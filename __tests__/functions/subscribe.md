@@ -27,7 +27,7 @@ Changing `body` re-evaluates subscribers.
 ## Parameterized Subscription
 
 ```brevity
-#parameterized = (:p Integer) { body + p }
+#parameterized = (p: Integer) { body + p }
 
 @doSub = {
   #parameterized.subscribe(p: 100) (v) { last <- v } ;
@@ -50,7 +50,7 @@ c = C()
 last *Integer = 0
 
 @doPubSub = { c.pub.subscribe (v) { last <- v } ; . }
-@bumpC = (:n Integer) { c.body <- n . }
+@bumpC = (n: Integer) { c.body <- n . }
 ```
 
 ## Remote Subscription Wire Shape

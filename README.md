@@ -83,7 +83,7 @@ rather than a plain Integer value.
   }
 *
 
-@fetch = (:key Text) {
+@fetch = (key: Text) {
   :value Text = Store.get(:key)
   return :value
 }

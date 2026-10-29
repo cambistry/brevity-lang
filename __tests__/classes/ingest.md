@@ -26,7 +26,7 @@ Greeting = *(Base |) -> "hello"
 ```
 
 ```brevity
-Labeled = *(:id Integer) {
+Labeled = *(id: Integer) {
   label Text = ingest
   @id = -> :id
   @label = -> :label

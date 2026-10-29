@@ -22,10 +22,10 @@ Use this for health, readiness, and obvious demo-visible state.
 
 @fetch
   =
-  :key Text
+  key: Text
   =
   :value Text = DB.lookup(:key)
-  -> :value
+  return :value
 ```
 
 Use this when the actor delegates to a declared dependency and returns the result.
@@ -41,10 +41,10 @@ Use this when the actor delegates to a declared dependency and returns the resul
 
 @compute
   =
-  :n Integer
+  n: Integer
   =
   :result Integer = Math.double(:n)
-  -> answer: result + 1
+  return answer: result + 1
 ```
 
 Use this when you want to show application logic layered over a dependency call.
@@ -69,7 +69,7 @@ view = WebView!(path: "/my_view")
   view.open()
   title: Text = view.getTitle()
   view.close()
-  -> :title
+  return :title
 ```
 
 Use this when the actor owns a long-lived remote surface such as a WebView.
@@ -85,7 +85,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 
 content Text! = "initial"
 
-@bump = (:v Text) { content <- v . }
+@bump = (v: Text) { content <- v . }
 @create = -> <div>{ content }</div>
 ```
 
@@ -94,7 +94,7 @@ Use this when you need a small reactive demo surface.
 ## 6. Echo / Round-Trip Handler
 
 ```brevity
-@echo = (:text Text) ->(:text)
+@echo = (text: Text) ->(:text)
 ```
 
 Use this for smoke tests and wiring checks.
@@ -104,11 +104,11 @@ Use this for smoke tests and wiring checks.
 ```brevity
 @saveAndReport
   =
-  :key Text
-  :value Text
+  key: Text
+  value: Text
   =
-  DB.put(:key, :value) .
-  -> ok: "saved"
+  DB.put(:key, :value)
+  return ok: "saved"
 ```
 
 Use obvious sequencing. Avoid packing too much into one expression.

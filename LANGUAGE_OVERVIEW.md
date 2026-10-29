@@ -47,7 +47,7 @@ Handlers are the public message surface of the actor.
 ```brevity
 @ping = -> status: "ok"
 
-@add = (:a Integer, :b Integer) -> sum: (a + b)
+@add = (a: Integer, b: Integer) -> sum: (a + b)
 ```
 
 Multiple handlers may share a name. Dispatch is based on message shape and type
@@ -59,7 +59,7 @@ Brevity treats an argument list as a real data shape. A handler or function can
 accept positional args, named args, or a mixed list:
 
 ```brevity
-@mix = (left Integer, :right Integer) -> total: (left + right)
+@mix = (left Integer, right: Integer) -> total: (left + right)
 ```
 
 The same idea applies to replies. Brevity does not only return one scalar or
@@ -120,7 +120,7 @@ Replying functions yield a value with `return`, or implicitly from a one-liner
   }
 *
 
-@notify = (:message Text) {
+@notify = (message: Text) {
   Log.write(:message) .
 }
 ```
@@ -153,7 +153,7 @@ The file actor itself can declare dependencies in a top-level header:
 
 @fetch
   =
-  :url Text
+  url: Text
   =
   :response Text = Remote.get(:url)
   return :response

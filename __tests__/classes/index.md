@@ -10,7 +10,7 @@ the current vocabulary is **class** (the source artifact) constructing an
 
 - A class defines an actor's shape.
 - `T = * { ... }` declares a no-arg class.
-- `T = *(x Integer, :label Text) { ... }` accepts positional and named params.
+- `T = *(x Integer, label: Text) { ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `:label Text = "hi"`.
 - Class params can synthesize accessors unless suppressed.
 - Subclasses use `*(Parent | own params)`.

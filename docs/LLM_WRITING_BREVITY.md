@@ -25,12 +25,12 @@ For the runtime distinction between values and actors, see
 ```brevity
 @status = -> ok: "ready"
 
-@echo = (:text Text) -> :text
+@echo = (text: Text) -> :text
 
 @add
   =
-  :a Integer
-  :b Integer
+  a: Integer
+  b: Integer
   =
   sum Integer = a + b
   return :sum
@@ -75,12 +75,12 @@ Declare dependencies in the file header:
   }
 *
 
-@fetch = (:key Text) {
+@fetch = (key: Text) {
   :value Text = Store.get(:key)
   return :value
 }
 
-@save = (:key Text, :value Text) {
+@save = (key: Text, value: Text) {
   Store.put(:key, :value) .
 }
 ```

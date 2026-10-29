@@ -15,7 +15,7 @@ state *Text = "ready"
 ```brevity
 @ping = -> ok: true
 
-@echo = (:text Text) -> :text
+@echo = (text: Text) -> :text
 ```
 
 ## Lineal Handler
@@ -23,8 +23,8 @@ state *Text = "ready"
 ```brevity
 @add
   =
-  :a Integer
-  :b Integer
+  a: Integer
+  b: Integer
   =
   sum Integer = a + b
   return :sum
@@ -77,7 +77,7 @@ Box = (seed Integer) *{
   }
 *
 
-@query = (:key Text) {
+@query = (key: Text) {
   :value Text = DB.lookup(:key)
   return :value
 }
@@ -92,7 +92,7 @@ Box = (seed Integer) *{
   }
 *
 
-@record = (:message Text) {
+@record = (message: Text) {
   Log.write(:message) .
 }
 ```

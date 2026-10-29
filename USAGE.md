@@ -34,7 +34,7 @@ header (`*` … `*`, each star alone on its line). The header is the class heade
   "/services/cache": (Cache) { get (key: Text) -> (value: Text) }
 *
 
-@fetch = (:key Text) {
+@fetch = (key: Text) {
   :value Text = DB.lookup(:key)
   return :value
 }
@@ -82,17 +82,17 @@ const { interface: iface } = extract(`
   *
     root Text
     "/services/db": (DB)
-    :cache_size Integer
+    cache_size: Integer
   *
   @noop = .
 `);
 
 // iface.params:
-//   <
+//   *(
 //     Text
 //     :"/services/db"
-//     :cache_size Integer
-//   >
+//     cache_size: Integer
+//   )
 ```
 
 For compilation purposes, the important case today is service resolution. A
