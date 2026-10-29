@@ -167,3 +167,113 @@ describe('positional result of a class method — bind by position', () => {
   });
 
 });
+
+// An inherited method is checked against the ancestor that declares it, using
+// that ancestor's own state/param types.
+describe('return shape — inherited methods', () => {
+  it('positional bind of an inherited named-only result is rejected', () => {
+    expect(() => compileSource(`
+      Base = *{ @get = -> value: 1 }
+      Box = (Base |) *{}
+      @run = { b = Box(); n Integer = b.get(); return a1: n }
+    `)).toThrow(/Cannot bind 'n' to 'b.get\(\)' — it returns only named fields \(value\)/);
+  });
+
+  it('named destructure of an inherited positional result is rejected', () => {
+    expect(() => compileSource(`
+      Base = *{ @seven = { 7 } }
+      Box = (Base |) *{}
+      @run = { b = Box(); :x Integer = b.seven(); return a1: x }
+    `)).toThrow(/Cannot destructure 'x' from 'b.seven\(\)'/);
+  });
+
+  it('a grandparent method is checked', () => {
+    expect(() => compileSource(`
+      A = *{ @get = -> value: 1 }
+      B = (A |) *{}
+      C = (B |) *{}
+      @run = { c = C(); n Integer = c.get(); return a1: n }
+    `)).toThrow(/returns only named fields \(value\)/);
+  });
+
+  it('a subclass override wins over the parent', () => {
+    expect(() => compileSource(`
+      Base = *{ @get = -> value: 1 }
+      Box = (Base |) *{ @get = { 2 } }
+      @run = { b = Box(); n Integer = b.get(); return a1: n }
+    `)).not.toThrow();
+  });
+
+  it('with two parents, the later one wins', () => {
+    const src = (bind) => `
+      A = *{ @get = -> value: 1 }
+      B = *{ @get = { 2 } }
+      C = (A, B |) *{}
+      @run = { c = C(); ${bind}; return a1: n }
+    `;
+    expect(() => compileSource(src('n Integer = c.get()'))).not.toThrow();
+    expect(() => compileSource(src(':n Integer = c.get()'))).toThrow(/Cannot destructure 'n'/);
+  });
+
+  it("uses the declaring class's state types", () => {
+    // `v` is Integer state on Base, so `-> v` is a known positional; Box has
+    // no `v` of its own.
+    expect(() => compileSource(`
+      Base = *{
+        v Integer = 3
+        @get = -> v
+      }
+      Box = (Base |) *{}
+      @run = { b = Box(); :x Integer = b.get(); return a1: x }
+    `)).toThrow(/Cannot destructure 'x' from 'b.get\(\)'/);
+  });
+
+  it('an inherited named result destructures and runs', async () => {
+    await expectBehavior(`
+      Base = *{ @get = -> value: 7 }
+      Box = (Base |) *{}
+      @run = { b = Box(); :value Integer = b.get(); return a1: value }
+    `,
+      { input: { id: '1', op: '@run', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: { a1: 7 } }) },
+    );
+  });
+
+  it('an inherited positional result binds and runs (empty-bodied subclass)', async () => {
+    await expectBehavior(`
+      Base = *{ @seven = { 7 } }
+      Box = (Base |) *{}
+      @run = { b = Box(); n Integer = b.seven(); return a1: n }
+    `,
+      { input: { id: '1', op: '@run', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: { a1: 7 } }) },
+    );
+  });
+
+  describe('manifest classes', () => {
+    const shapes = `{
+      Base () -> *{
+        get () -> (value: Integer)
+        size () -> (Integer)
+      }
+      Box (Base |) -> *{}
+    }`;
+    const withBox = (body) => compileSource(`*\n  Shapes: (:Box)\n*\n${body}\n`, {
+      remotes: [{ path: 'Shapes', service: shapes }],
+    });
+
+    it('inherited named-only result: positional bind rejected', () => {
+      expect(() => withBox('@run = { b = Box(); n Integer = b.get(); return a1: n }'))
+        .toThrow(/returns only named fields \(value\)/);
+    });
+
+    it('inherited named result: wrong name rejected', () => {
+      expect(() => withBox('@run = { b = Box(); :wrong Integer = b.get(); return a1: wrong }'))
+        .toThrow(/Cannot destructure 'wrong'/);
+    });
+
+    it('inherited positional result: positional bind accepted', () => {
+      expect(() => withBox('@run = { b = Box(); n Integer = b.size(); return a1: n }')).not.toThrow();
+    });
+  });
+});

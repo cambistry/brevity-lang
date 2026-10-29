@@ -1148,7 +1148,9 @@ export function codegen(ast, options = {}) {
   const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0
     ? { ...inlineRemotes, ...resolvedRemotes }
     : null;
-  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0));
+  // A subclass with an empty body (`Box = (Base |) *{}`) is still a class: its
+  // surface is all inherited.
+  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
   if (active.length === 0) return '';
 
   function bodyUsesObject(body) {

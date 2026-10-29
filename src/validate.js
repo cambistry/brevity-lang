@@ -2779,8 +2779,23 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
       } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
           && !dependencyNames?.has(callSrc.object.name)) {
         const typeName = resolveObjType(callSrc.object.name);
-        const cls = typeName && actorByName.get(typeName);
         const method = callSrc.method.startsWith('@') ? callSrc.method : '@' + callSrc.method;
+        // The class that declares the method: the receiver's class, else the
+        // nearest ancestor (later supertypes win, as in resolveSuperclassChain).
+        // Its own state/param types decide what its returns can carry.
+        const declares = (c) => (c.functions || []).some(f => f.name === method && !f.emptyOverload);
+        const definingClass = (c, seen = new Set()) => {
+          if (!c || seen.has(c)) return null;
+          seen.add(c);
+          if (declares(c)) return c;
+          const sups = c.supertypes || [];
+          for (let i = sups.length - 1; i >= 0; i--) {
+            const found = definingClass(actorByName.get(sups[i].supertype), seen);
+            if (found) return found;
+          }
+          return null;
+        };
+        const cls = typeName ? definingClass(actorByName.get(typeName)) : null;
         const fns = (cls?.functions || []).filter(f => f.name === method && !f.emptyOverload);
         if (fns.length > 0) {
           const classTypes = new Map();

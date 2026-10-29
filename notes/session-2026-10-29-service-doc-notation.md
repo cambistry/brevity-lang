@@ -146,3 +146,18 @@ needs the prefix-colon file param `:url Text` retired for good; (b) quote it,
 - The params document (`interface.params`) is still emitted as
   `*( entries )`, the retired header shape. Belongs with the header-colon
   decision.
+
+## Follow-up: return-shape check on inherited methods
+
+The call-result shape check (c6fe13e) only looked at methods the receiver's
+class declares itself, so `n Integer = b.get()` / `:x = b.get()` against an
+inherited method were never checked — local subclasses and manifest classes
+alike. It now resolves the declaring class (the receiver's, else the nearest
+ancestor; later supertypes win, matching `resolveSuperclassChain`) and uses
+that class's own state/param types. Tests in
+`__tests__/destructure/named_returns.test.js` (js / erlang / rust green).
+
+Found while writing the runtime test: **js dropped an empty-bodied subclass**
+(`Box = (Base |) *{}`) — the active-actor filter in `classes.js` required own
+functions/state/params, so `Box()` failed at runtime. Erlang and rust were
+fine. Subclasses are now always emitted.
