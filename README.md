@@ -78,7 +78,7 @@ rather than a plain Integer value.
 
 ```brevity
 *
-  "/services/store": (Store) {
+  "/services/store": Store {
     get (key: Text) -> (value: Text)
   }
 *

@@ -31,7 +31,7 @@ describe("set operation", () => {
       set
         =
         val Integer
-        label: (l) Text
+        label: l Text
         =
         p <- val
         label <- l

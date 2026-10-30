@@ -5,7 +5,7 @@ import { createActor, expectActorBehavior, compileActor, compileSource } from '.
 describe('type coercion — service ref (*)', () => {
   const source = `
     *
-      "/services/counter": (Counter) {
+      "/services/counter": Counter {
         get () -> (count: Integer)
       } | Integer
     *
@@ -44,7 +44,7 @@ describe('type coercion — service ref (*)', () => {
 describe('type coercion — service ref, multiple as types', () => {
   const source = `
     *
-      "/services/store": (Store) {
+      "/services/store": Store {
         ping () -> .
       } | Integer | Text
     *
@@ -84,7 +84,7 @@ describe('type coercion — service ref, multiple as types', () => {
 describe('type coercion — class ref (#), two-step', () => {
   const source = `
     *
-        "service.bv": (Service) () -> *{
+        "service.bv": Service () -> *{
         ping () -> .
       } | Integer
     *
@@ -116,7 +116,7 @@ describe('type coercion — class ref (#), two-step', () => {
 describe('type coercion — class ref (#), one-step', () => {
   const source = `
     *
-        "service.bv": (Service) () -> *{
+        "service.bv": Service () -> *{
         ping () -> .
       } | Integer
     *
@@ -157,7 +157,7 @@ describe('type coercion — service ref (*) via remotes', () => {
   it('bare * with remotes — typed assign emits [Integer, as]', async () => {
     const compiled = await compileActor(`
       *
-        "/services/counter": (Counter)
+        "/services/counter": Counter
       *
 
       @readInt
@@ -176,7 +176,7 @@ describe('type coercion — service ref (*) via remotes', () => {
   it('bare * with remotes — full roundtrip', async () => {
     const compiled = await compileActor(`
       *
-        "/services/counter": (Counter)
+        "/services/counter": Counter
       *
 
       @readInt
@@ -203,7 +203,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
   it('Integer coercion via remotes sends [Integer, as]', async () => {
     const compiled = await compileActor(`
       *
-        "/services/store": (Store)
+        "/services/store": Store
       *
 
       @asInt
@@ -221,7 +221,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
   it('Text coercion via remotes sends [Text, as]', async () => {
     const compiled = await compileActor(`
       *
-        "/services/store": (Store)
+        "/services/store": Store
       *
 
       @asText
@@ -240,13 +240,13 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 // ── Constructor ref (#) via options.remotes ──────────────────────────────────
 
 describe('type coercion — class ref (#) via remotes, two-step', () => {
-  const ctorParams = '*()';
+  const ctorParams = '()';
   const ctorService = '{\n  ping () -> .\n} | Integer';
 
   it('bare # with remotes — new then [Integer, as] to actor', async () => {
     const actor = await createActor(`
       *
-        "service.bv": (Service) #
+        "service.bv": Service #
       *
 
       s = Service()
@@ -272,13 +272,13 @@ describe('type coercion — class ref (#) via remotes, two-step', () => {
 });
 
 describe('type coercion — class ref (#) via remotes, one-step', () => {
-  const ctorParams = '*()';
+  const ctorParams = '()';
   const ctorService = '{\n  ping () -> .\n} | Integer | Text';
 
   it('one-step Integer — new then [Integer, as]', async () => {
     const compiled = await compileActor(`
       *
-        "service.bv": (Service) #
+        "service.bv": Service #
       *
 
       @asInt
@@ -308,7 +308,7 @@ describe('type coercion — class ref (#) via remotes, one-step', () => {
   it('one-step Text — new then [Text, as]', async () => {
     const compiled = await compileActor(`
       *
-        "service.bv": (Service) #
+        "service.bv": Service #
       *
 
       @asText
@@ -343,7 +343,7 @@ describe('type coercion — compile errors via remotes', () => {
     const noAsManifest = '{\n  get () -> (count: Integer)\n}';
     expect(() => compileSource(`
       *
-        "/services/counter": (Counter)
+        "/services/counter": Counter
       *
 
       @readInt
@@ -354,11 +354,11 @@ describe('type coercion — compile errors via remotes', () => {
   });
 
   it('class ref — remotes interface lacks as type → error', () => {
-    const noAsParams = '*()';
+    const noAsParams = '()';
     const noAsService = '{\n  ping () -> .\n}';
     expect(() => compileSource(`
       *
-        "service.bv": (Service) #
+        "service.bv": Service #
       *
 
       @asInt
@@ -375,7 +375,7 @@ describe('type coercion — compile errors', () => {
   it('typed assign from service ref fails when interface lacks as type', () => {
     expect(() => compileSource(`
       *
-        "/services/counter": (Counter) {
+        "/services/counter": Counter {
           get () -> (count: Integer)
         }
       *
@@ -390,7 +390,7 @@ describe('type coercion — compile errors', () => {
   it('typed assign from class ref fails when interface lacks as type', () => {
     expect(() => compileSource(`
       *
-          "service.bv": (Service) () -> *{
+          "service.bv": Service () -> *{
           ping () -> .
         }
       *

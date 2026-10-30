@@ -39,7 +39,7 @@ describe('test.set — mixed positional + named args', () => {
       set
         =
         val Integer
-        label: (l) Text
+        label: l Text
         =
         p <- val
         label <- l

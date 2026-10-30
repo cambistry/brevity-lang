@@ -78,7 +78,7 @@ describe('lineal function — param styles', () => {
 
     extract
       =
-      tag: (t) Text
+      tag: t Text
       =
       -> result: t
   `;

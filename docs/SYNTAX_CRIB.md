@@ -72,7 +72,7 @@ Box = (seed Integer) *{
 
 ```brevity
 *
-  "/services/db": (DB) {
+  "/services/db": DB {
     lookup (key: Text) -> (value: Text)
   }
 *
@@ -87,7 +87,7 @@ Box = (seed Integer) *{
 
 ```brevity
 *
-  "/services/log": (Log) {
+  "/services/log": Log {
     write (message: Text) -> .
   }
 *
@@ -101,7 +101,7 @@ Box = (seed Integer) *{
 
 ```brevity
 *
-  "WebView": (WebView) (path: Text) -> *{
+  "WebView": WebView (path: Text) -> *{
     open () -> .
   }
 *

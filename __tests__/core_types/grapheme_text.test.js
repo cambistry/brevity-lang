@@ -11,7 +11,7 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 // Supports all Text functions except upper/lower (cast to Text for those).
 //
 // Usage:
-//   *( "GraphemeText": (GT) # )
+//   *( "GraphemeText": GT # )
 //   g = GT(text: "café")
 //   sz Integer = g.size()
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -43,7 +43,7 @@ const GT_MANIFEST = `(text Text) -> *{
 describe('GraphemeText via DI — # class', () => {
   const source = `
     *
-      "GraphemeText": (GT) #
+      "GraphemeText": GT #
     *
 
     g = GT(text: "e\u{0301}")

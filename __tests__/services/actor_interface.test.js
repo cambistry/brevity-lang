@@ -257,7 +257,7 @@ describe('class interface — imported type address resolution', () => {
   it('class param of imported type renders as backtick address', () => {
     const { interface: iface } = extract(`
       *
-        "/models/item": (Item)
+        "/models/item": Item
       *
 
       @Wrapper = (item: Item) *{
@@ -272,7 +272,7 @@ describe('class interface — imported type address resolution', () => {
   it('actor method returning imported type', () => {
     const { interface: iface } = extract(`
       *
-        "/models/pair": (Pair)
+        "/models/pair": Pair
       *
 
       @Factory = * {
@@ -287,7 +287,7 @@ describe('class interface — imported type address resolution', () => {
   it('actor method accepting imported type as parameter', () => {
     const { interface: iface } = extract(`
       *
-        "/models/item": (Item)
+        "/models/item": Item
       *
 
       @Processor = * {

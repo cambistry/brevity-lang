@@ -18,27 +18,42 @@ Returned fields used by tests:
 
 ## `interface.params` Rendering
 
-The file actor's construction-time inputs render in declaration order:
+The file actor's construction-time inputs render in declaration order, inside
+`( … )` (`()` when empty): the caller-facing side of the header, keys and
+types only.
 
-- `:"/db"`: service dependency path.
-- `:"thing.bv" #`: class dependency path.
-- `:name Type`: named scalar param.
-- `Type`: positional scalar param; binding name is dropped.
+- `"/db": { … }`: service dependency with an inline interface.
+- `"thing.bv": ( … ) -> *{ … }`: class dependency with an inline profile.
+- `"thing.bv": #`: class dependency; the profile comes from the remote.
+- `"/db":`: dependency; its type comes from the remote.
+- `"name": Type`: named scalar param (a renamed param shows its key).
+- `Type`: positional scalar param.
 
-The local alias is intentionally not surfaced:
+Every named key is quoted (keys are paths); a positional entry is only its
+type. Bindings are private and not surfaced — a dependency's local name or
+destructure, a positional param's name, a renamed param's local:
 
 ```brevity
-*( "/db": (DB) )
-=
+*
+  "/db": DB
+  HTML: (:div, :span)
+  limit: n Integer
+*
 ```
 
 renders params as:
 
 ```text
-*(
-  :"/db"
+(
+  "/db":
+  "HTML":
+  "limit": Integer
 )
 ```
+
+Read back (a remote's `params` in `compile` options), the scalar entries give
+the constructor signature that calls to the dependency are checked against.
+Dependency entries are skipped for now. The retired `*( … )` shape is rejected.
 
 ## `interface.service` Rendering
 

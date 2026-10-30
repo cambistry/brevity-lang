@@ -184,7 +184,7 @@ describe('service document — emitted form', () => {
 });
 
 describe('read-only fields — validation', () => {
-  const remote = (iface, body) => compileSrc(`*\n  "remote.bv": (Remote) ${iface}\n*\n${body}\n`);
+  const remote = (iface, body) => compileSrc(`*\n  "remote.bv": Remote ${iface}\n*\n${body}\n`);
 
   it('a read-only service field can be read and subscribed to', () => {
     expect(() => remote('{ count Integer }', '@go = { Remote.count.subscribe (v) { . } ; . }')).not.toThrow();
@@ -229,7 +229,7 @@ describe('read-only fields — validation', () => {
 describe('constructor profiles in source', () => {
   it('header dependency: (Alias) (params) -> *{ iface }, arrow optional', () => {
     for (const arrow of ['-> ', '']) {
-      const { ast } = extract(`*\n  "thing.bv": (Thing) (a: Integer) ${arrow}*{ get () -> (value: Integer) }\n*\n@go = -> 1\n`);
+      const { ast } = extract(`*\n  "thing.bv": Thing (a: Integer) ${arrow}*{ get () -> (value: Integer) }\n*\n@go = -> 1\n`);
       const dep = ast.dependencies[0];
       expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', type: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
@@ -237,7 +237,7 @@ describe('constructor profiles in source', () => {
   });
 
   it('header dependency in a delimited ( … ) *{ … } header', () => {
-    expect(() => compileSrc(`( "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) } ) *{
+    expect(() => compileSrc(`( "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) } ) *{
   t = Thing(a: 1)
   @go = { :value Integer = t.get(); return :value }
 }
@@ -246,7 +246,7 @@ describe('constructor profiles in source', () => {
 
   it('header dependency: multi-line iface with a nested constructor body', () => {
     const { ast } = extract(`*
-  "lib.bv": (Lib) {
+  "lib.bv": Lib {
     ::Point (x Integer, y Integer)
     Counter (start: Integer) -> *{
       get () -> (value: Integer)
@@ -263,14 +263,14 @@ describe('constructor profiles in source', () => {
     expect(p.ping).toHaveLength(1);
   });
 
-  it('retired: (Alias) *( … ) -> { … }', () => {
-    expect(() => extract('*\n  "thing.bv": (Thing) *(a: Integer) -> { get: () -> (value: Integer) }\n*\n@go = -> 1\n'))
+  it('retired: Alias *( … ) -> { … }', () => {
+    expect(() => extract('*\n  "thing.bv": Thing *(a: Integer) -> { get: () -> (value: Integer) }\n*\n@go = -> 1\n'))
       .toThrow(/retired/);
   });
 
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
     expect(() => compileSrc(`*
-  "thing.bv": (Thing) #
+  "thing.bv": Thing #
 *
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 @go = -> 1
@@ -279,7 +279,7 @@ Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
   it('retired: as *( … ) -> { … }', () => {
     expect(() => extract(`*
-  "thing.bv": (Thing) #
+  "thing.bv": Thing #
 *
 Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 @go = -> 1
@@ -288,7 +288,7 @@ Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 
   it('service constraint entries drop the colon', () => {
     expect(() => extract(`*
-  "store.bv": (Store) { get (key: Text) -> (value: Text) }
+  "store.bv": Store { get (key: Text) -> (value: Text) }
 *
 db = Store as { @get: (key: Text) -> (value: Text) }
 @go = -> 1

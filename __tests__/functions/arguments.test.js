@@ -21,7 +21,7 @@ describe('arguments', () => {
 
     @keyMapped
       =
-      outer: (inner) Text
+      outer: inner Text
       =
       ->(result: inner)
 
@@ -51,7 +51,7 @@ describe('arguments', () => {
     );
   });
 
-  it('key-mapped arg — outer: (inner) Text', async () => {
+  it('key-mapped arg — outer: inner Text', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' } },
       { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },

@@ -914,14 +914,15 @@ export function parse(tokensIn) {
         // name: ... — named param (external label = `name`).
         const name = consume().value;
         consume(); // COLON
-        if (peek().type === 'LPAREN') {
-          // name: (alias) [Type] — remap to a paren-wrapped local
-          consume(); // LPAREN
-          const alias = expect('IDENT').value;
-          expect('RPAREN');
-          let type = null;
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          params.push({ key: name, name: alias, type });
+        if (isRetiredParenAlias()) {
+          throwRetiredParenAlias(name);
+        } else if (startsRenamedParam()) {
+          // name: local Type — the caller passes `name`, the body sees `local`
+          params.push(parseRenamedParam(name));
+        } else if (isLoneNameAfterColon()) {
+          // name: X — X is a type if one is in scope, else a local (resolved
+          // after parsing: see resolveLoneNames)
+          params.push({ name, type: consume().value, positional: false, typeOrLocal: true });
         } else if (peek().type === 'SIGIL') {
           // name: :accessor Type — remap to a sigil-marked local alias
           const accessor = consume().value;
@@ -2952,6 +2953,59 @@ export function parse(tokensIn) {
     return after !== 'EQUALS' && after !== 'COMMA';
   }
 
+  // ── After a named param's colon (`key: …`) ────────────────────────────────
+  // `key: local Type` renames; a lone `key: X` is a type or a local depending
+  // on what is in scope (resolveLoneNames). A single name in parens is retired.
+  function isRetiredParenAlias() {
+    return peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' &&
+      tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type !== '->';
+  }
+  function throwRetiredParenAlias(key) {
+    const alias = tokens[pos + 1].value;
+    const after = tokens[pos + 3];
+    if (after?.type === 'SIGIL') {
+      throw new Error(`Accessor remap '${key}: (${alias}) :${after.value}' is retired. Publish the param with '@${key}: ${alias} Type', or write a handler: '@${after.value} = { ${alias} }'`);
+    }
+    const rest = after?.type === 'IDENT' ? ` ${after.value}`
+      : after?.type === 'STAR' ? ' *'
+      : after?.type === 'HASH' ? ' #'
+      : after?.type === 'LBRACE' ? ' { … }'
+      : after?.type === 'LPAREN' ? ' ( … ) -> *{ … }'
+      : '';
+    throw Object.assign(
+      new Error(`'${key}: (${alias})' is retired — write '${key}: ${alias}${rest}' (no parens around a single name)`),
+      { fatal: true },
+    );
+  }
+  function startsRenamedParam() {
+    if (peek().type !== 'IDENT') return false;
+    const next = tokens[pos + 1];
+    if (next?.type === 'IDENT' || next?.type === 'AMPERSAND_IDENT') return true;
+    if (next?.type === 'STAR') {
+      const after = tokens[pos + 2]?.type;
+      return after === 'IDENT' || after === 'COMMA' || after === 'RPAREN' || after === 'NEWLINE' || after === 'BLOCK_SEP';
+    }
+    return false;
+  }
+  function parseRenamedParam(key) {
+    const name = consume().value;
+    if (peek().type === 'STAR') {
+      consume(); // *
+      if (peek().type === 'IDENT') return { key, name, type: parseType(), positional: false, ref: true };
+      return { key, name, type: 'Anything', positional: false, ref: true };
+    }
+    if (peek().type === 'AMPERSAND_IDENT') {
+      return { key, name, type: consumeAmpersandTypeForParam(), positional: false, readonly: true };
+    }
+    return { key, name, type: parseType(), positional: false };
+  }
+  function isLoneNameAfterColon() {
+    if (peek().type !== 'IDENT') return false;
+    const next = tokens[pos + 1]?.type;
+    return next === 'COMMA' || next === 'RPAREN' || next === 'NEWLINE' || next === 'BLOCK_SEP' ||
+      next === 'EOF' || next === 'EQUALS' || next === 'GT' || next === 'DIVIDER' || next === undefined;
+  }
+
   function isParamStart() {
     const t = peek().type;
     if (t === 'ELLIPSIS') return true;
@@ -3003,7 +3057,7 @@ export function parse(tokensIn) {
     // ── Param forms ───────────────────────────────────────────────────────
     if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
       // @name … — published param: the class answers `@name` with its value.
-      // Accessor name is the external one (the key for `@key: (local) Type`).
+      // Accessor name is the external one (the key for `@key: local Type`).
       consume(); // AT
       const next = tokens[pos + 1]?.type;
       const p = peek().type === 'IDENT' && (next === 'RPAREN' || next === 'COMMA' || next === 'NEWLINE' || next === 'BLOCK_SEP')
@@ -3020,19 +3074,15 @@ export function parse(tokensIn) {
       // name: ... — named param (external label = `name`).
       const first = consume().value;
       consume(); // COLON
-      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' &&
-          tokens[pos + 3]?.type !== '->') {
-        // name: (alias) Type  OR  name: (alias) :accessor Type — remap to a paren-wrapped local.
-        // (A paren group followed by `->` is a function type: `name: (s: T) -> .`)
-        consume(); // LPAREN
-        const alias = expect('IDENT').value;
-        expect('RPAREN');
-        if (peek().type === 'SIGIL') {
-          throw new Error(`Accessor remap '${first}: (${alias}) :${peek().value}' is retired. Publish the param with '@${first}: (${alias}) Type', or write a handler: '@${peek().value} = { ${alias} }'`);
-        }
-        let type = null;
-        if (peekIsParamType()) { type = parseType(); }
-        return withDefault({ key: first, name: alias, type }, tryParseDefault());
+      if (isRetiredParenAlias()) throwRetiredParenAlias(first);
+      if (startsRenamedParam()) {
+        // name: local Type — the caller passes `name`, the body sees `local`
+        return withDefault(parseRenamedParam(first), tryParseDefault());
+      }
+      if (isLoneNameAfterColon()) {
+        // name: X — X is a type if one is in scope, else a local (resolved
+        // after parsing: see resolveLoneNames)
+        return withDefault({ name: first, type: consume().value, typeOrLocal: true }, tryParseDefault());
       }
       if (peek().type === 'SIGIL') {
         throw new Error(`Accessor remap '${first}: :${peek().value}' is retired. Publish the param with '@${first}: Type', or write a handler: '@${peek().value} = { ${first} }'`);
@@ -3992,18 +4042,6 @@ export function parse(tokensIn) {
         cParams.push({ name, type, readonly: true });
         continue;
       }
-      // Keyed ref: key: (alias) *
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const savedPos = pos;
-        const keyName = consume().value;
-        consume();
-        if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type === 'STAR') {
-          consume(); const alias = consume().value; consume(); consume();
-          cParams.push({ key: keyName, name: alias, type: 'Anything', ref: true });
-          continue;
-        }
-        pos = savedPos;
-      }
       // Inline service constraint: name { @method: ... }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
         const name = consume().value;
@@ -4956,6 +4994,26 @@ export function parse(tokensIn) {
     }
     return false;
   }
+  // After `Key:` in a header: a dependency binding rather than a named
+  // param's type. A lone name (`HTML: Html`) stays a named param; it takes a
+  // `#`, an interface, or a constructor profile after it to be a dependency.
+  function isBareKeyDependency(p) {
+    const t = tokens[p]?.type;
+    if (t === 'SIGIL') return true;
+    if (t === 'LPAREN') return !parenGroupFollowedByArrow(p);
+    if (t === 'IDENT') {
+      const after = tokens[p + 1]?.type;
+      if (after === 'HASH' || after === 'LBRACE') return true;
+      if (after === 'LPAREN') return parenGroupFollowedByArrow(p + 1);
+    }
+    return false;
+  }
+  function fileParamFrom(p, positional) {
+    return AST.fileParam(p.name, {
+      type: p.type, positional, defaultValue: p.defaultValue, accessor: p.accessor,
+      key: p.key, typeOrLocal: p.typeOrLocal,
+    });
+  }
   function parseFileHeaderEntries(isEnd) {
     while (!isEnd() && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
@@ -4977,39 +5035,46 @@ export function parse(tokensIn) {
         } else {
           const p = parseOneParam();
           if (p === null) throw new Error(`Expected scalar param after ':' in file-level header`);
-          dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
+          dependencies.push(fileParamFrom(p, false));
           continue;
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && tokens[pos + 2]?.type === 'LPAREN' &&
-                 !parenGroupFollowedByArrow(pos + 2)) {
-        // Bare-identifier dependency: `HTML: (:div)`. A paren group followed
-        // by `->` is instead a function-typed file param: `cb: (s: T) -> .`
-        alias = consume().value;
-        path = alias;
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON' && isBareKeyDependency(pos + 2)) {
+        // Bare-identifier dependency: `HTML: (:div)`, `HTML: :div`,
+        // `Lib: L #`. (`HTML: Html` alone is a named param — see
+        // isBareKeyDependency.)
+        path = consume().value;
         consume(); // COLON
       } else if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
         // Published file-param: `@name Type` / `@name: Type`
         const p = parseOneParam();
-        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: !!p.positional, defaultValue: p.defaultValue, accessor: p.accessor }));
+        dependencies.push(fileParamFrom(p, !!p.positional));
         continue;
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        // Named scalar file-param: `name: Type` (post-colon flip 2026-05-10)
+        // Named scalar file-param: `name: Type`, `name: local Type`
         const p = parseOneParam();
         if (p === null) throw new Error(`Expected scalar param in file-level header`);
-        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: false, defaultValue: p.defaultValue }));
+        dependencies.push(fileParamFrom(p, false));
         continue;
       } else if (peek().type === 'IDENT') {
         // Positional scalar file-param: `name Type`
         const p = parseOneParam();
         if (p === null) throw new Error(`Expected positional scalar param in file-level header`);
-        dependencies.push(AST.fileParam(p.name, { type: p.type, positional: true, defaultValue: p.defaultValue }));
+        dependencies.push(fileParamFrom(p, true));
         continue;
       } else {
         path = expect('STRING').value;
         expect('COLON');
       }
       skipNewlines();
-      if (peek().type === 'LPAREN') {
+      // The binding: a local name (`"thing.bv": Thing #`), one member
+      // (`HTML: :div`), or a destructure group (`HTML: (:div, :span)`).
+      if (isRetiredParenAlias()) throwRetiredParenAlias(/^\w+$/.test(path) ? path : `"${path}"`);
+      if (peek().type === 'IDENT') {
+        alias = consume().value;
+      } else if (peek().type === 'SIGIL') {
+        const name = consume().value;
+        destructures = [{ local: name, remote: name }];
+      } else if (peek().type === 'LPAREN' && !parenGroupFollowedByArrow(pos)) {
         expect('LPAREN');
         const isDestructure = peek().type === 'SIGIL' ||
           peek().type === 'ELLIPSIS' ||
@@ -5043,12 +5108,12 @@ export function parse(tokensIn) {
               throw new Error(`Expected ':name', 'Remote: local', 'Remote: _', or '...' in destructure list, got ${peek().type}`);
             }
           }
-          if (!alias) alias = path;
         } else {
-          alias = expect('IDENT').value;
+          throw new Error(`Expected a destructure ('(:name, …)') after '${path}:', got ${peek().type}`);
         }
         expect('RPAREN');
       }
+      if (!alias) alias = path;
       // end-of-entry — service reference, interface fetched via options.remotes
       // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
       if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
@@ -5056,7 +5121,7 @@ export function parse(tokensIn) {
         continue;
       }
       skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-      // (Alias) # — actor constructor, manifest fetched via options.remotes
+      // Alias # — actor constructor, manifest fetched via options.remotes
       if (peek().type === 'HASH') {
         consume(); // #
         dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
@@ -5064,11 +5129,11 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
         throw Object.assign(
-          new Error(`'(Alias) *( ... ) -> { ... }' is retired (dependency '${alias}') — write '(${alias}) ( ... ) -> *{ ... }'`),
+          new Error(`'(Alias) *( ... ) -> { ... }' is retired (dependency '${alias}') — write '${alias} ( ... ) -> *{ ... }'`),
           { fatal: true },
         );
       }
-      // (Alias) (p: Type, ...) [->] *{ iface } — explicit constructor + service
+      // Alias (p: Type, ...) [->] *{ iface } — explicit constructor + service
       if (peek().type === 'LPAREN') {
         const ctorParams = parseCtorProfileParams(`for dependency '${alias}'`);
         let iface = parseInlineIface();
@@ -5076,7 +5141,7 @@ export function parse(tokensIn) {
         dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
         continue;
       }
-      // (Alias) { iface } — service reference with inline interface
+      // Alias { iface } — service reference with inline interface
       if (peek().type === 'LBRACE') {
         let iface = parseInlineIface();
         iface = parseAsTypeSuffix(iface);
@@ -5150,10 +5215,10 @@ export function parse(tokensIn) {
     }
 
     // ── File-level constructor header — delimited ─────────────────────────
-    //   ( "/path": (Alias) ) *{ body }                  — service ref, fetched externally
-    //   ( "/path": (Alias) { iface } ) *{ body }        — service ref, inline interface
-    //   ( "/path": (Alias) # ) *{ body }                — actor constructor, fetched externally
-    //   ( "/path": (Alias) (p: Type) -> *{ iface } ) *{ body } — inline manifest
+    //   ( "/path": Alias ) *{ body }                  — service ref, fetched externally
+    //   ( "/path": Alias { iface } ) *{ body }        — service ref, inline interface
+    //   ( "/path": Alias # ) *{ body }                — actor constructor, fetched externally
+    //   ( "/path": Alias (p: Type) -> *{ iface } ) *{ body } — inline manifest
     //   ( name: Type ) -> *{ body }                     — optional arrow
     // Told apart from a body statement that starts with `(` by looking ahead
     // past the matching `)` for `[->] *{`.
@@ -5259,5 +5324,103 @@ export function parse(tokensIn) {
   }
 
   const result = AST.program(actors, dependencies, types);
+  resolveLoneNames(result);
   return result;
+
+  // A type name in scope is reserved: no param may share it. So a lone name
+  // after a named param's colon (`key: X`) is the type X when one is in scope,
+  // and otherwise the param's local name (untyped). In scope: built-ins, the
+  // file's `::` types and classes, and every name the header binds.
+  function resolveLoneNames(program) {
+    const typeNames = new Set(AST.BUILTIN_TYPE_NAMES);
+    const collect = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(collect); return; }
+      if (node.type === 'TypeDecl' && node.name) typeNames.add(node.name);
+      if (node.type === 'Actor' && node.name) typeNames.add(node.name.replace(/^@/, ''));
+      if (node.type === 'Dependency') {
+        if (node.name) typeNames.add(node.name);
+        for (const d of node.destructures || []) if (d.local) typeNames.add(d.local);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') collect(v);
+    };
+    collect(program);
+
+    const resolve = (p, owner) => {
+      if (!p || typeof p !== 'object') return;
+      const typeField = p.type === 'FileParam' ? 'paramType' : 'type';
+      if (p.typeOrLocal) {
+        delete p.typeOrLocal;
+        const lone = p[typeField];
+        if (!typeNames.has(lone)) {
+          p.key = p.name;
+          p.name = lone;
+          p[typeField] = p.defaultValue ? inferDefaultType(p.defaultValue) : null;
+          checkRenamedUse(p, owner);
+          if (!p[typeField] && owner?.type === 'FunctionDecl' && owner.name?.startsWith('@')) {
+            throw new Error(`Public function param '${p.key}: ${p.name}' requires a type annotation`);
+          }
+        }
+      }
+      if (p.name && typeNames.has(p.name)) {
+        throw new Error(`Param '${p.name}' has the name of a type in scope — a type name is reserved; rename the param`);
+      }
+    };
+
+    // `key: Intger` (a misspelt type) reads as a rename to the local `Intger`.
+    // When the body uses `key` and never the local, say so.
+    const checkRenamedUse = (p, owner) => {
+      if (!owner) return;
+      let keyUsed = false, localUsed = false;
+      const scan = (node) => {
+        if (!node || typeof node !== 'object' || (keyUsed && localUsed)) return;
+        if (Array.isArray(node)) { node.forEach(scan); return; }
+        if (node.type === 'Identifier' && node.name === p.key) keyUsed = true;
+        for (const [k, v] of Object.entries(node)) {
+          if (v === p.name && k !== 'type') localUsed = true;
+          else if (v && typeof v === 'object') scan(v);
+        }
+      };
+      for (const [k, v] of Object.entries(owner)) {
+        if (k !== 'params' && k !== 'initParams') scan(v);
+      }
+      if (keyUsed && !localUsed) {
+        throw new Error(`'${p.name}' is not declared or imported, so '${p.key}: ${p.name}' names the param's local '${p.name}' and leaves '${p.key}' unbound. Import the type, or rename the local`);
+      }
+    };
+
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node.type !== 'EmitDecl') {
+        for (const key of ['params', 'initParams']) {
+          if (Array.isArray(node[key])) for (const p of node[key]) resolve(p, node);
+        }
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
+    };
+    // Every header key is a path. A keyed entry with no type is resolved by
+    // its key — a dependency: `HTML: Html`, `"svc.bv": Svc`, `limit: n`,
+    // `limit:`. A typed one is a value supplied at construction.
+    const fileActor = program.actors.find(a => !a.name);
+    program.dependencies = program.dependencies.map(d => {
+      if (d.type !== 'FileParam') return d;
+      resolve(d, fileActor);
+      if (d.positional || d.paramType || d.accessor) return d;
+      typeNames.add(d.name);
+      return AST.dependency(d.name, { path: d.key || d.name });
+    });
+    walk(program.actors);
+    walk(program.types);
+
+    // Signatures with no body (a dependency's constructor profile, an emit
+    // declaration) name no locals: a lone name there is the type.
+    const clear = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(clear); return; }
+      delete node.typeOrLocal;
+      for (const v of Object.values(node)) if (v && typeof v === 'object') clear(v);
+    };
+    clear(program);
+  }
 }

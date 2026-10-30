@@ -4,6 +4,7 @@
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
+import { BUILTIN_TYPE_NAMES } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
@@ -77,7 +78,14 @@ export function validate(ast, options = {}) {
     for (const d of (ast.dependencies || [])) {
       if (d.path) pathToAlias.set(d.path, d.name);
     }
+    // An inline definition preempts the remote's document: the compiler takes
+    // the file's own statement of what it needs; a mismatch with the real
+    // service fails at runtime.
+    const inlineDefined = new Set((ast.dependencies || [])
+      .filter(d => d.interface || d.constructorParams)
+      .map(d => d.name));
     const ingestRemote = (alias, service, params) => {
+      if (inlineDefined.has(alias)) return;
       if (typeof service !== 'string') {
         remotesParsed[alias] = service;
         return;
@@ -119,7 +127,7 @@ export function validate(ast, options = {}) {
   // options.remotes, or supplied by a constructor coercion).
   for (const d of (ast.dependencies || [])) {
     if (d.path && !d.interface && !remotesParsed[d.name] && !coercedDeps.has(d.name)) {
-      throw new Error(`Dependency '${d.name}' (${d.path}) requires an interface — supply it inline or via options.remotes`);
+      throw new Error(`'${d.path}' (bound as '${d.name}') has no type — declare one in the header, or supply its document via options.remotes`);
     }
   }
 
@@ -881,16 +889,6 @@ function callbackOutputType(paramTypeStr) {
   if (arrowIdx === -1) return null;
   return paramTypeStr.slice(arrowIdx + 2).trim();
 }
-
-// Built-in / structural type names that never require an import. Plurals are the
-// List-element shorthands. Used to keep the explicit-annotation nameability
-// check from firing on primitives.
-const BUILTIN_TYPE_NAMES = new Set([
-  'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'Anything', 'Self',
-  'Function', 'List', 'Map', 'Array', 'Object', 'Null', 'Timestamp', 'Duration',
-  'Integers', 'Texts', 'Booleans', 'Decimals', 'Floats', 'Blobs', 'Anythings',
-  'Lists', 'Maps', 'Arrays', 'Objects',
-]);
 
 // Returns the offending name when `typeStr` is a single bare Capitalized type
 // name that is neither a built-in nor in `nameable`; otherwise null. Only a lone
@@ -1713,19 +1711,48 @@ function splitAsTypes(service) {
   return { iface, asTypes };
 }
 
+// The params document (`interface.params`): the caller-facing side of a
+// file's header, `( … )`, one entry per line (an entry's interface may span
+// lines). A positional entry is a type; a named entry is `key: Type`. Yields
+// the scalar constructor args. Dependency entries — a type that is an
+// interface, a constructor profile, `#`, or absent (`key:`) — are skipped:
+// checking a caller-supplied dependency is not implemented yet.
 function parseParamsDocument(params) {
   const t = params.trim();
-  if (!t.startsWith('*(') || !t.endsWith(')')) return null;
-  const inner = t.slice(2, -1).trim();
-  if (!inner) return [];
+  if (t.startsWith('*(')) {
+    throw new Error(`Params document '*( … )' is retired — write '( … )'`);
+  }
+  if (!t.startsWith('(') || !t.endsWith(')')) return null;
   const result = [];
-  for (const line of inner.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const m = trimmed.match(/^:(\w+)\s+(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
-    if (m) result.push({ name: m[1], type: m[2] });
+  for (const entry of splitParamsEntries(t.slice(1, -1))) {
+    const named = entry.match(/^("[^"]*"|\w+):\s*([\s\S]*)$/);
+    if (!named) { result.push({ name: null, type: entry }); continue; }
+    const type = named[2].trim();
+    if (!type || /^[#{(]/.test(type)) continue;
+    const key = named[1].startsWith('"') ? JSON.parse(named[1]) : named[1];
+    result.push({ name: key, key, type });
   }
   return result;
+}
+
+// Entries are separated by newlines (or commas) outside brackets and quotes.
+function splitParamsEntries(inner) {
+  const entries = [];
+  let depth = 0, inQuote = false, current = '';
+  for (const ch of inner) {
+    if (inQuote) { current += ch; if (ch === '"') inQuote = false; continue; }
+    if (ch === '"') inQuote = true;
+    else if (ch === '(' || ch === '{') depth++;
+    else if (ch === ')' || ch === '}') depth--;
+    if ((ch === '\n' || ch === ',') && depth === 0) {
+      if (current.trim()) entries.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) entries.push(current.trim());
+  return entries;
 }
 
 // A remote service string that is itself a constructor profile:
@@ -1874,8 +1901,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
       } else {
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
-          `Use '( "path": (${depName}) # ) *{ ... }' with a manifest in options.remotes, ` +
-          `or '( "path": (${depName}) (param: Type) -> *{ ... } ) *{ ... }' inline.`,
+          `Use '( "path": ${depName} # ) *{ ... }' with a manifest in options.remotes, ` +
+          `or '( "path": ${depName} (param: Type) -> *{ ... } ) *{ ... }' inline.`,
         );
       }
     }

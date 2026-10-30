@@ -69,7 +69,7 @@ Declare dependencies in the file header:
 
 ```brevity
 *
-  "/services/store": (Store) {
+  "/services/store": Store {
     get (key: Text) -> (value: Text)
     put (key: Text, value: Text) -> .
   }
@@ -93,7 +93,7 @@ Silent methods return `.`. Replying methods bind their named reply fields.
 
 ```brevity
 *
-  "WebView": (WebView) (path: Text) -> *{
+  "WebView": WebView (path: Text) -> *{
     open () -> .
     close () -> .
   }

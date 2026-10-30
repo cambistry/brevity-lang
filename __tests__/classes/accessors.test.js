@@ -6,7 +6,7 @@ import { expectBehavior, compileSource, createActor, expectActorBehavior } from 
 // Class and file params are private unless published with `@`:
 //   @a Integer          → accessor @a, replies with the value positionally
 //   @label: Text        → accessor @label
-//   @label: (l) Text    → accessor @label, local binding l
+//   @label: l Text    → accessor @label, local binding l
 //   a Integer           → private: no accessor
 // A renamed public name is an explicit handler: `@b = { a }`.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -87,7 +87,7 @@ describe('published params — retired accessor syntax', () => {
 describe('published params — service document', () => {
   it('lists published params as read-only fields', () => {
     const { interface: iface } = compileSource(`
-      @T = (@a Integer, @label: (l) Text, quiet: Text) *{ @x = -> 1 }
+      @T = (@a Integer, @label: l Text, quiet: Text) *{ @x = -> 1 }
       @test = -> 1
     `);
     expect(iface.service).toContain('T (Integer, label: Text, quiet: Text) -> *{\n    a Integer\n    label Text\n    x () -> (Integer)\n  }');
@@ -112,7 +112,7 @@ describe('published params — runtime', () => {
       @sum = -> result: (a + b)
     }
 
-    Named = (@label: (l) Text, quiet: Text) *{
+    Named = (@label: l Text, quiet: Text) *{
       @both = -> result: l + quiet
     }
 

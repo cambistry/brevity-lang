@@ -115,7 +115,7 @@ Replying functions yield a value with `return`, or implicitly from a one-liner
 
 ```brevity
 *
-  "/services/log": (Log) {
+  "/services/log": Log {
     write (message: Text) -> .
   }
 *
@@ -146,7 +146,7 @@ The file actor itself can declare dependencies in a top-level header:
 
 ```brevity
 *
-  "Remote": (Remote) {
+  "Remote": Remote {
     get (url: Text) -> (response: Text)
   }
 *
@@ -197,7 +197,7 @@ the actor's address:
 
 ```brevity
 *
-  "WebView": (WebView) (path: Text) -> *{
+  "WebView": WebView (path: Text) -> *{
     open () -> .
   }
 *

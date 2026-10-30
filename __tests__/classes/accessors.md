@@ -34,7 +34,7 @@ T = (@a Integer, @b Integer = 99) *{
 Publish a named param under its label while binding a different local:
 
 ```brevity
-Named = (@label: (l) Text) *{
+Named = (@label: l Text) *{
   @shout = -> result: l
 }
 ```

@@ -33,7 +33,7 @@ describe('extract', () => {
 
     expect(iface).toEqual({
       structures: [],
-      params: '*()',
+      params: '()',
       service: '{\n  do_this (Text, b: Integer) -> (output: Boolean)\n}',
     });
   });
@@ -41,7 +41,7 @@ describe('extract', () => {
   it('non-empty params render alongside service', () => {
     const source = `
       *
-        "/db": (DB) { lookup (key: Text) -> (value: Text) }
+        "/db": DB { lookup (key: Text) -> (value: Text) }
         limit: Integer
       *
 
@@ -52,7 +52,7 @@ describe('extract', () => {
 
     expect(iface).toEqual({
       structures: [],
-      params: '*(\n  :"/db"\n  limit: Integer\n)',
+      params: '(\n  "/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n  "limit": Integer\n)',
       service: '{\n  fetch (key: Text) -> (value: Text)\n}',
     });
   });

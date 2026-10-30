@@ -9,7 +9,7 @@ import { createActor, expectActorBehavior, expectBehavior } from '../helpers.js'
 
 const THING = `
   *
-    "thing.bv": (Thing) (a: Integer) -> *{
+    "thing.bv": Thing (a: Integer) -> *{
       get () -> (Integer)
       pair () -> (x: Integer)
     }

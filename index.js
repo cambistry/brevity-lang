@@ -152,43 +152,43 @@ function publishedParamLines(actor, aliasMap) {
     .map(p => `${p.accessor} ${p.type ? resolveType(p.type, aliasMap) : 'Anything'}`);
 }
 
-function quoteParamPath(path) {
-  // Quote the path if it contains any non-word character (including `-`).
-  return /^\w+$/.test(path) ? path : JSON.stringify(path);
-}
-
-function renderFileHeaderEntry(entry) {
+// One entry of the params document: the caller-facing side of a header entry.
+// Bindings are private and dropped — a positional param's name, a renamed
+// param's local, a dependency's alias or destructure. A positional entry is
+// its type; a named entry is `"key": Type`, and a dependency with no declared
+// type (it comes from the remote's own document) is `"key":`. Every named key
+// is quoted: keys are paths.
+function renderParamsEntry(entry) {
   if (entry.type === 'FileParam') {
     const typeName = entry.paramType || 'Anything';
     if (entry.positional) return typeName;
-    return `${entry.name}: ${typeName}`;
+    return `${renderParamsKey(entry.key || entry.name)}: ${typeName}`;
   }
-  // Dependency: service (no sigil) or constructor (#). Compact form drops the alias.
-  const isCtor = entry.constructorParams != null || entry.generic;
-  if (entry.destructures) {
-    const members = entry.destructures.map(d =>
-      d.local === d.remote ? `:${d.local}` : `${d.remote}: ${d.local}${d.type ? ' ' + d.type : ''}`,
-    ).join(', ');
-    return isCtor
-      ? `:${quoteParamPath(entry.path)} (${members}) #`
-      : `:${quoteParamPath(entry.path)} (${members})`;
+  const key = renderParamsKey(entry.path);
+  const type = dependencyTypeText(entry);
+  return type ? `${key}: ${type.replace(/\n/g, '\n  ')}` : `${key}:`;
+}
+
+function renderParamsKey(key) {
+  return JSON.stringify(key);
+}
+
+function dependencyTypeText(dep) {
+  if (dep.constructorParams) {
+    const params = dep.constructorParams.map(p => formatParam(p, new Map())).join(', ');
+    return `(${params}) -> *${dep.interface || '{}'}`;
   }
-  return isCtor
-    ? `:${quoteParamPath(entry.path)} #`
-    : `:${quoteParamPath(entry.path)}`;
+  if (dep.generic) return '#';
+  return dep.interface || null;
 }
 
 function buildParamsDocument(ast) {
-  const entries = [];
-  for (const d of ast.dependencies || []) {
-    if (d.type === 'FileParam') {
-      entries.push(renderFileHeaderEntry(d));
-    } else if (d.type === 'Dependency' && d.path) {
-      entries.push(renderFileHeaderEntry(d));
-    }
-  }
-  if (entries.length === 0) return '*()';
-  return '*(\n  ' + entries.join('\n  ') + '\n)';
+  const entries = (ast.dependencies || [])
+    .filter(d => d.type === 'FileParam' || (d.type === 'Dependency' && d.path))
+    .map(renderParamsEntry);
+  // Same outer shape as a delimited header's param list: `( … )`.
+  if (entries.length === 0) return '()';
+  return '(\n  ' + entries.join('\n  ') + '\n)';
 }
 
 function reactiveCellType(getter, setter, aliasMap) {
@@ -600,6 +600,7 @@ function injectFileParamsIntoFileActor(ast) {
     .filter(d => d.type === 'FileParam')
     .map(p => ({
       name: p.name,
+      ...(p.key ? { key: p.key } : {}),
       type: p.paramType,
       positional: !!p.positional,
       ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),

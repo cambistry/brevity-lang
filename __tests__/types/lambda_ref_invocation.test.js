@@ -94,7 +94,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
 describe('lambda ref invocation — service method callback param (CAM round-trip)', () => {
   const fixture = `
     *
-      "Widget": (Widget)
+      "Widget": Widget
     *
     @go = { Widget.watch(on: (s) { s.dismiss() }) . }
   `;

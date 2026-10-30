@@ -72,7 +72,7 @@ values, depending on the receiver.
 ```brevity
 Person = * {
   name Text! = "anonymous"
-  update = (name: (n) Text) { name <- n . }
+  update = (name: n Text) { name <- n . }
   @get = -> name: name
 }
 

@@ -24,19 +24,19 @@ describe('function params — all forms', () => {
 
     @keyMapped
       =
-      fn = (label: (x)) { x + 1 }
+      fn = (label: x) { x + 1 }
       result Integer = fn(label: 9)
       return :result
 
     @keyMappedTwo
       =
-      fn = (first: (a), last: (b)) { a + b }
+      fn = (first: a, last: b) { a + b }
       result Integer = fn(first: 3, last: 4)
       return :result
 
     @keyMappedTyped
       =
-      fn = (label: (x) Integer) { x + 1 }
+      fn = (label: x Integer) { x + 1 }
       result Integer = fn(label: 9)
       return :result
 
@@ -105,7 +105,7 @@ describe('function params — all forms', () => {
     );
   });
 
-  it('(label: (x) Integer) ->  key-mapped with type', async () => {
+  it('(label: x Integer) ->  key-mapped with type', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@keyMappedTyped', from: 'c' } },
       { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },

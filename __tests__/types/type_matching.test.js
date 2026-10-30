@@ -163,9 +163,9 @@ describe('type matching — overloading', () => {
 
 describe('type matching — key-mapped params', () => {
   const script = `
-    @lettersTwo = (a: (alpha) Text, b: (beta) Integer) -> result: alpha
-    @mashKeyed = (x Integer, a: (alpha) Text) -> result: x
-    @lettersSigil = (a: (alpha) Text, c: Integer) -> result: alpha
+    @lettersTwo = (a: alpha Text, b: beta Integer) -> result: alpha
+    @mashKeyed = (x Integer, a: alpha Text) -> result: x
+    @lettersSigil = (a: alpha Text, c: Integer) -> result: alpha
   `;
 
   it('exact key-mapped match dispatches', async () => {

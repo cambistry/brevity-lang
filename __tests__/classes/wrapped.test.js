@@ -7,7 +7,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //   T = <super *> { body }        positional actor ref
 //   T = <super*> { body }         sugared (star attached to ident)
 //   T = <:name *> { body }        keyed actor ref
-//   T = <name: (alias) *> { body} keyed with internal alias
+//   T = <name: alias *> { body} keyed with internal alias
 //   T = <name: alias*> { body }   keyed sugared
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -93,7 +93,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
         @double = (n: Integer) -> result: (n * 2)
       }
 
-      Wrapper = (child: (inner) *) *{
+      Wrapper = (child: inner *) *{
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
           return result: (result * 2)
@@ -110,7 +110,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
         @double = (n: Integer) -> result: (n * 2)
       }
 
-      Wrapper = (child: (inner) *) *{
+      Wrapper = (child: inner *) *{
         @quadruple = (n: Integer) {
           :result Integer = inner.double(n: n)
           return result: (result * 2)
@@ -153,14 +153,14 @@ describe('wrapped child — runtime with *', () => {
       }
     }
 
-    WrapperAlias = (child: (inner) *) *{
+    WrapperAlias = (child: inner *) *{
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
         return result: (result * 2)
       }
     }
 
-    WrapperSugared = (child: (inner) *) *{
+    WrapperSugared = (child: inner *) *{
       @quadruple = (n: Integer) {
         :result Integer = inner.double(n: n)
         return result: (result * 2)
@@ -344,7 +344,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
 
   it('alias * calling nonexistent method compiles alone', () => {
     expect(() => compileSource(`
-      Wrapper = (name: (s) *) *{
+      Wrapper = (name: s *) *{
         @try = {
           :result Integer = s.no_such_method()
           return :result
@@ -357,7 +357,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
 
   it('sugared alias* calling nonexistent method compiles alone', () => {
     expect(() => compileSource(`
-      Wrapper = (name: (s) *) *{
+      Wrapper = (name: s *) *{
         @try = {
           :result Integer = s.no_such_method()
           return :result
@@ -439,7 +439,7 @@ describe('wrapped child — construction fails when method missing', () => {
         @meth = -> result: 1
       }
 
-      B = (child: (s) *) *{
+      B = (child: s *) *{
         @try = {
           :result Integer = s.not_a_meth()
           return :result
@@ -460,7 +460,7 @@ describe('wrapped child — construction fails when method missing', () => {
         @meth = -> result: 1
       }
 
-      B = (child: (s) *) *{
+      B = (child: s *) *{
         @try = {
           :result Integer = s.not_a_meth()
           return :result
@@ -570,7 +570,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         @meth = -> result: 1
       }
 
-      B = (child: (s) *) *{
+      B = (child: s *) *{
         @try = {
           :result Integer = s.meth()
           return :result
@@ -591,7 +591,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
         @meth = -> result: 1
       }
 
-      B = (child: (s) *) *{
+      B = (child: s *) *{
         @try = {
           :result Integer = s.meth()
           return :result
@@ -770,7 +770,7 @@ describe('wrapped child — arg type mismatch at construction', () => {
         @add = (y: Integer) -> result: (y + 1)
       }
 
-      B = (child: (s) *) *{
+      B = (child: s *) *{
         @do = {
           :result Integer = s.add(y: "ten")
           return :result

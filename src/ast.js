@@ -34,8 +34,17 @@ export const ingestExpr = (defaultValue = null) =>
 export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false, destructures = null } = {}) =>
   ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic, ...(destructures && { destructures }) });
 
-export const fileParam = (name, { type = null, positional = false, defaultValue = null, accessor = null } = {}) =>
-  ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }), ...(accessor && { accessor }) });
+// Type names that never need an import. Plurals are the List-element
+// shorthands.
+export const BUILTIN_TYPE_NAMES = new Set([
+  'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'Anything', 'Self',
+  'Function', 'List', 'Map', 'Array', 'Object', 'Null', 'Timestamp', 'Duration',
+  'Integers', 'Texts', 'Booleans', 'Decimals', 'Floats', 'Blobs', 'Anythings',
+  'Lists', 'Maps', 'Arrays', 'Objects',
+]);
+
+export const fileParam = (name, { type = null, positional = false, defaultValue = null, accessor = null, key = null, typeOrLocal = false } = {}) =>
+  ({ type: 'FileParam', name, paramType: type, positional, ...(defaultValue && { defaultValue }), ...(accessor && { accessor }), ...(key && { key }), ...(typeOrLocal && { typeOrLocal }) });
 
 // ── Declarations ─────────────────────────────────────────────────────────────
 

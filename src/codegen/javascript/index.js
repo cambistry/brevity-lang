@@ -42,7 +42,7 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
     return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.type));
   }
   // Named object: map to positional order via the file actor's initParams.
-  return params.map(p => _coerceArg(constructorArgs[p.name], p.type));
+  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.type));
 }
 
 let _moduleSeq = 0;

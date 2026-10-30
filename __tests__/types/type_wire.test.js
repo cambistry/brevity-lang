@@ -94,7 +94,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
     const actor = await createActor(`
       ::Point (x Integer, y Integer)
       *
-        "Sink": (Sink) {
+        "Sink": Sink {
           take (p: Point) -> ()
         }
       *
@@ -117,7 +117,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
     const actor = await createActor(`
       ::Game (? started Boolean, ? turn: Integer)
       *
-        "Sink": (Sink) {
+        "Sink": Sink {
           take (g: Game) -> ()
         }
       *
@@ -140,7 +140,7 @@ describe('type wire — outbound argument payload + bv-a', () => {
     const actor = await createActor(`
       ::Point (x Integer, y Integer)
       *
-        "Sink": (Sink) {
+        "Sink": Sink {
           take (n: Integer, p: Point) -> ()
         }
       *

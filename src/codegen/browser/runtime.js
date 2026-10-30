@@ -8,7 +8,7 @@
  * start() — compiles, instantiates, and wires up live actors
  */
 
-const documentDI = '*\n  "document": (document)\n*\n';
+const documentDI = '*\n  "document": document\n*\n';
 // A constructor header: delimited `( ... ) [->] *{`, no-params `*{`, or a
 // lineal `*` alone on the first line.
 const hasHeader = (source) => {

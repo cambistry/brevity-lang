@@ -2238,7 +2238,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Module-level state var holding a child instance ref.
         lines.push(`${I}{ let _cn = self.state.get("${stateKey(s.objectName)}").and_then(|v| v.as_str()).unwrap_or("").to_string(); self.child_dispatch(&_cn, "${internalSetSelector}", &${valueArray([val])}, "", "__parent"); }`);
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
-        // Remote dep declared via `( "Alias": (Alias) { ... } ) *{ }`: post the
+        // Remote dep declared via `( "Alias": Alias { ... } ) *{ }`: post the
         // set message via binding.send with bare "set" op and the full
         // address as "#<alias selector>" (hash-angle delimited).
         // Include bv-a with the value's type so the remote's schema/type

@@ -43,7 +43,7 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (Array.isArray(constructorArgs)) {
     return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.type));
   }
-  return params.map(p => _coerceArg(constructorArgs[p.name], p.type));
+  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.type));
 }
 
 export default {

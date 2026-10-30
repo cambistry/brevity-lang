@@ -71,7 +71,7 @@ context with a top-level class/dependency boundary:
 
 ```brevity
 *
-  "/services/store": (Store) {
+  "/services/store": Store {
     get (key: Text) -> (value: Text)
   }
 *

@@ -11,7 +11,7 @@ describe('extract — basic', () => {
 
   it('interface separates file-level params from service', () => {
     const { interface: iface } = extract('@ping = -> 1\n');
-    expect(iface.params).toBe('*()');
+    expect(iface.params).toBe('()');
     expect(iface.service).toBe('{\n  ping () -> (Integer)\n}');
   });
 });
@@ -19,22 +19,24 @@ describe('extract — basic', () => {
 // ── File-level params rendering ──────────────────────────────────────────────
 //
 // The file-actor's construction-time inputs are rendered into `iface.params`
-// in declaration order, using a compact form:
+// in declaration order, as `( … )`: the caller-facing side of the header.
 //
-//   :path           — service injection (replaces { ...iface })
-//   :path #         — class injection (replaces *(...) -> { ...iface })
-//   :name Type      — named scalar param
-//   Type            — positional scalar param
+//   "path": { iface }              — service dependency, inline interface
+//   "path": (…) -> *{ iface }      — class dependency, inline profile
+//   "path": #                      — class dependency, profile from the remote
+//   "path":                        — dependency, type from the remote
+//   "name": Type                   — named scalar param
+//   Type                           — positional scalar param
 //
-// Paths containing any non-word character are quoted: `:"/db"`
-// Identifier paths are bare:                           `:db`
-// The local alias (e.g. `(DB)`) is NOT surfaced in params.
+// Bindings are private and not surfaced: a dependency's alias or destructure,
+// a positional param's name, a renamed param's local. Every named key is
+// quoted (keys are paths); a positional entry is only its type.
 
 describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
       *
-        "/db": (DB) { lookup (key: Text) -> (value: Text) }
+        "/db": DB { lookup (key: Text) -> (value: Text) }
       *
 
       @go = (key: Text) {
@@ -42,50 +44,50 @@ describe('extract — params rendering', () => {
         return :value
       }
     `);
-    expect(iface.params).toBe('*(\n  :"/db"\n)');
+    expect(iface.params).toBe('(\n  "/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n)');
   });
 
-  it('bare service DI renders with no sigil', () => {
+  it('bare service DI renders as key: with no type', () => {
     const { interface: iface } = extract(`
       *
-        "/db": (DB)
+        "/db": DB
       *
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  :"/db"\n)');
+    expect(iface.params).toBe('(\n  "/db":\n)');
   });
 
-  it('class DI with inline header + iface renders as compact #', () => {
+  it('class DI with an inline profile renders the profile', () => {
     const { interface: iface } = extract(`
       *
-        "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
+        "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
       *
 
       t = Thing(a: 5)
 
       @go = { :value Integer = t.get(); return :value }
     `);
-    expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
+    expect(iface.params).toBe('(\n  "thing.bv": (a: Integer) -> *{\n    get () -> (value: Integer)\n  }\n)');
   });
 
-  it('bare class DI # renders as compact #', () => {
+  it('bare class DI renders as #', () => {
     const { interface: iface } = extract(`
       *
-        "thing.bv": (Thing) #
+        "thing.bv": Thing #
       *
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  :"thing.bv" #\n)');
+    expect(iface.params).toBe('(\n  "thing.bv": #\n)');
   });
 
-  it('named scalar param renders as :name Type', () => {
+  it('named scalar param renders as "name": Type', () => {
     const { interface: iface } = extract(`
       *
         value: Integer
       *
       @get = -> value
     `);
-    expect(iface.params).toBe('*(\n  value: Integer\n)');
+    expect(iface.params).toBe('(\n  "value": Integer\n)');
   });
 
   it('multiple named scalar params render in order', () => {
@@ -96,7 +98,7 @@ describe('extract — params rendering', () => {
       *
       @greet = -> greeting: name as Text
     `);
-    expect(iface.params).toBe('*(\n  name: Text\n  count: Integer\n)');
+    expect(iface.params).toBe('(\n  "name": Text\n  "count": Integer\n)');
   });
 
   it('positional scalar param renders as bare Type (binding name dropped)', () => {
@@ -107,7 +109,7 @@ describe('extract — params rendering', () => {
       *
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  Text\n  Integer\n)');
+    expect(iface.params).toBe('(\n  Text\n  Integer\n)');
   });
 
   it('mixed positional and named scalar params preserve order', () => {
@@ -118,17 +120,17 @@ describe('extract — params rendering', () => {
       *
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  Text\n  limit: Integer\n)');
+    expect(iface.params).toBe('(\n  Text\n  "limit": Integer\n)');
   });
 
-  it('path with non-word char quotes in rendered params', () => {
+  it('a dependency key is always quoted', () => {
     const { interface: iface } = extract(`
       *
-        "my-app.bv": (App) #
+        "my-app.bv": App #
       *
       @noop = .
     `);
-    expect(iface.params).toBe('*(\n  :"my-app.bv" #\n)');
+    expect(iface.params).toBe('(\n  "my-app.bv": #\n)');
   });
 
   it('all four entry kinds mixed, declaration order preserved', () => {
@@ -136,26 +138,46 @@ describe('extract — params rendering', () => {
     const { interface: iface } = extract(`
       *
         t Text
-        "/db": (DB)
+        "/db": DB
         value: Integer
-        "thing.bv": (Thing) #
+        "thing.bv": Thing #
       *
       @noop = .
     `);
     expect(iface.params).toBe(
-      '*(\n  Text\n  :"/db"\n  value: Integer\n  :"thing.bv" #\n)',
+      '(\n  Text\n  "/db":\n  "value": Integer\n  "thing.bv": #\n)',
     );
   });
 
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
       *
-        "/db": (DB)
+        "/db": DB
       *
       @noop = .
     `);
     expect(iface.params).not.toContain('DB');
-    expect(iface.params).not.toContain('(DB)');
+  });
+
+  it('a renamed named param surfaces its key, not its local', () => {
+    const { interface: iface } = extract(`
+      *
+        limit: n Integer
+      *
+      @get = -> n
+    `);
+    expect(iface.params).toBe('(\n  "limit": Integer\n)');
+  });
+
+  it('a bare-identifier key is quoted too; its destructure is not surfaced', () => {
+    const { interface: iface } = extract(`
+      *
+        HTML: (:div, :span)
+        Shapes: :Box #
+      *
+      @noop = .
+    `);
+    expect(iface.params).toBe('(\n  "HTML":\n  "Shapes": #\n)');
   });
 });
 
@@ -186,7 +208,7 @@ describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
       *
-        "Remote": (Remote)
+        "Remote": Remote
       *
       @fetch
         =
@@ -212,7 +234,7 @@ describe('extract + compile — round-trip', () => {
 
     const { ast } = extract(`
       *
-        "Remote": (Remote)
+        "Remote": Remote
       *
 
       @fetch
@@ -233,7 +255,7 @@ describe('extract + compile — round-trip', () => {
 
     const { ast } = extract(`
       *
-        "Store": (Store)
+        "Store": Store
       *
       @go = { Store.get() . }
     `);
@@ -260,7 +282,7 @@ describe('extract + compile — optional args round-trip', () => {
 
     const { ast } = extract(`
       *
-        "Greeter": (Greeter)
+        "Greeter": Greeter
       *
 
       @go
@@ -285,7 +307,7 @@ describe('extract + compile — optional args round-trip', () => {
 
     const { ast } = extract(`
       *
-        "Math": (Math)
+        "Math": Math
       *
 
       @go
@@ -305,5 +327,58 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     expect(ifaceA.service).toContain('? Integer');
+  });
+});
+
+// ── Params document as a remote's constructor signature ─────────────────────
+
+describe('params document — read back as constructor params', () => {
+  const remote = extract(`
+    *
+      t Text
+      limit: Integer
+      "/db": DB
+    *
+    @noop = .
+  `).interface;
+  const consumer = (call) => extract(`
+    *
+      "svc.bv": Svc #
+    *
+    s = ${call}
+    @noop = .
+  `).ast;
+  const remotes = [{ path: 'svc.bv', params: remote.params, service: remote.service }];
+
+  it('accepts a call matching the positional and named params', () => {
+    expect(() => compile(consumer('Svc("a", limit: 3)'), { remotes })).not.toThrow();
+  });
+
+  it('rejects a missing named param', () => {
+    expect(() => compile(consumer('Svc("a")'), { remotes })).toThrow(/missing: limit/);
+  });
+
+  it('reads past multi-line dependency entries', () => {
+    const typed = extract(`
+      *
+        "/db": DB { get (key: Text) -> (value: Text) }
+        "lib.bv": Lib (a: Integer, b: Text) -> *{ ping () -> . }
+        limit: lim Integer
+      *
+      @noop = .
+    `).interface;
+    expect(typed.params).toBe(
+      '(\n  "/db": {\n    get (key: Text) -> (value: Text)\n  }\n' +
+      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping () -> .\n  }\n  "limit": Integer\n)',
+    );
+    const typedRemotes = [{ path: 'svc.bv', params: typed.params, service: typed.service }];
+    expect(() => compile(consumer('Svc(limit: 3)'), { remotes: typedRemotes })).not.toThrow();
+    expect(() => compile(consumer('Svc()'), { remotes: typedRemotes })).toThrow(/missing: limit/);
+  });
+
+  it('rejects the retired *( … ) params document', () => {
+    expect(() => compile(consumer('Svc("a", limit: 3)'), {
+      remotes: [{ path: 'svc.bv', params: '*(\n  Text\n)', service: remote.service }],
+    })).toThrow(/'\*\( … \)' is retired/);
   });
 });

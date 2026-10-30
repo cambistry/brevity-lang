@@ -296,6 +296,7 @@ function injectFileParamsIntoFileActor(ast) {
     .filter(d => d.type === 'FileParam')
     .map(p => ({
       name: p.name,
+      ...(p.key ? { key: p.key } : {}),
       type: p.paramType,
       positional: !!p.positional,
       ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),

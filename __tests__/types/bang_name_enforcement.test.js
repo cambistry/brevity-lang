@@ -52,7 +52,7 @@ describe('bang enforcement — interface methods (bidirectional)', () => {
     poke! () -> .
   }`;
   const remotes = [{ path: 'Widget', service: WIDGET }];
-  const dep = (body) => `*\n  "Widget": (Widget)\n*\n${body}`;
+  const dep = (body) => `*\n  "Widget": Widget\n*\n${body}`;
 
   it('accepts a no-bang method called without a bang', () => {
     expect(() => compileSource(dep(`@go = { Widget.watch(on: (s) { s.dismiss() }) . }`), { remotes })).not.toThrow();

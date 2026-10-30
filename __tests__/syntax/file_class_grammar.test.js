@@ -44,7 +44,7 @@ describe('file-class header — delimited', () => {
   it('multi-line entries', () => {
     expect(() => compileSource(`
       (
-        "Remote": (Remote) { get () -> (value: Integer) }
+        "Remote": Remote { get () -> (value: Integer) }
         name: Text
       ) *{
         @get = -> name
@@ -213,7 +213,7 @@ describe('file-class header — lineal forms', () => {
   it('dependency entries, one per line', () => {
     expect(() => compileSource(`
       *
-        "/services/counter": (Counter) {
+        "/services/counter": Counter {
           get () -> (count: Integer)
         }
         base: Integer
@@ -231,7 +231,7 @@ describe('file-class header — lineal params land as file params', () => {
   it('lineal and delimited headers yield identical dependencies', () => {
     const lineal = extract(`
       *
-        "Remote": (Remote)
+        "Remote": Remote
         name: Text
         n Integer
       *
@@ -239,7 +239,7 @@ describe('file-class header — lineal params land as file params', () => {
       @get = -> name
     `);
     const delimited = extract(`
-      ( "Remote": (Remote), name: Text, n Integer ) *{
+      ( "Remote": Remote, name: Text, n Integer ) *{
         @get = -> name
       }
     `);

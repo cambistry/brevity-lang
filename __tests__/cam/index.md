@@ -7,9 +7,9 @@ construction, callback flow, and outgoing wire messages.
 ## Current Tested Model
 
 - Dependencies are declared in the file-level `*( ... )` header.
-- A dependency entry binds a path or name to a local alias: `"Remote": (Remote)`.
+- A dependency entry binds a path or name to a local alias: `"Remote": Remote`.
 - Inline service constraints are the safest examples:
-  `"Remote": (Remote) { get (url: Text) -> (response: Text) }`.
+  `"Remote": Remote { get (url: Text) -> (response: Text) }`.
 - Calls to dependency aliases send CAM messages to the alias address.
 - Replying calls suspend the current continuation until a matching `re` arrives.
 - Silent calls use `spawn` or a silent `-> .` surface and do not produce a value.

@@ -77,6 +77,11 @@ Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
 
 ### Deferred: the header colon
 
+> **Resolved (same day):** the colon stays. It is the key/value colon
+> (`:HTML` = `HTML: HTML`), so there is nothing to drop; option (a) was
+> wrong. Single-name parens are dropped instead (`"thing.bv": Thing #`). See
+> `session-2026-10-29-params-document-header-notation.md`.
+
 `"thing.bv": (Thing) …` and `HTML: (:div)` keep their colon. Dropping it is
 safe for quoted paths, but for bare-identifier paths `HTML (:div)` would
 collide with a positional file param that has a paren type (`pt (x Integer)`,

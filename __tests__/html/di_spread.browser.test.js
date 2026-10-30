@@ -92,7 +92,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
       @create = -> <div>x</div>
     `;
     const { ast } = extract(source);
-    expect(() => compile(ast, {})).toThrow(/HTML.*interface|spread.*HTML.*manifest/i);
+    expect(() => compile(ast, {})).toThrow(/HTML.*has no type|spread.*HTML.*manifest/i);
   });
 
   it('two spread injections sharing a name is a compile error', () => {

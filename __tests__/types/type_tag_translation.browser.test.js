@@ -20,7 +20,7 @@ async function forwardingActor(selfAddr) {
   const compiled = await compileActor(`
     ::Point (x Integer, y Integer)
     *
-      "Sink": (Sink) {
+      "Sink": Sink {
         take (p: Point) -> ()
       }
     *

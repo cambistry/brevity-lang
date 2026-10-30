@@ -1123,6 +1123,7 @@ export function codegen(ast, options = {}) {
   // that never reference Self as a value pay no cost.
   ctx.fileName = options.fileName;
   // Build remotes from inline interfaces and merge with options.remotes
+  // (the inline definition wins — see validate)
   const inlineRemotes = {};
   for (const d of (ast.dependencies || [])) {
     if (d.interface) inlineRemotes[d.name] = stripAsTypeSuffix(d.interface);
@@ -1144,7 +1145,7 @@ export function codegen(ast, options = {}) {
     }
   }
   const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0
-    ? { ...inlineRemotes, ...resolvedRemotes }
+    ? { ...resolvedRemotes, ...inlineRemotes } // an inline definition wins
     : null;
   // A subclass with an empty body (`Box = (Base |) *{}`) is still a class: its
   // surface is all inherited.

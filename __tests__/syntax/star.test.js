@@ -25,7 +25,7 @@ import { compileSource } from '../helpers.js';
 //   Service coercion:
 //     Coerced = Thing as *(p: Type) -> { iface }
 //   File-level header:
-//     ( "/path": (Alias) ) *{ body }  |  *\n "/path": (Alias)\n *\n body
+//     ( "/path": Alias ) *{ body }  |  *\n "/path": Alias\n *\n body
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('class (params) *{...} — delimited with-params', () => {
@@ -457,7 +457,7 @@ describe('service coercion — `as *(...)`', () => {
   it('Coerced = Alias as (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": (Thing) #
+        "thing.bv": Thing #
       *
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
@@ -491,7 +491,7 @@ describe('file-level header — lineal', () => {
   it('inline manifest class: (Alias) (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": (Thing) (a: Integer) -> *{ get () -> (value: Integer) }
+        "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
         base: Integer
       *
 
@@ -531,13 +531,13 @@ describe('hard error — old `<...>` syntax', () => {
   });
 
   it('rejects file-level <...> header with deps', () => {
-    expect(() => compileSource('<\n  "thing.bv": (Thing) #\n>\n=\n\n@test = -> 1\n')).toThrow();
+    expect(() => compileSource('<\n  "thing.bv": Thing #\n>\n=\n\n@test = -> 1\n')).toThrow();
   });
 
   it('rejects old service coercion as *(p: Type)', () => {
     // Build with concatenation so the conversion script can't rewrite the
     // literal old-syntax fixture.
     const oldAsClause = 'as ' + '<' + ':a Integer' + '>';
-    expect(() => compileSource(`*\n  "thing.bv": (Thing) #\n*\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = -> 1\n`)).toThrow();
+    expect(() => compileSource(`*\n  "thing.bv": Thing #\n*\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = -> 1\n`)).toThrow();
   });
 });

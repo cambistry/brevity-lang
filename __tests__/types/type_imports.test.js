@@ -121,7 +121,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('accepts Geom::Point in a field annotation when Geom exports Point', () => {
     const { ast } = extract(`
       *
-        "geometry.bv": (Geom)
+        "geometry.bv": Geom
       *
       ::User (profile Geom::Point)
       @noop = -> ok: 1
@@ -132,7 +132,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('rejects Geom::NoSuch when NoSuch is not exported', () => {
     const { ast } = extract(`
       *
-        "geometry.bv": (Geom)
+        "geometry.bv": Geom
       *
       ::User (profile Geom::NoSuch)
       @noop = -> ok: 1
@@ -152,7 +152,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('cross-module ref in a parameter annotation is validated', () => {
     const { ast } = extract(`
       *
-        "geometry.bv": (Geom)
+        "geometry.bv": Geom
       *
       @go = (p: Geom::Point) -> ok: 1
     `);

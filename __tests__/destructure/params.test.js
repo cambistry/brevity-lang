@@ -193,7 +193,7 @@ describe('destructure params — class (#) form', () => {
       *
 
       @go = -> 1
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 });
 
@@ -210,7 +210,7 @@ describe('destructure params — requires interface', () => {
         =
         p = Point(1, 2)
         return :p
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 
   it('multiple destructures without remotes throws', () => {
@@ -220,7 +220,7 @@ describe('destructure params — requires interface', () => {
       *
 
       @go = -> 1
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 
   it('aliased destructure without remotes throws', () => {
@@ -230,7 +230,7 @@ describe('destructure params — requires interface', () => {
       *
 
       @go = -> 1
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 });
 
@@ -258,15 +258,14 @@ describe('destructure params — inline interface', () => {
 // ─── Extraction — params rendering ───────────────────────────────────────────
 
 describe('destructure params — extraction', () => {
-  it('single destructure renders in iface.params', () => {
+  it('single destructure renders in iface.params (key only; the destructure is a binding)', () => {
     const { interface: iface } = extract(`
       *
         "geometry.bv": (:Point)
       *
       @noop = .
     `);
-    expect(iface.params).toContain('geometry.bv');
-    expect(iface.params).toContain('Point');
+    expect(iface.params).toBe('(\n  "geometry.bv":\n)');
   });
 
   it('multiple destructures render in iface.params', () => {
@@ -410,7 +409,7 @@ describe('destructure params — validation', () => {
         "service.bv": (:greet)
       *
       @go = -> 1
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 
   it('# form without remotes rejects with destructures', () => {
@@ -419,7 +418,7 @@ describe('destructure params — validation', () => {
         "service.bv": (:greet) #
       *
       @go = -> 1
-    `)).toThrow(/requires an interface/);
+    `)).toThrow(/has no type/);
   });
 });
 

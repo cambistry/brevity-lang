@@ -31,7 +31,7 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   if (Array.isArray(constructorArgs)) return constructorArgs;
   const { ast } = ctx.extract(source);
   const fileActor = (ast.actors || []).find(a => !a.name);
-  const order = (fileActor?.initParams || []).map(p => p.name);
+  const order = (fileActor?.initParams || []).map(p => p.key || p.name);
   return order.map(n => constructorArgs[n]);
 }
 

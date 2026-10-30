@@ -7,7 +7,7 @@ dependencies. Prefer explicit inline constraints in examples.
 
 ```brevity
 *(
-  "/services/db": (DB) {
+  "/services/db": DB {
     lookup (key: Text) -> (value: Text)
   }
 )
@@ -45,7 +45,7 @@ This parses:
 
 ```brevity
 *(
-  "Remote": (Remote)
+  "Remote": Remote
 )
 =
 ```

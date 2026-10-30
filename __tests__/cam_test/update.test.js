@@ -4,7 +4,7 @@ describe('test.update — single named param via update handler', () => {
   const script = `
       name *Text = "anonymous"
 
-      update = (name: (n) Text) ->  name <- n .
+      update = (name: n Text) ->  name <- n .
 
       @get = -> :name
   `;
@@ -35,7 +35,7 @@ describe('test.update — mixed positional + named args', () => {
       update
         =
         val Integer
-        label: (l) Text
+        label: l Text
         =
         p <- val
         label <- l
@@ -87,7 +87,7 @@ describe('test.update — child actor via normal dispatch', () => {
       Person =
         *
         name *Text = "anonymous"
-        update = (name: (n) Text) ->  name <- n .
+        update = (name: n Text) ->  name <- n .
         @get = -> name: name
         .
       end#Person

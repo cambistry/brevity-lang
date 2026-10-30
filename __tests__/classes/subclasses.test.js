@@ -75,7 +75,7 @@ describe('subclasses — arg type override rejected — compilation', () => {
   it('re-aliasing inherited arg without changing type is ok', () => {
     expect(() => compileSource(`
       T = (a: Decimal) *{}
-      V = (T | a: (b) Decimal) *{
+      V = (T | a: b Decimal) *{
         @c = -> result: b
       }
       @test = -> 1

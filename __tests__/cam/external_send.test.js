@@ -3,7 +3,7 @@ import { expectBehavior } from '../helpers.js';
 describe('external send', () => {
   const script = `
     *
-      "Remote": (Remote) {
+      "Remote": Remote {
         get (url: Text) -> (response: Text)
       }
     *

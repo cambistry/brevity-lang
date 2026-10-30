@@ -169,7 +169,7 @@ const remotesM = [{ path: 'Widget', service: WIDGET_M }];
 
 const withDep = (body) => `
   *
-    "Widget": (Widget)
+    "Widget": Widget
   *
   ${body}
 `;
