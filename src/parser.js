@@ -280,7 +280,7 @@ export function parse(tokensIn) {
       if (tokens[after]?.type !== 'PIPE') break;
       const nxt = tokens[after+1];
       if (nxt?.type === 'KEYWORD' && nxt.value === 'null') { len += 2; continue; }
-      if (nxt?.type === 'IDENT' && /^[A-Z]/.test(nxt.value)) {
+      if (nxt?.type === 'IDENT') {
         const inner = typeLength(after + 1);
         if (inner > 0) { len += 1 + inner; continue; }
       }
@@ -340,9 +340,6 @@ export function parse(tokensIn) {
     if (ampTok.type !== 'AMPERSAND_IDENT') {
       throw new Error(`Expected &Type, got ${ampTok.type}`);
     }
-    if (!/^[A-Z]/.test(ampTok.value)) {
-      throw new Error(`'&${ampTok.value}' is not valid in type position — use uppercase Type names`);
-    }
     tokens.splice(pos, 0, { type: 'IDENT', value: ampTok.value });
     return parseType();
   }
@@ -360,7 +357,7 @@ export function parse(tokensIn) {
         result = `${result} | null`;
         continue;
       }
-      if (nxt?.type === 'IDENT' && /^[A-Z]/.test(nxt.value)) {
+      if (nxt?.type === 'IDENT') {
         consume(); // |
         const member = parseAtomicType(false);
         result = `${result} | ${member}`;
@@ -885,12 +882,6 @@ export function parse(tokensIn) {
     const peekIsType = () => {
       if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
       if (peek().type !== 'IDENT') return false;
-      const next = tokens[pos + 1]?.type;
-      if (next === 'EQUALS') {
-        // IDENT = ... — could be "Type = default" or "name = value"
-        // If IDENT starts with uppercase, it's a type with default
-        return /^[A-Z]/.test(peek().value);
-      }
       return true;
     };
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
@@ -938,7 +929,7 @@ export function parse(tokensIn) {
           consume();
           const type = parseType();
           params.push({ name, type, positional: false, ref: true });
-        } else if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+        } else if (peek().type === 'AMPERSAND_IDENT') {
           // name: &Type — named read-only ref param
           const type = consumeAmpersandTypeForParam();
           params.push({ name, type, positional: false, readonly: true });
@@ -962,7 +953,7 @@ export function parse(tokensIn) {
           consume(); // *
           const type = parseType();
           params.push({ name, type, positional: true, ref: true });
-        } else if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+        } else if (peek().type === 'AMPERSAND_IDENT') {
           // name &Type — positional read-only ref param
           const type = consumeAmpersandTypeForParam();
           params.push({ name, type, positional: true, readonly: true });
@@ -1952,7 +1943,7 @@ export function parse(tokensIn) {
     }
 
     // ── XML constructor: <Name attr="val" attr2={expr} /> ──────────────
-    if (peek().type === 'LT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+    if (peek().type === 'LT' && tokens[pos + 1]?.type === 'IDENT') {
       return parseXmlConstructor();
     }
 
@@ -1976,8 +1967,8 @@ export function parse(tokensIn) {
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = consume().value;
       result = parseForwardCall(name);
-    } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT' && /^[a-z_]/.test(tokens[pos + 1].value)) {
-      // *name (lowercase) — call-site write-capability grant on a ref cell.
+    } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
+      // *name — call-site write-capability grant on a ref cell.
       // Mirrors the *Type sigil in param position. Caller must own the cell.
       // Per notes/capability-sigils-2026-05-06.md.
       consume(); // *
@@ -2282,7 +2273,7 @@ export function parse(tokensIn) {
   function isTypeAttestation() {
     return peek().type === 'KEYWORD' && peek().value === 'as' &&
            (
-             (tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) ||
+             tokens[pos + 1]?.type === 'IDENT' ||
              tokens[pos + 1]?.type === 'LPAREN'
            );
   }
@@ -2490,22 +2481,24 @@ export function parse(tokensIn) {
         const name = consume().value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        else if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) typeName = parseType();
+        else if (peek().type === 'IDENT') typeName = parseType();
         pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // key-mapped: key: local [Type]  OR  named: key: Type  OR  key: _  (discard)
         const first = consume().value;
         consume(); // COLON
-        if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) {
-          // key: Type — named field with type (uppercase = type, not local name)
-          const typeName = parseType();
-          pattern.push({ named: true, name: first, type: typeName });
-        } else if (peek().type === 'IDENT') {
+        if (isLoneNameAfterColon()) {
+          // key: X — X is a type if one is in scope (named field, typed),
+          // else the local the field binds to (resolved after parsing: see
+          // resolveLoneNames)
+          pattern.push({ named: true, name: first, type: consume().value, typeOrLocal: true });
+        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
+          // key: local Type
           const localName = consume().value;
-          let typeName = null;
-          // Whitespace type after local name (in destructure, EQUALS is always assignment, so type before = is valid)
-          if (peek().type === 'IDENT' && /^[A-Z]/.test(peek().value)) { typeName = parseType(); }
-          pattern.push({ key: first, name: localName, type: typeName });
+          pattern.push({ key: first, name: localName, type: parseType() });
+        } else if (peek().type === 'IDENT') {
+          // key: Type — a qualified, union or `of` type
+          pattern.push({ named: true, name: first, type: parseType() });
         } else if (peek().type === 'DISCARD') {
           // `key: _` — consumes the key so a trailing `...` skips it. Only
           // meaningful for DI-namespace destructuring; ignored by object
@@ -2516,7 +2509,7 @@ export function parse(tokensIn) {
           // key: (no local name, no type — just named)
           pattern.push({ named: true, name: first, type: null });
         }
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT' && /^[A-Z]/.test(tokens[pos + 1]?.value)) {
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
         // typed positional: a Type
         const name = consume().value;
         const type = parseType();
@@ -2645,9 +2638,7 @@ export function parse(tokensIn) {
       let i = pos;
       while (i < tokens.length) {
         const t = tokens[i].type;
-        if (t === 'SIGIL' || t === 'COMMA' || t === 'COLON' || t === 'DISCARD' ||
-            (t === 'IDENT' && !/^[A-Z]/.test(tokens[i].value))) { i++; continue; }
-        if (t === 'IDENT' && /^[A-Z]/.test(tokens[i].value)) { i++; continue; } // Type in typed destructure
+        if (t === 'SIGIL' || t === 'COMMA' || t === 'COLON' || t === 'DISCARD' || t === 'IDENT') { i++; continue; }
         break;
       }
       return tokens[i]?.type === 'EQUALS';
@@ -2674,8 +2665,10 @@ export function parse(tokensIn) {
       }
       return tokens[i]?.type === 'EQUALS';
     }
-    // named with type: `key: Type [, ...] = expr` — Type is uppercase (key is both external and local name)
-    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && /^[A-Z]/.test(tokens[pos + 2]?.value ?? '')) {
+    // named: `key: X [, ...] = expr` — X is a type or a local, settled after
+    // parsing (resolveLoneNames); `key: Type`; `key: local Type = expr`
+    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT') {
+      if (t3 === 'IDENT') return true;
       const afterType = tokens[pos + 2 + typeLength(pos + 2)]?.type;
       if (afterType === 'EQUALS') return true;
       if (afterType === 'COMMA') {
@@ -2689,14 +2682,6 @@ export function parse(tokensIn) {
         return tokens[i]?.type === 'EQUALS';
       }
     }
-    // key-mapped: `key: local = expr` — local must be lowercase (uppercase = typed assignment)
-    if (t0 === 'IDENT' && t1 === 'COLON' && t2 === 'IDENT' && t3 === 'EQUALS')
-      return /^[a-z]/.test(tokens[pos + 2]?.value ?? '');
-    // key-mapped with type: `key: local Type = ...`
-    if (t0 === 'IDENT' && t1 === 'COLON' &&
-        t2 === 'IDENT' && /^[a-z]/.test(tokens[pos + 2]?.value ?? '') &&
-        t3 === 'IDENT')
-      return true;
     // typed positional as first of multi-item: `a Type, ...`
     // (single `a Type = expr` is caught first by isTypedAssignStart)
     if (t0 === 'IDENT' && t1 === 'IDENT') {
@@ -2834,7 +2819,7 @@ export function parse(tokensIn) {
       value = parseRHSObjectLiteral(null);
     } else {
       value = parseExpr();
-      // Treat any user type (capitalized, non-builtin) the same as
+      // Treat any user type (non-builtin) the same as
       // `Object` for the purposes of bare-comma RHS — `p Point = 1, 2`
       // becomes a ObjectLiteral that the post-parse pass coerces into
       // `Point(1, 2)`. Slice 9 of types-implementation-plan-2026-04-27.
@@ -2846,7 +2831,6 @@ export function parse(tokensIn) {
         typeName === 'null' || typeName === 'Function' || typeName === 'Object'
       );
       const looksLikeUserType = typeof typeName === 'string' &&
-        /^[A-Z]/.test(typeName) &&
         !typeName.includes(' ') &&
         !typeName.includes('->') &&
         !isBuiltinTypeName;
@@ -3098,7 +3082,7 @@ export function parse(tokensIn) {
         const type = parseType();
         return withDefault({ name: first, type, ref: true }, tryParseDefault());
       }
-      if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+      if (peek().type === 'AMPERSAND_IDENT') {
         // name: &Type — named read-only ref param
         const type = consumeAmpersandTypeForParam();
         return withDefault({ name: first, type, readonly: true }, tryParseDefault());
@@ -3131,7 +3115,7 @@ export function parse(tokensIn) {
         return withDefault({ name, type, positional: true, ref: true }, tryParseDefault());
       }
       // &Type — positional read-only ref param
-      if (peek().type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(peek().value)) {
+      if (peek().type === 'AMPERSAND_IDENT') {
         const type = consumeAmpersandTypeForParam();
         return withDefault({ name, type, positional: true, readonly: true }, tryParseDefault());
       }
@@ -3625,15 +3609,16 @@ export function parse(tokensIn) {
     }
 
     // ── Public constant: @name = <literal|ctor> ─────────────────────────
-    // Speculative: if after `=` we see a literal or a capital-ident ctor
-    // call, treat as a constant. Otherwise fall through to handler parsing.
+    // Speculative: if after `=` we see a literal or a call, treat as a
+    // constant. Otherwise fall through to handler parsing. The call must
+    // construct a type in scope — checked after parsing (resolveLoneNames).
     if (peek().type === 'EQUALS') {
       const savedPos = pos;
       consume(); // EQUALS
       skipNewlines();
       const t = peek().type;
       // Exclude `Function(...)` — that's the empty-overload initializer form.
-      const isCtorCall = t === 'IDENT' && /^[A-Z]/.test(peek().value) && peek().value !== 'Function' && tokens[pos + 1]?.type === 'LPAREN';
+      const isCtorCall = t === 'IDENT' && peek().value !== 'Function' && tokens[pos + 1]?.type === 'LPAREN';
       const isLiteral = t === 'NUMBER' || t === 'STRING' || t === 'LBRACKET' ||
         (t === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'));
       if (isLiteral || isCtorCall) {
@@ -3646,7 +3631,7 @@ export function parse(tokensIn) {
           if (v.type === 'BoolLiteral') return 'Boolean';
           if (v.type === 'ListLiteral') return 'List';
           if (v.type === 'DecimalLiteral') return 'Decimal';
-          if (v.type === 'FunctionCallExpr' && v.callee?.type === 'Identifier' && /^[A-Z]/.test(v.callee.name)) {
+          if (v.type === 'FunctionCallExpr' && v.callee?.type === 'Identifier') {
             return v.callee.name;
           }
           return null;
@@ -3660,6 +3645,7 @@ export function parse(tokensIn) {
         const getter = AST.functionDecl('@' + op, [], [
           AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),
         ]);
+        if (value.type === 'FunctionCallExpr') getter.constantCallee = typeName;
         return [getter];
       }
       pos = savedPos;
@@ -3872,17 +3858,13 @@ export function parse(tokensIn) {
     return AST.asClause(targetType, negated, expr);
   }
 
-  function isActorBodyStart(declName) {
+  function isActorBodyStart() {
     // Detects whether the lineal-form body of a named `name = ... = body`
     // declaration is an actor body (becomes a class) vs. a regular function
-    // body. Two signals:
-    //   1. UpperCase name → class body by convention (e.g. `Counter`, `Box`).
-    //   2. First non-blank body token is an actor-flavored marker
-    //      (@method / self / set / update).
-    // Ref-decls (`name *Type = ...`) at the body opening are *not*
-    // discriminative — they appear in both body kinds — so a lowercase name
-    // whose body opens with a ref-decl is treated as a regular function.
-    if (typeof declName === 'string' && /^[A-Z]/.test(declName)) return true;
+    // body: the first non-blank body token is an actor-flavored marker
+    // (@method / self / set / update). Ref-decls (`name *Type = ...`) at the
+    // body opening are *not* discriminative — they appear in both body kinds —
+    // so a body opening with a ref-decl is treated as a regular function.
     let i = pos;
     while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
     const t = tokens[i];
@@ -4008,7 +3990,7 @@ export function parse(tokensIn) {
         }
       }
       // Positional read-only ref: name &Type
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
         const name = consume().value;
         const type = consumeAmpersandTypeForParam();
         cParams.push({ name, type, positional: true, readonly: true });
@@ -4036,7 +4018,7 @@ export function parse(tokensIn) {
         }
       }
       // Sigil read-only ref: :name &Type
-      if (peek().type === 'SIGIL' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT' && /^[A-Z]/.test(tokens[pos + 1].value)) {
+      if (peek().type === 'SIGIL' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
         const name = consume().value;
         const type = consumeAmpersandTypeForParam();
         cParams.push({ name, type, readonly: true });
@@ -4752,9 +4734,9 @@ export function parse(tokensIn) {
         } else {
           const params = parseParams();
 
-          // Check if this is a named actor definition (capitalized name or
-          // body opens with @method / self / set / update).
-          if (isActorBodyStart(op)) {
+          // Check if this is a named actor definition (body opens with
+          // @method / self / set / update).
+          if (isActorBodyStart()) {
             const nested = parseActorBody(() =>
               (peek().type === 'DOT') ||
               (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -4821,11 +4803,14 @@ export function parse(tokensIn) {
       if (value.type === 'StringLiteral') return 'Text';
       if (value.type === 'BoolLiteral') return 'Boolean';
       if (value.type === 'ListLiteral') return 'List';
-      if (value.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier' && /^[A-Z]/.test(value.callee.name)) {
+      // A call infers its callee's name; whether that is a type in scope is
+      // settled after parsing (resolveLoneNames)
+      if (value.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier') {
         return value.callee.name;
       }
       return null;
     }
+    const isCall = (value) => value?.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier';
     // A TypedAssign that constructs against a declared dependency (or a
     // class coercion of one) is conceptually a ref decl: it produces
     // an actor reference. Mark such state vars as isRef so codegens
@@ -4847,6 +4832,7 @@ export function parse(tokensIn) {
         if (!stmt.typeName) {
           const inferred = inferType(stmt.expr);
           if (inferred) stmt.typeName = inferred;
+          if (inferred && isCall(stmt.expr)) stmt.typeFromCallee = true;
         }
         declarationReturn = stmt;
       } else if (stmt.type === 'ExprStatement') {
@@ -4854,9 +4840,11 @@ export function parse(tokensIn) {
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
         const isIngest = stmt.value?.type === 'IngestExpr';
         const isRef = stmt.type === 'RefDecl' || isDepConstructorCall(stmt.value);
+        const fromCallee = !stmt.typeName && !stmt.rhsType && isCall(stmt.value);
         stateVarDecls.push({
           name: stmt.name,
           typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything',
+          ...(fromCallee && { typeFromCallee: true }),
           isRef,
           ...(isIngest && { ingest: true, ingestDefault: stmt.value.defaultValue }),
         });
@@ -5330,7 +5318,8 @@ export function parse(tokensIn) {
   // A type name in scope is reserved: no param may share it. So a lone name
   // after a named param's colon (`key: X`) is the type X when one is in scope,
   // and otherwise the param's local name (untyped). In scope: built-ins, the
-  // file's `::` types and classes, and every name the header binds.
+  // file's `::` types and classes (coercions included), and every name the
+  // header binds.
   function resolveLoneNames(program) {
     const typeNames = new Set(AST.BUILTIN_TYPE_NAMES);
     const collect = (node) => {
@@ -5338,6 +5327,7 @@ export function parse(tokensIn) {
       if (Array.isArray(node)) { node.forEach(collect); return; }
       if (node.type === 'TypeDecl' && node.name) typeNames.add(node.name);
       if (node.type === 'Actor' && node.name) typeNames.add(node.name.replace(/^@/, ''));
+      if (node.type === 'ServiceCoercion' && node.name) typeNames.add(node.name);
       if (node.type === 'Dependency') {
         if (node.name) typeNames.add(node.name);
         for (const d of node.destructures || []) if (d.local) typeNames.add(d.local);
@@ -5412,6 +5402,45 @@ export function parse(tokensIn) {
     });
     walk(program.actors);
     walk(program.types);
+
+    // Bodies: a destructure's `key: X`, and types inferred from a call's
+    // callee (`c = Counter()`, `@origin = Point(0, 0)`).
+    const settle = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(settle); return; }
+      if (node.type === 'DestructureAssign') {
+        for (const item of node.pattern) {
+          if (item.typeOrLocal) {
+            delete item.typeOrLocal;
+            if (!typeNames.has(item.type)) {
+              item.key = item.name;
+              item.name = item.type;
+              item.type = null;
+              delete item.named;
+            }
+          }
+          if (item.name && typeNames.has(item.name)) {
+            throw new Error(`Local '${item.name}' has the name of a type in scope — a type name is reserved; rename the local`);
+          }
+        }
+      }
+      if (node.typeFromCallee) {
+        delete node.typeFromCallee;
+        if (!typeNames.has(node.typeName)) {
+          if (node.type === 'ImplicitReturn') node.typeName = null;
+          else node.typeName = 'Anything';
+        }
+      }
+      if (node.constantCallee) {
+        const callee = node.constantCallee;
+        delete node.constantCallee;
+        if (!typeNames.has(callee)) {
+          throw new Error(`'${node.name}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
+        }
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') settle(v);
+    };
+    settle(program.actors);
 
     // Signatures with no body (a dependency's constructor profile, an emit
     // declaration) name no locals: a lone name there is the type.

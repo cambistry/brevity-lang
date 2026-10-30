@@ -123,9 +123,7 @@ for `HTML: HTML`, as `:div` is for `div: div`), so `:HTML (:div)` means
 
 ## Open
 
-- **Capitalization in the parser** — ~25 sites still decide type vs. name by
-  case (destructure statements, `peekIsType`, …). Ticket filed by the user;
-  the same scope rule should replace them.
+- ~~**Capitalization in the parser**~~ — done: `session-2026-10-29-scope-not-case.md`.
 - **Caller-supplied dependencies** (`Svc("a", "/db": myDb)`): checking them
   against the params document's dependency entries. Next.
 - A header spread (`HTML: (...)`) brings in names the parser can't see, so

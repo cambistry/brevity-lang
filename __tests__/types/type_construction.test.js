@@ -63,9 +63,8 @@ describe('type declaration — registry validation', () => {
     `)).not.toThrow();
   });
 
-  it('rejects a lowercase type name', () => {
-    expect(() => compileSource('::point (x Integer)\n@ping = -> ok: 1\n'))
-      .toThrow(/uppercase letter.*::point/);
+  it('accepts a lowercase type name — capitalization is convention', () => {
+    expect(() => compileSource('::point (x Integer)\n@ping = -> ok: 1\n')).not.toThrow();
   });
 
   it('rejects two declarations of the same type name', () => {

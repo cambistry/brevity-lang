@@ -48,10 +48,10 @@ describe("set operation", () => {
       .
     end#Store
 
-    Counter
-      =
-      seed Integer
-      =
+    Counter =
+      *
+        seed Integer
+      *
       count *Integer = seed
 
       set

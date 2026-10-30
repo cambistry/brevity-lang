@@ -824,9 +824,6 @@ export function validate(ast, options = {}) {
 function checkTypeDecls(ast) {
   const seen = new Set();
   for (const decl of (ast.types || [])) {
-    if (!/^[A-Z]/.test(decl.name)) {
-      throw new Error(`Type name must start with an uppercase letter: '::${decl.name}'`);
-    }
     if (seen.has(decl.name)) {
       throw new Error(`Duplicate type declaration: '::${decl.name}' is declared more than once in this file`);
     }
@@ -890,14 +887,14 @@ function callbackOutputType(paramTypeStr) {
   return paramTypeStr.slice(arrowIdx + 2).trim();
 }
 
-// Returns the offending name when `typeStr` is a single bare Capitalized type
-// name that is neither a built-in nor in `nameable`; otherwise null. Only a lone
-// identifier is policed — qualified (`Alias::Name`), unions, `List of …`,
-// lowercase, and function sigs are intentionally left alone (conservative).
+// Returns the offending name when `typeStr` is a single bare type name that is
+// neither a built-in nor in `nameable`; otherwise null. Only a lone identifier
+// is policed — qualified (`Alias::Name`), unions, `List of …`, and function
+// sigs are intentionally left alone (conservative).
 function unknownBareType(typeStr, nameable) {
   if (typeof typeStr !== 'string') return null;
   const t = typeStr.trim();
-  if (!/^[A-Z]\w*$/.test(t)) return null;
+  if (!/^[A-Za-z_]\w*$/.test(t) || t === 'null') return null;
   if (BUILTIN_TYPE_NAMES.has(t) || nameable.has(t)) return null;
   return t;
 }
@@ -1460,7 +1457,7 @@ function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
     if (typeof typeStr !== 'string') return;
     if (checked.has(typeStr)) return;
     checked.add(typeStr);
-    const m = typeStr.match(/^([A-Z]\w*)::([A-Z]\w*)(?:\s*\|\s*null)?$/);
+    const m = typeStr.match(/^(\w+)::(\w+)(?:\s*\|\s*null)?$/);
     if (!m) return;
     const [, alias, remoteName] = m;
     if (!dependencyNames.has(alias)) {
