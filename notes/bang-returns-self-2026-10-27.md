@@ -1,7 +1,8 @@
 # `!` ⇒ mutates and returns self (language-level convention)
 
-Status: **design, approved in principle 2026-10-27 — proposed for implementation.**
-Builds on [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md)
+Status: **SUPERSEDED by [mutation-suffix-2026-10-31](mutation-suffix-2026-10-31.md).**
+`!` now means "writes", with self as the default return. Was: design, approved in
+principle 2026-10-27. Builds on [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md)
 (the call-site name-match, now implemented) and firms up the long-soft
 convention from [big-factory-example §3](big-factory-example-2026-04-21.md)
 ("`append!` = mutate and return self", *"possibly enforced later"*) and
