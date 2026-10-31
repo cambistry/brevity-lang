@@ -15,10 +15,9 @@ body *Integer = 0
 lastPub *Integer = 0
 lastPriv *Integer = 0
 
-@doSubs = {
+@doSubs. = {
   @pub.subscribe (v) { lastPub <- v } ;
-  #priv.subscribe (v) { lastPriv <- v } ;
-  .
+  #priv.subscribe (v) { lastPriv <- v }
 }
 ```
 
@@ -29,9 +28,8 @@ Changing `body` re-evaluates subscribers.
 ```brevity
 #parameterized = (p: Integer) { body + p }
 
-@doSub = {
-  #parameterized.subscribe(p: 100) (v) { last <- v } ;
-  .
+@doSub. = {
+  #parameterized.subscribe(p: 100) (v) { last <- v }
 }
 ```
 
@@ -49,8 +47,8 @@ C = * {
 c = C()
 last *Integer = 0
 
-@doPubSub = { c.pub.subscribe (v) { last <- v } ; . }
-@bumpC = (n: Integer) { c.body <- n . }
+@doPubSub. = { c.pub.subscribe (v) { last <- v } }
+@bumpC. = (n: Integer) { c.body <- n }
 ```
 
 ## Remote Subscription Wire Shape

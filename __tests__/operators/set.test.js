@@ -12,7 +12,7 @@ describe("set operation", () => {
         =
         n Integer
         =
-        value <- n .
+        value <- n
 
       @get
         =
@@ -35,7 +35,6 @@ describe("set operation", () => {
         =
         p <- val
         label <- l
-        .
 
       @pos
         =
@@ -58,7 +57,7 @@ describe("set operation", () => {
         =
         n Integer
         =
-        count <- n .
+        count <- n
 
 
       @get
@@ -217,7 +216,7 @@ describe("set operation — compile errors", () => {
           =
           n Integer
           =
-          value <- n .
+          value <- n
 
 
         @get
@@ -251,7 +250,7 @@ describe("set operation — compile errors", () => {
           =
           n Integer
           =
-          value <- n .
+          value <- n
 
 
         @get

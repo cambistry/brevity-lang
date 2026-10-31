@@ -212,8 +212,10 @@ function reactiveCellType(getter, setter, aliasMap) {
 // no `=`). Field declarations preserve names regardless of declaration style.
 function formatTypeField(field) {
   const opt = field.optional ? '? ' : '';
-  if (field.named) return `${opt}${field.name}: ${field.paramType}`;
-  return `${opt}${field.name} ${field.paramType}`;
+  // A silent-function field shows its silent `.` (stored without it).
+  const name = /->\s*\.\s*$/.test(field.paramType || '') ? `${field.name}.` : field.name;
+  if (field.named) return `${opt}${name}: ${field.paramType}`;
+  return `${opt}${name} ${field.paramType}`;
 }
 
 function formatTypeDecl(decl) {

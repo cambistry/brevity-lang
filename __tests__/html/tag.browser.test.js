@@ -47,7 +47,7 @@ describe('HTML tag smoke — no-arg construction', () => {
       *
         HTML: (:${tag})
       *
-      @test = { e = ${tag}() . }
+      @test. = { e = ${tag}() }
     `)).not.toThrow();
   });
 });
@@ -67,7 +67,7 @@ describe('HTML tag smoke — inherits Element attributes', () => {
       *
         HTML: (:${tag})
       *
-      @test = { e = ${tag}(id: "x") . }
+      @test. = { e = ${tag}(id: "x") }
     `)).not.toThrow();
   });
 });
@@ -82,7 +82,7 @@ describe('HTML tag smoke — unknown attribute rejected', () => {
       *
         HTML: (:${tag})
       *
-      @test = { e = ${tag}(nope: "x") . }
+      @test. = { e = ${tag}(nope: "x") }
     `)).toThrow(/Got named: nope/);
   });
 });
@@ -101,7 +101,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:a)
       *
-      @test = { e = a(href: "/x", target: "_blank", rel: "noopener", download: "file.pdf", type: "application/pdf", hreflang: "en", ping: "https://example.com/p", referrerpolicy: "no-referrer") . }
+      @test. = { e = a(href: "/x", target: "_blank", rel: "noopener", download: "file.pdf", type: "application/pdf", hreflang: "en", ping: "https://example.com/p", referrerpolicy: "no-referrer") }
     `)).not.toThrow();
   });
 
@@ -110,7 +110,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:blockquote)
       *
-      @test = { e = blockquote(cite: "https://example.com") . }
+      @test. = { e = blockquote(cite: "https://example.com") }
     `)).not.toThrow();
   });
 
@@ -119,7 +119,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:ol)
       *
-      @test = { e = ol(type: "1", start: 5, reversed: true) . }
+      @test. = { e = ol(type: "1", start: 5, reversed: true) }
     `)).not.toThrow();
   });
 
@@ -128,7 +128,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:li)
       *
-      @test = { e = li(value: 3) . }
+      @test. = { e = li(value: 3) }
     `)).not.toThrow();
   });
 
@@ -137,7 +137,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:td)
       *
-      @test = { e = td(colspan: 2, rowspan: 1, headers: "h1") . }
+      @test. = { e = td(colspan: 2, rowspan: 1, headers: "h1") }
     `)).not.toThrow();
   });
 
@@ -146,7 +146,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:th)
       *
-      @test = { e = th(colspan: 2, rowspan: 1, headers: "h1", scope: "row", abbr: "abbr") . }
+      @test. = { e = th(colspan: 2, rowspan: 1, headers: "h1", scope: "row", abbr: "abbr") }
     `)).not.toThrow();
   });
 
@@ -155,7 +155,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:form)
       *
-      @test = { e = form(action: "/submit", method: "post", target: "_self", enctype: "multipart/form-data", autocomplete: "on", novalidate: true, name: "main") . }
+      @test. = { e = form(action: "/submit", method: "post", target: "_self", enctype: "multipart/form-data", autocomplete: "on", novalidate: true, name: "main") }
     `)).not.toThrow();
   });
 
@@ -164,7 +164,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(type: "text", name: "q", value: "hello", placeholder: "search", required: true, disabled: false, readonly: false, min: 0, max: 100, step: 1, minlength: 1, maxlength: 64, pattern: "[a-z]+", accept: "image/*", multiple: false, checked: false, autocomplete: "off", list: "options", src: "/img.png", alt: "alt text", form: "main", height: 16, width: 24, size: 32) . }
+      @test. = { e = input(type: "text", name: "q", value: "hello", placeholder: "search", required: true, disabled: false, readonly: false, min: 0, max: 100, step: 1, minlength: 1, maxlength: 64, pattern: "[a-z]+", accept: "image/*", multiple: false, checked: false, autocomplete: "off", list: "options", src: "/img.png", alt: "alt text", form: "main", height: 16, width: 24, size: 32) }
     `)).not.toThrow();
   });
 
@@ -173,7 +173,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:button)
       *
-      @test = { e = button(type: "submit", name: "go", value: "yes", disabled: false, form: "main", formaction: "/x", formmethod: "post", formnovalidate: true, formtarget: "_self") . }
+      @test. = { e = button(type: "submit", name: "go", value: "yes", disabled: false, form: "main", formaction: "/x", formmethod: "post", formnovalidate: true, formtarget: "_self") }
     `)).not.toThrow();
   });
 
@@ -182,7 +182,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:select)
       *
-      @test = { e = select(name: "x", multiple: true, required: true, disabled: false, size: 4, autocomplete: "on", form: "main") . }
+      @test. = { e = select(name: "x", multiple: true, required: true, disabled: false, size: 4, autocomplete: "on", form: "main") }
     `)).not.toThrow();
   });
 
@@ -191,7 +191,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:option)
       *
-      @test = { e = option(value: "a", selected: true, disabled: false, label: "Apple") . }
+      @test. = { e = option(value: "a", selected: true, disabled: false, label: "Apple") }
     `)).not.toThrow();
   });
 
@@ -200,7 +200,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:textarea)
       *
-      @test = { e = textarea(name: "msg", rows: 4, cols: 40, placeholder: "Type", required: true, disabled: false, readonly: false, minlength: 1, maxlength: 1000, wrap: "soft", autocomplete: "off", form: "main") . }
+      @test. = { e = textarea(name: "msg", rows: 4, cols: 40, placeholder: "Type", required: true, disabled: false, readonly: false, minlength: 1, maxlength: 1000, wrap: "soft", autocomplete: "off", form: "main") }
     `)).not.toThrow();
   });
 
@@ -209,7 +209,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:label)
       *
-      @test = { e = label(for: "x", form: "main") . }
+      @test. = { e = label(for: "x", form: "main") }
     `)).not.toThrow();
   });
 
@@ -218,7 +218,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:img)
       *
-      @test = { e = img(src: "/i.png", srcset: "/i.png 1x, /i2.png 2x", alt: "x", width: 100, height: 80, sizes: "100vw", loading: "lazy", decoding: "async", fetchpriority: "high", crossorigin: "anonymous", referrerpolicy: "no-referrer", usemap: "#m", ismap: false) . }
+      @test. = { e = img(src: "/i.png", srcset: "/i.png 1x, /i2.png 2x", alt: "x", width: 100, height: 80, sizes: "100vw", loading: "lazy", decoding: "async", fetchpriority: "high", crossorigin: "anonymous", referrerpolicy: "no-referrer", usemap: "#m", ismap: false) }
     `)).not.toThrow();
   });
 
@@ -227,7 +227,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:canvas)
       *
-      @test = { e = canvas(width: 320, height: 240) . }
+      @test. = { e = canvas(width: 320, height: 240) }
     `)).not.toThrow();
   });
 
@@ -236,7 +236,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:iframe)
       *
-      @test = { e = iframe(src: "/x", srcdoc: "<p>x</p>", name: "f1", sandbox: "allow-scripts", allow: "camera", allowfullscreen: true, loading: "lazy", referrerpolicy: "no-referrer", width: 640, height: 480) . }
+      @test. = { e = iframe(src: "/x", srcdoc: "<p>x</p>", name: "f1", sandbox: "allow-scripts", allow: "camera", allowfullscreen: true, loading: "lazy", referrerpolicy: "no-referrer", width: 640, height: 480) }
     `)).not.toThrow();
   });
 
@@ -245,7 +245,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:details)
       *
-      @test = { e = details(open: true, name: "g1") . }
+      @test. = { e = details(open: true, name: "g1") }
     `)).not.toThrow();
   });
 
@@ -254,7 +254,7 @@ describe('HTML tag own attributes — happy paths', () => {
       *
         HTML: (:dialog)
       *
-      @test = { e = dialog(open: true) . }
+      @test. = { e = dialog(open: true) }
     `)).not.toThrow();
   });
 });
@@ -286,7 +286,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:a)
       *
-      @test = { e = a(download: true) . }
+      @test. = { e = a(download: true) }
     `)).not.toThrow();
   });
 
@@ -295,7 +295,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:a)
       *
-      @test = { e = a(download: "file.pdf") . }
+      @test. = { e = a(download: "file.pdf") }
     `)).not.toThrow();
   });
 
@@ -304,7 +304,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:a)
       *
-      @test = { e = a(download: 1) . }
+      @test. = { e = a(download: 1) }
     `)).toThrow(/named arg 'download'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
 
@@ -317,7 +317,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(value: ${val}) . }
+      @test. = { e = input(value: ${val}) }
     `)).not.toThrow();
   });
 
@@ -326,7 +326,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(value: true) . }
+      @test. = { e = input(value: true) }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer \| Decimal'/);
   });
 
@@ -339,7 +339,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(min: ${val}) . }
+      @test. = { e = input(min: ${val}) }
     `)).not.toThrow();
   });
 
@@ -352,7 +352,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(max: ${val}) . }
+      @test. = { e = input(max: ${val}) }
     `)).not.toThrow();
   });
 
@@ -365,7 +365,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:input)
       *
-      @test = { e = input(step: ${val}) . }
+      @test. = { e = input(step: ${val}) }
     `)).not.toThrow();
   });
 
@@ -377,7 +377,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:button)
       *
-      @test = { e = button(value: ${val}) . }
+      @test. = { e = button(value: ${val}) }
     `)).not.toThrow();
   });
 
@@ -386,7 +386,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:button)
       *
-      @test = { e = button(value: true) . }
+      @test. = { e = button(value: true) }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer'/);
   });
 
@@ -399,7 +399,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:option)
       *
-      @test = { e = option(value: ${val}) . }
+      @test. = { e = option(value: ${val}) }
     `)).not.toThrow();
   });
 
@@ -413,10 +413,9 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:${tag})
       *
-      @test = {
+      @test. = {
         e1 = ${tag}(width: ${intVal})
         e2 = ${tag}(width: ${textVal})
-        .
       }
     `)).not.toThrow();
   });
@@ -431,7 +430,7 @@ describe('HTML tag union overloads — happy variants', () => {
       *
         HTML: (:${tag})
       *
-      @test = { e = ${tag}(height: true) . }
+      @test. = { e = ${tag}(height: true) }
     `)).toThrow(/named arg 'height'.*'Boolean' is not assignable to 'Integer \| Text'/);
   });
 });

@@ -149,6 +149,19 @@ function parseDomChildren(source, startIdx, parentTag) {
   return null;
 }
 
+// A `.` glued to the end of a name marks a silent function (`sfn.`). Counts the
+// run of dots at `i`, just past a name: one dot not starting a member name is
+// the suffix; three are an ellipsis (`sfn...`, which absorbs the suffix); two or
+// four-plus are errors. Returns the number of dots to absorb into the name.
+function silentSuffixAt(source, i, name, line) {
+  let n = 0;
+  while (source[i + n] === '.') n++;
+  if (n === 1) return /[a-zA-Z_]/.test(source[i + 1] ?? '') ? 0 : 1;
+  if (n === 2) throw new Error(`Unexpected '..' after '${name}' (line ${line})`);
+  if (n >= 4) throw new Error(`'${name}${'.'.repeat(n)}' — the ellipsis absorbs a silent name's dot: write '${name}...' (line ${line})`);
+  return 0;
+}
+
 export function tokenize(source) {
   const tokens = [];
   let i = 0;
@@ -491,6 +504,7 @@ export function tokenize(source) {
         i++; // skip ':'
         let name = '';
         while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+        if (source[i] === '.' && silentSuffixAt(source, i, ':' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
         tokens.push({ type: 'SIGIL', value: name });
       } else {
         tokens.push({ type: 'COLON' });
@@ -508,6 +522,10 @@ export function tokenize(source) {
       if (i < source.length && source[i] === '?') { value += source[i++]; }
       if (value === '_') {
         tokens.push({ type: 'DISCARD' });
+      } else if (!value.endsWith('?') && source[i] === '.' &&
+                 silentSuffixAt(source, i, value, tokens.filter(t => t.type === 'NEWLINE').length + 1)) {
+        tokens.push({ type: 'IDENT', value: value + '.' });
+        i++;
       } else {
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
@@ -527,6 +545,7 @@ export function tokenize(source) {
       i++;
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+      if (name && source[i] === '.' && silentSuffixAt(source, i, '&' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
       if (name) tokens.push({ type: 'AMPERSAND_IDENT', value: name });
       continue;
     }

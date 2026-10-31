@@ -44,7 +44,7 @@ Lineal public handler:
 - Bare helper functions are internal and excluded from service documents.
 - Params support positional, named, key-mapped, mixed, and optional forms.
 - Return forms include implicit tail expressions, `-> value`, `-> :name`, named
-  replies, positional replies, and silent `.` / `-> .`.
+  replies, positional replies, and silent `name.` functions (`-> .`).
 - Silent functions cannot be used as values; use `spawn` for effect-only calls.
 - Closures can capture state and can be addressable for subscription tests.
 - `&name` passes a function reference to forms such as `over` and `reduce`.
@@ -54,7 +54,7 @@ Lineal public handler:
 - Use `#name` for private functions in new examples.
 - Use `@name` only for externally callable handlers.
 - Use `:name Type` for named params and `name Type` for positional params.
-- Use `-> .` or `.` for silent/effect-only functions.
+- Name silent/effect-only functions with a glued `.` (`fire.`) and call them with `...`.
 - Do not assign the result of a silent function.
 - Prefer explicit return fields when generating examples for documentation.
 

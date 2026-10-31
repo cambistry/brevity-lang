@@ -71,7 +71,7 @@ Declare dependencies in the file header:
 *
   "/services/store": Store {
     get (key: Text) -> (value: Text)
-    put (key: Text, value: Text) -> .
+    put. (key: Text, value: Text) -> .
   }
 *
 
@@ -80,12 +80,13 @@ Declare dependencies in the file header:
   return :value
 }
 
-@save = (key: Text, value: Text) {
-  Store.put(:key, :value) .
+@save. = (key: Text, value: Text) {
+  Store.put.(:key, :value)...
 }
 ```
 
-Silent methods return `.`. Replying methods bind their named reply fields.
+Silent methods are named with a glued `.` and typed `-> .`; call them with a
+trailing `...` (fire-and-forget). Replying methods bind their named reply fields.
 
 ## Remote Actors
 
@@ -94,14 +95,14 @@ Silent methods return `.`. Replying methods bind their named reply fields.
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open () -> .
-    close () -> .
+    open. () -> .
+    close. () -> .
   }
 *
 
 view = *WebView(path: "/main")
 
-@open = { view.open() . }
+@open. = { view.open... }
 ```
 
 Use named arguments for remote actor construction unless the tests for a case
@@ -165,6 +166,6 @@ For browser examples, start with the tested browser and HTML/XML notes:
 - Prefer the simplest pattern already present in tests.
 - Keep examples small and actor-centered.
 - Do not invent method names; check the relevant method doc first.
-- Use `-> .` or trailing `.` for silent operations.
+- Name silent operations with a glued `.` (`save.`), type them `-> .`, and call them with `...`. A trailing `.` in a body is an error.
 - Use explicit local variables when reply typing matters.
 - Treat design notes as context. Treat test-backed docs as current behavior.

@@ -52,7 +52,7 @@ describe('extract — params rendering', () => {
       *
         "/db": DB
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "/db":\n)');
   });
@@ -75,7 +75,7 @@ describe('extract — params rendering', () => {
       *
         "thing.bv": Thing #
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "thing.bv": #\n)');
   });
@@ -107,7 +107,7 @@ describe('extract — params rendering', () => {
         t Text
         n Integer
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  Text\n  Integer\n)');
   });
@@ -118,7 +118,7 @@ describe('extract — params rendering', () => {
         t Text
         limit: Integer
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  Text\n  "limit": Integer\n)');
   });
@@ -128,7 +128,7 @@ describe('extract — params rendering', () => {
       *
         "my-app.bv": App #
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "my-app.bv": #\n)');
   });
@@ -142,7 +142,7 @@ describe('extract — params rendering', () => {
         value: Integer
         "thing.bv": Thing #
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe(
       '(\n  Text\n  "/db":\n  "value": Integer\n  "thing.bv": #\n)',
@@ -154,7 +154,7 @@ describe('extract — params rendering', () => {
       *
         "/db": DB
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).not.toContain('DB');
   });
@@ -175,7 +175,7 @@ describe('extract — params rendering', () => {
         HTML: (:div, :span)
         Shapes: :Box #
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "HTML":\n  "Shapes": #\n)');
   });
@@ -257,7 +257,7 @@ describe('extract + compile — round-trip', () => {
       *
         "Store": Store
       *
-      @go = { Store.get() . }
+      @go. = { Store.get() }
     `);
 
     expect(() => compile(ast, { remotes: [{ path: 'Store', service: ifaceA.service }] })).toThrow(/don't match/);
@@ -339,14 +339,14 @@ describe('params document — read back as constructor params', () => {
       limit: Integer
       "/db": DB
     *
-    @noop = .
+    @noop. = {}
   `).interface;
   const consumer = (call) => extract(`
     *
       "svc.bv": Svc #
     *
     s = ${call}
-    @noop = .
+    @noop. = {}
   `).ast;
   const remotes = [{ path: 'svc.bv', params: remote.params, service: remote.service }];
 
@@ -362,14 +362,14 @@ describe('params document — read back as constructor params', () => {
     const typed = extract(`
       *
         "/db": DB { get (key: Text) -> (value: Text) }
-        "lib.bv": Lib (a: Integer, b: Text) -> *{ ping () -> . }
+        "lib.bv": Lib (a: Integer, b: Text) -> *{ ping. () -> . }
         limit: lim Integer
       *
-      @noop = .
+      @noop. = {}
     `).interface;
     expect(typed.params).toBe(
       '(\n  "/db": {\n    get (key: Text) -> (value: Text)\n  }\n' +
-      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping () -> .\n  }\n  "limit": Integer\n)',
+      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping. () -> .\n  }\n  "limit": Integer\n)',
     );
     const typedRemotes = [{ path: 'svc.bv', params: typed.params, service: typed.service }];
     expect(() => compile(consumer('Svc(limit: 3)'), { remotes: typedRemotes })).not.toThrow();

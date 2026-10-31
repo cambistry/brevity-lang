@@ -158,6 +158,39 @@ export function parse(tokensIn) {
   // simply a misplaced arrow (syntax error).
   const isReturnKw = () => peek().type === 'KEYWORD' && peek().value === 'return';
   const MISPLACED_ARROW_MSG = "'->' is the lambda arrow and can't start a statement here";
+
+  // Silence is in a declaration's name (`sfn. = …`), never a trailing `.` in its
+  // body. `declCtx` is the named declaration whose body is being parsed (null
+  // inside a lambda, whose trailing `.` still marks it silent). Inside one, a
+  // source `.` / `return .` / `-> .` is an error; inside a silent one, a bare
+  // `return` exits early and `return value` is an error.
+  let declCtx = null;
+  const declFor = (name) => ({ name, silent: name.endsWith('.') });
+  const trailingDotError = () => {
+    const { name, silent, builtin } = declCtx;
+    if (builtin) return new Error(`'${name}' takes no trailing '.'`);
+    if (silent) return new Error(`'${name}' is silent by its name — drop the trailing '.' ('return' exits early)`);
+    return new Error(`A trailing '.' no longer makes a function silent — name it '${name}.' and drop the '.'`);
+  };
+  // `set = (params) -> stmt` is a one-line body: the end of its line ends it
+  // (a trailing `.` used to), so the next declaration may follow directly.
+  const endArrowStatementAtLine = () => {
+    let i = pos;
+    while (i < tokens.length && tokens[i].type !== 'NEWLINE' && tokens[i].type !== 'BLOCK_SEP' && tokens[i].type !== 'EOF') i++;
+    if (tokens[i]?.type === 'NEWLINE') tokens[i] = { type: 'BLOCK_SEP' };
+  };
+  const atBareReturnEnd = () => {
+    const t = peek().type;
+    return t === 'NEWLINE' || t === 'RBRACE' || t === 'BLOCK_SEP' || t === 'EOF' || t === 'DIVIDER';
+  };
+  // After `return` in a silent declaration: a bare `return` is a silent early
+  // exit (returns true — caller pushes the terminator); a value is an error.
+  const silentReturn = () => {
+    if (!declCtx?.silent) return false;
+    if (peek().type === 'DOT') throw trailingDotError();
+    if (atBareReturnEnd()) return true;
+    throw new Error(`'${declCtx.name}' is silent — 'return' takes no value`);
+  };
   const skipBlanks = () => { while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume(); };
   const currentScope = () => localScopes[localScopes.length - 1];
   const declareLocal = (name) => { if (name) currentScope().add(name); };
@@ -1003,7 +1036,11 @@ export function parse(tokensIn) {
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
       if (isReturnKw()) {
         consume();
-        if (peek().type === 'DOT') { consume(); body.push(AST.silentTerminator()); break; }
+        if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
+        if (peek().type === 'DOT') {
+          if (declCtx) throw trailingDotError();
+          consume(); body.push(AST.silentTerminator()); break;
+        }
         body.push(AST.returnNode(parseReplyFields(true)));
         continue;
       }
@@ -1177,6 +1214,7 @@ export function parse(tokensIn) {
       skipNewlines();
       if (peek().type === stopToken || peek().type === 'EOF') break;
       if (peek().type === 'DOT') {
+        if (declCtx) throw trailingDotError();
         consume();
         body.push(AST.silentTerminator());
         break;
@@ -1194,7 +1232,9 @@ export function parse(tokensIn) {
       }
       if (isReturnKw()) {
         consume(); // 'return'
+        if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
+          if (declCtx) throw trailingDotError();
           consume(); // '.'
           body.push(AST.silentTerminator());
           break;
@@ -1348,7 +1388,10 @@ export function parse(tokensIn) {
       } else if (implicitReplyFields) {
         // Implicit return — try reply field syntax first, fall back to expression
         const savedPos = pos;
-        const fields = parseReplyFields(true);
+        // A statement the reply-field syntax can't read (`v.ref...`) is an
+        // expression: fall through to parseExpr below.
+        let fields = [];
+        try { fields = parseReplyFields(true); } catch { pos = savedPos; }
         const next = peek().type;
         const isMultiOrNamed = fields.length > 1 || (fields.length === 1 && !fields[0].positional);
         if (isMultiOrNamed && (next === stopToken || next === 'EOF' || next === 'NEWLINE' || next === 'SEMICOLON')) {
@@ -1373,6 +1416,12 @@ export function parse(tokensIn) {
   }
 
   function parseFunction() {
+    const outerDecl = declCtx;
+    declCtx = null;
+    try { return parseFunctionLiteral(); } finally { declCtx = outerDecl; }
+  }
+
+  function parseFunctionLiteral() {
     localScopes.push(new Set());
     refVarScopes.push(new Map());
     readonlyParamScopes.push(new Set());
@@ -2093,6 +2142,10 @@ export function parse(tokensIn) {
         for (const p of subParams) if (p.name) declareLocal(p.name);
         skipNewlines();
         let subBody;
+        // The subscription body is a callback: a lambda, not the enclosing
+        // declaration's body.
+        const outerDecl = declCtx;
+        declCtx = null;
         if (peek().type === 'LBRACE') {
           consume();
           subBody = parseBody('RBRACE');
@@ -2101,6 +2154,7 @@ export function parse(tokensIn) {
         } else {
           subBody = parseBody();
         }
+        declCtx = outerDecl;
         result = AST.subscribeCall(result, subParams, subBody, subArgs);
         break;
       }
@@ -2211,6 +2265,19 @@ export function parse(tokensIn) {
       } else {
         result = AST.dotAccessExpr(result, method);
       }
+    }
+    // `call...` — fire-and-forget. Right after a name the ellipsis absorbs a
+    // silent name's dot: `sfn...` is `sfn.()...`, `x.sfn...` is `x.sfn.()...`.
+    if (peek().type === 'ELLIPSIS') {
+      consume();
+      if (result.type === 'Identifier' || result.type === 'RefRead') {
+        result = AST.functionCallExpr(AST.identifier(result.name + '.'), []);
+      } else if (result.type === 'DotAccessExpr') {
+        result = AST.dotCallExpr(result.object, result.property + '.', []);
+      } else if (result.type !== 'FunctionCallExpr' && result.type !== 'DotCallExpr') {
+        throw new Error(`'...' (fire-and-forget) follows a call or a silent name`);
+      }
+      result.faf = true;
     }
     return result;
   }
@@ -3225,6 +3292,14 @@ export function parse(tokensIn) {
     refVarScopes.push(new Map());
     readonlyParamScopes.push(new Set());
     skipNewlines();
+    // A silent declaration's lineal body may be empty: a blank line right
+    // after its `=` ends it (the old lone `.` used to fill this slot).
+    if (!stopToken && declCtx?.silent && (peek().type === 'BLOCK_SEP' || peek().type === 'EOF')) {
+      readonlyParamScopes.pop();
+      refVarScopes.pop();
+      localScopes.pop();
+      return [];
+    }
     if (peek().type === 'BLOCK_SEP') consume();
 
     const isStop = () => peek().type === 'BLOCK_SEP' || peek().type === 'EOF' || (stopToken && peek().type === stopToken);
@@ -3234,6 +3309,7 @@ export function parse(tokensIn) {
       if (isStop()) break;
 
       if (peek().type === 'DOT') {
+        if (declCtx) throw trailingDotError();
         consume();
         body.push(AST.silentTerminator());
         break;
@@ -3242,7 +3318,9 @@ export function parse(tokensIn) {
       // Explicit `return` statement — the value-return form.
       if (isReturnKw()) {
         consume();
+        if (silentReturn()) { body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
+          if (declCtx) throw trailingDotError();
           consume(); // `return .` — silent
           body.push(AST.silentTerminator());
           break;
@@ -3262,6 +3340,7 @@ export function parse(tokensIn) {
         if (stopToken || body.length > 0) throw new Error(MISPLACED_ARROW_MSG);
         consume();
         if (peek().type === 'DOT') {
+          if (declCtx) throw trailingDotError();
           consume(); // `-> .` — silent one-liner
           body.push(AST.silentTerminator());
           break;
@@ -3491,7 +3570,7 @@ export function parse(tokensIn) {
         }
         body.push(AST.spawnStatement(expr ));
       } else if (
-        (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) ||
+        (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
         (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'DOT') ||
         (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'DOT')
       ) {
@@ -3568,6 +3647,7 @@ export function parse(tokensIn) {
     } else {
       throw new Error(`Expected op name after '@', got ${opTok.type} '${opTok.value}'`);
     }
+    declCtx = declFor('@' + op);
 
     // ── Public ref cell: @name *Type = expr ─────────────────────────────
     // Desugars to a private refDecl (state slot) plus a synthesized getter
@@ -3865,6 +3945,9 @@ export function parse(tokensIn) {
     // (@method / self / set / update). Ref-decls (`name *Type = ...`) at the
     // body opening are *not* discriminative — they appear in both body kinds —
     // so a body opening with a ref-decl is treated as a regular function.
+    // A silent name (`fire.`) is never a class: an empty lineal body followed
+    // by the next `@handler` stays a function.
+    if (declCtx?.silent) return false;
     let i = pos;
     while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
     const t = tokens[i];
@@ -4202,8 +4285,10 @@ export function parse(tokensIn) {
     const nestedActors = [];
     const asClauses = [];
     const constructorBody = [];
+    const outerDecl = declCtx;
     refVarScopes.push(new Map()); // actor-level ref scope
     while (peek().type !== 'EOF') {
+      declCtx = null;
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
       // Constructor-block tail: `return self` / `-> self` terminates an actor
@@ -4257,6 +4342,7 @@ export function parse(tokensIn) {
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = (val) { ... } — syntactic sugar for the <- handler
         consume(); // 'set'
+        declCtx = { name: 'set', builtin: true };
         let params;
         if (peek().type === 'EQUALS') {
           consume(); // =
@@ -4309,6 +4395,7 @@ export function parse(tokensIn) {
           if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
               (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
             consume(); // ->
+            endArrowStatementAtLine();
           }
           body = parseBody();
         }
@@ -4316,6 +4403,7 @@ export function parse(tokensIn) {
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = (val) { ... } — syntactic sugar for the <| handler
         consume(); // 'update'
+        declCtx = { name: 'update', builtin: true };
         let params;
         if (peek().type === 'EQUALS') {
           consume(); // =
@@ -4359,6 +4447,7 @@ export function parse(tokensIn) {
         if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
             (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
           consume(); // ->
+          endArrowStatementAtLine();
         }
         const body = parseBody();
         functions.push(AST.functionDecl('update', params, body));
@@ -4437,6 +4526,7 @@ export function parse(tokensIn) {
         constructorBody.push(AST.typedAssign(name, typeName, null));
       } else if (peek().type === 'HASH_IDENT') {
         const op = '#' + consume().value;
+        declCtx = declFor(op);
 
         // ── Private function — supports same-line, delimited, and lineal
         // forms (parallels @public functions; constructor form excluded).
@@ -4467,7 +4557,7 @@ export function parse(tokensIn) {
           consume(); // ->
           const expr = parseExpr();
           let exprType = null;
-          if (peek().type === 'DOT') consume();
+          if (peek().type === 'DOT') throw trailingDotError();
           else if (isTypeAttestation()) exprType = consumeTypeAttestation();
           hashBareBody = [AST.implicitReturn(expr, exprType)];
         } else if (peek().type === 'EQUALS' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
@@ -4541,6 +4631,7 @@ export function parse(tokensIn) {
         constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {
         const op = consume().value;
+        declCtx = declFor(op);
         let _identOverloadMode = 'create';
 
         // ── Overload operator: name << ─────────────────────────────────
@@ -4687,7 +4778,7 @@ export function parse(tokensIn) {
             // Body is a single expression to EOL — wrap as implicit return.
             const expr = parseExpr();
             let exprType = null;
-            if (peek().type === 'DOT') consume();
+            if (peek().type === 'DOT') throw trailingDotError();
             else if (isTypeAttestation()) exprType = consumeTypeAttestation();
             bareFormBody = [AST.implicitReturn(expr, exprType)];
           } else {
@@ -4852,6 +4943,7 @@ export function parse(tokensIn) {
       }
     }
     refVarScopes.pop(); // end actor-level ref scope
+    declCtx = outerDecl;
     return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn };
   }
 
@@ -4866,6 +4958,20 @@ export function parse(tokensIn) {
   //   `? name Type` — positional, optional
   //   `? name: Type` — named, optional
   // Slices 1, 7, 8, 11 of types-implementation-plan-2026-04-27.
+  // A field holding a silent function is named with the silent `.`
+  // (`press.: () -> .`); the stored name drops it — a type can't hold both
+  // `press` and `press.`, and the dot is restored wherever the type is shown.
+  function silentFieldName(name, paramType) {
+    const silentType = typeof paramType === 'string' && /->\s*\.\s*$/.test(paramType);
+    if (name.endsWith('.') && !silentType) {
+      throw new Error(`Field '${name}' is silent by its name — its type is a silent function '(…) -> .'`);
+    }
+    if (silentType && !name.endsWith('.')) {
+      throw new Error(`Field '${name}' holds a silent function — name it '${name}.'`);
+    }
+    return silentType ? name.slice(0, -1) : name;
+  }
+
   function parseTypeField() {
     let optional = false;
     if (peek().type === 'QUESTION') {
@@ -4879,7 +4985,7 @@ export function parse(tokensIn) {
       named = true;
     }
     const paramType = parseType();
-    return AST.typeField(fieldName, paramType, { optional, named });
+    return AST.typeField(silentFieldName(fieldName, paramType), paramType, { optional, named });
   }
 
   // Parse `::Name (fields)` (delimited form, single- or multi-line) or
@@ -5313,7 +5419,79 @@ export function parse(tokensIn) {
 
   const result = AST.program(actors, dependencies, types);
   resolveLoneNames(result);
+  settleSilentDecls(result);
+  settleFireAndForget(result);
   return result;
+
+  // A statement `call...` is a fire-and-forget launch: the statement is marked
+  // so validation can require a silent callee (and turn a call to one of the
+  // actor's own functions into a `spawn`). Anywhere else a `...` call has no
+  // value to give.
+  function settleFireAndForget(program) {
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (const s of node) {
+          if ((s?.type === 'ExprStatement' || s?.type === 'ImplicitReturn') && s.expr?.faf) {
+            delete s.expr.faf;
+            s.ellipsis = true;
+          }
+        }
+        node.forEach(visit);
+        return;
+      }
+      if (node.faf) throw new Error(`A fire-and-forget call ('...') has no value — use it as a statement`);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
+    };
+    visit(program.actors);
+  }
+
+  // A declaration named with a glued `.` (`sfn.`, `@go.`, `#log.`) is silent:
+  // its tail value is discarded and it ends in the silent terminator every
+  // backend keys on. `set` / `update` keep their reply-less shape too.
+  function settleSilentDecls(program) {
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      if (node.type === 'FunctionDecl' && typeof node.name === 'string' && !node.actorDef && !node.emptyOverload &&
+          (node.name.endsWith('.') || node.name === 'set' || node.name === 'update')) {
+        silence(node);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
+    };
+    // An early `return` inside a branch exits like any early return (an empty
+    // `Return`, which every backend emits as a guard); the function's own
+    // trailing terminator is what keeps it reply-less.
+    const earlyExits = (node) => {
+      if (!node || typeof node !== 'object' || node.type === 'Function') return;
+      if (Array.isArray(node)) {
+        node.forEach((s, i) => { if (s?.type === 'SilentTerminator') node[i] = AST.returnNode([]); });
+        node.forEach(earlyExits);
+        return;
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') earlyExits(v);
+    };
+    const silence = (fn) => {
+      const body = fn.body || (fn.body = []);
+      for (const s of body) earlyExits(s);
+      const last = body[body.length - 1];
+      if (last?.type === 'SilentTerminator') return;
+      if (last?.type === 'ImplicitReturn') {
+        body[body.length - 1] = AST.exprStatement(last.expr);
+      } else if (last?.type === 'Reply' || last?.type === 'Return') {
+        const f = last.fields || [];
+        if (f.length === 1 && f[0].positional && f[0].expr && !f[0].type) {
+          body[body.length - 1] = AST.exprStatement(f[0].expr);
+        } else if (f.length > 0) {
+          throw new Error(`'${fn.name}' is silent — it can't reply with a value`);
+        } else {
+          body.pop();
+        }
+      }
+      body.push(AST.silentTerminator());
+    };
+    visit(program.actors);
+  }
 
   // A type name in scope is reserved: no param may share it. So a lone name
   // after a named param's colon (`key: X`) is the type X when one is in scope,

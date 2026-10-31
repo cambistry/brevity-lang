@@ -36,8 +36,8 @@ describe('closure-subscribe — multi-ref capture', () => {
     a *Text = "hello"
     b *Text = "world"
     f = { a + " " + b }
-    @setA = (v: Text) { a <- v . }
-    @setB = (v: Text) { b <- v . }
+    @setA. = (v: Text) { a <- v }
+    @setB. = (v: Text) { b <- v }
   `;
 
   it('initial re reflects composite of both captured refs', async () => {
@@ -51,7 +51,7 @@ describe('closure-subscribe — multi-ref capture', () => {
     await expectBehavior(twoTextRefs,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'hi' }, '@setA'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'hi' }, '@setA.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi world'], to: 'c' } },
     );
   });
@@ -60,7 +60,7 @@ describe('closure-subscribe — multi-ref capture', () => {
     await expectBehavior(twoTextRefs,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'earth' }, '@setB'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'earth' }, '@setB.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hello earth'], to: 'c' } },
     );
   });
@@ -69,9 +69,9 @@ describe('closure-subscribe — multi-ref capture', () => {
     await expectBehavior(twoTextRefs,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'hi' }, '@setA'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'hi' }, '@setA.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi world'], to: 'c' } },
-      { input: { id: '3', op: [{ v: 'there' }, '@setB'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [{ v: 'there' }, '@setB.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi there'], to: 'c' } },
     );
   });
@@ -82,17 +82,17 @@ describe('closure-subscribe — multi-ref capture', () => {
     a *Integer = 2
     b *Integer = 3
     sum = { a + b }
-    @setA = (v: Integer) { a <- v . }
-    @setB = (v: Integer) { b <- v . }
+    @setA. = (v: Integer) { a <- v }
+    @setB. = (v: Integer) { b <- v }
   `;
 
   it('Integer composite replays on either dep mutation', async () => {
     await expectBehavior(twoIntegerRefs,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: [5], to: 'c' } },
-      { input: { id: '2', op: [{ v: 10 }, '@setA'], 'bv-a': [{ v: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 10 }, '@setA.'], 'bv-a': [{ v: 'Integer' }], from: 'c' } },
       { output: { id: '1', re: [13], to: 'c' } },
-      { input: { id: '3', op: [{ v: 100 }, '@setB'], 'bv-a': [{ v: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ v: 100 }, '@setB.'], 'bv-a': [{ v: 'Integer' }], from: 'c' } },
       { output: { id: '1', re: [110], to: 'c' } },
     );
   });
@@ -120,7 +120,7 @@ describe('closure-subscribe — payload-carried address', () => {
     content *Text = "initial"
     f = { content }
     @getAddr = -> ref: "#<@0>"
-    @bump = (v: Text) { content <- v . }
+    @bump. = (v: Text) { content <- v }
   `;
 
   it('handler reply carries closure address; subscribing to it yields initial re', async () => {
@@ -149,7 +149,7 @@ describe('closure-subscribe — payload-carried address', () => {
 
     await actor.sendAsync({
       id: 'B',
-      op: [{ v: 'updated' }, '@bump'],
+      op: [{ v: 'updated' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'c',
     });
@@ -166,8 +166,8 @@ describe('closure-subscribe — payload-carried address', () => {
     fm = { meta }
     @getContentAddr = -> ref: "#<@0>"
     @getMetaAddr = -> ref: "#<@1>"
-    @bumpContent = (v: Text) { content <- v . }
-    @bumpMeta = (v: Text) { meta <- v . }
+    @bumpContent. = (v: Text) { content <- v }
+    @bumpMeta. = (v: Text) { meta <- v }
   `;
 
   it('two address handles route to independent closures', async () => {
@@ -189,7 +189,7 @@ describe('closure-subscribe — payload-carried address', () => {
     const postsBefore = actor.posts.length;
     await actor.sendAsync({
       id: 'M1',
-      op: [{ v: 'c-new' }, '@bumpContent'],
+      op: [{ v: 'c-new' }, '@bumpContent.'],
       'bv-a': [{ v: 'Text' }],
       from: 'c',
     });
@@ -215,12 +215,12 @@ describe('closure-subscribe — inter-actor shepherded', () => {
   const publisher = `
     content *Text = "initial"
     f = { content }
-    @bump = (v: Text) { content <- v . }
+    @bump. = (v: Text) { content <- v }
   `;
 
   const subscriber = `
     received *Text = ""
-    @routedRe = (v: Text) { received <- v . }
+    @routedRe. = (v: Text) { received <- v }
     @readReceived = -> :received as Text
   `;
 
@@ -234,7 +234,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
       if (msg.to !== 'sub' || !Array.isArray(msg.re)) continue;
       await subActor.sendAsync({
         id: 'r-' + msg.id,
-        op: [{ v: msg.re[0] }, '@routedRe'],
+        op: [{ v: msg.re[0] }, '@routedRe.'],
         'bv-a': [{ v: 'Text' }],
         from: 'router',
       });
@@ -272,7 +272,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     await pub.sendAsync({
       id: 'B1',
-      op: [{ v: 'first' }, '@bump'],
+      op: [{ v: 'first' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });
@@ -280,7 +280,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     await pub.sendAsync({
       id: 'B2',
-      op: [{ v: 'second' }, '@bump'],
+      op: [{ v: 'second' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });
@@ -312,7 +312,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
         if (msg.to !== addr || !Array.isArray(msg.re)) continue;
         await target.sendAsync({
           id: 'r-' + msg.id,
-          op: [{ v: msg.re[0] }, '@routedRe'],
+          op: [{ v: msg.re[0] }, '@routedRe.'],
           'bv-a': [{ v: 'Text' }],
           from: 'router',
         });
@@ -324,7 +324,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     await pub.sendAsync({
       id: 'B',
-      op: [{ v: 'broadcast' }, '@bump'],
+      op: [{ v: 'broadcast' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });

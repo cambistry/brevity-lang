@@ -54,15 +54,15 @@ Use this when you want to show application logic layered over a dependency call.
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open () -> .
+    open. () -> .
     getTitle () -> (title: Text)
-    close () -> .
+    close. () -> .
   }
 *
 
 view = WebView!(path: "/my_view")
 
-@open = { view.open() . }
+@open. = { view.open... }
 
 @workflow
   =
@@ -79,13 +79,13 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 ```brevity
 *
   "DOM": DOM {
-    div () -> .
+    div. () -> .
   }
 *
 
 content Text! = "initial"
 
-@bump = (v: Text) { content <- v . }
+@bump. = (v: Text) { content <- v }
 @create = -> <div>{ content }</div>
 ```
 

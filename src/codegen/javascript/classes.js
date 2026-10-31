@@ -12,11 +12,14 @@ import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
 } from './statements.js';
 
+// A silent name's trailing `.` (`log.`, `@go.`) becomes `$` — a JS identifier
+// character no Brevity name uses, so `log` and `log.` stay distinct.
 function methodNameFor(name) {
-  if (name.startsWith('#')) return `priv_${name.slice(1)}`;
-  if (name.startsWith('set@')) return `setAt_${name.slice(4)}`;
-  if (name.startsWith('@')) return `op_${name.slice(1)}`;
-  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+  const n = name.replace(/\.$/, '$');
+  if (n.startsWith('#')) return `priv_${n.slice(1)}`;
+  if (n.startsWith('set@')) return `setAt_${n.slice(4)}`;
+  if (n.startsWith('@')) return `op_${n.slice(1)}`;
+  return n.replace(/[^a-zA-Z0-9_$]/g, '_');
 }
 
 // The `{ members }` of a service string: drops a trailing `| AsType` suffix
@@ -220,6 +223,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   if (bodyHasEarlyReturn(body)) {
     const jsName = methodNameFor(name);
     const arg = params.length > 0 ? '_s' : 'BvObject.pack(payload)';
+    // A silent function sends no reply, early exit or not.
+    if (rawBody.some(s => s.type === 'SilentTerminator')) {
+      return { condition, block: `${destructure}\n        await this.#${jsName}Fn(${arg});\n        _handled = true;` };
+    }
     return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${bvaLine}\n        _handled = true;` };
   }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
@@ -347,7 +354,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
-    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+    if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) silentFnNames.add(fn.name);
   }
   const allFns = [...publicFns, ...privateFns];
   const usesObject = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);

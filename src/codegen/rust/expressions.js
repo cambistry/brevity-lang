@@ -1095,7 +1095,7 @@ ${subRegLines.join('\n')}
     }
     // Handle FnRef (actor function) — call the fn method for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
-      const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
+      const fnName = rustIdent(fn.name);
       return `{ let mut _result = Vec::new(); if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = BvObject { positional: vec![_el.clone()], named: Map::new() }; _result.push(self.${fnName}_fn(&_s).one()); } } Value::Array(_result) }`;
     }
     // Resolve FnRef to actual function node via eCtx.fnDefs
@@ -1159,7 +1159,7 @@ ${subRegLines.join('\n')}
     let fn = expr.fn;
     // Handle FnRef (actor function) — call the fn method with (acc, item) for each element
     if (fn.type === 'FnRef' && G.ctx.actorFnNames.has(fn.name)) {
-      const fnName = fn.name.startsWith('#') ? `pv_${fn.name.slice(1)}` : fn.name;
+      const fnName = rustIdent(fn.name);
       if (expr.initial) {
         const initVal = forceJsonWrap(init);
         return `{ let mut _acc: Value = ${initVal}; if let Some(_arr) = ${coll}.as_array() { for _el in _arr { let _s = BvObject { positional: vec![_acc.clone(), _el.clone()], named: Map::new() }; _acc = self.${fnName}_fn(&_s).one(); } } _acc }`;
@@ -1496,9 +1496,14 @@ function genRustFnMethod({ name: op, params, body }) {
   const savedSsaScope = G.ctx.ssaScope;
   const savedSsaCounts = G.ctx.ssaCounts;
   const fnReturnMaker = (fields, te) => genRustFnReturn(fields, te);
+  // A leading guard runs before the locals (an early exit must skip the
+  // statements after it); later guards run after them, as in public handlers.
+  const leadingGuard = guards.length > 0 && body[0] === guards[0] ? guards[0] : null;
+  const leadingGuardLines = leadingGuard ? buildRustGuardBlock(leadingGuard.expr, typeEnv, I, fnReturnMaker) : '';
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I, undefined, fnReturnMaker);
-  const guardLines = guards.length > 0
-    ? guards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
+  const trailingGuards = leadingGuard ? guards.slice(1) : guards;
+  const guardLines = trailingGuards.length > 0
+    ? trailingGuards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
     : '';
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'BvObject::empty()';
   G.ctx.ssaScope = savedSsaScope;
@@ -1506,11 +1511,12 @@ function genRustFnMethod({ name: op, params, body }) {
 
   const bodyLines = [];
   if (paramLines.length > 0) bodyLines.push(paramLines.join('\n'));
+  if (leadingGuardLines) bodyLines.push(leadingGuardLines);
   if (locals) bodyLines.push(locals);
   if (guardLines) bodyLines.push(guardLines);
   bodyLines.push(`${I}${retExpr}`);
 
-  const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
+  const fnBaseName = rustIdent(op);
   return `    fn ${fnBaseName}_fn(&mut self, _s: &BvObject) -> BvObject {\n${bodyLines.join('\n')}\n    }`;
 }
 

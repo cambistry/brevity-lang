@@ -36,7 +36,7 @@ Use `spawn` when calling a silent remote operation from a replying handler:
 ```brevity
 *(
   "Store": Store {
-    notify (msg: Text) -> .
+    notify. (msg: Text) -> .
   }
 )
 =
@@ -45,7 +45,7 @@ Use `spawn` when calling a silent remote operation from a replying handler:
   =
   :msg Text
   =
-  spawn Store.notify(:msg)
+  Store.notify.(:msg)...
   return ack: "ok"
 ```
 

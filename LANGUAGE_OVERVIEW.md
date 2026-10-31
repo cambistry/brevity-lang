@@ -111,22 +111,25 @@ choices for the same underlying callable model.
 ```
 
 Replying functions yield a value with `return`, or implicitly from a one-liner
-`->` arrow body (as `@double` above). Effect-only functions use `.` or `-> .`:
+`->` arrow body (as `@double` above). An effect-only (silent) function is named
+with a glued `.` and sends no reply; its type is `(…) -> .`. A silent call ends
+in `...` (fire-and-forget); right after a name the ellipsis absorbs the dot
+(`fire...`):
 
 ```brevity
 *
   "/services/log": Log {
-    write (message: Text) -> .
+    write. (message: Text) -> .
   }
 *
 
-@notify = (message: Text) {
-  Log.write(:message) .
+@notify. = (message: Text) {
+  Log.write.(:message)...
 }
 ```
 
-Use `spawn` when a replying handler should start a silent operation without
-waiting for a reply.
+A bare `return` exits a silent function early; `return value` is an error.
+`spawn` also starts a silent operation without waiting for a reply.
 
 ## Classes and Dependency Context
 
@@ -198,13 +201,13 @@ the actor's address:
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open () -> .
+    open. () -> .
   }
 *
 
 view = *WebView(path: "/main")
 
-@open = { view.open() . }
+@open. = { view.open... }
 ```
 
 The returned actor address remains messageable.

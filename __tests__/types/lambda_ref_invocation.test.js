@@ -21,21 +21,20 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 //
 // Fully fictional service (`Widget`) and types (`Signal`, `Panel`) — no DOM,
 // no browser. The Signal's `dismiss` is a silent endpoint reference; invoking
-// `s.dismiss()` inside the lambda fires to whatever address the value carries,
+// `s.dismiss...` inside the lambda fires to whatever address the value carries,
 // which is how each test observes that the lambda ran against a correctly
-// reconstructed, reference-bearing value. (Members are called by their declared
-// names — `onpress`, `dismiss` — with no `!`: silentness comes from the `-> .`
-// return type, not a call-site sigil.)
+// reconstructed, reference-bearing value. (Silent members carry the silent `.`
+// in their names — `onpress.`, `dismiss.` — and are launched with `...`.)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WIDGET_FIELD = `{
-  ::Signal (dismiss: () -> ., code: Integer)
-  ::Panel (onpress: (s: Signal) -> ., label: Text)
+  ::Signal (dismiss.: () -> ., code: Integer)
+  ::Panel (onpress.: (s: Signal) -> ., label: Text)
 }`;
 
 const WIDGET_METHOD = `{
-  ::Signal (dismiss: () -> ., code: Integer)
-  watch (on: (s: Signal) -> .) -> .
+  ::Signal (dismiss.: () -> ., code: Integer)
+  watch. (on: (s: Signal) -> .) -> .
 }`;
 
 // A Signal value as it arrives on the wire: its silent `dismiss` reference
@@ -54,16 +53,14 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
       "Widget": (:Panel)
     *
     // Generic lambda: param type inferred as Widget::Signal from the field.
-    @generic = (sig: Widget::Signal) {
-      p = Panel(onpress: (s) { s.dismiss() }, label: "a")
-      p.onpress(sig)
-      .
+    @generic. = (sig: Widget::Signal) {
+      p = Panel(onpress.: (s) { s.dismiss... }, label: "a")
+      p.onpress.(sig)...
     }
     // Typed lambda: param explicitly qualified, matching the slot.
-    @typed = (sig: Widget::Signal) {
-      p = Panel(onpress: (s Widget::Signal) { s.dismiss() }, label: "b")
-      p.onpress(sig)
-      .
+    @typed. = (sig: Widget::Signal) {
+      p = Panel(onpress.: (s Widget::Signal) { s.dismiss... }, label: "b")
+      p.onpress.(sig)...
     }
   `;
   const remotes = [{ path: 'Widget', service: WIDGET_FIELD }];
@@ -71,7 +68,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
   it('invokes a generic lambda assigned to the field (fires to the carried address)', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: [{ sig: sigWire }, '@generic'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
+      { input: { id: '1', op: [{ sig: sigWire }, '@generic.'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
       { output: { id: expect.any(String), op: '@d', to: '#<caller @d>' } },
     );
   });
@@ -79,7 +76,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
   it('invokes a correctly-typed lambda assigned to the field', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '2', op: [{ sig: sigWire }, '@typed'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
+      { input: { id: '2', op: [{ sig: sigWire }, '@typed.'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
       { output: { id: expect.any(String), op: '@d', to: '#<caller @d>' } },
     );
   });
@@ -96,14 +93,14 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     *
       "Widget": Widget
     *
-    @go = { Widget.watch(on: (s) { s.dismiss() }) . }
+    @go. = { Widget.watch.(on: (s) { s.dismiss... })... }
   `;
   const remotes = [{ path: 'Widget', service: WIDGET_METHOD }];
 
   it('hands the remote a routable self-reference to the lambda', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
-    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch');
+    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
+    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch.');
     expect(watch).toBeTruthy();
     expect(watch.to).toBe('Widget');
     // The callback arg is a local-form self-address (#<@N>): a reference the
@@ -113,8 +110,8 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
 
   it('runs the lambda when the remote invokes the reference through CAM', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
-    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch');
+    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
+    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch.');
     const selector = watch.op[0].on.slice(2, -1); // '#<@0>' → '@0'
 
     const before = actor.posts.length;

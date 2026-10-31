@@ -84,15 +84,13 @@ describe('capture — function reference state', () => {
   const script = `
     transform *Function = (x Integer) ->  x as Integer
 
-    @useDouble
+    @useDouble.
       =
       transform <- (x Integer) ->  x * 2 as Integer
-      .
 
-    @useNegate
+    @useNegate.
       =
       transform <- (x Integer) ->  0 - x as Integer
-      .
 
     @apply
       =
@@ -114,7 +112,7 @@ describe('capture — function reference state', () => {
     const actor = await createActor(script);
     await actor.sendAsync({ id: '1', cam: 'capture', from: 'p' });
     const before = actor.posts.find(o => o.id === '1').re.transform;
-    await actor.sendAsync({ id: '2', op: '@useDouble', from: 'c' });
+    await actor.sendAsync({ id: '2', op: '@useDouble.', from: 'c' });
     await actor.sendAsync({ id: '3', cam: 'capture', from: 'p' });
     const after = actor.posts.find(o => o.id === '3').re.transform;
     expect(after).toMatch(/^_lambda_/);
@@ -123,7 +121,7 @@ describe('capture — function reference state', () => {
 
   it('@apply calls the current function reference after @useDouble', async () => {
     const actor = await createActor(script);
-    await actor.sendAsync({ id: '1', op: '@useDouble', from: 'c' });
+    await actor.sendAsync({ id: '1', op: '@useDouble.', from: 'c' });
     await expectActorBehavior(actor,
       { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: 10 } }) },
@@ -132,10 +130,10 @@ describe('capture — function reference state', () => {
 
   it('capture after @useNegate has a different label than @useDouble', async () => {
     const actor = await createActor(script);
-    await actor.sendAsync({ id: '1', op: '@useDouble', from: 'c' });
+    await actor.sendAsync({ id: '1', op: '@useDouble.', from: 'c' });
     await actor.sendAsync({ id: '2', cam: 'capture', from: 'p' });
     const doubleLabel = actor.posts.find(o => o.id === '2').re.transform;
-    await actor.sendAsync({ id: '3', op: '@useNegate', from: 'c' });
+    await actor.sendAsync({ id: '3', op: '@useNegate.', from: 'c' });
     await actor.sendAsync({ id: '4', cam: 'capture', from: 'p' });
     const negateLabel = actor.posts.find(o => o.id === '4').re.transform;
     expect(negateLabel).toMatch(/^_lambda_/);
@@ -144,7 +142,7 @@ describe('capture — function reference state', () => {
 
   it('@apply reflects the latest behavior after @useNegate', async () => {
     const actor = await createActor(script);
-    await actor.sendAsync({ id: '1', op: '@useNegate', from: 'c' });
+    await actor.sendAsync({ id: '1', op: '@useNegate.', from: 'c' });
     await expectActorBehavior(actor,
       { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: -5 } }) },

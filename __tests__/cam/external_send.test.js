@@ -8,11 +8,11 @@ describe('external send', () => {
       }
     *
 
-    @call_remote_fire
+    @call_remote_fire.
       =
       url: Text
       =
-      spawn Remote.get(:url) .
+      spawn Remote.get(:url)
 
     @call_remote_receive
       =
@@ -24,7 +24,7 @@ describe('external send', () => {
 
   it('fires outgoing message for DotCallExpr', async () => {
     await expectBehavior(script,
-      { input: { id: '42', op: [{ url: 'http://example.com' }, '@call_remote_fire'], from: 'caller', 'bv-a': [{ url: 'Text' }] } },
+      { input: { id: '42', op: [{ url: 'http://example.com' }, '@call_remote_fire.'], from: 'caller', 'bv-a': [{ url: 'Text' }] } },
       { output: { id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'bv-a': [{ url: 'Text' }] } },
     );
   });

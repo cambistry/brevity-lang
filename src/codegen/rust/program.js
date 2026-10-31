@@ -104,7 +104,7 @@ ${bvTypeFieldsArms}
     const hasReply = fn.body?.some(s => s.type === 'Reply');
     const hasImplicit = fn.body?.some(s => s.type === 'ImplicitReturn');
     const hasSilent = fn.body?.some(s => s.type === 'SilentTerminator');
-    if (hasSilent && !hasReply && !hasImplicit) _silentFns.add(fn.name);
+    if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) _silentFns.add(fn.name);
   }
   const refCapturedBy = new Map();
   for (const fn of (actor.functions || [])) {

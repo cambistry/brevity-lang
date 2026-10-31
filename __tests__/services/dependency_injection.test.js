@@ -50,7 +50,7 @@ describe('file-level DI — basic compilation', () => {
   it('multiple dependencies compile', () => {
     expect(() => compileSource(`
       *
-        "/services/db": DB { put (key: Text, value: Text) -> . }
+        "/services/db": DB { put. (key: Text, value: Text) -> . }
         "/services/cache": Cache { get (key: Text) -> (value: Text) }
       *
 
@@ -59,8 +59,8 @@ describe('file-level DI — basic compilation', () => {
         return :value
       }
 
-      @store = (key: Text, value: Text) {
-        DB.put(:key, :value) .
+      @store. = (key: Text, value: Text) {
+        DB.put.(:key, :value)...
       }
     `)).not.toThrow();
   });
@@ -68,11 +68,11 @@ describe('file-level DI — basic compilation', () => {
   it('comma-separated dependencies compile', () => {
     expect(() => compileSource(`
       *
-        "/db": DB { ping () -> . }
-        "/cache": Cache { ping () -> . }
+        "/db": DB { ping. () -> . }
+        "/cache": Cache { ping. () -> . }
       *
 
-      @test = { DB.ping() . }
+      @test. = { DB.ping.()... }
     `)).not.toThrow();
   });
 
@@ -82,7 +82,7 @@ describe('file-level DI — basic compilation', () => {
       *
         "/services/remote": Remote
       *
-      @go = { Remote.ping() . }
+      @go. = { Remote.ping.()... }
     `);
     expect(() => compile(ast)).toThrow(/has no type/);
   });
@@ -94,12 +94,12 @@ describe('file-level DI — outgoing CAM messages', () => {
   const source = `
     *
       "/services/remote": Remote {
-        ping () -> .
+        ping. () -> .
         greet (name: Text) -> (greeting: Text)
       }
     *
 
-    @ping = { Remote.ping() . }
+    @ping. = { Remote.ping.()... }
 
     @greet
       =
@@ -114,10 +114,10 @@ describe('file-level DI — outgoing CAM messages', () => {
 
   it('silent call sends correct outgoing message', async () => {
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: '@ping', from: 'c' });
+    await actor.sendAsync({ id: '1', op: '@ping.', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toBe('@ping');
+    expect(outgoing.op).toBe('@ping.');
   });
 
   it('call with args sends correct outgoing message', async () => {
@@ -212,7 +212,7 @@ describe('file-level DI — service coercion with as', () => {
   it('as-cast can widen to methods not in original constraint', () => {
     expect(() => compileSource(`
       *
-        "/services/generic": Svc { basic () -> . }
+        "/services/generic": Svc { basic. () -> . }
       *
 
       narrow = Svc as { @specialized (x: Integer) -> (result: Integer) }
@@ -249,7 +249,7 @@ describe('file-level DI — inline constraint checks', () => {
         "/services/db": DB { lookup (key: Text) -> (value: Text) }
       *
 
-      @go = { DB.missing() . }
+      @go. = { DB.missing() }
     `)).toThrow(/has no function 'missing'/);
   });
 
@@ -259,17 +259,17 @@ describe('file-level DI — inline constraint checks', () => {
         "/services/db": DB { lookup (key: Text) -> (value: Text) }
       *
 
-      @go = { n Integer = 42; DB.lookup(n) . }
+      @go. = { n Integer = 42; DB.lookup(n) }
     `)).toThrow(/don't match|type/i);
   });
 
   it('rejects returning silent remote call', () => {
     expect(() => compileSource(`
       *
-        "/services/remote": Remote { fire (Text) -> . }
+        "/services/remote": Remote { fire. (Text) -> . }
       *
 
-      @go = -> Remote.fire("hi")
+      @go = -> Remote.fire.("hi")
     `)).toThrow(/silent/);
   });
 
@@ -278,7 +278,7 @@ describe('file-level DI — inline constraint checks', () => {
       *
         "/services/store": Store {
           lookup (key: Text) -> (value: Text)
-          save (key: Text, value: Text) -> .
+          save. (key: Text, value: Text) -> .
         }
       *
 
@@ -287,8 +287,8 @@ describe('file-level DI — inline constraint checks', () => {
         return :value
       }
 
-      @write = (key: Text, value: Text) {
-        Store.save(:key, :value) .
+      @write. = (key: Text, value: Text) {
+        Store.save.(:key, :value)...
       }
     `)).not.toThrow();
   });
@@ -340,7 +340,7 @@ describe('file-level DI — options.remotes injection', () => {
       *
         "/services/db": DB
       *
-      @go = { key Text = "test"; DB.lookup(:key) . }
+      @go. = { key Text = "test"; DB.lookup(:key) }
     `);
     expect(() => compile(ast, {
       remotes: [{ path: '/services/db', service: dbManifest }],
@@ -352,7 +352,7 @@ describe('file-level DI — options.remotes injection', () => {
       *
         "/services/db": DB
       *
-      @go = { DB.lookup("test") . }
+      @go. = { DB.lookup("test") }
     `);
     expect(() => compile(ast)).toThrow(/has no type/);
   });
@@ -362,7 +362,7 @@ describe('file-level DI — options.remotes injection', () => {
       *
         "/services/db": DB
       *
-      @go = { DB.missing() . }
+      @go. = { DB.missing() }
     `);
     expect(() => compile(ast, {
       remotes: [{ path: '/services/db', service: dbManifest }],
@@ -374,7 +374,7 @@ describe('file-level DI — options.remotes injection', () => {
       *
         "/services/db": DB
       *
-      @go = { n Integer = 42; DB.lookup(n) . }
+      @go. = { n Integer = 42; DB.lookup(n) }
     `);
     expect(() => compile(ast, {
       remotes: [{ path: '/services/db', service: dbManifest }],
@@ -384,12 +384,12 @@ describe('file-level DI — options.remotes injection', () => {
   it('options.remotes catches returning silent call', () => {
     const { ast } = extract(`
       *
-        "/services/db": DB { ping () -> . }
+        "/services/db": DB { ping. () -> . }
       *
-      @go = -> DB.ping()
+      @go = -> DB.ping.()
     `);
     expect(() => compile(ast, {
-      remotes: [{ path: '/services/db', service: '{\n  ping () -> .\n}' }],
+      remotes: [{ path: '/services/db', service: '{\n  ping. () -> .\n}' }],
     })).toThrow(/silent/);
   });
 });

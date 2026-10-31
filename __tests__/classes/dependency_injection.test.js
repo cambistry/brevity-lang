@@ -46,12 +46,12 @@ describe('explicit form — compilation', () => {
   it('empty class params *() compiles', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing () -> *{ ping () -> . }
+        "thing.bv": Thing () -> *{ ping. () -> . }
       *
 
       t = Thing()
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).not.toThrow();
   });
 
@@ -87,14 +87,14 @@ describe('explicit form — actor routing', () => {
     *
         "thing.bv": Thing (a: Integer) -> *{
         get () -> (value: Integer)
-        ping () -> .
+        ping. () -> .
       }
     *
 
     t = Thing(a: 5)
 
     @go = { :value Integer = t.get(); return :value }
-    @notify = { t.ping() . }
+    @notify. = { t.ping.()... }
   `;
 
   it('non-silent method call routes to actor address', async () => {
@@ -126,8 +126,8 @@ describe('explicit form — actor routing', () => {
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/77>', 'bv-a': '#<Thing>', from: 'Thing' } },
-      { input: { id: '2', op: '@notify', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@ping', to: 'Thing/77' }) },
+      { input: { id: '2', op: '@notify.', from: 'caller' } },
+      { output: expect.objectContaining({ op: '@ping.', to: 'Thing/77' }) },
     );
   });
 });
@@ -212,16 +212,15 @@ describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
       *
 
-      @spawn = {
+      @spawn. = {
         t = Thing(a: 5)
-        .
       }
     `);
     await expectActorBehavior(actor,
-      { input: { id: '99', op: '@spawn', from: 'caller' } },
+      { input: { id: '99', op: '@spawn.', from: 'caller' } },
       { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
       { input: { id: '1', re: '#<Thing/1>', 'bv-a': '#<Thing>', from: 'Thing' } },
     );
@@ -254,48 +253,48 @@ describe('explicit form — class arg validation', () => {
   it('rejects wrong class arg type', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
       *
 
       t = Thing(a: "not-an-int")
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).toThrow(/expected Integer, got Text/);
   });
 
   it('rejects extra class args', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
       *
 
       t = Thing(a: 5, b: 99)
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).toThrow(/don't match|unexpected/i);
   });
 
   it('rejects missing class args', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer, b: Text) -> *{ ping () -> . }
+        "thing.bv": Thing (a: Integer, b: Text) -> *{ ping. () -> . }
       *
 
       t = Thing(a: 5)
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).toThrow(/don't match|missing/i);
   });
 
   it('rejects construction against (Alias) { iface } service-only form', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing { ping () -> . }
+        "thing.bv": Thing { ping. () -> . }
       *
 
       t = Thing()
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).toThrow(/no constructor signature/);
     // (error message preserved verbatim from compiler output)
   });
@@ -305,36 +304,36 @@ describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
       *
 
       t = Thing(a: 5)
 
-      @go = { t.missing() . }
+      @go. = { t.missing() }
     `)).toThrow(/has no function 'missing'/);
   });
 
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ call (msg: Text) -> . }
+        "thing.bv": Thing (a: Integer) -> *{ call. (msg: Text) -> . }
       *
 
       t = Thing(a: 5)
 
-      @go = { n Integer = 42; t.call(msg: n) . }
+      @go. = { n Integer = 42; t.call.(msg: n)... }
     `)).toThrow(/expected Text, got Integer/);
   });
 
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ fire () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ fire. () -> . }
       *
 
       t = Thing(a: 5)
 
-      @go = -> t.fire()
+      @go = -> t.fire.()
     `)).toThrow(/silent/);
   });
 });
@@ -360,13 +359,13 @@ describe('# form — requires manifest', () => {
 
       t = Thing(a: 5)
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `)).toThrow(/has no type/);
   });
 });
 
 describe('# form — manifest from options.remotes', () => {
-  const ctorManifest = '(a: Integer) -> *{\n  ping () -> .\n  get () -> (value: Integer)\n}';
+  const ctorManifest = '(a: Integer) -> *{\n  ping. () -> .\n  get () -> (value: Integer)\n}';
 
   it('# form compiles when manifest supplied via options.remotes', () => {
     expect(() => compileSource(`
@@ -376,7 +375,7 @@ describe('# form — manifest from options.remotes', () => {
 
       t = Thing(a: 5)
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).not.toThrow();
   });
 
@@ -388,7 +387,7 @@ describe('# form — manifest from options.remotes', () => {
 
       t = Thing(a: "not-an-int")
 
-      @go = { t.ping() . }
+      @go. = { t.ping.()... }
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/expected Integer, got Text/);
   });
 
@@ -400,7 +399,7 @@ describe('# form — manifest from options.remotes', () => {
 
       t = Thing(a: 5)
 
-      @go = { t.missing() . }
+      @go. = { t.missing() }
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/has no function 'missing'/);
   });
 
@@ -459,7 +458,7 @@ describe('coercion to typed class — compilation', () => {
 
       thing = Coerced(a: "not-an-int")
 
-      @go = { thing.get() . }
+      @go. = { thing.get() }
     `)).toThrow(/expected Integer, got Text/);
   });
 
@@ -473,7 +472,7 @@ describe('coercion to typed class — compilation', () => {
 
       thing = Coerced(a: 5)
 
-      @go = { thing.missing() . }
+      @go. = { thing.missing() }
     `)).toThrow(/has no function 'missing'/);
   });
 });

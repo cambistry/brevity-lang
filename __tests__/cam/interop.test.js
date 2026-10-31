@@ -46,7 +46,7 @@ describe('interop — cross-call to silent public function', () => {
     const actor = await createActor(`
       *
         "Store": Store {
-          notify (msg: Text) -> .
+          notify. (msg: Text) -> .
         }
       *
 
@@ -54,11 +54,11 @@ describe('interop — cross-call to silent public function', () => {
         =
         msg: Text
         =
-        spawn Store.notify(:msg)
+        spawn Store.notify.(:msg)
         return ack: "ok"
     `);
     await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] });
-    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ msg: 'hello' }, '@notify'], to: 'Store' }));
+    expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ msg: 'hello' }, '@notify.'], to: 'Store' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'Tester' }));
   });
 
@@ -66,18 +66,18 @@ describe('interop — cross-call to silent public function', () => {
     const script = `
       last *Text = ""
 
-      @notify
+      @notify.
         =
         msg: Text
         =
-        last <- msg .
+        last <- msg
 
       @check
         =
         -> last: last
     `;
     await expectBehavior(script,
-      { input: { id: 'N1', op: [{ msg: 'hello' }, '@notify'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] } },
+      { input: { id: 'N1', op: [{ msg: 'hello' }, '@notify.'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] } },
       { input: { id: '2', op: '@check', from: 'Tester' } },
       { output: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }) },
     );

@@ -62,14 +62,14 @@ Constructor-like remote refs are written with `Alias!(...)`.
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open () -> .
-    close () -> .
+    open. () -> .
+    close. () -> .
   }
 *
 
 view = WebView!(path: "/demo")
 
-@open = { view.open() . }
+@open. = { view.open... }
 ```
 
 Use named arguments for clarity.
@@ -81,7 +81,7 @@ A `Type!` ref holds mutable state.
 ```brevity
 content Text! = "initial"
 
-@bump = (v: Text) { content <- v . }
+@bump. = (v: Text) { content <- v }
 ```
 
 Prefer public mutation handlers instead of hidden writes.
@@ -93,13 +93,13 @@ A factory-style actor can return DOM-like structures from a public handler.
 ```brevity
 *
   "DOM": DOM {
-    div () -> .
+    div. () -> .
   }
 *
 
 content Text! = "initial"
 
-@bump = (v: Text) { content <- v . }
+@bump. = (v: Text) { content <- v }
 @create = -> <div>{ content }</div>
 ```
 

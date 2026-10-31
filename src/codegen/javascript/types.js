@@ -187,6 +187,16 @@ function parseTypeDeclFields(valueText) {
     } else {
       continue;
     }
+    // A silent-function field is named with the silent `.`, stored without it
+    // (same rule as the parser's silentFieldName).
+    const silentType = /->\s*\.\s*$/.test(paramType);
+    if (name.endsWith('.') && !silentType) {
+      throw new Error(`Field '${name}' is silent by its name — its type is a silent function '(…) -> .'`);
+    }
+    if (silentType && !name.endsWith('.')) {
+      throw new Error(`Field '${name}' holds a silent function — name it '${name}.'`);
+    }
+    if (silentType) name = name.slice(0, -1);
     const out = { type: 'TypeField', name, paramType };
     if (optional) out.optional = true;
     if (named) out.named = true;
@@ -195,7 +205,8 @@ function parseTypeDeclFields(valueText) {
   return fields;
 }
 
-const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*\??!?/;
+// A name may end in `?`, `!`, or the silent `.` (`notify. (Text) -> .`).
+const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.(?=[\s(]|$)|\??!?)/;
 // A read-only field's type: names, `of`, `|` unions, `::` qualifiers.
 const FIELD_TYPE_RE = /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)?(\s+(of\s+)?[A-Za-z_][A-Za-z0-9_]*)*(\s*\|\s*[A-Za-z_][A-Za-z0-9_]*(\s+of\s+[A-Za-z_][A-Za-z0-9_]*)?)*$/;
 
@@ -222,6 +233,14 @@ function parseSignature(name, text) {
     return { kind: 'constructor', paramsInner, bodyInner: rest.slice(2, bEnd - 1) };
   }
   const params = paramsInner ? parseFieldList(paramsInner) : [];
+  // Silence is in the name: `-> .` and a trailing `.` on the name go together
+  // (bang names keep their own `-> .` for now).
+  if (rest === '.' && !name.endsWith('.') && !name.endsWith('!')) {
+    throw new Error(`Interface entry '${name}' is silent — name it '${name}.'`);
+  }
+  if (rest !== '.' && name.endsWith('.')) {
+    throw new Error(`Interface entry '${name}' is silent by its name — its return is '-> .'`);
+  }
   if (rest === '.') return { kind: 'function', params, returns: null };
   if (rest.startsWith('(')) {
     const rEnd = groupEnd(rest, 0);

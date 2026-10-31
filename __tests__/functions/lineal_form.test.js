@@ -352,12 +352,11 @@ describe('lineal function — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        result Integer = fire()
+        result Integer = fire.()
         return result
-      fire
+      fire.
         =
-        .
-    `)).toThrow(/Silent function/);
+    `)).toThrow(/'fire\.' is silent/);
   });
 
   it('public and private function with same base name can coexist', () => {
@@ -407,12 +406,11 @@ describe('lineal function — compile errors', () => {
 const edgeCaseScript = `
   @goSilent
     =
-    spawn fire()
+    spawn fire.()
     return answer: "ok"
 
-  fire
+  fire.
     =
-    .
 
   @fooStruct
     =

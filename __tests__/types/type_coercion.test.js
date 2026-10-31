@@ -45,7 +45,7 @@ describe('type coercion — service ref, multiple as types', () => {
   const source = `
     *
       "/services/store": Store {
-        ping () -> .
+        ping. () -> .
       } | Integer | Text
     *
 
@@ -85,7 +85,7 @@ describe('type coercion — class ref (#), two-step', () => {
   const source = `
     *
         "service.bv": Service () -> *{
-        ping () -> .
+        ping. () -> .
       } | Integer
     *
 
@@ -117,7 +117,7 @@ describe('type coercion — class ref (#), one-step', () => {
   const source = `
     *
         "service.bv": Service () -> *{
-        ping () -> .
+        ping. () -> .
       } | Integer
     *
 
@@ -198,7 +198,7 @@ describe('type coercion — service ref (*) via remotes', () => {
 });
 
 describe('type coercion — service ref (*) via remotes, multiple as types', () => {
-  const manifest = '{\n  ping () -> .\n} | Integer | Text';
+  const manifest = '{\n  ping. () -> .\n} | Integer | Text';
 
   it('Integer coercion via remotes sends [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -241,7 +241,7 @@ describe('type coercion — service ref (*) via remotes, multiple as types', () 
 
 describe('type coercion — class ref (#) via remotes, two-step', () => {
   const ctorParams = '()';
-  const ctorService = '{\n  ping () -> .\n} | Integer';
+  const ctorService = '{\n  ping. () -> .\n} | Integer';
 
   it('bare # with remotes — new then [Integer, as] to actor', async () => {
     const actor = await createActor(`
@@ -273,7 +273,7 @@ describe('type coercion — class ref (#) via remotes, two-step', () => {
 
 describe('type coercion — class ref (#) via remotes, one-step', () => {
   const ctorParams = '()';
-  const ctorService = '{\n  ping () -> .\n} | Integer | Text';
+  const ctorService = '{\n  ping. () -> .\n} | Integer | Text';
 
   it('one-step Integer — new then [Integer, as]', async () => {
     const compiled = await compileActor(`
@@ -355,7 +355,7 @@ describe('type coercion — compile errors via remotes', () => {
 
   it('class ref — remotes interface lacks as type → error', () => {
     const noAsParams = '()';
-    const noAsService = '{\n  ping () -> .\n}';
+    const noAsService = '{\n  ping. () -> .\n}';
     expect(() => compileSource(`
       *
         "service.bv": Service #
@@ -391,7 +391,7 @@ describe('type coercion — compile errors', () => {
     expect(() => compileSource(`
       *
           "service.bv": Service () -> *{
-          ping () -> .
+          ping. () -> .
         }
       *
 

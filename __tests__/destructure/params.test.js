@@ -263,7 +263,7 @@ describe('destructure params — extraction', () => {
       *
         "geometry.bv": (:Point)
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "geometry.bv":\n)');
   });
@@ -273,7 +273,7 @@ describe('destructure params — extraction', () => {
       *
         "dom.bv": (:Element, :div, :p)
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toContain('dom.bv');
   });
@@ -283,7 +283,7 @@ describe('destructure params — extraction', () => {
       *
         "service.bv": (Func: fn, CONFIG: cfg Text)
       *
-      @noop = .
+      @noop. = {}
     `);
     expect(iface.params).toContain('service.bv');
   });
@@ -303,7 +303,7 @@ describe('destructure params — extraction', () => {
 // ─── Outgoing CAM messages ───────────────────────────────────────────────────
 
 describe('destructure params — outgoing messages', () => {
-  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping () -> .\n}';
+  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping. () -> .\n}';
 
   it('destructured function call sends message to source service', async () => {
     const compiled = await compileActor(`
@@ -332,16 +332,16 @@ describe('destructure params — outgoing messages', () => {
   it('destructured silent call sends message to source service', async () => {
     const compiled = await compileActor(`
       *
-        "greeter.bv": (:ping)
+        "greeter.bv": (:ping.)
       *
 
-      @go = { ping() . }
+      @go. = { ping... }
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
 
-    const outgoing = actor.posts.find(p => p.op === '@ping');
+    const outgoing = actor.posts.find(p => p.op === '@ping.');
     expect(outgoing).toBeDefined();
   });
 });

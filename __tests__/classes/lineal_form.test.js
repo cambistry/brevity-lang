@@ -23,13 +23,12 @@ describe('lineal class grammar — accepted forms', () => {
 
   it('Cls\\n=\\n*\\nparams\\n*\\nbody . (header `=` on its own line)', () => {
     expect(() => compileSource(`
-      Box
+      Box.
         =
         *
         value Integer
         *
         @get = -> result: value
-        .
 
       @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
@@ -97,12 +96,11 @@ describe('lineal class grammar — accepted forms', () => {
 describe('lineal class grammar — rejected forms', () => {
   it('Cls\\n*\\nparams (missing opening `=`) is a parse error', () => {
     expect(() => compileSource(`
-      Box
+      Box.
         *
         value Integer
         *
         @get = -> result: value
-        .
     `)).toThrow(/requires '=' before '\*'/);
   });
 

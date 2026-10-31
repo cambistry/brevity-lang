@@ -16,20 +16,21 @@ import { compileSource, compileActor } from '../helpers.js';
 
 const WIDGET = `{
   ::Control (
-    press: () -> .
-    release: () -> .
-    reset: () -> .
+    press.: () -> .
+    release.: () -> .
+    reset.: () -> .
     ? label: Text
   )
 }`;
 
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
-const handler = (body) => `
+// A silent handler fires a reference; a replying one reads a value field.
+const handler = (body, name = '@handle.') => `
   *
     "Widget": Widget
   *
-  @handle = (c: Widget::Control) ${body}
+  ${name} = (c: Widget::Control) ${body}
 `;
 
 // A representative Control value as it arrives on the wire (named map): each
@@ -43,7 +44,7 @@ const ctl = {
 
 describe('cross-module type with reference fields', () => {
   it('resolves a cross-module type as a handler param', () => {
-    expect(() => compileSource(handler('{ c.press() . }'), { remotes })).not.toThrow();
+    expect(() => compileSource(handler('{ c.press... }'), { remotes })).not.toThrow();
   });
 
   it('rejects a name the service does not export', () => {
@@ -55,28 +56,28 @@ describe('cross-module type with reference fields', () => {
     `, { remotes })).toThrow(/not exported by 'Widget'/);
   });
 
-  it('invoking c.press() fires to the endpoint address the value carries', async () => {
-    const actor = await (await compileActor(handler('{ c.press() . }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+  it('invoking c.press... fires to the endpoint address the value carries', async () => {
+    const actor = await (await compileActor(handler('{ c.press... }'), { compileOptions: { remotes } })).spawn();
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@press1' && p.to === '#<Widget @press1>')).toBe(true);
   });
 
-  it('invoking c.release() fires to the release endpoint, not press', async () => {
-    const actor = await (await compileActor(handler('{ c.release() . }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+  it('invoking c.release... fires to the release endpoint, not press', async () => {
+    const actor = await (await compileActor(handler('{ c.release... }'), { compileOptions: { remotes } })).spawn();
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@release1' && p.to === '#<Widget @release1>')).toBe(true);
     expect(actor.posts.some(p => p.op === '@press1')).toBe(false);
   });
 
-  it('invoking c.reset() fires to the reset endpoint', async () => {
-    const actor = await (await compileActor(handler('{ c.reset() . }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+  it('invoking c.reset... fires to the reset endpoint', async () => {
+    const actor = await (await compileActor(handler('{ c.reset... }'), { compileOptions: { remotes } })).spawn();
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@reset1' && p.to === '#<Widget @reset1>')).toBe(true);
   });
 
   it('reads a value field locally (no send) and replies with it', async () => {
     const actor = await (await compileActor(
-      handler('-> label: (c.label ?? "none")'),
+      handler('-> label: (c.label ?? "none")', '@handle'),
       { compileOptions: { remotes } },
     )).spawn();
     await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });

@@ -8,18 +8,17 @@ describe('silent public functions + type matching', () => {
   const script = `
     --- silent public functions: inline and lineal forms ---
 
-    @notify = (msg: Text) .
+    @notify. = (msg: Text) {}
 
-    @log
+    @log.
       =
       info: Text
       =
-      .
 
-    --- overloaded: silent for Integer, replying for Text ---
+    --- silence is per name: the silent and replying ops are distinct ---
 
-    @overloaded = (msg: Integer) .
-    @overloaded << (msg: Text) -> ack: "noted"
+    @overloaded. = (msg: Integer) {}
+    @overloaded = (msg: Text) -> ack: "noted"
 
     --- replying function alongside silent ones ---
 
@@ -29,12 +28,10 @@ describe('silent public functions + type matching', () => {
 
     @spawnTest
       =
-      spawn fire()
+      spawn fire.()
       return answer: "ok"
 
-    fire
-      =
-      .
+    fire. = {}
   `;
 
   it('replying function still works alongside silent function', async () => {
@@ -60,8 +57,8 @@ describe('silent public functions + type matching', () => {
 
   it('type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ msg: 42 }, '@notify'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
-      { output: { id: '4', ex: { '@notify': 'unhandled' }, to: 'c' } },
+      { input: { id: '4', op: [{ msg: 42 }, '@notify.'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
+      { output: { id: '4', ex: { '@notify.': 'unhandled' }, to: 'c' } },
     );
   });
 
@@ -74,9 +71,9 @@ describe('silent public functions + type matching', () => {
 
   it.skip('silent messages produce no output', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ msg: 'attention' }, '@notify'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
-      { input: { id: '7', op: [{ info: 'hello' }, '@log'], 'bv-a': [{ info: 'Text' }], from: 'c' } },
-      { input: { id: '8', op: [{ msg: 42 }, '@overloaded'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
+      { input: { id: '6', op: [{ msg: 'attention' }, '@notify.'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: '7', op: [{ info: 'hello' }, '@log.'], 'bv-a': [{ info: 'Text' }], from: 'c' } },
+      { input: { id: '8', op: [{ msg: 42 }, '@overloaded.'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
       // is this testing anything?
       { output: [] },
     );
@@ -96,11 +93,11 @@ describe('stateful silent functions + lambdas', () => {
 
     --- store: dot on same line as state mutation ---
 
-    @store
+    @store.
       =
       msg: Text
       =
-      last <- msg .
+      last <- msg
 
     @check
       =
@@ -138,7 +135,7 @@ describe('stateful silent functions + lambdas', () => {
 
   it('dot on same line — store is silent, state persists', async () => {
     await expectBehavior(script,
-      { input: { id: 's1', op: [{ msg: 'hello' }, '@store'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: 's1', op: [{ msg: 'hello' }, '@store.'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
       { input: { id: 'c1', op: '@check', from: 'c' } },
       { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) },
     );
@@ -184,12 +181,12 @@ describe('silent private — side-effect spawn with __tick__', () => {
 
       @test
         =
-        spawn fire()
+        spawn fire.()
         repeat while (x == 0) __tick__()
         return x
-      fire
+      fire.
         =
-        x <- 1 .
+        x <- 1
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
@@ -199,26 +196,36 @@ describe('silent private — side-effect spawn with __tick__', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// -> . synonym for . (arrow-dot silent terminator)
+// Empty lineal silent body: the blank line after `=` ends it
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('silent function — -> . synonym', () => {
+describe('silent function — empty lineal body', () => {
   const script = `
-    @spaciousArrowDot
+    @spaciousEmpty
       =
-      spawn fireArrow()
+      spawn fireEmpty.()
       return answer: "ok"
 
-    fireArrow
+    fireEmpty.
       =
-      -> .
+
+    @after = -> 1
   `;
 
-  it('lineal private function — -> . is silent', async () => {
+  it('lineal private function — empty body is silent', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@spaciousArrowDot', from: 'c' } },
+      { input: { id: '1', op: '@spaciousEmpty', from: 'c' } },
       { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
+  });
+
+  it('`-> .` in a named function is an error naming the fix', () => {
+    expect(() => compileSource(`
+      fireArrow
+        =
+        -> .
+      @go = -> 1
+    `)).toThrow(/name it 'fireArrow\.' and drop the '\.'/);
   });
 });
 
@@ -227,29 +234,25 @@ describe('silent function — -> . synonym', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('silent function — compile errors', () => {
-  it('calling silent private function without spawn → compile error', () => {
+  it('calling silent private function without `...` → compile error', () => {
     expect(() => compileSource(`
       @test
         =
-        fire()
+        fire.()
         return answer: "done"
 
-      fire
-        =
-        .
-    `)).toThrow(/Silent function invocation requires 'spawn'/);
+      fire. = {}
+    `)).toThrow(/'fire\.' is silent — call it 'fire\.\(…\)\.\.\.'/);
   });
 
   it('assigning result of silent private function → compile error', () => {
     expect(() => compileSource(`
       @test
         =
-        result Integer = fire()
+        result Integer = fire.()
         return result
-      fire
-        =
-        .
-    `)).toThrow(/Silent function/);
+      fire. = {}
+    `)).toThrow(/'fire\.' is silent/);
   });
 
   it('assigning result of silent lambda → compile error', () => {
@@ -268,13 +271,11 @@ describe('silent function — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        x Integer = 1 + fire()
+        x Integer = 1 + fire.()
         return :x
 
-      fire
-        =
-        .
-    `)).toThrow(/Silent function 'fire' cannot be used in an expression/);
+      fire. = {}
+    `)).toThrow(/Silent function 'fire\.' cannot be used in an expression/);
   });
 
   it('silent function used as argument → compile error', () => {
@@ -282,24 +283,20 @@ describe('silent function — compile errors', () => {
       @test
         =
         double = (n) ->  n * 2
-        result Integer = double(fire())
+        result Integer = double(fire.())
         return :result
 
-      fire
-        =
-        .
-    `)).toThrow(/Silent function 'fire' cannot be used as an argument/);
+      fire. = {}
+    `)).toThrow(/Silent function 'fire\.' cannot be used as an argument/);
   });
 
   it('silent function used as return value → compile error', () => {
     expect(() => compileSource(`
       @test
         =
-        -> fire()
+        -> fire.()
 
-      fire
-        =
-        .
-    `)).toThrow(/Silent function 'fire' cannot be used as a return value/);
+      fire. = {}
+    `)).toThrow(/Silent function 'fire\.' cannot be used as a return value/);
   });
 });

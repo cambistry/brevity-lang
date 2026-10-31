@@ -348,26 +348,26 @@ describe('catch — Phase 4: block-label syntax', () => {
 describe('catch — compile errors', () => {
   it('rejects shadowing an active label', () => {
     const src = `
-      @t
+      @t.
         =
         catch #a {
           catch #a { }
         }
-        return .
+        return
     `;
     expect(() => compileSource(src)).toThrow(/shadows outer/);
   });
 
   it('rejects mixing void and value invocations of the same label', () => {
     const src = `
-      @t
+      @t.
         =
         catch #m {
           if true #m
           if false #m(1)
           0
         }
-        return .
+        return
     `;
     expect(() => compileSource(src)).toThrow(/Inconsistent #m/);
   });

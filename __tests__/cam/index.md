@@ -12,7 +12,7 @@ construction, callback flow, and outgoing wire messages.
   `"Remote": Remote { get (url: Text) -> (response: Text) }`.
 - Calls to dependency aliases send CAM messages to the alias address.
 - Replying calls suspend the current continuation until a matching `re` arrives.
-- Silent calls use `spawn` or a silent `-> .` surface and do not produce a value.
+- Silent calls end in `...` (or use `spawn`) and do not produce a value.
 - Source form for a remote actor binding: `view = *Name(...)`. Construction
   calls the remote class — a `#new` message is sent to the dependency address;
   the reply carries the actor's address.

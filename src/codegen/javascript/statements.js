@@ -436,6 +436,10 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     } else if (s.type === 'Return') {
       lastTypedName = null;
       code += `\n        return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+    } else if (s.type === 'SilentTerminator') {
+      // Early exit from a silent function: no reply.
+      lastTypedName = null;
+      code += `\n        return BvObject.pack(undefined);`;
     }
   }
   if (lastTypedName !== null) {

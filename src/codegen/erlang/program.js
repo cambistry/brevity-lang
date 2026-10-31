@@ -186,9 +186,9 @@ function genFn(ctx, fn) {
   const { name: op, params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
   const reply = rawBody.find(s => s.type === 'Reply');
-  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
-  let body = rawBody;
   const hasSilentFn = rawBody.some(s => s.type === 'SilentTerminator');
+  let implicitReturn = !reply ? rawBody.filter(s => !isSilentGuard(s, hasSilentFn) && s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
   if (!reply && !implicitReturn && !hasSilentFn && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
     body = rawBody.slice(0, -1);
@@ -324,7 +324,7 @@ function genFn(ctx, fn) {
     allLines.push(`${I}${retExpr}`);
   }
 
-  const fnBaseName = op.startsWith('#') ? `pv_${op.slice(1)}` : op;
+  const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s');
   return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
@@ -381,7 +381,8 @@ function genDispatch(ctx, publicFns) {
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
       const isWireOp = op === 'set' || op === 'update';
       const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
-      const baseName = isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op;
+      // A silent name's trailing `.` → `__s` (`.` ends an Erlang form).
+      const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s');
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -431,14 +432,21 @@ function genDispatch(ctx, publicFns) {
   return clauses;
 }
 
+// In a silent body, an `if` holding an early exit is a guard, never the tail
+// value (a silent function has none).
+function isSilentGuard(s, silent) {
+  return silent && s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr) &&
+    JSON.stringify(s.expr).includes('"type":"Return"');
+}
+
 function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false } = {}) {
   const { params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
   const reply = rawBody.find(s => s.type === 'Reply');
-  let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
-  let body = rawBody;
   // Trailing ExprStatement in braced body acts as implicit return (unless explicitly silent)
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
+  let implicitReturn = !reply ? rawBody.filter(s => !isSilentGuard(s, hasSilent) && s.type === 'ImplicitReturn').pop() : null;
+  let body = rawBody;
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     const lastExpr = rawBody[rawBody.length - 1].expr;
     const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && ctx.emitNames.has(lastExpr.callee.name) && ctx.emitNames.get(lastExpr.callee.name).silent;
@@ -772,7 +780,7 @@ function genChildHandleOp(ctx, actor) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
-    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+    if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) silentFnNames.add(fn.name);
   }
   const savedRefCapturedBy = ctx._refCapturedBy;
   const refCapturedBy = new Map();
@@ -1379,7 +1387,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const hasReply = fn.body.some(s => s.type === 'Reply');
     const hasImplicit = fn.body.some(s => s.type === 'ImplicitReturn');
     const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
-    if (hasSilent && !hasReply && !hasImplicit) silentFnNames.add(fn.name);
+    if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) silentFnNames.add(fn.name);
   }
   const refCapturedBy = new Map();
   for (const fn of [...publicFns, ...privateFns]) {

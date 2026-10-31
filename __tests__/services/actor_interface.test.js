@@ -65,11 +65,11 @@ describe('class interface — actor methods', () => {
   it('silent method', () => {
     const { interface: iface } = extract(`
       @Logger = * {
-        @log = (msg: Text) .
+        @log. = (msg: Text) {}
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Logger () -> *{\n    log (msg: Text) -> .\n  }\n}',
+      '{\n  Logger () -> *{\n    log. (msg: Text) -> .\n  }\n}',
     );
   });
 
@@ -124,10 +124,10 @@ describe('class interface — mixed with public functions', () => {
         @body = -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
       }
-      @publish = (doc: Document) .
+      @publish. = (doc: Document) {}
     `);
     expect(iface.service).toBe(
-      '{\n  publish (doc: Document) -> .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
+      '{\n  publish. (doc: Document) -> .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -291,11 +291,11 @@ describe('class interface — imported type address resolution', () => {
       *
 
       @Processor = * {
-        @handle = (item: Item) .
+        @handle. = (item: Item) {}
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Processor () -> *{\n    handle (item: `/models/item`) -> .\n  }\n}',
+      '{\n  Processor () -> *{\n    handle. (item: `/models/item`) -> .\n  }\n}',
     );
   });
 });

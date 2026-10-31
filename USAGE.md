@@ -100,7 +100,7 @@ const { interface: iface } = extract(`
     "/services/db": DB
     cache_size: Integer
   *
-  @noop = .
+  @noop. = {}
 `);
 
 // iface.params:

@@ -10,8 +10,8 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 
 describe('interface parser — nested function-type parameter', () => {
   it('keeps a silent-callback parameter intact (top-level arrow wins)', () => {
-    const parsed = parseInterface('{ watch (on: (s: Signal) -> .) -> . }');
-    expect(parsed.watch).toEqual([
+    const parsed = parseInterface('{ watch. (on: (s: Signal) -> .) -> . }');
+    expect(parsed['watch.']).toEqual([
       { params: [{ name: 'on', type: '(s: Signal) -> .', positional: false }], returns: null },
     ]);
   });

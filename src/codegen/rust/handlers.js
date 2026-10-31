@@ -131,6 +131,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   let leadingGuardLines = null;
   let trailingGuards = guards;
   function makeReturnLines(returnFields, branchIndent) {
+    // An early exit from a silent handler sends no reply.
+    if (hasSilent) return `${branchIndent}return (None, None, true);`;
     const reBody = genRustReBody(returnFields, typeEnv, refNames);
     const bvaBody = genRustBvaBody(returnFields, typeEnv, refNames);
     const out = [];
@@ -1116,7 +1118,7 @@ function genRustChildMethods(allActors) {
       const hasReply = fn.body?.some(s => s.type === 'Reply');
       const hasImplicit = fn.body?.some(s => s.type === 'ImplicitReturn');
       const hasSilent = fn.body?.some(s => s.type === 'SilentTerminator');
-      if (hasSilent && !hasReply && !hasImplicit) _childSilent.add(fn.name);
+      if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) _childSilent.add(fn.name);
     }
     const savedRefCapturedBy = G.ctx._refCapturedBy;
     const _childRefCapturedBy = new Map();

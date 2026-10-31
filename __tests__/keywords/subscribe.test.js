@@ -118,16 +118,16 @@ describe('subscribe — call-site syntax', () => {
     c = C()
     last *Integer = 0
 
-    @doSubscribe = { c.val.subscribe (v) { last <- v } ; . }
+    @doSubscribe. = { c.val.subscribe (v) { last <- v } }
 
-    @setVal = (n: Integer) { c.val <- n . }
+    @setVal. = (n: Integer) { c.val <- n }
 
     @readLast = -> :last as Integer
   `;
 
   it('handler captures initial value after subscribe', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
       { input: { id: '2', op: '@readLast', from: 'caller' } },
       { output: { id: '2', 'bv-a': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
     );
@@ -135,8 +135,8 @@ describe('subscribe — call-site syntax', () => {
 
   it('handler re-runs when the subscribed cell is set', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 42 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 42 }, '@setVal.'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
       { input: { id: '3', op: '@readLast', from: 'caller' } },
       { output: { id: '3', 'bv-a': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
     );
@@ -144,10 +144,10 @@ describe('subscribe — call-site syntax', () => {
 
   it('handler captures the latest value across multiple sets', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: [{ n: 10 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '4', op: [{ n: 99 }, '@setVal'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 5 }, '@setVal.'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: [{ n: 10 }, '@setVal.'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '4', op: [{ n: 99 }, '@setVal.'], 'bv-a': [{ n: 'Integer' }], from: 'caller' } },
       { input: { id: '5', op: '@readLast', from: 'caller' } },
       { output: { id: '5', 'bv-a': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
     );
@@ -169,7 +169,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
 
     last *Integer = 0
 
-    @doSubscribe = { Remote.val.subscribe (v) { last <- v } ; . }
+    @doSubscribe. = { Remote.val.subscribe (v) { last <- v } }
 
     @readLast = -> :last as Integer
   `;
@@ -177,7 +177,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('subscribe@val message is posted to the remote alias', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
         { output: expect.objectContaining({ op: '@subscribe', to: '#<Remote @val>' }) },
       ],
     });
@@ -186,7 +186,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('stubbed initial re updates local state', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
         { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Remote @val>' }) },
         { input: { id: '1', re: [7] } },
         { input: { id: '2', op: '@readLast', from: 'caller' } },
@@ -198,7 +198,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('stubbed later re (simulated set notification) replays to handler', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe', from: 'caller' } },
+        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
         { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Remote @val>' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [5] } },
@@ -254,8 +254,8 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
 
       last *Integer = 0
 
-      @doSubscribe = { pub.val.subscribe (v) { last <- v } ; . }
-      @setPub = (n: Integer) { pub.val <- n . }
+      @doSubscribe. = { pub.val.subscribe (v) { last <- v } }
+      @setPub. = (n: Integer) { pub.val <- n }
       @readLast = -> :last as Integer
     `;
 
@@ -265,7 +265,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     let subPrev = sub.posts.length;
 
     // 1. Subscribe: caller -> sub. sub posts subscribe@val to pub.
-    await sub.sendAsync({ id: '1', op: '@doSubscribe', from: 'caller' });
+    await sub.sendAsync({ id: '1', op: '@doSubscribe.', from: 'caller' });
     await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub replies with re:[0] addressed back to sub.
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
@@ -273,7 +273,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@val(77) to pub.
-    await sub.sendAsync({ id: '2', op: [{ n: 77 }, '@setPub'], 'bv-a': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [{ n: 77 }, '@setPub.'], 'bv-a': [{ n: 'Integer' }], from: 'caller' });
     await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub mutates state, notifies sub with re:[77] on the subscription id.
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);

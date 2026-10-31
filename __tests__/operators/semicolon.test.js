@@ -26,11 +26,11 @@ const fnBodyScript = `
 
   @spawnWhile
     =
-    spawn bump(); repeat while (a == 0) __tick__()
+    spawn bump.(); repeat while (a == 0) __tick__()
     return a
-  bump
+  bump.
     =
-    a <- 1; .
+    a <- 1;
 `;
 
 const inlineParamScript = `@add; =; n: Integer; m: Integer\n =\n  -> sum: n + m\n`;

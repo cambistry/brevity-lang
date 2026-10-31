@@ -88,12 +88,12 @@ Box = (seed Integer) *{
 ```brevity
 *
   "/services/log": Log {
-    write (message: Text) -> .
+    write. (message: Text) -> .
   }
 *
 
-@record = (message: Text) {
-  Log.write(:message) .
+@record. = (message: Text) {
+  Log.write.(:message)...
 }
 ```
 
@@ -102,13 +102,13 @@ Box = (seed Integer) *{
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open () -> .
+    open. () -> .
   }
 *
 
 view = *WebView(path: "/main")
 
-@open = { view.open() . }
+@open. = { view.open... }
 ```
 
 ## Type
@@ -135,7 +135,19 @@ name.trim!
 ```brevity
 return result: 42
 return :value
-return .
+```
+
+## Silent Functions
+
+```brevity
+fire. = { count <- count + 1 }   // the glued `.` names it silent
+@poke. = { fire... }             // `...` fire-and-forget; absorbs the dot
+@log. = (n Integer) {
+  if n < 0 {
+    return                       // bare `return` exits early
+  }
+  Log.write.(n)...
+}
 ```
 
 ## Imports for Details

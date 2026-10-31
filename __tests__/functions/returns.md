@@ -74,4 +74,4 @@ x, y = fn(3, 4)
 - Prefer `-> :name` or `-> field: expr`.
 - Use destructuring for multi-value returns.
 - Use `as Type` when the result type should be stable.
-- Use `.` or `-> .` for silent functions; see [Silent Functions](silent.md).
+- Name silent functions with a glued `.` (type `-> .`); see [Silent Functions](silent.md).

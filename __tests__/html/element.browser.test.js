@@ -78,7 +78,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div() . }
+      @test. = { d = div() }
     `)).not.toThrow();
   });
 
@@ -87,7 +87,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(id: "header") . }
+      @test. = { d = div(id: "header") }
     `)).not.toThrow();
   });
 
@@ -96,7 +96,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(hidden: true) . }
+      @test. = { d = div(hidden: true) }
     `)).not.toThrow();
   });
 
@@ -105,7 +105,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(tabindex: 0) . }
+      @test. = { d = div(tabindex: 0) }
     `)).not.toThrow();
   });
 
@@ -114,10 +114,9 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div, :Aria)
       *
-      @test = {
+      @test. = {
         a = Aria(label: "Close")
         d = div(aria: a)
-        .
       }
     `)).not.toThrow();
   });
@@ -127,7 +126,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(id: "x", hidden: true, tabindex: 1) . }
+      @test. = { d = div(id: "x", hidden: true, tabindex: 1) }
     `)).not.toThrow();
   });
 
@@ -136,7 +135,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(children: ["Hello"]) . }
+      @test. = { d = div(children: ["Hello"]) }
     `)).not.toThrow();
   });
 
@@ -145,7 +144,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:Aria)
       *
-      @test = { a = Aria(level: 2) . }
+      @test. = { a = Aria(level: 2) }
     `)).not.toThrow();
   });
 
@@ -154,7 +153,7 @@ describe('HTML element compile — happy path', () => {
       *
         HTML: (:Aria)
       *
-      @test = { a = Aria(valuenow: 0.5) . }
+      @test. = { a = Aria(valuenow: 0.5) }
     `)).not.toThrow();
   });
 });
@@ -165,7 +164,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(tabindex: "1") . }
+      @test. = { d = div(tabindex: "1") }
     `)).toThrow(/named arg 'tabindex'.*'Text' is not assignable to 'Integer'/);
   });
 
@@ -174,7 +173,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       *
         HTML: (:Aria)
       *
-      @test = { a = Aria(level: "high") . }
+      @test. = { a = Aria(level: "high") }
     `)).toThrow(/named arg 'level'.*'Text' is not assignable to 'Integer'/);
   });
 
@@ -183,7 +182,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(aria: "Close") . }
+      @test. = { d = div(aria: "Close") }
     `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria'/);
   });
 
@@ -192,7 +191,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(spellcheck: 1) . }
+      @test. = { d = div(spellcheck: 1) }
     `)).toThrow(/named arg 'spellcheck'.*'Integer' is not assignable to 'Boolean'/);
   });
 
@@ -201,7 +200,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(inner_html: "Hello") . }
+      @test. = { d = div(inner_html: "Hello") }
     `)).toThrow(/Got named: inner_html/);
   });
 });
@@ -251,7 +250,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(${kw}) . }
+      @test. = { d = div(${kw}) }
     `)).not.toThrow();
   });
 
@@ -260,7 +259,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(data: Object(role: "main")) . }
+      @test. = { d = div(data: Object(role: "main")) }
     `)).not.toThrow();
   });
 
@@ -269,10 +268,9 @@ describe('HTML.div compile — every single-type Element attribute', () => {
       *
         HTML: (:div, :Aria)
       *
-      @test = {
+      @test. = {
         a = Aria(label: "Close")
         d = div(aria: a)
-        .
       }
     `)).not.toThrow();
   });
@@ -282,7 +280,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(children: ["Hello"]) . }
+      @test. = { d = div(children: ["Hello"]) }
     `)).not.toThrow();
   });
 
@@ -292,7 +290,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(${allKw}) . }
+      @test. = { d = div(${allKw}) }
     `)).not.toThrow();
   });
 });
@@ -319,7 +317,7 @@ describe('HTML.div compile — :hidden Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(hidden: true) . }
+      @test. = { d = div(hidden: true) }
     `)).not.toThrow();
   });
 
@@ -328,7 +326,7 @@ describe('HTML.div compile — :hidden Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(hidden: "until-found") . }
+      @test. = { d = div(hidden: "until-found") }
     `)).not.toThrow();
   });
 
@@ -337,7 +335,7 @@ describe('HTML.div compile — :hidden Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(hidden: 1) . }
+      @test. = { d = div(hidden: 1) }
     `)).toThrow(/named arg 'hidden'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
 });
@@ -348,7 +346,7 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(class: "header active") . }
+      @test. = { d = div(class: "header active") }
     `)).not.toThrow();
   });
 
@@ -357,10 +355,9 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
       *
         HTML: (:div)
       *
-      @test = {
+      @test. = {
         classes List of Texts = ["header", "active"]
         d = div(class: classes)
-        .
       }
     `)).not.toThrow();
   });
@@ -370,7 +367,7 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(class: 42) . }
+      @test. = { d = div(class: 42) }
     `)).toThrow(/named arg 'class'.*'Integer' is not assignable to 'Text \| List of Texts'/);
   });
 
@@ -379,10 +376,9 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
       *
         HTML: (:div)
       *
-      @test = {
+      @test. = {
         nums List of Integers = [1, 2]
         d = div(class: nums)
-        .
       }
     `)).toThrow(/named arg 'class'.*'List of Integers' is not assignable to 'Text \| List of Texts'/);
   });
@@ -394,7 +390,7 @@ describe('HTML.div compile — :contenteditable Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(contenteditable: true) . }
+      @test. = { d = div(contenteditable: true) }
     `)).not.toThrow();
   });
 
@@ -403,7 +399,7 @@ describe('HTML.div compile — :contenteditable Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(contenteditable: "plaintext-only") . }
+      @test. = { d = div(contenteditable: "plaintext-only") }
     `)).not.toThrow();
   });
 
@@ -412,7 +408,7 @@ describe('HTML.div compile — :contenteditable Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(contenteditable: 0) . }
+      @test. = { d = div(contenteditable: 0) }
     `)).toThrow(/named arg 'contenteditable'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
 });
@@ -423,7 +419,7 @@ describe('HTML.div compile — :popover Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(popover: true) . }
+      @test. = { d = div(popover: true) }
     `)).not.toThrow();
   });
 
@@ -432,7 +428,7 @@ describe('HTML.div compile — :popover Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(popover: "auto") . }
+      @test. = { d = div(popover: "auto") }
     `)).not.toThrow();
   });
 
@@ -441,7 +437,7 @@ describe('HTML.div compile — :popover Boolean | Text', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(popover: 0) . }
+      @test. = { d = div(popover: 0) }
     `)).toThrow(/named arg 'popover'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
 });
@@ -452,7 +448,7 @@ describe('HTML element compile — unknown attrs (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(nope: "x") . }
+      @test. = { d = div(nope: "x") }
     `)).toThrow(/Got named: nope/);
   });
 
@@ -461,7 +457,7 @@ describe('HTML element compile — unknown attrs (sad path)', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(label: "Close") . }
+      @test. = { d = div(label: "Close") }
     `)).toThrow(/Got named: label/);
   });
 });
@@ -490,7 +486,7 @@ describe('HTML element compile — void elements reject :children', () => {
         *
           HTML: (:${tag})
         *
-        @test = { e = ${tag}(children: ["x"]) . }
+        @test. = { e = ${tag}(children: ["x"]) }
       `)).toThrow(/Got named: children/);
     });
   }
@@ -502,7 +498,7 @@ describe('HTML element compile — TextElement accepts text-only children', () =
       *
         HTML: (:textarea)
       *
-      @test = { t = textarea(children: ["initial value"]) . }
+      @test. = { t = textarea(children: ["initial value"]) }
     `)).not.toThrow();
   });
 
@@ -511,10 +507,9 @@ describe('HTML element compile — TextElement accepts text-only children', () =
       *
         HTML: (:textarea)
       *
-      @test = {
+      @test. = {
         nums List of Integers = [1, 2]
         t = textarea(children: nums)
-        .
       }
     `)).toThrow(/named arg 'children'.*'List of Integers' is not assignable to 'List of Texts'/);
   });
@@ -526,7 +521,7 @@ describe('HTML element compile — ParentElement accepts mixed children (List of
       *
         HTML: (:div)
       *
-      @test = { d = div(children: ["Hello"]) . }
+      @test. = { d = div(children: ["Hello"]) }
     `)).not.toThrow();
   });
 
@@ -535,7 +530,7 @@ describe('HTML element compile — ParentElement accepts mixed children (List of
       *
         HTML: (:div)
       *
-      @test = { d = div(children: [1]) . }
+      @test. = { d = div(children: [1]) }
     `)).not.toThrow();
   });
 });
@@ -556,11 +551,10 @@ describe('HTML element compile — children mutators on void tags rejected', () 
       *
         HTML: (:br, :div)
       *
-      @test = {
+      @test. = {
         b = br()
         c = div()
         b.append_child!(child: c)
-        .
       }
     `)).toThrow(/'br' has no method 'append_child!'/);
   });
@@ -570,10 +564,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
       *
         HTML: (:input)
       *
-      @test = {
+      @test. = {
         i = input()
         i.append!(items: ["x"])
-        .
       }
     `)).toThrow(/'input' has no method 'append!'/);
   });
@@ -583,10 +576,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
       *
         HTML: (:br)
       *
-      @test = {
+      @test. = {
         b = br()
         b.remove!()
-        .
       }
     `)).not.toThrow();
   });
@@ -596,10 +588,9 @@ describe('HTML element compile — children mutators on void tags rejected', () 
       *
         HTML: (:div)
       *
-      @test = {
+      @test. = {
         d = div()
         d.bogus_method!()
-        .
       }
     `)).toThrow(/'div' has no method 'bogus_method!'/);
   });
@@ -609,11 +600,10 @@ describe('HTML element compile — children mutators on void tags rejected', () 
       *
         HTML: (:div, :span)
       *
-      @test = {
+      @test. = {
         d = div()
         s = span()
         d.append_child!(child: s)
-        .
       }
     `)).not.toThrow();
   });
@@ -625,7 +615,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.inner_html <- "Hi" . }
+      @test. = { d = div(); d.inner_html <- "Hi" }
     `)).not.toThrow();
   });
 
@@ -634,7 +624,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.text_content <- "Hi" . }
+      @test. = { d = div(); d.text_content <- "Hi" }
     `)).not.toThrow();
   });
 
@@ -643,7 +633,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.inner_text <- "Hi" . }
+      @test. = { d = div(); d.inner_text <- "Hi" }
     `)).not.toThrow();
   });
 
@@ -652,7 +642,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:textarea)
       *
-      @test = { t = textarea(); t.inner_html <- "Hi" . }
+      @test. = { t = textarea(); t.inner_html <- "Hi" }
     `)).not.toThrow();
   });
 
@@ -661,7 +651,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.id <- "x" . }
+      @test. = { d = div(); d.id <- "x" }
     `)).toThrow(/'div' has no settable field 'id'/);
   });
 
@@ -670,7 +660,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:br)
       *
-      @test = { b = br(); b.inner_html <- "x" . }
+      @test. = { b = br(); b.inner_html <- "x" }
     `)).toThrow(/'br' has no settable field 'inner_html'/);
   });
 
@@ -679,7 +669,7 @@ describe('HTML element compile — settable-field discipline (`obj.f <- v`)', ()
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.bogus_field <- "x" . }
+      @test. = { d = div(); d.bogus_field <- "x" }
     `)).toThrow(/'div' has no settable field 'bogus_field'/);
   });
 });
@@ -690,7 +680,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); name = d.tag_name() . }
+      @test. = { d = div(); name = d.tag_name() }
     `)).not.toThrow();
   });
 
@@ -699,7 +689,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); h = d.outer_html() . }
+      @test. = { d = div(); h = d.outer_html() }
     `)).not.toThrow();
   });
 
@@ -708,7 +698,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); v = d.get_attribute("data-x") . }
+      @test. = { d = div(); v = d.get_attribute("data-x") }
     `)).not.toThrow();
   });
 
@@ -717,7 +707,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.set_attribute!("data-x", "1") . }
+      @test. = { d = div(); d.set_attribute!("data-x", "1") }
     `)).not.toThrow();
   });
 
@@ -726,7 +716,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:br)
       *
-      @test = { b = br(); b.set_attribute!("data-x", "1") . }
+      @test. = { b = br(); b.set_attribute!("data-x", "1") }
     `)).not.toThrow();
   });
 
@@ -735,7 +725,7 @@ describe('HTML element compile — content + generic-attribute methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.toggle_attribute!("hidden") . }
+      @test. = { d = div(); d.toggle_attribute!("hidden") }
     `)).not.toThrow();
   });
 });
@@ -746,7 +736,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); p = d.parent_element() . }
+      @test. = { d = div(); p = d.parent_element() }
     `)).not.toThrow();
   });
 
@@ -755,7 +745,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); cs = d.children() . }
+      @test. = { d = div(); cs = d.children() }
     `)).not.toThrow();
   });
 
@@ -764,7 +754,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); c = d.first_child() . }
+      @test. = { d = div(); c = d.first_child() }
     `)).not.toThrow();
   });
 
@@ -773,7 +763,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); c = d.is_connected() . }
+      @test. = { d = div(); c = d.is_connected() }
     `)).not.toThrow();
   });
 
@@ -782,7 +772,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div, :span)
       *
-      @test = { d = div(); s = span(); b = d.contains(other: s) . }
+      @test. = { d = div(); s = span(); b = d.contains(other: s) }
     `)).not.toThrow();
   });
 
@@ -791,7 +781,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:br)
       *
-      @test = { b = br(); p = b.parent_element() . }
+      @test. = { b = br(); p = b.parent_element() }
     `)).not.toThrow();
   });
 
@@ -800,7 +790,7 @@ describe('HTML element compile — Node traversal', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.bogus_traversal() . }
+      @test. = { d = div(); d.bogus_traversal() }
     `)).toThrow(/'div' has no method 'bogus_traversal'/);
   });
 });
@@ -811,7 +801,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); m = d.query_selector("p") . }
+      @test. = { d = div(); m = d.query_selector("p") }
     `)).not.toThrow();
   });
 
@@ -820,7 +810,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); ms = d.query_selector_all("p") . }
+      @test. = { d = div(); ms = d.query_selector_all("p") }
     `)).not.toThrow();
   });
 
@@ -829,7 +819,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); m = d.closest("section") . }
+      @test. = { d = div(); m = d.closest("section") }
     `)).not.toThrow();
   });
 
@@ -838,7 +828,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); b = d.matches(".foo") . }
+      @test. = { d = div(); b = d.matches(".foo") }
     `)).not.toThrow();
   });
 
@@ -847,7 +837,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); ms = d.get_elements_by_tag_name("li") . }
+      @test. = { d = div(); ms = d.get_elements_by_tag_name("li") }
     `)).not.toThrow();
   });
 
@@ -856,7 +846,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); ms = d.get_elements_by_class_name("foo") . }
+      @test. = { d = div(); ms = d.get_elements_by_class_name("foo") }
     `)).not.toThrow();
   });
 
@@ -865,7 +855,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:br)
       *
-      @test = { b = br(); m = b.matches("br") . }
+      @test. = { b = br(); m = b.matches("br") }
     `)).not.toThrow();
   });
 
@@ -874,7 +864,7 @@ describe('HTML element compile — query methods', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.bogus_query("x") . }
+      @test. = { d = div(); d.bogus_query("x") }
     `)).toThrow(/'div' has no method 'bogus_query'/);
   });
 
@@ -883,7 +873,7 @@ describe('HTML element compile — query methods', () => {
       *
         :document
       *
-      @test = { m = document.query_selector("p") . }
+      @test. = { m = document.query_selector("p") }
     `)).not.toThrow();
   });
 
@@ -892,7 +882,7 @@ describe('HTML element compile — query methods', () => {
       *
         :document
       *
-      @test = { p = document.parent_node() . }
+      @test. = { p = document.parent_node() }
     `)).not.toThrow();
   });
 });
@@ -903,7 +893,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); w = d.client_width() . }
+      @test. = { d = div(); w = d.client_width() }
     `)).not.toThrow();
   });
 
@@ -912,7 +902,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); r = d.bounding_client_rect() . }
+      @test. = { d = div(); r = d.bounding_client_rect() }
     `)).not.toThrow();
   });
 
@@ -921,7 +911,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); rs = d.client_rects() . }
+      @test. = { d = div(); rs = d.client_rects() }
     `)).not.toThrow();
   });
 
@@ -930,7 +920,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); p = d.offset_parent() . }
+      @test. = { d = div(); p = d.offset_parent() }
     `)).not.toThrow();
   });
 
@@ -939,7 +929,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.scroll_top <- 100.0 . }
+      @test. = { d = div(); d.scroll_top <- 100.0 }
     `)).not.toThrow();
   });
 
@@ -948,7 +938,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.scroll_left <- 50.0 . }
+      @test. = { d = div(); d.scroll_left <- 50.0 }
     `)).not.toThrow();
   });
 
@@ -957,7 +947,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.client_width <- 100 . }
+      @test. = { d = div(); d.client_width <- 100 }
     `)).toThrow(/'div' has no settable field 'client_width'/);
   });
 
@@ -966,7 +956,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.scroll_to!(0.0, 100.0) . }
+      @test. = { d = div(); d.scroll_to!(0.0, 100.0) }
     `)).not.toThrow();
   });
 
@@ -975,7 +965,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.scroll_to!(top: 100.0, behavior: "smooth") . }
+      @test. = { d = div(); d.scroll_to!(top: 100.0, behavior: "smooth") }
     `)).not.toThrow();
   });
 
@@ -984,7 +974,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.scroll_into_view!() . }
+      @test. = { d = div(); d.scroll_into_view!() }
     `)).not.toThrow();
   });
 
@@ -993,7 +983,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.focus!() . }
+      @test. = { d = div(); d.focus!() }
     `)).not.toThrow();
   });
 
@@ -1002,7 +992,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.focus!(prevent_scroll: true) . }
+      @test. = { d = div(); d.focus!(prevent_scroll: true) }
     `)).not.toThrow();
   });
 
@@ -1011,7 +1001,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.click!() . }
+      @test. = { d = div(); d.click!() }
     `)).not.toThrow();
   });
 
@@ -1020,7 +1010,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); c = d.clone_node() . }
+      @test. = { d = div(); c = d.clone_node() }
     `)).not.toThrow();
   });
 
@@ -1029,7 +1019,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); c = d.clone_node(true) . }
+      @test. = { d = div(); c = d.clone_node(true) }
     `)).not.toThrow();
   });
 
@@ -1038,7 +1028,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { a = div(); b = div(); eq = a.is_same_node(other: b) . }
+      @test. = { a = div(); b = div(); eq = a.is_same_node(other: b) }
     `)).not.toThrow();
   });
 
@@ -1047,7 +1037,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.normalize!() . }
+      @test. = { d = div(); d.normalize!() }
     `)).not.toThrow();
   });
 
@@ -1056,7 +1046,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         HTML: (:br)
       *
-      @test = { b = br(); w = b.client_width() . }
+      @test. = { b = br(); w = b.client_width() }
     `)).not.toThrow();
   });
 
@@ -1065,7 +1055,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
       *
         :document
       *
-      @test = { document.normalize!() . }
+      @test. = { document.normalize!() }
     `)).not.toThrow();
   });
 });
@@ -1076,7 +1066,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); cl = d.class_list() . }
+      @test. = { d = div(); cl = d.class_list() }
     `)).not.toThrow();
   });
 
@@ -1085,7 +1075,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.class_list().add!("foo") . }
+      @test. = { d = div(); d.class_list().add!("foo") }
     `)).not.toThrow();
   });
 
@@ -1094,7 +1084,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); b = d.class_list().toggle!("hi", true) . }
+      @test. = { d = div(); b = d.class_list().toggle!("hi", true) }
     `)).not.toThrow();
   });
 
@@ -1103,7 +1093,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); b = d.class_list().replace!(old_token: "a", new_token: "b") . }
+      @test. = { d = div(); b = d.class_list().replace!(old_token: "a", new_token: "b") }
     `)).not.toThrow();
   });
 
@@ -1112,7 +1102,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); cl = d.class_list(); cl.value <- "a b" . }
+      @test. = { d = div(); cl = d.class_list(); cl.value <- "a b" }
     `)).not.toThrow();
   });
 
@@ -1121,7 +1111,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); ds = d.dataset() . }
+      @test. = { d = div(); ds = d.dataset() }
     `)).not.toThrow();
   });
 
@@ -1130,7 +1120,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); v = d.dataset().get("fooBar") . }
+      @test. = { d = div(); v = d.dataset().get("fooBar") }
     `)).not.toThrow();
   });
 
@@ -1139,7 +1129,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); d.dataset().put!(key: "k", value: "v") . }
+      @test. = { d = div(); d.dataset().put!(key: "k", value: "v") }
     `)).not.toThrow();
   });
 
@@ -1148,7 +1138,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:div)
       *
-      @test = { d = div(); ks = d.dataset().keys() . }
+      @test. = { d = div(); ks = d.dataset().keys() }
     `)).not.toThrow();
   });
 
@@ -1157,7 +1147,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
       *
         HTML: (:br)
       *
-      @test = { b = br(); cl = b.class_list() . }
+      @test. = { b = br(); cl = b.class_list() }
     `)).not.toThrow();
   });
 });

@@ -65,7 +65,7 @@ Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
 
 - Public service documents omit `@` from handler names.
 - Entries have no colon: `name (params) -> (returns)`, `Name (params) -> *{ … }`.
-- Silent handlers render as `-> .`.
+- Silent handlers render with their dot: `notify. (Text) -> .`.
 - Optional args render with `?`.
 - Private `#name` and bare helper functions do not appear in service docs.
 - Public classes use `@Name = ...` when they should be exported through the

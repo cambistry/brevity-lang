@@ -42,7 +42,7 @@ describe('factory end-to-end', () => {
       HTML: (:div)
     *
     content *Text = "initial"
-    @bump = (v: Text) { content <- v . }
+    @bump. = (v: Text) { content <- v }
     @create = -> <div>{ content }</div>
   `;
 
@@ -83,7 +83,7 @@ describe('factory end-to-end', () => {
     // Mutate content via the public @bump setter.
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, '@bump'],
+      op: [{ v: 'updated' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });
@@ -107,7 +107,7 @@ describe('factory end-to-end', () => {
     for (const [seq, value] of [['a', 'first'], ['b', 'second'], ['c', 'third']]) {
       await factory.sendAsync({
         id: seq,
-        op: [{ v: value }, '@bump'],
+        op: [{ v: value }, '@bump.'],
         'bv-a': [{ v: 'Text' }],
         from: 'caller',
       });

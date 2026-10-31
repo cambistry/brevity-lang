@@ -6,7 +6,7 @@ describe('update operator (<|)', () => {
       *
       name *Text = "anonymous"
 
-      update = (name: n Text) ->  name <- n .
+      update = (name: n Text) ->  name <- n
 
       @get
         =
@@ -26,7 +26,6 @@ describe('update operator (<|)', () => {
         =
         p <- val
         label <- l
-        .
 
       @pos
         =

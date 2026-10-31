@@ -25,14 +25,14 @@ describe('service document — entry forms', () => {
     }]);
   });
 
-  it('silent function: name (params) -> .', () => {
+  it('silent function: name. (params) -> .', () => {
     const p = parseInterface('{ log! (Text) -> . }');
     expect(p['log!']).toEqual([{ params: [{ name: null, type: 'Text', positional: true }], returns: null }]);
   });
 
   it('the -> before a return is optional on input', () => {
-    const withArrow = parseInterface('{ f (Integer) -> (Text)\n  g () -> . }');
-    const without = parseInterface('{ f (Integer) (Text)\n  g () . }');
+    const withArrow = parseInterface('{ f (Integer) -> (Text)\n  g. () -> . }');
+    const without = parseInterface('{ f (Integer) (Text)\n  g. () . }');
     expect(without).toEqual(withArrow);
   });
 
@@ -160,10 +160,10 @@ describe('service document — emitted form', () => {
 
   it('overloads emit one line each', () => {
     const { interface: iface } = extract(`
-      @notify = (msg: Integer) .
+      @notify. = (msg: Integer) {}
       @notify = (msg: Text) -> ack: "ok"
     `);
-    expect(iface.service).toBe('{\n  notify (msg: Integer) -> .\n  notify (msg: Text) -> (ack: Text)\n}');
+    expect(iface.service).toBe('{\n  notify. (msg: Integer) -> .\n  notify (msg: Text) -> (ack: Text)\n}');
   });
 
   it('emitted document parses back', () => {
@@ -187,17 +187,17 @@ describe('read-only fields — validation', () => {
   const remote = (iface, body) => compileSrc(`*\n  "remote.bv": Remote ${iface}\n*\n${body}\n`);
 
   it('a read-only service field can be read and subscribed to', () => {
-    expect(() => remote('{ count Integer }', '@go = { Remote.count.subscribe (v) { . } ; . }')).not.toThrow();
+    expect(() => remote('{ count Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
     expect(() => remote('{ count Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
   });
 
   it('a read-only service field cannot be set', () => {
-    expect(() => remote('{ count Integer }', '@go = { Remote.count <- 5 ; . }'))
+    expect(() => remote('{ count Integer }', '@go. = { Remote.count <- 5 }'))
       .toThrow(/'Remote.count' is a read-only property/);
   });
 
   it('a ref-cell service field can be set', () => {
-    expect(() => remote('{ count *Integer }', '@go = { Remote.count <- 5 ; . }')).not.toThrow();
+    expect(() => remote('{ count *Integer }', '@go. = { Remote.count <- 5 }')).not.toThrow();
   });
 
   const shapes = `{
@@ -216,13 +216,13 @@ describe('read-only fields — validation', () => {
   });
 
   it('a read-only class field cannot be set', () => {
-    expect(() => withBox('@go = { b = Box(); b.total <- 5 ; . }'))
+    expect(() => withBox('@go. = { b = Box(); b.total <- 5 }'))
       .toThrow(/'Box' has no settable field 'total' \(available: label, slot\)/);
   });
 
   it('ref-cell and set-declared class fields can be set', () => {
-    expect(() => withBox('@go = { b = Box(); b.slot <- 5 ; . }')).not.toThrow();
-    expect(() => withBox('@go = { b = Box(); b.label <- "x" ; . }')).not.toThrow();
+    expect(() => withBox('@go. = { b = Box(); b.slot <- 5 }')).not.toThrow();
+    expect(() => withBox('@go. = { b = Box(); b.label <- "x" }')).not.toThrow();
   });
 });
 
@@ -252,7 +252,7 @@ describe('constructor profiles in source', () => {
       get () -> (value: Integer)
       slot *Integer
     }
-    ping () -> .
+    ping. () -> .
   }
 *
 @go = -> 1
@@ -260,7 +260,7 @@ describe('constructor profiles in source', () => {
     const p = parseInterface(ast.dependencies[0].interface);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
     expect(p.__types.Counter.functions.map(f => f.name)).toEqual(['get', 'slot']);
-    expect(p.ping).toHaveLength(1);
+    expect(p['ping.']).toHaveLength(1);
   });
 
   it('retired: Alias *( … ) -> { … }', () => {
@@ -307,14 +307,14 @@ db = Store as { @get: (key: Text) -> (value: Text) }
 
 describe('file-level params — function-typed', () => {
   it('named: cb: (s: Integer) -> .', () => {
-    const { ast } = extract('*\n  cb: (s: Integer) -> .\n*\n@go = { cb(s: 1) ; . }\n');
+    const { ast } = extract('*\n  cb: (s: Integer) -> .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
       { type: 'FileParam', name: 'cb', paramType: '(s: Integer) -> .', positional: false },
     ]);
   });
 
   it('positional: cb (s: Integer) -> .', () => {
-    const { ast } = extract('*\n  cb (s: Integer) -> .\n*\n@go = { cb(s: 1) ; . }\n');
+    const { ast } = extract('*\n  cb (s: Integer) -> .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
       { type: 'FileParam', name: 'cb', paramType: '(s: Integer) -> .', positional: true },
     ]);
@@ -323,9 +323,9 @@ describe('file-level params — function-typed', () => {
 
 describe('service document — param and return fields', () => {
   it('a :: qualifier in a positional type is not a label', () => {
-    const p = parseInterface('{ make () -> (Geom::Point)\n  move (p: Geom::Point) -> . }');
+    const p = parseInterface('{ make () -> (Geom::Point)\n  move. (p: Geom::Point) -> . }');
     expect(p.make[0].returns).toEqual([{ name: null, type: 'Geom::Point', positional: true }]);
-    expect(p.move[0].params).toEqual([{ name: 'p', type: 'Geom::Point', positional: false }]);
+    expect(p['move.'][0].params).toEqual([{ name: 'p', type: 'Geom::Point', positional: false }]);
   });
 
   it('retired: prefix-colon fields', () => {

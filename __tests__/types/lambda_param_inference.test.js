@@ -15,13 +15,13 @@ import { compileSource } from '../helpers.js';
 
 const TYPES = `
   ::Signal (code: Integer)
-  ::Panel (onpress: (s: Signal) -> ., label: Text)
+  ::Panel (onpress.: (s: Signal) -> ., label: Text)
 `;
 
 describe('lambda param inference — C1 local type callback field', () => {
   it('infers the lambda param type from a named-arg callback field (reads a real field)', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s) { use: Integer = s.code . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { use: Integer = s.code . }, label: "x")
     `)).not.toThrow();
   });
 
@@ -33,28 +33,28 @@ describe('lambda param inference — C1 local type callback field', () => {
 
   it('rejects a field the inferred type does not declare', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s) { bad: Integer = s.bogus . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { bad: Integer = s.bogus . }, label: "x")
     `)).toThrow(/has no field 'bogus'/);
   });
 
   it('the arrow+block spelling infers the same way', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s) -> { use: Integer = s.code . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) -> { use: Integer = s.code . }, label: "x")
     `)).not.toThrow();
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s) -> { bad: Integer = s.bogus . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) -> { bad: Integer = s.bogus . }, label: "x")
     `)).toThrow(/has no field 'bogus'/);
   });
 
   it('a param named differently from the signature still infers by position', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (evt) { use: Integer = evt.code . }, label: "x")
+      @make = -> p: Panel(onpress.: (evt) { use: Integer = evt.code . }, label: "x")
     `)).not.toThrow();
   });
 
   it('an explicit matching annotation is accepted', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s: Signal) { use: Integer = s.code . }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Signal) { use: Integer = s.code . }, label: "x")
     `)).not.toThrow();
   });
 
@@ -65,13 +65,13 @@ describe('lambda param inference — C1 local type callback field', () => {
     // the explicit type sticks by confirming `s.code` is NOT validated as a
     // Signal field access (it compiles, because Integer has no decl to check).
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s: Integer) { return ok: 1 }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Integer) { return ok: 1 }, label: "x")
     `)).not.toThrow();
   });
 
   it('rejects invoking a plain value field as a reference inside the lambda', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress: (s) { s.code! . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { s.code! . }, label: "x")
     `)).toThrow(/not a (reference|function|callable)|cannot be invoked/i);
   });
 });
@@ -86,8 +86,8 @@ describe('lambda param inference — C1 local type callback field', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET = `{
-  ::Signal (dismiss: () -> ., code: Integer)
-  ::Panel (onpress: (s: Signal) -> ., label: Text)
+  ::Signal (dismiss.: () -> ., code: Integer)
+  ::Panel (onpress.: (s: Signal) -> ., label: Text)
 }`;
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
@@ -101,19 +101,19 @@ const withPanel = (body) => `
 describe('lambda param inference — C2 service-hosted type callback field', () => {
   it('infers the param as the service type and resolves a silent ref field', () => {
     expect(() => compileSource(withPanel(`
-      @make = -> p: Panel(onpress: (s) { s.dismiss() }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { s.dismiss... }, label: "x")
     `), { remotes })).not.toThrow();
   });
 
   it('resolves a value field on the implicitly-imported type', () => {
     expect(() => compileSource(withPanel(`
-      @make = -> p: Panel(onpress: (s) { use: Integer = s.code . }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { use: Integer = s.code . }, label: "x")
     `), { remotes })).not.toThrow();
   });
 
   it('rejects a field the service type does not declare (scoped decl is consulted)', () => {
     expect(() => compileSource(withPanel(`
-      @make = -> p: Panel(onpress: (s) { s.bogus! }, label: "x")
+      @make = -> p: Panel(onpress.: (s) { s.bogus! }, label: "x")
     `), { remotes })).toThrow(/has no field 'bogus'/);
   });
 
@@ -121,8 +121,8 @@ describe('lambda param inference — C2 service-hosted type callback field', () 
     // @a infers `Signal` implicitly; that must NOT let @b name `Signal`
     // explicitly without an import — the implicit import is inference-only.
     expect(() => compileSource(withPanel(`
-      @a = -> p: Panel(onpress: (s) { s.dismiss() }, label: "x")
-      @b = -> q: Panel(onpress: (s: Signal) { s.dismiss() }, label: "y")
+      @a = -> p: Panel(onpress.: (s) { s.dismiss... }, label: "x")
+      @b = -> q: Panel(onpress.: (s: Signal) { s.dismiss... }, label: "y")
     `), { remotes })).toThrow(/not declared or imported/);
   });
 });
@@ -130,13 +130,13 @@ describe('lambda param inference — C2 service-hosted type callback field', () 
 describe('lambda param inference — C2 explicit annotation requires explicit import', () => {
   it('rejects an explicit bare type name that is not imported', () => {
     expect(() => compileSource(withPanel(`
-      @make = -> p: Panel(onpress: (s: Signal) { s.dismiss() }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Signal) { s.dismiss... }, label: "x")
     `), { remotes })).toThrow(/not declared or imported/);
   });
 
   it('accepts the qualified Alias::Name annotation', () => {
     expect(() => compileSource(withPanel(`
-      @make = -> p: Panel(onpress: (s: Widget::Signal) { s.dismiss() }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Widget::Signal) { s.dismiss... }, label: "x")
     `), { remotes })).not.toThrow();
   });
 
@@ -145,7 +145,7 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
       *
         "Widget": (:Panel, :Signal)
       *
-      @make = -> p: Panel(onpress: (s: Signal) { s.dismiss() }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Signal) { s.dismiss... }, label: "x")
     `, { remotes })).not.toThrow();
   });
 });
@@ -162,8 +162,8 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET_M = `{
-  ::Signal (dismiss: () -> ., code: Integer)
-  watch (on: (s: Signal) -> .) -> .
+  ::Signal (dismiss.: () -> ., code: Integer)
+  watch. (on: (s: Signal) -> .) -> .
 }`;
 const remotesM = [{ path: 'Widget', service: WIDGET_M }];
 
@@ -177,37 +177,37 @@ const withDep = (body) => `
 describe('lambda param inference — C3 service method callback param', () => {
   it('infers the param and resolves a silent ref field (direct dep call)', () => {
     expect(() => compileSource(withDep(`
-      @go = { Widget.watch(on: (s) { s.dismiss() }) . }
+      @go. = { Widget.watch.(on: (s) { s.dismiss... })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 
   it('resolves a value field on the implicitly-imported type', () => {
     expect(() => compileSource(withDep(`
-      @go = { Widget.watch(on: (s) { use: Integer = s.code . }) . }
+      @go. = { Widget.watch.(on: (s) { use: Integer = s.code . })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 
   it('rejects a field the service type does not declare', () => {
     expect(() => compileSource(withDep(`
-      @go = { Widget.watch(on: (s) { s.bogus! }) . }
+      @go. = { Widget.watch.(on: (s) { s.bogus! })... }
     `), { remotes: remotesM })).toThrow(/has no field 'bogus'/);
   });
 
   it('infers through an instance-typed receiver (w: Widget)', () => {
     expect(() => compileSource(withDep(`
-      @go = (w: Widget) { w.watch(on: (s) { s.bogus! }) . }
+      @go. = (w: Widget) { w.watch.(on: (s) { s.bogus! })... }
     `), { remotes: remotesM })).toThrow(/has no field 'bogus'/);
   });
 
   it('rejects an explicit bare type name that is not imported', () => {
     expect(() => compileSource(withDep(`
-      @go = { Widget.watch(on: (s: Signal) { s.dismiss() }) . }
+      @go. = { Widget.watch.(on: (s: Signal) { s.dismiss... })... }
     `), { remotes: remotesM })).toThrow(/not declared or imported/);
   });
 
   it('accepts the qualified Alias::Name annotation', () => {
     expect(() => compileSource(withDep(`
-      @go = { Widget.watch(on: (s: Widget::Signal) { s.dismiss() }) . }
+      @go. = { Widget.watch.(on: (s: Widget::Signal) { s.dismiss... })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 });

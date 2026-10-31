@@ -27,7 +27,7 @@ describe('class params — file-level *Integer write-cap', () => {
         slot: *Integer
       *
 
-      @bump = { slot <- slot + 1 . }
+      @bump. = { slot <- slot + 1 }
       @get = -> :slot
     `,
       { constructorArgs: { slot: 100 } },
@@ -36,7 +36,7 @@ describe('class params — file-level *Integer write-cap', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', op: '@get', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: { slot: 100 }, to: 'caller' }) },
-      { input: { id: '2', op: '@bump', from: 'caller' } },
+      { input: { id: '2', op: '@bump.', from: 'caller' } },
       { input: { id: '3', op: '@get', from: 'caller' } },
       { output: expect.objectContaining({ id: '3', re: { slot: 101 }, to: 'caller' }) },
     );
@@ -55,8 +55,8 @@ describe('class params — file-level *Point write-cap', () => {
 
       ::Point (x Integer, y Integer)
 
-      @shift = (dx Integer, dy Integer) {
-        coords <- Point(coords.x + dx, coords.y + dy) .
+      @shift. = (dx Integer, dy Integer) {
+        coords <- Point(coords.x + dx, coords.y + dy)
       }
       @get = -> :coords
     `,
@@ -64,7 +64,7 @@ describe('class params — file-level *Point write-cap', () => {
     );
 
     await expectActorBehavior(actor,
-      { input: { id: '1', op: [[3, 4], '@shift'], 'bv-a': [['Integer', 'Integer']], from: 'caller' } },
+      { input: { id: '1', op: [[3, 4], '@shift.'], 'bv-a': [['Integer', 'Integer']], from: 'caller' } },
       { input: { id: '2', op: '@get', from: 'caller' } },
       { output: expect.objectContaining({
         id: '2',
@@ -86,14 +86,14 @@ describe('class params — file-level *List write-cap', () => {
         ns: *List of Integers
       *
 
-      @reset = { ns <- [9, 8, 7] . }
+      @reset. = { ns <- [9, 8, 7] }
       @get = -> :ns
     `,
       { constructorArgs: { ns: [1, 2, 3] } },
     );
 
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@reset', from: 'caller' } },
+      { input: { id: '1', op: '@reset.', from: 'caller' } },
       { input: { id: '2', op: '@get', from: 'caller' } },
       { output: expect.objectContaining({
         id: '2',

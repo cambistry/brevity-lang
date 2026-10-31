@@ -750,9 +750,9 @@ export const domManifest = `{
   }
 
   ::Event (
-    prevent: () -> .
-    stop: () -> .
-    stop_immediate: () -> .
+    prevent.: () -> .
+    stop.: () -> .
+    stop_immediate.: () -> .
     ? kind: Text
     ? phase: Integer
     ? bubbles: Boolean

@@ -489,7 +489,7 @@ describe('ref — bare and @ namespaces are independent', () => {
     val *Integer = 11
     @val *Integer = 22
     @both = -> p: val, q: @val
-    @bumpBare = { val <- val + 100 . }
+    @bumpBare. = { val <- val + 100 }
   `;
 
   it('bare val and @val coexist with independent values', async () => {
@@ -501,7 +501,7 @@ describe('ref — bare and @ namespaces are independent', () => {
 
   it('mutating bare val does not change @val', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@bumpBare', from: 'c' } },
+      { input: { id: '1', op: '@bumpBare.', from: 'c' } },
       { input: { id: '2', op: '@both', from: 'c' } },
       { output: { id: '2', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 111, q: 22 }, to: 'c' } },
     );
@@ -532,7 +532,7 @@ describe('ref — bare idents starting with __ are usable', () => {
     __foo *Integer = 42
     __bar *Text = "hi"
     @get = -> :__foo as Integer, :__bar as Text
-    @setFoo = (n: Integer) { __foo <- n . }
+    @setFoo. = (n: Integer) { __foo <- n }
   `;
 
   it('__foo and __bar are readable as protected refs', async () => {
@@ -544,7 +544,7 @@ describe('ref — bare idents starting with __ are usable', () => {
 
   it('__foo is mutable via <-', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, '@setFoo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [{ n: 7 }, '@setFoo.'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
       { input: { id: '2', op: '@get', from: 'c' } },
       { output: { id: '2', 'bv-a': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 7, __bar: 'hi' }, to: 'c' } },
     );

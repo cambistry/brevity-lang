@@ -38,11 +38,11 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       *
         "Scene": (:node)
       *
-      @build = { <node x="1">hello</node> . }
+      @build. = { <node x="1">hello</node> }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@build', from: 'caller' } },
+      { input: { id: '1', op: '@build.', from: 'caller' } },
       { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Scene @node' } },
     );
   });
@@ -52,11 +52,11 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       *
         "Canvas": (:node)
       *
-      @build = { <node x="1">hello</node> . }
+      @build. = { <node x="1">hello</node> }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Canvas', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@build', from: 'caller' } },
+      { input: { id: '1', op: '@build.', from: 'caller' } },
       { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Canvas @node' } },
     );
   });
@@ -66,13 +66,13 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       *
         "Scene": (:node, :leaf)
       *
-      @build = { <node><leaf>deep</leaf></node> . }
+      @build. = { <node><leaf>deep</leaf></node> }
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: `{
       node (Anything) -> (Anything)
       leaf (Anything) -> (Anything)
     }` }] } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
     // The inner <leaf> is pre-dispatched as its own #new to `Scene @leaf`; the
     // outer <node> #new awaits that child's address before it can fire, so with
     // no service answering, only the child send is observable here. That it
@@ -91,13 +91,13 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
       "Scene": (:node)
     *
     status *Text = "ready"
-    @build = { <node label={ status }>x</node> . }
+    @build. = { <node label={ status }>x</node> }
   `;
   const remotes = [{ path: 'Scene', service: HOST }];
 
   it('carries the reactive hole to the host service as a local-form lambda ref', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
     expect(post.to).toBe('Scene @node');
     expect(post.op[0].label).toMatch(/^#<@\d+>$/);
@@ -105,7 +105,7 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
 
   it('runs the reactive lambda when the host invokes the reference through CAM', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
     const selector = post.op[0].label.slice(2, -1); // '#<@0>' → '@0'
 

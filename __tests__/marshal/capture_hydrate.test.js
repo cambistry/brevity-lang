@@ -137,10 +137,9 @@ describe('capture/hydrate round-trip — function reference', () => {
     const source = `
       transform *Function = (x Integer) ->  x as Integer
 
-      @useDouble
+      @useDouble.
         =
         transform <- (x Integer) ->  x * 2 as Integer
-        .
 
       @apply
         =
@@ -151,7 +150,7 @@ describe('capture/hydrate round-trip — function reference', () => {
     `;
 
     const original = await createActor(source);
-    await original.sendAsync({ id: '1', op: '@useDouble', from: 'c' });
+    await original.sendAsync({ id: '1', op: '@useDouble.', from: 'c' });
     await original.sendAsync({ id: '2', op: [{ n: 7 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' });
     // Verify double is active (useDouble is silent, no output)
     expect(original.posts.find(o => o.id === '2')).toEqual(expect.objectContaining({ re: { result: 14 } }));

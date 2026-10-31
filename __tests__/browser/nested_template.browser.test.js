@@ -41,7 +41,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
       HTML: (:div, :p, :h1)
     *
     content *Text = "initial"
-    @bump = (v: Text) { content <- v . }
+    @bump. = (v: Text) { content <- v }
     @create = -> <div><h1>Title</h1><p>{ content }</p></div>
   `;
 
@@ -76,7 +76,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, '@bump'],
+      op: [{ v: 'updated' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });

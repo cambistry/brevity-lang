@@ -8,7 +8,7 @@ describe('test.set — single positional via set handler', () => {
         =
         n Integer
         =
-        value <- n .
+        value <- n
 
       @get = -> :value
   `;
@@ -43,7 +43,6 @@ describe('test.set — mixed positional + named args', () => {
         =
         p <- val
         label <- l
-        .
 
       @getP = -> :p
       @getLabel = -> :label
@@ -68,7 +67,7 @@ describe('test.set — then mutate with public function', () => {
         =
         n Integer
         =
-        count <- n .
+        count <- n
 
       @inc = {
         count <- count + 1
@@ -102,7 +101,7 @@ describe('test.set — child actor via normal dispatch', () => {
           =
           n Integer
           =
-          value <- n .
+          value <- n
 
         @get = -> value: value
         .
@@ -136,7 +135,7 @@ describe('test.set — target child actor', () => {
           =
           n Integer
           =
-          value <- n .
+          value <- n
 
         @get = -> value: value
         .
@@ -160,7 +159,7 @@ describe('test.set — nested target', () => {
       Inner =
         *
         val *Integer = 0
-        set = (n Integer) ->  val <- n .
+        set = (n Integer) ->  val <- n
         @get = -> val: val
         .
 

@@ -9,7 +9,7 @@ routing of the returned address.
 ```brevity
 *(
   "WebView": WebView (path: Text) -> *{
-    open () -> .
+    open. () -> .
     getTitle () -> (title: Text)
   }
 )
@@ -17,7 +17,7 @@ routing of the returned address.
 
 view = *WebView(path: "/my_view")
 
-@open = { view.open() . }
+@open. = { view.open... }
 ```
 
 ## Wire Behavior

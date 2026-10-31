@@ -14,31 +14,31 @@ import { compileSource } from '../helpers.js';
 //    stripped and the call resolved to the no-bang field.)
 describe('bang enforcement — type reference fields', () => {
   const TYPES = `
-    ::Signal (dismiss: () -> ., code: Integer)
-    ::Panel (onpress: (s: Signal) -> ., label: Text)
+    ::Signal (dismiss.: () -> ., code: Integer)
+    ::Panel (onpress.: (s: Signal) -> ., label: Text)
   `;
 
   it('rejects a spurious bang on a silent reference field', () => {
     expect(() => compileSource(`${TYPES}
-      @h = (s: Signal) { s.dismiss! . }
+      @h. = (s: Signal) { s.dismiss! }
     `)).toThrow(/declared without '!'|invoke it as '\.dismiss'/);
   });
 
   it('accepts the declared (no-bang) form', () => {
     expect(() => compileSource(`${TYPES}
-      @h = (s: Signal) { s.dismiss() . }
+      @h. = (s: Signal) { s.dismiss... }
     `)).not.toThrow();
   });
 
   it('rejects a bang on a value field (a value is not a function)', () => {
     expect(() => compileSource(`${TYPES}
-      @h = (s: Signal) { s.code! . }
+      @h. = (s: Signal) { s.code! }
     `)).toThrow(/is a value, not a function|cannot be invoked with '!'/);
   });
 
   it('rejects a spurious bang on a callback field invoked with args', () => {
     expect(() => compileSource(`${TYPES}
-      @h = (sig: Signal) { p = Panel(onpress: (s) { s.dismiss() }, label: "x") p.onpress!(sig) . }
+      @h. = (sig: Signal) { p = Panel(onpress.: (s) { s.dismiss... }, label: "x") p.onpress!(sig) }
     `)).toThrow(/declared without '!'/);
   });
 });
@@ -47,28 +47,28 @@ describe('bang enforcement — type reference fields', () => {
 //    bang-ness must match the declared name — both directions.
 describe('bang enforcement — interface methods (bidirectional)', () => {
   const WIDGET = `{
-    ::Signal (dismiss: () -> ., code: Integer)
-    watch (on: (s: Signal) -> .) -> .
+    ::Signal (dismiss.: () -> ., code: Integer)
+    watch. (on: (s: Signal) -> .) -> .
     poke! () -> .
   }`;
   const remotes = [{ path: 'Widget', service: WIDGET }];
   const dep = (body) => `*\n  "Widget": Widget\n*\n${body}`;
 
   it('accepts a no-bang method called without a bang', () => {
-    expect(() => compileSource(dep(`@go = { Widget.watch(on: (s) { s.dismiss() }) . }`), { remotes })).not.toThrow();
+    expect(() => compileSource(dep(`@go. = { Widget.watch.(on: (s) { s.dismiss... })... }`), { remotes })).not.toThrow();
   });
 
   it('rejects a spurious bang on a no-bang method', () => {
-    expect(() => compileSource(dep(`@go = { Widget.watch!(on: (s) { s.dismiss() }) . }`), { remotes }))
+    expect(() => compileSource(dep(`@go. = { Widget.watch!(on: (s) { s.dismiss... })... }`), { remotes }))
       .toThrow(/has no function 'watch!'/);
   });
 
   it('accepts a bang method called with its bang', () => {
-    expect(() => compileSource(dep(`@go = { Widget.poke!() . }`), { remotes })).not.toThrow();
+    expect(() => compileSource(dep(`@go. = { Widget.poke!() }`), { remotes })).not.toThrow();
   });
 
   it('rejects a bang method called without its bang (distinct member)', () => {
-    expect(() => compileSource(dep(`@go = { Widget.poke() . }`), { remotes }))
+    expect(() => compileSource(dep(`@go. = { Widget.poke() }`), { remotes }))
       .toThrow(/has no function 'poke'/);
   });
 });
@@ -78,14 +78,14 @@ describe('bang enforcement — class methods', () => {
   it('accepts a declared no-bang method called without a bang', () => {
     expect(() => compileSource(`
       Box = (v Integer) *{ @get = -> r: v () }
-      @h = { b = Box(1) r: Integer = b.get() . }
+      @h. = { b = Box(1) r: Integer = b.get() }
     `)).not.toThrow();
   });
 
   it('rejects a spurious bang on a class method', () => {
     expect(() => compileSource(`
       Box = (v Integer) *{ @get = -> r: v () }
-      @h = { b = Box(1) r: Integer = b.get!() . }
+      @h. = { b = Box(1) r: Integer = b.get!() }
     `)).toThrow(/has no method 'get!'/);
   });
 });

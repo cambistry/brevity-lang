@@ -231,7 +231,7 @@ describe('Q4: reactive attr closure subscription', () => {
         HTML: (:div)
       *
       cls *Text = "active"
-      @bump = (v: Text) { cls <- v . }
+      @bump. = (v: Text) { cls <- v }
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -242,7 +242,7 @@ describe('Q4: reactive attr closure subscription', () => {
       }) },
       { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['active'] }) },
-      { input: { id: 'b1', op: [{ v: 'highlighted' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: 'b1', op: [{ v: 'highlighted' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['highlighted'] }) },
     );
   });
@@ -253,7 +253,7 @@ describe('Q4: reactive attr closure subscription', () => {
         HTML: (:div)
       *
       cls *Text = "a"
-      @bump = (v: Text) { cls <- v . }
+      @bump. = (v: Text) { cls <- v }
       @create = -> <div class={ cls }></div>
     `;
     await expectEmission(script,
@@ -264,9 +264,9 @@ describe('Q4: reactive attr closure subscription', () => {
       }) },
       { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['a'] }) },
-      { input: { id: 'b1', op: [{ v: 'b' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: 'b1', op: [{ v: 'b' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['b'] }) },
-      { input: { id: 'b2', op: [{ v: 'c' }, '@bump'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: 'b2', op: [{ v: 'c' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['c'] }) },
     );
   });
@@ -288,7 +288,7 @@ describe('integration: reactive attr in real DOM', () => {
     el = <div class={ cls }>content</div>
     body = document.body()
     body.append!(el)
-    @bump = (v: Text) { cls <- v . }
+    @bump. = (v: Text) { cls <- v }
   `;
 
   const html = `<html><head>
@@ -308,7 +308,7 @@ describe('integration: reactive attr in real DOM', () => {
 
     await factory.sendAsync({
       id: 'b1',
-      op: [{ v: 'updated' }, '@bump'],
+      op: [{ v: 'updated' }, '@bump.'],
       'bv-a': [{ v: 'Text' }],
       from: 'caller',
     });

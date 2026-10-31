@@ -4,18 +4,17 @@ describe('spawn', () => {
   const script = `
     @fireAndForget
       =
-      spawn fire()
+      spawn fire.()
       return answer: "ok"
 
     @continuity
       =
-      spawn fire()
+      spawn fire.()
       x Integer = get()
       return :x
 
-    fire
+    fire.
       =
-      .
 
     get
       =
@@ -44,12 +43,12 @@ describe('spawn — side-effect (stateful)', () => {
 
       @test
         =
-        spawn fire()
+        spawn fire.()
         repeat while (x == 0) __tick__()
         return x
-      fire
+      fire.
         =
-        x <- 1 .
+        x <- 1
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test', from: 'c' } },
