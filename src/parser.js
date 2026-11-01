@@ -5531,6 +5531,7 @@ export function parse(tokensIn) {
   settleSilentDecls(result);
   settleBangDecls(result);
   settleWrites(result);
+  captureReturnedCells(result);
   settleFireAndForget(result);
   return result;
 
@@ -5715,6 +5716,10 @@ export function parse(tokensIn) {
       if (node.type === 'FunctionDecl' && typeof node.name === 'string' && node.name.endsWith('!') && !node.actorDef && !node.emptyOverload) {
         settle(node);
       }
+      // A `!` function declared in a body follows the same rules.
+      if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.name?.endsWith('!') && node.value?.type === 'Function') {
+        settle({ name: node.name, body: node.value.body ?? (node.value.body = []) });
+      }
       if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && node.object?.type === 'FunctionCallExpr' && node.object.callee?.name?.endsWith('!')
           && !classNames.has(node.object.callee.name)) {
         throw new Error(`A chain can't start from '${node.object.callee.name}(…)', a call on this actor — write the calls as separate statements`);
@@ -5726,6 +5731,31 @@ export function parse(tokensIn) {
     };
     visit(program.actors);
     checkChainReceivers(program);
+  }
+
+  // `return a` names its field, and backends only capture what a body reads. In a
+  // nested function, returning an enclosing function's cell is such a read.
+  function captureReturnedCells(program) {
+    const visit = (node, cells, nested) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visit(n, cells, nested)); return; }
+      if (node.type === 'FunctionDecl') { visit(node.body, new Set(), false); return; }
+      if (node.type === 'Function') {
+        const inner = new Set(cells);
+        for (const p of node.params || []) inner.delete(p.name);
+        visit(node.body, inner, true);
+        return;
+      }
+      if (node.type === 'RefDecl') cells.add(node.name);
+      else if (node.type === 'Assign' || node.type === 'TypedAssign') cells.delete(node.name);
+      if (nested && (node.type === 'Return' || node.type === 'Reply')) {
+        for (const f of node.fields || []) {
+          if (!f.expr && !f.spread && cells.has(f.name)) f.expr = { type: 'RefRead', name: f.name };
+        }
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, cells, nested);
+    };
+    visit(program.actors, new Set(), false);
   }
 
   // Spreads a write chain into one statement per link, in source order. A write

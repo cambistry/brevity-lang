@@ -157,10 +157,10 @@ Nothing reads `effect` yet; phase 4 does.
 - **The add_child warning isn't built:** there's no warning channel.
 - **Remote constructions count as fresh:** `t = Thing()` inside a function exempts writes
   to `t` until it escapes, including for a dependency the note doesn't address.
-- **A named local function reaching only its enclosing function's cells** must be `!`
-  itself, but calling it doesn't make the enclosing function a writer.
-- **`->` params are only checked at direct calls** to this file's own functions. Reference
-  fields and doc params aren't checked yet.
+- **`->` slots on imported types aren't checked,** and neither are slots on a class reached
+  through a chain, or on an overloaded function. A named function passed by reference isn't
+  checked either.
+- **Discarded reads inside a nested function aren't checked.**
 - **Published cells can't be written from inside.** `@log *Text` has no inside-write form
   (`log <- x` and `@log <- x` are both errors, also before this work), so `untracked @log`
   is only useful for writes from other actors.
@@ -170,3 +170,11 @@ Nothing reads `effect` yet; phase 4 does.
 A private class no longer appears in the generated service doc. A public class inheriting from one states the inherited params and members in place, since `...T` would have no entry to expand from; a public ancestor behind it stays a spread.
 
 Writing the tests exposed a phase 4 bug: `src/effects.js` looked classes up by declared name, so public classes (`@C`) were never found when called as `C`. Claims didn't spread through them, overriding a public parent's `!` was rejected, and writing a fresh public actor counted as a write. Fixed with `classesByName`.
+
+## Closing the gaps in effect checks (2026-11-01)
+
+- **`!` functions declared in a body** now follow the same rules as file-level ones. A write to the enclosing function's own cell needs `!` on the name, but doesn't make the enclosing function a writer. A write past it, including to a fresh actor the enclosing function holds, counts for the name.
+- **`->` slots** are checked on type fields, class params (inherited too), class methods, and doc params, and the slot's own arrow is read, not one nested in its params or result.
+- **Discarded reads** are caught on typed params and class params, and on inherited members.
+
+Requiring `return` in nested `!` functions exposed an older bug on all targets: `return a` from a nested function, where `a` is the enclosing function's cell, failed, while `{ a }` worked. The parser now marks that field as a cell read, the JS and Erlang capture scanners read both field forms (they only looked at `f.value`, and positional fields use `f.expr`), and the Rust and Erlang nested returns prefer `f.expr` over the name.

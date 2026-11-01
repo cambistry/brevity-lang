@@ -204,7 +204,7 @@ function erlCollectFreeVars(ctx, funcNode) {
         walkExpr(s.expr);
       } else if (s.type === 'Reply' || s.type === 'Return') {
         for (const f of s.fields) {
-          if (f.value) walkExpr(f.value);
+          if (f.value ?? f.expr) walkExpr(f.value ?? f.expr);
           if ('sigil' in f) ids.add(f.sigil);
         }
       } else if (s.type === 'DestructureAssign') {
@@ -281,7 +281,7 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
     if (s.type === 'Reply' || s.type === 'Return') {
       for (const f of s.fields) {
         if (f.ref) return true;
-        if (f.value && hasRefRead(f.value)) return true;
+        if (hasRefRead(f.value ?? f.expr)) return true;
       }
     }
   }

@@ -1531,11 +1531,11 @@ function genRustFnReturn(fields, typeEnv) {
 
   const posVals = pos.map(f => {
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
+    if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     if (f.name) {
       if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
       return forceJsonWrap(toJsonValue(rustSsaResolve(f.name), t));
     }
-    if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     return 'Value::Null';
   }).join(', ');
 

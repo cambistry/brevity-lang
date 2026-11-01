@@ -69,8 +69,8 @@ describe('ref — inner scope reads and puts', () => {
       @readFn
         =
         a *Integer = 7
-        fn! = { a }
-        result Integer = fn!()
+        fn = { a }
+        result Integer = fn()
         return :result
 
       @putIf
@@ -128,9 +128,30 @@ describe('ref — closure put and return value', () => {
       @closurePut
         =
         a *Integer = 0
-        fn! = { a <- a + 1 }
+        fn! = {
+          a <- a + 1
+          return a
+        }
         result Integer = fn!()
         return :result
+
+      @closureReturnsCell
+        =
+        a *Integer = 3
+        fn = {
+          return a
+        }
+        result Integer = fn()
+        return :result
+
+      @closureReturnsNamedCell
+        =
+        a *Integer = 4
+        fn = {
+          return value: a
+        }
+        :value Integer = fn()
+        return :value
 
       @closureTwice
         =
@@ -144,8 +165,8 @@ describe('ref — closure put and return value', () => {
         =
         a *Integer = 0
         a <- 10
-        fn! = { a + 5 }
-        result Integer = fn!()
+        fn = { a + 5 }
+        result Integer = fn()
         return :result
 
       @closureShared
@@ -162,6 +183,14 @@ describe('ref — closure put and return value', () => {
 
   it('closure puts to outer ref and returns the new value', async () => {
     await expectBehavior(script, { input: { id: '1', op: '@closurePut', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+  });
+
+  it('closure returns an outer ref by name', async () => {
+    await expectBehavior(script, { input: { id: '5', op: '@closureReturnsCell', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+  });
+
+  it('closure returns an outer ref under a key', async () => {
+    await expectBehavior(script, { input: { id: '6', op: '@closureReturnsNamedCell', from: 'c' } }, { output: { id: '6', 'bv-a': { value: 'Integer' }, re: { value: 4 }, to: 'c' } });
   });
 
   it('closure called twice increments ref twice', async () => {

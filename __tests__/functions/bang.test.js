@@ -305,6 +305,36 @@ describe('effect enforcement', () => {
     expect(() => compileSource('@C = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@go = {\n  c = C()\n  c.g!()\n  return 1\n}\n')).not.toThrow();
   });
 
+  describe('discarded reads on typed receivers', () => {
+    const CLASSES = `
+      C = *{
+        @g = { return 1 }
+        @quiet = { b Integer = 1 }
+      }
+      U = (C |) *{}
+    `;
+
+    it('a typed param', () => {
+      expect(() => compileSource(`${CLASSES}\n@go = (c C) {\n  c.g()\n  return 1\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
+    });
+
+    it('a write-capability param', () => {
+      expect(() => compileSource(`${CLASSES}\n@go = (c *C) {\n  c.g()\n  return 1\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
+    });
+
+    it('a class param', () => {
+      expect(() => compileSource(`${CLASSES}\nD = (c C) *{\n  @go = {\n    c.g()\n    return 1\n  }\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
+    });
+
+    it('a member inherited by the param\'s class', () => {
+      expect(() => compileSource(`${CLASSES}\n@go = (u U) {\n  u.g()\n  return 1\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
+    });
+
+    it('nothing to lose: a function with no value', () => {
+      expect(() => compileSource(`${CLASSES}\n@go = (c C) {\n  c.quiet()\n  return 1\n}\n`)).not.toThrow();
+    });
+  });
+
   it('a `!` function that never writes is an error', () => {
     expect(() => compileSource('@go! = { return 1 }\n')).toThrow(/'@go!' never writes/);
   });
@@ -323,7 +353,7 @@ describe('effect enforcement', () => {
   });
 
   it('discarding a read is an error', () => {
-    expect(() => compileSource('get = { return 1 }\n@go = {\n  get()\n  return 2\n}\n')).toThrow(/'get\(\)' only reads/);
+    expect(() => compileSource('get = { return 1 }\n@go = {\n  get()\n  return 2\n}\n')).toThrow(/The value of 'get\(\)' is discarded/);
   });
 
   it('writes to an actor created here don\'t count', () => {
@@ -521,6 +551,91 @@ describe('effect enforcement', () => {
         return n
       }
     `)).toThrow(/takes a read-only function/);
+  });
+
+  describe('`->` slots', () => {
+    const WRITER = '() -> { a <- 1 }';
+    const CLASSES = `
+      ::R (f: () -> (), g: () => ())
+      a *Integer = 0
+      C = (f: () -> ()) *{
+        @take = (f () -> ()) { return 1 }
+        @give! = (f () => ()) { f() }
+      }
+      D = (C |) *{}
+    `;
+    const body = (lines) => `${CLASSES}\n@go! = (c C) {\n  a <- 0\n  ${lines}\n}\n`;
+    const service = '{ take (f: () -> ()) -> (n: Integer)\n pos (() -> ()) -> (n: Integer)\n give (f: () => ()) => self }';
+    const remote = (lines) => `*\n  "svc.bv": Svc () -> *${service}\n*\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
+
+    it.each([
+      ['a type field', `r = R(f: ${WRITER}, g: () -> { a <- 2 })`],
+      ['a class method', `n Integer = c.take(${WRITER})`],
+      ['a class param', `x = C(f: ${WRITER})`],
+      ['an inherited class param', `x = D(f: ${WRITER})`],
+    ])('rejects a writing function in %s', (_, lines) => {
+      expect(() => compileSource(body(lines))).toThrow(/takes a read-only function/);
+    });
+
+    it.each([
+      ['named', `n Integer = s.take(f: ${WRITER})`],
+      ['positional', `n Integer = s.pos(${WRITER})`],
+    ])('rejects a writing function in a %s doc param', (_, lines) => {
+      expect(() => compileSource(remote(lines))).toThrow(/takes a read-only function/);
+    });
+
+    it('accepts a writing function in a `=>` slot', () => {
+      expect(() => compileSource(body(`r = R(f: () -> { b Integer = 1 }, g: ${WRITER})`))).not.toThrow();
+      expect(() => compileSource(body(`c.give!(${WRITER})`))).not.toThrow();
+      expect(() => compileSource(remote(`s.give(f: ${WRITER})`))).not.toThrow();
+    });
+
+    it('accepts a reading function in a `->` slot', () => {
+      expect(() => compileSource(body('n Integer = c.take(() -> { b Integer = 1 })'))).not.toThrow();
+    });
+
+    it('reads the slot\'s own arrow, not one inside its params', () => {
+      expect(() => compileSource(`
+        a *Integer = 0
+        run! = (f () => (g: () -> ())) { f() }
+        @go! = { run!(() -> { a <- 1 }) }
+      `)).not.toThrow();
+    });
+  });
+
+  describe('`!` functions declared in a body', () => {
+    const inBody = (lines) => `n *Integer = 0\n@go! = {\n  n <- 0\n  ${lines}\n}\n`;
+
+    it('a tail value is an error', () => {
+      expect(() => compileSource(inBody('f! = {\n    n <- 1\n    n\n  }\n  f!()'))).toThrow(/'f!' is a '!' function, which has no tail return/);
+    });
+
+    it('a bare tail `self` is an error', () => {
+      expect(() => compileSource(inBody('f! = {\n    n <- 1\n    self\n  }\n  f!()'))).toThrow(/'f!' returns self by falling off the end/);
+    });
+
+    it('a value on one path and a fall-through on another is an error', () => {
+      expect(() => compileSource(inBody('f! = (b Boolean) {\n    n <- 1\n    if b { return 1 }\n  }\n  f!(true)'))).toThrow(/'f!' returns a value on one path/);
+    });
+
+    it('never writing is an error', () => {
+      expect(() => compileSource(inBody('f! = { return 1 }\n  v Integer = f!()'))).toThrow(/'f!' never writes/);
+    });
+
+    it('writing through a `=>` param, a sibling, or a held actor is a write', () => {
+      expect(() => compileSource(inBody('f! = (g () => ()) { g() }'))).not.toThrow();
+      expect(() => compileSource('@go = {\n  m *Integer = 0\n  f! = { m <- 1 }\n  h! = { f!() }\n  h!()\n  return m\n}\n')).not.toThrow();
+      expect(() => compileSource('C = *{\n  k *Integer = 0\n  @g! = { k <- 1 }\n}\n@go = {\n  c = C()\n  f! = { c.g!() }\n  f!()\n  return 1\n}\n')).not.toThrow();
+    });
+
+    it('a write to the enclosing function\'s own cell needs `!` on the name, but not on the enclosing function', () => {
+      expect(() => compileSource('@go = {\n  m *Integer = 0\n  f! = { m <- 1 }\n  f!()\n  return m\n}\n')).not.toThrow();
+      expect(() => compileSource('@go = {\n  m *Integer = 0\n  f = { m <- 1 }\n  f()\n  return m\n}\n')).toThrow(/'f' writes/);
+    });
+
+    it('a write past the enclosing function makes it a writer too', () => {
+      expect(() => compileSource('n *Integer = 0\n@go = {\n  f! = { n <- 1 }\n  f!()\n  return 1\n}\n')).toThrow(/'@go' writes/);
+    });
   });
 
   it('a `=>` param accepts one, and calling it counts as a write', () => {

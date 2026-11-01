@@ -1663,9 +1663,9 @@ function genFnReturnExpr(fields, genInner, innerVarName) {
 
   // All returns go through object tuples for consistent bv_object_one() unwrapping
   const posVals = pos.map(f => {
-    if (f.name) return innerVarName(f.name);
     if (f.expr) return genInner(f.expr);
     if (f.value) return genInner(f.value);
+    if (f.name) return innerVarName(f.name);
     return 'null';
   });
   const namedEntries = named.map(f => {

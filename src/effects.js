@@ -5,6 +5,7 @@
 // Design: notes/mutation-suffix-2026-10-31.md.
 
 import { parseInterface } from './codegen/javascript/types.js';
+import { resolveSuperclassChain } from './subclass.js';
 
 const isSuffixed = (name) => name.endsWith('!') || name.endsWith('.');
 
@@ -20,6 +21,20 @@ const isUnnamedHandler = (name) =>
 
 // Calls name a class bare, while a public class is declared with its `@`.
 const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name.replace(/^@/, ''), a]));
+
+const typeNameOf = (type) => (typeof type === 'string' ? type.trim().replace(/^[*&]/, '') : null);
+
+// A function type's own arrow, skipping any inside its params or result.
+function functionTypeArrow(type) {
+  if (typeof type !== 'string') return null;
+  let depth = 0;
+  for (let i = 0; i < type.length; i++) {
+    if ('({'.includes(type[i])) depth++;
+    else if (')}'.includes(type[i])) depth--;
+    else if (depth === 0 && /^[-=~]>/.test(type.slice(i, i + 2))) return type.slice(i, i + 2);
+  }
+  return null;
+}
 
 export function checkEffects(ast, remotesParsed = {}) {
   const classes = classesByName(ast);
@@ -54,6 +69,10 @@ export function checkEffects(ast, remotesParsed = {}) {
       const callee = s.value?.callee?.name;
       if (s.type === 'StateAssign' && callee) instanceOf.set(s.name.replace(/^@/, ''), callee);
     }
+    for (const d of actor.stateVarDecls || []) {
+      if (!instanceOf.has(d.name.replace(/^@/, '')) && typeNameOf(d.typeName)) instanceOf.set(d.name.replace(/^@/, ''), typeNameOf(d.typeName));
+    }
+    for (const p of actor.initParams || []) if (typeNameOf(p.type)) instanceOf.set(p.name, typeNameOf(p.type));
     const docSignatures = (alias, method) => {
       const parsed = remotesParsed[alias];
       if (parsed?.[method]) return parsed[method];
@@ -95,6 +114,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           const root = receiverRoot(node.value);
           if (isConstruction(root) || (root?.type === 'Identifier' && scope.fresh.has(root.name))) scope.fresh.add(node.name);
           if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.name) scope.instances.set(node.name, node.value.callee.name);
+          else if (typeNameOf(node.typeName)) scope.instances.set(node.name, typeNameOf(node.typeName));
           if (node.value?.type === 'Identifier') scope.fresh.delete(node.value.name);
           return;
         }
@@ -118,6 +138,13 @@ export function checkEffects(ast, remotesParsed = {}) {
             scope.write(`${node.objectName}.${node.fieldName} <- …`);
           }
           walk(node.value, scope);
+          return;
+        case 'TypeConstruction':
+          checkReadOnlySlots(
+            ast.types?.find(t => t.name === node.typeName)?.fields?.map(f => ({ name: f.name, type: f.paramType })),
+            node.args || [], node.typeName, scope,
+          );
+          walk(node.args, scope);
           return;
         case 'FunctionCallExpr':
           call(node, scope);
@@ -158,6 +185,7 @@ export function checkEffects(ast, remotesParsed = {}) {
 
     const call = (node, scope) => {
       const name = node.callee?.type === 'Identifier' ? node.callee.name : null;
+      if (name) checkReadOnlySlots(calleeParams(name, scope), node.args || [], name, scope);
       for (const arg of node.args || []) {
         escapeNames(arg, scope);
         walk(arg, scope);
@@ -176,20 +204,46 @@ export function checkEffects(ast, remotesParsed = {}) {
       if (scope.writingParams.has(name)) { scope.write(`${name}(…)`); return; }
       if (claimed.has(name)) scope.mightWrite();
       if (isSuffixed(name) && !untrackedNames.has(name.replace(/^@/, ''))) scope.write(`${name}(…)`);
-      checkReadOnlySlots(functions.find(f => f.name === name)?.params, node.args || [], name, scope);
+    };
+
+    // Overloads may differ in a slot's arrow, so only a lone signature decides it.
+    const loneParams = (sigs) => (sigs?.length === 1 ? sigs[0].params : null);
+    const classParams = (cls) => [...resolveSuperclassChain(classes, cls).inheritedParams, ...(cls.initParams || [])];
+    const calleeParams = (name, scope) => {
+      const local = scope.localFunctions.get(name);
+      if (local) return local.params;
+      if (classes.has(name)) return classParams(classes.get(name));
+      const dependency = ast.dependencies?.find(d => d.name === name);
+      if (dependency) return dependency.constructorParams;
+      return loneParams(functions.filter(f => f.name === name || f.name === '@' + name || f.name === '#' + name));
+    };
+    const methodParams = (object, method, scope) => {
+      const rootName = object?.type === 'Identifier' || object?.type === 'RefRead' ? object.name : null;
+      const source = object?.type === 'FunctionCallExpr'
+        ? object.callee?.name
+        : rootName && (scope.instances.get(rootName) ?? instanceOf.get(rootName.replace(/^@/, '')) ?? rootName);
+      if (classes.has(source)) return loneParams(classMethods(classes.get(source), method));
+      return dependencyNames.has(source) ? loneParams(docSignatures(source, method)) : null;
+    };
+    // A class's overloads of a method, its own hiding any it inherits.
+    const classMethods = (cls, method) => {
+      const own = (cls.functions || []).filter(f => f.name === '@' + method);
+      return own.length ? own : resolveSuperclassChain(classes, cls).inheritedFunctions.filter(f => f.name === '@' + method);
     };
 
     // A param typed with `->` requires a read-only function.
     const checkReadOnlySlots = (params, args, calleeLabel, scope) => {
       if (!params) return;
-      const bag = args.find(a => a.type === 'NamedArgsBag')?.fields || {};
+      const slot = (key) => params.find(p => (p.key || p.name) === key)?.type;
+      const positional = args.filter(a => a.type !== 'NamedArgsBag' && !(a.name && !a.positional));
       const passed = [
-        ...args.filter(a => a.type !== 'NamedArgsBag').map((a, i) => [a, params[i]?.type]),
-        ...Object.entries(bag).map(([k, v]) => [v, params.find(p => (p.key || p.name) === k)?.type]),
+        ...positional.map((a, i) => [a, params[i]?.type]),
+        ...args.filter(a => a.name && !a.positional).map(a => [a, slot(a.name)]),
+        ...Object.entries(args.find(a => a.type === 'NamedArgsBag')?.fields || {}).map(([k, v]) => [v, slot(k)]),
       ];
       for (const [arg, type] of passed) {
         const value = arg.expr ?? arg;
-        if (value?.type !== 'Function' || typeof type !== 'string' || !/^\s*\([^]*\)\s*->/.test(type)) continue;
+        if (value?.type !== 'Function' || functionTypeArrow(type) !== '->') continue;
         let why = null;
         const inner = { ...scope, locals: new Set(scope.locals), write: (w) => { why ??= w; }, discard: () => {} };
         walk(value, inner);
@@ -199,6 +253,7 @@ export function checkEffects(ast, remotesParsed = {}) {
 
     const member = (node, name, scope) => {
       walk(node.object, scope);
+      checkReadOnlySlots(methodParams(node.object, name, scope), node.args || [], name, scope);
       for (const a of node.args || []) {
         escapeNames(a.expr ?? a, scope);
         walk(a.expr ?? a, scope);
@@ -249,19 +304,29 @@ export function checkEffects(ast, remotesParsed = {}) {
       for (const p of node.value.params || []) if (!p.ref) probe.locals.add(p.name);
       collectOwnRefs(body, probe.locals);
       const outerWrites = [];
+      let might = false;
       probe.write = (why) => { outerWrites.push(why); };
-      walk(body, { ...probe, fresh: new Set(scope.fresh) });
+      probe.mightWrite = () => { might = true; scope.mightWrite(); };
+      // An enclosing function's local functions and fresh actors aren't this one's own.
+      probe.localFunctions = new Map([...scope.localFunctions].map(([k, v]) => [k, { ...v, writesOutside: v.writes }]));
+      probe.writingParams = new Set([...scope.writingParams, ...writingParamsOf(node.value)]);
+      walk(body, { ...probe, fresh: new Set() });
       if (outerWrites.length) writesAny = outerWrites[0];
       const pastLocals = { ...inner };
       for (const n of outerLocals) pastLocals.locals.add(n);
       collectOwnRefs(body, pastLocals.locals);
       walk(body, { ...pastLocals, fresh: new Set(scope.fresh) });
-      scope.localFunctions.set(name, { writesOutside: !!writesOutside });
+      scope.localFunctions.set(name, { writesOutside: !!writesOutside, writes: !!writesAny, params: node.value.params });
       if (writesOutside) scope.write(`${name}(…)`);
       if (writesAny && !isSuffixed(name)) {
         throw new Error(`'${name}' writes (${writesAny}), so it must be named '${name}!' or '${name}.'`);
       }
+      if (!writesAny && !might && name.endsWith('!')) {
+        throw new Error(`'${name}' never writes, so it shouldn't be named with '!'`);
+      }
     };
+
+    const writingParamsOf = (fn) => (fn.params || []).filter(p => functionTypeArrow(p.type) === '=>').map(p => p.name);
 
     const collectOwnRefs = (node, into) => {
       if (!node || typeof node !== 'object') return;
@@ -286,7 +351,7 @@ export function checkEffects(ast, remotesParsed = {}) {
         const rootName = expr.object?.type === 'Identifier' || expr.object?.type === 'RefRead' ? expr.object.name : null;
         if (!rootName) return false;
         const ownClass = classes.get(scope.instances.get(rootName) ?? instanceOf.get(rootName.replace(/^@/, '')));
-        const own = ownClass?.functions?.find(f => f.name === '@' + expr.method);
+        const own = ownClass && classMethods(ownClass, expr.method)[0];
         if (own) return !yieldsNothing(own);
         const alias = depAliasFor(rootName, scope);
         const sigs = alias && docSignatures(alias, expr.method);
@@ -310,14 +375,15 @@ export function checkEffects(ast, remotesParsed = {}) {
         write: (reason) => { why ??= reason; },
         discard: (stmt) => {
           if (stmt !== lastStatement && isReadCall(stmt.expr, scope) && !stmt.ellipsis) {
-            throw new Error(`'${discardedName(stmt.expr)}' only reads, and its result is discarded in '${fn.name}'`);
+            throw new Error(`The value of '${discardedName(stmt.expr)}' is discarded in '${fn.name}'`);
           }
         },
       };
       for (const p of fn.params || []) {
         if (!p.ref) scope.locals.add(p.name);
-        if (typeof p.type === 'string' && /=>/.test(p.type)) scope.writingParams.add(p.name);
+        if (typeNameOf(p.type)) scope.instances.set(p.name, typeNameOf(p.type));
       }
+      for (const name of writingParamsOf(fn)) scope.writingParams.add(name);
       walk(fn.body, scope);
       if (fn.untracked) {
         if (why) throw new Error(`'${fn.name}' is untracked, so it can only write untracked state, but it writes (${why})`);
@@ -376,7 +442,6 @@ export function purportedFunctions(ast, parseDoc) {
     docClaims.set(d.name, new Set(sigs.filter(([, sig]) => sig.effect === 'purported').map(([k]) => k)));
   }
 
-  const typeNameOf = (type) => (typeof type === 'string' ? type.trim().replace(/^\*/, '') : null);
   // What a receiver is: a class in this file or a dependency, by name.
   const sourceOf = (node, known) => {
     if (node?.type === 'FunctionCallExpr') return node.callee?.name ?? null;
