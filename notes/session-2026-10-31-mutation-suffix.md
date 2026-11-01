@@ -124,3 +124,43 @@ writes, `~>` purports to read; the table is in the
   declarations too. Silent lambda bodies (`(e) -> .`) are unchanged.
 
 Nothing reads `effect` yet; phase 4 does.
+
+## Phase 4: enforcement
+
+`src/effects.js` runs at the end of `validate`.
+
+- **Errors:** a writer without `!` or `.`; a `!` function that never writes, unless it
+  overrides one; a discarded read with a value to lose; a writing function in a `->`
+  param; an `untracked` function writing tracked state; a class writing during
+  construction without `!`; a file constructor whose alias and arrow disagree.
+- **Not writes:** local cells, writes to an actor created in this function before it
+  escapes, and anything `untracked`.
+- **Spreading `~>`:** a function reading a `~>` in an inline doc gets `~>` in its own
+  generated doc, following calls across the whole file (own functions, class fields,
+  locals, typed params, fresh constructions and chains) until nothing changes. `!` and
+  `.` keep `=>`. A `~>` call is reason enough for `!`. A doc supplied through
+  `options.remotes` isn't seen by generated docs, because they come from `extract`,
+  before remotes exist.
+- **`untracked` in source:** on cells, functions and nested actors, and in generated docs.
+- **Backends:** local functions named `fn!` needed sanitizing on JS and Erlang.
+- **Migration:** about 90 functions across 26 test files gained `!`, by a throwaway script
+  run in report, rename, re-report rounds.
+
+## Known gaps in phase 4
+
+- **`~>` warnings aren't built:** a `!` or `.` function resting only on a `~>` compiles
+  silently, for want of a warning channel.
+- **A non-public class's members leak into the file's doc.** `C = *{ @g = … }` lists `g` at
+  the top level, with no entry for `C`, though the file has no such op. Existing behaviour,
+  also on `92e6eda`.
+
+- **The add_child warning isn't built:** there's no warning channel.
+- **Remote constructions count as fresh:** `t = Thing()` inside a function exempts writes
+  to `t` until it escapes, including for a dependency the note doesn't address.
+- **A named local function reaching only its enclosing function's cells** must be `!`
+  itself, but calling it doesn't make the enclosing function a writer.
+- **`->` params are only checked at direct calls** to this file's own functions. Reference
+  fields and doc params aren't checked yet.
+- **Published cells can't be written from inside.** `@log *Text` has no inside-write form
+  (`log <- x` and `@log <- x` are both errors, also before this work), so `untracked @log`
+  is only useful for writes from other actors.

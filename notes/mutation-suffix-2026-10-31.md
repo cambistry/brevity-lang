@@ -1,8 +1,8 @@
 # `!` means the function writes: mutation, return paths, and service docs — 2026-10-31
 
-Status: **Phases 1-2 IMPLEMENTED 2026-10-31**
+Status: **Phases 1-4 IMPLEMENTED, 2026-10-31 to 11-01**
 ([session note](session-2026-10-31-mutation-suffix.md)), with `<-` as a value still a
-compile error. Phases 3-4 are next. Supersedes
+compile error. Phase 4 is uncommitted for review. Supersedes
 [bang-returns-self](bang-returns-self-2026-10-27.md). Builds on
 [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md) (name
 match at the call site, kept) and
@@ -223,8 +223,9 @@ above it.
 A silent call is not exempt from contagion. That would be simpler, but it would
 allow a "read-only" function to contain `account.debit.(10)...`.
 
-**Not suffixed, still counted as writes:** `set`/`update` handlers, `on` handlers
-and subscription bodies have no caller-facing name to mark.
+**Not suffixed, still counted as writes:** `set`/`update` handlers, `on` handlers,
+subscription bodies and inline element handlers (`onclick={ … }`, synthesized as `@0`)
+have no caller-facing name to mark.
 
 ### `untracked`
 
@@ -267,7 +268,7 @@ nested actors, and it crosses actor borders through the doc.
 | Bare tail `self` in a `!` function | Error: delete it, or write `return self` |
 | Bare statement discards a read-only call: `a.sorted()` | Error; suggests `sorted!` if it exists |
 | `a.sort()` when only `sort!` exists | Unknown member (exists today) |
-| `!` returns its receiver's class but isn't the receiver | Warning at the declaration |
+| `!` returns its receiver's class but isn't the receiver | Warning at the declaration (not built: the compiler has no warning channel) |
 
 The last row covers the one case where a misread chain still type-checks:
 
@@ -454,14 +455,8 @@ that could have been documented as a read.
 
 ### Phase 4: effect inference and enforcement
 
-- New pass in `src/validate.js`: compute each function's effects to a fixpoint
-  across calls, with escape analysis for local cells and fresh actors, and the
-  non-transactional exemption.
-- Turn on the errors in the checks table, and the remaining tail-value and
-  discarded-call errors.
-- Migrate the corpus. `<-` alone appears on about 300 lines across 44 test files,
-  and contagion will add their callers, so that's a lower bound. Docs and
-  `agent-resources/` too.
+Done, in `src/effects.js`. The check is local rather than a fixpoint: a callee's effect
+comes from its name or its doc's arrow, and the callee's own body answers for that name.
 
 ### Follow-ups
 

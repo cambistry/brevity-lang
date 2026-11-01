@@ -164,8 +164,21 @@ sort (by) => self            // writes, returns self
 log (Text) => .              // writes, silent
 ```
 
+The compiler checks this. A function that writes must be named `!` or `.`, so a missing
+suffix is a guarantee. Local cells don't count, nor do writes to an actor created in the
+same function before it's passed on.
+
 `untracked` before a declaration or doc entry says its writes don't count, for logs,
-metrics and caches.
+metrics and caches. It applies to cells, functions and nested actors:
+
+```brevity
+untracked hits *Integer = 0
+
+@get_value = {
+  hits <- hits + 1     // still read-only
+  return value
+}
+```
 
 ## Classes and Dependency Context
 

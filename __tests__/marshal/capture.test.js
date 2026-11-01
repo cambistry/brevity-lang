@@ -59,16 +59,16 @@ describe('capture — null and zero values', () => {
 
 const mutationCapture = `
     x *Integer = 0
-    @inc = { x <- x + 1; return :x }
+    @inc! = { x <- x + 1; return :x }
     @noop = -> x
 `;
 
 describe('capture — state after mutation', () => {
   it('reflects mutated state', async () => {
     await expectBehavior(mutationCapture,
-      { input: { id: '1', op: '@inc', from: 'c' } },
-      { input: { id: '2', op: '@inc', from: 'c' } },
-      { input: { id: '3', op: '@inc', from: 'c' } },
+      { input: { id: '1', op: '@inc!', from: 'c' } },
+      { input: { id: '2', op: '@inc!', from: 'c' } },
+      { input: { id: '3', op: '@inc!', from: 'c' } },
       { input: { id: '4', cam: 'capture', from: 'p' } },
       { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },

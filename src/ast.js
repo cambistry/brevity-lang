@@ -31,8 +31,8 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const ingestExpr = (defaultValue = null) =>
   ({ type: 'IngestExpr', defaultValue });
 
-export const dependency = (name, { interface: iface = null, constructorParams = null, path = null, generic = false, destructures = null } = {}) =>
-  ({ type: 'Dependency', name, interface: iface, constructorParams, path, generic, ...(destructures && { destructures }) });
+export const dependency = (name, { interface: iface = null, constructorParams = null, constructorArrow = null, path = null, generic = false, destructures = null } = {}) =>
+  ({ type: 'Dependency', name, interface: iface, constructorParams, ...(constructorArrow && { constructorArrow }), path, generic, ...(destructures && { destructures }) });
 
 // Type names that never need an import. Plurals are the List-element
 // shorthands.

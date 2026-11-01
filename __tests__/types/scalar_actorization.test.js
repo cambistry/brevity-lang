@@ -18,12 +18,12 @@ describe('scalar actorization — *Integer state cell', () => {
 
     @get = -> n: n
 
-    @inc = (delta Integer) {
+    @inc! = (delta Integer) {
       n <- n + delta
       return n: n
     }
 
-    @reset = {
+    @reset! = {
       n <- 0
       return n: n
     }
@@ -38,10 +38,10 @@ describe('scalar actorization — *Integer state cell', () => {
     });
   });
 
-  it('@inc mutates the cell via `n <- n + delta`; reply reflects new value', async () => {
+  it('@inc! mutates the cell via `n <- n + delta`; reply reflects new value', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: [[5], '@inc'], 'bv-a': [['Integer']], from: 'c' } },
+        { input: { id: '1', op: [[5], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
         { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 5 }, to: 'c' } },
         { input: { id: '2', op: '@get', from: 'c' } },
         { output: { id: '2', 'bv-a': { n: 'Integer' }, re: { n: 5 }, to: 'c' } },
@@ -54,7 +54,7 @@ describe('scalar actorization — *Integer state cell', () => {
       expects: [
         { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
         { output: { id: 'sub-1', 'bv-a': { n: 'Integer' }, re: { n: 0 }, to: 'c' } },
-        { input: { id: '2', op: [[3], '@inc'], 'bv-a': [['Integer']], from: 'c' } },
+        { input: { id: '2', op: [[3], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
         // Cell-mutation re-emit fires before the handler's own reply.
         { output: { id: 'sub-1', 'bv-a': { n: 'Integer' }, re: { n: 3 }, to: 'c' } },
         { output: { id: '2', 'bv-a': { n: 'Integer' }, re: { n: 3 }, to: 'c' } },
@@ -65,9 +65,9 @@ describe('scalar actorization — *Integer state cell', () => {
   it('whole-cell replace via `n <- 0` resets the slot', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: [[7], '@inc'], 'bv-a': [['Integer']], from: 'c' } },
+        { input: { id: '1', op: [[7], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
         { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },
-        { input: { id: '2', op: '@reset', from: 'c' } },
+        { input: { id: '2', op: '@reset!', from: 'c' } },
         { output: { id: '2', 'bv-a': { n: 'Integer' }, re: { n: 0 }, to: 'c' } },
       ],
     });
@@ -80,7 +80,7 @@ describe('scalar actorization — *Text state cell', () => {
 
     @get = -> label: label
 
-    @set_label = (s Text) {
+    @set_label! = (s Text) {
       label <- s
       return label: label
     }
@@ -100,7 +100,7 @@ describe('scalar actorization — *Text state cell', () => {
       expects: [
         { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
         { output: { id: 'sub-1', 'bv-a': { label: 'Text' }, re: { label: 'ready' }, to: 'c' } },
-        { input: { id: '2', op: [['done'], '@set_label'], 'bv-a': [['Text']], from: 'c' } },
+        { input: { id: '2', op: [['done'], '@set_label!'], 'bv-a': [['Text']], from: 'c' } },
         { output: { id: 'sub-1', 'bv-a': { label: 'Text' }, re: { label: 'done' }, to: 'c' } },
         { output: { id: '2', 'bv-a': { label: 'Text' }, re: { label: 'done' }, to: 'c' } },
       ],
@@ -114,7 +114,7 @@ describe('scalar actorization — *Boolean state cell', () => {
 
     @get = -> flag: flag
 
-    @set_flag = (b Boolean) {
+    @set_flag! = (b Boolean) {
       flag <- b
       return flag: flag
     }
@@ -134,7 +134,7 @@ describe('scalar actorization — *Boolean state cell', () => {
       expects: [
         { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
         { output: { id: 'sub-1', 'bv-a': { flag: 'Boolean' }, re: { flag: false }, to: 'c' } },
-        { input: { id: '2', op: [[true], '@set_flag'], 'bv-a': [['Boolean']], from: 'c' } },
+        { input: { id: '2', op: [[true], '@set_flag!'], 'bv-a': [['Boolean']], from: 'c' } },
         { output: { id: 'sub-1', 'bv-a': { flag: 'Boolean' }, re: { flag: true }, to: 'c' } },
         { output: { id: '2', 'bv-a': { flag: 'Boolean' }, re: { flag: true }, to: 'c' } },
       ],

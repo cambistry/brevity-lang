@@ -250,7 +250,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastSetName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
-      code += `\n  const ${s.name} = {value: ${rhs}};`;
+      code += `\n  const ${jsIdent(s.name)} = {value: ${rhs}};`;
     } else if (s.type === 'SetStatement') {
       _lastTypedName = null;
       _lastSetName = s.name;
@@ -393,16 +393,16 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n        const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n        const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n        const ${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n        const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
@@ -424,7 +424,7 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     } else if (s.type === 'RefDecl') {
       lastTypedName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
-      code += `\n        const ${s.name} = {value: ${rhs}};`;
+      code += `\n        const ${jsIdent(s.name)} = {value: ${rhs}};`;
     } else if (s.type === 'ExprStatement') {
       lastTypedName = null;
       const exprCode = genExpr(ctx, s.expr);
@@ -498,15 +498,15 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n${inner}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'Assign') {
       if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+        code += `\n${inner}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
       } else {
-        code += `\n${inner}const ${s.name} = ${genExpr(ctx, s.value)};`;
+        code += `\n${inner}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
       }
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
@@ -802,7 +802,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (catchCode !== null) return catchCode;
     if (s.type === 'RefDecl') {
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
-      return `\n        const ${s.name} = {value: ${rhs}};`;
+      return `\n        const ${jsIdent(s.name)} = {value: ${rhs}};`;
     }
     if (s.type === 'SetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
@@ -1136,19 +1136,19 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   if (s.type === 'BareTypeDecl') return '';
   if (s.type === 'RefDecl') {
     const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
-    return `\n${indent}const ${s.name} = {value: ${rhs}};`;
+    return `\n${indent}const ${jsIdent(s.name)} = {value: ${rhs}};`;
   }
   if (s.type === 'Assign') {
     if (CALL_LIKE.has(s.value.type)) {
-      return `\n${indent}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+      return `\n${indent}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
     }
-    return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
+    return `\n${indent}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
   }
   if (s.type === 'TypedAssign') {
     if (CALL_LIKE.has(s.value.type)) {
-      return `\n${indent}const ${s.name} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
+      return `\n${indent}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
     }
-    return `\n${indent}const ${s.name} = ${genExpr(ctx, s.value)};`;
+    return `\n${indent}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
   }
   if (s.type === 'StateAssign') {
     return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;

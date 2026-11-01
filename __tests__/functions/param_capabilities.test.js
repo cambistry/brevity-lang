@@ -15,32 +15,32 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('param capabilities — *Integer write-cap on lambda', () => {
   const script = `
-    @bumpOnce
+    @bumpOnce!
       =
       n *Integer = 0
-      bump = (x *Integer) { x <- x + 1 }
-      bump(*n)
+      bump! = (x *Integer) { x <- x + 1 }
+      bump!(*n)
       return result: n
 
-    @bumpTwice
+    @bumpTwice!
       =
       n *Integer = 0
-      bump = (x *Integer) { x <- x + 1 }
-      bump(*n)
-      bump(*n)
+      bump! = (x *Integer) { x <- x + 1 }
+      bump!(*n)
+      bump!(*n)
       return result: n
   `;
 
   it('*Integer param mutates caller cell when granted *n', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@bumpOnce', from: 'c' } },
+      { input: { id: '1', op: '@bumpOnce!', from: 'c' } },
       { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('repeated *Integer grants accumulate on caller cell', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@bumpTwice', from: 'c' } },
+      { input: { id: '2', op: '@bumpTwice!', from: 'c' } },
       { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
@@ -52,17 +52,17 @@ describe('param capabilities — *Point write-cap on lambda', () => {
   const script = `
     ::Point (x Integer, y Integer)
 
-    @replace
+    @replace!
       =
       coords *Point = Point(0, 0)
-      reset = (p *Point) { p <- Point(7, 8) }
-      reset(*coords)
+      reset! = (p *Point) { p <- Point(7, 8) }
+      reset!(*coords)
       return :coords
   `;
 
   it('whole-cell replace via *Point grant propagates to caller', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@replace', from: 'c' } },
+      { input: { id: '1', op: '@replace!', from: 'c' } },
       { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [7, 8] }, to: 'c' } },
     );
   });
@@ -75,19 +75,19 @@ describe('param capabilities — *List write-cap on lambda', () => {
   // pattern for collection refs through *List params, paralleling scalar
   // and type behavior.
   const script = `
-    @whole_replace
+    @whole_replace!
       =
       ns *List of Integers = [1, 2, 3]
-      reset = (xs *List of Integers) {
+      reset! = (xs *List of Integers) {
         xs <- [9, 8, 7]
       }
-      reset(*ns)
+      reset!(*ns)
       return :ns
   `;
 
   it('whole-cell replace via *List grant propagates to caller', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@whole_replace', from: 'c' } },
+      { input: { id: '1', op: '@whole_replace!', from: 'c' } },
       { output: { id: '1', 'bv-a': { ns: 'List of Integers' }, re: { ns: [9, 8, 7] }, to: 'c' } },
     );
   });
@@ -101,8 +101,8 @@ describe('param capabilities — compile errors', () => {
       @test
         =
         n *Integer = 0
-        bump = (x *Integer) { x <- x + 1 }
-        bump(n)
+        bump! = (x *Integer) { x <- x + 1 }
+        bump!(n)
         return result: n
     `)).toThrow();
   });
@@ -112,8 +112,8 @@ describe('param capabilities — compile errors', () => {
       @test
         =
         n Integer = 0
-        bump = (x *Integer) { x <- x + 1 }
-        bump(*n)
+        bump! = (x *Integer) { x <- x + 1 }
+        bump!(*n)
         return result: n
     `)).toThrow(/not a ref cell/);
   });
@@ -134,8 +134,8 @@ describe('param capabilities — compile errors', () => {
       @test
         =
         n *Integer = 0
-        bump = (x *Integer) { x <- x + 1 }
-        bump(&n)
+        bump! = (x *Integer) { x <- x + 1 }
+        bump!(&n)
         return result: n
     `)).toThrow(/use '\*n'/);
   });

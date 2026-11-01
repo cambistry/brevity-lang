@@ -69,7 +69,7 @@ describe('test.set — then mutate with public function', () => {
         =
         count <- n
 
-      @inc = {
+      @inc! = {
         count <- count + 1
         return :count
       }
@@ -80,7 +80,7 @@ describe('test.set — then mutate with public function', () => {
   it('set state then increment', async () => {
     await expectBehavior(script,
       { input: { test: { set: 10 }, from: 't' } },
-      { input: { id: '1', test: { op: '@inc' }, from: 't' } },
+      { input: { id: '1', test: { op: '@inc!' }, from: 't' } },
       { input: { id: '2', test: { get: 'count' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { count: 11 } }) },
       { output: { id: '2', 'bv-a': 'Integer', re: 11, to: 't'  }},

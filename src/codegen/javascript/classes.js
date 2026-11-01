@@ -582,7 +582,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
-      const jsVarName = lVarName.startsWith('#') ? `_pv_${lVarName.slice(1)}` : lVarName;
+      const jsVarName = lVarName.startsWith('#') ? `_pv_${lVarName.slice(1)}` : lVarName.replace(/!$/, '$w');
       block += `\n        const ${jsVarName} = "${lName}";`;
     }
     // Load captures from private fields

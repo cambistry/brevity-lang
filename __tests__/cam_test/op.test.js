@@ -4,7 +4,7 @@ describe('test.op — public function', () => {
   const script = `
     x *Integer = 0
 
-    @inc
+    @inc!
       =
       x <- x + 1
       return :x
@@ -14,8 +14,8 @@ describe('test.op — public function', () => {
 
   it('dispatches public function', async () => {
     await expectBehavior(script,
-      { input:  { id: '1', test: { op: '@inc' }, from: 't' } },
-      { input:  { id: '2', test: { op: '@inc' }, from: 't' } },
+      { input:  { id: '1', test: { op: '@inc!' }, from: 't' } },
+      { input:  { id: '2', test: { op: '@inc!' }, from: 't' } },
       { input:  { id: '3', test: { op: '@get' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
@@ -52,7 +52,7 @@ describe('test.op — with args', () => {
   const script = `
     x *Integer = 0
 
-    @add
+    @add!
       =
       n: Integer
       =
@@ -62,8 +62,8 @@ describe('test.op — with args', () => {
 
   it('passes args to op', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [{ n: 3 }, '@add'] }, from: 't' } },
-      { input: { id: '2', test: { op: [{ n: 7 }, '@add'] }, from: 't' } },
+      { input: { id: '1', test: { op: [{ n: 3 }, '@add!'] }, from: 't' } },
+      { input: { id: '2', test: { op: [{ n: 7 }, '@add!'] }, from: 't' } },
       { input: { id: '3', test: { get: 'x' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { x: 3 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 10 } }) },

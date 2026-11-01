@@ -228,6 +228,31 @@ describe('effect arrows in signatures', () => {
     expect(doc.service).toMatch(/total \(\) -> \(/);
   });
 
+  it('a claim spreads: a function reading a `~>` gets `~>` in its own doc', () => {
+    const { interface: doc } = compileSource(`
+      *
+        "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }
+      *
+      s = Svc()
+      helper = {
+        :n Integer = s.guess()
+        return :n
+      }
+      @direct = {
+        :n Integer = s.guess()
+        return :n
+      }
+      @indirect = {
+        v Integer = helper()
+        return v
+      }
+      @plain = { return 1 }
+    `);
+    expect(doc.service).toMatch(/direct \(\) ~> /);
+    expect(doc.service).toMatch(/indirect \(\) ~> /);
+    expect(doc.service).toMatch(/plain \(\) -> /);
+  });
+
   it('a foreign silent function needs no dot in its name', () => {
     const { output } = compileSource('*\n  "Logger": Logger\n*\n@go. = { Logger.log("x")... }\n',
       { remotes: [{ path: 'Logger', service: '{ log (Text) => . }' }] });
@@ -237,6 +262,319 @@ describe('effect arrows in signatures', () => {
   it('`...` still needs a silent function', () => {
     expect(() => compileSource('*\n  "Logger": Logger\n*\n@go. = { Logger.get("x")... }\n',
       { remotes: [{ path: 'Logger', service: '{ get (Text) -> (Integer) }' }] })).toThrow(/needs a silent/);
+  });
+});
+
+describe('effect enforcement', () => {
+  const REMOTE = '*\n  "Svc": Svc\n*\n';
+  const docs = (service) => ({ remotes: [{ path: 'Svc', service }] });
+
+  it('a function that writes must say so', () => {
+    expect(() => compileSource('a *Integer = 0\n@go = { a <- 1\n return 1 }\n')).toThrow(/'@go' writes \(a <- …\), so it must be named '@go!' or '@go\.'/);
+  });
+
+  it('a local cell doesn\'t count', () => {
+    expect(() => compileSource('@go = {\n  a *Integer = 0\n  a <- 1\n  return a\n}\n')).not.toThrow();
+  });
+
+  it('a param cell does', () => {
+    expect(() => compileSource('@go = (x *Integer) { x <- 1\n return 1 }\n')).toThrow(/'@go' writes/);
+  });
+
+  it('the effect spreads through calls', () => {
+    expect(() => compileSource('a *Integer = 0\nbump! = { a <- 1 }\n@go = { bump!()\n return 1 }\n')).toThrow(/'@go' writes \(bump!\(…\)\)/);
+  });
+
+  it('a silent call counts', () => {
+    expect(() => compileSource('a *Integer = 0\nfire. = { a <- 1 }\n@go = { fire...\n return 1 }\n')).toThrow(/'@go' writes/);
+  });
+
+  it('a named local function answers for its name', () => {
+    expect(() => compileSource('a *Integer = 0\n@go! = {\n  f = (i Integer) { a <- i }\n  f(1)\n}\n')).toThrow(/'f' writes/);
+  });
+
+  it('an anonymous function\'s writes belong to the function defining it', () => {
+    expect(() => compileSource('a *Integer = 0\n@go = { x = over([1]) |v| { a <- v }\n return 1 }\n')).toThrow();
+  });
+
+  it('a `!` function that never writes is an error', () => {
+    expect(() => compileSource('@go! = { return 1 }\n')).toThrow(/'@go!' never writes/);
+  });
+
+  it('an override may be purer than the function it overrides', () => {
+    expect(() => compileSource(`
+      Base = *{
+        a *Integer = 0
+        @go! = { a <- 1 }
+      }
+      Sub = (Base |) *{
+        @go! = { return 1 }
+      }
+      @t = { return 1 }
+    `)).not.toThrow();
+  });
+
+  it('discarding a read is an error', () => {
+    expect(() => compileSource('get = { return 1 }\n@go = {\n  get()\n  return 2\n}\n')).toThrow(/'get\(\)' only reads/);
+  });
+
+  it('writes to an actor created here don\'t count', () => {
+    expect(() => compileSource(`
+      C = *{
+        a *Integer = 0
+        @inc! = { a <- 1 }
+      }
+      @make = {
+        c = C()
+        c.inc!().inc!()
+        return c
+      }
+    `)).not.toThrow();
+  });
+
+  it('passing it on first makes a later write count', () => {
+    expect(() => compileSource(`
+      C = *{
+        a *Integer = 0
+        @inc! = { a <- 1 }
+      }
+      keep = (c C) { return 1 }
+      @make = {
+        c = C()
+        n Integer = keep(c)
+        c.inc!()
+        return n
+      }
+    `)).toThrow(/'@make' writes/);
+  });
+
+  it('a held actor\'s write counts', () => {
+    expect(() => compileSource(`
+      C = *{
+        a *Integer = 0
+        @inc! = { a <- 1 }
+      }
+      c = C()
+      @go = { c.inc!()\n return 1 }
+    `)).toThrow(/'@go' writes/);
+  });
+
+  it('a foreign writer counts, by its arrow', () => {
+    expect(() => compileSource(`${REMOTE}@go = { Svc.sort(1)\n return 1 }\n`, docs('{ sort (Integer) => self }'))).toThrow(/'@go' writes/);
+  });
+
+  it('a foreign read doesn\'t count, even with a bang in its name', () => {
+    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.uniq!()\n  return :n\n}\n`, docs('{ uniq! () -> (n: Integer) }'))).not.toThrow();
+  });
+
+  it('a purported read counts as a read', () => {
+    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.get()\n  return :n\n}\n`, docs('{ get () ~> (n: Integer) }'))).not.toThrow();
+  });
+
+  describe('calling a `~>`', () => {
+    const SVC = '*\n  "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }\n*\ns = Svc()\n';
+    const reads = '  :n Integer = s.guess()\n  x Integer = n\n';
+
+    it('a `!` function may rest on it alone', () => {
+      expect(() => compileSource(`${SVC}@a! = {\n${reads}}\n`)).not.toThrow();
+    });
+
+    it('a `!` function may rest on an own function that calls it', () => {
+      expect(() => compileSource(`${SVC}helper = {\n  :n Integer = s.guess()\n  return :n\n}\n@a! = {\n  v Integer = helper()\n  x Integer = v\n}\n`)).not.toThrow();
+    });
+
+    it('a silent function may rest on it alone', () => {
+      expect(() => compileSource(`${SVC}@a. = {\n${reads}}\n`)).not.toThrow();
+    });
+
+    it('a claim crosses classes and locals, until nothing changes', () => {
+      const { interface: doc } = compileSource(`
+        *
+          "svc.bv": Svc () -> *{
+            guess () ~> (n: Integer)
+            sure () -> (n: Integer)
+          }
+        *
+        C = *{
+          s = Svc()
+          @g = {
+            :n Integer = s.guess()
+            return :n
+          }
+          @h = {
+            :n Integer = s.sure()
+            return :n
+          }
+        }
+        D = *{
+          c = C()
+          @viaField = {
+            :n Integer = c.g()
+            return :n
+          }
+        }
+        @viaLocal = {
+          c = C()
+          :n Integer = c.g()
+          return :n
+        }
+        @viaFresh = {
+          :n Integer = C().g()
+          return :n
+        }
+        @viaTwoClasses = {
+          d = D()
+          :n Integer = d.viaField()
+          return :n
+        }
+        @viaParam = (c C) {
+          :n Integer = c.g()
+          return :n
+        }
+        @direct = {
+          s = Svc()
+          :n Integer = s.guess()
+          return :n
+        }
+        @certain = {
+          c = C()
+          :n Integer = c.h()
+          return :n
+        }
+      `);
+      for (const name of ['g', 'viaField', 'viaLocal', 'viaFresh', 'viaTwoClasses', 'viaParam', 'direct']) {
+        expect(doc.service).toMatch(new RegExp(`${name} \\(.*\\) ~> `));
+      }
+      expect(doc.service).toMatch(/\bh \(\) -> /);
+      expect(doc.service).toMatch(/certain \(\) -> /);
+    });
+
+    it('a claim shows on a public class\'s members', () => {
+      const { interface: doc } = compileSource(`${SVC}
+        @Pub = *{
+          t = Svc()
+          @g = {
+            :n Integer = t.guess()
+            return :n
+          }
+        }
+      `);
+      expect(doc.service).toMatch(/g \(\) ~> /);
+    });
+
+    it('a claim through a class is reason enough for `!`', () => {
+      expect(() => compileSource(`${SVC}
+        C = *{
+          t = Svc()
+          @g = {
+            :n Integer = t.guess()
+            return :n
+          }
+        }
+        c = C()
+        @a! = {
+          :n Integer = c.g()
+          x Integer = n
+        }
+      `)).not.toThrow();
+    });
+
+    it('functions calling each other settle', () => {
+      const { interface: doc } = compileSource(`${SVC}
+        p = (i Integer) {
+          if i == 0 {
+            :n Integer = s.guess()
+            return n
+          }
+          return q(i)
+        }
+        q = (i Integer) { return p(i - 1) }
+        @go = {
+          v Integer = q(1)
+          return v
+        }
+      `);
+      expect(doc.service).toMatch(/go \(\) ~> /);
+    });
+
+    it('`!` and `.` keep `=>` in their docs', () => {
+      const { interface: doc } = compileSource(`${SVC}@a! = {\n${reads}}\n@b. = {\n${reads}}\n`);
+      expect(doc.service).toContain('a! () => self');
+      expect(doc.service).toContain('b. () => .');
+    });
+  });
+
+  it('a `->` param rejects a writing function', () => {
+    expect(() => compileSource(`
+      a *Integer = 0
+      run = (f (Integer) -> (Integer)) { return f(1) }
+      @go! = {
+        n Integer = run((i Integer) { a <- i\n return i })
+        return n
+      }
+    `)).toThrow(/takes a read-only function/);
+  });
+
+  it('a `=>` param accepts one, and calling it counts as a write', () => {
+    expect(() => compileSource(`
+      a *Integer = 0
+      run! = (f (Integer) => (Integer)) { return f(1) }
+      @go! = {
+        n Integer = run!((i Integer) { a <- i\n return i })
+        return n
+      }
+    `)).not.toThrow();
+    expect(() => compileSource('run = (f (Integer) => (Integer)) { return f(1) }\n@go = { return 1 }\n')).toThrow(/'run' writes/);
+  });
+
+  it('a class that writes while constructing must be `!`', () => {
+    const source = (name) => `${REMOTE}${name} = *{\n  Svc.ping!()\n  @get = { return 1 }\n}\n@go = { return 1 }\n`;
+    expect(() => compileSource(source('W'), docs('{ ping! () => self }'))).toThrow(/Class 'W' writes/);
+  });
+
+  it('a file constructor\'s alias and arrow must agree', () => {
+    expect(() => compileSource('*\n  "w.bv": Widget (a: Integer) => *{ get () -> (n: Integer) }\n*\n@go = { return 1 }\n')).toThrow(/alias must be 'Widget!'/);
+    expect(() => compileSource('*\n  "w.bv": Widget! (a: Integer) -> *{ get () -> (n: Integer) }\n*\n@go = { return 1 }\n')).toThrow(/can't carry '!'/);
+  });
+});
+
+describe('untracked', () => {
+  it('a write to an untracked cell doesn\'t count', () => {
+    expect(() => compileSource('untracked hits *Integer = 0\n@go = { hits <- 1\n return 1 }\n')).not.toThrow();
+  });
+
+  it('a call to an untracked function doesn\'t count', () => {
+    expect(() => compileSource('untracked log *Integer = 0\nuntracked write. = (m Integer) { log <- m }\n@go = { write.(1)...\n return 1 }\n')).not.toThrow();
+  });
+
+  it('a call to an untracked nested actor doesn\'t count', () => {
+    expect(() => compileSource(`
+      Logger = *{
+        n *Integer = 0
+        @add! = { n <- 1 }
+      }
+      untracked audit = Logger()
+      @go = { audit.add!()\n return 1 }
+    `)).not.toThrow();
+  });
+
+  it('an untracked function can only write untracked state', () => {
+    expect(() => compileSource('a *Integer = 0\nuntracked @write. = { a <- 1 }\n')).toThrow(/is untracked, so it can only write untracked state/);
+  });
+
+  it('an untracked member in a foreign doc doesn\'t count', () => {
+    expect(() => compileSource('*\n  "Svc": Svc\n*\n@go = { Svc.write.(1)...\n return 1 }\n',
+      { remotes: [{ path: 'Svc', service: '{ untracked write. (Integer) => . }' }] })).not.toThrow();
+  });
+
+  it('crosses actor borders in the generated doc', () => {
+    const { interface: doc } = compileSource('untracked @log *Text = ""\nuntracked hidden *Text = ""\nuntracked @write. = (m Text) { hidden <- m }\n');
+    expect(doc.service).toContain('untracked log *Text');
+    expect(doc.service).toContain('untracked write. (Text) => .');
+  });
+
+  it('is an error before anything but a declaration', () => {
+    expect(() => compileSource('untracked 1\n')).toThrow(/must come before a declaration/);
   });
 });
 
@@ -630,7 +968,7 @@ describe('chained calls', () => {
       return n
     }
 
-    @bangClass = {
+    @bangClass! = {
       v Integer = W!().add!(2).get()
       return v
     }
@@ -673,7 +1011,7 @@ describe('chained calls', () => {
 
   it('a class named with `!` is constructed and chains on the new actor', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@bangClass', from: 'c' } },
+      { input: { id: '1', op: '@bangClass!', from: 'c' } },
       { output: { id: '1', re: [2], 'bv-a': ['Integer'], to: 'c' } },
     );
   });

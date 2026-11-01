@@ -2,6 +2,7 @@
 // Every target (JS, Erlang, Rust) gets the same checks.
 
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
+import { checkEffects } from './effects.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
@@ -815,6 +816,8 @@ export function validate(ast, options = {}) {
   // ── Silent reference calls must precede the first reply-awaiting send ──
   checkSilentRefOrdering(ast);
   checkSilentCallForm(ast, remotesParsed);
+  // ── A function that writes says so in its name ────────────────────────
+  checkEffects(ast, remotesParsed);
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call

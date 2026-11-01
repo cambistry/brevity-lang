@@ -5,11 +5,11 @@ const stmtScript = `
   a *Integer = 0
   b *Integer = 0
 
-  @twoStmt
+  @twoStmt!
     =
     x <- 42; return x
 
-  @threeStmt
+  @threeStmt!
     =
     a <- 1; b <- 2; return a: a, b: b
 `;
@@ -18,13 +18,13 @@ const fnBodyScript = `
   a *Integer = 0
   b *Integer = 0
 
-  @bracedFnBody
+  @bracedFnBody!
     =
-    apply = (v) { a <- v; b <- v + 1; . }
-    apply(10)
+    apply! = (v) { a <- v; b <- v + 1; . }
+    apply!(10)
     return a: a, b: b
 
-  @spawnWhile
+  @spawnWhile!
     =
     spawn bump.(); repeat while (a == 0) __tick__()
     return a
@@ -46,7 +46,7 @@ const refDeclScript = `
 const mixedScript = `
   a *Integer = 0; b *Integer = 0
 
-  @mixedNewlines
+  @mixedNewlines!
     =
     a <- 5
     b <- 10; return a: a, b: b
@@ -55,14 +55,14 @@ const mixedScript = `
 describe('semicolon — statement separator', () => {
   it('two statements on one line', async () => {
     await expectBehavior(stmtScript,
-      { input: { id: '1', op: '@twoStmt', from: 'c' } },
+      { input: { id: '1', op: '@twoStmt!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [42], to: 'c' }) },
     );
   });
 
   it('three statements on one line', async () => {
     await expectBehavior(stmtScript,
-      { input: { id: '1', op: '@threeStmt', from: 'c' } },
+      { input: { id: '1', op: '@threeStmt!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }) },
     );
   });
@@ -71,14 +71,14 @@ describe('semicolon — statement separator', () => {
 describe('semicolon — function body', () => {
   it('braced function body with semicolons', async () => {
     await expectBehavior(fnBodyScript,
-      { input: { id: '1', op: '@bracedFnBody', from: 'c' } },
+      { input: { id: '1', op: '@bracedFnBody!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'c' }) },
     );
   });
 
   it('function body with semicolons + spawn', async () => {
     await expectBehavior(fnBodyScript,
-      { input: { id: '1', op: '@spawnWhile', from: 'c' } },
+      { input: { id: '1', op: '@spawnWhile!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
@@ -105,7 +105,7 @@ describe('semicolon — ref declaration', () => {
 describe('semicolon — mixed with newlines', () => {
   it('semicolons and newlines freely mixed', async () => {
     await expectBehavior(mixedScript,
-      { input: { id: '1', op: '@mixedNewlines', from: 'c' } },
+      { input: { id: '1', op: '@mixedNewlines!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { a: 5, b: 10 }, to: 'c' }) },
     );
   });

@@ -30,7 +30,7 @@ Peer = (@name: Text, :P *List of Self) *{
 peers *List of Peer = []
 @peers = { peers }
 
-@run = {
+@run! = {
   peers <- [Peer(name: "Aaron", P: peers), Peer(name: "Betsy", P: peers), Peer(name: "Charlie", P: peers)]
   p Peer = peers.first
   ns List = p.names()
@@ -43,7 +43,7 @@ describe('*List of Self — peers iterate a shared list-actor of their own kind'
     const compiled = await compileActor(SCRIPT);
     const actor = await compiled.spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@run', from: 'caller' } },
+      { input: { id: '1', op: '@run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
         re: expect.objectContaining({

@@ -56,44 +56,44 @@ describe('repeat until', () => {
 // Tail-repeat as Void return — symmetrical to repeat_while.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('repeat until — tail repeat → Void (re: [])', () => {
+describe('repeat until — tail repeat in a `!` function → self', () => {
   const script = `
     x *Integer = 0
 
-    @publicTailBlock
+    @publicTailBlock!
       =
       x <- 3
       repeat until x <= 0 {
         x <- x - 1
       }
 
-    @publicTailSingleLine
+    @publicTailSingleLine!
       =
       x <- 3
       repeat until x <= 0 x <- x - 1
 
-    @callPrivateTailLambda
+    @callPrivateTailLambda!
       =
       x <- 3
-      fn = {
+      fn! = {
         repeat until x <= 0 {
           x <- x - 1
         }
       }
-      fn()
+      fn!()
       return ack: "ok"
   `;
 
-  it('public handler, tail repeat block — re: []', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) });
+  it('public handler, tail repeat block — returns self', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: {}, 'bv-a': '#<>', to: 'c' }) });
   });
 
-  it('public handler, tail repeat single-line — re: []', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) });
+  it('public handler, tail repeat single-line — returns self', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: {}, 'bv-a': '#<>', to: 'c' }) });
   });
 
   it('private lambda with tail repeat — call completes void', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@callPrivateTailLambda', from: 'c' } }, { output: expect.objectContaining({ id: '3', re: { ack: 'ok' }, to: 'c' }) });
+    await expectBehavior(script, { input: { id: '3', op: '@callPrivateTailLambda!', from: 'c' } }, { output: expect.objectContaining({ id: '3', re: { ack: 'ok' }, to: 'c' }) });
   });
 });
 
@@ -126,12 +126,12 @@ describe('repeat until — compile errors (repeat is non-assignable)', () => {
       @test
         =
         x *Integer = 5
-        fn = {
+        fn! = {
           repeat until x <= 0 {
             x <- x - 1
           }
         }
-        result = fn()
+        result = fn!()
         return :result
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });

@@ -29,7 +29,7 @@ const singleViewSource = `
 
   @status = -> ok: "ready"
   @open. = { view.open.()... }
-  @workflow
+  @workflow!
     =
     view.open.()...
     title: Text = view.getTitle()
@@ -61,7 +61,7 @@ describe('remote actor — sequential calls to actor', () => {
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<WebView/42>', 'bv-a': '#<WebView>', from: 'WebView' } },
-      { input: { id: '100', op: '@workflow', from: 'caller' } },
+      { input: { id: '100', op: '@workflow!', from: 'caller' } },
       { output: expect.objectContaining({ op: '@open.', to: 'WebView/42' }) },
       { input: { id: '2', re: {} } }, // reply to open
       { output: expect.objectContaining({ op: '@getTitle', to: 'WebView/42' }) },

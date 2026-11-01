@@ -340,7 +340,7 @@ describe('file-level DI — options.remotes injection', () => {
       *
         "/services/db": DB
       *
-      @go. = { key Text = "test"; DB.lookup(:key) }
+      @go = { key Text = "test"; DB.lookup(:key) }
     `);
     expect(() => compile(ast, {
       remotes: [{ path: '/services/db', service: dbManifest }],

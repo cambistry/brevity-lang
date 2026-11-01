@@ -67,21 +67,21 @@ describe("set operation", () => {
       .
     end#Counter
 
-    @singlePos
+    @singlePos!
       =
       b = Box(0)
       b <- 42
       :value Integer = b.get()
       return :value
 
-    @posNamed
+    @posNamed!
       =
       s = Store(0)
       s <- 11, label: "eleven"
       :value Integer = s.pos()
       return :value
 
-    @statePersists
+    @statePersists!
       =
       c = Counter(0)
       c <- 99
@@ -105,8 +105,8 @@ describe("set operation", () => {
     @refFromLambda
       =
       b = *Box(0)
-      fn = { b <- 55 }
-      fn()
+      fn! = { b <- 55 }
+      fn!()
       :value Integer = b.get()
       return :value
   `;
@@ -114,7 +114,7 @@ describe("set operation", () => {
   it("single positional set — actor receives via set handler", async () => {
     await expectBehavior(
       script,
-      { input: { id: "1", op: "@singlePos", from: "c" } },
+      { input: { id: "1", op: "@singlePos!", from: "c" } },
       {
         output: {
           id: "1",
@@ -129,7 +129,7 @@ describe("set operation", () => {
   it("positional + named set", async () => {
     await expectBehavior(
       script,
-      { input: { id: "2", op: "@posNamed", from: "c" } },
+      { input: { id: "2", op: "@posNamed!", from: "c" } },
       {
         output: {
           id: "2",
@@ -144,7 +144,7 @@ describe("set operation", () => {
   it("set without as clause — state persists via getter", async () => {
     await expectBehavior(
       script,
-      { input: { id: "3", op: "@statePersists", from: "c" } },
+      { input: { id: "3", op: "@statePersists!", from: "c" } },
       {
         output: {
           id: "3",
@@ -226,7 +226,7 @@ describe("set operation — compile errors", () => {
         .
       end#Box
 
-      @test
+      @test!
         =
         b = Box(0)
         if true
@@ -260,11 +260,11 @@ describe("set operation — compile errors", () => {
         .
       end#Box
 
-      @test
+      @test!
         =
         b = Box(0)
-        fn = { b <- 55 }
-        fn()
+        fn! = { b <- 55 }
+        fn!()
         :value Integer = b.get()
         return :value
     `),
@@ -274,7 +274,7 @@ describe("set operation — compile errors", () => {
   it("non-ref scalar — set is compile error", () => {
     expect(() =>
       compileSource(`
-      @test
+      @test!
         =
         x Integer = 0
         x <- 5

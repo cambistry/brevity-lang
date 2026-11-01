@@ -404,7 +404,7 @@ describe('lineal function — compile errors', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const edgeCaseScript = `
-  @goSilent
+  @goSilent!
     =
     spawn fire.()
     return answer: "ok"
@@ -452,7 +452,7 @@ const edgeCaseScript = `
 
 describe('lineal function — silent (. stop)', () => {
   it('side-effect-only function with dot', async () => {
-    await expectBehavior(edgeCaseScript, { input: { id: '1', op: '@goSilent', from: 'c' } }, { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
+    await expectBehavior(edgeCaseScript, { input: { id: '1', op: '@goSilent!', from: 'c' } }, { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
   });
 });
 

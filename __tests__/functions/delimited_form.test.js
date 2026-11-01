@@ -316,7 +316,7 @@ describe('delimited form — public function braced body', () => {
   it('public function braced body with state mutation', () => {
     expect(() => compileSource(`
       x *Integer = 0
-      @inc = (n: Integer) { x <- n; return :x }
+      @inc! = (n: Integer) { x <- n; return :x }
     `)).not.toThrow();
   });
 });

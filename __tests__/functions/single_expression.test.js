@@ -13,17 +13,17 @@ describe('single-expression — fn = (params) ->  side_effect .', () => {
   const script = `
     count *Integer = 0
 
-    @test
+    @test!
       =
-      fn = (n) ->  count <- count + n .
-      fn(5)
-      fn(3)
+      fn! = (n) ->  count <- count + n .
+      fn!(5)
+      fn!(3)
       return :count
   `;
 
   it('fn = (n) ->  side_effect . — silent function mutates state', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@test!', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 8 }, to: 'c' } },
     );
   });

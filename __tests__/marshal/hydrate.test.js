@@ -96,15 +96,15 @@ describe('hydrate — mutate after hydrate', () => {
   it('mutations apply on top of hydrated state', async () => {
     const script = `
       x *Integer = 0
-      @inc = { x <- x + 1; return :x }
+      @inc! = { x <- x + 1; return :x }
       @get = -> :x
     `;
   await expectBehavior(script,
       { input: { id: '1', cam: [{ x: 10 }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
-      { input: { id: '2', op: '@inc', from: 'c' } },
+      { input: { id: '2', op: '@inc!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { x: 11 } }) },
-      { input: { id: '3', op: '@inc', from: 'c' } },
+      { input: { id: '3', op: '@inc!', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: { x: 12 } }) },
       { input: { id: '4', op: '@get', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: { x: 12 } }) },

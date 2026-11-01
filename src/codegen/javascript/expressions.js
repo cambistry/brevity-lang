@@ -4,7 +4,8 @@ import { parseDecimalLiteral } from '../decimal_utils.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
-export function jsIdent(name) {
+export function jsIdent(rawName) {
+  const name = rawName.replace(/!$/, '$w');
   if (name.startsWith('#')) return `_pv_${name.slice(1)}`;
   return name;
 }

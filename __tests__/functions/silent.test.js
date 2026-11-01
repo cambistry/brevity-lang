@@ -26,7 +26,7 @@ describe('silent public functions + type matching', () => {
 
     --- spawn + silent private function ---
 
-    @spawnTest
+    @spawnTest!
       =
       spawn fire.()
       return answer: "ok"
@@ -50,7 +50,7 @@ describe('silent public functions + type matching', () => {
 
   it('spawn + silent private function — reply ok', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@spawnTest', from: 'c' } },
+      { input: { id: '3', op: '@spawnTest!', from: 'c' } },
       { output: { id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
   });
@@ -105,31 +105,31 @@ describe('stateful silent functions + lambdas', () => {
 
     --- lambdas: four syntactic forms ---
 
-    @lambdaInline
+    @lambdaInline!
       =
-      apply = (x) ->  lastInt <- x .
-      apply(42)
+      apply! = (x) ->  lastInt <- x .
+      apply!(42)
       return lastInt
-    @lambdaNextLine
+    @lambdaNextLine!
       =
-      apply = (x) ->  lastInt <- x
+      apply! = (x) ->  lastInt <- x
         .
-      apply(99)
+      apply!(99)
       return lastInt
-    @lambdaCurly
+    @lambdaCurly!
       =
-      apply = (x) {
+      apply! = (x) {
         a <- x
         b <- x + 1
         .
       }
-      apply(10)
+      apply!(10)
       return a: a, b: b
 
-    @lambdaCurlySingle
+    @lambdaCurlySingle!
       =
-      apply = (x) { a <- x . }
-      apply(77)
+      apply! = (x) { a <- x . }
+      apply!(77)
       return a: a
   `;
 
@@ -143,28 +143,28 @@ describe('stateful silent functions + lambdas', () => {
 
   it('lambda — inline same line', async () => {
     await expectBehavior(script,
-      { input: { id: 'l1', op: '@lambdaInline', from: 'c' } },
+      { input: { id: 'l1', op: '@lambdaInline!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l1', re: [42], to: 'c' }) },
     );
   });
 
   it('lambda — inline next line', async () => {
     await expectBehavior(script,
-      { input: { id: 'l2', op: '@lambdaNextLine', from: 'c' } },
+      { input: { id: 'l2', op: '@lambdaNextLine!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l2', re: [99], to: 'c' }) },
     );
   });
 
   it('lambda — curly brace body', async () => {
     await expectBehavior(script,
-      { input: { id: 'l3', op: '@lambdaCurly', from: 'c' } },
+      { input: { id: 'l3', op: '@lambdaCurly!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }) },
     );
   });
 
   it('lambda — curly brace single line', async () => {
     await expectBehavior(script,
-      { input: { id: 'l4', op: '@lambdaCurlySingle', from: 'c' } },
+      { input: { id: 'l4', op: '@lambdaCurlySingle!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }) },
     );
   });
@@ -179,7 +179,7 @@ describe('silent private — side-effect spawn with __tick__', () => {
     const script = `
       x *Integer = 0
 
-      @test
+      @test!
         =
         spawn fire.()
         repeat while (x == 0) __tick__()
@@ -189,7 +189,7 @@ describe('silent private — side-effect spawn with __tick__', () => {
         x <- 1
     `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@test!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
@@ -201,7 +201,7 @@ describe('silent private — side-effect spawn with __tick__', () => {
 
 describe('silent function — empty lineal body', () => {
   const script = `
-    @spaciousEmpty
+    @spaciousEmpty!
       =
       spawn fireEmpty.()
       return answer: "ok"
@@ -214,7 +214,7 @@ describe('silent function — empty lineal body', () => {
 
   it('lineal private function — empty body is silent', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@spaciousEmpty', from: 'c' } },
+      { input: { id: '1', op: '@spaciousEmpty!', from: 'c' } },
       { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
   });
@@ -261,8 +261,8 @@ describe('silent function — compile errors', () => {
 
       @test
         =
-        apply = (x) ->  x <- x .
-        result Integer = apply(42)
+        apply! = (x) ->  x <- x .
+        result Integer = apply!(42)
         return x
     `)).toThrow(/Cannot assign result of silent function/);
   });

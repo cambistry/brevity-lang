@@ -154,6 +154,7 @@ export function parse(tokensIn) {
   const peek = () => tokens[pos];
   // Effect arrows belong to signatures. A body's arrow is always `->`.
   let inSignature = 0;
+  let ctorArrow = '->';
   const consume = () => {
     const tok = tokens[pos++];
     if (tok?.type === '->' && tok.value !== '->' && inSignature === 0) {
@@ -886,7 +887,7 @@ export function parse(tokensIn) {
     }
     expect('RPAREN');
     skipNewlines();
-    if (peek().type === '->') { consume(); skipNewlines(); }
+    if (peek().type === '->') { inSignature++; ctorArrow = consume().value; inSignature--; skipNewlines(); }
     if (peek().type !== 'STAR' || tokens[pos + 1]?.type !== 'LBRACE') {
       throw new Error(`Expected '*{ ... }' service interface after constructor params ${where}`);
     }
@@ -4366,10 +4367,24 @@ export function parse(tokensIn) {
     const constructorBody = [];
     const outerDecl = declCtx;
     refVarScopes.push(new Map()); // actor-level ref scope
+    const untrackedDecls = new Set();
     while (peek().type !== 'EOF') {
       declCtx = null;
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
+      // `untracked` marks the declaration that follows: its writes don't count.
+      if (peek().type === 'KEYWORD' && peek().value === 'untracked') {
+        consume();
+        if (peek().type === 'HASH_IDENT') {
+          untrackedDecls.add('#' + peek().value);
+          continue;
+        }
+        const sigil = tokens[pos]?.type === 'AT' ? '@' : '';
+        const nameTok = sigil ? tokens[pos + 1] : tokens[pos];
+        if (nameTok?.type !== 'IDENT') throw new Error("'untracked' must come before a declaration");
+        untrackedDecls.add(sigil + nameTok.value);
+        continue;
+      }
       // Constructor-block tail: `return self` / `-> self` terminates an actor
       // body (becomes-self); `return expr` / `-> expr` is a declaration return
       // (return-as); `return ()` / `-> ()` is a no-op. `->` persists here as the
@@ -5026,6 +5041,9 @@ export function parse(tokensIn) {
     }
     refVarScopes.pop(); // end actor-level ref scope
     declCtx = outerDecl;
+    for (const decl of [...functions, ...stateVarDecls]) {
+      if (untrackedDecls.has(decl.name)) decl.untracked = true;
+    }
     return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn };
   }
 
@@ -5319,10 +5337,11 @@ export function parse(tokensIn) {
       }
       // Alias (p: Type, ...) [->] *{ iface } — explicit constructor + service
       if (peek().type === 'LPAREN') {
+        ctorArrow = '->';
         const ctorParams = parseCtorProfileParams(`for dependency '${alias}'`);
         let iface = parseInlineIface();
         iface = parseAsTypeSuffix(iface);
-        dependencies.push(AST.dependency(alias, { path, interface: iface, constructorParams: ctorParams, destructures }));
+        dependencies.push(AST.dependency(alias, { path, interface: iface, constructorArrow: ctorArrow, constructorParams: ctorParams, destructures }));
         continue;
       }
       // Alias { iface } — service reference with inline interface
@@ -5487,7 +5506,7 @@ export function parse(tokensIn) {
                peek().type === 'DIVIDER' ||
                peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
-               (peek().type === 'KEYWORD' && (peek().value === 'self' || peek().value === 'true' || peek().value === 'false'))) {
+               (peek().type === 'KEYWORD' && (peek().value === 'untracked' || peek().value === 'self' || peek().value === 'true' || peek().value === 'false'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn } = parseActorBody(
         () => false,

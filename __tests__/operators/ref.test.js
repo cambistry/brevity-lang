@@ -69,8 +69,8 @@ describe('ref — inner scope reads and puts', () => {
       @readFn
         =
         a *Integer = 7
-        fn = { a }
-        result Integer = fn()
+        fn! = { a }
+        result Integer = fn!()
         return :result
 
       @putIf
@@ -83,8 +83,8 @@ describe('ref — inner scope reads and puts', () => {
       @putFn
         =
         a *Integer = 0
-        fn = { a <- 99 }
-        fn()
+        fn! = { a <- 99 }
+        fn!()
         return result: a
 
       @putWhile
@@ -128,35 +128,35 @@ describe('ref — closure put and return value', () => {
       @closurePut
         =
         a *Integer = 0
-        fn = { a <- a + 1 }
-        result Integer = fn()
+        fn! = { a <- a + 1 }
+        result Integer = fn!()
         return :result
 
       @closureTwice
         =
         a *Integer = 0
-        fn = { a <- a + 1 }
-        fn()
-        fn()
+        fn! = { a <- a + 1 }
+        fn!()
+        fn!()
         return result: a
 
       @closureAfterPut
         =
         a *Integer = 0
         a <- 10
-        fn = { a + 5 }
-        result Integer = fn()
+        fn! = { a + 5 }
+        result Integer = fn!()
         return :result
 
       @closureShared
         =
         a *Integer = 0
-        inc = { a <- a + 1 }
-        dec = { a <- a - 1 }
-        inc()
-        inc()
-        inc()
-        dec()
+        inc! = { a <- a + 1 }
+        dec! = { a <- a - 1 }
+        inc!()
+        inc!()
+        inc!()
+        dec!()
         return result: a
   `;
 
@@ -183,62 +183,62 @@ describe('ref — closure put and return value', () => {
 
 describe('ref — pass by reference', () => {
   const script = `
-      @passRef
+      @passRef!
         =
         a *Integer = 0
-        fn = (x *Integer) { x <- 1 }
-        fn(*a)
+        fn! = (x *Integer) { x <- 1 }
+        fn!(*a)
         return result: a
 
-      @passRefExpr
+      @passRefExpr!
         =
         a *Integer = 5
-        add_ten = (x *Integer) { x <- x + 10 }
-        add_ten(*a)
+        add_ten! = (x *Integer) { x <- x + 10 }
+        add_ten!(*a)
         return result: a
 
-      @passRefMulti
+      @passRefMulti!
         =
         a *Integer = 0
-        bump = (x *Integer) { x <- x + 1 }
-        bump(*a)
-        bump(*a)
-        bump(*a)
+        bump! = (x *Integer) { x <- x + 1 }
+        bump!(*a)
+        bump!(*a)
+        bump!(*a)
         return result: a
 
-      @passRefExtra
+      @passRefExtra!
         =
         a *Integer = 0
-        add = (x *Integer, n Integer) { x <- x + n }
-        add(*a, 7)
+        add! = (x *Integer, n Integer) { x <- x + n }
+        add!(*a, 7)
         return result: a
 
-      @passRefNamed
+      @passRefNamed!
         =
         a *Integer = 0
-        fn = (named: *Integer) { named <- 1 }
-        fn(named: *a)
+        fn! = (named: *Integer) { named <- 1 }
+        fn!(named: *a)
         return result: a
   `;
 
   it('fn(ref x) x <- 1 mutates caller ref via *a', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@passRef', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@passRef!', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('pass-by-ref with expression: x <- x + 10', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@passRefExpr', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@passRefExpr!', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('pass-by-ref called multiple times', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@passRefMulti', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@passRefMulti!', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('pass-by-ref with additional positional args', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@passRefExtra', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@passRefExtra!', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('pass-by-ref with named argument', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@passRefNamed', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@passRefNamed!', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 });
 
@@ -249,7 +249,7 @@ describe('ref — pass by reference', () => {
 describe('ref — compile errors', () => {
   it('rebinding with = → compile error', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a *Integer = 0
         a = 1
@@ -259,7 +259,7 @@ describe('ref — compile errors', () => {
 
   it('typed reassignment of ref → compile error', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a *Integer = 0
         a Integer = 1
@@ -269,7 +269,7 @@ describe('ref — compile errors', () => {
 
   it('put to non-ref → compile error', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a Integer = 0
         a <- 1
@@ -279,33 +279,33 @@ describe('ref — compile errors', () => {
 
   it('passing non-ref with * → compile error', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a Integer = 0
-        fn = (x *Integer) { x <- 1 }
-        fn(*a)
+        fn! = (x *Integer) { x <- 1 }
+        fn!(*a)
         return result: a
     `)).toThrow();
   });
 
   it('passing ref without * → compile error', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a *Integer = 0
-        fn = (x *Integer) { x <- 1 }
-        fn(a)
+        fn! = (x *Integer) { x <- 1 }
+        fn!(a)
         return result: a
     `)).toThrow();
   });
 
   it('legacy &a for cell write-grant → compile error directs to *a', () => {
     expect(() => compileSource(`
-      @test
+      @test!
         =
         a *Integer = 0
-        fn = (x *Integer) { x <- 1 }
-        fn(&a)
+        fn! = (x *Integer) { x <- 1 }
+        fn!(&a)
         return result: a
     `)).toThrow(/use '\*a'/);
   });

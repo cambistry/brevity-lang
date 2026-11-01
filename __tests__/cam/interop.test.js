@@ -50,14 +50,14 @@ describe('interop — cross-call to silent public function', () => {
         }
       *
 
-      @send_notify
+      @send_notify!
         =
         msg: Text
         =
         spawn Store.notify.(:msg)
         return ack: "ok"
     `);
-    await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify!'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ msg: 'hello' }, '@notify.'], to: 'Store' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'Tester' }));
   });

@@ -33,7 +33,7 @@ describe('test.get — read state vars', () => {
 describe('test.get — after mutation', () => {
   const script = `
     x *Integer = 0
-    @inc = { x <- x + 1; return :x }
+    @inc! = { x <- x + 1; return :x }
     @noop = -> x
   `;
 
@@ -46,8 +46,8 @@ describe('test.get — after mutation', () => {
 
   it('reads mutated value after increments', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@inc', from: 'c' } },
-      { input: { id: '3', op: '@inc', from: 'c' } },
+      { input: { id: '2', op: '@inc!', from: 'c' } },
+      { input: { id: '3', op: '@inc!', from: 'c' } },
       { input: { id: '4', test: { get: 'x' }, from: 't' } },
       { output: expect.objectContaining({ id: '2', re: { x: 1 } }) },
       { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },

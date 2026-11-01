@@ -68,19 +68,19 @@ describe('silent name — invocation', () => {
 
     get = { return 10 }
 
-    @elided
+    @elided!
       =
       fire...
       repeat while (x == 0) __tick__()
       return x
 
-    @withArgs
+    @withArgs!
       =
       bump.(7)...
       repeat while (x == 0) __tick__()
       return x
 
-    @early
+    @early!
       =
       bump.(500)...
       bump.(3)...
@@ -90,21 +90,21 @@ describe('silent name — invocation', () => {
 
   it('`fire...` runs the silent `fire.` without waiting', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@elided', from: 'c' } },
+      { input: { id: '1', op: '@elided!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
 
   it('`bump.(7)...` passes args', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@withArgs', from: 'c' } },
+      { input: { id: '1', op: '@withArgs!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
     );
   });
 
   it('a bare `return` exits a silent function early', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@early', from: 'c' } },
+      { input: { id: '1', op: '@early!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
     );
   });
@@ -129,7 +129,7 @@ describe('silent name — invocation', () => {
       x *Integer = 0
       ping = { return 1 }
       ping. = { x <- 1 }
-      @go = { ping...; n Integer = ping(); return n }
+      @go! = { ping...; n Integer = ping(); return n }
     `)).not.toThrow();
   });
 

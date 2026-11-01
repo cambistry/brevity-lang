@@ -5,7 +5,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 const silentEmitScript = `
   Firer = * {
     emit fire() => .
-    @fire = { fire() }
+    @fire! = { fire() }
     @ping = -> pong: "ok"
   }
 
@@ -18,25 +18,25 @@ const silentEmitScript = `
   @noSub
     =
     f = Firer()
-    f.fire()
+    f.fire!()
     :pong Text = f.ping()
     return :pong
 
-  @oneSub
+  @oneSub!
     =
     f = Firer()
     c = Counter(f)
-    f.fire()
+    f.fire!()
     :count Integer = c.count()
     return :count
 
-  @threeFires
+  @threeFires!
     =
     f = Firer()
     c = Counter(f)
-    f.fire()
-    f.fire()
-    f.fire()
+    f.fire!()
+    f.fire!()
+    f.fire!()
     :count Integer = c.count()
     return :count
 
@@ -45,7 +45,7 @@ const silentEmitScript = `
 const argsEmitScript = `
   Firer = * {
     emit fire(n Integer) => .
-    @fire = (n: Integer) { fire(n) }
+    @fire! = (n: Integer) { fire(n) }
   }
 
   Accumulator = (firer *) *{
@@ -54,12 +54,12 @@ const argsEmitScript = `
     @total = -> :total
   }
 
-  @test
+  @test!
     =
     f = Firer()
     a = Accumulator(f)
-    f.fire(n: 10)
-    f.fire(n: 20)
+    f.fire!(n: 10)
+    f.fire!(n: 20)
     :total Integer = a.total()
     return :total
 `;
@@ -67,7 +67,7 @@ const argsEmitScript = `
 const returnEmitScript = `
   Checker = * {
     emit check(n Integer) -> (valid Boolean)
-    @validate = (n: Integer) {
+    @validate! = (n: Integer) {
       :valid = check(n)
       return :valid
     }
@@ -77,11 +77,11 @@ const returnEmitScript = `
     on checker.check (n: Integer) -> valid: (n > 0)
   }
 
-  @test
+  @test!
     =
     c = Checker()
     r = Rules(c)
-    :valid = c.validate(n: 5)
+    :valid = c.validate!(n: 5)
     return :valid
 `;
 
@@ -94,7 +94,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Firer = * {
         emit fire() => .
-        @fire = { fire() }
+        @fire! = { fire() }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -104,7 +104,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Notifier = * {
         emit notify(msg Text) => .
-        @send = (msg: Text) { notify(msg) }
+        @send! = (msg: Text) { notify(msg) }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -114,7 +114,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Checker = * {
         emit check(n Integer) -> (valid Boolean)
-        @validate = (n: Integer) { :valid = check(n); return :valid }
+        @validate! = (n: Integer) { :valid = check(n); return :valid }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -124,7 +124,7 @@ describe('emit — compilation', () => {
     expect(() => compileSource(`
       Firer = * {
         emit fire() => .
-        @fire = { fire() }
+        @fire! = { fire() }
       }
       Counter = (firer *) *{
         count *Integer = 0
@@ -150,14 +150,14 @@ describe('emit — silent fire-and-forget', () => {
 
   it('emit with subscriber triggers handler', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@oneSub', from: 'c' } },
+      { input: { id: '1', op: '@oneSub!', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
 
   it('multiple fires accumulate', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@threeFires', from: 'c' } },
+      { input: { id: '1', op: '@threeFires!', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
     );
   });
@@ -170,7 +170,7 @@ describe('emit — silent fire-and-forget', () => {
 describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
     await expectBehavior(argsEmitScript,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@test!', from: 'c' } },
       { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
   });
@@ -185,7 +185,7 @@ describe('emit — multiple subscribers', () => {
     const script = `
       Firer = * {
         emit fire() => .
-        @fire = { fire() }
+        @fire! = { fire() }
       }
 
       CounterA = (firer *) *{
@@ -200,17 +200,17 @@ describe('emit — multiple subscribers', () => {
         @count = -> :count
       }
 
-      @test
+      @test!
         =
         f = Firer()
         a = CounterA(f)
         b = CounterB(f)
-        f.fire()
+        f.fire!()
         :count Integer = a.count()
         return :count
     `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@test!', from: 'c' } },
       { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
@@ -223,7 +223,7 @@ describe('emit — multiple subscribers', () => {
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
     await expectBehavior(returnEmitScript,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: '@test!', from: 'c' } },
       { output: { id: '1', re: { valid: true }, to: 'c' } },
     );
   });

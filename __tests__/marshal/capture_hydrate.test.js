@@ -7,14 +7,14 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 describe('capture/hydrate round-trip — integer counter', () => {
   const source = `
     count *Integer = 0
-    @inc = { count <- count + 1; return :count }
+    @inc! = { count <- count + 1; return :count }
   `;
 
   async function buildRestoredActor() {
     const original = await createActor(source);
-    await original.sendAsync({ id: '1', op: '@inc', from: 'c' });
-    await original.sendAsync({ id: '2', op: '@inc', from: 'c' });
-    await original.sendAsync({ id: '3', op: '@inc', from: 'c' });
+    await original.sendAsync({ id: '1', op: '@inc!', from: 'c' });
+    await original.sendAsync({ id: '2', op: '@inc!', from: 'c' });
+    await original.sendAsync({ id: '3', op: '@inc!', from: 'c' });
     await original.sendAsync({ id: '4', cam: 'capture', from: 'p' });
     const snapshot = original.posts.find(o => o.id === '4').re;
     const restored = await createActor(source);
@@ -32,7 +32,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
 
   it('hydrated actor continues from captured state', async () => {
     const restored = await buildRestoredActor();
-    await restored.sendAsync({ id: '2', op: '@inc', from: 'c' });
+    await restored.sendAsync({ id: '2', op: '@inc!', from: 'c' });
     await expectActorBehavior(restored,
       { input: { id: '3', test: { get: 'count' }, from: 't' } },
       { output: { id: '3', 'bv-a': 'Integer', re: 4, to: 't' } },
@@ -49,14 +49,14 @@ describe('capture/hydrate round-trip — multiple types', () => {
       score *Integer = 0
       active *Boolean = false
 
-      @setLabel
+      @setLabel!
         =
         val: Text
         =
         label <- val
         return :val
 
-      @setScore
+      @setScore!
         =
         val: Integer
         =
@@ -67,8 +67,8 @@ describe('capture/hydrate round-trip — multiple types', () => {
     `;
 
     const original = await createActor(source);
-    await original.sendAsync({ id: '1', op: [{ val: 'player1' }, '@setLabel'], 'bv-a': [{ val: 'Text' }], from: 'c' });
-    await original.sendAsync({ id: '2', op: [{ val: 42 }, '@setScore'], 'bv-a': [{ val: 'Integer' }], from: 'c' });
+    await original.sendAsync({ id: '1', op: [{ val: 'player1' }, '@setLabel!'], 'bv-a': [{ val: 'Text' }], from: 'c' });
+    await original.sendAsync({ id: '2', op: [{ val: 42 }, '@setScore!'], 'bv-a': [{ val: 'Integer' }], from: 'c' });
     await original.sendAsync({ id: '3', cam: 'capture', from: 'p' });
     const snapshot = original.posts.find(o => o.id === '3').re;
 
@@ -94,21 +94,21 @@ describe('capture/hydrate round-trip — clone divergence', () => {
   beforeAll(async () => {
     const source = `
       x *Integer = 0
-      @inc = { x <- x + 1; return :x }
+      @inc! = { x <- x + 1; return :x }
     `;
 
     const original = await createActor(source);
-    await original.sendAsync({ id: '1', op: '@inc', from: 'c' });
-    await original.sendAsync({ id: '2', op: '@inc', from: 'c' });
-    await original.sendAsync({ id: '3', op: '@inc', from: 'c' });
+    await original.sendAsync({ id: '1', op: '@inc!', from: 'c' });
+    await original.sendAsync({ id: '2', op: '@inc!', from: 'c' });
+    await original.sendAsync({ id: '3', op: '@inc!', from: 'c' });
     await original.sendAsync({ id: '4', cam: 'capture', from: 'p' });
     const snapshot = original.posts.find(o => o.id === '4').re;
 
     // Clone A: inc twice
     cloneA = await createActor(source);
     await cloneA.sendAsync({ id: '1', cam: [snapshot, 'hydrate'], from: 'p' });
-    await cloneA.sendAsync({ id: '2', op: '@inc', from: 'c' });
-    await cloneA.sendAsync({ id: '3', op: '@inc', from: 'c' });
+    await cloneA.sendAsync({ id: '2', op: '@inc!', from: 'c' });
+    await cloneA.sendAsync({ id: '3', op: '@inc!', from: 'c' });
 
     // Clone B: no inc
     cloneB = await createActor(source);

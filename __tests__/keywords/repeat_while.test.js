@@ -10,7 +10,7 @@ const statefulScript = `
   x *Integer = 0
   y *Integer = 0
 
-  @drain
+  @drain!
     =
     x <- 10
     repeat while x > 0 {
@@ -19,7 +19,7 @@ const statefulScript = `
     }
     return x, y
 
-  @parenStateful
+  @parenStateful!
     =
     x <- 3
     repeat while (x > 0) {
@@ -27,19 +27,19 @@ const statefulScript = `
     }
     return x
 
-  @parenSingleLine
+  @parenSingleLine!
     =
     x <- 3
     repeat while (x > 0) x <- x - 1
     return x
 
-  @bareSingleLine
+  @bareSingleLine!
     =
     x <- 5
     repeat while x > 0 x <- x - 1
     return x
 
-  @lexicalBlock
+  @lexicalBlock!
     =
     step Integer
     =
@@ -48,7 +48,7 @@ const statefulScript = `
     }
     return x
 
-  @lexicalSingleLine
+  @lexicalSingleLine!
     =
     limit Integer
     =
@@ -58,33 +58,33 @@ const statefulScript = `
 
 describe('repeat while — state mutation loop', () => {
   it('drains x to 0 and accumulates y to 10', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: '@drain', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@drain!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0, 10], to: 'c' }) });
   });
 });
 
 describe('repeat while — parenthesized condition (stateful)', () => {
   it('parens around condition with block body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenStateful', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenStateful!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 
   it('parens around condition with single-line body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@parenSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — single-line body (stateful)', () => {
   it('bare condition with single-line put', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: '@bareSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: '@bareSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) });
   });
 });
 
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: [[3], '@lexicalBlock'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[3], '@lexicalBlock!'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: [[5], '@lexicalSingleLine'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[5], '@lexicalSingleLine!'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
 });
 
@@ -95,55 +95,55 @@ describe('repeat while — lexical scope', () => {
 // is implicit.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('repeat while — tail repeat → Void (re: [])', () => {
+describe('repeat while — tail repeat in a `!` function → self', () => {
   const script = `
     x *Integer = 0
 
-    @publicTailBlock
+    @publicTailBlock!
       =
       x <- 3
       repeat while x > 0 {
         x <- x - 1
       }
 
-    @publicTailSingleLine
+    @publicTailSingleLine!
       =
       x <- 3
       repeat while x > 0 x <- x - 1
 
-    @publicTailParen
+    @publicTailParen!
       =
       x <- 3
       repeat while (x > 0) {
         x <- x - 1
       }
 
-    @callPrivateTailLambda
+    @callPrivateTailLambda!
       =
       x <- 3
-      fn = {
+      fn! = {
         repeat while x > 0 {
           x <- x - 1
         }
       }
-      fn()
+      fn!()
       return ack: "ok"
   `;
 
-  it('public handler, tail repeat block — re: []', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) });
+  it('public handler, tail repeat block — returns self', async () => {
+    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: {}, 'bv-a': '#<>', to: 'c' }) });
   });
 
-  it('public handler, tail repeat single-line — re: []', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) });
+  it('public handler, tail repeat single-line — returns self', async () => {
+    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: {}, 'bv-a': '#<>', to: 'c' }) });
   });
 
-  it('public handler, tail repeat with parenthesized cond — re: []', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@publicTailParen', from: 'c' } }, { output: expect.objectContaining({ id: '3', re: [], to: 'c' }) });
+  it('public handler, tail repeat with parenthesized cond — returns self', async () => {
+    await expectBehavior(script, { input: { id: '3', op: '@publicTailParen!', from: 'c' } }, { output: expect.objectContaining({ id: '3', re: {}, 'bv-a': '#<>', to: 'c' }) });
   });
 
   it('private lambda with tail repeat — call completes void', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@callPrivateTailLambda', from: 'c' } }, { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) });
+    await expectBehavior(script, { input: { id: '4', op: '@callPrivateTailLambda!', from: 'c' } }, { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) });
   });
 });
 
@@ -211,12 +211,12 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
       @test
         =
         x *Integer = 5
-        fn = {
+        fn! = {
           repeat while x > 0 {
             x <- x - 1
           }
         }
-        result = fn()
+        result = fn!()
         return :result
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
