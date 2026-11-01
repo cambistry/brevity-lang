@@ -812,7 +812,7 @@ function genChildHandleOp(ctx, actor) {
 
   // Set child self_send prefix so actorFnNames calls route to child dispatch
   const savedSelfSendPrefix = ctx.selfSendPrefix;
-  if (childPrivateFns.length > 0) {
+  if (childPrivateFns.length > 0 || childPublicFns.length > 0) {
     ctx.selfSendPrefix = prefix;
   }
 
@@ -1182,6 +1182,7 @@ function genChildActorCode(ctx, actors) {
     for (const f of allChildPrivateFns) {
       ctx.actorFnNames.add(f.name);
     }
+    for (const f of mergedActor.functions) if (f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload) ctx.actorFnNames.add(f.name);
 
     // Note: child private functions are dispatched via child_X_handle_op clauses (generated in genChildHandleOp).
     // No standalone genFn needed — child_X_self_send routes through child_X_handle_op.
@@ -1193,9 +1194,8 @@ function genChildActorCode(ctx, actors) {
     // Generate public function dispatch
     sections.push(genChildHandleOp(ctx, mergedActor));
 
-    // Generate child-specific self_send if child has private functions
-    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update');
-    if (childPrivFns.length > 0) {
+    // Generate child-specific self_send if the child has functions to call
+    if (mergedActor.functions.some(f => f.type === 'FunctionDecl' && f.name)) {
       const prefix = `child_${name.toLowerCase()}`;
       sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>),\n    bv_object_pack(Re).`);
     }
@@ -2304,6 +2304,8 @@ export function codegenErlang(ast, options = {}) {
   for (const a of active) {
     a.functions.filter(_isPrivate).forEach(f => ctx.actorFnNames.add(f.name));
     a.functions.filter(f => _isPublicFn(f) && !f.actorDef).forEach(f => ctx.publicFnNames.add(f.name));
+    // `@x(…)` names the function itself, so it routes as an actor function does.
+    a.functions.filter(f => f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload).forEach(f => ctx.actorFnNames.add(f.name));
   }
 
   // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──

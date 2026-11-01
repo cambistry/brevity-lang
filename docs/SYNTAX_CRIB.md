@@ -150,6 +150,23 @@ fire. = { count <- count + 1 }   // the glued `.` names it silent
 }
 ```
 
+## `!` Functions
+
+```brevity
+n *Integer = 0
+@inc! = (i Integer) { n <- n + i }   // falls off the end: returns self
+@total = { return n }
+
+run! = (f (Integer) => ()) { f(1) }  // `=>` slot takes a function that writes
+@go! = {
+  run!(&inc!)                        // by reference: `&name!`, never a bare name
+  @inc!(1)                           // self-call
+  @inc!(1).inc!(2)                   // a chain, as the whole statement or value
+  v Integer = @inc!(1).total()
+  return v
+}
+```
+
 ## Imports for Details
 
 - [Writing Brevity Quickly](./LLM_WRITING_BREVITY.md)

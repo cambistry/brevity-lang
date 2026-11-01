@@ -96,10 +96,50 @@ describe('chains — validation', () => {
     }
   `;
 
-  it('a chain from a call on this actor is reported as not yet supported', () => {
-    const body = (call) => `a *Integer = 0\nbump! = (i Integer) { a <- a + i }\n@add! = (i Integer) { a <- a + i }\n@go = {\n  ${call}\n  return a\n}\n`;
-    expect(() => compileSource(body('bump!(1).add!(2)'))).toThrow(/can't start from 'bump!/);
-    expect(() => compileSource(body('@add!(1).add!(2)'))).toThrow(/can't start from '@add!/);
+  describe('from a call on this actor', () => {
+    const body = (lines) => `a *Integer = 0\nbump! = (i Integer) { a <- a + i }\n@add! = (i Integer) { a <- a + i }\n@pop! = {\n  a <- 0\n  return a\n}\nhidden! = { a <- 1 }\n@total = { return a }\n@go! = {\n  ${lines}\n}\n`;
+
+    it.each([
+      ['a private head', 'bump!(1).add!(2)'],
+      ['a public head', '@add!(1).add!(2)'],
+      ['a value at the end', 'v Integer = bump!(1).total()\n  return v'],
+      ['a member read at the end', 'v Integer = bump!(1).total\n  return v'],
+      ['a returned chain', 'return bump!(1).add!(2).total()'],
+    ])('accepts %s', (_, lines) => {
+      expect(() => compileSource(body(lines))).not.toThrow();
+    });
+
+    it('a head that returns a value can\'t be chained on', () => {
+      expect(() => compileSource(body('v Integer = @pop!().total()\n  return v'))).toThrow(/'@pop!' returns a value here.*bind it first/);
+    });
+
+    it('a member must be public', () => {
+      expect(() => compileSource(body('bump!(1).hidden!()'))).toThrow(/'hidden!' isn't a public function/);
+    });
+
+    it('a member must exist', () => {
+      expect(() => compileSource(body('bump!(1).nope!()'))).toThrow(/'nope!' isn't a public function/);
+    });
+
+    it.each([
+      ['an operand', 'v Integer = 1 + bump!(1).total()\n  return v'],
+      ['a condition', 'if bump!(1).total() == 1 { a <- 2 }'],
+      ['a loop condition', 'repeat while bump!(1).total() == 1 { a <- 2 }'],
+    ])('must be a whole value, not %s', (_, lines) => {
+      expect(() => compileSource(body(lines))).toThrow(/can't start from 'bump!.*bind it first/);
+    });
+
+    it('a local function can\'t start one', () => {
+      expect(() => compileSource(body('f! = { a <- 1 }\n  f!().add!(1)'))).toThrow(/can't start from 'f!/);
+    });
+
+    it('its effect counts', () => {
+      expect(() => compileSource(`a *Integer = 0\n@add! = { a <- 1 }\n@total = { return a }\n@go = { return @add!().total() }\n`)).toThrow(/'@go' writes/);
+    });
+
+    it('a discarded read at the end is reported', () => {
+      expect(() => compileSource(body('bump!(1).total()'))).toThrow(/The value of '@total\(\)' is discarded/);
+    });
   });
 
   it('a value-returning `!` call on a new actor can\'t be chained on', () => {
@@ -119,6 +159,98 @@ describe('chains — validation', () => {
         return n
       }
     `)).toThrow(/returns a value here.*bind it first/);
+  });
+});
+
+describe('a `!` function by name', () => {
+  const FILE = 'x *Integer = 0\nbump! = { x <- 1 }\n';
+
+  it('`&name!` is the reference form', () => {
+    expect(() => compileSource(`${FILE}run! = (f () => ()) { f() }\n@go! = {\n  run!(&bump!)\n  return x\n}\n`)).not.toThrow();
+  });
+
+  it('a bare name asks for `&`', () => {
+    expect(() => compileSource(`${FILE}run! = (f () => ()) { f() }\n@go! = {\n  run!(bump!)\n  return x\n}\n`)).toThrow(/use &bump! to pass by reference/);
+  });
+
+  it('a bare name asks for `&` in a return', () => {
+    expect(() => compileSource(`${FILE}run = (f () -> ()) { return f() }\n@go = { return run(bump!) }\n`)).toThrow(/use &bump! to pass by reference/);
+  });
+
+  it('a bare name asks for `&` in a function named like a builtin', () => {
+    expect(() => compileSource(`${FILE}take = (f () -> ()) { f() }\n@go = {\n  take(bump!)\n  return 1\n}\n`)).toThrow(/use &bump! to pass by reference/);
+  });
+
+  it('`&a!=b` is still not-equal', () => {
+    expect(() => compileSource('f = { return 1 }\n@go = {\n  r Boolean = &f!=&f\n  return r\n}\n')).not.toThrow();
+  });
+
+  it('taking a reference to a writer counts as a write', () => {
+    expect(() => compileSource('x *Integer = 0\nnext! = (i Integer) {\n  x <- i\n  return i\n}\n@go = {\n  r List of Integers = over([1], &next!)\n  return r\n}\n')).toThrow(/'@go' writes \(&next!\)/);
+  });
+
+  it('a `!` function on a `#` name is passed the same way', () => {
+    expect(() => compileSource('x *Integer = 0\n#hit! = { x <- 1 }\n@go! = {\n  #hit!()\n  return x\n}\n')).not.toThrow();
+  });
+
+  describe('in a `->` slot', () => {
+    const rejected = /takes a read-only function here, but '&\S+' writes/;
+
+    it('rejects a `!` function', () => {
+      expect(() => compileSource(`${FILE}take = (f () -> ()) { f() }\n@go = {\n  take(&bump!)\n  return 1\n}\n`)).toThrow(rejected);
+    });
+
+    it('rejects a silent function', () => {
+      expect(() => compileSource(`x *Integer = 0\nfire. = { x <- 1 }\nrun = (f () -> ()) { f() }\n@go = {\n  run(&fire.)\n  return 1\n}\n`)).toThrow(rejected);
+    });
+
+    it('rejects a `=>` param passed on', () => {
+      expect(() => compileSource('run = (f () -> ()) { f() }\n@go! = (g () => ()) {\n  run(&g)\n  g()\n}\n')).toThrow(rejected);
+    });
+
+    it('rejects one on a class method', () => {
+      expect(() => compileSource(`${FILE}C = *{\n  @run = (f () -> ()) { return 1 }\n}\n@go! = {\n  c = C()\n  n Integer = c.run(&bump!)\n  return n\n}\n`)).toThrow(rejected);
+    });
+
+    it('rejects one on a named param', () => {
+      expect(() => compileSource(`${FILE}run = (f: () -> ()) { f() }\n@go = {\n  run(f: &bump!)\n  return 1\n}\n`)).toThrow(rejected);
+    });
+
+    it('rejects one in a return', () => {
+      expect(() => compileSource(`${FILE}run = (f () -> ()) { return f() }\n@go = { return run(&bump!) }\n`)).toThrow(rejected);
+    });
+
+    it('rejects one in a doc param', () => {
+      expect(() => compileSource(`*\n  "svc.bv": Svc () -> *{ run (f: () -> ()) -> (n: Integer) }\n*\n${FILE}@go! = {\n  s = Svc()\n  n Integer = s.run(f: &bump!)\n  return n\n}\n`)).toThrow(rejected);
+    });
+
+    it('accepts a read-only function', () => {
+      expect(() => compileSource('get = { return 1 }\nrun = (f () -> ()) { return f() }\n@go = { return run(&get) }\n')).not.toThrow();
+    });
+
+    it('accepts an untracked function', () => {
+      expect(() => compileSource('untracked n *Integer = 0\nuntracked note! = { n <- 1 }\nrun = (f () -> ()) { return f() }\n@go = { return run(&note!) }\n')).not.toThrow();
+    });
+  });
+
+  it('a `!` function declared in a body can\'t be passed by reference yet', () => {
+    expect(() => compileSource('run! = (f () => ()) { f() }\n@go! = {\n  m *Integer = 0\n  f! = { m <- 1 }\n  run!(&f!)\n  return m\n}\n')).toThrow(/'&f!' — a '!' function declared in a body can't be passed by reference yet/);
+  });
+});
+
+describe('a function named like a builtin', () => {
+  it('shadows it, before and after its declaration', () => {
+    expect(() => compileSource('@a = { return first(1) }\nfirst = (i Integer) { return i + 1 }\n@b = { return first(2) }\n')).not.toThrow();
+  });
+
+  it('leaves the method form alone', () => {
+    expect(() => compileSource('first = (i Integer) { return i + 1 }\n@a = { return Text.first("abc") }\n')).not.toThrow();
+  });
+
+  it('the builtin reports a wrong argument count', () => {
+    expect(() => compileSource('@go = { return take("abc") }\n')).toThrow(/'take' takes 2 arguments, got 1/);
+    expect(() => compileSource('@go = { return slice("abc") }\n')).toThrow(/'slice' takes 2 to 3 arguments, got 1/);
+    expect(() => compileSource('@go = {\n  x Text = take("abc")\n  return x\n}\n')).toThrow(/'take' takes 2 arguments, got 1/);
   });
 });
 
@@ -832,6 +964,93 @@ describe('! function — return paths', () => {
       a <- a + 1 * 3
       return a
     }
+
+    run! = (f (Integer) => ()) { f(2) }
+
+    @passes! = {
+      run!(&bump!)
+      return acc
+    }
+
+    @localCell = {
+      m *Integer = 0
+      m <- 2
+      return m
+    }
+
+    @passesToOver! = {
+      r List of Integers = over([1, 2], &next!)
+      return r, log
+    }
+
+    @selfCalls! = {
+      @inc!(1)
+      @inc!(2)
+      return acc as Integer
+    }
+
+    @selfCallValue! = {
+      @inc!(4)
+      v Integer = @take!()
+      return v, acc
+    }
+
+    @selfCallRead = {
+      v Integer = @total()
+      return v
+    }
+
+    @selfCallReturned = { return @total() as Integer }
+
+    #hit! = (i Integer) { acc <- acc + i }
+
+    @hashCall! = {
+      #hit!(2)
+      #hit!(3)
+      return acc
+    }
+
+    #plain = { return 8 }
+
+    @hashReturned = { return #plain() as Integer }
+
+    @builtinReturned = { return upper("hi") as Text }
+
+    @selfChain! = {
+      @inc!(1).explicit!(2)
+      return acc
+    }
+
+    @privateChain! = {
+      bump!(1).inc!(2)
+      return acc
+    }
+
+    @chainValue! = {
+      v Integer = bump!(4).total()
+      return v
+    }
+
+    @chainMember! = {
+      v Integer = bump!(5).total
+      return v
+    }
+
+    @chainReturned! = { return @inc!(1).inc!(2).total() as Integer }
+
+    @chainTail! = { @inc!(1).inc!(2) }
+
+    @barePublic! = {
+      inc!(6)
+      v Integer = total()
+      return v
+    }
+
+    @shadowsEarly = { return first(1) as Integer }
+
+    first = (i Integer) { return i + 10 }
+
+    @shadowsLate = { return first(2) as Integer }
   `;
 
   it('falling off the end returns self', async () => {
@@ -1032,6 +1251,111 @@ describe('! function — return paths', () => {
       { output: { id: '1', re: [3], 'bv-a': ['Integer'], to: 'c' } },
     );
   });
+
+  it('`&name!` passes a `!` function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@passes!', from: 'c' } },
+      { output: { id: '1', re: [2], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`return` on a local cell returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@localCell', from: 'c' } },
+      { output: { id: '1', re: [2], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`&name!` works with `over`', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@passesToOver!', from: 'c' } },
+      { output: { id: '1', re: [[1, 2], 12], 'bv-a': ['List of Integers', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('`#x!(…)` self-calls run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@hashCall!', from: 'c' } },
+      { output: { id: '1', re: [5], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`return #x()` returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@hashReturned', from: 'c' } },
+      { output: { id: '1', re: [8], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`return` takes a bare builtin', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@builtinReturned', from: 'c' } },
+      { output: { id: '1', re: ['HI'], 'bv-a': ['Text'], to: 'c' } },
+    );
+  });
+
+  it('`@x(…)` self-calls run in order', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@selfCalls!', from: 'c' } },
+      { output: { id: '1', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a `@x!(…)` self-call yields its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@selfCallValue!', from: 'c' } },
+      { output: { id: '1', re: [4, 0], 'bv-a': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('a `@x(…)` self-call reads', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { input: { id: '2', op: '@selfCallRead', from: 'c' } },
+      { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+      { input: { id: '3', op: '@selfCallReturned', from: 'c' } },
+      { output: { id: '3', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it.each([
+    ['@selfChain!', 3],
+    ['@privateChain!', 3],
+    ['@chainValue!', 4],
+    ['@chainMember!', 5],
+    ['@chainReturned!', 3],
+  ])('a chain from a call on this actor: %s', async (op, expected) => {
+    await expectBehavior(script,
+      { input: { id: '1', op, from: 'c' } },
+      { output: { id: '1', re: [expected], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a bare name reaches a public function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@barePublic!', from: 'c' } },
+      { output: { id: '1', re: [6], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a chain in tail position returns self', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@chainTail!', from: 'c' } },
+      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { input: { id: '2', op: '@total', from: 'c' } },
+      { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a function named like a builtin shadows it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@shadowsEarly', from: 'c' } },
+      { output: { id: '1', re: [11], 'bv-a': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: '@shadowsLate', from: 'c' } },
+      { output: { id: '2', re: [12], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
 });
 
 describe('chained calls', () => {
@@ -1053,6 +1377,12 @@ describe('chained calls', () => {
         return Item(name: "x")
       }
       @total = { return acc }
+      @twice! = (i Integer) {
+        @inc!(i)
+        @inc!(i)
+      }
+      @chainTwice! = (i Integer) { @inc!(i).inc!(i) }
+      @chainTotal! = (i Integer) { return @inc!(i).total() }
     }
 
     W! = *{
@@ -1095,6 +1425,49 @@ describe('chained calls', () => {
       v Integer = W!().add!(2).get()
       return v
     }
+
+    @selfCallInChild = {
+      v Integer = C().twice!(2).total()
+      return v
+    }
+
+    @selfChainInChild = {
+      v Integer = C().chainTwice!(3).total()
+      return v
+    }
+
+    @selfChainValueInChild = {
+      c = C()
+      v Integer = c.chainTotal!(4)
+      return v
+    }
+
+    P = *{
+      @one = { return 1 }
+    }
+
+    D = (P |) *{
+      @two = {
+        v Integer = @one()
+        return v + 1
+      }
+    }
+
+    @selfCallInherited = {
+      d = D()
+      v Integer = d.two()
+      return v
+    }
+
+    @childrenApart = {
+      a = C()
+      b = C()
+      a.twice!(1)
+      b.twice!(5)
+      x Integer = a.total()
+      y Integer = b.total()
+      return x, y
+    }
   `;
 
   it('chains on a child held in a local', async () => {
@@ -1136,6 +1509,25 @@ describe('chained calls', () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bangClass!', from: 'c' } },
       { output: { id: '1', re: [2], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it.each([
+    ['@selfCallInChild', 4],
+    ['@selfChainInChild', 6],
+    ['@selfChainValueInChild', 4],
+    ['@selfCallInherited', 2],
+  ])('self-calls in a child: %s', async (op, expected) => {
+    await expectBehavior(script,
+      { input: { id: '1', op, from: 'c' } },
+      { output: { id: '1', re: [expected], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('self-calls stay on their own child', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@childrenApart', from: 'c' } },
+      { output: { id: '1', re: [2, 10], 'bv-a': ['Integer', 'Integer'], to: 'c' } },
     );
   });
 });

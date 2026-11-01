@@ -557,6 +557,7 @@ export function tokenize(source) {
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
       if (name && source[i] === '.' && silentSuffixAt(source, i, '&' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
+      else if (name && source[i] === '!' && source[i + 1] !== '=') { name += '!'; i++; }
       if (name) tokens.push({ type: 'AMPERSAND_IDENT', value: name });
       continue;
     }
@@ -566,6 +567,7 @@ export function tokenize(source) {
       i++;
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+      if (name && source[i] === '!' && source[i + 1] !== '=') { name += '!'; i++; }
       if (name) tokens.push({ type: 'HASH_IDENT', value: name });
       else tokens.push({ type: 'HASH' });
       continue;

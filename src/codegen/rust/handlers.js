@@ -1167,14 +1167,12 @@ function genRustChildMethods(allActors) {
     for (const f of allChildPrivateFns) {
       G.ctx.actorFnNames.add(f.name);
     }
+    for (const f of mergedActor.functions) if (f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload) G.ctx.actorFnNames.add(f.name);
 
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
-    // Set child self-send prefix so private function calls route through child dispatch
-    const childPrivFns = mergedActor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@'));
-    if (childPrivFns.length > 0) {
-      G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
-    }
+    // Set child self-send prefix so a call to the class's own function routes through child dispatch
+    G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
     parts.push(genRustChildDispatch(mergedActor));
     G.ctx.childSelfSendPrefix = null;
 

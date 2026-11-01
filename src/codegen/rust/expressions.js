@@ -585,7 +585,7 @@ ${subRegLines.join('\n')}
         : rustSsaResolve(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
-        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); BvObject::pack(&_cfr).one() }`;
+        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); BvObject::pack(&_cfr).one_or_null() }`;
       }
       // Pre-compute nested call_fn/self_send args to avoid double &mut self borrow
       const precomputes = [];
@@ -605,7 +605,7 @@ ${subRegLines.join('\n')}
         return toJsonValue(raw, t || 'Anything');
       }).join(', ');
       const preStr = precomputes.length > 0 ? precomputes.join(' ') + ' ' : '';
-      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); BvObject::pack(&_cfr).one() }`;
+      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); BvObject::pack(&_cfr).one_or_null() }`;
     }
     const callee = genRustExpr(expr.callee, typeEnv, eCtx);
     const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
@@ -1564,11 +1564,11 @@ function genRustFnCallExpr(expr, typeEnv) {
   const calleeName = expr.callee.name;
   // Self-send: call through handle_op dispatch, return re value
   // Use child dispatch when inside child actor context
-  const selfSendCall = G.ctx.childSelfSendPrefix
-    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", &Value::Object(Map::new()), "", "__parent")`
-    : `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
+  const selfSendCall = (payload) => (G.ctx.childSelfSendPrefix
+    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", ${payload}, "", "__parent")`
+    : `self.self_send("${calleeName}", ${payload})`);
   if (expr.args.length === 0) {
-    return `{ let _re = ${selfSendCall}; BvObject::pack(&_re) }`;
+    return `{ let _re = ${selfSendCall('&Value::Object(Map::new())')}; BvObject::pack(&_re) }`;
   }
   const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -1590,7 +1590,7 @@ function genRustFnCallExpr(expr, typeEnv) {
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
-    return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
+    return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = ${selfSendCall('&_payload')}; BvObject::pack(&_re) }`;
   }
   if (namedBag) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
@@ -1598,9 +1598,9 @@ function genRustFnCallExpr(expr, typeEnv) {
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
-    return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
+    return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = ${selfSendCall('&_payload')}; BvObject::pack(&_re) }`;
   }
-  return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = self.self_send("${calleeName}", &_payload); BvObject::pack(&_re) }`;
+  return `{ let _payload = Value::Array(vec![${argVals.join(', ')}]); let _re = ${selfSendCall('&_payload')}; BvObject::pack(&_re) }`;
 }
 
 function genRustDefaultValue(node, _brevityType) {

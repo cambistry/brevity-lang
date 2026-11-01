@@ -1,5 +1,5 @@
 import * as AST from './ast.js';
-import { checkChainReceivers } from './chains.js';
+import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -23,10 +23,24 @@ function assertNoBangFunctional(recv, method, isBang) {
   throw new Error(`${recv}.${method}!(...) is not a valid form — the bang form applies only to a receiver-ref method call (\`*ref.${method}!(...)\`).`);
 }
 
+// Functions declared at file level, found up front so that one named like a bare
+// builtin (`take`, `first`) shadows it wherever it's called, before or after.
+function fileLevelFunctionNames(tokens) {
+  const names = new Set();
+  let depth = 0;
+  tokens.forEach((t, i) => {
+    if (t.type === 'LBRACE' || t.type === 'LPAREN') depth++;
+    else if (t.type === 'RBRACE' || t.type === 'RPAREN') depth--;
+    else if (depth === 0 && t.type === 'IDENT' && tokens[i - 1]?.type !== 'AT' && tokens[i + 1]?.type === 'EQUALS' && ['LPAREN', 'LBRACE', '->'].includes(tokens[i + 2]?.type)) names.add(t.value);
+  });
+  return names;
+}
+
 export function parse(tokensIn) {
   let tokens = tokensIn;
   let pos = 0;
   const functionNames = new Set();
+  const fileFunctionNames = fileLevelFunctionNames(tokensIn);
   const localScopes = [new Set()];
   const refVarScopes = [new Map()];
   const readonlyParamScopes = [new Set()];
@@ -731,6 +745,12 @@ export function parse(tokensIn) {
     }
 
     return AST.functionNode(params, body, { returnType });
+  }
+
+  // `take(s, 1)`: a builtin, unless a function of that name shadows it.
+  function atBareBuiltinCall() {
+    return (peek().type === 'IDENT' || peek().type === 'KEYWORD') && TEXT_METHODS.has(peek().value) && tokens[pos + 1]?.type === 'LPAREN'
+      && !functionNames.has(peek().value) && !fileFunctionNames.has(peek().value);
   }
 
   function checkFunctionArgs(args, calleeName) {
@@ -2035,12 +2055,16 @@ export function parse(tokensIn) {
     }
 
     let result;
-    if ((peek().type === 'IDENT' || peek().type === 'KEYWORD') && TEXT_METHODS.has(peek().value) && tokens[pos + 1]?.type === 'LPAREN') {
+    if (atBareBuiltinCall()) {
       const methodName = consume().value;
       consume(); // LPAREN
       const args = [parseExpr()];
       while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
       expect('RPAREN');
+      const [minArgs, maxArgs] = TEXT_METHODS.get(methodName).arity;
+      if (args.length < minArgs || args.length > maxArgs) {
+        throw new Error(`'${methodName}' takes ${minArgs === maxArgs ? minArgs : `${minArgs} to ${maxArgs}`} arguments, got ${args.length}`);
+      }
       if (methodName === 'size') {
         result = AST.sizeExpr(args[0]);
       } else {
@@ -2441,6 +2465,11 @@ export function parse(tokensIn) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
+      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || atBareBuiltinCall()) {
+        const expr = parseExpr();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'NUMBER') {
         const numTok = consume();
         let typeName = null;
@@ -2509,6 +2538,7 @@ export function parse(tokensIn) {
               }
             } else {
               const args = parseCallArgs();
+              if (exprNode.type === 'Identifier') checkFunctionArgs(args, exprNode.name);
               exprNode = AST.functionCallExpr(exprNode, args);
             }
           }
@@ -5720,42 +5750,49 @@ export function parse(tokensIn) {
       if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.name?.endsWith('!') && node.value?.type === 'Function') {
         settle({ name: node.name, body: node.value.body ?? (node.value.body = []) });
       }
-      if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && node.object?.type === 'FunctionCallExpr' && node.object.callee?.name?.endsWith('!')
-          && !classNames.has(node.object.callee.name)) {
-        throw new Error(`A chain can't start from '${node.object.callee.name}(…)', a call on this actor — write the calls as separate statements`);
-      }
       if (node.type === 'FunctionCallExpr' && node.callee?.name?.endsWith('!') && AST.BUILTIN_TYPE_NAMES.has(node.callee.name.slice(0, -1))) {
         throw new Error(`'${node.callee.name}' — a type name takes no '!'`);
       }
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
     };
     visit(program.actors);
+    lowerSelfChains(program);
+    const checkSelfChains = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(checkSelfChains); return; }
+      if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && node.object?.type === 'FunctionCallExpr' && node.object.callee?.name?.endsWith('!')
+          && !classNames.has(node.object.callee.name)) {
+        throw new Error(`A chain can't start from '${node.object.callee.name}(…)' here: on a function of this actor, it has to be a whole statement or value — bind it first`);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') checkSelfChains(v);
+    };
+    checkSelfChains(program.actors);
     checkChainReceivers(program);
   }
 
-  // `return a` names its field, and backends only capture what a body reads. In a
-  // nested function, returning an enclosing function's cell is such a read.
+  // `return a` names its field, but on a local cell it reads the cell. Backends only
+  // capture what a nested function's body reads, and only read what a field's expr says.
   function captureReturnedCells(program) {
-    const visit = (node, cells, nested) => {
+    const visit = (node, cells) => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(n => visit(n, cells, nested)); return; }
-      if (node.type === 'FunctionDecl') { visit(node.body, new Set(), false); return; }
+      if (Array.isArray(node)) { node.forEach(n => visit(n, cells)); return; }
+      if (node.type === 'FunctionDecl') { visit(node.body, new Set()); return; }
       if (node.type === 'Function') {
         const inner = new Set(cells);
         for (const p of node.params || []) inner.delete(p.name);
-        visit(node.body, inner, true);
+        visit(node.body, inner);
         return;
       }
       if (node.type === 'RefDecl') cells.add(node.name);
       else if (node.type === 'Assign' || node.type === 'TypedAssign') cells.delete(node.name);
-      if (nested && (node.type === 'Return' || node.type === 'Reply')) {
+      if (node.type === 'Return' || node.type === 'Reply') {
         for (const f of node.fields || []) {
           if (!f.expr && !f.spread && cells.has(f.name)) f.expr = { type: 'RefRead', name: f.name };
         }
       }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, cells, nested);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, cells);
     };
-    visit(program.actors, new Set(), false);
+    visit(program.actors, new Set());
   }
 
   // Spreads a write chain into one statement per link, in source order. A write

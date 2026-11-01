@@ -366,7 +366,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
 
-  ctx.actorFnNames = new Set(privateFns.map(f => f.name));
+  // `@x(…)` names the function itself, so it routes as a private function does.
+  ctx.actorFnNames = new Set([...privateFns, ...publicFns.filter(f => f.name.startsWith('@'))].map(f => f.name));
   // Identify silent functions (no reply, no implicit return, has SilentTerminator)
   const silentFnNames = new Set();
   for (const fn of [...publicFns, ...privateFns]) {

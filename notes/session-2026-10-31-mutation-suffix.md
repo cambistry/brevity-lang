@@ -86,8 +86,7 @@ backend uses that one early-return form.
   locals bound to one. Elsewhere JS reports a runtime error, and Rust and Erlang fail to
   compile. A remote's `!` is assumed to return self in a chain, so a remote that returns
   a value misroutes the next call on Rust and Erlang. Phase 3 can check `-> self`.
-- **Chain from a call on this actor:** `bump!(1).add!(2)` is a compile error, since `@x(…)`
-  self-calls don't compile on Rust. Write separate statements.
+- **Chain from a call on this actor:** see "References and self-calls" below.
 - **Classes named with `!`:** `W!` constructs and chains, and is renamed `W__w` in the AST,
   so generated docs show that name, and a type annotation `x W!` is an error. File
   constructors are covered in the design note.
@@ -158,8 +157,7 @@ Nothing reads `effect` yet; phase 4 does.
 - **Remote constructions count as fresh:** `t = Thing()` inside a function exempts writes
   to `t` until it escapes, including for a dependency the note doesn't address.
 - **`->` slots on imported types aren't checked,** and neither are slots on a class reached
-  through a chain, or on an overloaded function. A named function passed by reference isn't
-  checked either.
+  through a chain, or on an overloaded function.
 - **Discarded reads inside a nested function aren't checked.**
 - **Published cells can't be written from inside.** `@log *Text` has no inside-write form
   (`log <- x` and `@log <- x` are both errors, also before this work), so `untracked @log`
@@ -178,3 +176,35 @@ Writing the tests exposed a phase 4 bug: `src/effects.js` looked classes up by d
 - **Discarded reads** are caught on typed params and class params, and on inherited members.
 
 Requiring `return` in nested `!` functions exposed an older bug on all targets: `return a` from a nested function, where `a` is the enclosing function's cell, failed, while `{ a }` worked. The parser now marks that field as a cell read, the JS and Erlang capture scanners read both field forms (they only looked at `f.value`, and positional fields use `f.expr`), and the Rust and Erlang nested returns prefer `f.expr` over the name.
+
+## References and self-calls (2026-11-01)
+
+- **`&name!` is the reference form,** matching `&name.`. A bare name still gets "use `&bump!`", now in `return` too. A `->` slot rejects a writer named by reference, as it does an inline one.
+- **The reported crash wasn't about `!`.** A function named `take` was parsed as the builtin `Text.take`, so the call was missing an argument. A file-level function now shadows a bare builtin, before or after its declaration. A public `@take` doesn't, so `@size = { return size(x) }` still means the builtin. A class-level function shadows only after its declaration. A bare builtin with the wrong argument count is a compile error.
+- **`@x(…)` was broken on JS as well as Rust.** Rust failed in `rustc`, and JS generated invalid code (`typeof @bump$w`). Each backend now routes `@x` as an actor function. `return @x()` and `return #x()` were parse errors and now work.
+- **`#name!` now lexes.** The earlier note claimed it; only `@name!` and `name!` did.
+- **A bare name reaches a public function on every target,** resolved once in `lowerSelfChains`. JS threw a `ReferenceError` at runtime, and a typed assign failed on Rust and Erlang.
+
+### Decision: chains from a call on this actor are allowed
+
+`bump!(1).add!(2)` and `v Integer = @add!(1).total()` are allowed, because a self-return is this actor, so the next link is a self-call. `lowerSelfChains` makes each `!` link a statement and the next member a self-call.
+
+- **The head must return self on every path,** or it's the usual "returns a value here, bind it first".
+- **Members must be public.** A private function isn't a member, so `bump!(1).hidden!()` is an error.
+- **A chain must be a statement's whole value.** Lowering moves the calls ahead of the statement, which would change the order in `x = @a!().get() + @b!().get()`, and would run a condition's calls once or unconditionally. Elsewhere it's a compile error.
+- **A function declared in a body can't start one.**
+
+### Backend bugs fixed on the way
+
+- **JS:** calling a param with a function type failed for every reference (`#selfSend` was given a closure). That branch is gone, and the general path handles both forms.
+- **JS, Erlang:** `return m` on a local cell put the cell object on the wire on JS, and an unbound variable in the output on Erlang. Rust was already right. `captureReturnedCells` now covers every function, not only nested ones.
+- **Rust, Erlang:** self-calls in a class with no private functions went to the file's actor. On Rust the same happened for any self-call with arguments. They now use the class's own dispatch.
+- **Rust:** calling a function value that returned self panicked in `.one()`.
+- **Erlang:** a reference to a function was a `fun`, which `self_send` can't take. As a value it's now the op name, like a lambda's label.
+
+### Known gaps
+
+- **`&f!` on a function declared in a body is a compile error.** It works only on JS: Rust and Erlang have no value for a local function outside the typed-assign inlining path. An unsuffixed local such as `run!(&dbl)` in statement position has the same gap: on Rust it emits an unbound name, which `rustc` rejects. Not checked at runtime on Erlang.
+- **Inline functions passed to a typed slot fail at runtime in some cases,** for example `run!((i Integer) { x <- i })` writing state on JS and Rust. Existing behaviour, not addressed here.
+- **Inheriting a class with private state is a compile error.** `D = (C |) *{}` where `C` writes its own `acc` reports "Cannot set 'acc'". Existing behaviour on a clean `HEAD`.
+

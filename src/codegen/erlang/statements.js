@@ -1480,7 +1480,8 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
     const allRequired = (decl.fields || []).every(fl => !fl.optional);
     return `bv_to_wire(${raw}, [${fieldList}], ${allRequired})`;
   };
-  if (f.name) {
+  // A returned local cell carries a read of the cell: its name isn't a variable.
+  if (f.name && f.expr?.type !== 'RefRead') {
     let raw;
     if (f.name && f.name.startsWith('$')) raw = `get(${erlStateKey(ctx, f.name.slice(1))})`;
     else if (ctx.stateVarNames.has(f.name)) raw = `get(${erlStateKey(ctx, f.name)})`;

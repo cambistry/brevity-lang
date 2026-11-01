@@ -47,7 +47,8 @@ Lineal public handler:
   replies, positional replies, and silent `name.` functions (`-> .`).
 - Silent functions cannot be used as values; use `spawn` for effect-only calls.
 - Closures can capture state and can be addressable for subscription tests.
-- `&name` passes a function reference to forms such as `over` and `reduce`.
+- `&name` passes a function reference to forms such as `over` and `reduce`. A
+  writing function keeps its suffix (`&bump!`, `&fire.`), and a `->` slot rejects it.
 
 ## LLM Rules
 

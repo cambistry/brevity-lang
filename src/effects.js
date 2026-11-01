@@ -156,16 +156,23 @@ export function checkEffects(ast, remotesParsed = {}) {
           member(node, node.property, scope);
           return;
         case 'FnRef':
-          if (node.name && isSuffixed(node.name) && !untrackedNames.has(node.name)) scope.write(`&${node.name}`);
+          if (scope.localFunctions.has(node.name) && isSuffixed(node.name)) {
+            throw new Error(`'&${node.name}' — a '${node.name.slice(-1)}' function declared in a body can't be passed by reference yet. Declare it at file level`);
+          }
+          if (refWrites(node, scope)) scope.write(`&${node.name}`);
           return;
         case 'ExprStatement':
-          scope.discard(node);
           walk(node.expr, scope);
+          scope.discard(node);
           return;
         default:
           for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v, scope);
       }
     };
+
+    // Whether the named function a `&name` refers to writes.
+    const refWrites = (node, scope) =>
+      scope.writingParams.has(node.name) || (isSuffixed(node.name) && !untrackedNames.has(node.name));
 
     const receiverRoot = (node) => {
       let cur = node;
@@ -235,15 +242,21 @@ export function checkEffects(ast, remotesParsed = {}) {
     const checkReadOnlySlots = (params, args, calleeLabel, scope) => {
       if (!params) return;
       const slot = (key) => params.find(p => (p.key || p.name) === key)?.type;
-      const positional = args.filter(a => a.type !== 'NamedArgsBag' && !(a.name && !a.positional));
+      // A member call's args are wrappers with no type of their own.
+      const isNamed = (a) => !a.type && a.name && !a.positional;
+      const positional = args.filter(a => a.type !== 'NamedArgsBag' && !isNamed(a));
       const passed = [
         ...positional.map((a, i) => [a, params[i]?.type]),
-        ...args.filter(a => a.name && !a.positional).map(a => [a, slot(a.name)]),
+        ...args.filter(isNamed).map(a => [a, slot(a.name)]),
         ...Object.entries(args.find(a => a.type === 'NamedArgsBag')?.fields || {}).map(([k, v]) => [v, slot(k)]),
       ];
       for (const [arg, type] of passed) {
         const value = arg.expr ?? arg;
-        if (value?.type !== 'Function' || functionTypeArrow(type) !== '->') continue;
+        if (functionTypeArrow(type) !== '->') continue;
+        if (value?.type === 'FnRef' && refWrites(value, scope)) {
+          throw new Error(`'${calleeLabel}' takes a read-only function here, but '&${value.name}' writes. Its param type would need '=>'`);
+        }
+        if (value?.type !== 'Function') continue;
         let why = null;
         const inner = { ...scope, locals: new Set(scope.locals), write: (w) => { why ??= w; }, discard: () => {} };
         walk(value, inner);

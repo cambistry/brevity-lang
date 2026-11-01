@@ -1775,6 +1775,8 @@ function codegenRust(ast, options = {}) {
   G.ctx.publicFnNames = new Set(mainActor0.functions.filter(f => _isPublic(f) && !f.actorDef).map(f => f.name));
   for (const a of active) {
     a.functions.filter(f => _isPublic(f) && !f.actorDef).forEach(f => G.ctx.publicFnNames.add(f.name));
+    // `@x(…)` names the function itself, so it routes as an actor function does.
+    a.functions.filter(f => f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload).forEach(f => G.ctx.actorFnNames.add(f.name));
   }
 
   // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──

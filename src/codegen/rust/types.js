@@ -139,6 +139,10 @@ impl BvObject {
             Value::Object(self.named.clone())
         }
     }
+    // A function value may be a writer that returned self, which has no value.
+    fn one_or_null(&self) -> Value {
+        if self.positional.is_empty() { Value::Null } else { self.one() }
+    }
     fn one(&self) -> Value {
         if self.positional.len() != 1 {
             panic!("requires exactly 1 positional return value, got {}", self.positional.len());

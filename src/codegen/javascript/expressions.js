@@ -807,7 +807,7 @@ export function genExpr(ctx, expr) {
         }
         return `await ${name}.create(${binding})`;
       }
-      // Self-send: private function call goes through dispatch
+      // Self-send: a call to this actor's function goes through dispatch
       if (ctx.actorFnNames.has(name)) {
         const genArg = arg => {
           if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
@@ -845,20 +845,6 @@ export function genExpr(ctx, expr) {
         }
         const vals = argExprs.map(a => wireArg(a)).join(', ');
         return `this.#send([[${vals}], ${method}], ${to})`;
-      }
-    }
-    // Check if callee is function-typed (parameter or variable) — route through self-send
-    if (expr.callee?.type === 'Identifier') {
-      const calleeName = expr.callee.name;
-      const calleeExpr = genExpr(ctx, expr.callee);
-      const calleeType = ctx.currentTypeEnv?.get(calleeName);
-      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType)));
-      if (isFnTyped) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
-        const op = expr.args.length === 0
-          ? calleeExpr
-          : `[[${expr.args.map(genArg).join(', ')}], ${calleeExpr}]`;
-        return `BvObject.pack(await this.#selfSend(${op}))`;
       }
     }
     const genArg = arg => {

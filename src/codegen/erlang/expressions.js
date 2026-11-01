@@ -629,9 +629,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'FnRef') {
-    if (ctx.actorFnNames.has(expr.name)) {
-      return `fun(Item_) -> bv_object_one(self_send(${erlString(expr.name)}, [Item_])) end`;
-    }
+    // As a value, a function reference is its op name, as a lambda's label is.
+    if (ctx.actorFnNames.has(expr.name)) return erlString(expr.name);
     if (ctx.lambdaVarNames.has(expr.name)) {
       const varRef = genExpr(ctx, { type: 'Identifier', name: expr.name }, typeEnv, sCtx);
       return `fun(Item_) -> bv_object_one(self_send(${varRef}, [Item_])) end`;
