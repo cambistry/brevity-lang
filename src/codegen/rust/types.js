@@ -697,7 +697,7 @@ function forceJsonWrap(expr, brevityType) {
 }
 
 function needsObject(actor) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
   const privateFns = actor.functions.filter(f => !_isPublic(f));
   const publicFns = actor.functions.filter(_isPublic);
   if (privateFns.length > 0) return true;

@@ -143,6 +143,8 @@ export default {
           return { alias: unescAddr(inner.slice(0, sp)), selector: unescAddr(inner.slice(sp + 1)) };
         }
         if (toStr.startsWith('@') || toStr.startsWith('#')) return { alias: null, selector: toStr };
+        const sp = toStr.indexOf(' ');
+        if (sp !== -1) return { alias: toStr.slice(0, sp), selector: toStr.slice(sp + 1) };
         return { alias: toStr, selector: null };
       };
       for (const [name, inst] of Object.entries(instances)) {
@@ -151,9 +153,18 @@ export default {
             const { alias, selector } = parseTo(msg.to);
             const target = alias;
             if (target && instances[target]) {
+              // A parent translates what its child sends: a local address gains
+              // the sender's name, and so does a sub-actor's `from`.
+              const promote = (v) => {
+                if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
+                if (Array.isArray(v)) return v.map(promote);
+                if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x)]));
+                return v;
+              };
+              const from = msg.from ? `${name} ${msg.from}` : name;
               // Deliver with `to` rewritten to bare selector (alias resolves
               // to the receiver = self, so the addr portion collapses).
-              const forwarded = selector ? { ...msg, to: selector, from: name } : { ...msg, to: undefined, from: name };
+              const forwarded = { ...promote(msg), to: selector || undefined, from };
               instances[target].instance.receive(forwarded);
             } else {
               external.push(normalizeBigInts(msg));

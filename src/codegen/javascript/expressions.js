@@ -827,6 +827,14 @@ export function genExpr(ctx, expr) {
           : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
+      // A class in another file, constructed in place.
+      if (ctx.constructorCoercions?.has(name) && ctx.depWireTargets?.some(([n]) => n === name)) {
+        const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a));
+        const bag = expr.args.find(a => a.type === 'NamedArgsBag');
+        const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(ctx, v)}`).join(', ')}}` : null;
+        const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '{}');
+        return `BvObject.pack([await this.#sendNew(${payload}, ${JSON.stringify(ctx.constructorCoercions.get(name))})])`;
+      }
       // Destructured member call → route to source service. A lambda argument
       // crosses to another actor, so it travels as a routable self-address.
       if (ctx.destructuredMembers?.has(name)) {

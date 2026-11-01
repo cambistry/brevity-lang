@@ -388,6 +388,21 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   // Destructured member call → route to source service
+  // A class in another file, constructed in place.
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
+    const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a, typeEnv, sCtx));
+    const bag = expr.args.find(a => a.type === 'NamedArgsBag');
+    const fields = bag ? `#{${Object.entries(bag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ')}}` : null;
+    const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '#{}');
+    const seq = ctx.sendCounter++;
+    return `begin
+        New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,
+        put(send_seq_, New_seq_${seq} + 1),
+        New_id_${seq} = integer_to_binary(New_seq_${seq}),
+        io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, <<"op">> => [${payload}, <<"#new">>], <<"to">> => ${erlString(ctx.constructorCoercions.get(expr.callee.name))}}), $\n]),
+        await_new_response_(New_id_${seq})
+    end`;
+  }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = ctx.destructuredMembers.get(expr.callee.name);
     const to = erlString(service);
@@ -671,6 +686,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
+    // A local holding a remote actor's address: a call in order, awaiting its reply.
+    if (dotObjName && ctx.localInstanceVars?.has(dotObjName) && !expr.method.endsWith('.')) {
+      return genDotCallAwait(ctx, expr, typeEnv, sCtx);
+    }
     // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
     if (dotObjName && sCtx?.selfSpawnedRefs?.has(dotObjName)) {
       return genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx);
@@ -740,7 +759,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     }
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
-    const to = erlString(expr.object.name);
+    const to = ctx.localInstanceVars?.has(dotObjName)
+      ? erlVarName(resolveSSAName(dotObjName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
+      : erlString(expr.object.name);
     const method = erlString('@' + expr.method);
     const v2 = erlSendVars(ctx);
     if (positional.length === 0 && named.length === 0) {

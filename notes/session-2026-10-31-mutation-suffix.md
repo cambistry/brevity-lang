@@ -92,8 +92,8 @@ backend uses that one early-return form.
 - **Value paths of different shapes:** a doc shows one, preferring the function's own level
   over a branch: `f (Boolean) -> (Text)` for `if b { return 1 }; return "x"`. Consumers
   read one return shape, so stating more needs a decision about how callers check them.
-- **Constructing a public class from another file:** `Svc.W()` is rejected for any class, so
-  a doc's constructor entry describes a name no member call reaches yet.
+- **Constructing a public class from another file:** done, see
+  [session-2026-11-01](session-2026-11-01-public-classes-across-files.md).
 - **Writing a published cell from its own actor:** `@a *Integer = 3` with `a <- a + 1` in a
   function reports "Cannot set 'a'", and `@a <- …` reports "The left side of '<-' must be a
   cell", with or without inheritance. Setting it from outside (`s.a <- 9`) works.

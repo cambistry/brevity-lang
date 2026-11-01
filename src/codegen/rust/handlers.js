@@ -282,6 +282,14 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     // (value-less) reply, distinct from silent (which suppresses the reply).
     lines.push('                re = Some(Value::Array(vec![]));');
   }
+  // new@<class>: the reply is the new actor's address, in local form.
+  if (name && name.startsWith('new@')) {
+    const selector = name.slice('new@'.length);
+    lines.push(`                let _addr = format!("@${selector}/{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
+    lines.push(`                self.published_instances.insert(_addr.clone());`);
+    lines.push(`                re = Some(Value::String(format!("#<{}>", _addr)));`);
+    lines.push(`                bva_re = Some(json!(${JSON.stringify(`#<@${selector}>`)}));`);
+  }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
   // `re` with optional `bv-a` type tag). Derived fn replay for this cell is
@@ -316,6 +324,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
+  // `#new` carries no tags: the caller checked its args against the doc.
+  if (name?.startsWith('new@')) guard = '';
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
@@ -742,7 +752,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
 }
 
 function genRustChildDispatch(actor) {
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
   const publicFns = actor.functions.filter(f => _isPublicFn(f));
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -1165,7 +1175,7 @@ function genRustChildMethods(allActors) {
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(G.ctx.actorFnNames);
-    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@'));
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@') && !f.name.startsWith('new@'));
     for (const f of allChildPrivateFns) {
       G.ctx.actorFnNames.add(f.name);
     }

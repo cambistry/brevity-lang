@@ -566,6 +566,30 @@ bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->
     bv_drain_notify_(),
     R_;
 bv_inst_call_(_, _, _) -> null.
+%% An actor made by \`#new\` has its own address, kept here so it can be reached.
+bv_publish_(Class, Pid) ->
+    N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
+    put({bv_inst_seq, Class}, N_),
+    Addr_ = <<"@", Class/binary, "/", (integer_to_binary(N_))/binary>>,
+    put({bv_instance, Addr_}, Pid),
+    <<"#<", Addr_/binary, ">">>.
+bv_instance_at_(To) when is_binary(To) ->
+    Sz_ = byte_size(To),
+    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
+    Found_ = [{T_, get({bv_instance, T_})} || T_ <- binary:split(Inner_, <<" ">>, [global]), get({bv_instance, T_}) =/= undefined],
+    case Found_ of [F_ | _] -> F_; [] -> none end;
+bv_instance_at_(_) -> none.
+bv_forward_(Pid, Addr, Op, Payload, Id, From) ->
+    Pid ! {bv_dispatch, self(), Op, Payload, Id},
+    R_ = receive {bv_reply, Id, Re_} -> {ok, Re_}; {bv_error, Id} -> error end,
+    bv_drain_notify_(),
+    Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
+    case R_ of
+        {ok, null} -> ok;
+        {ok, Pid} -> io:put_chars([json_encode(Base_#{<<"re">> => #{}, <<"bv-a">> => <<"#<", Addr/binary, ">">>}), $\n]);
+        {ok, V_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
+        error -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"error">>}}), $\n])
+    end.
 %% A subscribe carries its whole message (op args, bv-a) and its id.
 bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
     Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},

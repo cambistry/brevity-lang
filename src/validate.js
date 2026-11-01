@@ -3,6 +3,7 @@
 
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
+import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
@@ -233,20 +234,25 @@ export function validate(ast, options = {}) {
     }
   }
 
+  lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependencyNames);
+
   // ── Destructured-member index + name-collision check ────────────────────
   // After spread expansion, build the local→{service, remote} map used by
   // codegen and infer routing. A `local` name appearing in two different
   // dependencies' destructure lists is a compile error.
   // destructuredMembers: localName → { service: depName, remote: remoteName }
   const destructuredMembers = new Map();
+  const suppliers = new Map();
   for (const d of (ast.dependencies || [])) {
     if (!Array.isArray(d.destructures)) continue;
     for (const entry of d.destructures) {
       if (entry.discard || entry.spread || !entry.local) continue;
-      const existing = destructuredMembers.get(entry.local);
-      if (existing && existing.service !== d.name) {
-        throw new Error(`DI name collision: '${entry.local}' is supplied by both '${existing.service}' and '${d.name}' — alias or discard one side`);
+      const existing = suppliers.get(entry.local);
+      if (existing && existing !== d.name) {
+        throw new Error(`DI name collision: '${entry.local}' is supplied by both '${existing}' and '${d.name}' — alias or discard one side`);
       }
+      suppliers.set(entry.local, d.name);
+      if (entry.isClass) continue;
       destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
       dependencyNames.add(entry.local);
     }
@@ -818,6 +824,7 @@ export function validate(ast, options = {}) {
   checkSilentCallForm(ast, remotesParsed);
   // ── A function that writes says so in its name ────────────────────────
   checkEffects(ast, remotesParsed);
+  addConstructHandlers(ast);
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call
@@ -3288,7 +3295,7 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
   if (!declaredParams) return;
 
   // Build a single signature from the constructor params
-  const sig = { params: declaredParams.map(p => ({ name: p.key || p.name, type: p.type })) };
+  const sig = { params: declaredParams.map(p => ({ name: p.key || p.name, type: p.type, ...(p.optional && { optional: true }) })) };
 
   // Extract call args — may come from parseCallArgs (NamedArgsBag) or parseSendArgs (direct)
   const callNamed = new Map();
@@ -3340,7 +3347,7 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
     const ca = callNamed.get(sp.name);
     if (!ca) continue;
     const ct = argType(ca);
-    if (ct && sp.type && ct !== sp.type) {
+    if (ct && sp.type && !sp.type.split('|').some(t => t.trim() === ct)) {
       throw new Error(`'${name}()' constructor arg '${sp.name}': expected ${sp.type}, got ${ct}`);
     }
   }
@@ -3380,7 +3387,8 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
   if (!sigs) {
     const opNames = Object.keys(parsed).filter(k => !k.startsWith('__'));
     const typeMethods = parsed.__types?.[actorName]?.functions?.map(f => f.name) || [];
-    const available = [...opNames, ...typeMethods].join(', ') || 'none';
+    const classes = Object.keys(parsed.__types || {});
+    const available = [...opNames, ...typeMethods, ...classes].join(', ') || 'none';
     throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${available}`);
   }
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');

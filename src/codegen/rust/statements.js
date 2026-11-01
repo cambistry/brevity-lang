@@ -1512,7 +1512,10 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let mut send_msg = Map::new();`);
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
   lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "#new"]));`);
-  lines.push(`${I}    send_msg.insert("to".to_string(), json!("${targetName}"));`);
+  const toJson = s.value.viaInstance
+    ? `json!(format!("{} ${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
+    : `json!("${targetName}")`;
+  lines.push(`${I}    send_msg.insert("to".to_string(), ${toJson});`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
   lines.push(`${I}    self.await_new_response(&new_id)`);
   lines.push(`${I}};`);

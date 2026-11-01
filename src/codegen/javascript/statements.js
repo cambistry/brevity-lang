@@ -1,3 +1,4 @@
+import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
@@ -578,7 +579,10 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
     argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
   }
   ctx.localInstanceVars.add(s.name);
-  return emitBinding(s.name, `await this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)})`);
+  const toExpr = s.value.viaInstance
+    ? `${genExpr(ctx, AST.identifier(s.value.viaInstance))} + ${JSON.stringify(' ' + s.value.viaSelector)}`
+    : JSON.stringify(targetName);
+  return emitBinding(s.name, `await this.#sendNew(${argsExpr}, ${toExpr})`);
 }
 
 function genDepConstructorAsAssign(ctx, s, emitBinding) {

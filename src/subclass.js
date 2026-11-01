@@ -124,6 +124,7 @@ export function useBareClassNames(ast) {
   const seen = new Set();
   for (const a of ast.actors) {
     if (!a.name) continue;
+    if (a.name.startsWith('@')) a.isPublic = true;
     a.name = a.name.replace(/^@/, '');
     if (seen.has(a.name)) throw new Error(`Class '${a.name}' is declared more than once`);
     seen.add(a.name);

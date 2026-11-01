@@ -507,6 +507,7 @@ export function tokenize(source) {
         i++; // skip ':'
         let name = '';
         while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
+        if (source[i] === '!' && source[i + 1] !== '=') name += source[i++];
         if (source[i] === '.' && silentSuffixAt(source, i, ':' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
         tokens.push({ type: 'SIGIL', value: name });
       } else {

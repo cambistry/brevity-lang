@@ -528,6 +528,16 @@ ${subRegLines.join('\n')}
     return `${genRustFnCallExpr(rewritten, typeEnv)}.one()`;
   }
   // Destructured member call → route to source service
+  // A class in another file, constructed in place.
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
+    const wrap = (a) => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)));
+    const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(wrap);
+    const bag = expr.args.find(a => a.type === 'NamedArgsBag');
+    const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `"${k}": ${wrap(v)}`).join(', ')}}` : null;
+    const payload = positional.length ? `json!([${[...positional, ...(fields ? [fields] : [])].join(', ')}])` : `json!(${fields ?? '{}'})`;
+    G.ctx.needsAwaitNew = true;
+    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); send_msg.insert("op".to_string(), json!([${payload}, "#new"])); send_msg.insert("to".to_string(), json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
+  }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
     const to = JSON.stringify(service);

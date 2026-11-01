@@ -116,7 +116,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@');
+  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@') && !name.startsWith('new@');
   // Handler body is bare `Self` — reply with the class address as a bare wire
   // value (mirrors the #new reply shape: bare string in `re`, bare metatype
   // tag in `bv-a`). Skip the standard positional array wrapping.
@@ -124,7 +124,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     && implicitReturn.expr?.type === 'Identifier'
     && implicitReturn.expr?.name === 'Self';
   let reLine;
-  if (reply) {
+  if (name.startsWith('new@')) {
+    const selector = name.slice('new@'.length);
+    reLine = `\n        re = '#<' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _bva_re = ${JSON.stringify(`#<@${selector}>`)};`;
+  } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (isBareSelfReturn) {
     reLine = `\n        re = this.constructor.classAddress;`;
@@ -163,7 +166,8 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
   ctx.currentTypeEnv = savedTypeEnv;
-  const typeCondition = genTypeCondition(ctx, params);
+  // `#new` carries no tags: the caller checked its args against the doc.
+  const typeCondition = name.startsWith('new@') ? null : genTypeCondition(ctx, params);
   // For overloaded functions (multiple clauses with same name), add arity check
   const hasOverloads = ctx._allDispatchFns && ctx._allDispatchFns.filter(f => f.name === name).length > 1;
   let condition;
@@ -363,7 +367,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@'));
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('new@'));
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
@@ -405,7 +409,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // treated as a dep at codegen time so `t = Coerced(args)` enters the same
   // construction path as `t = Thing(args)`, but `new` is addressed to the
   // underlying dep.
-  ctx.constructorCoercions = new Map();
+  ctx.constructorCoercions = new Map(ctx.depWireTargets || []);
   for (const c of constructorCoercions) {
     const underlying = c.ref?.name || c.ref;
     ctx.constructorCoercions.set(c.name, underlying);
@@ -858,6 +862,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // its own address). Classes that never use Self as a value omit the
   // field entirely.
   const classUsesSelfAsValue = astUsesSelfAsValue(actor);
+  const publishesClasses = (actor.functions || []).some(f => f.name?.startsWith('new@'));
   const classAddressField = classUsesSelfAsValue
     ? `\n  static classAddress = ${JSON.stringify('#<' + ctx.fileName + '>')}`
     : '';
@@ -867,7 +872,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #pending = new Map()
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
-  #nextId = 0
+  #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()' : ''}
   #_remoteRoutes = null${classAddressField}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding; }
@@ -1059,7 +1064,29 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     return p;
   }
 
-  receive(message) {
+${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
+  // and we translate what it sends, as a parent does.
+  #_publishInstance(cls, inst) {
+    const n = (this.#_instanceSeq.get(cls) || 0) + 1;
+    this.#_instanceSeq.set(cls, n);
+    const addr = '@' + cls + '/' + n;
+    this.#_instances.set(addr, inst);
+    const local = (v) => {
+      if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? '#<' + addr + ' ' + c + '>' : '#<' + addr + '>'));
+      if (Array.isArray(v)) return v.map(local);
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
+      return v;
+    };
+    inst._adoptBinding({ post: (msg) => this.#binding.post({ ...local(msg), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr }) });
+    return addr;
+  }
+
+` : ''}  receive(message) {${publishesClasses ? `
+    if (typeof message.to === 'string') {
+      const _instTo = /(?:^|[\\s<])(@[A-Za-z_][A-Za-z0-9_]*!?\\/[0-9]+)(?:\\s+([^>]*))?>?$/.exec(message.to);
+      const _inst = _instTo && this.#_instances.get(_instTo[1]);
+      if (_inst) { _inst.receive({ ...message, to: _instTo[2] || undefined }); return; }
+    }` : ''}
     if (this.#_testFwd.has(message.id)) {
       const cb = this.#_testFwd.get(message.id);
       this.#_testFwd.delete(message.id);
@@ -1116,6 +1143,10 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     if (opName === '#set') opName = 'set';
     else if (opName === '#update') opName = 'update';
     else if (opName === '#new') opName = 'new';
+    if (opName === 'new' && typeof message.to === 'string') {
+      const _newSel = /@([A-Za-z_][A-Za-z0-9_]*!?)>?$/.exec(message.to.trim());
+      if (_newSel) opName = 'new@' + _newSel[1];
+    }
     if ((opName === '@subscribe' || opName === 'set') && typeof message.to === 'string') {
       if (opName === '@subscribe') opName = 'subscribe';
       const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());
@@ -1133,7 +1164,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== 'as' && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== 'as' && !opName.startsWith('new@') && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
@@ -1249,7 +1280,7 @@ export function codegen(ast, options = {}) {
     }
     return false;
   };
-  const needsPreamble = active.some(a =>
+  const needsPreamble = (ast.dependencies || []).some(d => d.wireTarget) || active.some(a =>
     a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesObject(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
     a.functions.some(f => hasNestedFunction(f.body) || hasNestedFunction(f.expr)) ||
     (a.initBody && bodyUsesObject(a.initBody)) ||
@@ -1354,6 +1385,7 @@ export function codegen(ast, options = {}) {
     return [a.name, { asClauses, initParams: mergedParams, inlineExpandable }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
   // destructuredMembers: localName → { service: depName, remote: remoteName }
   ctx.destructuredMembers = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
@@ -1370,7 +1402,7 @@ export function codegen(ast, options = {}) {
           if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
           continue;
         }
-        ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
         if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
           ctx.templateTagHost.set(entry.remote, d.name);

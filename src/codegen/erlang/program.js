@@ -490,6 +490,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     }
   }
 
+  // `#new` carries no tags: the caller checked its args against the doc.
+  if (fn.name?.startsWith('new@')) typeCheck = '';
   // Build arity check for overloads — always applied (not bypassed by From)
   let arityCheck = '';
   if (hasOverloads && params.length > 0) {
@@ -615,7 +617,12 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   );
 
   let replyBlock;
-  if (erlGuards.length > 0) {
+  if (fn.name?.startsWith('new@')) {
+    // The reply is the new actor's address, in local form.
+    const selector = fn.name.slice('new@'.length);
+    const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
+    replyBlock = `${I}{ok, bv_publish_(${erlString(selector)}, ${inst}), ${erlString(`#<@${selector}>`)}}`;
+  } else if (erlGuards.length > 0) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
     const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
 
@@ -1441,7 +1448,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // Constructor coercions: alias name → underlying dep name. Add the alias
   // to dependencyNames so `t = Coerced(args)` enters the construction path;
   // substitute the underlying dep at `new` emission.
-  ctx.constructorCoercions = new Map();
+  ctx.constructorCoercions = new Map(ctx.depWireTargets || []);
   for (const s of (actor.constructorBody || [])) {
     if (s.type === 'ServiceCoercion' && s.constructorParams) {
       const underlying = s.ref?.name || s.ref;
@@ -1828,7 +1835,8 @@ ${testTypeClauses || '                _ -> null'};
         Lst when is_list(Lst), length(Lst) > 0 -> true;
         _ -> false
     end,
-    case HasPayload andalso not maps:is_key(<<"bv-a">>, Message) of
+    IsNew = case OpName of <<"new@", _/binary>> -> true; _ -> false end,
+    case HasPayload andalso not IsNew andalso not maps:is_key(<<"bv-a">>, Message) of
         true ->
             Ex = #{OpName => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
@@ -1871,9 +1879,18 @@ ${testTypeClauses || '                _ -> null'};
                 nomatch -> OpName0_s;
                 Sel_ -> <<"set", Sel_/binary>>
             end;
+        <<"new">> ->
+            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
+                nomatch -> OpName0_s;
+                Sel_ -> <<"new", Sel_/binary>>
+            end;
         _ -> OpName0_s
     end,
-${dispatchInner}.
+    case bv_instance_at_(maps:get(<<"to">>, Message, null)) of
+        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, OpName, bv_unwire_payload(Message, Payload), Id, From);
+        none ->
+${dispatchInner}
+    end.
 
 handle_result({ok, Re, BvaRe}, Id, From, _OpName) when Re =/= null ->
     Resp0 = #{<<"id">> => Id, <<"re">> => Re, <<"to">> => From},
@@ -2275,6 +2292,7 @@ export function codegenErlang(ast, options = {}) {
   }
 
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
   ctx.destructuredMembers = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
   // factory address of whichever service the tag was destructured from. Keyed by
@@ -2289,7 +2307,7 @@ export function codegenErlang(ast, options = {}) {
           if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
           continue;
         }
-        ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
         if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
           ctx.templateTagHost.set(entry.remote, d.name);

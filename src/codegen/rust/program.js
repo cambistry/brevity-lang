@@ -20,7 +20,7 @@ import { lowerChains } from '../../chains.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
@@ -136,7 +136,7 @@ ${bvTypeFieldsArms}
   // Constructor coercions: alias name → underlying dep name. Treat the alias
   // as a dep so `t = Coerced(args)` enters the construction path; substitute
   // the underlying dep for `new` addressing.
-  G.ctx.constructorCoercions = new Map();
+  G.ctx.constructorCoercions = new Map(G.ctx.depWireTargets || []);
   for (const c of constructorCoercions) {
     const underlying = c.ref?.name || c.ref;
     G.ctx.constructorCoercions.set(c.name, underlying);
@@ -277,6 +277,11 @@ ${bvTypeFieldsArms}
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
+  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@'));
+  if (publishesClasses) {
+    structFields.push('    published_instances: std::collections::HashSet<String>');
+    newArgs.push('published_instances: std::collections::HashSet::new()');
+  }
 
   // Per-class instance pools for spawn-needing classes. Each pool keys an
   // independent state HashMap by a u32 instance id, so multiple instances of
@@ -1537,7 +1542,7 @@ ${handleOpMethod}
                     None => op_name,
                 }
             }
-            "set" => {
+            "set" | "new" => {
                 match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
                     Some(sel) => format!("{}{}", op_name, sel),
                     None => op_name,
@@ -1550,7 +1555,7 @@ ${handleOpMethod}
             Some(Value::Array(a)) => !a.is_empty(),
             _ => false,
         };
-        if has_payload && message.get("bv-a").is_none() {
+        if has_payload && !op_name.starts_with("new@") && message.get("bv-a").is_none() {
             let mut ex = Map::new();
             ex.insert(op_name.clone(), json!("schema_required"));
             let mut resp = Map::new();
@@ -1560,7 +1565,34 @@ ${handleOpMethod}
             let _ = self.binding.send(Value::Object(resp));
             return;
         }
-        let payload = raw_payload.unwrap_or(json!({}));
+        let payload = raw_payload.unwrap_or(json!({}));${publishesClasses ? `
+        // An actor made by \`#new\` has its own address.
+        if let Some(addr) = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
+            to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
+        }) {
+            let (class, inst) = addr[1..].split_once('/').unwrap_or(("", ""));
+            let class = class.trim_end_matches('!').to_lowercase();
+            let child = format!("{}/{}", class, inst);
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("to".to_string(), json!(from));
+            resp.insert("from".to_string(), json!(addr));
+            match catch_unwind(AssertUnwindSafe(|| self.child_dispatch(&child, op_name.as_str(), &payload, id, from))) {
+                Ok(Value::Null) => return,
+                Ok(v) if v == json!(child) => {
+                    resp.insert("re".to_string(), json!({}));
+                    resp.insert("bv-a".to_string(), json!(format!("#<{}>", addr)));
+                }
+                Ok(v) => { resp.insert("re".to_string(), v); }
+                Err(_) => {
+                    let mut ex = Map::new();
+                    ex.insert(op_name.clone(), json!("error"));
+                    resp.insert("ex".to_string(), Value::Object(ex));
+                }
+            }
+            let _ = self.binding.send(Value::Object(resp));
+            return;
+        }` : ''}
 ${dispatchBlock}
     }
 ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
@@ -1682,7 +1714,7 @@ function codegenRust(ast, options = {}) {
   // Self-as-value: validate() has enforced fileName when the AST uses Self
   // as a bare value. Stash it for handlers/expressions to read.
   G.ctx.fileName = options.fileName;
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
   const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
@@ -1709,6 +1741,7 @@ function codegenRust(ast, options = {}) {
     G.ctx.typeAuthority.set(info.name, info.path || '');
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
+  G.ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
   // Map dep alias -> interface (as declared in the constructor block). Used by
   // SubscribeCall to infer the target field's type so the re callback's
   // param gets a typed local, not a raw Value.
@@ -1730,7 +1763,7 @@ function codegenRust(ast, options = {}) {
           if (!G.ctx.templateSpreadHost) G.ctx.templateSpreadHost = d.name;
           continue;
         }
-        G.ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) G.ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
         G.ctx.dependencyNames.add(entry.local);
         if (entry.remote && !G.ctx.templateTagHost.has(entry.remote)) {
           G.ctx.templateTagHost.set(entry.remote, d.name);
@@ -1748,7 +1781,7 @@ function codegenRust(ast, options = {}) {
         for (const st of (actor.supertypes || [])) {
           const sup = G.ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@')))) return true;
           if (check(sup)) return true;
         }
         return false;

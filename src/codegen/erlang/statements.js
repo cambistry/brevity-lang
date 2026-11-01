@@ -214,13 +214,16 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
     argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
   }
   ctx.localInstanceVars.add(s.name);
+  const toExpr = s.value.viaInstance
+    ? `<<(${genExpr(ctx, { type: 'Identifier', name: s.value.viaInstance }, typeEnv, stmtCtx)})/binary, " ${s.value.viaSelector}"/utf8>>`
+    : erlString(targetName);
   // Emit `new` and synchronously await the reply (returning the instance addr).
   // Use a unique seq slot per call site so the var names don't collide.
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
   lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${toExpr}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }

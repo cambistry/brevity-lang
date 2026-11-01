@@ -111,6 +111,27 @@ view = *WebView(path: "/main")
 @open. = { view.open... }
 ```
 
+## Public Class From Another File
+
+A file's public class (`@W = *{ … }`) is constructed through the file, or imported by name.
+Bind it before use. A class named with `!` keeps the `!` at the call, and its type doesn't.
+
+```brevity
+*
+  "svc.bv": Svc
+  "other.bv": (:Item, :Widget!)
+*
+
+@go! = {
+  c = Svc.Counter(5)             // the shared Svc actor makes it
+  s = Svc()
+  d = s.Counter(5)               // this Svc makes it
+  i = Item()
+  w Widget = Widget!()           // counts as a write
+  return 1
+}
+```
+
 ## Type
 
 ```brevity
