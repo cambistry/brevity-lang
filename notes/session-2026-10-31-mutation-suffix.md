@@ -164,3 +164,9 @@ Nothing reads `effect` yet; phase 4 does.
 - **Published cells can't be written from inside.** `@log *Text` has no inside-write form
   (`log <- x` and `@log <- x` are both errors, also before this work), so `untracked @log`
   is only useful for writes from other actors.
+
+## Private classes in service docs (2026-11-01)
+
+A private class no longer appears in the generated service doc. A public class inheriting from one states the inherited params and members in place, since `...T` would have no entry to expand from; a public ancestor behind it stays a spread.
+
+Writing the tests exposed a phase 4 bug: `src/effects.js` looked classes up by declared name, so public classes (`@C`) were never found when called as `C`. Claims didn't spread through them, overriding a public parent's `!` was rejected, and writing a fresh public actor counted as a write. Fixed with `classesByName`.

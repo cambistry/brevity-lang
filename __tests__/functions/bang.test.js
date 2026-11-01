@@ -297,6 +297,14 @@ describe('effect enforcement', () => {
     expect(() => compileSource('a *Integer = 0\n@go = { x = over([1]) |v| { a <- v }\n return 1 }\n')).toThrow();
   });
 
+  it('a public parent is found: overriding its `!` needs no write', () => {
+    expect(() => compileSource('@P = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@U = (P |) *{ @g! = { return self } }\n')).not.toThrow();
+  });
+
+  it('a public class is found: writing a fresh actor of it is no write', () => {
+    expect(() => compileSource('@C = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@go = {\n  c = C()\n  c.g!()\n  return 1\n}\n')).not.toThrow();
+  });
+
   it('a `!` function that never writes is an error', () => {
     expect(() => compileSource('@go! = { return 1 }\n')).toThrow(/'@go!' never writes/);
   });
@@ -395,7 +403,7 @@ describe('effect enforcement', () => {
             sure () -> (n: Integer)
           }
         *
-        C = *{
+        @C = *{
           s = Svc()
           @g = {
             :n Integer = s.guess()
@@ -442,7 +450,7 @@ describe('effect enforcement', () => {
           return :n
         }
       `);
-      for (const name of ['g', 'viaField', 'viaLocal', 'viaFresh', 'viaTwoClasses', 'viaParam', 'direct']) {
+      for (const name of ['g', 'viaLocal', 'viaFresh', 'viaTwoClasses', 'viaParam', 'direct']) {
         expect(doc.service).toMatch(new RegExp(`${name} \\(.*\\) ~> `));
       }
       expect(doc.service).toMatch(/\bh \(\) -> /);

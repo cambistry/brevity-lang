@@ -1,4 +1,5 @@
 import { extract } from '../../index.js';
+import { parseInterface } from '../../src/codegen/javascript/types.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Interface render for subclass constructors
@@ -114,5 +115,48 @@ describe('subclass interface — parent render unchanged', () => {
     const tBody = s.slice(s.indexOf('T ('), s.indexOf('U ('));
     expect(tBody).toContain('a () -> (v: Integer)');
     expect(tBody).not.toContain('...');
+  });
+});
+
+describe('subclass interface — private parent', () => {
+  // A private parent has no entry for `...T` to expand from.
+  const doc = svc(`
+    @G = *{ @g = { return 1 } }
+    T = (x: Integer) *{
+      @a = { return 'text' }
+      @k = { return 1 }
+    }
+    P = (G | @p: Integer) *{ @m = { return 2 } }
+    @U = (T | y: Integer) *{
+      @a = { return 2 }
+      @b = { return 3 }
+    }
+    @V = (P | z: Integer) *{}
+
+    @go = { return 4 }
+  `);
+  const parsed = parseInterface(doc);
+
+  it('states inherited params and members in place, with no spread', () => {
+    expect(doc).toContain(
+      'U (x: Integer, y: Integer) -> *{\n    k () -> (Integer)\n    a () -> (Integer)\n    b () -> (Integer)\n  }',
+    );
+  });
+
+  it('an override replaces the inherited member', () => {
+    expect(parsed.__types.U.functions.find(f => f.name === 'a').returns[0].type).toBe('Integer');
+  });
+
+  it('keeps a public ancestor behind the private parent as a spread', () => {
+    expect(doc).toContain(
+      'V (G | p: Integer, z: Integer) -> *{\n    ...G\n    p Integer\n    m () -> (Integer)\n  }',
+    );
+  });
+
+  it('reads back with the members on the class and none on the file', () => {
+    expect(parsed.__types.U.supertypes).toEqual([]);
+    expect(parsed.__types.U.functions.map(f => f.name)).toEqual(['k', 'a', 'b']);
+    expect(parsed.go).toBeDefined();
+    expect(parsed.k).toBeUndefined();
   });
 });

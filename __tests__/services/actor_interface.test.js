@@ -161,22 +161,25 @@ describe('class interface — mixed with public functions', () => {
 // ── Private classes excluded ─────────────────────────────────────────────────
 
 describe('class interface — private classes excluded', () => {
-  // TODO: @-methods inside private classes currently leak into
-  // the service interface as top-level functions. Once that is fixed,
-  // the expectation below should drop the `get` line.
-  it('non-public class does not appear in interface', () => {
-    const { interface: iface } = extract(`
-      Helper = (n Integer) *{
-        @get = -> value: n as Integer
-      }
-      @use
-        =
-        h = Helper(5)
-        :value Integer = h.get()
-        return :value as Integer
-    `);
+  const { interface: iface } = extract(`
+    Helper = (n Integer) *{
+      @get = -> value: n as Integer
+      @use = -> value: "shadowed"
+      @count *Integer = 0
+    }
+    @Shown = *{
+      @show = -> value: 1 as Integer
+    }
+    @use
+      =
+      h = Helper(5)
+      :value Integer = h.get()
+      return :value as Integer
+  `);
+
+  it('leaves out a private class and its members, keeping public entries', () => {
     expect(iface.service).toBe(
-      '{\n  use () -> (value: Integer)\n  get () -> (value: Integer)\n}',
+      '{\n  use () -> (value: Integer)\n  Shown () -> *{\n    show () -> (value: Integer)\n  }\n}',
     );
   });
 });

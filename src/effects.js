@@ -18,8 +18,11 @@ function functionsOf(actor) {
 const isUnnamedHandler = (name) =>
   /^@\d+$/.test(name) || name === 'set' || name === 'update' || name === 'as' || name.startsWith('set@') || name.startsWith('update@') || name.startsWith('subscribe');
 
+// Calls name a class bare, while a public class is declared with its `@`.
+const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name.replace(/^@/, ''), a]));
+
 export function checkEffects(ast, remotesParsed = {}) {
-  const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  const classes = classesByName(ast);
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   const claimedByActor = purportedFunctions(ast, parseInterface);
 
@@ -359,7 +362,7 @@ export function checkEffects(ast, remotesParsed = {}) {
 // through any call in this file, per actor. A claim can't become a guarantee on the
 // way up, so this follows calls across classes until nothing changes.
 export function purportedFunctions(ast, parseDoc) {
-  const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  const classes = classesByName(ast);
   const docClaims = new Map();
   for (const d of ast.dependencies || []) {
     if (typeof d.interface !== 'string') continue;
