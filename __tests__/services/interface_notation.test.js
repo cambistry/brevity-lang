@@ -61,7 +61,7 @@ describe('service document — entry forms', () => {
 
   it('constructor with no members of its own: -> *{}', () => {
     const p = parseInterface('{ Text (Node |) -> *{} }');
-    expect(p.__types.Text).toEqual({ supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
+    expect(p.__types.Text).toEqual({ effect: 'read', supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
   });
 
   it('type declaration: ::Name (fields)', () => {

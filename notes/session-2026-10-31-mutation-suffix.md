@@ -87,11 +87,16 @@ backend uses that one early-return form.
   compile. A remote's `!` is assumed to return self in a chain, so a remote that returns
   a value misroutes the next call on Rust and Erlang. Phase 3 can check `-> self`.
 - **Chain from a call on this actor:** see "References and self-calls" below.
-- **Classes named with `!`:** `W!` constructs and chains, and is renamed `W__w` in the AST,
-  so generated docs show that name, and a type annotation `x W!` is an error. File
-  constructors are covered in the design note.
-- **Generated docs for mixed paths:** they show only the tail return, as they did for
-  value returns before.
+- **Classes named with `!`:** see "Generated docs" below. File constructors are covered in
+  the design note.
+- **Value paths of different shapes:** a doc shows one, preferring the function's own level
+  over a branch: `f (Boolean) -> (Text)` for `if b { return 1 }; return "x"`. Consumers
+  read one return shape, so stating more needs a decision about how callers check them.
+- **Constructing a public class from another file:** `Svc.W()` is rejected for any class, so
+  a doc's constructor entry describes a name no member call reaches yet.
+- **Writing a published cell from its own actor:** `@a *Integer = 3` with `a <- a + 1` in a
+  function reports "Cannot set 'a'", and `@a <- …` reports "The left side of '<-' must be a
+  cell", with or without inheritance. Setting it from outside (`s.a <- 9`) works.
 
 ## Tests
 
@@ -208,3 +213,81 @@ Requiring `return` in nested `!` functions exposed an older bug on all targets: 
 - **Inline functions passed to a typed slot fail at runtime in some cases,** for example `run!((i Integer) { x <- i })` writing state on JS and Rust. Existing behaviour, not addressed here.
 - **Inheriting a class with private state is a compile error.** `D = (C |) *{}` where `C` writes its own `acc` reports "Cannot set 'acc'". Existing behaviour on a clean `HEAD`.
 
+## Generated docs
+
+### Classes named with `!`
+
+`@W!` documents as `W! () => *{ … }`, and `parseInterface` keeps the literal name:
+`__types['W!']`, with `effect: 'write'`. Every constructor record now has `effect`, and a
+supertype in a doc can carry `!`.
+
+The class's identifier is `W`, not `W__w`, and `sourceName` on the actor and the supertype
+keeps the `!`. So `x W` and `List of W` resolve to the class and are checked, and errors say
+`W`. That also repairs `S! = (W! |)`, which inherited nothing before, since the supertype
+wasn't renamed along with the class.
+
+- **`W()` on a class named `W!` is an error,** where it used to compile.
+- **`W` and `W!` can't both be declared,** since different effects need different names.
+- **`(W |)` on a class named `W!` is an error:** write `(W! |)`.
+- **A subclass of a writing constructor must be `!`,** whether the parent is in this file or
+  in a doc that says `=>`. This enforces the inheritance rule in the design note. A
+  grandparent counts through its child, which must itself be `!`.
+
+### Decision: `x W!` stays an error
+
+Write `x W = W!()`. The `!` says that this construction writes, which is a fact about the
+call. The actor it produces has the type `W`.
+
+### Decision: a doc states both outcomes as `(Type) | self`
+
+```
+go! (Boolean) => (Integer) | self
+```
+
+- **Why `|`:** it's the existing union form, and the design note already calls this a union.
+  Overloads stay on separate lines, since they differ by params and this doesn't.
+- **`self` goes last,** whichever path comes first in the source. `self | (Integer)` is an
+  error with that fix in it, so a doc has one spelling.
+- **Function types take it too:** `f () => (Integer) | self`.
+- **Parsed shape:** `returnsSelf: true` with a non-null `returns`. `returnsSelf` with
+  `returns: null` is plain `=> self`.
+- **All paths count:** docs walk the function's own returns, not nested functions'. That also
+  fixes `=> ()` for a function that returned only from branches.
+
+### Decision: nothing chains on a mixed return
+
+A caller can't know statically which outcome it gets, so a chain could land on a value.
+Locally this was already the compile error "returns a value here, so nothing can be chained
+on it — bind it first". The same error now covers a remote whose doc states `(Type) | self`.
+A remote doc with only `=> (Type)` still isn't checked, because the value may be an actor.
+
+## Public classes and inheritance
+
+Writing tests for the docs work exposed two older bugs, on every target.
+
+### Public classes are constructed by their bare name
+
+`@Pub = *{…}` beside `Pub()` generated invalid output (`class @Pub`), since codegen stored the
+class with its `@` and looked it up without one. The `@` says the class is public, which only
+docs need. `useBareClassNames` in `src/subclass.js` strips it in place at the top of `compile()`, for
+validation and codegen, in both `index.js` and the browser target. So `p.nope()` on a public
+class is now checked, a public class can be a superclass, and declaring `Pub` and `@Pub` together
+is an error.
+
+### Subclasses inherit state and run the parent's constructor body
+
+A subclass used to inherit methods but no state, so an inherited method that wrote the parent's
+cell failed to compile. `resolveSuperclassChain` now returns `inheritedState` and `inheritedInit`,
+and `withInheritedState` merges them where each target already merged ingest state.
+
+The two can't be separated, because a cell's initial value is a statement in the constructor body.
+
+- **Each subclass actor has its own copy.**
+- **Ancestors' bodies run first,** nearest last. A subclass's initial value can read the parent's.
+- **A redeclared name hides the inherited one.** The nearest class's initial value is the only
+  one kept, so an overridden initializer doesn't run at all, including any calls in it.
+- **Args:** params are already flattened by name, so a parent's body sees the subclass's args.
+- **Excluded:** a wrapped superclass (`*name`) is its own actor with its own state, and an `ingest`
+  slot is filled by the subclass's tail. Running the parent's `label Text = ingest` would
+  overwrite that value.
+- **Writes count:** a parent body that writes makes the parent `!`, which the subclass must carry.

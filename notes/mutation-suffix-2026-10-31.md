@@ -302,6 +302,7 @@ The arrow states the effect, and the name is never interpreted:
 | `() ~> ()` | Purported read-only: treated as a read, but not guaranteed |
 | `() => ()` | Writes, returns a value |
 | `() => self` | Writes, returns self |
+| `() => (Integer) \| self` | Writes, returns a value or self depending on the path; can't be chained on |
 | `() => .` | Writes, silent |
 | `() -> .`, `() ~> .`, `() ~> self` | Errors: nothing to read. A fluent method whose effect is in doubt is `=> self` |
 
@@ -399,6 +400,10 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
 ## Settled decisions
 
 - **`emit` counts as a write, `.subscribe` doesn't.**
+- **Mixed return paths in docs:** `=> (Type) | self`, and nothing chains on one. See "Generated
+  docs" in [the session note](session-2026-10-31-mutation-suffix.md).
+- **A class named with `!`:** its doc entry is `W! () => *{ … }`, and its actors are annotated
+  `x W`; `x W!` is an error.
 - **File constructors:** `"widget.bv": Widget! (a: Integer) => *{ … }`. `=>` is the fact
   and `!` on the local alias shows it at the call site. They must agree. One that
   doesn't write is `Widget (a: Integer) -> *{ … }`.

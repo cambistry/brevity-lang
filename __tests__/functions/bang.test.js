@@ -1426,6 +1426,28 @@ describe('chained calls', () => {
       return v
     }
 
+    @bangClassAnnotated! = {
+      w W = W!()
+      w.add!(3)
+      v Integer = w.get()
+      return v
+    }
+
+    Base! = *{
+      @one = { return 1 }
+    }
+
+    S! = (Base! |) *{
+      @more = { return 10 }
+    }
+
+    @bangSuper! = {
+      s = S!()
+      a Integer = s.one()
+      b Integer = s.more()
+      return a + b
+    }
+
     @selfCallInChild = {
       v Integer = C().twice!(2).total()
       return v
@@ -1505,6 +1527,20 @@ describe('chained calls', () => {
     );
   });
 
+  it('an actor of a class named with `!` is annotated without the `!`', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@bangClassAnnotated!', from: 'c' } },
+      { output: { id: '1', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a subclass inherits from a class named with `!`', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@bangSuper!', from: 'c' } },
+      { output: { id: '1', re: [11], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
   it('a class named with `!` is constructed and chains on the new actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bangClass!', from: 'c' } },
@@ -1559,6 +1595,25 @@ describe('chained calls through a remote', () => {
       { output: expect.objectContaining({ op: '@total', to: '#<Thing/9>' }) },
       { input: { id: '3', re: { value: 7 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 7 }, to: 'caller' }) },
+    );
+  });
+});
+
+describe('a public class named with `!`', () => {
+  it('is constructed by that name in its own file', async () => {
+    await expectBehavior(`
+      @Pub! = *{
+        @one = { return 5 }
+      }
+
+      @go! = {
+        p = Pub!()
+        n Integer = p.one()
+        return n
+      }
+    `,
+      { input: { id: '1', op: '@go!', from: 'c' } },
+      { output: { id: '1', re: [5], 'bv-a': ['Integer'], to: 'c' } },
     );
   });
 });

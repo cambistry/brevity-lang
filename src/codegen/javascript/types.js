@@ -139,7 +139,7 @@ function splitTopLevel(str, sep) {
 // Disambiguates `(T | own)` (supertype divider) from `(id: Text | null)`
 // (nullable union inside a single param). The supertype form requires that
 // the LHS of `|` is an identifier-list (optionally with `*alias` markers).
-const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
+const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*!?(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*!?(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
 function trySplitSupertypePipe(inner) {
   let depth = 0;
   for (let i = 0; i < inner.length; i++) {
@@ -234,7 +234,7 @@ function parseSignature(name, text) {
     if (rest.slice(bEnd).trim()) {
       throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${rest.slice(bEnd).trim()}'`);
     }
-    return { kind: 'constructor', paramsInner, bodyInner: rest.slice(2, bEnd - 1) };
+    return { kind: 'constructor', effect, paramsInner, bodyInner: rest.slice(2, bEnd - 1) };
   }
   const params = paramsInner ? parseFieldList(paramsInner) : [];
   // A trailing `.` on the name means silent. A foreign function can be silent
@@ -252,8 +252,14 @@ function parseSignature(name, text) {
     return { kind: 'function', params, returns: null, returnsSelf: true, effect };
   }
   if (rest === '(self)') throw new Error(`Interface entry '${name}': a self-return takes no parens — write '=> self'`);
+  if (/^self\s*\|/.test(rest)) throw new Error(`Interface entry '${name}': 'self' goes last — write '=> (Type) | self'`);
   if (rest.startsWith('(')) {
     const rEnd = groupEnd(rest, 0);
+    // `(Type) | self`: some paths yield a value and others the receiver.
+    if (rEnd !== -1 && /^\|\s*self$/.test(rest.slice(rEnd).trim())) {
+      const inner = rest.slice(1, rEnd - 1).trim();
+      return { kind: 'function', params, returns: inner ? parseFieldList(inner) : [], returnsSelf: true, effect };
+    }
     if (rEnd !== rest.length) {
       const extra = rEnd === -1 ? rest : rest.slice(rEnd).trim();
       throw new Error(
@@ -293,7 +299,7 @@ function parseConstructor(name, paramsInner, bodyInner) {
   const setters = [];
   for (const e of parseEntries(bodyInner)) {
     if (e.kind === 'function') {
-      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns });
+      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}) });
     } else if (e.kind === 'field') {
       // A field reads as a zero-arg getter; a ref cell is also settable.
       functions.push({ name: e.name, params: [], returns: [{ name: null, type: e.type, positional: true }] });
@@ -341,9 +347,9 @@ function parseEntry(text) {
   if (rest.startsWith('(')) {
     const sig = parseSignature(name, rest);
     if (sig.kind === 'constructor') {
-      return { kind: 'constructor', name, ...parseConstructor(name, sig.paramsInner, sig.bodyInner) };
+      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, sig.paramsInner, sig.bodyInner) };
     }
-    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.silent ? { silent: true } : {}) };
+    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.silent ? { silent: true } : {}) };
   }
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
   const readOnly = !rest.startsWith('*');
@@ -367,8 +373,10 @@ function parseEntries(body) {
 export function parseInterface(manifestStr) {
   // Result shape:
   //   result[name]               — function overloads `[{ params, returns }]`;
-  //                                a field contributes a zero-arg getter
-  //   result.__types[Name]       — constructors `{ supertypes, initParams, functions, setters }`
+  //                                a field contributes a zero-arg getter.
+  //                                `returnsSelf` alone is `=> self`; with a non-null
+  //                                `returns` it's `=> (Type) | self`
+  //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`
   //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
   //   result.__fields[name]      — `{ type, readOnly }` for `name Type` / `name *Type`
   //   result.__setters           — `[{ name, type }]` for top-level `set name (Type)`
@@ -382,11 +390,11 @@ export function parseInterface(manifestStr) {
     } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
       if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
-      const { supertypes, initParams, functions, setters } = e;
-      result.__types[e.name] = { supertypes, initParams, functions, setters };
+      const { effect, supertypes, initParams, functions, setters } = e;
+      result.__types[e.name] = { effect, supertypes, initParams, functions, setters };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
-      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.silent ? { silent: true } : {}) });
+      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.silent ? { silent: true } : {}) });
     } else if (e.kind === 'field') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: [], returns: [{ name: null, type: e.type, positional: true }] });

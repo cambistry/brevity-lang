@@ -6,7 +6,7 @@ import {
 } from './types.js';
 import { intFromValue } from './int_repr.js';
 import { inferExprType } from '../../inference.js';
-import { resolveSuperclassChain } from '../../subclass.js';
+import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
   genRustCondition, isRustGuardIf,
@@ -1037,7 +1037,7 @@ function genRustChildMethods(allActors) {
   const parts = [];
   for (const actor of childActors) {
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1084,6 +1084,8 @@ function genRustChildMethods(allActors) {
       _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
     };
+
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
 
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {

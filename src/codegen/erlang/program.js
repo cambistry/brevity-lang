@@ -1,7 +1,7 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import * as AST from '../../ast.js';
-import { resolveSuperclassChain } from '../../subclass.js';
+import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
@@ -1052,7 +1052,7 @@ function genChildActorCode(ctx, actors) {
     if (!actor) continue;
 
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1137,6 +1137,8 @@ function genChildActorCode(ctx, actors) {
       _inheritedIngests: inheritedIngests,
       _paramSubscriptions: paramSubInfo,
     };
+
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
 
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {

@@ -3,6 +3,7 @@ import { parseInterface } from './src/codegen/javascript/types.js';
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
+import { useBareClassNames } from './src/subclass.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
 import { inferExprType } from './src/inference.js';
 
@@ -90,44 +91,81 @@ function formatReplyField(field, index, aliasMap, typeEnv) {
   return `arg${index + 1}: ${resolved}`;
 }
 
-function buildExtractTypeEnv(params, body) {
-  const env = new Map();
+function buildExtractTypeEnv(params, body, outer = null) {
+  const env = new Map(outer ?? []);
   for (const p of params || []) {
     if (p.rest) continue;
     if (p.name && p.type) env.set(p.name, p.type);
   }
   for (const s of body || []) {
-    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
+    if (s?.type === 'TypedAssign' || s?.type === 'BareTypeDecl') {
       env.set(s.name, s.typeName);
-    } else if (s.type === 'Assign') {
+    } else if (s?.type === 'Assign') {
       const t = inferExprType(s.value, env);
       if (t) env.set(s.name, t);
-    } else if (s.type === 'RefDecl' && s.typeName) {
+    } else if (s?.type === 'RefDecl' && s.typeName) {
       env.set(s.name, s.typeName);
     }
   }
   return env;
 }
 
-function formatPublicFnSig(fn, aliasMap, purported = null) {
-  const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
-  const reply = fn.body.find(stmt => stmt.type === 'Reply');
-  // Bodies are checked by the compiler, so a generated arrow states the fact.
-  const arrow = fn.name.endsWith('!') ? '=>' : (purported?.has(fn.name) ? '~>' : '->');
-  if (reply?.fields[0]?.selfReturn) return `(${input}) ${arrow} self`;
-  if (reply) {
-    const typeEnv = buildExtractTypeEnv(fn.params, fn.body);
-    const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap, typeEnv)).join(', ');
-    return `(${input}) ${arrow} (${output})`;
-  }
-  const isSilent = fn.body.some(stmt => stmt.type === 'SilentTerminator');
-  if (isSilent) return `(${input}) => .`;
-  return `(${input}) ${arrow} ()`;
+// Every return on the function's own paths, with the locals in scope at each.
+function returnPaths(fn) {
+  const paths = [];
+  const walk = (node, env) => {
+    if (!node || typeof node !== 'object' || node.type === 'Function') return;
+    if (Array.isArray(node)) {
+      const scope = buildExtractTypeEnv(null, node, env);
+      node.forEach(n => walk(n, scope));
+      return;
+    }
+    if (node.type === 'Reply' || node.type === 'Return') {
+      paths.push({ node, env });
+      return;
+    }
+    for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v, env);
+  };
+  const root = buildExtractTypeEnv(fn.params, null);
+  walk(fn.body, root);
+  // A tail `if` returns the value each of its branches ends in.
+  const tailIf = (branch, env) => {
+    if (branch?.type === 'IfExpr') {
+      tailIf(branch.then, env);
+      tailIf(branch.else, env);
+      return;
+    }
+    const scope = buildExtractTypeEnv(null, branch?.body, env);
+    const last = branch?.body?.at(-1);
+    if (last?.type !== 'ImplicitReturn') return;
+    if (last.expr?.type === 'IfExpr') tailIf(last.expr, scope);
+    else paths.push({ node: { fields: [{ positional: true, expr: last.expr, type: last.typeName }] }, env: scope });
+  };
+  const tail = fn.body.at(-1);
+  if (tail?.type === 'ImplicitReturn' && tail.expr?.type === 'IfExpr') tailIf(tail.expr, root);
+  return paths;
 }
 
-function formatConstructorSig(actor, aliasMap, purported = null) {
+function formatPublicFnSig(fn, aliasMap, purported = null) {
+  const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
+  // Bodies are checked by the compiler, so a generated arrow states the fact.
+  const arrow = fn.name.endsWith('!') ? '=>' : (purported?.has(fn.name) ? '~>' : '->');
+  if (fn.body.some(stmt => stmt.type === 'SilentTerminator')) return `(${input}) => .`;
+  const paths = returnPaths(fn);
+  const values = paths.filter(p => !p.node.fields?.[0]?.selfReturn);
+  const orSelf = values.length < paths.length;
+  // Value paths that differ in shape still show one, preferring the function's own level.
+  const value = values.find(p => fn.body.includes(p.node)) ?? values[0];
+  if (value) {
+    const output = (value.node.fields ?? []).map((f, i) => formatReplyField(f, i, aliasMap, value.env)).join(', ');
+    return `(${input}) ${arrow} (${output})${orSelf ? ' | self' : ''}`;
+  }
+  return orSelf ? `(${input}) ${arrow} self` : `(${input}) ${arrow} ()`;
+}
+
+function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->') {
   const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
-  const supertypes = (actor.supertypes || []).map(st => st.supertype);
+  const supertypes = (actor.supertypes || []).map(st => st.sourceName ?? st.supertype);
   // Input: when subtyping, prefix with `Parent1, Parent2 | ` and keep only the
   // subtype's own params on the right of the pipe (inherited params are implied
   // by the spread `...Parent` on the body side).
@@ -147,8 +185,8 @@ function formatConstructorSig(actor, aliasMap, purported = null) {
   // before; the spread makes additions vs. replacements explicit.
   const spreadLines = supertypes.map(s => `    ...${s}`);
   const bodyLines = [...spreadLines, ...fieldLines, ...methodLines];
-  if (bodyLines.length === 0) return `(${input}) -> *{}`;
-  return `(${input}) -> *{\n${bodyLines.join('\n')}\n  }`;
+  if (bodyLines.length === 0) return `(${input}) ${arrow} *{}`;
+  return `(${input}) ${arrow} *{\n${bodyLines.join('\n')}\n  }`;
 }
 
 const untrackedPrefix = (actor, name) =>
@@ -281,9 +319,9 @@ function buildServiceDocument(ast) {
   for (const actor of ast.actors) {
     // Public constructor: actor with @-prefixed name
     if (actor.name && actor.name.startsWith('@')) {
-      const name = actor.name.replace(/^@/, '');
+      const name = (actor.sourceName ?? actor.name).replace(/^@/, '');
       const flat = withPrivateSupers(actor, privateClasses, purportedByActor);
-      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported)}`);
+      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->')}`);
       continue;
     }
     // A private class isn't part of the file's surface.
@@ -757,6 +795,7 @@ export function extract(source) {
 }
 
 export function compile(ast, options = {}) {
+  useBareClassNames(ast);
   validate(ast, options);
   const name = options.target || process.env.BREVITY_TARGET || 'js';
   const target = getTarget(name);

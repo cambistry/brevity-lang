@@ -27,7 +27,7 @@ export function buildActorMap(ast) {
 export function resolveSuperclassChain(actorByName, actor) {
   const supertypes = actor.supertypes || [];
   if (supertypes.length === 0) {
-    return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [], inheritedSetters: [] };
+    return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [], inheritedSetters: [], inheritedState: [], inheritedInit: [] };
   }
 
   const inheritedParams = [];
@@ -35,6 +35,8 @@ export function resolveSuperclassChain(actorByName, actor) {
   const wrappedBindings = [];
   const inheritedIngests = [];
   const inheritedSetters = [];
+  const inheritedState = [];
+  const inheritedInit = [];
 
   for (const st of supertypes) {
     const superActor = actorByName?.get(st.supertype);
@@ -64,6 +66,17 @@ export function resolveSuperclassChain(actorByName, actor) {
       wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
     }
 
+    // A wrapped superclass is its own actor, which keeps its own state.
+    if (!st.wrappedAs) {
+      for (const sv of [...parentChain.inheritedState, ...(superActor.stateVarDecls || []).filter(v => !v.ingest)]) {
+        const idx = inheritedState.findIndex(es => es.name === sv.name);
+        if (idx >= 0) inheritedState[idx] = sv;
+        else inheritedState.push(sv);
+      }
+      // An ingest slot is filled by the subclass's own tail.
+      inheritedInit.push(...parentChain.inheritedInit, ...(superActor.initBody || []).filter(s => s.value?.type !== 'IngestExpr'));
+    }
+
     for (const sv of (superActor.stateVarDecls || [])) {
       if (sv.ingest) {
         inheritedIngests.push({ name: sv.name, typeName: sv.typeName, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
@@ -82,5 +95,37 @@ export function resolveSuperclassChain(actorByName, actor) {
     }
   }
 
-  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedSetters };
+  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedSetters, inheritedState, inheritedInit };
+}
+
+// A subclass actor has its own copy of the state its inherited methods use, and runs
+// its ancestors' constructor bodies before its own. A name it declares itself hides the
+// inherited one.
+export function withInheritedState(actor, { inheritedState, inheritedInit }) {
+  const own = actor.stateVarDecls || [];
+  const ownNames = new Set(own.map(v => v.name));
+  const stateVarDecls = [...inheritedState.filter(v => !ownNames.has(v.name)), ...own];
+  const stateNames = new Set(stateVarDecls.map(v => v.name));
+  // The nearest class's initial value for a name is its only one.
+  const seen = new Set();
+  const initBody = [...inheritedInit, ...(actor.initBody || [])].reverse().filter((s) => {
+    if (!stateNames.has(s.name)) return true;
+    if (seen.has(s.name)) return false;
+    seen.add(s.name);
+    return true;
+  }).reverse();
+  return { stateVarDecls, initBody };
+}
+
+// The `@` on a class says it's public, which matters to docs. Calls and supertypes name
+// it bare, as generated code does.
+// Validation writes to the AST and callers read it afterward, so this renames in place.
+export function useBareClassNames(ast) {
+  const seen = new Set();
+  for (const a of ast.actors) {
+    if (!a.name) continue;
+    a.name = a.name.replace(/^@/, '');
+    if (seen.has(a.name)) throw new Error(`Class '${a.name}' is declared more than once`);
+    seen.add(a.name);
+  }
 }

@@ -15,7 +15,7 @@ import {
   genRustDispatch,
   genRustChildMethods,
 } from './handlers.js';
-import { resolveSuperclassChain } from '../../subclass.js';
+import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { genRustLocals } from './statements.js';
 
@@ -1819,8 +1819,8 @@ function codegenRust(ast, options = {}) {
   // Pre-merge superclass inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(G.ctx.actorNodes, a);
-    if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0) continue;
+    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, a);
+    if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0 && inheritedState.length === 0 && inheritedInit.length === 0) continue;
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
@@ -1847,6 +1847,7 @@ function codegenRust(ast, options = {}) {
       _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
     };
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {
       const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));

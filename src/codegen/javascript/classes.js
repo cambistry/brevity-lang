@@ -1,5 +1,5 @@
 import * as AST from '../../ast.js';
-import { resolveSuperclassChain } from '../../subclass.js';
+import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
@@ -300,7 +300,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
 
   // ── Resolve superclass inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests } = resolveSuperclassChain(ctx.actorNodes, actor);
+  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
   // Merge inherited params (prepend) — skip any that the subclass redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -335,6 +335,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     initParams: mergedParams,
     functions: mergedFunctions,
   };
+
+  Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
 
   // Merge inherited ingest state var decls into the subclass
   if (inheritedIngests.length > 0) {

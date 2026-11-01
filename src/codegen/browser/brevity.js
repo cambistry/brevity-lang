@@ -15,6 +15,7 @@
 import { tokenize } from '../../lexer.js';
 import { parse } from '../../parser.js';
 import { validate } from '../../validate.js';
+import { useBareClassNames } from '../../subclass.js';
 import { codegen as jsCodegen } from '../javascript/classes.js';
 import { start } from './runtime.js';
 
@@ -384,6 +385,7 @@ export function extract(source) {
 }
 
 export function compile(ast, options = {}) {
+  useBareClassNames(ast);
   validate(ast, options);
   return jsCodegen(ast, options);
 }

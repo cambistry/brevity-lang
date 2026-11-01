@@ -583,6 +583,12 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
+    // `=> (Integer) | self`: some paths yield a value and others the receiver.
+    if (peek().type === 'PIPE' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1].value === 'self') {
+      consume();
+      consume();
+      return { ...AST.functionType(inputs, outputs), orSelf: true, arrow };
+    }
     return { ...AST.functionType(inputs, outputs), arrow };
   }
 
@@ -594,7 +600,7 @@ export function parse(tokensIn) {
     const arrow = functionType.arrow ?? '->';
     if (functionType.silent) return `(${fmtSide(functionType.inputs)}) => .`;
     if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) ${arrow} self`;
-    return `(${fmtSide(functionType.inputs)}) ${arrow} (${fmtSide(functionType.outputs)})`;
+    return `(${fmtSide(functionType.inputs)}) ${arrow} (${fmtSide(functionType.outputs)})${functionType.orSelf ? ' | self' : ''}`;
   }
 
   function getFunctionLiteralSignature(fnNode) {
@@ -5639,15 +5645,33 @@ export function parse(tokensIn) {
   // no tail return, falling off the end returns self, `return v` returns v. See
   // notes/mutation-suffix-2026-10-31.md.
   function settleBangDecls(program) {
-    // A class named with `!` (`W!`) constructs by that name. Backends need an
-    // identifier, so the name becomes a plain one; nothing else depends on the `!`.
-    const bangClasses = new Set(program.actors.map(a => a.name).filter(n => n?.endsWith('!')));
+    // A class named with `!` (`W!`) is constructed by that name, and its actors have the
+    // type `W`. So the class's identifier is `W`, and `sourceName` keeps the `!` for docs
+    // and effects.
+    const bangClasses = new Set(program.actors.map(a => a.name?.replace(/^@/, '')).filter(n => n?.endsWith('!')));
     if (bangClasses.size > 0) {
-      const plain = (name) => `${name.slice(0, -1)}__w`;
+      const plain = (name) => name.slice(0, -1);
+      for (const a of program.actors) {
+        const bare = a.name?.replace(/^@/, '');
+        if (bare && bangClasses.has(`${bare}!`)) throw new Error(`'${bare}' and '${bare}!' are both declared — different effects need different names`);
+      }
       const rename = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { node.forEach(rename); return; }
-        if (node.type === 'Actor' && bangClasses.has(node.name)) node.name = plain(node.name);
+        if (node.type === 'Actor' && bangClasses.has(node.name?.replace(/^@/, ''))) {
+          node.sourceName = node.name;
+          node.name = plain(node.name);
+        }
+        for (const st of node.type === 'Actor' ? node.supertypes || [] : []) {
+          if (bangClasses.has(`${st.supertype}!`)) throw new Error(`'${st.supertype}' is named '${st.supertype}!'`);
+          if (bangClasses.has(st.supertype)) {
+            st.sourceName = st.supertype;
+            st.supertype = plain(st.supertype);
+          }
+        }
+        if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && bangClasses.has(`${node.callee.name}!`)) {
+          throw new Error(`'${node.callee.name}' writes while constructing, so call it '${node.callee.name}!'`);
+        }
         if (node.type === 'Identifier' && bangClasses.has(node.name)) node.name = plain(node.name);
         for (const v of Object.values(node)) if (v && typeof v === 'object') rename(v);
       };

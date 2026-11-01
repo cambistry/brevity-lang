@@ -199,7 +199,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       }
       if (!name) { walk(node.callee, scope); return; }
       if (classes.has(name)) {
-        if (name.endsWith('__w')) scope.write(`${name}(…)`);
+        if (classes.get(name).sourceName) scope.write(`${name}!(…)`);
         return;
       }
       if (emits.has(name)) { scope.write(`${name}(…)`); return; }
@@ -264,7 +264,20 @@ export function checkEffects(ast, remotesParsed = {}) {
       }
     };
 
+    // A doc's `=> (Type) | self` may yield a value, so nothing can be chained on it.
+    const checkRemoteChain = (node, scope) => {
+      const held = node.object;
+      const method = held?.type === 'DotCallExpr' ? held.method : held?.type === 'DotAccessExpr' ? held.property : null;
+      if (!method) return;
+      const root = receiverRoot(held);
+      const alias = root?.type === 'Identifier' || root?.type === 'RefRead' ? depAliasFor(root.name, scope) : null;
+      if (alias && docSignatures(alias, method)?.some(s => s.returnsSelf && s.returns)) {
+        throw new Error(`'${method}' returns a value here, so nothing can be chained on it — bind it first`);
+      }
+    };
+
     const member = (node, name, scope) => {
+      checkRemoteChain(node, scope);
       walk(node.object, scope);
       checkReadOnlySlots(methodParams(node.object, name, scope), node.args || [], name, scope);
       for (const a of node.args || []) {
@@ -430,7 +443,12 @@ export function checkEffects(ast, remotesParsed = {}) {
       for (const n of ownCalls) untrackedNames.add(n);
       walk(actor.initBody, scope);
       if (untrackedNames.size !== saved) for (const n of ownCalls) if (!functions.some(f => f.untracked && f.name.replace(/^@/, '') === n)) untrackedNames.delete(n);
-      if (why && !actor.name.endsWith('__w')) {
+      if (!actor.sourceName) {
+        const parent = (actor.supertypes || []).find(st => classes.get(st.supertype)?.sourceName
+          || Object.values(remotesParsed).some(doc => doc?.__types?.[st.supertype]?.effect === 'write'));
+        if (parent) throw new Error(`Class '${actor.name.replace(/^@/, '')}' inherits from '${parent.sourceName ?? parent.supertype}', which writes while constructing, so it must be named '${actor.name.replace(/^@/, '')}!'`);
+      }
+      if (why && !actor.sourceName) {
         throw new Error(`Class '${actor.name}' writes (${why}) while constructing, so it must be named '${actor.name}!'`);
       }
     }
