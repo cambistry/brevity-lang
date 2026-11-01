@@ -1299,7 +1299,7 @@ describe('HTML element runtime — service side', () => {
     const { el } = await makeAttached(page, 'div');
     await expectBehavior(el,
       { input: { id: 's', op: [['data-x', 'one'], '@set_attribute!'] } },
-      { output: expect.objectContaining({ re: {}, 'bv-a': 'self' }) },
+      { output: expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }) },
     );
     const value = await page.evaluate(() => document.querySelector('div').getAttribute('data-x'));
     expect(value).toBe('one');
@@ -1309,7 +1309,7 @@ describe('HTML element runtime — service side', () => {
     const page = await loadPage(html);
     const { el } = await makeAttached(page, 'div', { id: 'wrap' });
     await el.sendAsync({ id: 'r', op: [['id'], '@remove_attribute!'] });
-    expect(el.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    expect(el.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
     const has = await page.evaluate(() => document.querySelector('div').hasAttribute('id'));
     expect(has).toBe(false);
   });
@@ -1340,7 +1340,7 @@ describe('HTML element runtime — service side', () => {
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('<b>hi</b>');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
   });
 
   it('set text_content via `<-` writes textContent (escapes HTML)', async () => {
@@ -1357,7 +1357,7 @@ describe('HTML element runtime — service side', () => {
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('&lt;b&gt;raw&lt;/b&gt;');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
   });
 
   it('set on a void tag\'s content field is silently ignored (no DOM write, no reply)', async () => {
@@ -1771,7 +1771,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
 
       // Verify the DOM took the write.
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
@@ -1810,7 +1810,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
 
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('after');
@@ -1839,7 +1839,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('');
     });
@@ -2130,14 +2130,14 @@ describe('HTML element runtime — service side', () => {
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       const t = await page.evaluate(() => document.querySelector('div').scrollTop);
       expect(t).toBe(100);
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
     });
 
     it('scroll_to! moves scroll position; scroll_top reads it back', async () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'sto', op: [{ top: 80, left: 50 }, '@scroll_to!'] });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       await el.sendAsync({ id: 'st', op: '@scroll_top' });
       await el.sendAsync({ id: 'sl', op: '@scroll_left' });
       expect(el.posts[el.posts.length - 2].re).toBe(80);
@@ -2167,7 +2167,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'siv', op: '@scroll_into_view!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
     });
 
     it('focus! focuses a tabbable element; activeElement matches', async () => {
@@ -2182,7 +2182,7 @@ describe('HTML element runtime — service side', () => {
       await body.sendAsync({ id: 'a', op: [inputAddr, '@append!'] });
       const input = await page.connectActor(inputAddr.slice(2, -1));
       await input.sendAsync({ id: 'f', op: '@focus!' });
-      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const isFocused = await page.evaluate(() => document.activeElement === document.querySelector('input'));
       expect(isFocused).toBe(true);
     });
@@ -2275,7 +2275,7 @@ describe('HTML element runtime — service side', () => {
       const before = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(before).toBe(2);
       await el.sendAsync({ id: 'norm', op: '@normalize!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const after = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(after).toBe(1);
     });
@@ -2296,7 +2296,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
     });
   });
 
@@ -2338,7 +2338,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { cl } = await makeWithClassList(page);
       await cl.sendAsync({ id: 'a', op: [['foo'], '@add!'] });
-      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const cls = await page.evaluate(() => document.querySelector('div').className);
       expect(cls).toBe('foo');
       await cl.sendAsync({ id: 'c', op: [['foo'], '@contains'] });
@@ -2409,7 +2409,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       await cl.sendAsync({ id: 'v', op: '@value' });
       expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 'foo bar' }));
     });
@@ -2435,7 +2435,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { ds } = await makeWithDataset(page);
       await ds.sendAsync({ id: 'p', op: [['fooBar', 'one'], '@put!'] });
-      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       // camelCase ↔ kebab-case translation is the DOM proxy's job.
       const attr = await page.evaluate(() => document.querySelector('div').getAttribute('data-foo-bar'));
       expect(attr).toBe('one');
@@ -3165,7 +3165,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent, childAddrWrapped } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'm', op: [{ child: childAddrWrapped }, '@append_child!'] });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const childCount = await page.evaluate(() => document.querySelector('div').childElementCount);
       expect(childCount).toBe(1);
     });
@@ -3222,7 +3222,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'r', op: '@remove!' });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': 'self' }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: {}, 'bv-a': expect.stringMatching(/^#<(HTML @|document).*>$/) }));
       const stillThere = await page.evaluate(() => document.body.querySelector('div'));
       expect(stillThere).toBeNull();
     });

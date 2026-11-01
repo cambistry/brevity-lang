@@ -406,6 +406,7 @@ async function compileAndLoad(source, compileOptions = {}) {
 // translates on the way out (see notes/layer-a-closure-as-child-2026-04-22.md):
 //
 //   - Payload `#<@N>` / `#<#N>` → `#<selfAddr @N>` (space between alias and selector).
+//   - Self address `#<>` (local form, no selector) → `#<selfAddr>`.
 //     Global-form addresses (word-char start inside the angles) are left
 //     alone; the discriminator is leading non-word-char = local.
 //   - Missing `from` → filled in with selfAddr.
@@ -423,7 +424,7 @@ let nextId = 0;
 
 function rewriteLocalAddresses(msg, selfAddr) {
   const json = JSON.stringify(msg);
-  const rewritten = json.replace(/#<([@#:][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
+  const rewritten = json.replace(/#<([@#:][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
   const out = JSON.parse(rewritten);
   if (out.from == null || out.from === '') {
     out.from = selfAddr;

@@ -16,6 +16,7 @@ import {
   genRustChildMethods,
 } from './handlers.js';
 import { resolveSuperclassChain } from '../../subclass.js';
+import { lowerChains } from '../../chains.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
@@ -1162,6 +1163,26 @@ impl BvStr for str { fn bv_str(&self) -> String { self.to_string() } }
 // Slice 12+13 wire format helpers. The codegen passes the field set per
 // call-site (no global registry), so each type-valued reply slot picks up
 // its own field order + optionality flag at codegen time.
+// A reply's re and its parallel bv-a, in wire shape: a positional reply tags per
+// slot, with named slots in a trailing object, and a named reply tags per key.
+fn bv_unwire_slot(tag: &Value, v: &Value) -> Value {
+    if tag.is_array() || tag.is_object() { return bv_unwire_reply(v, tag); }
+    let Some(t) = tag.as_str() else { return v.clone() };
+    match bv_type_name(t).and_then(bv_type_fields) {
+        Some(fields) => bv_from_wire(t, v, fields),
+        None => v.clone(),
+    }
+}
+fn bv_unwire_reply(re: &Value, bva: &Value) -> Value {
+    match (re, bva) {
+        (Value::Array(vs), Value::Array(ts)) => Value::Array(vs.iter().enumerate()
+            .map(|(i, v)| ts.get(i).map_or_else(|| v.clone(), |t| bv_unwire_slot(t, v))).collect()),
+        (Value::Object(vs), Value::Object(ts)) => Value::Object(vs.iter()
+            .map(|(k, v)| (k.clone(), ts.get(k).map_or_else(|| v.clone(), |t| bv_unwire_slot(t, v)))).collect()),
+        _ => re.clone(),
+    }
+}
+
 fn bv_to_wire(v: &Value, fields: &[&str], all_required: bool) -> Value {
     let m = match v { Value::Object(m) => m, _ => return v.clone() };
     if !m.contains_key("__type") { return v.clone(); }
@@ -1555,7 +1576,13 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
-                                return re.clone();
+                                // A self-return's value is the address in its bv-a.
+                                if re.as_object().is_some_and(|o| o.is_empty()) {
+                                    if let Some(addr) = msg.get("bv-a").filter(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
+                                        return Value::Array(vec![addr.clone()]);
+                                    }
+                                }
+                                return msg.get("bv-a").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
                             }
                         }
                         if msg.get("ex").is_some() && msg_id == target_id {
@@ -1650,6 +1677,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
 }
 
 function codegenRust(ast, options = {}) {
+  lowerChains(ast);
   setCtx(createRustContext());
   // Self-as-value: validate() has enforced fileName when the AST uses Self
   // as a bare value. Stash it for handlers/expressions to read.

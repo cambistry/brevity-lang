@@ -1,4 +1,5 @@
 import * as AST from './ast.js';
+import { checkChainReceivers } from './chains.js';
 import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -378,6 +379,9 @@ export function parse(tokensIn) {
   }
 
   function parseType(inOf = false) {
+    if (peek().type === 'IDENT' && peek().value.endsWith('!')) {
+      throw new Error(`'${peek().value}' — a type name takes no '!'; declare a write-capable ref as '*${peek().value.slice(0, -1)}'`);
+    }
     let result = parseAtomicType(inOf);
     // Union suffix — only at top level (not inside 'of').
     // Greedily consumes any number of `| Type` and `| null` segments.
@@ -519,6 +523,11 @@ export function parse(tokensIn) {
       consume();
       return AST.functionType(inputs, [], true);
     }
+    // `-> self`: the function yields its own receiver. Like `.`, it stands alone.
+    if (peek().type === 'KEYWORD' && peek().value === 'self') {
+      consume();
+      return { ...AST.functionType(inputs, []), returnsSelf: true };
+    }
     expect('LPAREN');
     const outputs = [];
     while (peek().type !== 'RPAREN') {
@@ -555,6 +564,7 @@ export function parse(tokensIn) {
       return `${item.type}`;
     }).join(', ');
     if (functionType.silent) return `(${fmtSide(functionType.inputs)}) -> .`;
+    if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) -> self`;
     return `(${fmtSide(functionType.inputs)}) -> (${fmtSide(functionType.outputs)})`;
   }
 
@@ -1034,6 +1044,11 @@ export function parse(tokensIn) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      if (atSelfValue()) {
+        consume(); // self
+        body.push({ ...AST.returnNode(selfReturnFields()), tailValue: true });
+        continue;
+      }
       if (isReturnKw()) {
         consume();
         if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
@@ -1230,7 +1245,10 @@ export function parse(tokensIn) {
           continue;
         }
       }
-      if (isReturnKw()) {
+      if (atSelfValue()) {
+        consume(); // self
+        body.push({ ...AST.returnNode(selfReturnFields()), tailValue: true });
+      } else if (isReturnKw()) {
         consume(); // 'return'
         if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
@@ -2313,7 +2331,35 @@ export function parse(tokensIn) {
     return left;
   }
 
+  // `<-` and `<|` as expressions. A write's left side is a cell and its right side
+  // a whole expression that stops at the next write, so chains stay on the target:
+  // `a <- b <- c` is `(a <- b) <- c`. Right after a write operator a further write
+  // continues the chain (SetChain); anywhere else it opens a SetExpr. Statement
+  // forms parse their own target, then reach this through their right side.
+  const atWriteOp = () => peek().type === 'SET' || peek().type === 'UPDATE';
   function parseExpr() {
+    const inWriteRhs = tokens[pos - 1]?.type === 'SET' || tokens[pos - 1]?.type === 'UPDATE';
+    if (!inWriteRhs && peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+      const name = consume().value;
+      if (!isRef(name)) {
+        if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+        throw new Error(`Cannot set '${name}' — only '*Type' variables support '<-'`);
+      }
+      const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+      return { type: 'SetExpr', name, value: parseExpr(), updateOp };
+    }
+    const value = parseValueExpr();
+    if (!atWriteOp()) return value;
+    if (!inWriteRhs) throw new Error("The left side of '<-' must be a cell");
+    const rest = [];
+    while (atWriteOp()) {
+      const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+      rest.push({ value: parseValueExpr(), updateOp });
+    }
+    return { type: 'SetChain', first: value, rest };
+  }
+
+  function parseValueExpr() {
     let left = parseAddExpr();
     // >> prepend operator. Right-associative; checked before CMP_OPS so the
     // GT GT pair isn't mis-parsed as comparison `>` followed by an unexpected
@@ -2321,7 +2367,7 @@ export function parse(tokensIn) {
     // validate.js rejects any leftover BinaryExpr('>>') as a sub-expression.
     if (peekIsPrepend()) {
       consumeOverloadOp();
-      return AST.binaryExpr('>>', left, parseExpr());
+      return AST.binaryExpr('>>', left, parseValueExpr());
     }
     if (CMP_OPS.has(peek().type)) {
       const tok = consume();
@@ -2331,7 +2377,7 @@ export function parse(tokensIn) {
     // Right-associative — `a ?? b ?? c` is `a ?? (b ?? c)`.
     if (peek().type === 'NULL_COALESCE') {
       consume();
-      left = AST.binaryExpr('??', left, parseExpr());
+      left = AST.binaryExpr('??', left, parseValueExpr());
     }
     return left;
   }
@@ -2360,7 +2406,17 @@ export function parse(tokensIn) {
     return { name, type: typeName };
   }
 
+  // `self` as a return value: the whole reply, never one field of several.
+  const atSelfValue = () => peek().type === 'KEYWORD' && peek().value === 'self' &&
+    !(tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as');
+  const selfReturnFields = () => [{ selfReturn: true, positional: true, expr: AST.selfValue(), type: null }];
+
   function parseReplyFields(sameLine = false) {
+    if (atSelfValue()) {
+      consume(); // self
+      if (peek().type === 'COMMA') throw new Error("'self' can't be one of several return values");
+      return selfReturnFields();
+    }
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
     if (hasParen) consume();
@@ -2368,7 +2424,9 @@ export function parse(tokensIn) {
       if (hasParen || !sameLine) skipNewlines();
       if (hasParen && peek().type === 'RPAREN') { consume(); break; }
       if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'NUMBER') {
+      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        fields.push({ expr: parseExpr(), type: null, positional: true });
+      } else if (peek().type === 'NUMBER') {
         const numTok = consume();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -2979,6 +3037,7 @@ export function parse(tokensIn) {
           if (depth === 0 && tokens[i+1]?.type === '->') {
             // skip '->' and parse second paren group
             i += 2;
+            if (tokens[i]?.type === 'KEYWORD' && tokens[i].value === 'self') return tokens[i + 1]?.type === 'EQUALS';
             if (tokens[i]?.type !== 'LPAREN') return false;
             depth = 0;
             continue;
@@ -3315,6 +3374,12 @@ export function parse(tokensIn) {
         break;
       }
 
+      if (atSelfValue()) {
+        consume(); // self
+        body.push({ ...AST.reply(selfReturnFields()), tailValue: true });
+        break;
+      }
+
       // Explicit `return` statement — the value-return form.
       if (isReturnKw()) {
         consume();
@@ -3347,7 +3412,7 @@ export function parse(tokensIn) {
         }
         const openForm = peek().type === 'NEWLINE';
         if (openForm) skipNewlines();
-        body.push(AST.reply(parseReplyFields(!openForm) ));
+        body.push({ ...AST.reply(parseReplyFields(!openForm)), tailValue: true });
         break;
       }
 
@@ -5420,6 +5485,8 @@ export function parse(tokensIn) {
   const result = AST.program(actors, dependencies, types);
   resolveLoneNames(result);
   settleSilentDecls(result);
+  settleBangDecls(result);
+  settleWrites(result);
   settleFireAndForget(result);
   return result;
 
@@ -5489,6 +5556,156 @@ export function parse(tokensIn) {
         }
       }
       body.push(AST.silentTerminator());
+    };
+    visit(program.actors);
+  }
+
+  // A `!` function writes, and what it yields is a property of each return path:
+  // no tail return, falling off the end returns self, `return v` returns v. See
+  // notes/mutation-suffix-2026-10-31.md.
+  function settleBangDecls(program) {
+    // A class named with `!` (`W!`) constructs by that name. Backends need an
+    // identifier, so the name becomes a plain one; nothing else depends on the `!`.
+    const bangClasses = new Set(program.actors.map(a => a.name).filter(n => n?.endsWith('!')));
+    if (bangClasses.size > 0) {
+      const plain = (name) => `${name.slice(0, -1)}__w`;
+      const rename = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) { node.forEach(rename); return; }
+        if (node.type === 'Actor' && bangClasses.has(node.name)) node.name = plain(node.name);
+        if (node.type === 'Identifier' && bangClasses.has(node.name)) node.name = plain(node.name);
+        for (const v of Object.values(node)) if (v && typeof v === 'object') rename(v);
+      };
+      rename(program.actors);
+    }
+    const PURE_TAIL = new Set(['Identifier', 'RefRead', 'BinaryExpr', 'UnaryExpr', 'IntLiteral', 'BigIntLiteral', 'DecimalLiteral',
+      'FloatLiteral', 'NumberLiteral', 'TextLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'ListLiteral', 'StructureLiteral', 'ObjectLiteral', 'Function']);
+    const tailValueError = (fn) => new Error(`'${fn.name}' is a '!' function, which has no tail return — a final value is discarded. Did you mean 'return'?`);
+    const isReturn = (s) => s?.type === 'Reply' || s?.type === 'Return';
+    const isSelfReturn = (s) => s.fields?.[0]?.selfReturn === true;
+    const classNames = new Set(program.actors.map(a => a.name).filter(Boolean));
+    // Whether a statement list always returns ('returns') or can reach its end
+    // ('falls'), rejecting tail values and dropping implicit-return wrappers.
+    const settleTail = (fn, stmts) => {
+      const last = stmts[stmts.length - 1];
+      if (!last) return 'falls';
+      // A final write is a statement, even in arrow form: `bump! = (i) -> a <- i`.
+      const tailWrite = last.type === 'ImplicitReturn' ? last.expr
+        : (isReturn(last) && last.tailValue && last.fields?.length === 1 ? last.fields[0].expr : null);
+      if (tailWrite?.type === 'SetExpr') {
+        stmts[stmts.length - 1] = AST.setStatement(tailWrite.name, tailWrite.value, { updateOp: tailWrite.updateOp });
+        return 'falls';
+      }
+      if (isReturn(last)) {
+        if (last.tailValue) {
+          if (isSelfReturn(last)) throw new Error(`'${fn.name}' returns self by falling off the end — delete the bare 'self', or write 'return self'`);
+          throw tailValueError(fn);
+        }
+        return 'returns';
+      }
+      if (last.type === 'ImplicitReturn' && last.expr?.type === 'IfExpr') {
+        settleIf(fn, last.expr);
+        // Each path through a tail `if` ends the function, so each returns self
+        // unless it says otherwise. That gives backends their one early-return form.
+        return returnSelfFromBranches(last.expr);
+      }
+      if (last.type === 'ImplicitReturn' || last.type === 'ExprStatement') {
+        if (PURE_TAIL.has(last.expr?.type)) throw tailValueError(fn);
+        if (last.type === 'ImplicitReturn') stmts[stmts.length - 1] = AST.exprStatement(last.expr);
+      }
+      return 'falls';
+    };
+    const returnSelfFromBranches = (ifExpr) => {
+      const close = (branch) => {
+        if (branch.type === 'IfExpr') return returnSelfFromBranches(branch);
+        if (!isReturn(branch.body[branch.body.length - 1])) branch.body.push(AST.returnNode(selfReturnFields()));
+        return 'returns';
+      };
+      const thenPath = close(ifExpr.then);
+      if (!ifExpr.else) return 'falls';
+      const elsePath = close(ifExpr.else);
+      return thenPath === 'returns' && elsePath === 'returns' ? 'returns' : 'falls';
+    };
+    const settleBranch = (fn, branch) => {
+      if (branch.type === 'IfExpr') return settleIf(fn, branch);
+      if (!branch.body) throw tailValueError(fn);
+      return settleTail(fn, branch.body);
+    };
+    const settleIf = (fn, ifExpr) => {
+      const thenPath = settleBranch(fn, ifExpr.then);
+      if (!ifExpr.else) return 'falls';
+      const elsePath = settleBranch(fn, ifExpr.else);
+      return thenPath === 'returns' && elsePath === 'returns' ? 'returns' : 'falls';
+    };
+    // Visits returns on this function's own paths, not those of nested functions.
+    const eachReturn = (node, visit) => {
+      if (!node || typeof node !== 'object' || node.type === 'Function') return;
+      if (Array.isArray(node)) { node.forEach(n => eachReturn(n, visit)); return; }
+      if (isReturn(node)) { visit(node); return; }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') eachReturn(v, visit);
+    };
+    const settle = (fn) => {
+      const body = fn.body || (fn.body = []);
+      const paths = settleTail(fn, body);
+      let returnsValue = false;
+      eachReturn(body, (r) => {
+        // A bare `return` exits the way falling off the end does.
+        if (!r.fields?.length) r.fields = selfReturnFields();
+        else if (!isSelfReturn(r)) returnsValue = true;
+      });
+      if (paths === 'returns') return;
+      if (returnsValue) throw new Error(`'${fn.name}' returns a value on one path and falls off the end on another — write 'return self' to make that deliberate`);
+      body.push(AST.reply(selfReturnFields()));
+    };
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      // A self-call mid-body (`@bump(1)`) is a statement: only the last one is a tail.
+      if (node.type === 'FunctionDecl' && Array.isArray(node.body)) {
+        node.body.forEach((st, i) => {
+          if (i < node.body.length - 1 && st?.type === 'ImplicitReturn' && ['FunctionCallExpr', 'DotCallExpr', 'DotAccessExpr'].includes(st.expr?.type)) {
+            node.body[i] = AST.exprStatement(st.expr);
+          }
+        });
+      }
+      if (node.type === 'FunctionDecl' && typeof node.name === 'string' && node.name.endsWith('!') && !node.actorDef && !node.emptyOverload) {
+        settle(node);
+      }
+      if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && node.object?.type === 'FunctionCallExpr' && node.object.callee?.name?.endsWith('!')
+          && !classNames.has(node.object.callee.name)) {
+        throw new Error(`A chain can't start from '${node.object.callee.name}(…)', a call on this actor — write the calls as separate statements`);
+      }
+      if (node.type === 'FunctionCallExpr' && node.callee?.name?.endsWith('!') && AST.BUILTIN_TYPE_NAMES.has(node.callee.name.slice(0, -1))) {
+        throw new Error(`'${node.callee.name}' — a type name takes no '!'`);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
+    };
+    visit(program.actors);
+    checkChainReceivers(program);
+  }
+
+  // Spreads a write chain into one statement per link, in source order. A write
+  // used as a value needs a returned cell reference, which doesn't exist yet:
+  // cells can't leave a function (notes/mutation-suffix-2026-10-31.md).
+  function settleWrites(program) {
+    const spread = (stmt) => {
+      const chain = stmt.value;
+      return [{ ...stmt, value: chain.first }, ...chain.rest.map(r => ({ ...stmt, value: r.value, updateOp: r.updateOp }))];
+    };
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (let i = node.length - 1; i >= 0; i--) {
+          if (node[i]?.value?.type === 'SetChain') node.splice(i, 1, ...spread(node[i]));
+        }
+        node.forEach(visit);
+        return;
+      }
+      if (node.type === 'SetChain') throw new Error("A chain of writes must be a statement: '<-' as a value isn't supported yet");
+      if (node.type === 'SetExpr') {
+        throw new Error(`'${node.name} <- …' as a value isn't supported yet — it would hand out a reference to the cell. Write the set, then 'return ${node.name}'`);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
     };
     visit(program.actors);
   }

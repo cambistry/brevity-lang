@@ -1,6 +1,7 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
 import { erlVarName, erlString, isListOfAnythingType, erlStateKey } from './preambles.js';
+import { returnsOnlySelf } from '../../chains.js';
 import {
   inferLiteralType,
   buildSSAEnv,
@@ -648,6 +649,25 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         }
       } else {
         lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);
+      }
+    }
+
+    // `d = c.inc!(5)` where every path of `inc!` returns self: the result is a
+    // handle to the receiver, so the new name dispatches the same way. The handle
+    // set doesn't record classes, so every class declaring `inc!` must agree.
+    {
+      const src = s.value ?? s.source;
+      const bound = s.name ?? (s.pattern?.length === 1 ? s.pattern[0].name : null);
+      if (bound && (s.type === 'Assign' || s.type === 'DestructureAssign') && (src?.type === 'DotCallExpr' || src?.type === 'DotAccessExpr')
+          && src.object?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(src.object.name)) {
+        const member = '@' + (src.method ?? src.property);
+        const declared = [...(ctx.actorInfo?.values() || [])].flatMap(i => i.actor?.functions || []).filter(f => f.name === member);
+        if (member.endsWith('!') && declared.every(returnsOnlySelf)) stmtCtx.selfSpawnedRefs.add(bound);
+      }
+      // A remote's self-return yields an address, so the new name is an instance.
+      if (bound && (s.type === 'Assign' || s.type === 'DestructureAssign') && src?.type === 'DotCallExpr' && src.method?.endsWith('!')
+          && src.object?.type === 'Identifier' && (ctx.remoteInstanceVars.has(src.object.name) || ctx.localInstanceVars?.has(src.object.name))) {
+        ctx.localInstanceVars?.add(bound);
       }
     }
 
@@ -1418,6 +1438,8 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
 // ── Reply field codegen ─────────────────────────────────────────────────────
 
 function genReplyBody(ctx, fields, typeEnv, sCtx) {
+  // Self-return: no data; the address travels in `bv-a`.
+  if (fields[0]?.selfReturn) return '#{}';
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   const spread = fields.find(f => f.spread);
@@ -1509,6 +1531,7 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
 }
 
 function genBvaBody(ctx, fields, typeEnv, sCtx) {
+  if (fields[0]?.selfReturn) return '<<"#<>"/utf8>>';
   const spread = fields.find(f => f.spread);
   if (spread) return null; // handled separately
 

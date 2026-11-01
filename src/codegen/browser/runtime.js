@@ -103,7 +103,7 @@ export const documentManifest = `{
     is_equal_node (other: Node) -> (Boolean)
     is_same_node (Node) -> (Boolean)
     is_same_node (other: Node) -> (Boolean)
-    normalize! () -> (self)
+    normalize! () -> self
     query_selector (Text) -> (Element | null)
     query_selector (selector: Text) -> (Element | null)
     query_selector_all (Text) -> (List of Elements)
@@ -182,7 +182,7 @@ export const domManifest = `{
     is_equal_node (other: Node) -> (Boolean)
     is_same_node (Node) -> (Boolean)
     is_same_node (other: Node) -> (Boolean)
-    normalize! () -> (self)
+    normalize! () -> self
   }
 
   Text (Node |) -> *{}
@@ -294,13 +294,13 @@ export const domManifest = `{
     get_attribute (name: Text) -> (Text | null)
     has_attribute (Text) -> (Boolean)
     has_attribute (name: Text) -> (Boolean)
-    set_attribute! (Text, Text) -> (self)
-    set_attribute! (name: Text, value: Text) -> (self)
-    remove_attribute! (Text) -> (self)
-    remove_attribute! (name: Text) -> (self)
-    toggle_attribute! (Text) -> (self)
-    toggle_attribute! (Text, Boolean) -> (self)
-    toggle_attribute! (name: Text, ? force: Boolean) -> (self)
+    set_attribute! (Text, Text) -> self
+    set_attribute! (name: Text, value: Text) -> self
+    remove_attribute! (Text) -> self
+    remove_attribute! (name: Text) -> self
+    toggle_attribute! (Text) -> self
+    toggle_attribute! (Text, Boolean) -> self
+    toggle_attribute! (name: Text, ? force: Boolean) -> self
     query_selector (Text) -> (Element | null)
     query_selector (selector: Text) -> (Element | null)
     query_selector_all (Text) -> (List of Elements)
@@ -330,29 +330,29 @@ export const domManifest = `{
     set scroll_left (Decimal)
     bounding_client_rect () -> (Object)
     client_rects () -> (List of Objects)
-    focus! () -> (self)
-    focus! (? prevent_scroll: Boolean) -> (self)
-    blur! () -> (self)
-    click! () -> (self)
-    scroll! (Decimal, Decimal) -> (self)
-    scroll! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
-    scroll_to! (Decimal, Decimal) -> (self)
-    scroll_to! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
-    scroll_by! (Decimal, Decimal) -> (self)
-    scroll_by! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> (self)
-    scroll_into_view! () -> (self)
-    scroll_into_view! (Boolean) -> (self)
-    scroll_into_view! (? behavior: Text, ? block: Text, ? inline: Text) -> (self)
-    before! (List) -> (self)
-    before! (items: List) -> (self)
-    after! (List) -> (self)
-    after! (items: List) -> (self)
-    replace_with! (List) -> (self)
-    replace_with! (items: List) -> (self)
-    remove! () -> (self)
-    insert_adjacent_element! (position: Text, element: Element) -> (self)
-    insert_adjacent_text! (position: Text, text: Text) -> (self)
-    insert_adjacent_html! (position: Text, html: Text) -> (self)
+    focus! () -> self
+    focus! (? prevent_scroll: Boolean) -> self
+    blur! () -> self
+    click! () -> self
+    scroll! (Decimal, Decimal) -> self
+    scroll! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> self
+    scroll_to! (Decimal, Decimal) -> self
+    scroll_to! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> self
+    scroll_by! (Decimal, Decimal) -> self
+    scroll_by! (? left: Decimal, ? top: Decimal, ? behavior: Text) -> self
+    scroll_into_view! () -> self
+    scroll_into_view! (Boolean) -> self
+    scroll_into_view! (? behavior: Text, ? block: Text, ? inline: Text) -> self
+    before! (List) -> self
+    before! (items: List) -> self
+    after! (List) -> self
+    after! (items: List) -> self
+    replace_with! (List) -> self
+    replace_with! (items: List) -> self
+    remove! () -> self
+    insert_adjacent_element! (position: Text, element: Element) -> self
+    insert_adjacent_text! (position: Text, text: Text) -> self
+    insert_adjacent_html! (position: Text, html: Text) -> self
   }
 
   Aria (
@@ -463,12 +463,12 @@ export const domManifest = `{
     item (index: Integer) -> (Text | null)
     contains (Text) -> (Boolean)
     contains (token: Text) -> (Boolean)
-    add! (Text) -> (self)
-    add! (List of Texts) -> (self)
-    add! (tokens: List of Texts) -> (self)
-    remove! (Text) -> (self)
-    remove! (List of Texts) -> (self)
-    remove! (tokens: List of Texts) -> (self)
+    add! (Text) -> self
+    add! (List of Texts) -> self
+    add! (tokens: List of Texts) -> self
+    remove! (Text) -> self
+    remove! (List of Texts) -> self
+    remove! (tokens: List of Texts) -> self
     toggle! (Text) -> (Boolean)
     toggle! (Text, Boolean) -> (Boolean)
     toggle! (token: Text, ? force: Boolean) -> (Boolean)
@@ -482,10 +482,10 @@ export const domManifest = `{
     has (key: Text) -> (Boolean)
     get (Text) -> (Text | null)
     get (key: Text) -> (Text | null)
-    put! (Text, Text) -> (self)
-    put! (key: Text, value: Text) -> (self)
-    remove! (Text) -> (self)
-    remove! (key: Text) -> (self)
+    put! (Text, Text) -> self
+    put! (key: Text, value: Text) -> self
+    remove! (Text) -> self
+    remove! (key: Text) -> self
     keys () -> (List of Texts)
     values () -> (List of Texts)
     entries () -> (List of Objects)
@@ -498,14 +498,14 @@ export const domManifest = `{
     set inner_html (Text)
     set text_content (Text)
     set inner_text (Text)
-    append! (List of Texts) -> (self)
-    append! (items: List of Texts) -> (self)
-    prepend! (List of Texts) -> (self)
-    prepend! (items: List of Texts) -> (self)
-    replace_children! (List of Texts) -> (self)
-    replace_children! (items: List of Texts) -> (self)
-    insert_adjacent_text! (position: Text, text: Text) -> (self)
-    insert_adjacent_html! (position: Text, html: Text) -> (self)
+    append! (List of Texts) -> self
+    append! (items: List of Texts) -> self
+    prepend! (List of Texts) -> self
+    prepend! (items: List of Texts) -> self
+    replace_children! (List of Texts) -> self
+    replace_children! (items: List of Texts) -> self
+    insert_adjacent_text! (position: Text, text: Text) -> self
+    insert_adjacent_html! (position: Text, html: Text) -> self
   }
 
   ParentElement (Element | ? children: List) -> *{
@@ -515,23 +515,23 @@ export const domManifest = `{
     set inner_html (Text)
     set text_content (Text)
     set inner_text (Text)
-    append_child! (Element) -> (self)
-    append_child! (child: Element) -> (self)
-    insert_before! (Element, ? Element) -> (self)
-    insert_before! (new_child: Element, ? ref_child: Element) -> (self)
-    remove_child! (Element) -> (self)
-    remove_child! (child: Element) -> (self)
-    replace_child! (Element, Element) -> (self)
-    replace_child! (new_child: Element, old_child: Element) -> (self)
-    append! (List) -> (self)
-    append! (items: List) -> (self)
-    prepend! (List) -> (self)
-    prepend! (items: List) -> (self)
-    replace_children! (List) -> (self)
-    replace_children! (items: List) -> (self)
-    insert_adjacent_element! (position: Text, element: Element) -> (self)
-    insert_adjacent_text! (position: Text, text: Text) -> (self)
-    insert_adjacent_html! (position: Text, html: Text) -> (self)
+    append_child! (Element) -> self
+    append_child! (child: Element) -> self
+    insert_before! (Element, ? Element) -> self
+    insert_before! (new_child: Element, ? ref_child: Element) -> self
+    remove_child! (Element) -> self
+    remove_child! (child: Element) -> self
+    replace_child! (Element, Element) -> self
+    replace_child! (new_child: Element, old_child: Element) -> self
+    append! (List) -> self
+    append! (items: List) -> self
+    prepend! (List) -> self
+    prepend! (items: List) -> self
+    replace_children! (List) -> self
+    replace_children! (items: List) -> self
+    insert_adjacent_element! (position: Text, element: Element) -> self
+    insert_adjacent_text! (position: Text, text: Text) -> self
+    insert_adjacent_html! (position: Text, html: Text) -> self
   }
 
   html (ParentElement |) -> *{}
@@ -1047,7 +1047,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
           el.classList.value = value == null ? '' : String(value);
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
           return;
         }
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
@@ -1077,13 +1077,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           case 'add!': {
             const tokens = tokensFromPayload(payload);
             el.classList.add(...tokens);
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
             return;
           }
           case 'remove!': {
             const tokens = tokensFromPayload(payload);
             el.classList.remove(...tokens);
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
             return;
           }
           case 'toggle!': {
@@ -1157,13 +1157,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             else if (payload && typeof payload === 'object') { key = payload.key; value = payload.value; }
             if (typeof key !== 'string' || typeof value !== 'string') return;
             el.dataset[key] = value;
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
             return;
           }
           case 'remove!': {
             const key = extractSingle(payload, 'key');
             if (typeof key === 'string') delete el.dataset[key];
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
             return;
           }
           case 'keys': {
@@ -1254,7 +1254,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const value = payload && payload.length > 0 ? payload[0] : null;
           el[setter.prop] = setter.coerce(value);
           Promise.resolve().then(() => route({
-            id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
+            id: eid, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: efrom,
           }));
           return;
         }
@@ -1267,7 +1267,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(eop) ? eop[0] : null;
           if (handleElementMutator(tag, cls, el, eopName, payload)) {
             Promise.resolve().then(() => route({
-              id: eid, re: {}, 'bv-a': 'self', from: addr, to: efrom,
+              id: eid, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: efrom,
             }));
           }
           return;
@@ -1425,7 +1425,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
           node.nodeValue = value == null ? '' : String(value);
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
           return;
         }
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
@@ -1434,7 +1434,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // replies self so chaining works uniformly across node kinds.
         if (opName === '@normalize!') {
           node.normalize();
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
           return;
         }
         const accessorName = opName.slice(1);
@@ -2213,7 +2213,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
       if (opName === '@normalize!') {
         document.normalize();
-        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': 'self', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<document>', from: 'document', to: from }));
         return;
       }
       if (opName === '@eval') {
@@ -2247,12 +2247,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   });
 
   // Parent-layer address translation for runtime-loaded actors. Payload
-  // `#<@N>`/`#<#N>` addresses get the sender's address prepended; `from`
+  // `#<>`/`#<@N>`/`#<#N>` addresses get the sender's address prepended; `from`
   // is filled in if missing, prepended if local-form. Structural walk
   // (not JSON round-trip) so BigInt and other non-JSON primitives survive.
   function rewriteAddressStrings(v, selfAddr) {
     if (typeof v === 'string') {
-      return v.replace(/#<([@#][^>]*)>/g, (_, content) => `#<${selfAddr} ${content}>`);
+      return v.replace(/#<([@#:][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
     }
     if (Array.isArray(v)) return v.map(el => rewriteAddressStrings(el, selfAddr));
     if (v && typeof v === 'object') {

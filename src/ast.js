@@ -95,6 +95,8 @@ export const actorSetStatement = (name, args, { updateOp = undefined } = {}) =>
 export const actorFieldSet = (objectName, fieldName, value, { updateOp = undefined } = {}) =>
   ({ type: 'ActorFieldSet', objectName, fieldName, value, ...(updateOp && { updateOp }) });
 
+export const selfValue = () => ({ type: 'SelfValue' });
+
 export const ifStatement = (cond, body) =>
   ({ type: 'IfStatement', cond, body });
 

@@ -1,4 +1,5 @@
 // statements.js — Statement generation for Rust codegen
+import { returnsOnlySelf } from '../../chains.js';
 import { inferExprType } from '../../inference.js';
 import { parseInterface } from '../javascript/types.js';
 import {
@@ -806,7 +807,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       val = convertFromValue(val, s.typeName);
     } else if (calleeFnTyped && s.typeName && rustType(s.typeName) !== 'Value') {
       val = convertFromValue(val, s.typeName);
-    } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
+    } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead' || s.value.type === 'DotAccessExpr') && s.typeName && rustType(s.typeName) !== 'Value') {
       val = convertFromValue(val, s.typeName);
     } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
     if (!isIterExpr && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
@@ -868,14 +869,14 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
   const isIterExpr2 = s.value.type === 'OverExpr' || s.value.type === 'ReduceExpr';
   if (isIterExpr2 && s.typeName && rustType(s.typeName) !== 'Value') {
     val = convertFromValue(val, s.typeName);
-  } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead') && s.typeName && rustType(s.typeName) !== 'Value') {
+  } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead' || s.value.type === 'DotAccessExpr') && s.typeName && rustType(s.typeName) !== 'Value') {
     val = convertFromValue(val, s.typeName);
   } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
   if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
 }
 
-// --- End extracted handlers ---
+// --- End extracted handlers ---// --- End extracted handlers ---
 
 function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
       // Branch 1: dep constructor (tiny, keep inline)
@@ -980,6 +981,9 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
         return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
       })()) {
         handleTypedAssign_DotCallExpr(s, typeEnv, I, lines);
+      } else if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && sCtx?.selfSpawnedRefs?.has(s.value.object.name)) {
+        // A member read on an instance is a call: bind the sole positional.
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`{ let _r = ${genRustExpr(s.value, typeEnv, sCtx)}; BvObject::pack(&_r).one() }`, s.typeName)};`);
       } else if (isStateChildCall(s.value)) {
         // Constructor-block child: dispatch through the cell's instance ref
         // and bind the sole positional.
@@ -1243,6 +1247,11 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
         if (dotName && sCtx?.selfSpawnedRefs?.has(dotName)) {
           const spawnClass = sCtx.selfSpawnedRefs.get(dotName);
           const method = JSON.stringify('@' + expr.method);
+          // `d = c.inc!(5)` where every path of `inc!` returns self: the result is a
+          // handle to the receiver, so the new name dispatches the same way.
+          const calleeFn = G.ctx.actorInfo?.get(spawnClass)?.actor?.functions?.find(f => f.name === '@' + expr.method);
+          const onlySelf = expr.method.endsWith('!') && (!calleeFn || returnsOnlySelf(calleeFn));
+          const handleName = onlySelf && s.pattern?.length === 1 ? s.pattern[0].name : null;
           const positional = expr.args.filter(a => a.positional);
           const named = expr.args.filter(a => !a.positional);
           const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
@@ -1267,6 +1276,11 @@ function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           } else {
             const lc = spawnClass.toLowerCase();
             lines.push(`${I}let ${tempName} = self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent");`);
+          }
+          if (handleName) {
+            lines.push(`${I}let ${mintRustSsa(handleName)}: Value = ${tempName};`);
+            sCtx.selfSpawnedRefs.set(handleName, spawnClass);
+            return;
           }
           // Destructure the response: named/key items read the named field,
           // positional items read by index.
@@ -1773,6 +1787,15 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
 // leaves them set on return so the caller can use the same scope when
 // emitting the reply / implicit return. Callers must save and restore both
 // themselves.
+// A store whose value calls back into the actor would borrow `self` twice, so the
+// value is computed first.
+function storeInsert(store, key, value) {
+  if (/self\.(self_send|child_|handle_op)/.test(value)) {
+    return `{ let _sv = ${value}; ${store}.insert("${key}".to_string(), _sv); }`;
+  }
+  return `${store}.insert("${key}".to_string(), ${value});`;
+}
+
 function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null) {
   const { fnDefs, skipSet, capturePoints } = functionAnalysis;
   const sCtx = { childActorRefs: new Map() };
@@ -1806,6 +1829,17 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     {
       const catchCode = tryGenRustCatchOrLabelStmt(s, typeEnv, I);
       if (catchCode !== null) { lines.push(catchCode); continue; }
+    }
+
+    // `d = remote.inc!(5)`: a self-return yields an address, so `d` is an instance.
+    // A value return leaves `d` a value, which a later member call can't use anyway.
+    {
+      const src = s.value ?? s.source;
+      const bound = s.name ?? (s.pattern?.length === 1 ? s.pattern[0].name : null);
+      if (bound && (s.type === 'Assign' || s.type === 'DestructureAssign') && src?.type === 'DotCallExpr' && src.method?.endsWith('!')
+          && src.object?.type === 'Identifier' && (G.ctx.remoteInstanceVars.has(src.object.name) || G.ctx.localInstanceVars?.has(src.object.name))) {
+        G.ctx.localInstanceVars?.add(bound);
+      }
     }
 
     // Handle lambda overload <</Function() before skipSet to avoid interfering with function pipeline
@@ -2035,7 +2069,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const t = s.typeName || inferLiteralType(s.value);
         // Local refs (self.refs) use bare names; only state slots (self.state) get the namespace prefix.
         const k = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-        lines.push(`${I}${rsStore(s.name)}.insert("${k}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`${I}${storeInsert(rsStore(s.name), k, forceJsonWrap(toJsonValue(val, t)))}`);
       }
     } else if (s.type === 'SetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
@@ -2077,7 +2111,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const val = genRustExpr(s.value, typeEnv);
           const t = typeEnv.get(s.name) || inferLiteralType(s.value);
           const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-          lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          lines.push(`${I}${storeInsert(rsStore(s.name), kk, forceJsonWrap(toJsonValue(val, t)))}`);
         }
         // In-process subscribers: dispatch the new value to each spawn-
         // needing instance subscribed to this cell via constructor-param
@@ -2275,7 +2309,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             const val = genRustExpr(bs.value, typeEnv);
             const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
             const bk = G.ctx.stateVarNames.has(bs.name) ? stateKey(bs.name) : bs.name;
-            bodyLines.push(`${I}    ${rsStore(bs.name)}.insert("${bk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+            bodyLines.push(`${I}    ${storeInsert(rsStore(bs.name), bk, forceJsonWrap(toJsonValue(val, t)))}`);
           }
         } else if (bs.type === 'StateAssign') {
           const val = genRustExpr(bs.value, typeEnv);
@@ -2681,7 +2715,7 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
       const sk2 = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-      lines.push(`${I}    ${rsStore(s.name)}.insert("${sk2}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}    ${storeInsert(rsStore(s.name), sk2, forceJsonWrap(toJsonValue(val, t)))}`);
     } else if (s.type === 'TypedAssign') {
       // Branch-local — use plain rustIdent (validator forbids rebinding from
       // a while body, so no SSA needed inside the branch).
@@ -2834,7 +2868,7 @@ function genRustCatchBodyStmt(s, typeEnv, I) {
     const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';
     const t = s.typeName || inferLiteralType(s.value);
     const k = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-    return `${I}${rsStore(s.name)}.insert("${k}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`;
+    return `${I}${storeInsert(rsStore(s.name), k, forceJsonWrap(toJsonValue(val, t)))}`;
   }
   if (s.type === 'StateAssign') {
     const val = genRustExpr(s.value, typeEnv);
@@ -2845,7 +2879,7 @@ function genRustCatchBodyStmt(s, typeEnv, I) {
     const val = genRustExpr(s.value, typeEnv);
     const t = typeEnv.get(s.name) || inferLiteralType(s.value);
     const sk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-    return `${I}${rsStore(s.name)}.insert("${sk}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`;
+    return `${I}${storeInsert(rsStore(s.name), sk, forceJsonWrap(toJsonValue(val, t)))}`;
   }
   if (s.type === 'Assign') {
     const val = genRustExpr(s.value, typeEnv);
@@ -3022,7 +3056,7 @@ function genRustIfStatementBody(branch, typeEnv, I) {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
       const sk3 = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-      lines.push(`${I}${rsStore(s.name)}.insert("${sk3}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`${I}${storeInsert(rsStore(s.name), sk3, forceJsonWrap(toJsonValue(val, t)))}`);
     } else if (s.type === 'StateAssign') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
@@ -3066,6 +3100,8 @@ function genRustReBody(fields, typeEnv, refNames) {
   refNames = refNames || new Set();
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return 'Value::Array(vec![])';
+  // Self-return: no data; the address travels in `bv-a`.
+  if (fields[0].selfReturn) return 'Value::Object(Map::new())';
   const spread = fields.find(f => f.spread);
   if (spread) return `bv_val(&${rustSsaResolve(spread.name)})`;
 
@@ -3163,6 +3199,7 @@ function genRustReBody(fields, typeEnv, refNames) {
 }
 
 function genRustBvaBody(fields, typeEnv, refNames) {
+  if (fields[0]?.selfReturn) return 'json!("#<>")';
   const spread = fields.find(f => f.spread);
   if (spread) return null; // bv-a handled separately for spread
 

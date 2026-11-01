@@ -7,15 +7,17 @@ export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
   genTypeCondition, genDefaultValue, stateKey,
+  genPackedReturn,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
 } from './statements.js';
 
-// A silent name's trailing `.` (`log.`, `@go.`) becomes `$` — a JS identifier
-// character no Brevity name uses, so `log` and `log.` stay distinct.
+// A silent name's trailing `.` (`log.`, `@go.`) becomes `$` and a writing name's
+// trailing `!` becomes `$w` — `$` is a JS identifier character no Brevity name
+// uses, so `log`, `log.` and `log!` stay distinct.
 function methodNameFor(name) {
-  const n = name.replace(/\.$/, '$');
+  const n = name.replace(/\.$/, '$').replace(/!$/, '$w');
   if (n.startsWith('#')) return `priv_${n.slice(1)}`;
   if (n.startsWith('set@')) return `setAt_${n.slice(4)}`;
   if (n.startsWith('@')) return `op_${n.slice(1)}`;
@@ -227,9 +229,26 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     if (rawBody.some(s => s.type === 'SilentTerminator')) {
       return { condition, block: `${destructure}\n        await this.#${jsName}Fn(${arg});\n        _handled = true;` };
     }
-    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${bvaLine}\n        _handled = true;` };
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv)}\n        _handled = true;` };
   }
   return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
+}
+
+// A delegated body can return from several paths, and only one tag is computed
+// up front. When any path returns self, the reply's tag is decided per path.
+function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
+  const returns = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object' || n.type === 'Function') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === 'Reply' || n.type === 'Return') { returns.push(n); return; }
+    for (const v of Object.values(n)) if (v && typeof v === 'object') walk(v);
+  };
+  walk(rawBody);
+  if (!returns.some(r => r.fields?.[0]?.selfReturn)) return bvaLine;
+  const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn);
+  const other = valued ? genBvaBody(ctx, valued.fields, typeEnv) : null;
+  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : ${other ?? 'undefined'};`;
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -265,7 +284,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const jsName = methodNameFor(name);
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
-    return BvObject.pack(re);
+    return ${reply?.fields?.[0]?.selfReturn ? genPackedReturn(ctx, reply.fields, typeEnv) : 'BvObject.pack(re)'};
   }`;
 }
 
@@ -891,7 +910,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     // Locally-held lambda in a reply-awaiting callback field: a local-form
     // self-address (#<@N>, no path) names a handler on us, so dispatch it to
     // ourselves and await the reply rather than posting outward. (See #fire.)
-    if (typeof to === 'string' && /^#<[@#:]/.test(to)) {
+    if (typeof to === 'string' && /^#<[@#:>]/.test(to)) {
       const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
       this.#dispatch({ id, op, from: '__self' });
       return p;
@@ -914,7 +933,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     // value leaves this actor (where perspective translation promotes it to
     // #<selfAddr @N>), it names a handler on us, so invoking it loops back to
     // our own dispatch instead of posting outward to a peer that isn't there.
-    if (typeof to === 'string' && /^#<[@#:]/.test(to)) {
+    if (typeof to === 'string' && /^#<[@#:>]/.test(to)) {
       this.#dispatch({ id, op, from: '__self' });
       return;
     }
@@ -941,11 +960,29 @@ ${fieldSection ? fieldSection + '\n' : ''}
   }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesChildSend ? `
 
   async #childSend(child, op) {
+    // A self-return from a remote yields an address, not a handle.
+    if (typeof child === 'string') return this.#send(op, child);
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      // A child's self-return arrives untranslated. We're its parent, so the
+      // translation is ours: its local-form self address means this handle.
+      this.#pending.set(id, { resolve: (v) => resolve(v === '#<>' ? child : v), reject });
       child.receive({ id, op, from: '__parent', _route: (msg) => this.receive(msg) });
     });
+  }
+
+  // A call on the result of a call. The receiver is whatever the first call
+  // yielded: a child handle, or an address from a self-return.
+  async #childSendChain(recv, op) {
+    const r = BvObject.pack(await recv);
+    return this.#childSend(r.selfReturn ? '#<>' : r.positional[0], op);
+  }
+
+  async #childSendRead(recv, prop) {
+    const r = BvObject.pack(await recv);
+    const v = r.selfReturn ? '#<>' : r.positional[0];
+    if (typeof v === 'string' || typeof v?.receive === 'function') return BvObject.one(BvObject.pack(await this.#childSend(v, '@' + prop)), prop);
+    throw new Error("'" + prop + "' read on a value in a chain: bind the value first");
   }` : ''}${fnSection}
 
   #capture() {
@@ -1031,8 +1068,8 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
       if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
       const pending = this.#pending.get(message.id);
       if (pending) {
-        if (pending.persistent) { pending.handler(message.re); return; }
-        this.#pending.delete(message.id); pending.resolve(message.re); return;
+        if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['bv-a'])); return; }
+        this.#pending.delete(message.id); pending.resolve(typeof message['bv-a'] === 'string' && message['bv-a'].startsWith('#<') && !message['bv-a'].includes('::') && message.re && typeof message.re === 'object' && !Array.isArray(message.re) && Object.keys(message.re).length === 0 ? message['bv-a'] : _bv_unwire_reply(message.re, message['bv-a'])); return;
       }
       // No matching pending — may need to forward to a proxy via remote routes
     }

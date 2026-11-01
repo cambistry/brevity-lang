@@ -813,6 +813,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
   }
 
+  if (expr.type === 'SelfValue') return '<<"#<>"/utf8>>';
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 

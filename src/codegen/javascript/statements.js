@@ -1,7 +1,7 @@
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genReBody, typeTag,
+  genListDestructureAssign, genPackedReturn, typeTag,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
   jsIdent, mintSsaNameIn, stateKey,
 } from './expressions.js';
@@ -337,7 +337,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastSetName = null;
-      code += `\n  return BvObject.pack(${genReBody(ctx, s.fields, typeEnv, declaredReturnType)});`;
+      code += `\n  return ${genPackedReturn(ctx, s.fields, typeEnv, declaredReturnType)};`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       _lastSetName = null;
@@ -425,6 +425,11 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       lastTypedName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
       code += `\n        const ${s.name} = {value: ${rhs}};`;
+    } else if (s.type === 'ExprStatement') {
+      lastTypedName = null;
+      const exprCode = genExpr(ctx, s.expr);
+      const needsAwait = exprCode.includes('#childSend') || exprCode.includes('#send(');
+      code += `\n        ${needsAwait ? 'await ' : ''}${exprCode};`;
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
       lastTypedName = null;
       const innerVar = `${tmpVar}_n${_innerIfIdx++}`;
@@ -435,7 +440,7 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
     } else if (s.type === 'Return') {
       lastTypedName = null;
-      code += `\n        return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+      code += `\n        return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
     } else if (s.type === 'SilentTerminator') {
       // Early exit from a silent function: no reply.
       lastTypedName = null;
@@ -515,7 +520,7 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(ctx, s, inner, outerEnv, counters);
     } else if (s.type === 'Return') {
-      code += `\n${inner}return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+      code += `\n${inner}return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
       const tmpVar = `_if${counters.ifIdx++}`;
       const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, `\n${inner}`);
@@ -1159,7 +1164,7 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
     return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
   }
   if (s.type === 'Return') {
-    return `\n${indent}return BvObject.pack(${genReBody(ctx, s.fields, ctx.currentTypeEnv)});`;
+    return `\n${indent}return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
   }
   if (s.type === 'ExprStatement') {
     const code = genExpr(ctx, s.expr);

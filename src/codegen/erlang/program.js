@@ -2,6 +2,7 @@
 
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain } from '../../subclass.js';
+import { lowerChains } from '../../chains.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import {
   buildTypeEnv,
@@ -112,6 +113,13 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
     return termRet ? makeRet(termRet.fields) : null;
   }
 
+  // Writes and calls: what a branch does before it returns or falls through.
+  function branchEffects(branchBody, indent) {
+    const effects = branchBody.filter(s => s.type !== 'Return' &&
+      !(s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr)));
+    return effects.length ? genLocals(ctx, effects, typeEnv, replyCtx, indent).map(l => `${l.trim()}\n${indent}`).join('') : '';
+  }
+
   function buildLevel(guardsList, idx, indent, fallthrough) {
     if (idx >= guardsList.length) return fallthrough();
     const ii = indent + '    ';
@@ -122,9 +130,11 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
     const elseBranch = ifExpr.else;
     const elseBody = elseBranch?.body || [];
 
-    const trueExpr = genBranchBody(thenBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough);
-    const falseExpr = elseBranch
-      ? (genBranchBody(elseBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough))
+    const trueExpr = branchEffects(thenBody, ii) + (genBranchBody(thenBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough));
+    const falseExpr = elseBranch?.type === 'IfExpr'
+      ? buildLevel([{ expr: elseBranch }], 0, ii, () => buildLevel(guardsList, idx + 1, ii, fallthrough))
+      : elseBranch
+      ? branchEffects(elseBody, ii) + (genBranchBody(elseBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough))
       : buildLevel(guardsList, idx + 1, ii, fallthrough);
 
     return `case is_truthy(${condExpr}) of\n${ii}true -> ${trueExpr};\n${ii}false -> ${falseExpr}\n${indent}end`;
@@ -139,7 +149,7 @@ function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
   const named = fields.filter(f => !f.positional && !f.spread);
   const posVals = pos.map(f => {
     if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
-    if (f.name) return erlVarName(f.name);
+    if (f.name) return genExpr(ctx, { type: 'Identifier', name: f.name }, typeEnv, replyCtx);
     return 'null';
   });
   const namedPairs = named.map(f => {
@@ -153,6 +163,7 @@ function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
 // makeRet callback for dispatch context: returns {ok, Re, null} where Re is
 // either a positional list `[v1, v2]` or a named map `#{k => v}`.
 function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
+  if (fields[0]?.selfReturn) return `{ok, ${genReplyBody(ctx, fields, typeEnv, replyCtx)}, ${genBvaBody(ctx, fields, typeEnv, replyCtx)}}`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && f.key !== undefined);
   if (named.length > 0 && pos.length === 0) {
@@ -166,10 +177,10 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
   }
   const posVals = pos.map(f => {
     if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
-    if (f.name) return erlVarName(f.name);
+    if (f.name) return genExpr(ctx, { type: 'Identifier', name: f.name }, typeEnv, replyCtx);
     return 'null';
   });
-  return `{ok, [${posVals.join(', ')}], null}`;
+  return `{ok, [${posVals.join(', ')}], ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
 }
 
 // ── Public function codegen ──────────────────────────────────────────────────
@@ -324,7 +335,7 @@ function genFn(ctx, fn) {
     allLines.push(`${I}${retExpr}`);
   }
 
-  const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s');
+  const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s').replace(/!$/, '__w');
   return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
@@ -382,7 +393,7 @@ function genDispatch(ctx, publicFns) {
       const isWireOp = op === 'set' || op === 'update';
       const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
       // A silent name's trailing `.` → `__s` (`.` ends an Erlang form).
-      const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s');
+      const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s').replace(/!$/, '__w');
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -1196,7 +1207,7 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    ${initCall},\n    bv_loop_${lowerName}().\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),\n            case Result_ of\n                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    ${initCall},\n    bv_loop_${lowerName}().\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),\n            case Result_ of\n                {ok, _, <<"#<>"/utf8>>} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                _ -> From_ ! {bv_error, Id_}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1952,7 +1963,9 @@ bv_loop() ->
             put(bv_caller_, From_),
             Result_ = handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>),
             case Result_ of
-                {ok, Re_, _Bva_} -> From_ ! {bv_reply, Id_, Re_};
+                %% A self-return: to the parent, this instance's address is its pid.
+                {ok, _, <<"#<>"/utf8>>} -> From_ ! {bv_reply, Id_, self()};
+                {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};
                 _ -> From_ ! {bv_error, Id_}
             end,
             bv_loop();
@@ -2068,7 +2081,26 @@ emit_await_(Event, Payload) ->
     return `bv_type_fields(${erlString(t.name)}) -> [${fields}];`;
   }).join('\n');
   const bvTypeFieldsBlock = `${typeArms}\nbv_type_fields(_) -> undefined.\n\n` +
-`bv_unwire_payload(Message, Payload) ->
+`%% A reply's re and its parallel bv-a, in wire shape: a positional reply tags per
+%% slot, with named slots in a trailing map, and a named reply tags per key.
+bv_unwire_slot(Tag, V) when is_list(Tag); is_map(Tag) -> bv_unwire_reply(V, Tag);
+bv_unwire_slot(Tag, V) when is_binary(Tag) ->
+    case bv_type_name(Tag) of
+        undefined -> V;
+        Name ->
+            case bv_type_fields(Name) of
+                undefined -> V;
+                Fields -> bv_from_wire(Tag, V, Fields)
+            end
+    end;
+bv_unwire_slot(_, V) -> V.
+bv_unwire_reply(Re, Bva) when is_list(Re), is_list(Bva), length(Re) =:= length(Bva) ->
+    lists:zipwith(fun bv_unwire_slot/2, Bva, Re);
+bv_unwire_reply(Re, Bva) when is_map(Re), is_map(Bva) ->
+    maps:map(fun(K, V) -> bv_unwire_slot(maps:get(K, Bva, null), V) end, Re);
+bv_unwire_reply(Re, _) -> Re.
+
+bv_unwire_payload(Message, Payload) ->
     case maps:find(<<"bv-a">>, Message) of
         {ok, [Types | _]} when is_map(Types) andalso is_map(Payload) ->
             maps:fold(fun
@@ -2168,6 +2200,7 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast, options = {}) {
+  lowerChains(ast);
   const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';

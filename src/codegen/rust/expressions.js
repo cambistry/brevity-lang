@@ -721,7 +721,7 @@ ${subRegLines.join('\n')}
         if (enclosing) {
           return `self.child_${enclosing}_dispatch_at(${idExpr}, ${method}, &${payloadX}, "", "__parent")`;
         }
-        return `{ let (re, _, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); re.unwrap_or(Value::Null) }`;
+        return `{ let (re, bva, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); let re = re.unwrap_or(Value::Null); bva.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
     }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
@@ -747,7 +747,7 @@ ${subRegLines.join('\n')}
         payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
       }
       if (spawnClass === '__self__') {
-        return `{ let (re, _, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); re.unwrap_or(Value::Null) }`;
+        return `{ let (re, bva, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); let re = re.unwrap_or(Value::Null); bva.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
       const lc = spawnClass.toLowerCase();
       return `self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent")`;
@@ -1257,6 +1257,7 @@ ${subRegLines.join('\n')}
     }
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
+  if (expr.type === 'SelfValue') return 'json!("#<>")';
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 

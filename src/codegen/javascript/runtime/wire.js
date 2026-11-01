@@ -50,6 +50,22 @@ export function _bv_from_wire(tag, payload, _bv_types) {
   return out;
 }
 
+// A reply's counterpart to `_bv_unwire_packed`: `re` and its parallel `bv-a`, in
+// wire shape. A positional reply tags per slot, with named slots in a trailing
+// object; a named reply tags per key. Slots whose tag is not `::Name` pass through.
+export function _bv_unwire_reply(re, bva, _bv_types) {
+  if (bva == null || typeof bva !== 'object' || re == null || typeof re !== 'object') return re;
+  if (Array.isArray(re) !== Array.isArray(bva)) return re;
+  if (Array.isArray(re)) {
+    return re.map((v, i) => (typeof bva[i] === 'object'
+      ? _bv_unwire_reply(v, bva[i], _bv_types)
+      : _bv_from_wire(bva[i], v, _bv_types)));
+  }
+  const out = {};
+  for (const k of Object.keys(re)) out[k] = _bv_from_wire(bva[k], re[k], _bv_types);
+  return out;
+}
+
 // Reference-field invocation: given the address held in a reference field,
 // return the op selector to send. An address `#<alias selector>` resolves to
 // its trailing `selector`; a bare address passes through unchanged. Mirrors the

@@ -526,6 +526,11 @@ export function tokenize(source) {
                  silentSuffixAt(source, i, value, tokens.filter(t => t.type === 'NEWLINE').length + 1)) {
         tokens.push({ type: 'IDENT', value: value + '.' });
         i++;
+      } else if (!value.endsWith('?') && source[i] === '!' && source[i + 1] !== '=' && !KEYWORDS.has(value)) {
+        // A `!` glued to the end of a name is part of it: the function writes.
+        // A keyword keeps its own token (`.reduce!` is a built-in method).
+        tokens.push({ type: 'IDENT', value: value + '!' });
+        i++;
       } else {
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }

@@ -1,6 +1,8 @@
 # `!` means the function writes: mutation, return paths, and service docs — 2026-10-31
 
-Status: **DESIGN, agreed in discussion 2026-10-31; not implemented.** Supersedes
+Status: **Phases 1-2 IMPLEMENTED 2026-10-31, uncommitted for review**
+([session note](session-2026-10-31-mutation-suffix.md)), with `<-` as a value still a
+compile error. Phases 3-4 are design only. Supersedes
 [bang-returns-self](bang-returns-self-2026-10-27.md). Builds on
 [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md) (name
 match at the call site, kept) and
@@ -93,6 +95,10 @@ Being a valid final statement is separate from being a return value:
 
 - `return acc <- x` is exactly equivalent to `acc <- x; return *acc`, with the
   same capability rules. This is an explicit handoff of write capability.
+- **Not implemented yet.** `return *acc` doesn't exist: cells can't leave a function,
+  and cross-actor scalar cell handoff is explicitly deferred
+  (`__tests__/classes/param_capabilities.test.js`). So `<-` as a value parses and
+  reports a compile error. Statements and chains work. See open decision 6.
 - Readers from C will expect the new number. The compiler reports a reference
   where the caller expects `Integer`, rather than dereferencing it silently. To
   return the number: `acc <- x; return acc`.
@@ -117,6 +123,30 @@ Being a valid final statement is separate from being a return value:
   multi-argument set (`src/parser.js:1276`), so `return a <- 1, 2` would otherwise
   be ambiguous. It means `return (a <- 1), 2`. A multi-argument set inside a list
   needs parens: `return (a <- 1, 2)`. The statement form is unchanged.
+
+### Self on the wire
+
+A self-return is an empty reply whose `bv-a` is the local-form self address:
+
+```
+{ id, re: {}, 'bv-a': '#<>' }
+```
+
+- **`#<>` is the canonical self address:** local form, no selector. An actor doesn't
+  know what it's called, so it can't name its class or address. By the
+  leading-character rule a non-word start is local, so the parent promotes it to
+  `#<addr>` like any other local address. `#<self>` would read as a global.
+- **`re: {}` is a placeholder.** `re` is what marks a message as a reply, but a
+  self-return carries no data.
+- **The caller reads `bv-a` as well as `re`.** After translation `bv-a` is the actor's
+  address in the caller's frame, and that address is the call's value.
+- **Parents translate in-process children too.** An untranslated `#<>` reaching a
+  caller would mean the caller itself, so the child-reply paths must swap in the
+  caller's handle for the child.
+- **A host of many sub-actors names the sub-actor.** The DOM runtime replies with the
+  element's address rather than `#<>`, which would mean the HTML node.
+- **`self` is a return-position value only in v1:** `return self` and a tail `self`.
+  `x = self` and `f(self)` are errors for now, and can be widened later.
 
 ## Functions
 
@@ -328,9 +358,10 @@ Recommendations are mine; spelling hasn't been discussed.
    against the doc.
 5. **`emit` and `.subscribe`.** Recommendation: `emit` counts as a write, and
    `.subscribe` doesn't.
-6. **`el.field <- x` as an expression on a remote actor.** Recommendation: v1 allows
-   the expression form, chains included, on local cells only. Also still to confirm: how the capability code treats a
-   returned `*acc`.
+6. **What `<-` yields as a value.** The design says a reference to the cell, which
+   needs a wire form for a returned cell, including one that isn't `@`-published. No
+   such mechanism exists, so a value use is a compile error for now. Until this is
+   settled, the expression form is also limited to local cells, not `el.field`.
 
 ## Implementation plan
 
@@ -365,15 +396,8 @@ No open decisions block this.
 
 ### Phase 2: `<-` as an expression
 
-`<-` is a statement today (`AST.setStatement`), and `parseExpr`
-(`src/parser.js:2316`) rejects it. Add the expression form for local cells, with
-reference-vs-value errors at the call site.
-
-- Statement sites look ahead for `IDENT SET` and each parse the set themselves;
-  they must also accept a chain. `return` needs the same lookahead, since
-  `parseReplyFields` consumes the leading name first.
-- Tests: `return acc <- acc + i`, `a <- b <- c`, `a <- (b <- c)`, `return a <- 1, 2`
-  against `return (a <- 1, 2)`, and `1 + a <- 2` as an error.
+Done, except for yielding a value (open decision 6). Chains spread into one statement
+per link, and a final write in arrow form is a statement in a `!` function.
 
 ### Phase 3: service doc contracts
 

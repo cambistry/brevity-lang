@@ -528,6 +528,7 @@ json_escape(<<C, R/binary>>, Acc) -> json_escape(R, [C|Acc]).
 
 %% ── Object helpers ───────────────────────────────────────────────────────
 bv_object_pack(null) -> {[], #{}};
+bv_object_pack(P) when is_pid(P) -> {[P], #{}};
 bv_object_pack(L) when is_list(L) ->
     case L of
         [] -> {[], #{}};
@@ -934,6 +935,16 @@ brevity_re_after(Bin, Re) ->
         nomatch -> <<>>
     end.
 
+%% A self-return's value is the address in its bv-a.
+bv_self_reply_(Re, Message) when map_size(Re) =:= 0 ->
+    case maps:find(<<"bv-a">>, Message) of
+        {ok, <<"#<", _/binary>> = Addr} ->
+            case binary:match(Addr, <<"::">>) of nomatch -> [Addr]; _ -> Re end;
+        {ok, Bva} -> bv_unwire_reply(Re, Bva);
+        _ -> Re
+    end;
+bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"bv-a">>, Message, null)).
+
 await_response_(Id) ->
     case io:get_line("") of
         eof -> null;
@@ -943,7 +954,7 @@ await_response_(Id) ->
             Message = json_decode(Bin),
             MsgId = maps:get(<<"id">>, Message, <<>>),
             case maps:find(<<"re">>, Message) of
-                {ok, Re} when MsgId =:= Id -> Re;
+                {ok, Re} when MsgId =:= Id -> bv_self_reply_(Re, Message);
                 {ok, _} -> await_response_(Id);
                 error ->
                     case maps:find(<<"ex">>, Message) of

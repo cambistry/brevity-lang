@@ -1,5 +1,5 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_sel } from './runtime/wire.js';
+import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel } from './runtime/wire.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
 // JS module is unit-testable; the preamble emission below is just the same
@@ -14,6 +14,7 @@ export const WIRE_PREAMBLE = [
   _bv_to_wire.toString().replace(', _bv_types)', ')'),
   _bv_from_wire.toString().replace(', _bv_types)', ')'),
   _bv_unwire_packed.toString().replace(', _bv_types)', ')'),
+  _bv_unwire_reply.toString().replace(', _bv_types)', ')'),
   _bv_sel.toString(),
 ].join('\n');
 
@@ -498,6 +499,9 @@ export const STRING_PREAMBLE = `function _bv_str(v) {
 export const OBJECT_PREAMBLE = `const BvObject = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };
+    if (Array.isArray(payload.positional) && 'named' in payload && 'positional_types' in payload) return payload;
+    // A self-return's value: an actor handle or an address.
+    if (typeof payload === 'string' || typeof payload.receive === 'function') return { positional: [payload], named: {}, positional_types: null, named_types: null };
     if (Array.isArray(payload)) {
       const last = payload[payload.length - 1];
       // Last element is the named-args dict only if it's a plain object.
@@ -520,6 +524,7 @@ export const OBJECT_PREAMBLE = `const BvObject = {
     return { positional: [], named: payload, positional_types: null, named_types: null };
   },
   one(s, name) {
+    if (s.selfReturn) return '#<>';
     if (s.positional.length !== 1)
       throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);
     return s.positional[0];

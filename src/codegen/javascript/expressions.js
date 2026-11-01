@@ -943,6 +943,20 @@ export function genExpr(ctx, expr) {
           : `this.#send(${op}, ${addr})`;
       }
     }
+    if (isChainReceiver(ctx, expr.object)) {
+      ctx.usesChildSend = true;
+      const positional = expr.args.filter(a => a.positional);
+      const named = expr.args.filter(a => !a.positional);
+      const method = JSON.stringify('@' + expr.method);
+      const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+      const posVals = positional.map(genArgVal).join(', ');
+      const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
+      let op = method;
+      if (positional.length > 0 && named.length > 0) op = `[${posVals}, {${namedFields}}, ${method}]`;
+      else if (named.length > 0) op = `[{${namedFields}}, ${method}]`;
+      else if (positional.length > 0) op = `[[${posVals}], ${method}]`;
+      return `this.#childSendChain(${genExpr(ctx, expr.object)}, ${op})`;
+    }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
@@ -1046,7 +1060,13 @@ export function genExpr(ctx, expr) {
       return `this.#send([[${posVals}], ${method}], ${to}, [[${posBva}]])`;
     }
   }
+  if (expr.type === 'SelfValue') return '"#<>"';
   if (expr.type === 'DotAccessExpr') {
+    // A member read on the result of a `!` call: a call on the handle it yielded.
+    if (isChainReceiver(ctx, expr.object)) {
+      ctx.usesChildSend = true;
+      return `(await this.#childSendRead(${genExpr(ctx, expr.object)}, ${JSON.stringify(expr.property)}))`;
+    }
     // Silent reference-field invocation with no args: `v.endpoint!` (bang, no
     // parens). The bang rode into the property name during parsing. Fire the
     // address the field holds; `v.endpoint` (no bang) stays a plain read below.
@@ -1072,6 +1092,15 @@ export function genExpr(ctx, expr) {
     return `${obj}.${expr.property}`;
   }
   throw new Error(`Unknown expression type: ${expr.type}`);
+}
+
+// The receiver of a chained call: a call to a `!` function, which yields a handle
+// when it returns self.
+function isChainReceiver(ctx, obj) {
+  if (obj.type === 'DotCallExpr') return obj.method?.endsWith('!');
+  if (obj.type === 'DotAccessExpr') return obj.property?.endsWith('!');
+  if (obj.type === 'FunctionCallExpr') return obj.callee?.type === 'Identifier' && obj.callee.name?.endsWith('!');
+  return false;
 }
 
 export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, indent = '        ') {
@@ -1300,6 +1329,7 @@ export function genArgSlots(ctx, positional, named) {
 }
 
 export function genBvaBody(ctx, fields, typeEnv) {
+  if (fields[0]?.selfReturn) return '"#<>"';
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
@@ -1351,9 +1381,18 @@ export function genBvaBody(ctx, fields, typeEnv) {
   }
 }
 
+// What a function body returns: a packed Object, marked when it's a self-return
+// so the handler can tag the reply on that path.
+export function genPackedReturn(ctx, fields, typeEnv, declaredReturnType = null) {
+  if (fields[0]?.selfReturn) return '{ positional: [], named: {}, positional_types: null, named_types: null, selfReturn: true }';
+  return `BvObject.pack(${genReBody(ctx, fields, typeEnv, declaredReturnType)})`;
+}
+
 export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
+  // Self-return: no data; the address travels in `bv-a`.
+  if (fields[0].selfReturn) return '{}';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;

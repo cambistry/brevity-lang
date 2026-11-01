@@ -242,6 +242,8 @@ function parseSignature(name, text) {
     throw new Error(`Interface entry '${name}' is silent by its name — its return is '-> .'`);
   }
   if (rest === '.') return { kind: 'function', params, returns: null };
+  if (rest === 'self') return { kind: 'function', params, returns: null, returnsSelf: true };
+  if (rest === '(self)') throw new Error(`Interface entry '${name}': a self-return takes no parens — write '-> self'`);
   if (rest.startsWith('(')) {
     const rEnd = groupEnd(rest, 0);
     if (rEnd !== rest.length) {
@@ -256,7 +258,7 @@ function parseSignature(name, text) {
   }
   if (!rest) {
     throw new Error(
-      `Interface entry '${name}': missing return — write '-> (Type)', '-> .', or '-> *{ … }' ` +
+      `Interface entry '${name}': missing return — write '-> (Type)', '-> .', '-> self', or '-> *{ … }' ` +
       `(a constructor with no members of its own is '-> *{}')`,
     );
   }

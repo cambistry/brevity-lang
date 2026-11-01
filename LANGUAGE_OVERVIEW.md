@@ -131,6 +131,28 @@ in `...` (fire-and-forget); right after a name the ellipsis absorbs the dot
 A bare `return` exits a silent function early; `return value` is an error.
 `spawn` also starts a silent operation without waiting for a reply.
 
+A function that writes is named with a glued `!`, which is part of its name:
+`c.inc!(5)` and `c.inc(5)` are different members. A `!` function has no tail
+return. Falling off the end returns `self`, and `return v` returns `v`:
+
+```brevity
+@inc! = (i Integer) { acc <- acc + i }     // returns self
+@take! = {
+  v Integer = acc
+  acc <- 0
+  return v
+}
+
+C().inc!(5).inc!(2).total
+```
+
+A final value in a `!` function is an error, because it would be discarded. So is a
+value on one path and falling off the end on another: write `return self` on the
+second. `self` is only a value in return position. Its type in a signature is
+`-> self`, as in `inc! (Integer) -> self`. On the wire a self-return is
+`{ re: {}, 'bv-a': '#<>' }`, where `#<>` is the sender's own address in local form
+and its parent promotes it, like any other local address.
+
 ## Classes and Dependency Context
 
 A **class** constructs actors. Its body is marked with `*`:

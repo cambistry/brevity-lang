@@ -142,39 +142,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     out.push(`${branchIndent}return (re, bva_re, handled);`);
     return out.join('\n');
   }
-  function genBranchLines(branchBody, branchIndent) {
-    const out = [];
-    for (const bs of branchBody) {
-      if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
-        out.push(genGuardBlock(bs.expr, branchIndent));
-      } else if (bs.type === 'Return') {
-        out.push(makeReturnLines(bs.fields, branchIndent));
-      } else if (bs.type === 'TypedAssign') {
-        const val = genRustExpr(bs.value, typeEnv);
-        out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-      } else if (bs.type === 'Assign') {
-        const val = genRustExpr(bs.value, typeEnv);
-        out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
-      }
-    }
-    return out.join('\n');
-  }
-  function genGuardBlock(ifExpr, blockIndent) {
-    const bI = blockIndent;
-    const bII = bI + '    ';
-    const cond = genRustCondition(ifExpr.cond, typeEnv, {});
-    const thenLines = genBranchLines(ifExpr.then?.body || [], bII);
-    let elseSection = '';
-    if (ifExpr.else) {
-      if (ifExpr.else.type === 'IfExpr') {
-        elseSection = ` else {\n${genGuardBlock(ifExpr.else, bII)}\n${bI}}`;
-      } else if (ifExpr.else.body) {
-        const elseLines = genBranchLines(ifExpr.else.body, bII);
-        elseSection = ` else {\n${elseLines}\n${bI}}`;
-      }
-    }
-    return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
-  }
+  const genGuardBlock = (ifExpr, blockIndent) => rustGuardBlock(ifExpr, blockIndent, typeEnv, makeReturnLines);
   if (hasLeadingGuard) {
     leadingGuardLines = genGuardBlock(guards[0].expr, '                ');
     trailingGuards = guards.slice(1);
@@ -578,6 +546,44 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   return arms.join('\n');
 }
 
+// A conditional-return guard: an `if` whose branches return. `makeReturnLines` says
+// how a return leaves the enclosing function.
+function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
+  const bII = bI + '    ';
+  const branch = (branchBody) => {
+    const out = [];
+    for (const bs of branchBody) {
+      if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+        out.push(rustGuardBlock(bs.expr, bII, typeEnv, makeReturnLines));
+      } else if (bs.type === 'Return') {
+        out.push(makeReturnLines(bs.fields, bII));
+      } else if (bs.type === 'TypedAssign') {
+        const val = genRustExpr(bs.value, typeEnv);
+        out.push(`${bII}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
+      } else if (bs.type === 'Assign') {
+        const val = genRustExpr(bs.value, typeEnv);
+        out.push(`${bII}let ${rustIdent(bs.name)} = ${val};`);
+      } else {
+        // Writes and calls: anything else a branch does before it returns.
+        const code = genRustLocals([bs], typeEnv, analyzeFunctions([bs], new Set(), typeEnv), findMutableVars([bs]), bII);
+        if (code) out.push(code);
+      }
+    }
+    return out.join('\n');
+  };
+  const cond = genRustCondition(ifExpr.cond, typeEnv, {});
+  const thenLines = branch(ifExpr.then?.body || []);
+  let elseSection = '';
+  if (ifExpr.else) {
+    if (ifExpr.else.type === 'IfExpr') {
+      elseSection = ` else {\n${rustGuardBlock(ifExpr.else, bII, typeEnv, makeReturnLines)}\n${bI}}`;
+    } else if (ifExpr.else.body) {
+      elseSection = ` else {\n${branch(ifExpr.else.body)}\n${bI}}`;
+    }
+  }
+  return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
+}
+
 function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
@@ -600,8 +606,20 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   if (destructure) lines.push(destructure);
   const savedSsaScope = G.ctx.ssaScope;
   const savedSsaCounts = G.ctx.ssaCounts;
-  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars);
+  // A child's arm runs inside a function returning its reply Value, so an early
+  // return is a plain `return`. The parent gets typed values decoded.
+  const childReply = (fields, te) => {
+    const reBody = genRustReBody(fields, te, refNames);
+    const bvaBody = genRustBvaBody(fields, te, refNames);
+    return bvaBody?.includes('::') ? `{ let _r = ${reBody}; if from == "__parent" { bv_unwire_reply(&_r, &${bvaBody}) } else { _r } }` : reBody;
+  };
+  const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
+  const genChildGuard = (g) => rustGuardBlock(g.expr, '                ', typeEnv, (fields, bI) => `${bI}return ${childReply(fields, typeEnv)};`);
+  const leadingChildGuard = body[0] === childGuards[0] ? childGuards[0] : null;
+  if (leadingChildGuard) lines.push(genChildGuard(leadingChildGuard));
+  const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, undefined, childReply);
   if (locals) lines.push(locals);
+  for (const g of childGuards) if (g !== leadingChildGuard) lines.push(genChildGuard(g));
 
   if (reply) {
     // Pre-compute reply field expressions that contain function calls producing block expressions
@@ -665,6 +683,11 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
     }
 
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
+    // In process there's no bv-a channel, so the parent gets typed values decoded.
+    const childBva = genRustBvaBody(reply.fields, typeEnv, refNames);
+    if (childBva?.includes('::')) {
+      lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childBva})); }`);
+    }
   } else if (implicitReturn) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv, eCtx);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
@@ -1189,6 +1212,9 @@ function genRustChildMethods(allActors) {
         self.current_${lc}_instance = saved_current;
         self.inst_depth -= 1;
         self.flush_pending_subs();
+        // A self-return has an empty Object for its reply and no other reply does.
+        // We're the parent, so its address, in our frame, is this handle.
+        if result.as_object().is_some_and(|o| o.is_empty()) { return bv_inst_ref("${lc}", instance_id); }
         result
     }
 
