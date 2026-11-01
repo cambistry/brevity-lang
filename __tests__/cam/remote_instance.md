@@ -9,7 +9,7 @@ routing of the returned address.
 ```brevity
 *(
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
+    open. () => .
     getTitle () -> (title: Text)
   }
 )

@@ -3,7 +3,7 @@
 LLM orientation: silent functions are effect-only. They do not produce a value
 that can be assigned, passed as an argument, used in an expression, or returned.
 Silence is in the name: a silent function is named with a glued `.`
-(`fire.`, `@notify.`). Its type is `(…) -> .`.
+(`fire.`, `@notify.`). Its type is `(…) => .`.
 
 ## Forms
 

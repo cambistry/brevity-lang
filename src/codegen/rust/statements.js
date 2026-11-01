@@ -790,7 +790,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
     const isFnCall = s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier';
     const calleeFnTyped = isFnCall && (() => {
       const ct = typeEnv.get(s.value.callee.name);
-      if (ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')))) return true;
+      if (ct && (ct === 'Function' || (typeof ct === 'string' && /[-=~]>/.test(ct)))) return true;
       // Lambda vars dispatch through call_fn and return Value
       if (G.ctx.lambdaVarNames.has(s.value.callee.name)) return true;
       // We're already past the actorFnNames / fnDefs paths — any remaining
@@ -1564,7 +1564,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           // Find the returned function from Reply and register it under the call-site name
           if (fnReply) {
             const retField = fnReply.fields.find(f =>
-              f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
+              f.type === 'Function' || (typeof f.type === 'string' && /[-=~]>/.test(f.type)));
             if (retField) {
               const retFunction = fnLocalFunctions.get(retField.name);
               if (retFunction) {
@@ -1592,10 +1592,10 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
         // an ImplicitReturn whose typeName is Function (the `inner as Function` form).
         const trackedReturnsFn = tracked && (() => {
           const rt = tracked.node.returnType;
-          if (rt === 'Function' || (typeof rt === 'string' && rt.includes('->'))) return true;
+          if (rt === 'Function' || (typeof rt === 'string' && /[-=~]>/.test(rt))) return true;
           const implRet = (tracked.node.body || []).find(bs => bs.type === 'ImplicitReturn');
           const tn = implRet?.typeName;
-          return tn === 'Function' || (typeof tn === 'string' && tn.includes('->'));
+          return tn === 'Function' || (typeof tn === 'string' && /[-=~]>/.test(tn));
         })();
         if (trackedReturnsFn) {
           // Function-returning function: inline body at outer scope, track returned function

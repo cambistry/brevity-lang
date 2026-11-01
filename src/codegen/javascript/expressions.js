@@ -305,8 +305,8 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';
-  if (!/->/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
 }
 
 export function genExpr(ctx, expr) {
@@ -851,7 +851,7 @@ export function genExpr(ctx, expr) {
       const calleeName = expr.callee.name;
       const calleeExpr = genExpr(ctx, expr.callee);
       const calleeType = ctx.currentTypeEnv?.get(calleeName);
-      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
+      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType)));
       if (isFnTyped) {
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const op = expr.args.length === 0
@@ -1333,7 +1333,7 @@ export function genBvaBody(ctx, fields, typeEnv) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
   // Type-valued slots emit the type's authority address (see typeTag);
   // List-of-any slots emit a runtime element-type probe.
   const tagFor = t => typeTag(ctx, t);

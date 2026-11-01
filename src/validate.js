@@ -814,13 +814,13 @@ export function validate(ast, options = {}) {
   checkTypeDestructure(ast);
   // ── Silent reference calls must precede the first reply-awaiting send ──
   checkSilentRefOrdering(ast);
-  checkSilentCallForm(ast);
+  checkSilentCallForm(ast, remotesParsed);
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call
 // to a silent name (`x.ping.()`) is fire-and-forget (`...` or `spawn`), and a
 // `...` call names a silent (or bang) member.
-function checkSilentCallForm(ast) {
+function checkSilentCallForm(ast, remotesParsed = {}) {
   const calleeName = (call) => call.type === 'DotCallExpr' ? call.method
     : call.callee?.type === 'Identifier' ? call.callee.name : null;
   const shown = (call) => call.type === 'DotCallExpr'
@@ -831,7 +831,9 @@ function checkSilentCallForm(ast) {
     if (node.type === 'SpawnStatement' || ((node.type === 'ExprStatement' || node.type === 'ImplicitReturn') && node.ellipsis)) {
       const call = node.type === 'SpawnStatement' ? node.call : node.expr;
       const name = calleeName(call);
-      if (node.ellipsis && name && !call.silentField && !name.endsWith('.') && !name.endsWith('!')) {
+      // A foreign function's name is literal, so its doc can say it's silent instead.
+      const docSilent = call.type === 'DotCallExpr' && remotesParsed[call.object?.name]?.[call.method]?.some?.(sig => sig.silent);
+      if (node.ellipsis && name && !call.silentField && !docSilent && !name.endsWith('.') && !name.endsWith('!')) {
         throw new Error(`'${shown(call)}' returns a value; '...' needs a silent '${name}.'`);
       }
       visit(call, true);
@@ -884,7 +886,7 @@ function callbackInputTypes(paramTypeStr) {
   if (typeof paramTypeStr !== 'string') return null;
   let depth = 0, arrowIdx = -1;
   for (let i = 0; i < paramTypeStr.length; i++) {
-    if (paramTypeStr[i] === '-' && paramTypeStr[i + 1] === '>') {
+    if ('-=~'.includes(paramTypeStr[i]) && paramTypeStr[i + 1] === '>') {
       if (depth === 0) { arrowIdx = i; break; }
       i++; continue;
     }
@@ -904,7 +906,7 @@ function callbackOutputType(paramTypeStr) {
   if (typeof paramTypeStr !== 'string') return null;
   let depth = 0, arrowIdx = -1;
   for (let i = 0; i < paramTypeStr.length; i++) {
-    if (paramTypeStr[i] === '-' && paramTypeStr[i + 1] === '>') {
+    if ('-=~'.includes(paramTypeStr[i]) && paramTypeStr[i + 1] === '>') {
       if (depth === 0) { arrowIdx = i; break; }
       i++; continue;
     }
@@ -985,7 +987,7 @@ function forEachCallbackLambdaArg(node, fields, onCallbackLambda) {
   for (let fi = 0; fi < fields.length; fi++) {
     const field = fields[fi];
     const sig = field.paramType;
-    if (!sig || !/->/.test(sig)) continue;
+    if (!sig || !/[-=~]>/.test(sig)) continue;
     const arg = fi < positional.length ? positional[fi] : named[field.name];
     const fn = asFunction(arg);
     if (fn) onCallbackLambda(fn, sig, field);
@@ -1040,7 +1042,7 @@ function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
       let pi = 0;
       for (const p of (sig.params || [])) {
         const argExpr = p.name ? named[p.name] : positional[pi++];
-        if (p.type && /->/.test(p.type)) {
+        if (p.type && /[-=~]>/.test(p.type)) {
           const fn = asFn(argExpr);
           if (fn) inferLambdaParamsFromCallbackType(fn, p.type, resolve, nameable);
         }
@@ -1129,7 +1131,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
       // A silent field's key carries its silent `.` (`onpress.: …`); the field
       // is stored without it.
       if (namedBag?.fields) {
-        const isSilent = (n) => /->\s*\.\s*$/.test(fields.find(f => f.name === n)?.paramType || '');
+        const isSilent = (n) => /=>\s*\.\s*$/.test(fields.find(f => f.name === n)?.paramType || '');
         for (const key of Object.keys(namedBag.fields)) {
           const plain = key.endsWith('.') ? key.slice(0, -1) : key;
           if (key.endsWith('.') && fields.some(f => f.name === plain) && !isSilent(plain)) {
@@ -1238,8 +1240,8 @@ function checkTypeFieldAccess(ast) {
     const f = decl.fields.find(ff => ff.name === name);
     if (!f) return null;
     const pt = f.paramType || '';
-    if (!/->/.test(pt)) return 'value';
-    return /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+    if (!/[-=~]>/.test(pt)) return 'value';
+    return /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
   }
 
   // Is `expr` the invocation of a silent reference field? (bang DotAccess, or a
@@ -1366,8 +1368,8 @@ function checkSilentRefOrdering(ast) {
     const f = decl.fields.find(ff => ff.name === name);
     if (!f) return null;
     const pt = f.paramType || '';
-    if (!/->/.test(pt)) return 'value';
-    return /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+    if (!/[-=~]>/.test(pt)) return 'value';
+    return /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
   };
   // Classify an invocation node as 'silent' | 'callback' (barrier) | null.
   const classify = (node, env) => {
@@ -1829,7 +1831,7 @@ function parseConstructorManifest(s) {
   const paramsStr = t.slice(1, i).trim();
   let j = i + 1;
   while (j < t.length && /\s/.test(t[j])) j++;
-  if (t.slice(j, j + 2) === '->') {
+  if (/^[-=~]>/.test(t.slice(j, j + 2))) {
     j += 2;
     while (j < t.length && /\s/.test(t[j])) j++;
   }

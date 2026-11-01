@@ -10,7 +10,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // falls out of the field's TYPE being behavioral (a function signature). The
 // discipline is selected by the signature's output side:
 //
-//   silent   `() -> .`        fire-and-forget, NO reply
+//   silent   `() => .`        fire-and-forget, NO reply
 //   callback `(x) -> (y)` / `(x) -> ()`   reply-awaiting
 //
 // Invoking a reference field sends to the address it holds, mirroring the
@@ -19,7 +19,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // no-args is the bare selector.
 //
 // Surface: a silent reference field is named with the silent `.`
-// (`push.: () -> .`) and invoked fire-and-forget: `v.push...` (no args) or
+// (`push.: () => .`) and invoked fire-and-forget: `v.push...` (no args) or
 // `v.push.(args)...`. A reply-awaiting callback is a plain call `v.field(args)`.
 // See notes/silent-dot-suffix-2026-10-30.md.
 //
@@ -32,9 +32,9 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('reference fields — grammar', () => {
-  it('a silent reference field `() -> .` parses as a type field', () => {
+  it('a silent reference field `() => .` parses as a type field', () => {
     expect(() => compileSource(`
-      ::Sink (push.: () -> .)
+      ::Sink (push.: () => .)
       @go = -> result: 1
     `)).not.toThrow();
   });
@@ -55,7 +55,7 @@ describe('reference fields — grammar', () => {
 
   it('mixes value fields and reference fields in one type', () => {
     expect(() => compileSource(`
-      ::Mixed (seed: Integer, push.: () -> ., check: (x: Integer) -> (ok: Boolean))
+      ::Mixed (seed: Integer, push.: () => ., check: (x: Integer) -> (ok: Boolean))
       @go = -> result: 1
     `)).not.toThrow();
   });
@@ -86,9 +86,9 @@ describe('reference fields — captured in the type declaration', () => {
     return decl;
   };
 
-  it('records a silent reference field with its `() -> .` signature', () => {
+  it('records a silent reference field with its `() => .` signature', () => {
     const { ast } = extract(`
-      ::Sink (push.: () -> .)
+      ::Sink (push.: () => .)
       @go = -> result: 1
     `);
     const decl = typeDeclNamed(ast, 'Sink');
@@ -97,7 +97,7 @@ describe('reference fields — captured in the type declaration', () => {
     // downstream discipline selection can distinguish it from a value field.
     const field = decl.fields.find(f => f.name === 'push');
     expect(field).toBeTruthy();
-    expect(field.paramType).toMatch(/->\s*\.$/);
+    expect(field.paramType).toMatch(/=>\s*\.$/);
   });
 });
 
@@ -115,7 +115,7 @@ describe('reference fields — captured in the type declaration', () => {
 
 describe('reference fields — runtime invocation', () => {
   const fixture = `
-    ::Sink (push.: () -> ., flush.: () -> .)
+    ::Sink (push.: () => ., flush.: () => .)
     ::Call (arg Integer, fn: (value: Integer) -> (out: Integer))
 
     // Silent reference, bang-invoked: fire-and-forget, no reply awaited;
@@ -184,7 +184,7 @@ describe('reference fields — runtime invocation', () => {
 describe('reference fields — validation', () => {
   it('rejects binding the result of a silent reference call (no value)', () => {
     expect(() => compileSource(`
-      ::Sink (push.: () -> .)
+      ::Sink (push.: () => .)
       @go = (s: Sink) {
         x = s.push...
         return result: 1
@@ -201,7 +201,7 @@ describe('reference fields — validation', () => {
 
   it('rejects invoking a field the type does not declare', () => {
     expect(() => compileSource(`
-      ::Sink (push.: () -> .)
+      ::Sink (push.: () => .)
       @go. = (s: Sink) { s.bogus! }
     `)).toThrow(/has no field 'bogus'/);
   });
@@ -216,7 +216,7 @@ describe('reference fields — validation', () => {
 describe('reference fields — silent-call ordering check', () => {
   it('accepts a silent call before any awaited send', () => {
     expect(() => compileSource(`
-      ::Mixed (push.: () -> ., check: (msg: Text) -> (ok: Boolean))
+      ::Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         m.push...
         ok: Boolean = m.check("done")
@@ -227,7 +227,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('accepts two silent calls before an awaited send', () => {
     expect(() => compileSource(`
-      ::Mixed (push.: () -> ., flush.: () -> ., check: (msg: Text) -> (ok: Boolean))
+      ::Mixed (push.: () => ., flush.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         m.push...
         m.flush...
@@ -239,7 +239,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('rejects a silent call after an awaited send', () => {
     expect(() => compileSource(`
-      ::Mixed (push.: () -> ., check: (msg: Text) -> (ok: Boolean))
+      ::Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         ok: Boolean = m.check("first")
         m.push...
@@ -250,7 +250,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('rejects a silent call after an awaited send inside an earlier branch', () => {
     expect(() => compileSource(`
-      ::Mixed (push.: () -> ., check: (msg: Text) -> (ok: Boolean))
+      ::Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed, flag: Boolean) {
         if flag ok: Boolean = m.check("maybe")
         m.push...

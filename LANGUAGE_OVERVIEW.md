@@ -112,14 +112,14 @@ choices for the same underlying callable model.
 
 Replying functions yield a value with `return`, or implicitly from a one-liner
 `->` arrow body (as `@double` above). An effect-only (silent) function is named
-with a glued `.` and sends no reply; its type is `(…) -> .`. A silent call ends
+with a glued `.` and sends no reply; its type is `(…) => .`. A silent call ends
 in `...` (fire-and-forget); right after a name the ellipsis absorbs the dot
 (`fire...`):
 
 ```brevity
 *
   "/services/log": Log {
-    write. (message: Text) -> .
+    write. (message: Text) => .
   }
 *
 
@@ -148,10 +148,24 @@ C().inc!(5).inc!(2).total
 
 A final value in a `!` function is an error, because it would be discarded. So is a
 value on one path and falling off the end on another: write `return self` on the
-second. `self` is only a value in return position. Its type in a signature is
-`-> self`, as in `inc! (Integer) -> self`. On the wire a self-return is
+second. `self` is only a value in return position. On the wire a self-return is
 `{ re: {}, 'bv-a': '#<>' }`, where `#<>` is the sender's own address in local form
 and its parent promotes it, like any other local address.
+
+A signature's arrow states its effect, in service docs and function types. A name
+is never interpreted:
+
+```
+total () -> (Integer)        // read-only
+me () -> self                // identity
+guess () ~> (Integer)        // purported read-only, not guaranteed
+pop () => (Item)             // writes, returns a value
+sort (by) => self            // writes, returns self
+log (Text) => .              // writes, silent
+```
+
+`untracked` before a declaration or doc entry says its writes don't count, for logs,
+metrics and caches.
 
 ## Classes and Dependency Context
 
@@ -223,7 +237,7 @@ the actor's address:
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
+    open. () => .
   }
 *
 

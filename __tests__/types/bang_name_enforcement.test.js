@@ -14,8 +14,8 @@ import { compileSource } from '../helpers.js';
 //    stripped and the call resolved to the no-bang field.)
 describe('bang enforcement — type reference fields', () => {
   const TYPES = `
-    ::Signal (dismiss.: () -> ., code: Integer)
-    ::Panel (onpress.: (s: Signal) -> ., label: Text)
+    ::Signal (dismiss.: () => ., code: Integer)
+    ::Panel (onpress.: (s: Signal) => ., label: Text)
   `;
 
   it('rejects a spurious bang on a silent reference field', () => {
@@ -47,9 +47,9 @@ describe('bang enforcement — type reference fields', () => {
 //    bang-ness must match the declared name — both directions.
 describe('bang enforcement — interface methods (bidirectional)', () => {
   const WIDGET = `{
-    ::Signal (dismiss.: () -> ., code: Integer)
-    watch. (on: (s: Signal) -> .) -> .
-    poke! () -> .
+    ::Signal (dismiss.: () => ., code: Integer)
+    watch. (on: (s: Signal) => .) => .
+    poke! () => .
   }`;
   const remotes = [{ path: 'Widget', service: WIDGET }];
   const dep = (body) => `*\n  "Widget": Widget\n*\n${body}`;

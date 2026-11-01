@@ -22,16 +22,17 @@ describe('service document — entry forms', () => {
         { name: 'b', type: 'Integer', positional: false },
       ],
       returns: [{ name: 'sum', type: 'Integer', positional: false }],
+      effect: 'read',
     }]);
   });
 
-  it('silent function: name. (params) -> .', () => {
-    const p = parseInterface('{ log! (Text) -> . }');
-    expect(p['log!']).toEqual([{ params: [{ name: null, type: 'Text', positional: true }], returns: null }]);
+  it('silent function: name. (params) => .', () => {
+    const p = parseInterface('{ log! (Text) => . }');
+    expect(p['log!']).toEqual([{ params: [{ name: null, type: 'Text', positional: true }], returns: null, effect: 'write' }]);
   });
 
   it('the -> before a return is optional on input', () => {
-    const withArrow = parseInterface('{ f (Integer) -> (Text)\n  g. () -> . }');
+    const withArrow = parseInterface('{ f (Integer) -> (Text)\n  g. () => . }');
     const without = parseInterface('{ f (Integer) (Text)\n  g. () . }');
     expect(without).toEqual(withArrow);
   });
@@ -45,7 +46,7 @@ describe('service document — entry forms', () => {
   it('constructor: Name (params) -> *{ members }', () => {
     const p = parseInterface(`{
       Counter (start: Integer) -> *{
-        inc! () -> .
+        inc! () => .
         get () -> (value: Integer)
       }
     }`);
@@ -105,7 +106,7 @@ describe('service document — entry forms', () => {
   });
 
   it('names may end in ? or !', () => {
-    const p = parseInterface('{ empty? () -> (Boolean)\n  clear! () -> . }');
+    const p = parseInterface('{ empty? () -> (Boolean)\n  clear! () => . }');
     expect(p['empty?']).toHaveLength(1);
     expect(p['clear!']).toHaveLength(1);
   });
@@ -163,7 +164,7 @@ describe('service document — emitted form', () => {
       @notify. = (msg: Integer) {}
       @notify = (msg: Text) -> ack: "ok"
     `);
-    expect(iface.service).toBe('{\n  notify. (msg: Integer) -> .\n  notify (msg: Text) -> (ack: Text)\n}');
+    expect(iface.service).toBe('{\n  notify. (msg: Integer) => .\n  notify (msg: Text) -> (ack: Text)\n}');
   });
 
   it('emitted document parses back', () => {
@@ -252,7 +253,7 @@ describe('constructor profiles in source', () => {
       get () -> (value: Integer)
       slot *Integer
     }
-    ping. () -> .
+    ping. () => .
   }
 *
 @go = -> 1
@@ -306,24 +307,24 @@ db = Store as { @get: (key: Text) -> (value: Text) }
 });
 
 describe('file-level params — function-typed', () => {
-  it('named: cb: (s: Integer) -> .', () => {
-    const { ast } = extract('*\n  cb: (s: Integer) -> .\n*\n@go. = { cb(s: 1) }\n');
+  it('named: cb: (s: Integer) => .', () => {
+    const { ast } = extract('*\n  cb: (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) -> .', positional: false },
+      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: false },
     ]);
   });
 
-  it('positional: cb (s: Integer) -> .', () => {
-    const { ast } = extract('*\n  cb (s: Integer) -> .\n*\n@go. = { cb(s: 1) }\n');
+  it('positional: cb (s: Integer) => .', () => {
+    const { ast } = extract('*\n  cb (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) -> .', positional: true },
+      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: true },
     ]);
   });
 });
 
 describe('service document — param and return fields', () => {
   it('a :: qualifier in a positional type is not a label', () => {
-    const p = parseInterface('{ make () -> (Geom::Point)\n  move. (p: Geom::Point) -> . }');
+    const p = parseInterface('{ make () -> (Geom::Point)\n  move. (p: Geom::Point) => . }');
     expect(p.make[0].returns).toEqual([{ name: null, type: 'Geom::Point', positional: true }]);
     expect(p['move.'][0].params).toEqual([{ name: 'p', type: 'Geom::Point', positional: false }]);
   });

@@ -4,7 +4,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 const silentEmitScript = `
   Firer = * {
-    emit fire() -> .
+    emit fire() => .
     @fire = { fire() }
     @ping = -> pong: "ok"
   }
@@ -44,7 +44,7 @@ const silentEmitScript = `
 
 const argsEmitScript = `
   Firer = * {
-    emit fire(n Integer) -> .
+    emit fire(n Integer) => .
     @fire = (n: Integer) { fire(n) }
   }
 
@@ -93,7 +93,7 @@ describe('emit — compilation', () => {
   it('emit declaration compiles', () => {
     expect(() => compileSource(`
       Firer = * {
-        emit fire() -> .
+        emit fire() => .
         @fire = { fire() }
       }
       @test = -> 1
@@ -103,7 +103,7 @@ describe('emit — compilation', () => {
   it('emit declaration with args compiles', () => {
     expect(() => compileSource(`
       Notifier = * {
-        emit notify(msg Text) -> .
+        emit notify(msg Text) => .
         @send = (msg: Text) { notify(msg) }
       }
       @test = -> 1
@@ -123,7 +123,7 @@ describe('emit — compilation', () => {
   it('on handler compiles', () => {
     expect(() => compileSource(`
       Firer = * {
-        emit fire() -> .
+        emit fire() => .
         @fire = { fire() }
       }
       Counter = (firer *) *{
@@ -184,7 +184,7 @@ describe('emit — multiple subscribers', () => {
   it('two subscribers both receive the emit', async () => {
     const script = `
       Firer = * {
-        emit fire() -> .
+        emit fire() => .
         @fire = { fire() }
       }
 

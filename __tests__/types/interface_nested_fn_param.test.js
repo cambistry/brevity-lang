@@ -10,9 +10,9 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 
 describe('interface parser — nested function-type parameter', () => {
   it('keeps a silent-callback parameter intact (top-level arrow wins)', () => {
-    const parsed = parseInterface('{ watch. (on: (s: Signal) -> .) -> . }');
+    const parsed = parseInterface('{ watch. (on: (s: Signal) => .) => . }');
     expect(parsed['watch.']).toEqual([
-      { params: [{ name: 'on', type: '(s: Signal) -> .', positional: false }], returns: null },
+      { params: [{ name: 'on', type: '(s: Signal) => .', positional: false }], returns: null, effect: 'write' },
     ]);
   });
 
@@ -22,6 +22,7 @@ describe('interface parser — nested function-type parameter', () => {
       {
         params: [{ name: 'cb', type: '(n: Integer) -> (ok: Boolean)', positional: false }],
         returns: [{ name: 'count', type: 'Integer', positional: false }],
+        effect: 'read',
       },
     ]);
   });
@@ -32,6 +33,7 @@ describe('interface parser — nested function-type parameter', () => {
       {
         params: [{ name: 'key', type: 'Text', positional: false }],
         returns: [{ name: 'value', type: 'Text', positional: false }],
+        effect: 'read',
       },
     ]);
   });

@@ -4,7 +4,7 @@ import { compileSource, compileActor } from '../helpers.js';
 // with no dependence on any real service.
 //
 // A fictional service `Widget` exports a Type `::Control` whose fields are a
-// mix of silent endpoint references (`() -> .` — fire-and-forget) and an
+// mix of silent endpoint references (`() => .` — fire-and-forget) and an
 // ordinary value field. A handler receives it as a typed param `Widget::Control`,
 // reads the value field locally, and invokes the endpoints (fire to the address
 // each field holds). This exercises cross-module type resolution + the
@@ -16,9 +16,9 @@ import { compileSource, compileActor } from '../helpers.js';
 
 const WIDGET = `{
   ::Control (
-    press.: () -> .
-    release.: () -> .
-    reset.: () -> .
+    press.: () => .
+    release.: () => .
+    reset.: () => .
     ? label: Text
   )
 }`;

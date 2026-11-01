@@ -600,7 +600,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (() => {
         const ct = ctx.currentTypeEnv?.get(s.value.callee.name);
-        return ct && (ct === 'Function' || (typeof ct === 'string' && ct.includes('->')));
+        return ct && (ct === 'Function' || (typeof ct === 'string' && /[-=~]>/.test(ct)));
       })()) {
         lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr') {

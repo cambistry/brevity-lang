@@ -3,7 +3,7 @@ import { compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════
 // Contextual lambda-parameter type inference — C1: local type callback field.
 //
-// A Type field may hold a callback (`(s: Signal) -> .`). When a lambda fills
+// A Type field may hold a callback (`(s: Signal) => .`). When a lambda fills
 // that field at construction, the lambda's untyped parameter takes its type
 // from the field's callback signature — so the lambda body resolves against
 // that type (`s.code` is a real field; `s.bogus` is not). Explicit annotations
@@ -15,7 +15,7 @@ import { compileSource } from '../helpers.js';
 
 const TYPES = `
   ::Signal (code: Integer)
-  ::Panel (onpress.: (s: Signal) -> ., label: Text)
+  ::Panel (onpress.: (s: Signal) => ., label: Text)
 `;
 
 describe('lambda param inference — C1 local type callback field', () => {
@@ -86,8 +86,8 @@ describe('lambda param inference — C1 local type callback field', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET = `{
-  ::Signal (dismiss.: () -> ., code: Integer)
-  ::Panel (onpress.: (s: Signal) -> ., label: Text)
+  ::Signal (dismiss.: () => ., code: Integer)
+  ::Panel (onpress.: (s: Signal) => ., label: Text)
 }`;
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
@@ -156,14 +156,14 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
 // imports that type's definition, scoped to the lambda — same semantics as the
 // construction carriers, sourced from the method signature instead of a field.
 //
-// (Named callback param form `(on: (s: Signal) -> .)`, matching the `onclick:`
+// (Named callback param form `(on: (s: Signal) => .)`, matching the `onclick:`
 // attribute shape. Positional function-type params hit a separate interface
 // comma/colon-split limitation and are out of scope here.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET_M = `{
-  ::Signal (dismiss.: () -> ., code: Integer)
-  watch. (on: (s: Signal) -> .) -> .
+  ::Signal (dismiss.: () => ., code: Integer)
+  watch. (on: (s: Signal) => .) => .
 }`;
 const remotesM = [{ path: 'Widget', service: WIDGET_M }];
 

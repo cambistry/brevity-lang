@@ -54,9 +54,9 @@ Use this when you want to show application logic layered over a dependency call.
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
+    open. () => .
     getTitle () -> (title: Text)
-    close. () -> .
+    close. () => .
   }
 *
 
@@ -79,7 +79,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 ```brevity
 *
   "DOM": DOM {
-    div. () -> .
+    div. () => .
   }
 *
 

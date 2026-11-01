@@ -110,15 +110,17 @@ function buildExtractTypeEnv(params, body) {
 function formatPublicFnSig(fn, aliasMap) {
   const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
   const reply = fn.body.find(stmt => stmt.type === 'Reply');
-  if (reply?.fields[0]?.selfReturn) return `(${input}) -> self`;
+  // Bodies are checked by the compiler, so a generated arrow states the fact.
+  const arrow = fn.name.endsWith('!') ? '=>' : '->';
+  if (reply?.fields[0]?.selfReturn) return `(${input}) ${arrow} self`;
   if (reply) {
     const typeEnv = buildExtractTypeEnv(fn.params, fn.body);
     const output = reply.fields.map((f, i) => formatReplyField(f, i, aliasMap, typeEnv)).join(', ');
-    return `(${input}) -> (${output})`;
+    return `(${input}) ${arrow} (${output})`;
   }
   const isSilent = fn.body.some(stmt => stmt.type === 'SilentTerminator');
-  if (isSilent) return `(${input}) -> .`;
-  return `(${input}) -> ()`;
+  if (isSilent) return `(${input}) => .`;
+  return `(${input}) ${arrow} ()`;
 }
 
 function formatConstructorSig(actor, aliasMap) {
@@ -214,7 +216,7 @@ function reactiveCellType(getter, setter, aliasMap) {
 function formatTypeField(field) {
   const opt = field.optional ? '? ' : '';
   // A silent-function field shows its silent `.` (stored without it).
-  const name = /->\s*\.\s*$/.test(field.paramType || '') ? `${field.name}.` : field.name;
+  const name = /=>\s*\.\s*$/.test(field.paramType || '') ? `${field.name}.` : field.name;
   if (field.named) return `${opt}${name}: ${field.paramType}`;
   return `${opt}${name} ${field.paramType}`;
 }

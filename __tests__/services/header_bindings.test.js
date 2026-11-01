@@ -28,7 +28,7 @@ describe('header bindings — forms', () => {
   it('"path": Name { iface } and a constructor profile', () => {
     expect(deps('"/db": DB { get (key: Text) -> (value: Text) }')[0])
       .toEqual(expect.objectContaining({ name: 'DB', iface: '{\n  get (key: Text) -> (value: Text)\n}' }));
-    expect(deps('"lib.bv": Lib (a: Integer) -> *{ ping. () -> . }')[0])
+    expect(deps('"lib.bv": Lib (a: Integer) -> *{ ping. () => . }')[0])
       .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', type: 'Integer' }] }));
   });
 
@@ -65,7 +65,7 @@ describe('header bindings — forms', () => {
 
   it('an untyped keyed entry takes its type from the remote document', () => {
     const src = '*\n  Store: S\n*\n@go. = { S.ping.()... }\n';
-    expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () -> .\n}' }] }))
+    expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () => .\n}' }] }))
       .not.toThrow();
   });
 
@@ -85,7 +85,7 @@ describe('header bindings — forms', () => {
 
 describe('inline definition wins over the remote document', () => {
   const header = '*\n  "/db": DB { get (key: Text) -> (value: Text) }\n*\n';
-  const remotes = [{ path: '/db', service: '{\n  put. (key: Text, value: Text) -> .\n}' }];
+  const remotes = [{ path: '/db', service: '{\n  put. (key: Text, value: Text) => .\n}' }];
   const compileWith = (body) => compile(extract(header + body).ast, { remotes });
 
   it('a declared method compiles even when the remote lacks it', () => {
@@ -97,8 +97,8 @@ describe('inline definition wins over the remote document', () => {
   });
 
   it('an inline constructor profile wins too', () => {
-    const src = '*\n  "lib.bv": Lib (a: Integer) -> *{ ping. () -> . }\n*\nl = Lib(a: 1)\n@go. = { l.ping.()... }\n';
-    const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () -> .\n}' }];
+    const src = '*\n  "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\n*\nl = Lib(a: 1)\n@go. = { l.ping.()... }\n';
+    const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () => .\n}' }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });
 

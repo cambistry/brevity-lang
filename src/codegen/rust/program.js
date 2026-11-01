@@ -216,7 +216,7 @@ ${bvTypeFieldsArms}
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
-  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
   const overloadedPrivNames = new Set();
   {
     const privNameCounts = new Map();

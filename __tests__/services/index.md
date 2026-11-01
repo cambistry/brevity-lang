@@ -37,7 +37,7 @@ definition: no entry colon, no `=` on types.
   add (a: Integer, b: Integer) -> (sum: Integer)
   clone () -> (Node)                      overloads: one line each,
   clone (deep: Boolean) -> (Node)         repeating the name
-  log! (Text) -> .                        silent
+  log! (Text) => .                        silent
   Counter (start: Integer) -> *{          constructor; body always written
     get () -> (value: Integer)
   }
@@ -65,7 +65,7 @@ Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
 
 - Public service documents omit `@` from handler names.
 - Entries have no colon: `name (params) -> (returns)`, `Name (params) -> *{ … }`.
-- Silent handlers render with their dot: `notify. (Text) -> .`.
+- Silent handlers render with their dot: `notify. (Text) => .`.
 - Optional args render with `?`.
 - Private `#name` and bare helper functions do not appear in service docs.
 - Public classes use `@Name = ...` when they should be exported through the

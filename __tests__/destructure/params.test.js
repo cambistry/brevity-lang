@@ -303,7 +303,7 @@ describe('destructure params — extraction', () => {
 // ─── Outgoing CAM messages ───────────────────────────────────────────────────
 
 describe('destructure params — outgoing messages', () => {
-  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping. () -> .\n}';
+  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping. () => .\n}';
 
   it('destructured function call sends message to source service', async () => {
     const compiled = await compileActor(`

@@ -62,8 +62,8 @@ Constructor-like remote refs are written with `Alias!(...)`.
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
-    close. () -> .
+    open. () => .
+    close. () => .
   }
 *
 
@@ -93,7 +93,7 @@ A factory-style actor can return DOM-like structures from a public handler.
 ```brevity
 *
   "DOM": DOM {
-    div. () -> .
+    div. () => .
   }
 *
 

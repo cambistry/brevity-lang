@@ -46,7 +46,7 @@ describe('explicit form — compilation', () => {
   it('empty class params *() compiles', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing () -> *{ ping. () -> . }
+        "thing.bv": Thing () -> *{ ping. () => . }
       *
 
       t = Thing()
@@ -87,7 +87,7 @@ describe('explicit form — actor routing', () => {
     *
         "thing.bv": Thing (a: Integer) -> *{
         get () -> (value: Integer)
-        ping. () -> .
+        ping. () => .
       }
     *
 
@@ -212,7 +212,7 @@ describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
       *
 
       @spawn. = {
@@ -253,7 +253,7 @@ describe('explicit form — class arg validation', () => {
   it('rejects wrong class arg type', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
       *
 
       t = Thing(a: "not-an-int")
@@ -265,7 +265,7 @@ describe('explicit form — class arg validation', () => {
   it('rejects extra class args', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
       *
 
       t = Thing(a: 5, b: 99)
@@ -277,7 +277,7 @@ describe('explicit form — class arg validation', () => {
   it('rejects missing class args', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer, b: Text) -> *{ ping. () -> . }
+        "thing.bv": Thing (a: Integer, b: Text) -> *{ ping. () => . }
       *
 
       t = Thing(a: 5)
@@ -289,7 +289,7 @@ describe('explicit form — class arg validation', () => {
   it('rejects construction against (Alias) { iface } service-only form', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing { ping. () -> . }
+        "thing.bv": Thing { ping. () => . }
       *
 
       t = Thing()
@@ -304,7 +304,7 @@ describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ ping. () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
       *
 
       t = Thing(a: 5)
@@ -316,7 +316,7 @@ describe('explicit form — method call validation', () => {
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ call. (msg: Text) -> . }
+        "thing.bv": Thing (a: Integer) -> *{ call. (msg: Text) => . }
       *
 
       t = Thing(a: 5)
@@ -328,7 +328,7 @@ describe('explicit form — method call validation', () => {
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
       *
-        "thing.bv": Thing (a: Integer) -> *{ fire. () -> . }
+        "thing.bv": Thing (a: Integer) -> *{ fire. () => . }
       *
 
       t = Thing(a: 5)
@@ -365,7 +365,7 @@ describe('# form — requires manifest', () => {
 });
 
 describe('# form — manifest from options.remotes', () => {
-  const ctorManifest = '(a: Integer) -> *{\n  ping. () -> .\n  get () -> (value: Integer)\n}';
+  const ctorManifest = '(a: Integer) -> *{\n  ping. () => .\n  get () -> (value: Integer)\n}';
 
   it('# form compiles when manifest supplied via options.remotes', () => {
     expect(() => compileSource(`

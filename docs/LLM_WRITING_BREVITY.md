@@ -71,7 +71,7 @@ Declare dependencies in the file header:
 *
   "/services/store": Store {
     get (key: Text) -> (value: Text)
-    put. (key: Text, value: Text) -> .
+    put. (key: Text, value: Text) => .
   }
 *
 
@@ -95,8 +95,8 @@ trailing `...` (fire-and-forget). Replying methods bind their named reply fields
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
-    close. () -> .
+    open. () => .
+    close. () => .
   }
 *
 

@@ -1,4 +1,5 @@
 import { expectBehavior, compileSource, createActor, expectActorBehavior } from '../helpers.js';
+import { parseInterface } from '../../src/codegen/javascript/types.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // A `!` function writes. Its return paths say what it yields: falling off the end
@@ -121,28 +122,121 @@ describe('chains — validation', () => {
   });
 });
 
-describe('-> self in signatures', () => {
-  it('a function type may return self', () => {
-    expect(() => compileSource('@a = (cb: (Integer) -> self) -> result: 1\n')).not.toThrow();
+describe('effect arrows in signatures', () => {
+  const widget = (entry) => ({ remotes: [{ path: 'Widget', service: `{ ${entry} }` }] });
+  const useWidget = '*\n  "Widget": Widget\n*\n@go. = { x Integer = 1 }\n';
+
+  it.each([
+    'total () -> (Integer)',
+    'me () -> self',
+    'total () ~> (Integer)',
+    'pop () => (Integer)',
+    'sort (Integer) => self',
+    'log (Text) => .',
+    'log. (Text) => .',
+  ])('`%s` is valid', (entry) => {
+    expect(() => compileSource(useWidget, widget(entry))).not.toThrow();
   });
 
-  it('`(self)` is retired in a function type', () => {
-    expect(() => compileSource('@a = (cb: (Integer) -> (self)) -> result: 1\n')).toThrow();
+  it.each([
+    ['log. (Text) -> .', /has nothing to read/],
+    ['log. (Text) ~> .', /has nothing to read/],
+    ['me () ~> self', /has nothing to read/],
+    ['me () -> (self)', /takes no parens/],
+    ['log. (Text) => (Integer)', /silent by its name/],
+  ])('`%s` is an error', (entry, message) => {
+    expect(() => compileSource(useWidget, widget(entry))).toThrow(message);
   });
 
-  it('a generated doc shows a self-return without parens', () => {
-    const { interface: doc } = compileSource('a *Integer = 0\n@inc! = (i Integer) { a <- a + i }\n');
-    expect(JSON.stringify(doc)).toContain('-> self');
+  it.each([
+    ['(Integer) -> self'],
+    ['(Integer) => self'],
+    ['(Integer) => (Integer)'],
+    ['(Integer) ~> (Integer)'],
+    ['(Integer) => .'],
+  ])('function type `%s` is valid', (type) => {
+    expect(() => compileSource(`@a = (cb: ${type}) -> result: 1\n`)).not.toThrow();
   });
 
-  it('an inline interface may declare `-> self`', () => {
-    const remotes = [{ path: 'Widget', service: '{ mod! (Integer) -> self }' }];
-    expect(() => compileSource('*\n  "Widget": Widget\n*\n@go. = { Widget.mod!(1)... }\n', { remotes })).not.toThrow();
+  it.each([
+    ['(Integer) -> .', /has nothing to read/],
+    ['(Integer) ~> .', /has nothing to read/],
+    ['(Integer) ~> self', /has nothing to read/],
+    ['(Integer) -> (self)', /./],
+  ])('function type `%s` is an error', (type, message) => {
+    expect(() => compileSource(`@a = (cb: ${type}) -> result: 1\n`)).toThrow(message);
   });
 
-  it('`-> (self)` is retired in an inline interface', () => {
-    const remotes = [{ path: 'Widget', service: '{ mod! (Integer) -> (self) }' }];
-    expect(() => compileSource('*\n  "Widget": Widget\n*\n@go. = { Widget.mod!(1)... }\n', { remotes })).toThrow(/takes no parens/);
+  it('`untracked` prefixes a doc entry', () => {
+    const p = parseInterface(`{
+      untracked log *Text
+      untracked write. (Text) => .
+      untracked set label (Text)
+      total () -> (Integer)
+    }`);
+    expect(p.__untracked).toEqual(['log', 'write.', 'label']);
+    expect(p['write.'][0].effect).toBe('write');
+  });
+
+  it('`untracked` is reserved for locals', () => {
+    expect(() => compileSource('@go = {\n  untracked Integer = 1\n  return untracked\n}\n')).toThrow();
+    expect(() => compileSource('@go = (untracked Integer) { return 1 }\n')).toThrow();
+  });
+
+  it('a local bound by a bare named param `untracked:` can\'t be read', () => {
+    expect(() => compileSource('@go = (untracked: Integer) { return untracked }\n')).toThrow();
+  });
+
+  it('a function may be named `@untracked` or `#untracked`', () => {
+    expect(() => compileSource('@untracked = { return 1 }\n')).not.toThrow();
+    expect(() => compileSource('#untracked = { return 1 }\n@go = { return 1 }\n')).not.toThrow();
+  });
+
+  it('a doc entry `untracked (…)` is a function with that name', () => {
+    const p = parseInterface('{ untracked () -> (Integer) }');
+    expect(p.untracked[0].effect).toBe('read');
+    expect(p.__untracked).toBeUndefined();
+  });
+
+  it('a member named `untracked` can be called', () => {
+    expect(() => compileSource('*\n  "Svc": Svc\n*\n@go = {\n  :n Integer = Svc.untracked()\n  return :n\n}\n',
+      { remotes: [{ path: 'Svc', service: '{ untracked () -> (n: Integer) }' }] })).not.toThrow();
+  });
+
+  it('an effect arrow is only for signatures', () => {
+    expect(() => compileSource('@a = (i Integer) => i\n')).toThrow(/only for signatures/);
+    expect(() => compileSource('@a = (i Integer) ~> i\n')).toThrow(/only for signatures/);
+  });
+
+  it('a generated doc states each function\'s effect', () => {
+    const { interface: doc } = compileSource(`
+      a *Integer = 0
+      @inc! = (i Integer) { a <- a + i }
+      @take! = {
+        v Integer = a
+        a <- 0
+        return v
+      }
+      @ping. = { a <- 1 }
+      @me = { self }
+      @total = { return a }
+    `);
+    expect(doc.service).toContain('inc! (Integer) => self');
+    expect(doc.service).toMatch(/take! \(\) => \(/);
+    expect(doc.service).toContain('ping. () => .');
+    expect(doc.service).toContain('me () -> self');
+    expect(doc.service).toMatch(/total \(\) -> \(/);
+  });
+
+  it('a foreign silent function needs no dot in its name', () => {
+    const { output } = compileSource('*\n  "Logger": Logger\n*\n@go. = { Logger.log("x")... }\n',
+      { remotes: [{ path: 'Logger', service: '{ log (Text) => . }' }] });
+    expect(output).toBeTruthy();
+  });
+
+  it('`...` still needs a silent function', () => {
+    expect(() => compileSource('*\n  "Logger": Logger\n*\n@go. = { Logger.get("x")... }\n',
+      { remotes: [{ path: 'Logger', service: '{ get (Text) -> (Integer) }' }] })).toThrow(/needs a silent/);
   });
 });
 
@@ -150,6 +244,8 @@ describe('-> self in signatures', () => {
 
 describe('! function — return paths', () => {
   const script = `
+    ::Flag (untracked: Boolean)
+
     acc *Integer = 0
     a *Integer = 0
     b *Integer = 5
@@ -242,6 +338,23 @@ describe('! function — return paths', () => {
     @notEqual = (n Integer) {
       r Boolean = n!=1
       return r
+    }
+
+    @keyReply = { return untracked: 1 }
+
+    @keyParam = (untracked: u Integer) { return u }
+
+    keyed = (untracked: u Integer) { return u }
+
+    @keyArg = {
+      v Integer = keyed(untracked: 2)
+      return v
+    }
+
+    @keyField = {
+      f Flag = Flag(untracked: true)
+      v Boolean = f.untracked
+      return v
     }
 
     @stays! = {
@@ -410,6 +523,34 @@ describe('! function — return paths', () => {
     );
   });
 
+  it('`untracked` works as a reply key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@keyReply', from: 'c' } },
+      { output: { id: '1', re: { untracked: 1 }, 'bv-a': { untracked: 'Integer' }, to: 'c' } },
+    );
+  });
+
+  it('`untracked` works as a param key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ untracked: 3 }, '@keyParam'], 'bv-a': [{ untracked: 'Integer' }], from: 'c' } },
+      { output: { id: '1', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`untracked` works as a named argument', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@keyArg', from: 'c' } },
+      { output: { id: '1', re: [2], 'bv-a': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`untracked` works as a type field', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@keyField', from: 'c' } },
+      { output: { id: '1', re: [true], 'bv-a': ['Boolean'], to: 'c' } },
+    );
+  });
+
   it('a `<-` chain stays on its target: a ends up holding c, b is only read', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@stays!', from: 'c' } },
@@ -542,7 +683,7 @@ describe('chained calls through a remote', () => {
   const source = `
     *
       "thing.bv": Thing (a: Integer) -> *{
-        inc! (Integer) -> self
+        inc! (Integer) => self
         total () -> (value: Integer)
       }
     *

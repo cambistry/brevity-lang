@@ -46,7 +46,7 @@ describe('interop — cross-call to silent public function', () => {
     const actor = await createActor(`
       *
         "Store": Store {
-          notify. (msg: Text) -> .
+          notify. (msg: Text) => .
         }
       *
 

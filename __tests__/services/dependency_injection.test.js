@@ -50,7 +50,7 @@ describe('file-level DI — basic compilation', () => {
   it('multiple dependencies compile', () => {
     expect(() => compileSource(`
       *
-        "/services/db": DB { put. (key: Text, value: Text) -> . }
+        "/services/db": DB { put. (key: Text, value: Text) => . }
         "/services/cache": Cache { get (key: Text) -> (value: Text) }
       *
 
@@ -68,8 +68,8 @@ describe('file-level DI — basic compilation', () => {
   it('comma-separated dependencies compile', () => {
     expect(() => compileSource(`
       *
-        "/db": DB { ping. () -> . }
-        "/cache": Cache { ping. () -> . }
+        "/db": DB { ping. () => . }
+        "/cache": Cache { ping. () => . }
       *
 
       @test. = { DB.ping.()... }
@@ -94,7 +94,7 @@ describe('file-level DI — outgoing CAM messages', () => {
   const source = `
     *
       "/services/remote": Remote {
-        ping. () -> .
+        ping. () => .
         greet (name: Text) -> (greeting: Text)
       }
     *
@@ -212,7 +212,7 @@ describe('file-level DI — service coercion with as', () => {
   it('as-cast can widen to methods not in original constraint', () => {
     expect(() => compileSource(`
       *
-        "/services/generic": Svc { basic. () -> . }
+        "/services/generic": Svc { basic. () => . }
       *
 
       narrow = Svc as { @specialized (x: Integer) -> (result: Integer) }
@@ -266,7 +266,7 @@ describe('file-level DI — inline constraint checks', () => {
   it('rejects returning silent remote call', () => {
     expect(() => compileSource(`
       *
-        "/services/remote": Remote { fire. (Text) -> . }
+        "/services/remote": Remote { fire. (Text) => . }
       *
 
       @go = -> Remote.fire.("hi")
@@ -278,7 +278,7 @@ describe('file-level DI — inline constraint checks', () => {
       *
         "/services/store": Store {
           lookup (key: Text) -> (value: Text)
-          save. (key: Text, value: Text) -> .
+          save. (key: Text, value: Text) => .
         }
       *
 
@@ -384,12 +384,12 @@ describe('file-level DI — options.remotes injection', () => {
   it('options.remotes catches returning silent call', () => {
     const { ast } = extract(`
       *
-        "/services/db": DB { ping. () -> . }
+        "/services/db": DB { ping. () => . }
       *
       @go = -> DB.ping.()
     `);
     expect(() => compile(ast, {
-      remotes: [{ path: '/services/db', service: '{\n  ping. () -> .\n}' }],
+      remotes: [{ path: '/services/db', service: '{\n  ping. () => .\n}' }],
     })).toThrow(/silent/);
   });
 });

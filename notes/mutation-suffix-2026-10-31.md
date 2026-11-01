@@ -1,8 +1,8 @@
 # `!` means the function writes: mutation, return paths, and service docs — 2026-10-31
 
-Status: **Phases 1-2 IMPLEMENTED 2026-10-31, uncommitted for review**
+Status: **Phases 1-2 IMPLEMENTED 2026-10-31**
 ([session note](session-2026-10-31-mutation-suffix.md)), with `<-` as a value still a
-compile error. Phases 3-4 are design only. Supersedes
+compile error. Phases 3-4 are next. Supersedes
 [bang-returns-self](bang-returns-self-2026-10-27.md). Builds on
 [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md) (name
 match at the call site, kept) and
@@ -98,7 +98,7 @@ Being a valid final statement is separate from being a return value:
 - **Not implemented yet.** `return *acc` doesn't exist: cells can't leave a function,
   and cross-actor scalar cell handoff is explicitly deferred
   (`__tests__/classes/param_capabilities.test.js`). So `<-` as a value parses and
-  reports a compile error. Statements and chains work. See open decision 6.
+  reports a compile error. Statements and chains work. See open decision 2.
 - Readers from C will expect the new number. The compiler reports a reference
   where the caller expects `Integer`, rather than dereferencing it silently. To
   return the number: `acc <- x; return acc`.
@@ -185,7 +185,7 @@ y = RegisteredWidget!(2).add!(z)     // chains on the new actor
 - **Inheritance:** a superclass constructor's effect carries to the subclass.
 - **Overloads:** the suffix is part of the name, so all overloads share one effect
   class. Different effects need different names. The same applies to functions.
-- **File constructors:** see open decisions.
+- **File constructors:** see settled decisions.
 
 ## What counts as a write
 
@@ -212,19 +212,50 @@ The compiler infers this. There is no effect analysis in `src/validate.js` today
 
   Passing or storing `w` before the write counts as escaping. Creating an actor
   isn't a write either: if a transaction aborts, the runtime discards it.
-- State declared non-transactional (see open decisions).
+- `untracked` cells, functions and nested actors (below).
 
 **Contagion:** the effect is transitive, so every caller of a writer must be `!`
 or `.`, and many handlers become `@place_order!`. Absence of a suffix stays a
-strong guarantee. The non-transactional marker is therefore **required**, not an
-optional refinement. Without it, adding a log line or memo cache to `get_value`
-renames every function above it.
+strong guarantee. `untracked` is therefore **required**, not an optional refinement.
+Without it, adding a log line or memo cache to `get_value` renames every function
+above it.
 
 A silent call is not exempt from contagion. That would be simpler, but it would
 allow a "read-only" function to contain `account.debit.(10)...`.
 
 **Not suffixed, still counted as writes:** `set`/`update` handlers, `on` handlers
 and subscription bodies have no caller-facing name to mark.
+
+### `untracked`
+
+Writes that don't count: logs, metrics, caches. It applies to cells, functions and
+nested actors, and it crosses actor borders through the doc.
+
+```brevity
+*{
+  untracked hits *Integer = 0
+  untracked @log *Text = ""
+  untracked @write. = (m Text) { log <- log + m }
+  untracked audit = Logger()
+}
+```
+```
+{
+  untracked log *Text
+  untracked write. (Text) => .
+}
+```
+
+- **Callers don't count it.** The arrow still says what the function does.
+- **Bodies are checked.** An `untracked` Brevity function may only write `untracked`
+  state or call `untracked` functions, so `untracked @debit.` can't hide a real write.
+- **Importers can state it for foreign services:**
+  `"logger.js": Log -> *{ untracked write. (Text) => . }`.
+- **Transactions don't roll it back.**
+- **It's a reserved word for locals only.** `@untracked`, `#untracked`, a member
+  `x.untracked` and a key `untracked:` are all fine, and a doc entry `untracked (…)` is
+  a function with that name. A named param takes the rename form,
+  `(untracked: u Integer)`.
 
 ## Compile-time checks
 
@@ -261,20 +292,34 @@ rely on adapting interfaces to normalize remote conventions. So:
 have their own conventions: Ruby's `uniq!` returns nil when nothing changed, so
 reading its bang as "returns self" would be wrong.
 
+The arrow states the effect, and the name is never interpreted:
+
+| Entry | Meaning |
+|---|---|
+| `() -> ()` | Read-only |
+| `() -> self` | Identity |
+| `() ~> ()` | Purported read-only: treated as a read, but not guaranteed |
+| `() => ()` | Writes, returns a value |
+| `() => self` | Writes, returns self |
+| `() => .` | Writes, silent |
+| `() -> .`, `() ~> .`, `() ~> self` | Errors: nothing to read. A fluent method whose effect is in doubt is `=> self` |
+
 ```
-sort (by) -> self            // JS: no bang, writes
-uniq! () -> (Array)          // Ruby: the bang is just part of its name
+sort (by) => self            // JS: no bang, writes
+uniq! () => (Array)          // Ruby: the bang is just part of its name
+log (Text) => .              // foreign silent function
 ```
 
-- **Return shape** is already in the doc: `-> .`, `-> (Type)`, `-> self`. Like `.`,
-  `self` stands alone as the whole output, so it takes no parens:
-  `{ mod! (Integer) -> self }`. `(self)` is retired, leaving one spelling. "Silent"
-  comes from `-> .`, not the name. The 10-30 rule tying the dot to `-> .` applies to
-  Brevity's own docs; a foreign no-reply function is `log (Text) -> .`.
-- **Effect** is new, and needs a spelling (see open decisions).
-- **Undeclared means may write.** It's the only safe default for transactions. A
-  call to an unannotated JS function forces `!` on its Brevity caller until someone
-  documents the function as a read.
+- **Function types use the same arrows.** A param typed `f: (Integer) -> (Integer)`
+  requires a read-only callback, which replaces the `f!` slot-name idea.
+- **`~>` spreads.** It doesn't force `!`, but a Brevity function that reads a `~>` gets
+  `~>` in its own generated doc. A claim can't become a guarantee on the way up.
+- **`->` in a hand-written doc is its author's word.** The compiler can't check it. Use
+  `~>` unless you own the implementation; the DOM manifest's queries stay `->`.
+- **`->` in source is unchanged.** Body arrows aren't effect notation; this applies in
+  type positions and docs.
+- **A dependency with no doc at all counts as may write.** Every documented entry states
+  its effect, so this is the only undeclared case left.
 - **The compiler generates docs for Brevity services** from what it already knows,
   so nothing is written twice.
 - **Importers can state a foreign contract** without an adapter, since an inline
@@ -341,27 +386,21 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
 
 ## Open decisions
 
-Recommendations are mine; spelling hasn't been discussed.
-
-1. **Non-transactional marker.** State or actors exempt from write inference, for
-   logs, metrics and caches, like C++ `mutable`. *Blocks phase 4.*
-2. **Effect marker in docs.** Since undeclared means may write, what needs marking
-   is the read. Recommendation: a prefix like the existing `set label (Text)`, as
-   in `read len () -> (Integer)`. Bare fields (`total Integer`) are already
-   read-only. Hand-written manifests like the DOM's need it added to every query.
-   *Blocks phase 3.*
-3. **Wire-name alias.** A Brevity actor serving a foreign protocol that requires a
+1. **Wire-name alias.** A Brevity actor serving a foreign protocol that requires a
    writing op called `push` has to name it `push!`, so the wire names don't match.
-   Needs an explicit alias on the declaration. *Blocks phase 3 for that case only.*
-4. **File constructors.** A `.bv` file has no declared name to carry `!`.
-   Recommendation: put it on the local alias, `"widget.bv": Widget!`, checked
-   against the doc.
-5. **`emit` and `.subscribe`.** Recommendation: `emit` counts as a write, and
-   `.subscribe` doesn't.
-6. **What `<-` yields as a value.** The design says a reference to the cell, which
+   Only affects serving, since a call to a foreign name keeps it literally. Deferred;
+   nothing needs it yet.
+2. **What `<-` yields as a value.** The design says a reference to the cell, which
    needs a wire form for a returned cell, including one that isn't `@`-published. No
    such mechanism exists, so a value use is a compile error for now. Until this is
    settled, the expression form is also limited to local cells, not `el.field`.
+
+## Settled decisions
+
+- **`emit` counts as a write, `.subscribe` doesn't.**
+- **File constructors:** `"widget.bv": Widget! (a: Integer) => *{ … }`. `=>` is the fact
+  and `!` on the local alias shows it at the call site. They must agree. One that
+  doesn't write is `Widget (a: Integer) -> *{ … }`.
 
 ## Implementation plan
 
@@ -396,18 +435,19 @@ No open decisions block this.
 
 ### Phase 2: `<-` as an expression
 
-Done, except for yielding a value (open decision 6). Chains spread into one statement
+Done, except for yielding a value (open decision 2). Chains spread into one statement
 per link, and a final write in arrow form is a statement in a `!` function.
 
 ### Phase 3: service doc contracts
 
-- Add the effect marker and read it from the doc, never from the name.
+- Add `=>` and `~>` to docs and function types, and read effects from the arrow, never
+  from the name. Report the error forms in the table above.
 - Mark the DOM and document manifests.
-- Generate the marker for Brevity services.
+- Generate the arrows for Brevity services.
+- Parse `untracked` on doc entries, for phase 4.
 - Fix `log! (Text) -> .` in the
   [service doc note](session-2026-10-29-service-doc-notation.md), and the exemption
   for bang entries from 10-30.
-- Add the wire alias.
 
 Goes before phase 4 so enforcement doesn't force `!` onto every caller of a function
 that could have been documented as a read.
@@ -427,5 +467,3 @@ that could have been documented as a read.
 
 - Chain pipelining, using the self-return guarantee.
 - Handing effect data to the transaction work.
-- Effects in function slot names (`f!`), which also covers the 10-30 open item on
-  params holding silent refs.

@@ -671,7 +671,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
     const overloadMode = s.value.overloadMode;
-    const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && s.typeName.includes('->'));
+    const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && /[-=~]>/.test(s.typeName));
     if ((isFnType || overloadMode) && !lambdaUsesOuterRefs(ctx, s.value)) {
       // Overload append: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append') {

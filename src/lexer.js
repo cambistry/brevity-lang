@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -387,6 +387,9 @@ export function tokenize(source) {
     }
 
     // Comparison operators (must come before single =, >, <)
+    // The effect arrows of a signature: `=>` writes, `~>` purports to read. They
+    // lex as arrows; the parser only accepts them in signatures.
+    if ((source[i] === '=' || source[i] === '~') && source[i+1] === '>') { tokens.push({ type: '->', value: source[i] + '>' }); i += 2; continue; }
     if (source[i] === '=' && source[i+1] === '=') { tokens.push({ type: 'EQ' }); i += 2; continue; }
     if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
     if (source[i] === '!') { tokens.push({ type: 'BANG' }); i++; continue; }
@@ -531,6 +534,9 @@ export function tokenize(source) {
         // A keyword keeps its own token (`.reduce!` is a built-in method).
         tokens.push({ type: 'IDENT', value: value + '!' });
         i++;
+      } else if (value === 'untracked' && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
+        // Reserved for locals only: a member or a key can have this name.
+        tokens.push({ type: 'IDENT', value });
       } else {
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }

@@ -88,7 +88,7 @@ Box = (seed Integer) *{
 ```brevity
 *
   "/services/log": Log {
-    write. (message: Text) -> .
+    write. (message: Text) => .
   }
 *
 
@@ -102,7 +102,7 @@ Box = (seed Integer) *{
 ```brevity
 *
   "WebView": WebView (path: Text) -> *{
-    open. () -> .
+    open. () => .
   }
 *
 

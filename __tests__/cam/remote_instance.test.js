@@ -19,9 +19,9 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 const singleViewSource = `
   *
     "WebView": WebView (path: Text) -> *{
-      open. () -> .
+      open. () => .
       getTitle () -> (title: Text)
-      close. () -> .
+      close. () => .
     }
   *
 

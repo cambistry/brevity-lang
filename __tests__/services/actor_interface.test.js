@@ -69,7 +69,7 @@ describe('class interface — actor methods', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Logger () -> *{\n    log. (msg: Text) -> .\n  }\n}',
+      '{\n  Logger () -> *{\n    log. (msg: Text) => .\n  }\n}',
     );
   });
 
@@ -127,7 +127,7 @@ describe('class interface — mixed with public functions', () => {
       @publish. = (doc: Document) {}
     `);
     expect(iface.service).toBe(
-      '{\n  publish. (doc: Document) -> .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
+      '{\n  publish. (doc: Document) => .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
     );
   });
 
@@ -295,7 +295,7 @@ describe('class interface — imported type address resolution', () => {
       }
     `);
     expect(iface.service).toBe(
-      '{\n  Processor () -> *{\n    handle. (item: `/models/item`) -> .\n  }\n}',
+      '{\n  Processor () -> *{\n    handle. (item: `/models/item`) => .\n  }\n}',
     );
   });
 });

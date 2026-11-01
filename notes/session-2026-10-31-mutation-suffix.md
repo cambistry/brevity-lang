@@ -20,7 +20,7 @@ unaffected.
   `-> (self)` is an error, and the DOM manifest moved over.
 - **`<-`:** `a <- b <- c` spreads into `a <- b` then `a <- c`, also with `<|`. A write
   used as a value parses and reports a compile error, because `return *acc` doesn't
-  exist (open decision 6).
+  exist (open decision 2).
 
 ## Wire
 
@@ -80,7 +80,7 @@ backend uses that one early-return form.
 
 ## Known gaps
 
-- **`<-` as a value:** see open decision 6.
+- **`<-` as a value:** see open decision 2.
 - **Chain on a value:** a `!` call on a class in this file that returns a value can't be
   chained on, which is a compile error: bind it first. The check sees constructions and
   locals bound to one. Elsewhere JS reports a runtime error, and Rust and Erlang fail to
@@ -90,7 +90,7 @@ backend uses that one early-return form.
   self-calls don't compile on Rust. Write separate statements.
 - **Classes named with `!`:** `W!` constructs and chains, and is renamed `W__w` in the AST,
   so generated docs show that name, and a type annotation `x W!` is an error. File
-  constructors are open decision 4.
+  constructors are covered in the design note.
 - **Generated docs for mixed paths:** they show only the tail return, as they did for
   value returns before.
 
@@ -102,3 +102,25 @@ Rust builds down. Fixture functions that write carry `!` already, so phase 4 won
 to migrate them. Plus a translation test in
 `__tests__/browser/closure_child.browser.test.js`. Element browser tests assert the new
 address tag.
+
+## Phase 3: effect arrows
+
+Docs and function types state effects in the arrow, never the name. `->` reads, `=>`
+writes, `~>` purports to read; the table is in the
+[design note](mutation-suffix-2026-10-31.md).
+
+- **Lexer:** `=>` and `~>` lex as arrow tokens carrying their spelling, so existing
+  lookaheads hold. `consume` rejects them outside signatures, so `(i) => i` is an error.
+- **Parser and `parseInterface`:** entries record `effect`. `-> .`, `~> .` and `~> self`
+  are errors. A foreign silent function may omit the dot, which sets `silent` on its
+  entry, so `Logger.log("x")...` is accepted.
+- **Generated docs:** `!` gets `=>`, a silent function gets `=> .`, and `@me = { self }`
+  gets `-> self`.
+- **Manifest:** bang entries and silent entries moved to `=>`. Queries stay `->`.
+- **`untracked`:** parsed on doc entries into `__untracked`, for phase 4. It's reserved
+  for locals only: `@untracked`, `#untracked`, members, keys and a doc entry
+  `untracked (…)` are fine.
+- **Migration:** `-> .` became `=> .` in type positions across tests and docs. `emit`
+  declarations too. Silent lambda bodies (`(e) -> .`) are unchanged.
+
+Nothing reads `effect` yet; phase 4 does.

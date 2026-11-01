@@ -362,14 +362,14 @@ describe('params document — read back as constructor params', () => {
     const typed = extract(`
       *
         "/db": DB { get (key: Text) -> (value: Text) }
-        "lib.bv": Lib (a: Integer, b: Text) -> *{ ping. () -> . }
+        "lib.bv": Lib (a: Integer, b: Text) -> *{ ping. () => . }
         limit: lim Integer
       *
       @noop. = {}
     `).interface;
     expect(typed.params).toBe(
       '(\n  "/db": {\n    get (key: Text) -> (value: Text)\n  }\n' +
-      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping. () -> .\n  }\n  "limit": Integer\n)',
+      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping. () => .\n  }\n  "limit": Integer\n)',
     );
     const typedRemotes = [{ path: 'svc.bv', params: typed.params, service: typed.service }];
     expect(() => compile(consumer('Svc(limit: 3)'), { remotes: typedRemotes })).not.toThrow();

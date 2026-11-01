@@ -28,13 +28,13 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WIDGET_FIELD = `{
-  ::Signal (dismiss.: () -> ., code: Integer)
-  ::Panel (onpress.: (s: Signal) -> ., label: Text)
+  ::Signal (dismiss.: () => ., code: Integer)
+  ::Panel (onpress.: (s: Signal) => ., label: Text)
 }`;
 
 const WIDGET_METHOD = `{
-  ::Signal (dismiss.: () -> ., code: Integer)
-  watch. (on: (s: Signal) -> .) -> .
+  ::Signal (dismiss.: () => ., code: Integer)
+  watch. (on: (s: Signal) => .) => .
 }`;
 
 // A Signal value as it arrives on the wire: its silent `dismiss` reference

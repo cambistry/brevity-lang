@@ -19,7 +19,7 @@ comma-separated.
   add (a: Integer, b: Integer) -> (sum: Integer)
   clone () -> (Node)                      overloads: one line each, name repeated
   clone (deep: Boolean) -> (Node)
-  log! (Text) -> .                        silent
+  log! (Text) => .                        silent
   empty? () -> (Boolean)                  names may end in `?` / `!`
   Counter (start: Integer) -> *{          constructor; body always written
     get () -> (value: Integer)

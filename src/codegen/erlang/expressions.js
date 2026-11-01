@@ -90,8 +90,8 @@ export function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';
-  if (!/->/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
 }
 
 // Erlang expression reading the address a reference field holds (a binary).
@@ -419,7 +419,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // Check if callee is function-typed — route through self_send
     if (expr.callee?.type === 'Identifier') {
       const calleeType = ctx.currentTypeEnv?.get(expr.callee.name);
-      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->')));
+      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType)));
       if (isFnTyped) {
         return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);
       }

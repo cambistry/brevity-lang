@@ -431,7 +431,7 @@ function resolveVarExpr(name) {
 }
 
 function isFunctionArg(arg) {
-  return arg.type === 'Function' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && arg.type.includes('->'));
+  return arg.type === 'Function' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && /[-=~]>/.test(arg.type));
 }
 
 function isFunctionOnlyConstructor(node) {
@@ -716,7 +716,7 @@ function needsObject(actor) {
 function fnReturnsFunction(fn) {
   const reply = fn.body.find(s => s.type === 'Reply');
   if (!reply) return false;
-  return reply.fields.some(f => f.type === 'Function' || (typeof f.type === 'string' && f.type?.includes('->')));
+  return reply.fields.some(f => f.type === 'Function' || (typeof f.type === 'string' && /[-=~]>/.test(f.type)));
 }
 
 function needsDotCallAwait(actor) {

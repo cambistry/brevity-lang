@@ -40,7 +40,7 @@ export function parse(tokensIn) {
   // Re-enabled inside fresh sub-expression contexts (parens, call args, etc.).
   let bareFuncAllowed = true;
 
-  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && t.includes('->'));
+  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
 
   // Parse the children array of a HTML_CONSTRUCTOR token. The lexer produces
   // { type: 'text', value }, { type: 'interp', source } (reactive closure),
@@ -152,7 +152,15 @@ export function parse(tokensIn) {
   }
 
   const peek = () => tokens[pos];
-  const consume = () => tokens[pos++];
+  // Effect arrows belong to signatures. A body's arrow is always `->`.
+  let inSignature = 0;
+  const consume = () => {
+    const tok = tokens[pos++];
+    if (tok?.type === '->' && tok.value !== '->' && inSignature === 0) {
+      throw new Error(`'${tok.value}' is only for signatures — a function body's arrow is '->'`);
+    }
+    return tok;
+  };
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
   // `return` is the explicit value-return keyword. `->` is the lambda /
   // body-opener arrow; standing on its own where a statement is expected, it is
@@ -515,18 +523,23 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
-    expect('->');
-    // Silent output `-> .` — a fire-and-forget signature with no reply,
-    // distinct from void `-> ()` (an empty reply). Mirrors the silent body
-    // terminator used by function definitions.
+    inSignature++;
+    const arrow = expect('->').value;
+    inSignature--;
+    // Silent output `=> .` — a fire-and-forget signature with no reply, distinct
+    // from void `-> ()` (an empty reply). Mirrors the silent body terminator used
+    // by function definitions. Nothing can be read from it, so it's always `=>`.
     if (peek().type === 'DOT') {
+      if (arrow !== '=>') throw new Error(`'${arrow} .' has nothing to read — a silent function is '=> .'`);
       consume();
-      return AST.functionType(inputs, [], true);
+      return { ...AST.functionType(inputs, [], true), arrow };
     }
-    // `-> self`: the function yields its own receiver. Like `.`, it stands alone.
+    // `=> self`: writes, and yields its own receiver. `-> self` is the identity
+    // function. Like `.`, `self` stands alone.
     if (peek().type === 'KEYWORD' && peek().value === 'self') {
+      if (arrow === '~>') throw new Error("'~> self' has nothing to read — write '=> self', or '-> self' if it's the identity function");
       consume();
-      return { ...AST.functionType(inputs, []), returnsSelf: true };
+      return { ...AST.functionType(inputs, []), returnsSelf: true, arrow };
     }
     expect('LPAREN');
     const outputs = [];
@@ -555,7 +568,7 @@ export function parse(tokensIn) {
       }
     }
     expect('RPAREN');
-    return AST.functionType(inputs, outputs);
+    return { ...AST.functionType(inputs, outputs), arrow };
   }
 
   function functionTypeToString(functionType) {
@@ -563,9 +576,10 @@ export function parse(tokensIn) {
       if (item.name !== undefined) return `${item.name}: ${item.type}`;
       return `${item.type}`;
     }).join(', ');
-    if (functionType.silent) return `(${fmtSide(functionType.inputs)}) -> .`;
-    if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) -> self`;
-    return `(${fmtSide(functionType.inputs)}) -> (${fmtSide(functionType.outputs)})`;
+    const arrow = functionType.arrow ?? '->';
+    if (functionType.silent) return `(${fmtSide(functionType.inputs)}) => .`;
+    if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) ${arrow} self`;
+    return `(${fmtSide(functionType.inputs)}) ${arrow} (${fmtSide(functionType.outputs)})`;
   }
 
   function getFunctionLiteralSignature(fnNode) {
@@ -2957,7 +2971,7 @@ export function parse(tokensIn) {
       );
       const looksLikeUserType = typeof typeName === 'string' &&
         !typeName.includes(' ') &&
-        !typeName.includes('->') &&
+        !/[-=~]>/.test(typeName) &&
         !isBuiltinTypeName;
       if (typeName === 'Object' || looksLikeUserType) {
         // Check for type annotation after value (wraps in single-element ObjectLiteral)
@@ -2980,7 +2994,7 @@ export function parse(tokensIn) {
           // Allow: lhs 'T | null' with rhs 'T' (non-null value assigned to nullable var)
           // Allow: function types — RHS as-type may be the return type portion
           const baseType = typeName.endsWith(' | null') ? typeName.slice(0, -7) : null;
-          const isFnType = typeof typeName === 'string' && typeName.includes('->');
+          const isFnType = typeof typeName === 'string' && /[-=~]>/.test(typeName);
           if (!isFnType && rhsType !== typeName && rhsType !== baseType) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
@@ -2995,12 +3009,12 @@ export function parse(tokensIn) {
         );
       }
     }
-    if (typeof typeName === 'string' && typeName.includes('->')) {
+    if (typeof typeName === 'string' && /[-=~]>/.test(typeName)) {
       // If the LHS declares the function type, the return-type is already
       // named there — let it flow into the literal so the signature check
       // doesn't demand a redundant in-body annotation.
       if (value.type === 'Function' && value.returnType == null) {
-        const m = typeName.match(/->\s*\((.*)\)\s*$/);
+        const m = typeName.match(/[-=~]>\s*\((.*)\)\s*$/);
         if (m) value.returnType = m[1];
       }
       checkFunctionSignature(typeName, value);
@@ -4533,7 +4547,10 @@ export function parse(tokensIn) {
         let returnType = null;
         let silent = false;
         if (peek().type === '->') {
-          consume();
+          inSignature++;
+          const emitArrow = consume().value;
+          inSignature--;
+          if (peek().type === 'DOT' && emitArrow !== '=>') throw new Error(`'${emitArrow} .' has nothing to read — a silent emit is '=> .'`);
           if (peek().type === 'DOT') {
             consume();
             silent = true;
@@ -5027,7 +5044,7 @@ export function parse(tokensIn) {
   // (`press.: () -> .`); the stored name drops it — a type can't hold both
   // `press` and `press.`, and the dot is restored wherever the type is shown.
   function silentFieldName(name, paramType) {
-    const silentType = typeof paramType === 'string' && /->\s*\.\s*$/.test(paramType);
+    const silentType = typeof paramType === 'string' && /=>\s*\.\s*$/.test(paramType);
     if (name.endsWith('.') && !silentType) {
       throw new Error(`Field '${name}' is silent by its name — its type is a silent function '(…) -> .'`);
     }
@@ -5101,6 +5118,14 @@ export function parse(tokensIn) {
   // parseInterface: one entry per line, with newlines inside a bracket group
   // (a multi-line type declaration, a nested `*{ … }` body) preserved.
   const parseInlineIface = () => {
+    inSignature++;
+    try {
+      return parseInlineIfaceBody();
+    } finally {
+      inSignature--;
+    }
+  };
+  const parseInlineIfaceBody = () => {
     consume(); // {
     const lines = [];
     let line = '';

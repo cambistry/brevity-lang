@@ -174,7 +174,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       lines.push(`                }`);
     } else {
       // Pre-compute function-typed param calls and DotCallExpr to avoid block expressions inside json!
-      const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && t.includes('->')));
+      const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t)));
       let precomputeIdx = 0;
 
       // Recursively walk expression tree to pre-compute local function calls and actor fn calls

@@ -26,8 +26,8 @@ export function refFieldInvocationRust(objExpr, rawName, typeEnv) {
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';
-  if (!/->/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /->\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
+  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
 }
 
 // Rust expression reading the address a reference field holds, as a String.
@@ -572,7 +572,7 @@ ${subRegLines.join('\n')}
     }
     // Check if callee is a local lambda var (now a handler name in a Value::String)
     const isLocalLambda = calleeName && G.ctx.lambdaVarNames.has(calleeName);
-    const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && calleeType.includes('->'))));
+    const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType))));
     // Local-identifier fallback: by this point we've ruled out actor fns, public
     // fns, destructured members, and constructors. Any remaining Identifier
     // callee must be a function value held in a local — route through call_fn.
