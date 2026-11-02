@@ -76,7 +76,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
       const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
       const typeCheck = hasOptionalTyped
-        ? `match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
+        ? `${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
         : `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
       guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
     } else if (namedTyped.length > 0) {
@@ -92,7 +92,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
     const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
     if (hasOptionalTyped) {
-      guard = ` if from == "__self" || from == "__test" || match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`;
+      guard = ` if from == "__self" || from == "__test" || ${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`;
     } else {
       guard = ` if from == "__self" || from == "__test" || match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
     }
@@ -580,6 +580,11 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
   return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
 }
 
+// With nothing required, a call can leave out every arg, and so every tag.
+function untaggedOk(params, message) {
+  return params.some(p => !p.defaultValue && !p.rest) ? '' : `${message}.get("bv-a").is_none() || `;
+}
+
 // A call from outside an instance has its tags checked, as a file handler's are.
 // In-process callers pass values, not tags. Overloads fall through to the next arm.
 function childTagGuard({ name, params }) {
@@ -593,7 +598,7 @@ function childTagGuard({ name, params }) {
   if (pos.length > 0) {
     const required = pos.filter(p => !p.defaultValue).length;
     const posTypes = pos.map(p => `"${p.type}"`).join(', ');
-    check = `match_types_positional_min(&self.wire_msg, &[${posTypes}], &[${named.map(pair).join(', ')}], ${required})`;
+    check = `${untaggedOk(params, 'self.wire_msg')}match_types_positional_min(&self.wire_msg, &[${posTypes}], &[${named.map(pair).join(', ')}], ${required})`;
   } else if (named.length > 0) {
     check = `match_types(&self.wire_msg, &[${named.filter(p => !p.defaultValue).map(pair).join(', ')}])`;
   } else {

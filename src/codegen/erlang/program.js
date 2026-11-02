@@ -503,7 +503,9 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
-        typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
+        // With nothing required, a call can leave out every arg, and so every tag.
+        const untaggedOk = params.some(p => !p.defaultValue && !p.rest) ? '' : 'not maps:is_key(<<"bv-a">>, Message) orelse ';
+        typeCheck = `(${exempt} orelse ${untaggedOk}match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
       } else {
         typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
       }

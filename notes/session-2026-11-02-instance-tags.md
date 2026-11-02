@@ -24,6 +24,16 @@ bug from `session-2026-11-01-as-renders-or-fails.md`. It had to go with this cha
 and Erlang accepted these calls only because they checked nothing, and would otherwise have started
 refusing them.
 
+## Leaving out every arg
+
+A handler with nothing required takes a call with no args and no tags, so `@opt = (i Integer = 1)`
+called as a bare `@opt` uses its default. This covers file handlers too, where it answered `unhandled` on
+every target, though a named optional and `bv-a: [[]]` already reached the default.
+
+The check is in codegen, not the matchers: no tags, or a tag match, when no param is required. That
+counts params the matchers skip, so `(l List, i Integer = 1)` still answers `unhandled`. Args with no tags
+still get `schema_required`, which runs first.
+
 ## Replies out
 
 Rust and Erlang instances replied with no `bv-a` at all, so a receiver saw a tag from a JS instance and

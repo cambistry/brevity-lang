@@ -1449,7 +1449,9 @@ export function genTypeCondition(ctx, params) {
   const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
   const hasOptional = requiredPosCount < posParams.length || namedParams.some(p => p.defaultValue);
   if (hasOptional) {
-    return `_matchTypes(_types, [${named.filter((_, i) => !namedParams[i].defaultValue).join(',')}], [${pos.join(',')}], ${requiredPosCount})`;
+    const match = `_matchTypes(_types, [${named.filter((_, i) => !namedParams[i].defaultValue).join(',')}], [${pos.join(',')}], ${requiredPosCount})`;
+    // With nothing required, a call can leave out every arg, and so every tag.
+    return params.some(p => !p.defaultValue) ? match : `(_types === null || ${match})`;
   }
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
 }

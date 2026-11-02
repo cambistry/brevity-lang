@@ -343,3 +343,92 @@ describe('optional arguments — compilation', () => {
     `)).not.toThrow();
   });
 });
+
+describe('a call that leaves out every arg', () => {
+  const bodies = `
+      @one = (i Integer = 1) { return i }
+      @two = (i Integer = 1, t Text = "x") { return t }
+      @withNamed = (i Integer = 1, n: Text = "x") { return n }
+      @onlyNamed = (i: Integer = 1) { return i }
+      @positionalRequired = (a Integer, i Integer = 1) { return i }
+      @namedRequired = (i Integer = 1, n: Text) { return i }
+      @listRequired = (l List, i Integer = 1) { return i }
+      @required = (a Integer) { return a }
+  `;
+  const script = `${bodies}
+    @Box = *{${bodies}}
+  `;
+  const newBox = [
+    { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+  ];
+  const atBox = { to: '@Box/1', from: 'c' };
+  const fromBox = { to: 'c', from: '@Box/1' };
+
+  describe.each([
+    ['@one', [1], ['Integer']],
+    ['@two', ['x'], ['Text']],
+    ['@withNamed', ['x'], ['Text']],
+    ['@onlyNamed', [1], ['Integer']],
+  ])('%s has nothing required', (op, re, tag) => {
+    it('uses its defaults in a file handler', async () => {
+      await expectBehavior(script,
+        { input: { id: '1', op, from: 'c' } },
+        { output: { id: '1', re, 'bv-a': tag, to: 'c' } },
+      );
+    });
+    it('uses its defaults in an instance', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op, ...atBox } },
+        { output: { id: '2', re, 'bv-a': tag, ...fromBox } },
+      );
+    });
+  });
+
+  describe.each([
+    ['@positionalRequired'],
+    ['@namedRequired'],
+    ['@listRequired'],
+    ['@required'],
+  ])('%s has something required', (op) => {
+    it('answers unhandled in a file handler', async () => {
+      await expectBehavior(script,
+        { input: { id: '1', op, from: 'c' } },
+        { output: { id: '1', ex: { [op]: 'unhandled' }, to: 'c' } },
+      );
+    });
+    it('answers unhandled in an instance', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op, ...atBox } },
+        { output: { id: '2', ex: { [op]: 'unhandled' }, ...fromBox } },
+      );
+    });
+  });
+
+  describe('an optional param given an arg', () => {
+    it('still answers unhandled for a wrong tag', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op: [['x'], '@one'], 'bv-a': [['Text']], ...atBox } },
+        { output: { id: '2', ex: { '@one': 'unhandled' }, ...fromBox } },
+        { input: { id: '3', op: [['x'], '@one'], 'bv-a': [['Text']], from: 'c' } },
+        { output: { id: '3', ex: { '@one': 'unhandled' }, to: 'c' } },
+      );
+    });
+    it('still asks for a schema with no tags', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op: [[5], '@one'], ...atBox } },
+        { output: { id: '2', ex: { '@one': 'schema_required' }, ...fromBox } },
+        { input: { id: '3', op: [[5], '@one'], from: 'c' } },
+        { output: { id: '3', ex: { '@one': 'schema_required' }, to: 'c' } },
+      );
+    });
+    it('still takes a right tag', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op: [[5], '@one'], 'bv-a': [['Integer']], ...atBox } },
+        { output: { id: '2', re: [5], 'bv-a': ['Integer'], ...fromBox } },
+        { input: { id: '3', op: [[5], '@one'], 'bv-a': [['Integer']], from: 'c' } },
+        { output: { id: '3', re: [5], 'bv-a': ['Integer'], to: 'c' } },
+      );
+    });
+  });
+});
