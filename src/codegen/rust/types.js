@@ -146,7 +146,7 @@ impl BvObject {
     }
     // A function value may be a writer that returned self, which has no value.
     fn one_or_null(&self) -> Value {
-        if self.positional.is_empty() { Value::Null } else { self.one() }
+        if self.positional.is_empty() && self.named.is_empty() { Value::Null } else { self.one() }
     }
     fn one(&self) -> Value {
         if self.positional.len() != 1 {

@@ -1084,6 +1084,10 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'FnRef') {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
+    // Another name for a function held in a local.
+    if (s.value.type === 'Identifier' && ctx.lambdaVarNames.has(s.value.name)) {
+      return emitBinding(s.name, genExpr(ctx, s.value));
+    }
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');
   return result;

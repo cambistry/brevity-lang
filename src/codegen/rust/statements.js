@@ -1994,9 +1994,18 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
               return;
             }
-            // FunctionCallExpr: callee being s.name is an inlinable callsite — the
-            // function pipeline handles it. Don't treat it as a value reference.
+            if (node.type === 'FnRef' && node.name === s.name) { needsBinding = true; return; }
+            // A call that is a statement's whole value is an inlinable callsite —
+            // the function pipeline handles it. Don't treat it as a value reference.
+            const whole = node.value ?? node.expr ?? node.source;
+            const call = whole?.type === 'AsExpr' ? whole.expr : whole;
+            if (['Assign', 'TypedAssign', 'DestructureAssign', 'ExprStatement', 'ImplicitReturn'].includes(node.type) && call?.type === 'FunctionCallExpr') {
+              for (const a of (call.args || [])) walkRefs(a);
+              return;
+            }
+            // Any other call to it, with args, goes through the value.
             if (node.type === 'FunctionCallExpr') {
+              if (node.callee?.name === s.name && node.args?.length) { needsBinding = true; return; }
               for (const a of (node.args || [])) walkRefs(a);
               return;
             }
@@ -2070,8 +2079,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           if (knownType && knownType.includes?.('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
           lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${val};`);
         } else {
-          const val = genRustExpr(s.value, typeEnv);
-          lines.push(`${I}let ${mintRustSsa(s.name)}: Value = ${val};`);
+          let val = genRustExpr(s.value, typeEnv);
+          // Arithmetic and literals have a type of their own, and aren't a Value.
+          const computed = ['BinaryExpr', 'IntLiteral', 'DecimalLiteral', 'FloatLiteral', 'BoolLiteral', 'StringLiteral'].includes(s.value.type)
+            ? inferExprType(s.value, typeEnv)
+            : null;
+          if (computed) typeEnv.set(s.name, computed);
+          if (s.value.type === 'StringLiteral') val += '.to_string()';
+          lines.push(`${I}let ${mintRustSsa(s.name)}: ${computed ? rustType(computed) : 'Value'} = ${val};`);
         }
       }
     } else if (s.type === 'StateAssign') {
@@ -3182,7 +3197,7 @@ function genRustReBody(fields, typeEnv, refNames) {
         return `_nm.insert("${f.sigil}".to_string(), ${needsClone ? `${val}.clone()` : wrapped});`;
       }
       if (f.key !== undefined) {
-        const val = genRustExpr(f.value, typeEnv);
+        const val = f._precomputed || genRustExpr(f.value, typeEnv);
         const t = inferExprType(f.value, typeEnv);
         return `_nm.insert("${f.key}".to_string(), ${toJsonValue(val, t)});`;
       }
@@ -3207,7 +3222,7 @@ function genRustReBody(fields, typeEnv, refNames) {
           const typed = typeWireWrap(`(${wrapped})`, slotType);
           inserts.push(`_re_map.insert("${f.sigil}".to_string(), ${typed || wrapped});`);
         } else if (f.key !== undefined) {
-          const val = genRustExpr(f.value, typeEnv);
+          const val = f._precomputed || genRustExpr(f.value, typeEnv);
           const isSimpleVar = /^[a-z_]\w*$/i.test(val);
           const wrapped = `bv_val(${isSimpleVar ? `${val}.clone()` : val})`;
           const slotType = f.type

@@ -26,6 +26,7 @@ import {
   genActorFnCallExpr,
   genFunctionLiteral,
   refFieldInvocationErl,
+  genExprScalar,
 } from './expressions.js';
 
 // Subscribe call-site codegen. `c.field.subscribe |v| { body }` emits:
@@ -1552,7 +1553,8 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
       return `${erlString(f.sigil)} => ${wireWrap(val, slotType)}`;
     }
     if (f.key !== undefined) {
-      const val = f.value ? genExpr(ctx, f.value, typeEnv, sCtx) : erlVarName(f.key);
+      // A call to a function gives back its whole reply; the field holds its value.
+      const val = f.value ? genExprScalar(ctx, f.value, typeEnv, sCtx) : erlVarName(f.key);
       const slotType = f.type
         || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv?.get(f.value.name) : null)
         || inferExprType(f.value, typeEnv);
@@ -1603,6 +1605,8 @@ function genBvaBody(ctx, fields, typeEnv, sCtx) {
       varExpr = valName ? erlVarName(ssaResolve(valName)) : null;
     }
     if (!key || !t) return null;
+    // A list of unknown elements with no name to probe: no tag, as on the others.
+    if (isListOfAnythingType(t) && !varExpr) return null;
     if (isListOfAnythingType(t) && varExpr) {
       namedTypes.push(`${erlString(key)} => list_component_types(${varExpr})`);
     } else {

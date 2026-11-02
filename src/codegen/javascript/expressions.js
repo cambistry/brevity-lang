@@ -330,7 +330,7 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'InterpolatedString') {
     const pieces = expr.parts.map(p => {
       if (p.kind === 'text') return JSON.stringify(p.value);
-      return `_bv_str(${genExpr(ctx, p.expr)})`;
+      return `_bv_str(${genValue(ctx, p.expr)})`;
     });
     return '(' + pieces.join(' + ') + ')';
   }
@@ -605,7 +605,7 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'ListLiteral') {
     if (expr.elements.length === 0) return '_List.empty';
-    return `_List.from([${expr.elements.map(e => genExpr(ctx, e)).join(', ')}])`;
+    return `_List.from([${expr.elements.map(e => genValue(ctx, e)).join(', ')}])`;
   }
   if (expr.type === 'ObjectLiteral') {
     return genExpr(ctx, { ...expr, type: 'ObjectConstructor' });
@@ -831,15 +831,6 @@ export function genExpr(ctx, expr) {
         const op = expr.args.length === 0
           ? `"${name}"`
           : `[[${expr.args.map(genArg).join(', ')}], "${name}"]`;
-        return `BvObject.pack(await this.#selfSend(${op}))`;
-      }
-      // Lambda var call → self-send through dispatch
-      if (ctx.lambdaVarNames.has(name)) {
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
-        const jsName = ssaResolve(ctx, name);
-        const op = expr.args.length === 0
-          ? jsName
-          : `[[${expr.args.map(genArg).join(', ')}], ${jsName}]`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // A class in another file, constructed in place.
@@ -1191,6 +1182,14 @@ export function genListDestructureAssign(ctx, { pattern, source }, ldIdx = 0, in
   return lines.join('');
 }
 
+// An expression where one value belongs. A call to a function gives back its
+// whole reply, so it takes the value out; other calls already give a value.
+export function genValue(ctx, expr, name = '_') {
+  const code = genExpr(ctx, expr);
+  const givesReply = CALL_LIKE.has(expr?.type) && /^(BvObject\.pack\(|\(typeof |await \()/.test(code);
+  return givesReply ? `BvObject.one(${code}, ${JSON.stringify(name)})` : code;
+}
+
 export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const isType = t => typeof t === 'string' && ctx.typeDecls?.has(t);
@@ -1211,7 +1210,7 @@ export function genReplyField(ctx, field, typeEnv) {
     val = wrapForReply(val, t);
     return `${name}: ${val}`;
   }
-  const valueCode = genExpr(ctx, field.value);
+  const valueCode = genValue(ctx, field.value, field.key);
   const t = field.type
     || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null)
     || inferExprType(field.value, typeEnv);

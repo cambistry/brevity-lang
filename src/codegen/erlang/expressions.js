@@ -201,7 +201,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // an integer and would stringify as Integer without the coercion.
     const pieces = expr.parts.map(p => {
       if (p.kind === 'text') return `(${erlString(p.value)})/binary`;
-      const code = genExpr(ctx, p.expr, typeEnv, sCtx);
+      const code = genExprScalar(ctx, p.expr, typeEnv, sCtx);
       const t = inferExprType(p.expr, typeEnv);
       const coerced = t === 'Float' ? `bv_to_float(${code})` : code;
       return `(bv_str(${coerced}))/binary`;
@@ -545,7 +545,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'ListLiteral') {
     if (expr.elements.length === 0) return '[]';
-    const elems = expr.elements.map(e => genExpr(ctx, e, typeEnv, sCtx));
+    const elems = expr.elements.map(e => genExprScalar(ctx, e, typeEnv, sCtx));
     return `[${elems.join(', ')}]`;
   }
 
@@ -1458,9 +1458,8 @@ function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
   const callee = genExpr(ctx, expr.callee, typeEnv, sCtx);
   const posArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a, typeEnv, sCtx));
   const namedBag = (expr.args || []).find(a => a.type === 'NamedArgsBag');
-  // Runtime dispatch: when callee is an Identifier that could hold a lambda label binary
-  // Only apply when lambda handlers exist (meaning lambdas are being lifted)
-  if (ctx.lambdaHandlers.length > 0 && expr.callee?.type === 'Identifier' && !ctx.actorFnNames.has(expr.callee.name) && !ctx.lambdaVarNames.has(expr.callee.name) && !ctx.stateVarNames.has(expr.callee.name)) {
+  // Runtime dispatch: when callee is an Identifier that could hold a function's label binary
+  if (expr.callee?.type === 'Identifier' && !ctx.actorFnNames.has(expr.callee.name) && !ctx.lambdaVarNames.has(expr.callee.name) && !ctx.stateVarNames.has(expr.callee.name)) {
     let selfSendPayload;
     if (posArgs.length === 0 && !namedBag) {
       selfSendPayload = '#{}';

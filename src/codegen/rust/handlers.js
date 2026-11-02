@@ -194,7 +194,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
           const calleeName = expr.callee.name;
           // Local function definition (e.g. #value = { "ten" }) — inline body
           const localFn = functionAnalysis.fnDefs.get(calleeName);
-          if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
+          // Only a function with no params can have its body generated in place.
+          if (localFn && !localFn.node.params?.length && !G.ctx.actorFnNames.has(calleeName)) {
             const fnNode = localFn.node;
             const fnBody = fnNode.body || [];
             if (precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, `_pvfn_${precomputeIdx}`, lines)) { precomputeIdx++; return; }
@@ -679,7 +680,8 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
       if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
         const calleeName = expr.callee.name;
         const localFn = functionAnalysis.fnDefs.get(calleeName);
-        if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
+        // Only a function with no params can have its body generated in place.
+        if (localFn && !localFn.node.params?.length && !G.ctx.actorFnNames.has(calleeName)) {
           const fnNode = localFn.node;
           const fnBody = fnNode.body || [];
           if (precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, `_pvfn_${precomputeIdx}`, lines)) { precomputeIdx++; return; }

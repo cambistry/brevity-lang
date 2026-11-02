@@ -43,6 +43,7 @@ export function validate(ast, options = {}) {
   }
 
   spreadObjectReturns(ast);
+  lowerFunctionAs(ast);
 
   // Build actor info map for cross-actor as-clause checking
   const actorInfo = new Map();
@@ -3167,6 +3168,25 @@ function knownReturnShape(fns, outerTypes = new Map()) {
 // `r Object = f(); return r` then forwards f's reply unchanged — the mirror of
 // a typed Object bind taking the whole reply. Several values (`return r, 7`)
 // keep r as one value.
+// `top as Function` on one of the file's functions is a reference to it: `&top`.
+function lowerFunctionAs(ast) {
+  for (const actor of ast.actors) {
+    const walk = (node, fns) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => walk(n, fns)); return; }
+      if (node.type === 'Identifier' && node.attestedAs === 'Function' && fns.has(node.name)) {
+        node.type = 'FnRef';
+        delete node.attestedAs;
+        return;
+      }
+      const params = Array.isArray(node.params) ? node.params.map(p => p?.name) : [];
+      const inner = params.some(p => fns.has(p)) ? new Set([...fns].filter(f => !params.includes(f))) : fns;
+      for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v, inner);
+    };
+    walk(actor, new Set((actor.functions || []).map(f => f.name)));
+  }
+}
+
 function spreadObjectReturns(ast) {
   // A lambda's return node is `Return`; a handler's / function's is `Reply`.
   // A param's tags came with the request. A local's didn't, so it forwards none.
