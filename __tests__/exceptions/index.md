@@ -37,6 +37,10 @@ instance. A call that receives a failure fails in turn with `error`, whether it 
 another actor, another handler or a function. The actors keep their state and go on
 answering.
 
+A failed `as` in a class's constructor block fails the construction: the calling handler
+reports `error`, and so does `#new`, under `new@<class>`. No actor is made and no address
+is taken.
+
 ## LLM Rules
 
 - Use `unhandled` for dispatch miss examples.

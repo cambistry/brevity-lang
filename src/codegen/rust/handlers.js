@@ -893,6 +893,8 @@ function genRustChildInit(actor) {
     (pastIngest ? postIngestBody : preIngestBody).push(s);
   }
 
+  const isInstanceCall = (e) => e?.type === 'DotCallExpr' && e.object?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(e.object.callee?.name);
+
   // Pre-ingest body statements
   for (const s of preIngestBody) {
     if (s.type === 'StateAssign') {
@@ -903,10 +905,22 @@ function genRustChildInit(actor) {
           ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
           : 'json!([])';
         lines.push(`        self.child_${childName}_init(&${argsJson});`);
+      } else if (isInstanceCall(s.value?.type === 'AsExpr' ? s.value.expr : s.value)) {
+        // A call on a new instance binds the instance and then the reply, as in a handler.
+        const name = 'cell_call';
+        const call = s.value.type === 'AsExpr' ? s.value.expr : s.value;
+        const binds = [
+          { type: 'Assign', name: 'cell_recv', value: call.object },
+          { type: 'Assign', name, value: { ...call, object: { type: 'Identifier', name: 'cell_recv' } } },
+        ];
+        const bound = genRustLocals(binds, initTypeEnv, analyzeFunctions(binds, new Set(), initTypeEnv), findMutableVars(binds), '            ');
+        const read = { type: 'Identifier', name };
+        const val = genRustExpr(s.value.type === 'AsExpr' ? { ...s.value, expr: read } : read, initTypeEnv);
+        lines.push(`        {\n${bound}\n            let _v = ${forceJsonWrap(toJsonValue(val, initTypeEnv.get(s.name)))};\n            self.state.insert("${stateKey(s.name)}".to_string(), _v);\n        }`);
       } else {
         const val = genRustExpr(s.value, initTypeEnv);
         const t = initTypeEnv.get(s.name);
-        lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
       }
     }
   }
@@ -916,7 +930,7 @@ function genRustChildInit(actor) {
     if (ownIngestInfo.defaultValue) {
       const val = genRustExpr(ownIngestInfo.defaultValue, initTypeEnv);
       const t = initTypeEnv.get(ownIngestInfo.name);
-      lines.push(`        self.state.insert("${stateKey(ownIngestInfo.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+      lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(ownIngestInfo.name)}".to_string(), _v); }`);
     } else {
       lines.push(`        self.state.insert("${stateKey(ownIngestInfo.name)}".to_string(), Value::Null);`);
     }
@@ -925,7 +939,7 @@ function genRustChildInit(actor) {
       if (s.type === 'StateAssign') {
         const val = genRustExpr(s.value, initTypeEnv);
         const t = initTypeEnv.get(s.name);
-        lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
       }
     }
   } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
@@ -933,13 +947,13 @@ function genRustChildInit(actor) {
     const ingest = inheritedIngests[0];
     const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
     const t = ingest.typeName;
-    lines.push(`        self.state.insert("${stateKey(ingest.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
   } else if (inheritedIngests.length > 0) {
     // Subclass doesn't provide a return — use superclass's default if available
     for (const ingest of inheritedIngests) {
       if (ingest.defaultValue) {
         const val = genRustExpr(ingest.defaultValue, initTypeEnv);
-        lines.push(`        self.state.insert("${stateKey(ingest.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, ingest.typeName))});`);
+        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, ingest.typeName))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
       }
     }
   }
@@ -948,7 +962,7 @@ function genRustChildInit(actor) {
   if (actor.declarationReturn && actor.declarationReturn.typeName) {
     const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
     const t = actor.declarationReturn.typeName;
-    lines.push(`        self.state.insert("${stateKey('__returnAs')}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+    lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey('__returnAs')}".to_string(), _v); }`);
   }
 
   // Service coercion aliases — copy ref state to alias.
@@ -1146,10 +1160,10 @@ function genRustChildMethods(allActors) {
     }
     for (const f of mergedActor.functions) if (f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload) G.ctx.actorFnNames.add(f.name);
 
-    const init = genRustChildInit(mergedActor);
-    if (init) parts.push(init);
     // Set child self-send prefix so a call to the class's own function routes through child dispatch
     G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
+    const init = genRustChildInit(mergedActor);
+    if (init) parts.push(init);
     parts.push(genRustChildDispatch(mergedActor));
     G.ctx.childSelfSendPrefix = null;
 
@@ -1166,13 +1180,19 @@ function genRustChildMethods(allActors) {
         let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.inst_depth += 1;
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
-        ${init ? `self.child_${lc}_init(args);` : 'let _ = args;'}
+        let outcome = catch_unwind(AssertUnwindSafe(|| { ${init ? `self.child_${lc}_init(args);` : 'let _ = args;'} }));
         let new_state = std::mem::take(&mut self.state);
-        self.${lc}_instances.insert(instance_id, new_state);
+        if outcome.is_ok() { self.${lc}_instances.insert(instance_id, new_state); }
         self.state = saved_state;
         self.current_${lc}_instance = saved_current;
         self.inst_depth -= 1;
         self.flush_pending_subs();
+        // A failed construction leaves no actor and takes no address, and the
+        // caller receives the failure.
+        if outcome.is_err() {
+            if self.${lc}_next_id.get() == instance_id + 1 { self.${lc}_next_id.set(instance_id); }
+            panic!("ex_response");
+        }
     }
 
     fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {

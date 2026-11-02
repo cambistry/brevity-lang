@@ -605,6 +605,7 @@ json_escape(<<C/utf8, R/binary>>, Acc) when C > 127 ->
 json_escape(<<C, R/binary>>, Acc) -> json_escape(R, [C|Acc]).
 
 %% ── Object helpers ───────────────────────────────────────────────────────
+bv_object_pack({Pos_, Named_}) when is_list(Pos_), is_map(Named_) -> {Pos_, Named_};
 bv_object_pack(null) -> {[], #{}};
 bv_object_pack(P) when is_pid(P) -> {[P], #{}};
 bv_object_pack(L) when is_list(L) ->
@@ -694,7 +695,10 @@ bv_inst_sub_(_, _, _, _, _) -> null.
 %% sync only once in its loop).
 bv_spawn_sync_(Pid) ->
     Pid ! {bv_init_sync, self()},
-    receive {bv_ready, Pid} -> Pid end.
+    receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed) end.
+%% A constructor block failed: there's no actor, and whoever is constructing it is told.
+bv_init_failed_() ->
+    receive {bv_init_sync, From_} -> From_ ! {bv_init_failed, self()} end.
 %% Deliver an emitted event to a subscriber instance and await its handler.
 bv_inst_emit_(Pid, Ev, Payload) ->
     Id_ = integer_to_binary(erlang:unique_integer([positive])),

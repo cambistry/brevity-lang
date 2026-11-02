@@ -4928,7 +4928,10 @@ export function parse(tokensIn) {
               continue;
             }
             let typeName = null;
-            if (isTypeAttestation()) typeName = consumeTypeAttestation();
+            if (isTypeAttestation()) {
+              typeName = consumeTypeAttestation();
+              value.attestedAs = typeName;
+            }
             constructorBody.push(AST.typedAssign(op, typeName, value));
             continue;
           }

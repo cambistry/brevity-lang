@@ -334,8 +334,24 @@ export function lowerAs(ast) {
     }
   }
 
+  // What a class's constructor block runs is its initBody, whose cells store the
+  // value in place. A failure fails the construction. The file's own block is left
+  // out: nothing has a call open on it to report to.
+  const lowerClassBlock = (actor) => {
+    const env = new Map((actor.initParams || []).filter(p => p?.name).map(p => [p.name, p.type || null]));
+    const ownFns = new Set((actor.functions || []).map(f => f.name));
+    for (const s of actor.initBody || []) {
+      if (s.type !== 'StateAssign') continue;
+      const decl = (actor.stateVarDecls || []).find(d => d.name === s.name);
+      if (s.value?.type === 'FunctionCallExpr' && ownFns.has(s.value.callee?.name) && decl?.typeName !== 'Object') s.soleValue = true;
+      if (s.value?.attestedAs) wrapInPlace(s, 'value', s.value.attestedAs, env);
+      env.set(s.name, decl?.typeName || null);
+    }
+  };
+
   collectActors(ast.actors);
   visit(ast.actors, new Map());
+  for (const actor of ast.actors || []) if (actor.name) lowerClassBlock(actor);
 }
 
 const BLOCKS = new Set(['body', 'then', 'else', 'thenBranch', 'elseBranch']);

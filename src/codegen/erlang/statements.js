@@ -869,7 +869,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         sCtx.selfSpawnedRefs?.add(s.name);
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${val}),`);
+        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${s.soleValue && s.value.type !== 'AsExpr' ? `bv_object_one(${val})` : val}),`);
       }
     }
 

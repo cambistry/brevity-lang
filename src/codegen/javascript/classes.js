@@ -558,6 +558,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if ((s.isRef || ctx.remoteInstanceVars.has(s.name)) && isAsyncSend) {
       expr = expr.replace('this.#send(', 'this.#sendRef(');
     }
+    if (s.soleValue && s.value.type !== 'AsExpr') expr = `BvObject.one(${expr}, ${JSON.stringify(s.name)})`;
     return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
   let ownIngestInfo = null;
@@ -853,6 +854,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
 
+  // A class's construction is a call its caller receives the failure of, so a
+  // failed `as` keeps its message only on the handler it happened in.
+  const initCall = `await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});`;
+  const initCallLine = actor.name
+    ? `try { ${initCall} } catch (err) { delete err.bvEx; throw err; }`
+    : initCall;
+
   const hasEmits = emitDecls.size > 0;
   // #_cellSubs holds subscription lists keyed by target name. Populated by
   // the generic subscribe@X prologue in #dispatch; walked by set@X's
@@ -913,7 +921,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
   static async create(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
     const instance = new this(binding);
     if (binding.created) binding.created(instance);
-    await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});
+    ${initCallLine}
     return instance;
   }
 

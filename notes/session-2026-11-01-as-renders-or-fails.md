@@ -94,6 +94,26 @@ the enclosing body's instances and scopes what it binds. JS's branch and loop bi
 Returning a local Object no longer copies the request's `bv-a` onto the reply (`localObject`). Only a
 param's tags came with the request.
 
+## Failing in a constructor block
+
+A constructor block counts as a call the constructor receives. A failure gives `error` on the calling
+handler, or on `new@Box` for a `#new`, and never the `as` message. No actor results and no address is
+taken, so the next `#new` still gets `@Box/1`. The caller keeps its state.
+
+- **The check was missing on every target.** `lowerAs` never wrapped the `StateAssign` a block runs, so
+  `n Integer = f() as Integer` only labelled. `lowerClassBlock` now wraps it, and the parser keeps the
+  `as` on `n = f() as T`.
+- **Self-calls went to the file actor** on Rust and Erlang, because the block was generated without the
+  class's self-send prefix.
+- **Rust** computes a value before storing it, which was the build failure, and `child_X_init_at`
+  restores state around a failure. A call on a new instance in a block binds the instance first, as a
+  handler does. Otherwise a class with no params would skip its block.
+- **Erlang** spawned instances report `{bv_init_failed, Pid}` to `bv_spawn_sync_`, which used to wait
+  forever. `bv_object_pack` now accepts a packed Object.
+- **A cell from the class's own function** (`t Integer = one()`) stored the whole Object on JS and Erlang.
+  It now takes the sole value (`soleValue`), except for an `Object` cell. Own functions only, so a function
+  inherited by a subclass's block isn't covered.
+
 ## Known gaps
 
 - **Empty list on JS:** `null` is JS's empty list, so `null as List` from a remote passes there and
@@ -103,8 +123,18 @@ param's tags came with the request.
   arithmetic, before `as` sees a value. Read from the generated code, not run.
 - **A public handler with an empty body** gets no param check on JS or Erlang, since a trailing check
   would become the reply. Rust's decode still fails, and JS's does for Integer.
-- **A failed `as` in a class's constructor block:** JS fails the call with `error`. Erlang ignores the
-  failure and the call succeeds. Rust's generated code doesn't build.
+- **A remote call in a class's constructor block:** nothing waits for the reply. Rust and Erlang post the
+  call and read null, so `n Integer = Svc.t() as Integer` always fails the construction with `error`,
+  even if the reply would have rendered. On JS the call reaches the parent as an incoming op, which posts
+  `ex: { "@t": "unhandled" }`, and the constructing handler never replies. Seen with a `Text` reply only.
+- **The file's own constructor block:** `lowerAs` leaves it out, since no call is open to report to.
+  `n Integer = f() as Integer` there isn't checked: JS stores a whole Object, Erlang stores null, and Rust
+  doesn't build. A class failing in a file-level cell (`b = C("x")`) fails the spawn on JS, times out the
+  Erlang router, and fails the Rust test.
+- **Rust's flat call paths** (`statements.js`, two `hasInit` checks) don't count `initBody`, so a class with
+  a block and no params would skip it. Handler bodies don't reach them, because `lowerChains` hoists the
+  receiver. Its one exemption is a loop condition, which is untested.
+- **Rust, `r = b.get()` with a named reply:** binds null, where JS and Erlang fail with `error`.
 - **A typed param with an honest wrong tag on an instance:** JS answers `unhandled`. Rust and Erlang
   report `as Integer: got Text`. In a file handler, all three answer `unhandled`. A tag that lies gives
   the message on all three.

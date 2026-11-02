@@ -1067,7 +1067,8 @@ ${subRegLines.join('\n')}
     const isCall = expr.expr.type === 'FunctionCallExpr' || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
     // Arithmetic on untyped operands comes out as a native i64, not a BigInt.
     const native = expr.expr.type === 'BinaryExpr' && inner.includes('.as_i64()');
-    const value = isCall ? `BvObject::pack(&${inner}).one()`
+    // A call on the actor's own function already comes out as its sole value.
+    const value = isCall ? (inner.endsWith('.one()') ? inner : `BvObject::pack(&${inner}).one()`)
       : native ? `json!(${inner})`
       : toJsonValue(inner, inferExprType(expr.expr, typeEnv) || (expr.expr.type === 'BinaryExpr' ? expr.typeName : null));
     const out = convertFromValue(`bv_as(&${value}, &json!(${JSON.stringify(expr.desc)}), ${JSON.stringify(expr.typeName)})`, expr.typeName);
