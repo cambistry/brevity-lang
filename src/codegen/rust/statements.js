@@ -2726,7 +2726,14 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
   const retKeyword = G.ctx.whileRetKeyword || 'return';
   lines.push(`${I}loop {`);
   lines.push(`${I}    if !(${whileCond}) { break; }`);
-  for (const s of node.body) {
+  lines.push(...inRustBranchScope(() => genRustWhileBody(node.body, new Map(typeEnv), I, makeRetExpr, retKeyword)));
+  lines.push(`${I}}`);
+  return lines.join('\n');
+}
+
+function genRustWhileBody(body, typeEnv, I, makeRetExpr, retKeyword) {
+  const lines = [];
+  for (const s of body) {
     {
       const catchCode = tryGenRustCatchOrLabelStmt(s, typeEnv, `${I}    `);
       if (catchCode !== null) { lines.push(catchCode); continue; }
@@ -2740,15 +2747,8 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
       const sk2 = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
       lines.push(`${I}    ${storeInsert(rsStore(s.name), sk2, forceJsonWrap(toJsonValue(val, t)))}`);
-    } else if (s.type === 'TypedAssign') {
-      // Branch-local — use plain rustIdent (validator forbids rebinding from
-      // a while body, so no SSA needed inside the branch).
-      let val = genRustExpr(s.value, typeEnv);
-      if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-      lines.push(`${I}    let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
-    } else if (s.type === 'Assign') {
-      const val = genRustExpr(s.value, typeEnv);
-      lines.push(`${I}    let ${rustIdent(s.name)} = ${val};`);
+    } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      lines.push(genRustBranchBind(s, typeEnv, `${I}    `));
     } else if (s.type === 'Return' && makeRetExpr) {
       lines.push(`${I}    ${retKeyword} ${makeRetExpr(s.fields, typeEnv)};`);
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr) && makeRetExpr) {
@@ -2759,8 +2759,7 @@ function genRustWhileStatement(node, typeEnv, I, makeRetExpr = null) {
       lines.push(`${I}    ${genRustExpr(s.expr, typeEnv)};`);
     }
   }
-  lines.push(`${I}}`);
-  return lines.join('\n');
+  return lines;
 }
 
 // Detects: any WhileStatement in `body` whose loop body contains a Return

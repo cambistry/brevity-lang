@@ -1649,6 +1649,7 @@ function genRustFnReturn(fields, typeEnv) {
     if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     if (f.name) {
       if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
+      if (G.ctx.stateVarNames?.has(f.name)) return genRustExpr({ type: 'Identifier', name: f.name }, typeEnv);
       return forceJsonWrap(toJsonValue(rustSsaResolve(f.name), t));
     }
     return 'Value::Null';

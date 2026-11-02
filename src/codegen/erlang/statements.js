@@ -1120,47 +1120,55 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
   // arm or _fn method) before delegating to genLocals; cleared after.
   const makeThrow = ctx.whileEarlyThrow;
 
+  // Each pass through the loop is a new fun body, but it closes over the
+  // enclosing names, so a bind takes a name of its own.
+  const baseIdx = (sCtx.stmtIdx ?? 0) + 1;
+  const ssaEnv = branchSSAEnv(ctx, node.body, baseIdx - 1, sCtx.ssaEnv);
+  const env = new Map(typeEnv);
   const bodyLines = [];
-  for (const s of node.body) {
+  node.body.forEach((s, i) => {
+    const scope = { ...sCtx, stmtIdx: baseIdx + i, ssaEnv };
     // Catch / label-invoke handling — emit as expressions (no trailing comma;
     // bodyLines join with comma below).
     if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
       const tag = lookupCatchTag(ctx, s.expr.label);
       bodyLines.push(`${I}            throw('${tag}')`);
-      continue;
+      return;
     }
     if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'CatchExpr') {
       // Nested block-label catch inside while body — emit as a `try ... end`
       // expression. genErlCatchStatement returns a chunk ending with `,` —
       // strip it so the comma-join below composes correctly.
-      const stmt = genErlCatchStatement(ctx, s.expr, typeEnv, sCtx, `${I}            `);
+      const stmt = genErlCatchStatement(ctx, s.expr, env, scope, `${I}            `);
       bodyLines.push(stmt.replace(/,$/, ''));
-      continue;
+      return;
     }
     if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExitErl(s.expr)) {
-      bodyLines.push(genErlIfWithLabelExit(ctx, s.expr, typeEnv, sCtx, `${I}            `));
-      continue;
+      bodyLines.push(genErlIfWithLabelExit(ctx, s.expr, env, scope, `${I}            `));
+      return;
     }
     if (s.type === 'WhileStatement') {
       // Nested repeat — strip the trailing comma from the chunk so it composes
       // as an expression in the while-body comma-join.
-      bodyLines.push(genWhileStatement(ctx, s, typeEnv, sCtx, `${I}            `).replace(/,$/, ''));
-      continue;
+      bodyLines.push(genWhileStatement(ctx, s, env, scope, `${I}            `).replace(/,$/, ''));
+      return;
     }
     if (s.type === 'SetStatement') {
-      bodyLines.push(`${I}            put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+      bodyLines.push(`${I}            put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
     } else if (s.type === 'StateAssign') {
-      bodyLines.push(`${I}            put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
-    } else if (s.type === 'TypedAssign') {
-      bodyLines.push(`${I}            ${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`);
+      bodyLines.push(`${I}            put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
+    } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      const bind = genLocals(ctx, [s], env, { ...scope, inBranch: true }, '');
+      bodyLines.push(`${I}            ${bind.map(l => l.trim()).join(' ').replace(/,$/, '')}`);
+      bindLocalType(env, s);
     } else if (s.type === 'Return' && makeThrow) {
-      bodyLines.push(`${I}            ${makeThrow(s.fields)}`);
+      bodyLines.push(`${I}            ${makeThrow(s.fields, { ...scope, typeEnv: env })}`);
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && makeThrow) {
-      bodyLines.push(`${I}            ${buildErlWhileGuardCase(ctx, s.expr, typeEnv, sCtx, makeThrow)}`);
+      bodyLines.push(`${I}            ${buildErlWhileGuardCase(ctx, s.expr, env, scope, makeThrow)}`);
     } else if (s.type === 'ExprStatement') {
-      bodyLines.push(`${I}            ${genExpr(ctx, s.expr, typeEnv, sCtx)}`);
+      bodyLines.push(`${I}            ${genExpr(ctx, s.expr, env, scope)}`);
     }
-  }
+  });
   bodyLines.push(`${I}            ${loopName}_f()`);
 
   return `${I}${loopName} = fun ${loopName}_f() ->\n` +

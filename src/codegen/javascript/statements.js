@@ -527,15 +527,20 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
   } else {
     code = `\n${indent}while ((${condCode}) !== false && (${condCode}) !== null) {`;
   }
-  for (const s of node.body) {
+  code += inBlockScope(ctx, () => genWhileBody(ctx, node.body, inner, outerEnv, counters));
+  code += `\n${indent}}`;
+  return code;
+}
+
+function genWhileBody(ctx, body, inner, outerEnv, counters) {
+  let code = '';
+  for (const s of body) {
     const catchCode = tryGenCatchOrLabelStmt(ctx, s, inner, outerEnv, counters);
     if (catchCode !== null) { code += catchCode; continue; }
     if (s.type === 'StateAssign') {
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
-    } else if (s.type === 'TypedAssign') {
-      code += `\n${inner}const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
-    } else if (s.type === 'Assign') {
-      code += `\n${inner}const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
+    } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      code += `\n${inner}${genBlockBind(ctx, s)}`;
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
@@ -548,7 +553,7 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
     } else if (s.type === 'WhileStatement') {
       code += genWhileStatement(ctx, s, inner, outerEnv, counters);
     } else if (s.type === 'Return') {
-      code += `\n${inner}return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
+      code += `\n${inner}return ${genBranchReturn(ctx, s.fields)};`;
     } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) {
       const tmpVar = `_if${counters.ifIdx++}`;
       const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, `\n${inner}`);
@@ -557,7 +562,6 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
       code += `\n${inner}${genExpr(ctx, s.expr)};`;
     }
   }
-  code += `\n${indent}}`;
   return code;
 }
 

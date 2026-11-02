@@ -4,6 +4,7 @@
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { lowerAs } from './as_check.js';
+import { lowerBranchOrder } from './branch_order.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
@@ -841,6 +842,7 @@ export function validate(ast, options = {}) {
   addConstructHandlers(ast);
   // Last, so every check above reads `as` as written.
   lowerAs(ast);
+  lowerBranchOrder(ast);
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call
@@ -2021,13 +2023,13 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   }
 
   for (const fn of actor.functions) {
-    const outerNames = collectScopeNames(fn.params, fn.body);
+    checkFunctionBinds(fn, new Set(), null);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
     // Merge state var types so actor-reference variables are visible
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    validateBody(fn.body, outerNames, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
+    validateBody(fn.body, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 }
 
@@ -2397,41 +2399,6 @@ function buildTypeEnv(params, body, typeDecls = null) {
   return env;
 }
 
-function collectScopeNames(params, body) {
-  const names = new Set();
-  for (const p of params) {
-    if (p.rest) continue;
-    if (p.name && p.type) names.add(p.name);
-  }
-  for (const s of body) {
-    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
-      names.add(s.name);
-    } else if (s.type === 'DestructureAssign') {
-      for (const item of s.pattern) {
-        if (item.discard || !item.name) continue;
-        if (item.type) { names.add(item.name); continue; }
-        if (s.source?.type === 'ObjectConstructor') {
-          let t;
-          if (item.positional) t = s.source.args.filter(a => a.positional)[item.idx]?.type;
-          else if (item.named) t = s.source.args.find(a => a.key === item.name)?.type;
-          else if (item.key !== undefined) t = s.source.args.find(a => a.key === item.key)?.type;
-          if (t) names.add(item.name);
-        }
-      }
-    } else if (s.type === 'ListDestructure') {
-      for (const item of s.pattern) {
-        if (item.discard || !item.name) continue;
-        if (item.type) names.add(item.name);
-      }
-    } else if (s.type === 'Assign') {
-      if (inferLiteralType(s.value)) names.add(s.name);
-    } else if (s.type === 'RefDecl' && s.typeName) {
-      names.add(s.name);
-    }
-  }
-  return names;
-}
-
 function inferLiteralType(expr) {
   if (!expr) return null;
   if (expr.type === 'IntLiteral')     return 'Integer';
@@ -2531,7 +2498,7 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
+function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
   checkTypeConsistency(body);
 
   // Build a local map of variable → actor class from assignments like: a = A().
@@ -3087,21 +3054,9 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
 
     // Function literal validation
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function' && s.value.body) {
-      checkRebind(s.value.body, outerNames, 'a function');
       checkWhileReturnType(s.value);
-      const fnScope = collectScopeNames(s.value.params || [], s.value.body);
       const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
-      validateBody(s.value.body, fnScope, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
-    }
-
-    // IfExpr re-bind check
-    if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'IfExpr') {
-      checkRebindInIf(s.value, outerNames);
-    }
-
-    // WhileStatement re-bind check
-    if (s.type === 'WhileStatement' && s.body) {
-      checkRebind(s.body, outerNames, 'a while block');
+      validateBody(s.value.body, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
     }
   }
 }
@@ -3361,27 +3316,60 @@ function checkPublishedParams(ast) {
 
 // ── Re-bind guards ──────────────────────────────────────────────────────────
 
-function checkRebind(body, outerNames, scopeLabel) {
+// A block's binds are its own, so an untyped bind on a name from outside would
+// look like a change to it and leave it as it was after the block. `x Type = …`
+// shadows on purpose. A function assigned to a name follows the same rule, and
+// a lambda passed inline starts a scope of its own.
+
+function patternNames(s) {
+  return (s.pattern || []).filter(item => !item.discard && item.name);
+}
+
+function checkBlockBinds(body, outer, label, own = new Set()) {
   for (const s of body) {
-    if (s.type === 'Assign' && outerNames.has(s.name)) {
-      throw new Error(`Cannot re-bind '${s.name}' from inside ${scopeLabel} — use '${s.name} : Type = ...' to shadow it`);
+    const rebound = s.type === 'Assign' ? [s.name]
+      : (s.type === 'DestructureAssign' || s.type === 'ListDestructure')
+        ? patternNames(s).filter(item => !item.type).map(item => item.name)
+        : [];
+    const hit = rebound.find(name => outer.has(name) && !own.has(name));
+    if (hit) {
+      throw new Error(`Cannot re-bind '${hit}' from inside ${label} — use '${hit} Type = ...' to shadow it`);
     }
-    if (s.type === 'WhileStatement' && s.body) {
-      checkRebind(s.body, outerNames, 'a while block');
+    const visible = new Set([...outer, ...own]);
+    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'Function' && s.value.body) {
+      checkFunctionBinds(s.value, visible, 'a function');
+    } else {
+      checkNestedBlocks(s, visible);
+    }
+    rebound.forEach(name => own.add(name));
+    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl' || s.type === 'RefDecl') own.add(s.name);
+    if (s.type === 'DestructureAssign' || s.type === 'ListDestructure') {
+      patternNames(s).forEach(item => own.add(item.name));
     }
   }
 }
 
-function checkRebindInIf(ifExpr, outerNames) {
-  if (ifExpr.then?.body) {
-    checkRebind(ifExpr.then.body, outerNames, 'an if block');
+function checkFunctionBinds(fn, outer, label) {
+  const params = (fn.params || []).map(p => p.name).filter(Boolean);
+  const visible = new Set([...outer].filter(name => !params.includes(name)));
+  checkBlockBinds(fn.body, visible, label, new Set(params));
+}
+
+function checkNestedBlocks(node, visible) {
+  if (Array.isArray(node)) {
+    node.forEach(item => checkNestedBlocks(item, visible));
+    return;
   }
-  if (ifExpr.else) {
-    if (ifExpr.else.type === 'IfExpr') {
-      checkRebindInIf(ifExpr.else, outerNames);
-    } else if (ifExpr.else.body) {
-      checkRebind(ifExpr.else.body, outerNames, 'an if block');
-    }
+  if (!node || typeof node !== 'object') return;
+  const label = { IfBranch: 'an if block', WhileStatement: 'a while block', CatchExpr: 'a catch block' }[node.type];
+  if (node.type === 'Function') {
+    if (node.body) checkFunctionBinds(node, new Set(), null);
+    else checkNestedBlocks(node.expr, visible);
+    return;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (label && key === 'body' && Array.isArray(value)) checkBlockBinds(value, visible, label);
+    else checkNestedBlocks(value, visible);
   }
 }
 
