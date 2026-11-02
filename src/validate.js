@@ -3,6 +3,7 @@
 
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
+import { lowerAs } from './as_check.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
@@ -838,6 +839,8 @@ export function validate(ast, options = {}) {
   checkEffects(ast, remotesParsed);
   lowerOwnCellWrites(ast);
   addConstructHandlers(ast);
+  // Last, so every check above reads `as` as written.
+  lowerAs(ast);
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call

@@ -3051,6 +3051,9 @@ export function parse(tokensIn) {
           const firstElem = { positional: true, expr: value, type: firstType };
           consume(); // COMMA
           value = parseRHSObjectLiteral(firstElem);
+        } else if (firstType === typeName) {
+          // `p Point = v as Point`: the value itself, checked at runtime.
+          value.attestedAs = firstType;
         } else if (firstType !== null) {
           // Single typed value → 1-element ObjectLiteral
           value = AST.objectLiteral([{ positional: true, expr: value, type: firstType }]);

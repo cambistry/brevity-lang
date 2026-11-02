@@ -221,6 +221,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
           }
         }
         // Walk children
+        if (expr.type === 'AsExpr') precomputeExprCalls(expr.expr, expectedType);
         if (expr.type === 'BinaryExpr') {
           precomputeExprCalls(expr.left, expectedType);
           precomputeExprCalls(expr.right, expectedType);
@@ -614,6 +615,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
     // Pre-compute reply field expressions that contain function calls producing block expressions
     let precomputeIdx = 0;
     const exprNeedsPrecompute = (expr) => {
+      if (expr?.type === 'AsExpr') return exprNeedsPrecompute(expr.expr);
       if (!expr) return false;
       if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
         const calleeName = expr.callee.name;
@@ -656,6 +658,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
           return;
         }
       }
+      if (expr.type === 'AsExpr') precomputeFnCalls(expr.expr, expectedType);
       if (expr.type === 'BinaryExpr') {
         precomputeFnCalls(expr.left, expectedType);
         precomputeFnCalls(expr.right, expectedType);

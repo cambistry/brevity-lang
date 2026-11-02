@@ -496,6 +496,100 @@ export const STRING_PREAMBLE = `function _bv_str(v) {
   return String(v);
 }`;
 
+export const AS_PREAMBLE = `const _BV_AS_NO = Symbol('no');
+const _bvAsKind = (v) => {
+  if (v === null || v === undefined) return 'null';
+  if (typeof v === 'bigint') return 'Integer';
+  if (typeof v === 'number') return Number.isInteger(v) ? 'Integer' : 'Float';
+  if (typeof v === 'string') return 'Text';
+  if (typeof v === 'boolean') return 'Boolean';
+  if (v instanceof BvDecimal) return 'Decimal';
+  if (typeof v.__type === 'string') return v.__type;
+  if (Array.isArray(v) || ('head' in v && 'tail' in v)) return 'List';
+  return 'Object';
+};
+const _bvAsFields = (v, d) => {
+  let src = v;
+  if (Array.isArray(v.positional) && 'named' in v) {
+    src = { ...v.named };
+    v.positional.forEach((x, i) => { if (d.f[i]) src[d.f[i][0]] = x; });
+  } else if (Array.isArray(v)) {
+    src = {};
+    v.forEach((x, i) => { if (d.f[i]) src[d.f[i][0]] = x; });
+  }
+  const out = { __type: d.t };
+  for (const [name, fd, optional] of d.f) {
+    const x = src[name];
+    if (x === undefined || (x === null && optional)) { if (optional) continue; return _BV_AS_NO; }
+    const r = fd === null ? x : _bvAsTry(x, fd);
+    if (r === _BV_AS_NO) return _BV_AS_NO;
+    out[name] = r;
+  }
+  return out;
+};
+function _bvAsTry(v, d) {
+  if (typeof d === 'string') {
+    switch (d) {
+      case 'Integer':
+        if (typeof v === 'bigint') return v;
+        if (typeof v === 'number') return Number.isInteger(v) ? BigInt(v) : _BV_AS_NO;
+        if (v instanceof BvDecimal) {
+          const f = 10n ** BigInt(v.s);
+          return v.c % f === 0n ? v.c / f : _BV_AS_NO;
+        }
+        return _BV_AS_NO;
+      case 'Float':
+        if (typeof v === 'number') return v;
+        if (typeof v === 'bigint') return Number(v);
+        if (v instanceof BvDecimal) return Number(v.c) / 10 ** v.s;
+        return _BV_AS_NO;
+      case 'Decimal':
+        if (v instanceof BvDecimal) return v;
+        if (typeof v === 'bigint') return BvDecimal.fromInt(v);
+        if (typeof v === 'number') { try { return BvDecimal.from(v); } catch { return _BV_AS_NO; } }
+        return _BV_AS_NO;
+      case 'Text': case 'Blob': return typeof v === 'string' ? v : _BV_AS_NO;
+      case 'Boolean': return typeof v === 'boolean' ? v : _BV_AS_NO;
+      case 'null': return v === null || v === undefined ? null : _BV_AS_NO;
+      default: return v;
+    }
+  }
+  if (d.u) {
+    const exact = d.u.find(m => typeof m === 'string' && m === _bvAsKind(v));
+    if (exact) return _bvAsTry(v, exact);
+    for (const m of d.u) { const r = _bvAsTry(v, m); if (r !== _BV_AS_NO) return r; }
+    return _BV_AS_NO;
+  }
+  if ('l' in d) {
+    if (v === null) return null;
+    let items;
+    if (Array.isArray(v)) items = v;
+    else if (typeof v === 'object' && 'head' in v && 'tail' in v) { items = []; for (let c = v; c !== null; c = c.tail) items.push(c.head); }
+    else return _BV_AS_NO;
+    let tail = null;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const r = d.l === null ? items[i] : _bvAsTry(items[i], d.l);
+      if (r === _BV_AS_NO) return _BV_AS_NO;
+      tail = { head: r, tail };
+    }
+    return tail;
+  }
+  if (v === null || typeof v !== 'object' || v instanceof BvDecimal) return _BV_AS_NO;
+  return _bvAsFields(v, d);
+}
+function _bvAs(v0, d, name) {
+  const sole = v0 !== null && typeof v0 === 'object' && Array.isArray(v0.positional) && 'named' in v0
+    && v0.positional.length === 1 && Object.keys(v0.named).length === 0;
+  const v = sole ? v0.positional[0] : v0;
+  const r = _bvAsTry(v, d);
+  if (r === _BV_AS_NO) {
+    const e = new Error('as ' + name + ': got ' + _bvAsKind(v));
+    e.bvEx = e.message;
+    throw e;
+  }
+  return r;
+}`;
+
 export const OBJECT_PREAMBLE = `const BvObject = {
   pack(payload) {
     if (payload == null) return { positional: [], named: {}, positional_types: null, named_types: null };

@@ -1060,6 +1060,20 @@ ${subRegLines.join('\n')}
       default: throw new Error(`Unknown Math method: ${m}`);
     }
   }
+  if (expr.type === 'AsExpr') {
+    const strict = G.strictConvert;
+    G.strictConvert = false;
+    const inner = genRustExpr(expr.expr, typeEnv, eCtx);
+    const isCall = expr.expr.type === 'FunctionCallExpr' || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
+    // Arithmetic on untyped operands comes out as a native i64, not a BigInt.
+    const native = expr.expr.type === 'BinaryExpr' && inner.includes('.as_i64()');
+    const value = isCall ? `BvObject::pack(&${inner}).one()`
+      : native ? `json!(${inner})`
+      : toJsonValue(inner, inferExprType(expr.expr, typeEnv) || (expr.expr.type === 'BinaryExpr' ? expr.typeName : null));
+    const out = convertFromValue(`bv_as(&${value}, &json!(${JSON.stringify(expr.desc)}), ${JSON.stringify(expr.typeName)})`, expr.typeName);
+    G.strictConvert = strict;
+    return out;
+  }
   if (expr.type === 'BlobMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
@@ -1663,7 +1677,13 @@ function genRustDefaultValue(node, _brevityType) {
   return 'Value::Null';
 }
 
+// Params arrive from another actor, so a wrong value fails rather than defaulting.
 function genRustDestructure(params) {
+  G.strictConvert = true;
+  try { return genRustDestructureParams(params); } finally { G.strictConvert = false; }
+}
+
+function genRustDestructureParams(params) {
   const lines = [];
   const hasPositional = params.some(p => p.positional && !p.rest);
 

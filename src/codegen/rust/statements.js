@@ -100,7 +100,7 @@ function handleTypedAssign_ChildActorRef(s, sCtx, I, lines) {
   const childCall = flat
     ? `self.child_${flat.toLowerCase()}_dispatch("as", &json!("${s.typeName}"), "", "__parent")`
     : `self.child_${sCtx.selfSpawnedRefs.get(s.value.name).toLowerCase()}_dispatch_at(bv_inst_id(&${rustSsaResolve(s.value.name)}), "as", &json!("${s.typeName}"), "", "__parent")`;
-  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)`, s.typeName)};`);
+  lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`bv_as_reply(${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null))`, s.typeName)};`);
   return true;
 }
 
@@ -394,6 +394,12 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
 
 // Branch 10: Object type assign
 function handleTypedAssign_ObjectType(s, typeEnv, I, lines) {
+  const dotName = s.value.type === 'DotCallExpr' && (s.value.object.type === 'RefRead' || s.value.object.type === 'Identifier') ? s.value.object.name : null;
+  if (dotName && (G.ctx.remoteInstanceVars.has(dotName) || G.ctx.localInstanceVars?.has(dotName) || G.ctx.dependencyNames?.has(dotName))) {
+    const reply = genRustRemoteDotCallAwait(s.value, typeEnv, I, lines);
+    lines.push(`${I}let ${mintRustSsa(s.name)}: Value = ${reply};`);
+    return;
+  }
   const sVal = genRustExpr(s.value, typeEnv);
   lines.push(`${I}let ${mintRustSsa(s.name)} = ${sVal};`);
 }
@@ -878,7 +884,12 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
 
 // --- End extracted handlers ---// --- End extracted handlers ---
 
-function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
+function genRustTypedAssign(...args) {
+  G.strictConvert = true;
+  try { return genRustTypedAssignBody(...args); } finally { G.strictConvert = false; }
+}
+
+function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {
       // Branch 1: dep constructor (tiny, keep inline)
       if (s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name) && !G.ctx.destructuredMembers?.has(s.value.callee.name)) {
         genRustDepConstructorAsAssign(s, typeEnv, I, lines);
@@ -996,7 +1007,12 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
 
 // Handles DestructureAssign statements.
 
-function genRustDestructureAssign(s, typeEnv, sCtx, I, lines, i, fnDefs) {
+function genRustDestructureAssign(...args) {
+  G.strictConvert = true;
+  try { return genRustDestructureAssignBody(...args); } finally { G.strictConvert = false; }
+}
+
+function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
       // Typed-value source: tagged Value::Object — read fields by name and
       // convert to the field's declared type. Validation in src/validate.js
       // rejects over-arity and undeclared-field references before reaching codegen.
@@ -1584,7 +1600,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
             lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${converted};`);
           } else {
             const callExpr = genRustFnCallExpr(s.value, typeEnv);
-            lines.push(`${I}let ${mintRustSsa(s.name)} = ${callExpr};`);
+            lines.push(`${I}let ${mintRustSsa(s.name)}: Value = ${callExpr}.one();`);
           }
         }
       } else {

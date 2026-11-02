@@ -671,7 +671,10 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       emitBinding(s.name, tmpVar)
     );
   }
-  if (s.typeName === 'Object') return emitBinding(s.name, genExpr(ctx, s.value));
+  if (s.typeName === 'Object') {
+    if (s.value.type === 'DotCallExpr') return emitBinding(s.name, `BvObject.pack(await ${genExpr(ctx, s.value)})`);
+    return emitBinding(s.name, genExpr(ctx, s.value));
+  }
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
     const overloadMode = s.value.overloadMode;

@@ -1889,10 +1889,10 @@ handle_result(_, _Id, _From, _OpName) ->
   {
     dispatchFinal = dispatchBody.replace(
       '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = handle_op(OpName, Message, Payload2, Id, From),\n            handle_result(Result, Id, From, OpName)',
-      '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = try handle_op(OpName, Message, Payload2, Id, From)\n            catch _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
+      '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = try handle_op(OpName, Message, Payload2, Id, From)\n            catch error:{bv_as, AsMsg_} ->\n                {caught_error, OpName, AsMsg_};\n            _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
     ).replace(
       'handle_result(_, _Id, _From, _OpName) ->\n    ok.',
-      'handle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
+      'handle_result({caught_error, Op, Msg}, Id, From, _OpName) ->\n    Resp = #{<<"id">> => Id, <<"ex">> => #{Op => Msg}, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
     );
   }
 
@@ -2197,7 +2197,7 @@ function createErlContext() {
 
 export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
-  const _hasPublicOrOn = a => a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
+  const _hasPublicOrOn = a => a.asClauses?.length > 0 || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
 

@@ -173,7 +173,20 @@ An annotation on a call has to hold for every path, and a destructured key has t
 
 ```brevity
 x Integer | Text = f(true)
-y Integer = f(true) as Integer             // takes your word for it; nothing checks at runtime
+y Integer = f(true) as Integer             // fails the call if it's not an Integer
+z Integer = Svc.t()                        // a remote reply is checked, with or without `as`
+```
+
+`as T` renders a value as T or fails the enclosing call with an `ex`, which can't be caught. It never
+parses or stringifies.
+
+```brevity
+1 as Float                                 // converts; so does 1 as Decimal
+t as Blob                                  // Text and Blob convert both ways
+x as Integer                               // a whole Float or Decimal passes, 1.5 fails
+"x" as Integer                             // compile error: no such rendering
+c as Integer                               // an actor is asked, through its `self as Integer`
+f() as Object                              // the whole reply
 ```
 
 ## Silent Functions

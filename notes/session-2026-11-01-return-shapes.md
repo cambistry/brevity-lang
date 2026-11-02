@@ -46,12 +46,11 @@ These pass, because there's nothing reliable to compare:
 - A function with overloads: the args pick one, and this check doesn't resolve them.
 - A value that isn't a direct call: `x Integer = y`, or a call nested in an expression.
 
-### `as` is the escape, and it's unchecked
+### `as` is the escape, and it's checked at runtime
 
-`x T = f() as T` has always parsed to the same thing as `x T = f()`, and there's no runtime check
-behind it: `t Integer = f()` with `f` returning `"x"` replies `"x"` tagged `Integer`. The parser now
-records `attestedAs` on the value so the check can trust it, and that's all `as` does here. A runtime
-check is a follow-up.
+`x T = f() as T` is how a caller takes one type out of a union. The return-path check doesn't judge
+it, because `as` settles it at runtime: a wrong value ends the call with an `ex`. See
+`session-2026-11-01-as-renders-or-fails.md`.
 
 ## Code
 

@@ -97,6 +97,84 @@ bv_pow(Base, Exp, Acc) ->
     bv_pow(Base, Exp - 1, Acc * Base).
 
 %% ── Float helpers ──────────────────────────────────────────────────────
+bv_as(V0, D, Name) ->
+    V = case V0 of
+        {[Only_], M0_} when is_map(M0_), map_size(M0_) =:= 0 -> Only_;
+        {[], M0_} when is_map(M0_) -> M0_;
+        {P0_, M0_} when is_list(P0_), is_map(M0_), map_size(M0_) =:= 0 -> P0_;
+        _ -> V0
+    end,
+    case bv_as_try(V, D) of
+        {ok, R_} -> R_;
+        no -> error({bv_as, <<"as ", Name/binary, ": got ", (bv_as_kind(V))/binary>>})
+    end.
+bv_as_kind(null) -> <<"null">>;
+bv_as_kind(true) -> <<"Boolean">>;
+bv_as_kind(false) -> <<"Boolean">>;
+bv_as_kind(V) when is_integer(V) -> <<"Integer">>;
+bv_as_kind(V) when is_float(V) -> case V == trunc(V) of true -> <<"Integer">>; false -> <<"Float">> end;
+bv_as_kind(V) when is_binary(V) -> <<"Text">>;
+bv_as_kind({bv_decimal, _, _}) -> <<"Decimal">>;
+bv_as_kind(V) when is_list(V) -> <<"List">>;
+bv_as_kind(#{<<"__type">> := T}) -> T;
+bv_as_kind(_) -> <<"Object">>.
+bv_as_try(V, <<"Integer">>) when is_integer(V) -> {ok, V};
+bv_as_try(V, <<"Integer">>) when is_float(V) -> case V == trunc(V) of true -> {ok, trunc(V)}; false -> no end;
+bv_as_try({bv_decimal, C, S}, <<"Integer">>) ->
+    F = bv_as_pow10(S),
+    case C rem F of 0 -> {ok, C div F}; _ -> no end;
+bv_as_try(V, <<"Float">>) when is_float(V) -> {ok, V};
+bv_as_try(V, <<"Float">>) when is_integer(V) -> {ok, float(V)};
+bv_as_try({bv_decimal, _, _} = V, <<"Float">>) -> {ok, bv_dec_to_float(V)};
+bv_as_try({bv_decimal, _, _} = V, <<"Decimal">>) -> {ok, V};
+bv_as_try(V, <<"Decimal">>) when is_number(V) -> {ok, bv_dec_from_number(V)};
+bv_as_try(V, <<"Text">>) when is_binary(V) ->
+    case unicode:characters_to_binary(V) of B when is_binary(B) -> {ok, V}; _ -> no end;
+bv_as_try(V, <<"Blob">>) when is_binary(V) -> {ok, V};
+bv_as_try(V, <<"Boolean">>) when is_boolean(V) -> {ok, V};
+bv_as_try(null, <<"null">>) -> {ok, null};
+bv_as_try(V, {u, Ms}) ->
+    Kind = bv_as_kind(V),
+    case lists:member(Kind, Ms) of
+        true -> bv_as_try(V, Kind);
+        false -> bv_as_first(V, Ms)
+    end;
+bv_as_try(V, {l, none}) when is_list(V) -> {ok, V};
+bv_as_try(V, {l, E}) when is_list(V) ->
+    Rs = [bv_as_try(X, E) || X <- V],
+    case lists:member(no, Rs) of
+        true -> no;
+        false -> {ok, [R || {ok, R} <- Rs]}
+    end;
+bv_as_try(V, {t, Name, Fields}) when is_map(V) -> bv_as_fields(V, Name, Fields);
+bv_as_try(V, {t, Name, Fields}) when is_list(V) ->
+    Keys = [K || {K, _, _} <- Fields],
+    bv_as_fields(maps:from_list(lists:zip(lists:sublist(Keys, length(V)), lists:sublist(V, length(Keys)))), Name, Fields);
+bv_as_try(_, _) -> no.
+bv_as_first(_, []) -> no;
+bv_as_first(V, [M | Ms]) ->
+    case bv_as_try(V, M) of
+        {ok, _} = R -> R;
+        no -> bv_as_first(V, Ms)
+    end.
+bv_as_fields(Src, Name, Fields) ->
+    lists:foldl(fun
+        (_, no) -> no;
+        ({K, FD, Opt}, {ok, Acc}) ->
+            case maps:find(K, Src) of
+                {ok, null} when Opt -> {ok, Acc};
+                error when Opt -> {ok, Acc};
+                error -> no;
+                {ok, X} when FD =:= none -> {ok, Acc#{K => X}};
+                {ok, X} ->
+                    case bv_as_try(X, FD) of
+                        {ok, R} -> {ok, Acc#{K => R}};
+                        no -> no
+                    end
+            end
+    end, {ok, #{<<"__type">> => Name}}, Fields).
+bv_as_pow10(0) -> 1;
+bv_as_pow10(N) -> 10 * bv_as_pow10(N - 1).
 bv_to_float(V) when is_float(V) -> V;
 bv_to_float(V) when is_integer(V) -> float(V).
 

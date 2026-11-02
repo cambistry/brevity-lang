@@ -87,6 +87,7 @@ export function inferExprType(expr, typeEnv) {
     case 'BoolLiteral':    return 'Boolean';
     case 'NullLiteral':    return 'null';
     case 'TypeConstruction': return expr.typeName;
+    case 'AsExpr':           return expr.typeName;
     case 'PresenceCheck':    return 'Boolean';
   }
 

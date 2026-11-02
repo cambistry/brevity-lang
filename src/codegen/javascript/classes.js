@@ -2,7 +2,7 @@ import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
-import { LIST_PREAMBLE, OBJECT_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
+import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
@@ -1175,7 +1175,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
 ${ifChain}
     } catch (err) {
       const _route = message._route || (from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg));
-      _route({ id, ex: { [opName]: 'error' }, to: _replyTo });
+      _route({ id, ex: { [opName]: err?.bvEx ?? 'error' }, to: _replyTo });
       return;
     }
     const _route = message._route || (from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg));
@@ -1226,7 +1226,7 @@ export function codegen(ast, options = {}) {
     : null;
   // A subclass with an empty body (`Box = (Base |) *{}`) is still a class: its
   // surface is all inherited.
-  const active = ast.actors.filter(a => a.functions.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
+  const active = ast.actors.filter(a => a.functions.length > 0 || a.asClauses?.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
   if (active.length === 0) return '';
 
   function bodyUsesObject(body) {
@@ -1438,6 +1438,7 @@ export function codegen(ast, options = {}) {
 
   return (needsPreamble ? OBJECT_PREAMBLE + '\n\n' : '') +
          DECIMAL_PREAMBLE + '\n\n' +
+         AS_PREAMBLE + '\n\n' +
          EQUALITY_PREAMBLE + '\n\n' +
          wireBlock +
          (needsListPreamble ? LIST_PREAMBLE + '\n\n' : '') +

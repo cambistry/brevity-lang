@@ -95,6 +95,15 @@ export function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
 }
 
 // Erlang expression reading the address a reference field holds (a binary).
+// The term `bv_as` checks against: see asDescriptor in src/as_check.js.
+function erlAsDesc(d) {
+  if (d === null) return 'none';
+  if (typeof d === 'string') return erlString(d);
+  if (d.u) return `{u, [${d.u.map(erlAsDesc).join(', ')}]}`;
+  if ('l' in d) return `{l, ${erlAsDesc(d.l)}}`;
+  return `{t, ${erlString(d.t)}, [${d.f.map(([n, fd, opt]) => `{${erlString(n)}, ${erlAsDesc(fd)}, ${opt}}`).join(', ')}]}`;
+}
+
 function refAddrExprErl(ctx, objExpr, field, typeEnv, sCtx) {
   return `maps:get(${erlString(field)}, ${genExpr(ctx, objExpr, typeEnv, sCtx)}, null)`;
 }
@@ -694,6 +703,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'ObjectLiteral') {
     return genObjectConstructor(ctx, expr, typeEnv, sCtx);
+  }
+
+  if (expr.type === 'AsExpr') {
+    const inner = genExpr(ctx, expr.expr, typeEnv, sCtx);
+    const isCall = expr.expr.type === 'FunctionCallExpr' || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
+    return `bv_as(${isCall ? `bv_object_one(bv_object_pack(${inner}))` : inner}, ${erlAsDesc(expr.desc)}, ${erlString(expr.typeName)})`;
   }
 
   if (expr.type === 'DecimalLiteral') {

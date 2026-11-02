@@ -69,6 +69,7 @@ export function collectFreeVars(ctx, funcNode) {
     if (expr.type === 'SizeExpr') { walkExpr(expr.arg); return; }
     if (expr.type === 'TextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'BlobMethodExpr') { expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'AsExpr') { walkExpr(expr.expr); return; }
     if (expr.type === 'GraphemeTextMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'ListMethodExpr') { expr.args.forEach(walkExpr); return; }
     if (expr.type === 'MathMethodExpr') { expr.args.forEach(walkExpr); return; }
@@ -172,6 +173,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
     if (expr.type === 'SizeExpr') return hasRefRead(expr.arg);
     if (expr.type === 'TextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'BlobMethodExpr') return expr.args.some(a => hasRefRead(a));
+    if (expr.type === 'AsExpr') return hasRefRead(expr.expr);
     if (expr.type === 'GraphemeTextMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'ListMethodExpr') return expr.args.some(a => hasRefRead(a));
     if (expr.type === 'MathMethodExpr') return expr.args.some(a => hasRefRead(a));
@@ -418,6 +420,12 @@ export function genExpr(ctx, expr) {
     return `/${expr.pattern}/${expr.flags}`;
   }
 
+  if (expr.type === 'AsExpr') {
+    const inner = genExpr(ctx, expr.expr);
+    const isCall = CALL_LIKE.has(expr.expr.type) || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
+    const value = isCall ? `BvObject.one(BvObject.pack(await ${inner}), 'as')` : inner;
+    return `_bvAs(${value}, ${JSON.stringify(expr.desc)}, ${JSON.stringify(expr.typeName)})`;
+  }
   if (expr.type === 'BlobMethodExpr') {
     const s = genExpr(ctx, expr.args[0]);
     return dispatchMethod(JS_BLOB_METHODS, 'Blob', expr, s, (i) => genExpr(ctx, expr.args[i]));
@@ -1193,6 +1201,7 @@ export function genReplyField(ctx, field, typeEnv) {
     // form (positional list when all fields are required, named map when any
     // optional). The bv-a `::Tag` annotation tells the receiver how to read.
     if (isType(t)) return `_bv_to_wire(${expr})`;
+    if (t === 'Object') return `((v) => (v !== null && typeof v === 'object' && Array.isArray(v.positional) ? BvObject.splat(v) : v))(${expr})`;
     return expr;
   };
   if ('sigil' in field) {
@@ -1223,7 +1232,7 @@ export function genDestructure(ctx, params, indent = '        ') {
   const hasDecParams = params.some(p => p.type === 'Decimal' && !p.ref);
   const wrapParam = (expr, p) => {
     if (p.ref) return expr;
-    if (p.type === 'Integer') return `BigInt(${expr})`;
+    if (p.type === 'Integer') return `_bvAs(${expr}, "Integer", "Integer")`;
     if (p.type === 'Decimal') return `BvDecimal.from(${expr})`;
     return expr;
   };

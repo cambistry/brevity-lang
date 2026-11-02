@@ -788,9 +788,9 @@ ${actor.initParams && actor.initParams.length > 0 ? actor.initParams.map((p, i) 
                     let _ = self.binding.send(Value::Object(resp));
                 }
             }
-            Err(_) => {
+            Err(e) => {
                 let mut ex = Map::new();
-                ex.insert(op_name.clone(), json!("error"));
+                ex.insert(op_name.clone(), bv_panic_ex(&e));
                 let mut resp = Map::new();
                 resp.insert("id".to_string(), json!(id));
                 resp.insert("ex".to_string(), Value::Object(ex));
@@ -879,6 +879,102 @@ fn bv_type_name(tag: &str) -> Option<&str> {
         match inner.rfind(' ') { Some(i) => &inner[i + 1..], None => inner }
     } else { tag };
     s.strip_prefix("::")
+}
+
+fn bv_as_kind(v: &Value) -> String {
+    match v {
+        Value::Null => "null".to_string(),
+        Value::Bool(_) => "Boolean".to_string(),
+        Value::String(_) => "Text".to_string(),
+        Value::Number(n) => {
+            let s = n.to_string();
+            if !s.contains('.') && !s.contains('e') && !s.contains('E') { return "Integer".to_string(); }
+            match n.as_f64() { Some(f) if f.fract() == 0.0 => "Integer".to_string(), _ => "Float".to_string() }
+        }
+        Value::Array(_) => "List".to_string(),
+        Value::Object(m) => m.get("__type").and_then(|t| t.as_str()).unwrap_or("Object").to_string(),
+    }
+}
+
+fn bv_as_try(v: &Value, d: &Value) -> Option<Value> {
+    if let Some(name) = d.as_str() {
+        return match name {
+            "Integer" => match v {
+                Value::Number(n) => {
+                    let s = n.to_string();
+                    if !s.contains('.') && !s.contains('e') && !s.contains('E') { return Some(v.clone()); }
+                    let f = n.as_f64()?;
+                    if f.fract() == 0.0 { Some(json!(f as i64)) } else { None }
+                }
+                _ => None,
+            },
+            "Float" | "Decimal" => if v.is_number() { Some(v.clone()) } else { None },
+            "Text" | "Blob" => if v.is_string() { Some(v.clone()) } else { None },
+            "Boolean" => if v.is_boolean() { Some(v.clone()) } else { None },
+            "null" => if v.is_null() { Some(Value::Null) } else { None },
+            _ => Some(v.clone()),
+        };
+    }
+    let o = d.as_object()?;
+    if let Some(ms) = o.get("u").and_then(|u| u.as_array()) {
+        let kind = bv_as_kind(v);
+        if ms.iter().any(|m| m.as_str() == Some(kind.as_str())) { return bv_as_try(v, &json!(kind)); }
+        return ms.iter().find_map(|m| bv_as_try(v, m));
+    }
+    if let Some(e) = o.get("l") {
+        let items = v.as_array()?;
+        if e.is_null() { return Some(v.clone()); }
+        let out: Option<Vec<Value>> = items.iter().map(|x| bv_as_try(x, e)).collect();
+        return out.map(Value::Array);
+    }
+    let fields = o.get("f")?.as_array()?;
+    let mut src: Map<String, Value> = match v {
+        Value::Object(m) => m.clone(),
+        Value::Array(a) => fields.iter().zip(a.iter()).map(|(f, x)| (f[0].as_str().unwrap_or("").to_string(), x.clone())).collect(),
+        _ => return None,
+    };
+    let mut out = Map::new();
+    out.insert("__type".to_string(), o.get("t")?.clone());
+    for f in fields {
+        let key = f[0].as_str().unwrap_or("");
+        let optional = f[2].as_bool().unwrap_or(false);
+        match src.remove(key) {
+            None => { if !optional { return None; } }
+            Some(Value::Null) if optional => {}
+            Some(x) => {
+                let r = if f[1].is_null() { x } else { bv_as_try(&x, &f[1])? };
+                out.insert(key.to_string(), r);
+            }
+        }
+    }
+    Some(Value::Object(out))
+}
+
+// Renders v as the type d describes, or ends the enclosing call with an ex naming both.
+fn bv_as(v0: &Value, d: &Value, name: &str) -> Value {
+    let is_list = d.get("l").is_some();
+    let v = match v0 {
+        Value::Array(a) if a.len() == 1 && !is_list => &a[0],
+        _ => v0,
+    };
+    match bv_as_try(v, d) {
+        Some(r) => r,
+        None => panic!("bv_as:as {}: got {}", name, bv_as_kind(v)),
+    }
+}
+
+// An actor with no clause for the type replies with nothing.
+fn bv_as_reply(v: Value) -> Value {
+    if v.is_null() { panic!("no as clause"); }
+    v
+}
+
+// The ex value for a caught panic: a failed as says what it wanted and what it got.
+fn bv_panic_ex(e: &Box<dyn std::any::Any + Send>) -> Value {
+    match e.downcast_ref::<String>().and_then(|s| s.strip_prefix("bv_as:")) {
+        Some(m) => json!(m),
+        None => json!("error"),
+    }
 }
 
 fn bv_to_bigint(v: &Value) -> BigInt {
@@ -1584,9 +1680,9 @@ ${handleOpMethod}
                     resp.insert("bv-a".to_string(), json!(format!("#<{}>", addr)));
                 }
                 Ok(v) => { resp.insert("re".to_string(), v); }
-                Err(_) => {
+                Err(e) => {
                     let mut ex = Map::new();
-                    ex.insert(op_name.clone(), json!("error"));
+                    ex.insert(op_name.clone(), bv_panic_ex(&e));
                     resp.insert("ex".to_string(), Value::Object(ex));
                 }
             }
@@ -1715,7 +1811,7 @@ function codegenRust(ast, options = {}) {
   // as a bare value. Stash it for handlers/expressions to read.
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
-  const active = ast.actors.filter(a => a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.actorFnNames = new Set();

@@ -645,7 +645,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
         const needsAwait = (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName) || ctx.dependencyNames?.has(dotObjName)))
           || refFieldInvocationErl(ctx, dotObj, s.value.method, typeEnv)?.discipline === 'callback';
-        if (needsAwait) {
+        if (needsAwait && s.type === 'TypedAssign' && s.typeName === 'Object') {
+          lines.push(`${I}${varName} = ${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)},`);
+        } else if (needsAwait) {
           lines.push(`${I}${varName} = bv_object_one(${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
         } else {
           lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);

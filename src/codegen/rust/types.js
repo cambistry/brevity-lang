@@ -370,6 +370,14 @@ function rustType(brevityType) {
 }
 
 function convertFromValue(expr, brevityType) {
+  // A typed bind fails on a wrong value rather than taking the type's default.
+  if (G.strictConvert && ['Integer', 'Text', 'Blob', 'Decimal', 'Float', 'Boolean'].includes(brevityType)) {
+    const checked = `bv_as(&${expr}, &json!("${brevityType}"), "${brevityType}")`;
+    G.strictConvert = false;
+    const out = convertFromValue(checked, brevityType);
+    G.strictConvert = true;
+    return out;
+  }
   if (brevityType === 'Integer') return intFromValue(expr);
   if (brevityType === 'Text') return `${expr}.as_str().unwrap_or("").to_string()`;
   if (brevityType === 'Blob') return `${expr}.as_str().unwrap_or("").to_string()`;
