@@ -1078,7 +1078,7 @@ function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
   return `begin
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
-        ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
+        ${reVar} = bv_await_(${idVar}),
         bv_drain_notify_(),
         bv_object_pack(${reVar})
     end`;
@@ -1111,7 +1111,7 @@ function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
   return `begin
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
-        ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
+        ${reVar} = bv_await_(${idVar}),
         bv_drain_notify_(),
         bv_object_pack(${reVar})
     end`;
@@ -1531,7 +1531,7 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
             true ->
                 Sub_id_ = integer_to_binary(erlang:unique_integer([positive])),
                 Item_ ! {bv_dispatch, self(), ${methodBin}, #{}, Sub_id_},
-                receive {bv_reply, Sub_id_, ItemReply_} -> ItemReply_; {bv_error, Sub_id_} -> null end;
+                bv_await_(Sub_id_);
             false ->
                 null
         end,

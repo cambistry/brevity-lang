@@ -1628,8 +1628,8 @@ function genRustFnCallExpr(expr, typeEnv) {
   // Self-send: call through handle_op dispatch, return re value
   // Use child dispatch when inside child actor context
   const selfSendCall = (payload) => (G.ctx.childSelfSendPrefix
-    ? `self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", ${payload}, "", "__parent")`
-    : `self.self_send("${calleeName}", ${payload})`);
+    ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", ${payload}, "", "__parent"))`
+    : `bv_call_self(|| self.self_send("${calleeName}", ${payload}))`);
   if (expr.args.length === 0) {
     return `{ let _re = ${selfSendCall('&Value::Object(Map::new())')}; BvObject::pack(&_re) }`;
   }

@@ -119,6 +119,47 @@ export function lowerAs(ast) {
     return asExpr({ type: 'Identifier', name }, t, desc);
   };
 
+  // A call on an actor has to wait for its reply, which only a bind does. A sole
+  // call forwards the whole reply, so `return b.m()` means `r = b.m() as Object; return r`.
+  const actorRef = (o) => (o?.type === 'Identifier' || o?.type === 'RefRead')
+    && (deps.has(o.name) || actorish.has(o.name) || localChildren.has(o.name));
+  const onActor = (e) => (e?.type === 'DotCallExpr' || e?.type === 'DotAccessExpr')
+    && (isCtorCall(e.object) || actorRef(e.object) || onActor(e.object));
+  const isMemberCall = (e) => e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && members_.has(e.callee.name);
+
+  // Not in a lambda: its body returns through the call that runs it.
+  let lambdaDepth = 0;
+
+  const bindActorCalls = (fields, env, pre) => {
+    if (lambdaDepth > 0) return;
+    for (const f of fields) {
+      const source = f.expr ?? f.value;
+      if (f.type || f.spread || f.selfReturn || !(onActor(source) || isMemberCall(source))) continue;
+      const whole = fields.length === 1 && f.expr && source.type !== 'DotAccessExpr' && !source.method?.endsWith('!');
+      const name = raw('r');
+      pre.push(whole
+        ? { type: 'TypedAssign', name, typeName: 'Object', value: source }
+        : { type: 'Assign', name, value: source });
+      env.set(name, whole ? 'Object' : null);
+      if (whole) {
+        delete f.expr;
+        delete f.positional;
+        Object.assign(f, { spread: true, name, type: null, localObject: true });
+      } else if (f.expr) f.expr = { type: 'Identifier', name };
+      else f.value = { type: 'Identifier', name };
+    }
+  };
+
+  // A tail call on an actor is a return, so it binds like one.
+  const returnTailCall = (fn) => {
+    if (lambdaDepth > 0) return;
+    const last = fn.body[fn.body.length - 1];
+    const expr = last?.type === 'ExprStatement' || (last?.type === 'ImplicitReturn' && !last.typeName) ? last.expr : null;
+    if (!expr || !(onActor(expr) || isMemberCall(expr)) || expr.silent || expr.method?.endsWith('.')) return;
+    if (fn.body.some(s => s.type === 'SilentTerminator' || s.type === 'Reply')) return;
+    fn.body[fn.body.length - 1] = { type: 'Reply', fields: [{ positional: true, expr, type: null }] };
+  };
+
   const lowerField = (f, env, pre) => {
     if (f.selfReturn || f.spread || !f.type) return;
     const source = f.expr ?? f.value ?? (f.name ? { type: 'Identifier', name: f.name }
@@ -195,6 +236,7 @@ export function lowerAs(ast) {
         visit(f.expr ?? f.value, env);
         lowerField(f, env, out);
       }
+      bindActorCalls(s.fields || [], env, out);
       out.push(s);
       return;
     }
@@ -255,7 +297,10 @@ export function lowerAs(ast) {
     if (Array.isArray(node.params) && Array.isArray(node.body)) {
       const inner = new Map(env);
       for (const p of node.params) if (p?.name) inner.set(p.key || p.name, p.type || null);
+      if (node.type === 'Function') lambdaDepth++;
+      returnTailCall(node);
       lowerList(node.body, inner);
+      if (node.type === 'Function') lambdaDepth--;
       if (typeof node.name === 'string' && node.name.startsWith('@') && !node.name.startsWith('@@')) checkParams(node);
       if (node.expr) visit(node.expr, inner);
       return;

@@ -3207,26 +3207,28 @@ function knownReturnShape(fns, outerTypes = new Map()) {
 // keep r as one value.
 function spreadObjectReturns(ast) {
   // A lambda's return node is `Return`; a handler's / function's is `Reply`.
+  // A param's tags came with the request. A local's didn't, so it forwards none.
+  const locals = new Set();
   const walk = (node, types, retType) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => walk(n, types, retType)); return; }
     if (Array.isArray(node.params) && Array.isArray(node.body)) {
       const inner = new Map(types);
-      for (const p of node.params) if (p?.name) inner.set(p.key || p.name, p.type || null);
+      for (const p of node.params) if (p?.name) { inner.set(p.key || p.name, p.type || null); locals.delete(p.name); }
       walk(node.body, inner, node.type === 'Function' ? 'Return' : 'Reply');
       return;
     }
-    if (node.type === 'TypedAssign' && node.name) types.set(node.name, node.typeName || null);
+    if (node.type === 'TypedAssign' && node.name) { types.set(node.name, node.typeName || null); locals.add(node.name); }
     const isObject = (name) => types.get(name) === 'Object';
     if ((node.type === 'Reply' || node.type === 'Return') && node.fields?.length === 1) {
       const f = node.fields[0];
       if (f.positional && f.name && !f.expr && !f.type && isObject(f.name)) {
-        node.fields = [{ spread: true, name: f.name, type: null }];
+        node.fields = [{ spread: true, name: f.name, type: null, localObject: locals.has(f.name) }];
       }
     } else if (node.type === 'ImplicitReturn' && node.expr?.type === 'Identifier' && isObject(node.expr.name)) {
       const name = node.expr.name;
       for (const k of Object.keys(node)) delete node[k];
-      Object.assign(node, { type: retType, fields: [{ spread: true, name, type: null }] });
+      Object.assign(node, { type: retType, fields: [{ spread: true, name, type: null, localObject: locals.has(name) }] });
       return;
     }
     for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') walk(v, types, retType);

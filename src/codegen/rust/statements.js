@@ -393,14 +393,14 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
 }
 
 // Branch 10: Object type assign
-function handleTypedAssign_ObjectType(s, typeEnv, I, lines) {
+function handleTypedAssign_ObjectType(s, typeEnv, sCtx, I, lines) {
   const dotName = s.value.type === 'DotCallExpr' && (s.value.object.type === 'RefRead' || s.value.object.type === 'Identifier') ? s.value.object.name : null;
   if (dotName && (G.ctx.remoteInstanceVars.has(dotName) || G.ctx.localInstanceVars?.has(dotName) || G.ctx.dependencyNames?.has(dotName))) {
     const reply = genRustRemoteDotCallAwait(s.value, typeEnv, I, lines);
     lines.push(`${I}let ${mintRustSsa(s.name)}: Value = ${reply};`);
     return;
   }
-  const sVal = genRustExpr(s.value, typeEnv);
+  const sVal = genRustExpr(s.value, typeEnv, sCtx);
   lines.push(`${I}let ${mintRustSsa(s.name)} = ${sVal};`);
 }
 
@@ -969,7 +969,7 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
       } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
         handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns);
       } else if (s.typeName === 'Object') {
-        handleTypedAssign_ObjectType(s, typeEnv, I, lines);
+        handleTypedAssign_ObjectType(s, typeEnv, sCtx, I, lines);
       } else if (s.value.type === 'ObjectConstructor') {
         handleTypedAssign_ObjectConstructor(s, typeEnv, I, lines);
       } else if (s.value.type === 'FunctionCallExpr') {
@@ -1815,19 +1815,24 @@ function storeInsert(store, key, value) {
   return `${store}.insert("${key}".to_string(), ${value});`;
 }
 
-function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null) {
+// `enclosing` is the walk this is a branch of: its locals stay in scope, and the
+// caller scopes what the branch binds.
+function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null, enclosing = null) {
   const { fnDefs, skipSet, capturePoints } = functionAnalysis;
-  const sCtx = { childActorRefs: new Map() };
+  const sCtx = enclosing || { childActorRefs: new Map() };
+  if (!enclosing) G.ctx.enclosingLocals = sCtx;
   const lines = [];
   const I = indent || '                ';
   // Track lambda start index for scoped overload resolution
   const savedLambdaStartIdx = G.ctx._lambdaStartIdx;
   G.ctx._lambdaStartIdx = G.ctx.lambdaHandlers?.length || 0;
-  // Fresh SSA scope for this body walk
-  G.ctx.ssaScope = new Map();
-  G.ctx.ssaCounts = new Map();
-  // Per-handler-body local actor vars from dep constructor calls
-  G.ctx.localInstanceVars = new Set();
+  if (!enclosing) {
+    // Fresh SSA scope for this body walk
+    G.ctx.ssaScope = new Map();
+    G.ctx.ssaCounts = new Map();
+    // Per-handler-body local actor vars from dep constructor calls
+    G.ctx.localInstanceVars = new Set();
+  }
   // Stash the active early-return expression maker on the context so nested
   // helpers (e.g. handleTypedAssign_FunctionCallExpr → inlined lambdas with a
   // `repeat while` Return) can pick it up without threading another param.

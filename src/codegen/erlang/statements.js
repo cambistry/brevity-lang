@@ -275,11 +275,13 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
   const savedLambdaStartIdx = ctx._lambdaStartIdx;
   ctx._lambdaStartIdx = ctx.lambdaHandlers?.length || 0;
   // Per-handler-body local actor vars from dep constructor calls
-  ctx.localInstanceVars = new Set();
+  // A branch's statements read the names bound before it, so they count from past
+  // the enclosing body, and they keep its local actors.
+  if (!sCtx.inBranch) ctx.localInstanceVars = new Set();
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
-    const stmtCtx = { ...sCtx, stmtIdx: i, ssaEnv };
+    const stmtCtx = { ...sCtx, stmtIdx: sCtx.inBranch ? sCtx.stmtIdx + i : i, ssaEnv };
 
     {
       const catchCode = tryGenErlCatchOrLabelStmt(ctx, s, typeEnv, stmtCtx, I);
@@ -630,15 +632,18 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         (s.value.object.type === 'RefRead' && stmtCtx.childActorRefs?.has(s.value.object.name)) ||
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
-        lines.push(`${I}${varName} = bv_object_one(${genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);
+        const reply = genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx);
+        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `bv_object_one(${reply})`},`);
       } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier'
           && (stmtCtx.childActorRefs?.has(s.value.object.name) || stmtCtx.selfSpawnedRefs?.has(s.value.object.name))) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
         lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
           && stmtCtx.selfSpawnedRefs?.has(s.value.object.name)) {
-        // Self-spawned PID: the dispatch awaits and packs the reply; bind its sole positional.
-        lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+        // Self-spawned PID: the dispatch awaits and packs the reply. An Object bind keeps it whole;
+        // any other binds its sole positional.
+        const reply = genExpr(ctx, s.value, typeEnv, stmtCtx);
+        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `bv_object_one(${reply})`},`);
       } else if (s.value?.type === 'DotCallExpr') {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;

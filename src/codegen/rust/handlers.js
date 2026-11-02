@@ -144,6 +144,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     return out.join('\n');
   }
   const genGuardBlock = (ifExpr, blockIndent) => rustGuardBlock(ifExpr, blockIndent, typeEnv, makeReturnLines);
+  G.ctx.enclosingLocals = null;
   if (hasLeadingGuard) {
     leadingGuardLines = genGuardBlock(guards[0].expr, '                ');
     trailingGuards = guards.slice(1);
@@ -166,13 +167,15 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       const spreadName = rustSsaResolve(spreadField.name);
       lines.push(`                re = Some(bv_val(&${spreadName}));`);
       // Passthrough bv-a from incoming message
-      lines.push(`                if let Some(bva) = message.get("bv-a") {`);
-      lines.push(`                    if let Some(arr) = bva.as_array() {`);
-      lines.push(`                        if !arr.is_empty() {`);
-      lines.push(`                            bva_re = Some(BvObject::splat_bva(&arr[0]));`);
-      lines.push(`                        }`);
-      lines.push(`                    }`);
-      lines.push(`                }`);
+      if (!spreadField.localObject) {
+        lines.push(`                if let Some(bva) = message.get("bv-a") {`);
+        lines.push(`                    if let Some(arr) = bva.as_array() {`);
+        lines.push(`                        if !arr.is_empty() {`);
+        lines.push(`                            bva_re = Some(BvObject::splat_bva(&arr[0]));`);
+        lines.push(`                        }`);
+        lines.push(`                    }`);
+        lines.push(`                }`);
+      }
     } else {
       // Pre-compute function-typed param calls and DotCallExpr to avoid block expressions inside json!
       const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t)));
@@ -540,10 +543,20 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
 // how a return leaves the enclosing function.
 function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
   const bII = bI + '    ';
+  const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
   const branch = (branchBody) => {
     const out = [];
+    const savedScope = G.ctx.ssaScope;
+    const savedCounts = G.ctx.ssaCounts;
+    G.ctx.ssaScope = new Map(savedScope);
+    G.ctx.ssaCounts = new Map(savedCounts);
+    const walk = (bs) => genRustLocals([bs], typeEnv, analyzeFunctions([bs], new Set(), typeEnv), findMutableVars([bs]), bII, undefined, null, enclosing);
     for (const bs of branchBody) {
-      if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+      if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && (bs.value?.type === 'DotCallExpr' || bs.value?.type === 'DotAccessExpr')) {
+        // A call waits for its reply, as it does outside a branch.
+        const code = walk(bs);
+        if (code) out.push(code);
+      } else if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
         out.push(rustGuardBlock(bs.expr, bII, typeEnv, makeReturnLines));
       } else if (bs.type === 'Return') {
         out.push(makeReturnLines(bs.fields, bII));
@@ -555,10 +568,12 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
         out.push(`${bII}let ${rustIdent(bs.name)} = ${val};`);
       } else {
         // Writes and calls: anything else a branch does before it returns.
-        const code = genRustLocals([bs], typeEnv, analyzeFunctions([bs], new Set(), typeEnv), findMutableVars([bs]), bII);
+        const code = walk(bs);
         if (code) out.push(code);
       }
     }
+    G.ctx.ssaScope = savedScope;
+    G.ctx.ssaCounts = savedCounts;
     return out.join('\n');
   };
   const cond = genRustCondition(ifExpr.cond, typeEnv, {});
@@ -604,6 +619,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
     return bvaBody?.includes('::') ? `{ let _r = ${reBody}; if from == "__parent" { bv_unwire_reply(&_r, &${bvaBody}) } else { _r } }` : reBody;
   };
   const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
+  G.ctx.enclosingLocals = null;
   const genChildGuard = (g) => rustGuardBlock(g.expr, '                ', typeEnv, (fields, bI) => `${bI}return ${childReply(fields, typeEnv)};`);
   const leadingChildGuard = body[0] === childGuards[0] ? childGuards[0] : null;
   if (leadingChildGuard) lines.push(genChildGuard(leadingChildGuard));
@@ -1172,13 +1188,20 @@ function genRustChildMethods(allActors) {
         let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.inst_depth += 1;
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
-        let result = self.child_${lc}_dispatch(op, payload, id, from);
+        let outcome = catch_unwind(AssertUnwindSafe(|| self.child_${lc}_dispatch(op, payload, id, from)));
         let new_state = std::mem::take(&mut self.state);
         self.${lc}_instances.insert(instance_id, new_state);
         self.state = saved_state;
         self.current_${lc}_instance = saved_current;
         self.inst_depth -= 1;
         self.flush_pending_subs();
+        // A failure leaves both actors intact. A call that receives one fails in
+        // turn, so a failed as keeps its message only on the handler it happened in.
+        let result = match outcome {
+            Ok(v) => v,
+            Err(e) if from != "__parent" => std::panic::resume_unwind(e),
+            Err(_) => panic!("ex_response"),
+        };
         // A self-return has an empty Object for its reply and no other reply does.
         // We're the parent, so its address, in our frame, is this handle.
         if result.as_object().is_some_and(|o| o.is_empty()) { return bv_inst_ref("${lc}", instance_id); }

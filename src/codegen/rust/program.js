@@ -977,6 +977,14 @@ fn bv_panic_ex(e: &Box<dyn std::any::Any + Send>) -> Value {
     }
 }
 
+// A call within the actor. A failed as keeps its message only on the handler it happened in.
+fn bv_call_self<T>(f: impl FnOnce() -> T) -> T {
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(v) => v,
+        Err(_) => panic!("ex_response"),
+    }
+}
+
 fn bv_to_bigint(v: &Value) -> BigInt {
     match v {
         Value::Number(n) => BigInt::from_str(&n.to_string()).unwrap_or_else(|_| BigInt::zero()),

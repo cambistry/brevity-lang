@@ -32,6 +32,11 @@ A failed `as` replies with `ex`, and the value names both types:
 { "id": "1", "ex": { "@go": "as Integer: got Text" }, "to": "c" }
 ```
 
+The message goes on the handler the `as` failed in, including a handler on a class
+instance. A call that receives a failure fails in turn with `error`, whether it called
+another actor, another handler or a function. The actors keep their state and go on
+answering.
+
 ## LLM Rules
 
 - Use `unhandled` for dispatch miss examples.

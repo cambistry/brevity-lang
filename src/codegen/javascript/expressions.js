@@ -1396,7 +1396,8 @@ export function genBvaBody(ctx, fields, typeEnv) {
 // so the handler can tag the reply on that path.
 export function genPackedReturn(ctx, fields, typeEnv, declaredReturnType = null) {
   if (fields[0]?.selfReturn) return '{ positional: [], named: {}, positional_types: null, named_types: null, selfReturn: true }';
-  return `BvObject.pack(${genReBody(ctx, fields, typeEnv, declaredReturnType)})`;
+  const packed = `BvObject.pack(${genReBody(ctx, fields, typeEnv, declaredReturnType)})`;
+  return fields.some(f => f.localObject) ? `Object.assign(${packed}, { forwarded: true })` : packed;
 }
 
 export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {

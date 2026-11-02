@@ -154,7 +154,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let bvaLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      bvaLine = `\n        _bva_re = _bva != null ? _bva[0] : undefined;`;
+      if (!reply.fields.some(f => f.localObject)) bvaLine = `\n        _bva_re = _bva != null ? _bva[0] : undefined;`;
     } else {
       const bvaBody = genBvaBody(ctx, reply.fields, typeEnv);
       if (bvaBody !== null) {
@@ -238,7 +238,8 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
 }
 
 // A delegated body can return from several paths, and only one tag is computed
-// up front. When any path returns self, the reply's tag is decided per path.
+// up front. When any path returns self or forwards a reply, which carries no tag,
+// the reply's tag is decided per path.
 function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
   const returns = [];
   const walk = (n) => {
@@ -248,10 +249,11 @@ function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
     for (const v of Object.values(n)) if (v && typeof v === 'object') walk(v);
   };
   walk(rawBody);
-  if (!returns.some(r => r.fields?.[0]?.selfReturn)) return bvaLine;
-  const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn);
+  const forwards = (r) => r.fields?.some(f => f.localObject);
+  if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return bvaLine;
+  const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn && !forwards(r));
   const other = valued ? genBvaBody(ctx, valued.fields, typeEnv) : null;
-  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : ${other ?? 'undefined'};`;
+  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : _fnResult.forwarded ? undefined : ${other ?? 'undefined'};`;
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -287,7 +289,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const jsName = methodNameFor(name);
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}
-    return ${reply?.fields?.[0]?.selfReturn ? genPackedReturn(ctx, reply.fields, typeEnv) : 'BvObject.pack(re)'};
+    return ${reply?.fields?.[0]?.selfReturn ? genPackedReturn(ctx, reply.fields, typeEnv) : reply?.fields?.some(f => f.localObject) ? 'Object.assign(BvObject.pack(re), { forwarded: true })' : 'BvObject.pack(re)'};
   }`;
 }
 

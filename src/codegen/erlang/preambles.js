@@ -640,10 +640,25 @@ bv_inst_get_(_, _) -> null.
 bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->
     Id_ = integer_to_binary(erlang:unique_integer([positive])),
     Pid ! {bv_dispatch, self(), Op, Payload, Id_},
-    R_ = receive {bv_reply, Id_, Re_} -> Re_; {bv_error, Id_} -> null end,
+    R_ = bv_await_(Id_),
     bv_drain_notify_(),
     R_;
 bv_inst_call_(_, _, _) -> null.
+%% Run a handler in an instance's loop. A failure is reported to the caller and
+%% the instance lives on: a failed \`as\` keeps its message.
+bv_guard_(F) ->
+    try F()
+    catch error:{bv_as, Msg_} -> {bv_failed, Msg_};
+          _:_ -> {bv_failed, <<"error">>}
+    end.
+%% A call within the actor. A failed \`as\` keeps its message only on the handler it happened in.
+bv_call_self_(F) ->
+    try F()
+    catch error:{bv_as, _} -> error(bv_call_failed)
+    end.
+%% The reply to a call on an instance. A call that receives a failure fails in turn.
+bv_await_(Id) ->
+    receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id, _} -> error(bv_call_failed) end.
 %% An actor made by \`#new\` has its own address, kept here so it can be reached.
 bv_publish_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
@@ -659,19 +674,19 @@ bv_instance_at_(To) when is_binary(To) ->
 bv_instance_at_(_) -> none.
 bv_forward_(Pid, Addr, Op, Payload, Id, From) ->
     Pid ! {bv_dispatch, self(), Op, Payload, Id},
-    R_ = receive {bv_reply, Id, Re_} -> {ok, Re_}; {bv_error, Id} -> error end,
+    R_ = receive {bv_reply, Id, Re_} -> {ok, Re_}; {bv_error, Id, Fail_} -> {failed, Fail_} end,
     bv_drain_notify_(),
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
     case R_ of
         {ok, null} -> ok;
         {ok, Pid} -> io:put_chars([json_encode(Base_#{<<"re">> => #{}, <<"bv-a">> => <<"#<", Addr/binary, ">">>}), $\n]);
         {ok, V_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
-        error -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"error">>}}), $\n])
+        {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
     end.
 %% A subscribe carries its whole message (op args, bv-a) and its id.
 bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
     Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
-    R_ = receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id} -> null end,
+    R_ = bv_await_(Id),
     bv_drain_notify_(),
     R_;
 bv_inst_sub_(_, _, _, _, _) -> null.
@@ -684,7 +699,7 @@ bv_spawn_sync_(Pid) ->
 bv_inst_emit_(Pid, Ev, Payload) ->
     Id_ = integer_to_binary(erlang:unique_integer([positive])),
     Pid ! {bv_emit, self(), Ev, Payload, Id_},
-    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_} -> null end.
+    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null end.
 %% Register this process for an emitter instance's event.
 bv_on_(Pid, Ev) when is_pid(Pid) ->
     Ref_ = make_ref(),

@@ -47,6 +47,12 @@ the enclosing call, and a call that receives one fails in turn, reporting `error
 An actor with no clause for T fails with plain `error` on every target, since nothing rendered a
 value to report on.
 
+A function call within the actor counts as a call here, as does a call on an instance. An instance
+survives a failure in its handler and keeps its state, and so does its caller. Erlang instance
+processes used to crash on a failed `as`, leaving the caller hanging, and Rust lost both actors'
+state. A failure now travels as `{bv_error, Id, Message}` on Erlang and is restored around in
+`dispatch_at` on Rust.
+
 **It can't be caught.** `catch` is a label-based early exit, and nothing in the language handles an
 `ex`. A failed `as` behaves like every other failure, and adding a handler is a separate decision.
 
@@ -72,6 +78,22 @@ value to report on.
 - **JS, an Object in a named reply field:** sent `{positional, named, …}` on the wire. It now sends
   `[1]` or `{a: 1}`, like Rust and Erlang.
 
+## Returning a call on an actor
+
+A return field only waits for a reply if it's been bound, so `lowerAs` binds a call on an actor first.
+`return b.m()` means `r Object = b.m(); return r`, forwarding the whole reply, and a tail call counts
+as a return. Beside other fields, or for a `!` call or field read, it binds untyped and takes the sole
+value. This also fixes `return Svc.t()`, which replied before the answer came.
+Lambdas are left alone, because their bodies return through the call that runs them.
+
+This reaches into branches, where a call on a local instance used to fail on every target. On Erlang
+`genLocals` restarted its statement index, so `b` lost its numbered name. Rust's branch walk now shares
+the enclosing body's instances and scopes what it binds. JS's branch and loop binds now await a send
+(`branchBindValue`).
+
+Returning a local Object no longer copies the request's `bv-a` onto the reply (`localObject`). Only a
+param's tags came with the request.
+
 ## Known gaps
 
 - **Empty list on JS:** `null` is JS's empty list, so `null as List` from a remote passes there and
@@ -81,6 +103,12 @@ value to report on.
   arithmetic, before `as` sees a value. Read from the generated code, not run.
 - **A public handler with an empty body** gets no param check on JS or Erlang, since a trailing check
   would become the reply. Rust's decode still fails, and JS's does for Integer.
-- **Nested failures in Erlang instance processes** report `error`, not the `as` message.
+- **One reply tag across return paths on JS:** a handler with an early return tags every path from one
+  of its returns, so `if c { return "x" }; return 9` should tag `"x"` as Integer. Read from the
+  generated code, not run. A forwarded reply is exempt.
+- **A typed param with an honest wrong tag:** JS answers `unhandled`, because its type dispatch finds
+  no match. Rust and Erlang report `as Integer: got Text`. A tag that lies gives the message on all three.
+- **A failed `as` in a constructor block on Erlang** should still hang the caller, since
+  `bv_spawn_sync_` waits on a process that has died. Read from the code, not run.
 - **`Anything` params:** the separate bug where a param typed `Anything` refuses a `Text`-tagged
   argument is still open, so the Type tests go through a remote reply.

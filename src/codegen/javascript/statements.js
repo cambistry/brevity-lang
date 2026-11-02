@@ -382,6 +382,16 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
   return `async (_s) => {${destr}${code}\n}`;
 }
 
+// A bind inside a branch or loop. A send waits for its reply, and an Object keeps it whole.
+function branchBindValue(ctx, s) {
+  const code = genExpr(ctx, s.value);
+  if (code.includes('#childSend') || code.includes('#send(')) {
+    const reply = `BvObject.pack(await ${code})`;
+    return s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`;
+  }
+  return CALL_LIKE.has(s.value.type) ? `BvObject.one(${code}, ${JSON.stringify(s.name)})` : code;
+}
+
 export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
   let code = '';
   let _rIdx = 0;
@@ -393,18 +403,10 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     if (s.type === 'BareTypeDecl') continue;
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
-      if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
-      } else {
-        code += `\n        const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
-      }
+      code += `\n        const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
     } else if (s.type === 'Assign') {
       lastTypedName = null;
-      if (CALL_LIKE.has(s.value.type)) {
-        code += `\n        const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
-      } else {
-        code += `\n        const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
-      }
+      code += `\n        const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
@@ -498,17 +500,9 @@ export function genWhileStatement(ctx, node, indent, outerEnv, counters = { ifId
     if (s.type === 'StateAssign') {
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign') {
-      if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
-      } else {
-        code += `\n${inner}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
-      }
+      code += `\n${inner}const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
     } else if (s.type === 'Assign') {
-      if (CALL_LIKE.has(s.value.type)) {
-        code += `\n${inner}const ${jsIdent(s.name)} = BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)});`;
-      } else {
-        code += `\n${inner}const ${jsIdent(s.name)} = ${genExpr(ctx, s.value)};`;
-      }
+      code += `\n${inner}const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
