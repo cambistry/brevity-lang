@@ -673,16 +673,22 @@ bv_instance_at_(To) when is_binary(To) ->
     Found_ = [{T_, get({bv_instance, T_})} || T_ <- binary:split(Inner_, <<" ">>, [global]), get({bv_instance, T_}) =/= undefined],
     case Found_ of [F_ | _] -> F_; [] -> none end;
 bv_instance_at_(_) -> none.
-bv_forward_(Pid, Addr, Op, Payload, Id, From) ->
-    Pid ! {bv_dispatch, self(), Op, Payload, Id},
-    R_ = receive {bv_reply, Id, Re_} -> {ok, Re_}; {bv_error, Id, Fail_} -> {failed, Fail_} end,
-    bv_drain_notify_(),
+%% A call from outside: its tags are checked, and its reply keeps its tag.
+bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
-    case R_ of
-        {ok, null} -> ok;
-        {ok, Pid} -> io:put_chars([json_encode(Base_#{<<"re">> => #{}, <<"bv-a">> => <<"#<", Addr/binary, ">">>}), $\n]);
-        {ok, V_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
-        {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
+    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"bv-a">>, Message) of
+        true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"schema_required">>}}), $\n]);
+        false ->
+            Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
+            R_ = receive {bv_wire_reply, Id, Re_, Bva_} -> {ok, Re_, Bva_}; {bv_error, Id, Fail_} -> {failed, Fail_} end,
+            bv_drain_notify_(),
+            case R_ of
+                {ok, null, _} -> ok;
+                {ok, _, <<"#<>"/utf8>>} -> io:put_chars([json_encode(Base_#{<<"re">> => #{}, <<"bv-a">> => <<"#<", Addr/binary, ">">>}), $\n]);
+                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
+                {ok, V_, Tag_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_, <<"bv-a">> => Tag_}), $\n]);
+                {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
+            end
     end.
 %% A subscribe carries its whole message (op args, bv-a) and its id.
 bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
@@ -782,6 +788,7 @@ match_types(Message, Pairs) ->
             TypesObj = hd(BvA),
             lists:all(fun({Name, TypeName}) ->
                 case maps:find(Name, TypesObj) of
+                    {ok, _} when TypeName =:= <<"Anything">> -> true;
                     {ok, V} when is_binary(V) -> type_member_of(V, TypeName);
                     {ok, V} when is_list(V) ->
                         TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
@@ -809,6 +816,7 @@ match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
                                 M when is_map(M) ->
                                     lists:all(fun({N, T}) ->
                                         case maps:find(N, M) of
+                                            {ok, _} when T =:= <<"Anything">> -> true;
                                             {ok, V} when is_binary(V) -> type_member_of(V, T);
                                             error -> true;
                                             _ -> false
@@ -828,7 +836,10 @@ match_pos_types(Arr, [T|Rest], I) ->
     case I < length(Arr) of
         true ->
             Actual = lists:nth(I+1, Arr),
-            case is_binary(Actual) andalso type_member_of(Actual, T) of
+            Ok = T =:= <<"Anything">>
+                orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List of Anything">>))
+                orelse (is_binary(Actual) andalso type_member_of(Actual, T)),
+            case Ok of
                 true -> match_pos_types(Arr, Rest, I+1);
                 false -> false
             end;

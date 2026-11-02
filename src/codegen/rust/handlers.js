@@ -580,7 +580,29 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
   return `${bI}if ${cond} {\n${thenLines}\n${bI}}${elseSection}`;
 }
 
-function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
+// A call from outside an instance has its tags checked, as a file handler's are.
+// In-process callers pass values, not tags. Overloads fall through to the next arm.
+function childTagGuard({ name, params }) {
+  if (name.startsWith('new@')) return '';
+  const isListOfAny = t => t === 'List of Anything' || t === 'List';
+  const typed = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
+  const pos = typed.filter(p => p.positional);
+  const named = typed.filter(p => !p.positional);
+  const pair = p => `("${p.key || p.name}", "${p.type}")`;
+  let check;
+  if (pos.length > 0) {
+    const required = pos.filter(p => !p.defaultValue).length;
+    const posTypes = pos.map(p => `"${p.type}"`).join(', ');
+    check = `match_types_positional_min(&self.wire_msg, &[${posTypes}], &[${named.map(pair).join(', ')}], ${required})`;
+  } else if (named.length > 0) {
+    check = `match_types(&self.wire_msg, &[${named.filter(p => !p.defaultValue).map(pair).join(', ')}])`;
+  } else {
+    return '';
+  }
+  return ` if !bv_from_wire_caller(from) || ${check}`;
+}
+
+function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -607,7 +629,9 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   const childReply = (fields, te) => {
     const reBody = genRustReBody(fields, te, refNames);
     const bvaBody = genRustBvaBody(fields, te, refNames);
-    return bvaBody?.includes('::') ? `{ let _r = ${reBody}; if from == "__parent" { bv_unwire_reply(&_r, &${bvaBody}) } else { _r } }` : reBody;
+    if (!bvaBody) return reBody;
+    const unwire = bvaBody.includes('::') ? `if from == "__parent" { bv_unwire_reply(&_r, &${bvaBody}) } else { _r }` : '_r';
+    return `{ let _r = ${reBody}; ${tagWireReply(bvaBody)} ${unwire} }`;
   };
   const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
   G.ctx.enclosingLocals = null;
@@ -685,10 +709,15 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
     // In process there's no bv-a channel, so the parent gets typed values decoded.
     const childBva = genRustBvaBody(reply.fields, typeEnv, refNames);
+    if (childBva) lines.push(`                ${tagWireReply(childBva)}`);
+    const spreadField = reply.fields.find(f => f.spread);
+    if (spreadField && !spreadField.localObject) {
+      lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("bv-a").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_bva); }`);
+    }
     if (childBva?.includes('::')) {
       lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childBva})); }`);
     }
-  } else if (implicitReturn) {
+  } else if (implicitReturn && !childGuards.includes(implicitReturn)) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv, eCtx);
     const retType = inferExprType(implicitReturn.expr, typeEnv);
     const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
@@ -713,7 +742,11 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
-  return `            "${name}" => {\n${lines.join('\n')}\n            }`;
+  return `            "${name}"${isPublic ? childTagGuard(fn) : ''} => {\n${lines.join('\n')}\n            }`;
+}
+
+function tagWireReply(bvaBody) {
+  return `if bv_from_wire_caller(from) { self.wire_tag = Some(${bvaBody}); }`;
 }
 
 function genRustChildDispatch(actor) {
@@ -733,7 +766,10 @@ function genRustChildDispatch(actor) {
   const classTypes = new Map();
   for (const p of (actor.initParams || [])) if (p.type) classTypes.set(p.name, p.type);
   for (const d of (actor.stateVarDecls || [])) if (d.typeName) classTypes.set(d.name, d.typeName);
-  const arms = [...publicFns, ...privateFns].map(h => genRustChildPublicFn(h, eCtx, classTypes));
+  const arms = [
+    ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true)),
+    ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
+  ];
   // Add on-handler arms
   for (const h of onHandlers) {
     const typeEnv = buildTypeEnv(h.params, h.body);
@@ -784,7 +820,7 @@ function genRustChildDispatch(actor) {
   for (const f of delegatedFunctions) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
-      arms.push(`            "${f.name}" => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload, "", "__parent"));\n            }`);
+      arms.push(`            "${f.name}"${childTagGuard(f)} => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload, "", "__parent"));\n            }`);
     }
   }
 
@@ -805,7 +841,7 @@ function genRustChildDispatch(actor) {
     arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
 
-  arms.push('            _ => {}');
+  arms.push('            _ => { if bv_from_wire_caller(from) { self.wire_unhandled = true; } }');
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {

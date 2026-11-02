@@ -21,6 +21,11 @@ const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bo
     false
 }`;
 
+// A tag against a param's type. Anything takes any tag, including a List's.
+const TAG_MATCHES_FN = `fn tag_matches(tag: &Value, expected: &str) -> bool {
+    expected == "Anything" || tag.as_str().map(|a| type_member_of(a, expected)).unwrap_or(false)
+}`;
+
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
     let bva = match message.get("bv-a") {
         Some(v) => v,
@@ -36,7 +41,7 @@ const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) 
     let types_obj = &arr[0];
     for &(name, type_name) in pairs {
         match types_obj.get(name) {
-            Some(v) if v.as_str().map(|a| type_member_of(a, type_name)).unwrap_or(false) => {}
+            Some(v) if tag_matches(v, type_name) => {}
             _ => return false,
         }
     }
@@ -71,7 +76,7 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
     }
     for (i, &t) in pos_types.iter().take(actual_pos_count).enumerate() {
         match types_arr.get(i) {
-            Some(v) if v.as_str().map(|a| type_member_of(a, t)).unwrap_or(false) => {}
+            Some(v) if tag_matches(v, t) => {}
             _ => return false,
         }
     }
@@ -79,7 +84,7 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
         if let Some(obj) = types_arr.last().unwrap().as_object() {
             for &(name, type_name) in named_types {
                 match obj.get(name) {
-                    Some(v) if v.as_str().map(|a| type_member_of(a, type_name)).unwrap_or(false) => {}
+                    Some(v) if tag_matches(v, type_name) => {}
                     None => {}
                     _ => return false,
                 }
@@ -790,6 +795,6 @@ function classRefersToSelf(actor) {
 }
 
 export {
-  TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances, classRefersToSelf,
 };

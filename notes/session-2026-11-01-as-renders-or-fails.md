@@ -135,8 +135,6 @@ taken, so the next `#new` still gets `@Box/1`. The caller keeps its state.
   a block and no params would skip it. Handler bodies don't reach them, because `lowerChains` hoists the
   receiver. Its one exemption is a loop condition, which is untested.
 - **Rust, `r = b.get()` with a named reply:** binds null, where JS and Erlang fail with `error`.
-- **A typed param with an honest wrong tag on an instance:** JS answers `unhandled`. Rust and Erlang
-  report `as Integer: got Text`. In a file handler, all three answer `unhandled`. A tag that lies gives
-  the message on all three.
-- **`Anything` params:** the separate bug where a param typed `Anything` refuses a `Text`-tagged
-  argument is still open, so the Type tests go through a remote reply.
+
+The gaps on an instance's wrong-tagged param and on `Anything` params are closed: see
+`session-2026-11-02-instance-tags.md`.

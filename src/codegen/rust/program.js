@@ -1,7 +1,7 @@
 // program.js — Program assembly and entry for Rust codegen
 import * as AST from '../../ast.js';
 import {
-  G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
+  G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
   RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
@@ -40,11 +40,12 @@ function genRustProgram(actor, allActors) {
   }
   const needsRefs = fnsWithRefs.some(h => bodyMutatesRefs(h.body));
   const allDispatchFns = [...publicFns, ...privateFns];
-  const needsMatchTypes = allDispatchFns.some(h => {
+  // A class's handlers check tags too, on a call from outside.
+  const needsMatchTypes = childActors.length > 0 || allDispatchFns.some(h => {
     const typed = h.params.filter(p => p.type && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
   });
-  const needsMatchTypesPos = allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
+  const needsMatchTypesPos = childActors.length > 0 || allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
   const needsListTypesOf = publicFns.some(h => {
     const isListOfAny = t => t === 'List of Anything' || t === 'List';
     return h.body.some(s =>
@@ -52,7 +53,7 @@ function genRustProgram(actor, allActors) {
       (s.type === 'DestructureAssign' && (s.pattern || []).some(p => isListOfAny(p.type))),
     );
   });
-  const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n' : '';
+  const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n\n' + TAG_MATCHES_FN + '\n' : '';
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
   const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
@@ -277,6 +278,10 @@ ${bvTypeFieldsArms}
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
+  // The call from outside that an instance is answering: the message its tags came
+  // in, and what the instance's handler adds to the reply. Handlers return only a value.
+  structFields.push('    wire_msg: Value', '    wire_tag: Option<Value>', '    wire_unhandled: bool');
+  newArgs.push('wire_msg: Value::Null', 'wire_tag: None', 'wire_unhandled: false');
   const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@'));
   if (publishesClasses) {
     structFields.push('    published_instances: std::collections::HashSet<String>');
@@ -879,6 +884,12 @@ fn bv_type_name(tag: &str) -> Option<&str> {
         match inner.rfind(' ') { Some(i) => &inner[i + 1..], None => inner }
     } else { tag };
     s.strip_prefix("::")
+}
+
+// Whether a call came from outside the process, so it has tags to check.
+#[allow(dead_code)]
+fn bv_from_wire_caller(from: &str) -> bool {
+    !matches!(from, "__parent" | "__self" | "__test" | "__emit")
 }
 
 fn bv_as_kind(v: &Value) -> String {
@@ -1659,21 +1670,23 @@ ${handleOpMethod}
             Some(Value::Array(a)) => !a.is_empty(),
             _ => false,
         };
-        if has_payload && !op_name.starts_with("new@") && message.get("bv-a").is_none() {
+${publishesClasses ? `        // An actor made by \`#new\` has its own address.
+        let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
+            to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
+        });
+` : ''}        if has_payload && !op_name.starts_with("new@") && message.get("bv-a").is_none() {
             let mut ex = Map::new();
             ex.insert(op_name.clone(), json!("schema_required"));
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("ex".to_string(), Value::Object(ex));
             resp.insert("to".to_string(), json!(from));
-            let _ = self.binding.send(Value::Object(resp));
+${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert("from".to_string(), json!(addr)); }
+` : ''}            let _ = self.binding.send(Value::Object(resp));
             return;
         }
         let payload = raw_payload.unwrap_or(json!({}));${publishesClasses ? `
-        // An actor made by \`#new\` has its own address.
-        if let Some(addr) = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
-            to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
-        }) {
+        if let Some(addr) = _inst_addr {
             let (class, inst) = addr[1..].split_once('/').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             let child = format!("{}/{}", class, inst);
@@ -1681,13 +1694,29 @@ ${handleOpMethod}
             resp.insert("id".to_string(), json!(id));
             resp.insert("to".to_string(), json!(from));
             resp.insert("from".to_string(), json!(addr));
-            match catch_unwind(AssertUnwindSafe(|| self.child_dispatch(&child, op_name.as_str(), &payload, id, from))) {
+            // A call can arrive while another waits on a reply, so each restores the last's.
+            let saved_msg = std::mem::replace(&mut self.wire_msg, message.clone());
+            self.wire_tag = None;
+            self.wire_unhandled = false;
+            let outcome = catch_unwind(AssertUnwindSafe(|| self.child_dispatch(&child, op_name.as_str(), &payload, id, from)));
+            self.wire_msg = saved_msg;
+            let tag = self.wire_tag.take();
+            let unhandled = std::mem::take(&mut self.wire_unhandled);
+            match outcome {
+                Ok(_) if unhandled => {
+                    let mut ex = Map::new();
+                    ex.insert(op_name.clone(), json!("unhandled"));
+                    resp.insert("ex".to_string(), Value::Object(ex));
+                }
                 Ok(Value::Null) => return,
                 Ok(v) if v == json!(child) => {
                     resp.insert("re".to_string(), json!({}));
                     resp.insert("bv-a".to_string(), json!(format!("#<{}>", addr)));
                 }
-                Ok(v) => { resp.insert("re".to_string(), v); }
+                Ok(v) => {
+                    resp.insert("re".to_string(), v);
+                    if let Some(t) = tag { resp.insert("bv-a".to_string(), t); }
+                }
                 Err(e) => {
                     let mut ex = Map::new();
                     ex.insert(op_name.clone(), bv_panic_ex(&e));

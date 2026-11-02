@@ -652,7 +652,7 @@ function _matchTypes(types, named, positional, requiredPos) {
     return s;
   };
   const memberOf = (actual, expected) => {
-    if (actual === expected) return true;
+    if (actual === expected || expected === 'Anything') return true;
     const isTypeTag = typeof actual === 'string' && (actual.startsWith('::') || actual.startsWith('#<'));
     if (isTypeTag && bareName(actual) === bareName(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {

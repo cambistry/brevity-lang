@@ -378,14 +378,14 @@ function genSubscribePrologue(fnName) {
     `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubBva_ = maps:get(<<"bv-a">>, Message, null),
-    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); _ -> From end,
+    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
     ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
     `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubBva_ = maps:get(<<"bv-a">>, Message, null),
-    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); _ -> From end,
+    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
     ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
@@ -472,7 +472,7 @@ function isSilentGuard(s, silent) {
     JSON.stringify(s.expr).includes('"type":"Return"');
 }
 
-function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false } = {}) {
+function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false, instance = false } = {}) {
   const { params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
   const reply = rawBody.find(s => s.type === 'Reply');
@@ -494,6 +494,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
 
+  // An instance checks only a call from outside: in-process callers pass values, not tags.
+  const exempt = instance ? '_From =/= <<"__bv_wire">>' : 'From =:= <<"__self">> orelse From =:= <<"__test">>';
   let typeCheck = '';
   if (!skipTypeCheck) {
     if (positionalTyped.length > 0) {
@@ -501,14 +503,14 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
-        typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
+        typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
       } else {
-        typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
+        typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
       }
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
       const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `(From =:= <<"__self">> orelse From =:= <<"__test">> orelse match_types(Message, [${pairs}]))`;
+      typeCheck = `(${exempt} orelse match_types(Message, [${pairs}]))`;
     }
   }
 
@@ -821,9 +823,24 @@ function genChildHandleOp(ctx, actor) {
     ctx.selfSendPrefix = prefix;
   }
 
-  for (const h of childPublicFns) {
-    const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
-    clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  // A name with typed params or overloads tries each clause in its own function,
+  // so a call from outside falls through to `unhandled` when its tags fit none.
+  const typedHelpers = [];
+  const publicByName = new Map();
+  for (const h of childPublicFns) publicByName.set(h.name, [...(publicByName.get(h.name) || []), h]);
+  for (const [op, variants] of publicByName) {
+    if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
+      const inner = genPublicFnInner(ctx, variants[0], { skipTypeCheck: true });
+      clauses.push(`${prefix}_handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${inner}`);
+      continue;
+    }
+    const hasOverloads = variants.length > 1;
+    const names = variants.map((_, i) => `${prefix}_clause_${typedHelpers.length}_${i}`);
+    variants.forEach((h, i) => {
+      typedHelpers.push(`${names[i]}(Message, Payload, _Id, _From) ->\n${genPublicFnInner(ctx, h, { hasOverloads, instance: true })}.`);
+    });
+    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlString(op)}}`);
+    clauses.push(`${prefix}_handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
   }
   // Add private function dispatch clauses for child actor
   for (const h of childPrivateFns) {
@@ -907,7 +924,7 @@ function genChildHandleOp(ctx, actor) {
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
 
   ctx.emitNames = savedEmitNames;
-  return clauses.join(';\n') + '.';
+  return [clauses.join(';\n') + '.', ...typedHelpers].join('\n\n');
 }
 
 function genChildInit(ctx, actor) {
@@ -1218,7 +1235,7 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, _, <<"#<>"/utf8>>} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, _, <<"#<>"/utf8>>} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WBva_} -> From_ ! {bv_wire_reply, Id_, WRe_, WBva_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1889,7 +1906,7 @@ ${testTypeClauses || '                _ -> null'};
         _ -> OpName0_s
     end,
     case bv_instance_at_(maps:get(<<"to">>, Message, null)) of
-        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, OpName, bv_unwire_payload(Message, Payload), Id, From);
+        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, OpName, Message, bv_unwire_payload(Message, Payload), Id, From);
         none ->
 ${dispatchInner}
     end.

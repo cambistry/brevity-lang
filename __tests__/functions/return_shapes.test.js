@@ -168,3 +168,80 @@ describe('at runtime', () => {
     );
   });
 });
+
+describe('a reply\'s tag', () => {
+  const bodies = `
+      @positional = (b Boolean) {
+        if b { return "x" }
+        return 9
+      }
+      @named = (b Boolean) {
+        if b { return n: "x" }
+        return n: 9
+      }
+      @elseBranch = (b Boolean) {
+        if b { return "x" } else { return 9 }
+      }
+      @nested = (b Boolean) {
+        if b {
+          if b { return "x" }
+        }
+        return 9
+      }
+      @inLoop = (b Boolean) {
+        n *Integer = 0
+        repeat while n < 1 {
+          if b { return "x" }
+          n <- n + 1
+        }
+        return 9
+      }
+      @fromParam = (b Boolean, t Text, i Integer) {
+        if b { return t }
+        return i
+      }
+  `;
+  const script = `${bodies}
+    @Box = *{${bodies}}
+  `;
+  const newBox = [
+    { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+  ];
+
+  const paths = [
+    ['@positional', ['x'], ['Text'], [9], ['Integer']],
+    ['@named', { n: 'x' }, { n: 'Text' }, { n: 9 }, { n: 'Integer' }],
+    ['@elseBranch', ['x'], ['Text'], [9], ['Integer']],
+    ['@nested', ['x'], ['Text'], [9], ['Integer']],
+    ['@inLoop', ['x'], ['Text'], [9], ['Integer']],
+  ];
+
+  describe.each(paths)('%s', (op, earlyRe, earlyTag, lateRe, lateTag) => {
+    it('tags each path in a file handler', async () => {
+      await expectBehavior(script,
+        { input: { id: '1', op: [[true], op], 'bv-a': [['Boolean']], from: 'c' } },
+        { output: { id: '1', re: earlyRe, 'bv-a': earlyTag, to: 'c' } },
+        { input: { id: '2', op: [[false], op], 'bv-a': [['Boolean']], from: 'c' } },
+        { output: { id: '2', re: lateRe, 'bv-a': lateTag, to: 'c' } },
+      );
+    });
+    it('tags each path in a class', async () => {
+      await expectBehavior(script, ...newBox,
+        { input: { id: '2', op: [[true], op], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
+        { output: { id: '2', re: earlyRe, 'bv-a': earlyTag, to: 'c', from: '@Box/1' } },
+        { input: { id: '3', op: [[false], op], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
+        { output: { id: '3', re: lateRe, 'bv-a': lateTag, to: 'c', from: '@Box/1' } },
+      );
+    });
+  });
+
+  it('tags a path by the type of the param it returns', async () => {
+    await expectBehavior(script, ...newBox,
+      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'bv-a': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: ['x'], 'bv-a': ['Text'], to: 'c', from: '@Box/1' } },
+      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'bv-a': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
+      { output: { id: '3', re: [9], 'bv-a': ['Integer'], to: 'c', from: '@Box/1' } },
+    );
+  });
+});
