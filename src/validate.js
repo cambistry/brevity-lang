@@ -4,6 +4,7 @@
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
+import { lowerOwnCellWrites } from './published_cells.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
@@ -824,6 +825,7 @@ export function validate(ast, options = {}) {
   checkSilentCallForm(ast, remotesParsed);
   // ── A function that writes says so in its name ────────────────────────
   checkEffects(ast, remotesParsed);
+  lowerOwnCellWrites(ast);
   addConstructHandlers(ast);
 }
 

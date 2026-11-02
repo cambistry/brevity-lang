@@ -136,8 +136,38 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
     end`;
 }
 
+// Tell a published cell's subscribers its new value, in the getter's shape.
+export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
+  const value = `get(${erlStateKey(ctx, '@' + cell)})`;
+  const bvaPart = cellType ? `, <<"bv-a">> => [${erlString(cellType)}]` : '';
+  return [
+    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
+    `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubBva${sfx}_}) ->`,
+    `${I}    case SubFrom${sfx}_ of`,
+    `${I}        <<"__parent">> ->`,
+    // In-process subscriber: invoke the parent actor's registered fun directly,
+    // bypassing stdout. The parent registered the fun under {pending_subscribe, SubId_}.
+    `${I}            case get({pending_subscribe, SubId${sfx}_}) of`,
+    `${I}                Sub_fun${sfx}_ when is_function(Sub_fun${sfx}_) -> Sub_fun${sfx}_([${value}]);`,
+    `${I}                _ -> ok`,
+    `${I}            end;`,
+    `${I}        SubPid${sfx}_ when is_pid(SubPid${sfx}_) ->`,
+    `${I}            SubPid${sfx}_ ! {bv_notify, SubId${sfx}_, [${value}]};`,
+    `${I}        _ ->`,
+    `${I}            Resp${sfx}_ = #{<<"id">> => SubId${sfx}_, <<"re">> => [${value}], <<"to">> => SubFrom${sfx}_${bvaPart}},`,
+    `${I}            io:put_chars([json_encode(Resp${sfx}_), $\\n])`,
+    `${I}    end;`,
+    `${I}    (_) -> ok`,
+    `${I}end, CellSubs${sfx}_),`,
+  ];
+}
+
 function genExpr(ctx, expr, typeEnv, sCtx) {
   if (!expr) return 'null';
+  if (expr.type === 'CellNotify') {
+    const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellType, '    ', `N${ctx.ephCounter++}`);
+    return `begin\n${lines.join('\n')}\n    ok\nend`;
+  }
 
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
@@ -1034,6 +1064,7 @@ function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
         ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
+        bv_drain_notify_(),
         bv_object_pack(${reVar})
     end`;
 }
@@ -1066,6 +1097,7 @@ function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
         ${idVar} = integer_to_binary(erlang:unique_integer([positive])),
         ${pidExpr} ! {bv_dispatch, self(), ${method}, ${payload}, ${idVar}},
         ${reVar} = receive {bv_reply, ${idVar}, BvReply_${n}_} -> BvReply_${n}_; {bv_error, ${idVar}} -> null end,
+        bv_drain_notify_(),
         bv_object_pack(${reVar})
     end`;
 }

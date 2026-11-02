@@ -236,7 +236,7 @@ nested actors, and it crosses actor borders through the doc.
 *{
   untracked hits *Integer = 0
   untracked @log *Text = ""
-  untracked @write. = (m Text) { log <- log + m }
+  untracked @write. = (m Text) { @log <- @log + m }
   untracked audit = Logger()
 }
 ```

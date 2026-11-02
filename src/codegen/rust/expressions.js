@@ -91,8 +91,47 @@ function rustDomHostAddr(tag) {
   return `${alias} @${tag}`;
 }
 
+// Tell a published cell's subscribers its new value, in the getter's shape. A file's
+// subscribers are in `cell_subs`, and a class's in its own state.
+export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
+  const cellKey = stateKey('@' + cell);
+  const lines = childPrefix === null
+    ? [
+      `let _subs = self.cell_subs.get(${JSON.stringify(cell)}).cloned().unwrap_or_default();`,
+      'for (_sub_id, _sub_from, _, _) in _subs {',
+    ]
+    : [
+      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_${cell}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
+      'for _sub in &_subs_snapshot {',
+      '    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();',
+      '    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();',
+    ];
+  lines.push(
+    `    let _cur = self.state.get("${cellKey}").cloned().unwrap_or(Value::Null);`,
+    '    if _sub_from == "__parent" {',
+    '        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {',
+    '            let slot = slot_val.as_i64().unwrap_or(-1);',
+    '            self.dispatch_sub(slot, &json!([_cur]));',
+    '        }',
+    '    } else {',
+    '        let mut _resp = Map::new();',
+    '        _resp.insert("id".to_string(), json!(_sub_id));',
+    '        _resp.insert("re".to_string(), json!([_cur]));',
+    '        _resp.insert("to".to_string(), json!(_sub_from));',
+    ...(cellType ? [`        _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`] : []),
+    '        let _ = self.binding.send(Value::Object(_resp));',
+    '    }',
+    '}',
+  );
+  return lines;
+}
+
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
+  if (expr.type === 'CellNotify') {
+    const child = G.ctx.childStatePrefix ? G.ctx.childStatePrefix : null;
+    return `{ ${rustCellNotifyLines(expr.cell, expr.cellType, child).join(' ')} Value::Null }`;
+  }
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
   }

@@ -36,8 +36,26 @@ function fileLevelFunctionNames(tokens) {
   return names;
 }
 
+// `@a <- v` writes this actor's published cell. It's one name to the statement forms.
+function joinOwnCellWrites(tokensIn) {
+  const written = new Set();
+  const out = [];
+  for (let i = 0; i < tokensIn.length; i++) {
+    const [t, next, after] = [tokensIn[i], tokensIn[i + 1], tokensIn[i + 2]];
+    if (t.type === 'AT' && next?.type === 'IDENT' && (after?.type === 'SET' || after?.type === 'UPDATE')) {
+      written.add('@' + next.value);
+      out.push({ ...next, value: '@' + next.value });
+      i++;
+    } else {
+      out.push(t);
+    }
+  }
+  return { tokens: out, written };
+}
+
 export function parse(tokensIn) {
-  let tokens = tokensIn;
+  const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
+  let tokens = joined;
   let pos = 0;
   const functionNames = new Set();
   const fileFunctionNames = fileLevelFunctionNames(tokensIn);
@@ -220,7 +238,7 @@ export function parse(tokensIn) {
   const declareLocal = (name) => { if (name) currentScope().add(name); };
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name, typeName = null) => refVarScopes[refVarScopes.length - 1].set(name, typeName);
-  const isRef = (name) => refVarScopes.some(s => s.has(name));
+  const isRef = (name) => ownCellWrites.has(name) || refVarScopes.some(s => s.has(name));
   const addReadonlyParam = (name) => { if (name) readonlyParamScopes[readonlyParamScopes.length - 1].add(name); };
   const isReadonlyParam = (name) => readonlyParamScopes.some(s => s.has(name));
   const refType = (name) => { for (let i = refVarScopes.length - 1; i >= 0; i--) { if (refVarScopes[i].has(name)) return refVarScopes[i].get(name); } return null; };
@@ -3778,7 +3796,7 @@ export function parse(tokensIn) {
       skipNewlines();
       const value = parseExpr();
       declareLocal('@' + op);
-      addRef('@' + op);
+      addRef('@' + op, typeName);
       if (constructorBody) constructorBody.push(AST.refDecl('@' + op, typeName, value));
       const getter = AST.functionDecl('@' + op, [], [
         AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),

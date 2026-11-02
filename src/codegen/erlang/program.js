@@ -4,6 +4,7 @@ import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
+import { erlCellNotifyLines } from './expressions.js';
 import {
   buildTypeEnv,
   buildSSAEnv,
@@ -558,31 +559,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   // using the stored id. Notification shape matches the getter (positional Re
   // + optional bv-a type tag).
   if (fn.name && fn.name.startsWith('set@')) {
-    const cellName = fn.name.slice('set@'.length);
-    const key = `{cell_subs, ${erlString(cellName)}}`;
-    const cellType = params[0]?.type;
-    const bvaPart = cellType ? `, <<"bv-a">> => [${erlString(cellType)}]` : '';
-    // State key path — child actor state uses a prefix (state_<child>_<cell>);
-    // top-level uses plain state_<cell>. childStatePrefix is set during child
-    // actor codegen.
-    const stateKeyRef = erlStateKey(ctx, '@' + cellName);
-    lines.push(`${I}CellSubs_ = case get(${key}) of undefined -> []; L_ -> L_ end,`);
-    lines.push(`${I}lists:foreach(fun({SubId_, SubFrom_, _SubArgs_, _SubBva_}) ->`);
-    lines.push(`${I}    case SubFrom_ of`);
-    lines.push(`${I}        <<"__parent">> ->`);
-    // In-process subscriber: invoke the parent actor's registered fun directly,
-    // bypassing stdout. The parent registered the fun under {pending_subscribe, SubId_}.
-    lines.push(`${I}            case get({pending_subscribe, SubId_}) of`);
-    lines.push(`${I}                Sub_fun_ when is_function(Sub_fun_) -> Sub_fun_([get(${stateKeyRef})]);`);
-    lines.push(`${I}                _ -> ok`);
-    lines.push(`${I}            end;`);
-    lines.push(`${I}        SubPid_ when is_pid(SubPid_) ->`);
-    lines.push(`${I}            SubPid_ ! {bv_notify, SubId_, [get(${stateKeyRef})]};`);
-    lines.push(`${I}        _ ->`);
-    lines.push(`${I}            Resp_ = #{<<"id">> => SubId_, <<"re">> => [get(${stateKeyRef})], <<"to">> => SubFrom_${bvaPart}},`);
-    lines.push(`${I}            io:put_chars([json_encode(Resp_), $\\n])`);
-    lines.push(`${I}    end`);
-    lines.push(`${I}end, CellSubs_),`);
+    lines.push(...erlCellNotifyLines(ctx, fn.name.slice('set@'.length), params[0]?.type, I));
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.

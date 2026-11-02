@@ -40,6 +40,12 @@ export function domHostAddr(ctx, tag) {
   return `${alias} @${tag}`;
 }
 
+// Tell a published cell's subscribers its new value, in the getter's shape.
+export function genCellNotify(cell, cellType) {
+  const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cell)}]${bvaPart}, to: _sub.from }); }`;
+}
+
 export function collectFreeVars(ctx, funcNode) {
   const paramNames = new Set(funcNode.params.map(p => p.name).filter(Boolean));
   const ids = new Set();
@@ -311,6 +317,7 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
 }
 
 export function genExpr(ctx, expr) {
+  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(expr.cell, expr.cellType)})()`;
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
   }

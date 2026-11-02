@@ -94,9 +94,8 @@ backend uses that one early-return form.
   read one return shape, so stating more needs a decision about how callers check them.
 - **Constructing a public class from another file:** done, see
   [session-2026-11-01](session-2026-11-01-public-classes-across-files.md).
-- **Writing a published cell from its own actor:** `@a *Integer = 3` with `a <- a + 1` in a
-  function reports "Cannot set 'a'", and `@a <- …` reports "The left side of '<-' must be a
-  cell", with or without inheritance. Setting it from outside (`s.a <- 9`) works.
+- **Writing a published cell from its own actor:** done, as `@a <- @a + 1`, see
+  [session-2026-11-01](session-2026-11-01-own-published-cells.md).
 
 ## Tests
 
@@ -164,9 +163,6 @@ Nothing reads `effect` yet; phase 4 does.
 - **`->` slots on imported types aren't checked,** and neither are slots on a class reached
   through a chain, or on an overloaded function.
 - **Discarded reads inside a nested function aren't checked.**
-- **Published cells can't be written from inside.** `@log *Text` has no inside-write form
-  (`log <- x` and `@log <- x` are both errors, also before this work), so `untracked @log`
-  is only useful for writes from other actors.
 
 ## Private classes in service docs (2026-11-01)
 

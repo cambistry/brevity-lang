@@ -7,7 +7,7 @@ export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
   genTypeCondition, genDefaultValue, stateKey,
-  genPackedReturn,
+  genPackedReturn, genCellNotify,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
@@ -87,7 +87,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const lastExpr = rawBody[rawBody.length - 1].expr;
     // Don't promote silent emit calls to implicit returns
     const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && ctx.emitNames.has(lastExpr.callee.name) && ctx.emitNames.get(lastExpr.callee.name).silent;
-    if (!isSilentEmit) {
+    if (!isSilentEmit && lastExpr.type !== 'CellNotify') {
       implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
       body = rawBody.slice(0, -1);
     }
@@ -211,11 +211,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let notifyBlock = '';
   if (name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
-    const key = JSON.stringify(cellName);
     const cellType = params[0]?.type;
-    const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
     notifyBlock = `
-        { const _subs = this.#_cellSubs.get(${key}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cellName)}]${bvaPart}, to: _sub.from }); }`;
+        ${genCellNotify(cellName, cellType)}`;
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.

@@ -10,6 +10,7 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
   genRustCondition, isRustGuardIf,
+  rustCellNotifyLines,
 } from './expressions.js';
 import {
   genRustLocals, genRustReBody, genRustBvaBody,
@@ -296,29 +297,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   // emitted by the underlying SetStatement codegen (set@<cell>'s body is
   // `<cell> <- _v`), so no additional fn replay here.
   if (name && name.startsWith('set@')) {
-    const cellName = name.slice('set@'.length);
-    const cellStateKey = stateKey('@' + cellName);
-    const cellType = params[0]?.type;
-    const bvaLine = cellType
-      ? `                    _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
-      : '';
-    lines.push(`                let _subs = self.cell_subs.get(${JSON.stringify(cellName)}).cloned().unwrap_or_default();`);
-    lines.push(`                for (_sub_id, _sub_from, _, _) in _subs {`);
-    lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
-    lines.push(`                    if _sub_from == "__parent" {`);
-    lines.push(`                        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {`);
-    lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
-    lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
-    lines.push(`                        }`);
-    lines.push(`                    } else {`);
-    lines.push(`                        let mut _resp = Map::new();`);
-    lines.push(`                        _resp.insert("id".to_string(), json!(_sub_id));`);
-    lines.push(`                        _resp.insert("re".to_string(), json!([_cur]));`);
-    lines.push(`                        _resp.insert("to".to_string(), json!(_sub_from));`);
-    if (bvaLine) lines.push(bvaLine);
-    lines.push(`                        let _ = self.binding.send(Value::Object(_resp));`);
-    lines.push(`                    }`);
-    lines.push(`                }`);
+    lines.push(...rustCellNotifyLines(name.slice('set@'.length), params[0]?.type));
   }
   lines.push('                handled = true;');
   G.ctx.ssaScope = savedSsaScope;
@@ -718,32 +697,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   // replay for this cell is emitted by the underlying SetStatement codegen
   // (set@<cell>'s body is `<cell> <- _v`), so no fn replay here.
   if (name.startsWith('set@')) {
-    const cellName = name.slice('set@'.length);
-    const subsKey = `${G.ctx.childStatePrefix || ''}_cell_subs_${cellName}`;
-    const cellStateKey = stateKey('@' + cellName);
-    const cellType = fn.params?.[0]?.type;
-    const bvaLine = cellType
-      ? `                        _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`
-      : '';
-    lines.push(`                let _subs_snapshot = self.state.get("${subsKey}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
-    lines.push(`                for _sub in &_subs_snapshot {`);
-    lines.push(`                    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
-    lines.push(`                    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();`);
-    lines.push(`                    let _cur = self.state.get("${cellStateKey}").cloned().unwrap_or(Value::Null);`);
-    lines.push(`                    if _sub_from == "__parent" {`);
-    lines.push(`                        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {`);
-    lines.push(`                            let slot = slot_val.as_i64().unwrap_or(-1);`);
-    lines.push(`                            self.dispatch_sub(slot, &json!([_cur]));`);
-    lines.push(`                        }`);
-    lines.push(`                    } else {`);
-    lines.push(`                        let mut _resp = Map::new();`);
-    lines.push(`                        _resp.insert("id".to_string(), json!(_sub_id));`);
-    lines.push(`                        _resp.insert("re".to_string(), json!([_cur]));`);
-    lines.push(`                        _resp.insert("to".to_string(), json!(_sub_from));`);
-    if (bvaLine) lines.push(bvaLine);
-    lines.push(`                        let _ = self.binding.send(Value::Object(_resp));`);
-    lines.push(`                    }`);
-    lines.push(`                }`);
+    lines.push(...rustCellNotifyLines(name.slice('set@'.length), fn.params?.[0]?.type, G.ctx.childStatePrefix || ''));
   }
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
