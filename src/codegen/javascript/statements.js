@@ -407,7 +407,13 @@ function inBlockScope(ctx, gen) {
 }
 
 // The value is generated first, so `r = r + 1` reads the enclosing `r`.
-function genBlockBind(ctx, s) {
+function genBlockBind(ctx, s, outerEnv) {
+  if (s.value?.type === 'Function') {
+    const emit = (name, rhs) => `\n        const ${mintSsaName(ctx, name)} = ${rhs};`;
+    return lambdaUsesOuterRefs(ctx, s.value)
+      ? genClosureBind(ctx, s, emit, outerEnv)
+      : genLiftedLambdaBind(ctx, s, emit);
+  }
   const value = branchBindValue(ctx, s);
   if (ctx.currentTypeEnv) bindLocalType(ctx.currentTypeEnv, s);
   return `const ${mintSsaName(ctx, s.name)} = ${value};`;
@@ -436,10 +442,10 @@ function genIfBlockStatements(ctx, body, tmpVar, _outerEnv) {
     if (s.type === 'BareTypeDecl') continue;
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
-      code += `\n        ${genBlockBind(ctx, s)}`;
+      code += `\n        ${genBlockBind(ctx, s, _outerEnv)}`;
     } else if (s.type === 'Assign') {
       lastTypedName = null;
-      code += `\n        ${genBlockBind(ctx, s)}`;
+      code += `\n        ${genBlockBind(ctx, s, _outerEnv)}`;
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
@@ -540,7 +546,7 @@ function genWhileBody(ctx, body, inner, outerEnv, counters) {
     if (s.type === 'StateAssign') {
       code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
-      code += `\n${inner}${genBlockBind(ctx, s)}`;
+      code += `\n${inner}${genBlockBind(ctx, s, outerEnv)}`;
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
         const wireOp = s.updateOp === '<|' ? 'update' : 'set';
@@ -1033,18 +1039,7 @@ export function genLocals(ctx, body, outerEnv) {
     }
     if (s.value.type === 'Function') {
       const overloadMode = s.value.overloadMode;
-      // Lambdas that set outer refs must remain closures (can't be lifted)
-      if (!overloadMode && lambdaUsesOuterRefs(ctx, s.value)) {
-        if (s.value.body) {
-          const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
-          return emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
-        }
-        const destr = genDestructure(ctx, s.value.params, '  ');
-        if (s.value.returnType === '.') {
-          return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
-        }
-        return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return BvObject.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
-      }
+      if (!overloadMode && lambdaUsesOuterRefs(ctx, s.value)) return genClosureBind(ctx, s, emitBinding, outerEnv);
       // Overload append: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append') {
         const existing = ctx.lambdaHandlers.slice(ctx._lambdaStartIdx || 0).find(h => h.varName === s.name);
@@ -1064,21 +1059,7 @@ export function genLocals(ctx, body, outerEnv) {
           return captureCode;
         }
       }
-      const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
-      ctx.lambdaVarNames.add(s.name);
-      const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
-      // Store captures in actor private fields. The free var name is
-      // resolved through the OUTER scope (current ctx.ssaScope) — we store
-      // the snapshot at lambda creation time before descending into body.
-      let captureCode = '';
-      for (const v of freeVars) {
-        const fieldName = `_cap_${lambdaName}_${v}`;
-        ctx.lambdaCaptureFields.push(fieldName);
-        const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
-        captureCode += `\n        this.#${fieldName} = ${src};`;
-      }
-      ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-      return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+      return genLiftedLambdaBind(ctx, s, emitBinding);
     }
     if (s.value.type === 'IndexExpr') {
       return emitBinding(s.name, genExpr(ctx, s.value));
@@ -1106,6 +1087,38 @@ export function genLocals(ctx, body, outerEnv) {
     throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
   }).join('');
   return result;
+}
+
+// A function that sets outer refs stays a closure, since it can't be lifted.
+function genClosureBind(ctx, s, emitBinding, outerEnv) {
+  if (s.value.body) {
+    const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
+    return emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
+  }
+  const destr = genDestructure(ctx, s.value.params, '  ');
+  if (s.value.returnType === '.') {
+    return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, s.value.expr)};\n}`, s.value, s.name));
+  }
+  return emitBinding(s.name, wrapWithCapture(ctx, `async (_s) => {${destr}\n  return BvObject.pack([${genExpr(ctx, s.value.expr)}]);\n}`, s.value, s.name));
+}
+
+// Any other function becomes a handler. Captures go in actor private fields, read
+// through the current scope: the snapshot at creation, before entering the body.
+// A handler with a guard generates its body twice, and both must name the same arm.
+function genLiftedLambdaBind(ctx, s, emitBinding) {
+  const existing = ctx.lambdaHandlers.find(h => h.fn === s.value);
+  const lambdaName = existing?.name ?? `_lambda_${ctx.lambdaCounter++}`;
+  ctx.lambdaVarNames.add(s.name);
+  const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
+  let captureCode = '';
+  for (const v of freeVars) {
+    const fieldName = `_cap_${lambdaName}_${v}`;
+    if (!existing) ctx.lambdaCaptureFields.push(fieldName);
+    const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
+    captureCode += `\n        this.#${fieldName} = ${src};`;
+  }
+  if (!existing) ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+  return captureCode + emitBinding(s.name, `"${lambdaName}"`);
 }
 
 export function isRemoteSend(ctx, expr) {

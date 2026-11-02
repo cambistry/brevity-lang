@@ -154,6 +154,13 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
   return buildLevel(guards, 0, I, makeFinalRet, { ...replyCtx, typeEnv });
 }
 
+// A call to a local function replies with a whole Object, and a return field holds one value.
+function genReturnValue(ctx, expr, typeEnv, replyCtx) {
+  const code = genExpr(ctx, expr, typeEnv, replyCtx);
+  const isLocalCall = expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.lambdaVarNames.has(expr.callee.name);
+  return isLocalCall ? `bv_object_one(${code})` : code;
+}
+
 // makeRet callback for genFn context: returns {[posVals], #{namedPairs}}
 function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
   const spread = fields.find(f => f.spread);
@@ -161,13 +168,13 @@ function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
   const posVals = pos.map(f => {
-    if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
+    if (f.expr) return genReturnValue(ctx, f.expr, typeEnv, replyCtx);
     if (f.name) return genExpr(ctx, { type: 'Identifier', name: f.name }, typeEnv, replyCtx);
     return 'null';
   });
   const namedPairs = named.map(f => {
     if ('sigil' in f) return `${erlString(f.sigil)} => ${genExpr(ctx, { type: 'Identifier', name: f.sigil }, typeEnv, replyCtx)}`;
-    if (f.key !== undefined) return `${erlString(f.key)} => ${genExpr(ctx, f.value, typeEnv, replyCtx)}`;
+    if (f.key !== undefined) return `${erlString(f.key)} => ${genReturnValue(ctx, f.value, typeEnv, replyCtx)}`;
     return '';
   }).filter(Boolean);
   return `{[${posVals.join(', ')}], #{${namedPairs.join(', ')}}}`;
@@ -184,14 +191,14 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
     const namedPairs = named.map(f => {
       if ('sigil' in f) return `${erlString(f.sigil)} => ${genExpr(ctx, { type: 'Identifier', name: f.sigil }, typeEnv, replyCtx)}`;
       const val = f.value !== undefined
-        ? genExpr(ctx, f.value, typeEnv, replyCtx)
-        : (f.expr ? genExpr(ctx, f.expr, typeEnv, replyCtx) : 'null');
+        ? genReturnValue(ctx, f.value, typeEnv, replyCtx)
+        : (f.expr ? genReturnValue(ctx, f.expr, typeEnv, replyCtx) : 'null');
       return `${erlString(f.key)} => ${val}`;
     });
     return `{ok, #{${namedPairs.join(', ')}}, ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
   }
   const posVals = pos.map(f => {
-    if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
+    if (f.expr) return genReturnValue(ctx, f.expr, typeEnv, replyCtx);
     if (f.name) return genExpr(ctx, { type: 'Identifier', name: f.name }, typeEnv, replyCtx);
     return 'null';
   });

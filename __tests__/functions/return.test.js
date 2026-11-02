@@ -51,8 +51,8 @@ describe('function return — all forms', () => {
         x = a + 1
         return (:x)
       }
-      :x = fn(5)
-      return :x
+      x: n = fn(5)
+      return x: n
 
     @explicitNamedExpr
       =

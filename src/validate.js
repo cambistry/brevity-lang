@@ -5,6 +5,7 @@ import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
+import { lowerParamScope } from './param_scope.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
@@ -838,6 +839,7 @@ export function validate(ast, options = {}) {
   checkSilentCallForm(ast, remotesParsed);
   // ── A function that writes says so in its name ────────────────────────
   checkEffects(ast, remotesParsed);
+  lowerParamScope(ast);
   lowerOwnCellWrites(ast);
   addConstructHandlers(ast);
   // Last, so every check above reads `as` as written.
@@ -2022,8 +2024,15 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     }
   }
 
+  const actorNames = new Set([
+    ...(actor.stateVarDecls || []).map(d => d.name),
+    ...(actor.initParams || []).map(p => p.name),
+    ...actor.functions.map(f => f.name),
+  ].filter(Boolean));
+  checkNestedBlocks(actor.constructorBody || [], actorNames);
+
   for (const fn of actor.functions) {
-    checkFunctionBinds(fn, new Set(), null);
+    checkFunctionBinds(fn, actorNames);
     const typeEnv = buildTypeEnv(fn.params, fn.body);
     // Merge state var types so actor-reference variables are visible
     for (const [k, v] of stateTypeEnv) {
@@ -3316,43 +3325,42 @@ function checkPublishedParams(ast) {
 
 // ── Re-bind guards ──────────────────────────────────────────────────────────
 
-// A block's binds are its own, so an untyped bind on a name from outside would
-// look like a change to it and leave it as it was after the block. `x Type = …`
-// shadows on purpose. A function assigned to a name follows the same rule, and
-// a lambda passed inline starts a scope of its own.
+// Inside a block, a name from the enclosing scope always means that name. A body's
+// names are all it binds at its own level, wherever in the body, so order doesn't
+// change what a block may bind. Separate branches enclose nothing of each other.
+// Function params are the one exception: a param may reuse an outer name, for that
+// function's body only.
 
-function patternNames(s) {
-  return (s.pattern || []).filter(item => !item.discard && item.name);
-}
+const BLOCK_LABELS = {
+  IfBranch: 'an if block',
+  IfStatement: 'an if block',
+  WhileStatement: 'a while block',
+  CatchExpr: 'a catch block',
+};
 
-function checkBlockBinds(body, outer, label, own = new Set()) {
-  for (const s of body) {
-    const rebound = s.type === 'Assign' ? [s.name]
-      : (s.type === 'DestructureAssign' || s.type === 'ListDestructure')
-        ? patternNames(s).filter(item => !item.type).map(item => item.name)
-        : [];
-    const hit = rebound.find(name => outer.has(name) && !own.has(name));
-    if (hit) {
-      throw new Error(`Cannot re-bind '${hit}' from inside ${label} — use '${hit} Type = ...' to shadow it`);
-    }
-    const visible = new Set([...outer, ...own]);
-    if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'Function' && s.value.body) {
-      checkFunctionBinds(s.value, visible, 'a function');
-    } else {
-      checkNestedBlocks(s, visible);
-    }
-    rebound.forEach(name => own.add(name));
-    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl' || s.type === 'RefDecl') own.add(s.name);
-    if (s.type === 'DestructureAssign' || s.type === 'ListDestructure') {
-      patternNames(s).forEach(item => own.add(item.name));
-    }
+function boundNames(s) {
+  if (s.type === 'Assign' || s.type === 'TypedAssign' || s.type === 'BareTypeDecl' || s.type === 'RefDecl') {
+    return [s.name];
   }
+  if (s.type === 'DestructureAssign' || s.type === 'ListDestructure') {
+    return (s.pattern || []).filter(item => !item.discard && item.name).map(item => item.name);
+  }
+  return [];
 }
 
-function checkFunctionBinds(fn, outer, label) {
+function checkBlockBinds(body, outer, label, params = []) {
+  const names = body.flatMap(boundNames);
+  const hit = names.find(name => outer.has(name) && !params.includes(name));
+  if (hit) {
+    throw new Error(`Cannot re-bind '${hit}' inside ${label} — it's bound in the enclosing scope, so use a new name`);
+  }
+  checkNestedBlocks(body, new Set([...outer, ...params, ...names]));
+}
+
+function checkFunctionBinds(fn, outer) {
   const params = (fn.params || []).map(p => p.name).filter(Boolean);
-  const visible = new Set([...outer].filter(name => !params.includes(name)));
-  checkBlockBinds(fn.body, visible, label, new Set(params));
+  if (fn.body) checkBlockBinds(fn.body, outer, 'a function', params);
+  else checkNestedBlocks(fn.expr, new Set([...outer, ...params]));
 }
 
 function checkNestedBlocks(node, visible) {
@@ -3361,12 +3369,11 @@ function checkNestedBlocks(node, visible) {
     return;
   }
   if (!node || typeof node !== 'object') return;
-  const label = { IfBranch: 'an if block', WhileStatement: 'a while block', CatchExpr: 'a catch block' }[node.type];
-  if (node.type === 'Function') {
-    if (node.body) checkFunctionBinds(node, new Set(), null);
-    else checkNestedBlocks(node.expr, visible);
+  if (node.type === 'Function' || node.type === 'OnHandler' || node.type === 'SubscribeCall') {
+    checkFunctionBinds(node, visible);
     return;
   }
+  const label = BLOCK_LABELS[node.type];
   for (const [key, value] of Object.entries(node)) {
     if (label && key === 'body' && Array.isArray(value)) checkBlockBinds(value, visible, label);
     else checkNestedBlocks(value, visible);

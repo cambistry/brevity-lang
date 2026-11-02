@@ -453,6 +453,12 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
           const refNames = new Set();
           lambdaLines.push(`${I}re = Some(${genRustReBody(termReturn.fields, capTypeEnv, refNames)});`);
         }
+      } else if (fnNode.body.some(s => s.type === 'Return')) {
+        const refNames = new Set();
+        const ret = fnNode.body.find(s => s.type === 'Return');
+        lambdaLines.push(`                re = Some(${genRustReBody(ret.fields, capTypeEnv, refNames)});`);
+        const bva = genRustBvaBody(ret.fields, capTypeEnv, refNames);
+        if (bva) lambdaLines.push(`                bva_re = Some(${bva});`);
       } else {
         // Implicit return — last expression in body
         const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');

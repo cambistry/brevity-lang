@@ -1815,6 +1815,68 @@ function storeInsert(store, key, value) {
   return `${store}.insert("${key}".to_string(), ${value});`;
 }
 
+// A function that's used as a value, or bound in a branch, becomes a dispatch
+// handler with captured variables. A body generated twice names the same handler.
+function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
+  const existing = G.ctx.lambdaHandlers.find(h => h.fn === fnNode);
+  const lambdaName = existing?.name ?? `_lambda_${G.ctx.lambdaCounter++}`;
+  // Find free variables (identifiers used but not defined as params or locals)
+  const freeVars = [];
+  const paramNames = new Set((fnNode.params || []).map(p => p.name));
+  // Collect variables assigned inside the lambda body — these are locals, not captures
+  const bodyLocals = new Set();
+  if (fnNode.body) for (const bs of fnNode.body) {
+    if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
+  }
+  const localScope = new Set([...paramNames, ...bodyLocals]);
+  function walkForIdents(expr, innerScope = localScope) {
+    if (!expr) return;
+    if (expr.type === 'Identifier' && !innerScope.has(expr.name)) freeVars.push(expr.name);
+    if (expr.type === 'BinaryExpr') { walkForIdents(expr.left, innerScope); walkForIdents(expr.right, innerScope); }
+    if (expr.type === 'FunctionCallExpr') {
+      if (expr.callee) walkForIdents(expr.callee, innerScope);
+      for (const a of (expr.args || [])) walkForIdents(a, innerScope);
+    }
+    // Nested Function: recurse into its body, with that function's
+    // params + body-locals added to scope. Free vars of the nested
+    // fn that aren't in the outer's local scope still bubble up so
+    // the outer lambda captures them for the nested lambda's use.
+    if (expr.type === 'Function') {
+      const nestedParams = new Set((expr.params || []).map(p => p.name));
+      const nestedLocals = new Set();
+      if (expr.body) for (const bs of expr.body) {
+        if (bs.type === 'TypedAssign' || bs.type === 'Assign') nestedLocals.add(bs.name);
+      }
+      const nestedScope = new Set([...innerScope, ...nestedParams, ...nestedLocals]);
+      if (expr.body) for (const bs of expr.body) {
+        if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr, nestedScope);
+        if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value, nestedScope);
+        if (bs.expr) walkForIdents(bs.expr, nestedScope);
+      }
+      if (expr.expr) walkForIdents(expr.expr, nestedScope);
+    }
+  }
+  if (fnNode.body) for (const bs of fnNode.body) {
+    if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
+    if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value);
+    if (bs.expr) walkForIdents(bs.expr);
+  }
+  if (fnNode.expr) walkForIdents(fnNode.expr);
+  // Deduplicate and filter out actor function names (those are self-sends, not captures)
+  const uniqueFreeVars = [...new Set(freeVars)].filter(v => !G.ctx.actorFnNames.has(v));
+  // Store captures in actor state — resolve through OUTER scope
+  // before descending into the lambda body.
+  for (const v of uniqueFreeVars) {
+    const capType = typeEnv.get(v);
+    const capVal = rustSsaResolve(v);
+    const capJson = capType === 'Integer' ? intToValue(capVal) : `json!(${capVal})`;
+    lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), ${capJson});`);
+  }
+  if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
+  G.ctx.lambdaVarNames.add(s.name);
+  lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${lambdaName}".to_string());`);
+}
+
 // `enclosing` is the walk this is a branch of: its locals stay in scope, and the
 // caller scopes what the branch binds.
 function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null, enclosing = null) {
@@ -1946,64 +2008,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             walkRefs(body[j]);
           }
           if (needsBinding) {
-            // Register lambda as a dispatch handler with captured variables
-            const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
-            const fnNode = tracked.node;
-            // Find free variables (identifiers used but not defined as params or locals)
-            const freeVars = [];
-            const paramNames = new Set((fnNode.params || []).map(p => p.name));
-            // Collect variables assigned inside the lambda body — these are locals, not captures
-            const bodyLocals = new Set();
-            if (fnNode.body) for (const bs of fnNode.body) {
-              if (bs.type === 'TypedAssign' || bs.type === 'Assign') bodyLocals.add(bs.name);
-            }
-            const localScope = new Set([...paramNames, ...bodyLocals]);
-            function walkForIdents(expr, innerScope = localScope) {
-              if (!expr) return;
-              if (expr.type === 'Identifier' && !innerScope.has(expr.name)) freeVars.push(expr.name);
-              if (expr.type === 'BinaryExpr') { walkForIdents(expr.left, innerScope); walkForIdents(expr.right, innerScope); }
-              if (expr.type === 'FunctionCallExpr') {
-                if (expr.callee) walkForIdents(expr.callee, innerScope);
-                for (const a of (expr.args || [])) walkForIdents(a, innerScope);
-              }
-              // Nested Function: recurse into its body, with that function's
-              // params + body-locals added to scope. Free vars of the nested
-              // fn that aren't in the outer's local scope still bubble up so
-              // the outer lambda captures them for the nested lambda's use.
-              if (expr.type === 'Function') {
-                const nestedParams = new Set((expr.params || []).map(p => p.name));
-                const nestedLocals = new Set();
-                if (expr.body) for (const bs of expr.body) {
-                  if (bs.type === 'TypedAssign' || bs.type === 'Assign') nestedLocals.add(bs.name);
-                }
-                const nestedScope = new Set([...innerScope, ...nestedParams, ...nestedLocals]);
-                if (expr.body) for (const bs of expr.body) {
-                  if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr, nestedScope);
-                  if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value, nestedScope);
-                  if (bs.expr) walkForIdents(bs.expr, nestedScope);
-                }
-                if (expr.expr) walkForIdents(expr.expr, nestedScope);
-              }
-            }
-            if (fnNode.body) for (const bs of fnNode.body) {
-              if (bs.type === 'ImplicitReturn') walkForIdents(bs.expr);
-              if (bs.type === 'TypedAssign' || bs.type === 'Assign') walkForIdents(bs.value);
-              if (bs.expr) walkForIdents(bs.expr);
-            }
-            if (fnNode.expr) walkForIdents(fnNode.expr);
-            // Deduplicate and filter out actor function names (those are self-sends, not captures)
-            const uniqueFreeVars = [...new Set(freeVars)].filter(v => !G.ctx.actorFnNames.has(v));
-            // Store captures in actor state — resolve through OUTER scope
-            // before descending into the lambda body.
-            for (const v of uniqueFreeVars) {
-              const capType = typeEnv.get(v);
-              const capVal = rustSsaResolve(v);
-              const capJson = capType === 'Integer' ? intToValue(capVal) : `json!(${capVal})`;
-              lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), ${capJson});`);
-            }
-            G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
-            G.ctx.lambdaVarNames.add(s.name);
-            lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${lambdaName}".to_string());`);
+            genRustLiftedLambda(s, tracked.node, typeEnv, I, lines);
           }
         }
       }
@@ -3299,4 +3304,4 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   return null;
 }
 
-export { genRustTypedAssign, genRustDestructureAssign, genRustAssignFnCall, genRustAssignChildDotCall, genRustAssignRemoteDotCall, genRustLocals, genRustWhileStatement, genRustListDestructure, genRustIfStatementBody, genRustIfStatement, genRustReBody, genRustBvaBody };
+export { genRustLiftedLambda, genRustTypedAssign, genRustDestructureAssign, genRustAssignFnCall, genRustAssignChildDotCall, genRustAssignRemoteDotCall, genRustLocals, genRustWhileStatement, genRustListDestructure, genRustIfStatementBody, genRustIfStatement, genRustReBody, genRustBvaBody };

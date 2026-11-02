@@ -8,7 +8,7 @@ import {
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
-import { genRustLocals, genRustValueCatchExpr } from './statements.js';
+import { genRustLiftedLambda, genRustLocals, genRustValueCatchExpr } from './statements.js';
 import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Classify the source numeric type of an operand for coercion
@@ -1469,7 +1469,13 @@ function inRustBranchScope(gen) {
 // The value is generated first, so `r = r + 1` reads the enclosing `r`.
 // `typeEnv` is the branch's own copy, and the bind updates it.
 function genRustBranchBind(s, typeEnv, indent) {
-  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr') {
+  if (s.value?.type === 'Function') {
+    const lines = [];
+    genRustLiftedLambda(s, s.value, typeEnv, indent, lines);
+    return lines.join('\n');
+  }
+  const callsLocalFunction = s.value?.type === 'FunctionCallExpr' && G.ctx.lambdaVarNames.has(s.value.callee?.name);
+  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr' || callsLocalFunction) {
     // A call waits for its reply, as it does outside a branch.
     const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
     const code = genRustLocals([s], typeEnv, analyzeFunctions([s], new Set(), typeEnv), findMutableVars([s]), indent, undefined, null, enclosing);

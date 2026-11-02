@@ -1,25 +1,62 @@
 # Session 2026-11-02: a block's binds are its own
 
 `r = 5; if c { r = 2; return r }; return r` replied `[5]` from the branch on every target. A branch's
-reads now see its binds, the enclosing name is back when the block ends, and an untyped bind on an
-outer name is a compile error. That last part settles the rule from `ssa-immutability-2026-04-09.md`.
+reads now see its binds, and a block can't bind a name from its enclosing scope at all. That settles
+the rule from `ssa-immutability-2026-04-09.md`.
 
 ## The rule
 
-- **`r = 2` on an outer name, in a block, is a compile error.** It looked like a change to `r`, and
-  `if c { r = 2 }; return r` would silently reply `[5]`. This covers `if`, `else`, nested branches,
-  `repeat while`, `catch`, branches of a function assigned to a name, untyped destructuring, and every
-  outer name, including params and values from calls. Before, only some of these were checked
+- **Inside a block, a name from the enclosing scope always means that name.** Binding it is a compile
+  error, typed or untyped, including destructuring and cell declarations. This covers `if`, `else`,
+  nested branches, `repeat while`, `catch` and function bodies, inline or assigned
   (`checkBlockBinds` in `validate.js`).
-- **`r Integer = 2` shadows on purpose.** Reads in the block see it, and the outer value is back after.
-- **A name of the block's own** can be rebound there, `s = 3; s = s + 1`. A name first bound after the
-  block doesn't count as outer, and neither does an inline lambda's scope.
-- **The right side of a bind** reads the old value, so `r Integer = r + 1` works. On Erlang a bind's
-  value used to resolve to its own new name.
-- **Types are scoped too.** `r = 5; if c { r Text = "x"; return r }` tags the branch's reply `Text` and
-  the other path's `Integer`. An untyped bind from a call has no tag on that path (`bindLocalType`).
-- **A loop body is a block** like a branch: `r Integer = 5; repeat while c { r Integer = 2; return r }`
-  replies `[2]`.
+- **A body's names are all it binds at its own level, wherever in the body.** So `if c { s = 1 }; s = 2`
+  is an error, and so is a local function's `x` when the enclosing body binds `x` after it. Statement
+  order never changes what's legal.
+- **A file's or class's names enclose its handlers and private functions**: `k = 5; @h = { k = 2 }` is
+  an error.
+- **Still legal:** rebinding in the same scope (`x = 1; x = x + 1`), the same name in separate branches,
+  and a key that matches an outer name, which is how a local function keeps a reply field:
+
+  ```
+  fn = (a) {
+    y = a + 1
+    return x: y
+  }
+  :x = fn(5)
+  ```
+
+- **Function params are the one exception.** A param may reuse an outer name in any function notation,
+  for that function's body only, and its most useful form is `(name:)` without an alias. Inside the
+  function it follows the normal rules: the body can rebind it at its own level, and a block in the
+  body can't bind it.
+- **A block's own name** can be rebound there, `s = 3; s = s + 1`.
+- **The right side of a bind** reads the old value, so `r = r + 1` works. On Erlang a bind's value used
+  to resolve to its own new name.
+- **Types are per name and path.** `r = 5; if c { s Text = "x"; return s }` tags the branch's reply
+  `Text` and the other path's `Integer`. An untyped bind from a call has no tag on that path
+  (`bindLocalType`).
+
+## Params that reuse a file or class name
+
+Every target looks up file and class names before locals, so `k = 5; @t = (k Integer) { return k }`
+replied `5`, on all three. `lowerParamScope` (`src/param_scope.js`) now gives such a param a name of its
+own and keeps its wire key. Setting one (`k <- 1`) is the usual `Cannot set` error unless the param is a
+ref. Before, it compiled against the cell in a handler with no `!`.
+
+## A function bound in a branch
+
+`if c { f = (a Integer) { return a + 1 }; return f(10) }` failed on all three targets. Each now lifts it
+to a handler like any other local function, capturing through the branch's scope.
+
+- **JS:** a handler with a guard generates its body twice, and the arm came from the first pass while
+  the code called the second's name. A function now keeps its handler across passes
+  (`genLiftedLambdaBind`). A function outside a branch was on the same path.
+- **Rust:** `genRustBranchBind` lifts it (`genRustLiftedLambda`), and a typed bind of its call goes
+  through `genRustLocals`. A lifted function with an explicit `return` also replied nothing, in or out
+  of a branch.
+- **Erlang:** a return field held the whole reply from `self_send`, which is now unwrapped
+  (`genReturnValue`).
 
 ## What follows an early return
 
@@ -62,3 +99,4 @@ after every check has read the code as written.
     don't run those
   - statements after the guard with no final `return`
 - **Rust:** `x = f(); x + 10` doesn't build (`cannot add &BigInt to &Value`), with or without a branch.
+- **JS only:** `f = (a) { return a + 1 }` wants a type on the return, and Rust and Erlang compile it.

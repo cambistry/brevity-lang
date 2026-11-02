@@ -16,7 +16,7 @@ describe('recursion', () => {
     @factorial
       =
       fact = (n) {
-        result Integer = if n > 1 n * fact(n - 1) as Integer else 1
+        r Integer = if n > 1 n * fact(n - 1) as Integer else 1
       }
       result Integer = fact(5)
       return :result

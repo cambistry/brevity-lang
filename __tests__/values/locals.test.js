@@ -136,7 +136,7 @@ describe('locals — nested lambda', () => {
         x Integer = 7
         outer = (a) {
           inner = { x + a }
-          result Integer = inner()
+          r Integer = inner()
         }
         result Integer = outer(3)
         return :result
@@ -226,7 +226,7 @@ describe('locals — nested lambda with header arg', () => {
         =
         fn = {
           inner = (x) ->  seed + x
-          result Integer = inner(1)
+          r Integer = inner(1)
         }
         result Integer = fn()
         return :result

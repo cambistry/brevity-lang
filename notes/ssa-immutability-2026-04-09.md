@@ -176,7 +176,9 @@ forbid shadowing; lambdas allow it.
 - **Handler body (top-level of a dispatch):** SSA applies. `=` mints a fresh
   suffix on rebinding. Sugar over immutability.
 
-  *Implemented 2026-11-02, with typed shadows allowed: `notes/session-2026-11-02-branch-scope.md`.*
+  *Implemented 2026-11-02, stricter than this note: blocks and function bodies can't bind an enclosing
+  name at all, typed or not, and only function params may reuse one. See
+  `notes/session-2026-11-02-branch-scope.md`.*
 
 - **`if` / `else` branch bodies:** each branch has a discardable inner scope
   for branch-local fresh names. **`=` to a name that already exists in any

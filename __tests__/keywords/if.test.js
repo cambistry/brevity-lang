@@ -162,11 +162,11 @@ describe('if/else expression', () => {
         result Integer = if x == 1 10 else if x == 2 20 else 30
         return :result
 
-      @shadow
+      @newName
         =
         x Integer = 10
         result Integer = if true {
-          x Integer = 99
+          y Integer = 99
         } else {
           0
         }
@@ -204,9 +204,9 @@ describe('if/else expression', () => {
     );
   });
 
-  it('inner block shadows outer variable; outer value is unchanged', async () => {
+  it('a new name in a block leaves the outer name unchanged', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@shadow', from: 'c' } },
+      { input: { id: '4', op: '@newName', from: 'c' } },
       { output: { id: '4', 'bv-a': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
     );
   });
@@ -280,15 +280,15 @@ describe('if without else + function call', () => {
 // Shadowing a name inside a branch
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('shadowing a name inside a branch', () => {
+describe('a new name inside a branch', () => {
   const script = `
     @Box = *{
       @one = { return 1 }
       @rebound = (c Boolean) {
         r = 5
         if c {
-          r Integer = 2
-          return r
+          s Integer = 2
+          return s
         }
         return r
       }
@@ -297,8 +297,8 @@ describe('shadowing a name inside a branch', () => {
     @plain = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
-        return r
+        s Integer = 2
+        return s
       }
       return r
     }
@@ -306,33 +306,33 @@ describe('shadowing a name inside a branch', () => {
       b = Box()
       r = 5
       if c {
-        r Integer = b.one()
-        return r
+        s Integer = b.one()
+        return s
       }
       return r
     }
     @fromItself = (c Boolean) {
       r = 5
       if c {
-        r Integer = r + 1
-        return r
+        s Integer = r + 1
+        return s
       }
       return r
     }
     @twice = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
-        r = r + 1
-        return r
+        s Integer = 2
+        s = s + 1
+        return s
       }
       return r
     }
     @inExpression = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
-        return r + 10
+        s Integer = 2
+        return s + 10
       }
       return r + 10
     }
@@ -341,8 +341,8 @@ describe('shadowing a name inside a branch', () => {
       if c {
         return r
       } else {
-        r Integer = 2
-        return r
+        s Integer = 2
+        return s
       }
     }
     @elseIf = (c Boolean) {
@@ -350,38 +350,38 @@ describe('shadowing a name inside a branch', () => {
       if c {
         return r
       } else if true {
-        r Integer = 2
-        return r
+        s Integer = 2
+        return s
       }
       return r
     }
     @nested = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
+        s Integer = 2
         if c {
-          r Integer = 3
-          return r
+          t Integer = 3
+          return t
         }
-        return r
+        return s
       }
       return r
     }
     @nestedOuter = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
+        s Integer = 2
         if false {
-          r Integer = 3
+          t Integer = 3
         }
-        return r
+        return s
       }
       return r
     }
     @fallsThrough = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
+        s Integer = 2
       }
       return r
     }
@@ -395,8 +395,8 @@ describe('shadowing a name inside a branch', () => {
     rebound = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
-        return r
+        s Integer = 2
+        return s
       }
       return r
     }
@@ -407,8 +407,8 @@ describe('shadowing a name inside a branch', () => {
       b = Box()
       r = 5
       if c {
-        r Integer = b.one()
-        return r
+        s Integer = b.one()
+        return s
       }
       return r
     }
@@ -429,26 +429,26 @@ describe('shadowing a name inside a branch', () => {
     @byName = (c Boolean) {
       r = 5
       if c {
-        r Integer = 2
-        return :r
+        s Integer = 2
+        return :s
       }
       return :r
     }
   `;
 
-  it('returns a shadow of a plain value', async () => {
+  it('returns a new name holding a plain value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@plain'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [2], to: 'c' } },
     );
   });
-  it('a shadow leaves the path that skips the branch alone', async () => {
+  it('a new name leaves the path that skips the branch alone', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], '@plain'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
-  it('returns a shadow bound from an instance call', async () => {
+  it('returns a new name bound from an instance call', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@instance'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
@@ -460,55 +460,55 @@ describe('shadowing a name inside a branch', () => {
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
-  it('reads the outer value on the right of its own shadow', async () => {
+  it('reads the outer name on the right of a new name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@fromItself'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
     );
   });
-  it('rebinds a shadow within its branch', async () => {
+  it('rebinds a new name within its branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@twice'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
     );
   });
-  it('reads the shadow inside an expression', async () => {
+  it('reads the new name inside an expression', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@inExpression'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [12], to: 'c' }) },
     );
   });
-  it('shadows in an else branch', async () => {
+  it('binds a new name in an else branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], '@elseBranch'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
     );
   });
-  it('the then branch still reads the outer value when else shadows', async () => {
+  it('the then branch still reads the outer value when else binds a new name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@elseBranch'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
-  it('shadows in an else-if branch', async () => {
+  it('binds a new name in an else-if branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], '@elseIf'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
     );
   });
-  it('shadows in a nested branch', async () => {
+  it('binds a new name in a nested branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@nested'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
     );
   });
-  it('a nested branch that is skipped leaves the enclosing shadow', async () => {
+  it('a nested branch that is skipped leaves the enclosing name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@nestedOuter'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
     );
   });
-  it('a shadow stays inside its branch', async () => {
+  it('a new name stays inside its branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@fallsThrough'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
@@ -544,10 +544,10 @@ describe('shadowing a name inside a branch', () => {
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('returns the shadow by name', async () => {
+  it('returns the new name by name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@byName'], 'bv-a': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'bv-a': { r: 'Integer' }, re: { r: 2 }, to: 'c' } },
+      { output: { id: '1', 'bv-a': { s: 'Integer' }, re: { s: 2 }, to: 'c' } },
     );
   });
   it('the path that skips the branch returns the outer value by name', async () => {
@@ -558,14 +558,14 @@ describe('shadowing a name inside a branch', () => {
   });
 });
 
-describe('shadowing a name inside a branch of a lambda', () => {
+describe('a new name inside a branch of a lambda', () => {
   const script = `
     @inLambda = (c Boolean) {
       f = (d Boolean) {
         r = 5
         if d {
-          r Integer = 2
-          return r
+          s Integer = 2
+          return s
         }
         return r
       }
@@ -575,8 +575,8 @@ describe('shadowing a name inside a branch of a lambda', () => {
       f = (d Boolean) {
         r = 5
         if d {
-          r Integer = 2
-          return r
+          s Integer = 2
+          return s
         }
         return r
       }
@@ -591,8 +591,8 @@ describe('shadowing a name inside a branch of a lambda', () => {
       f = (d Boolean) {
         r = 5
         if d {
-          r Integer = 2
-          return r
+          s Integer = 2
+          return s
         }
         return r
       }
@@ -627,7 +627,7 @@ describe('shadowing a name inside a branch of a lambda', () => {
       { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
     );
   });
-  it('a returned lambda call with a branch and no shadow', async () => {
+  it('a returned lambda call with a branch and no new name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@lambdaGuardNoRebind'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
@@ -635,14 +635,14 @@ describe('shadowing a name inside a branch of a lambda', () => {
   });
 });
 
-describe('shadowing a name in a loop', () => {
+describe('a new name in a loop', () => {
   const script = `
     @inLoop = (c Boolean) {
       r = 5
       repeat while c {
         if c {
-          r Integer = 2
-          return r
+          s Integer = 2
+          return s
         }
       }
       return r
@@ -650,16 +650,16 @@ describe('shadowing a name in a loop', () => {
     @inLoopBody = (c Boolean) {
       r Integer = 5
       repeat while c {
-        r Integer = 2
-        return r
+        s Integer = 2
+        return s
       }
       return r
     }
     @fromOuterInLoopBody = (c Boolean) {
       r Integer = 5
       repeat while c {
-        r Integer = r + 1
-        return r
+        s Integer = r + 1
+        return s
       }
       return r
     }
@@ -684,7 +684,7 @@ describe('shadowing a name in a loop', () => {
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
-  it('reads the outer value on the right of a shadow in a loop body', async () => {
+  it('reads the outer name on the right of a new name in a loop body', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@fromOuterInLoopBody'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
@@ -886,13 +886,13 @@ describe('a literal return in a branch', () => {
   });
 });
 
-describe('shadowing a name with another type inside a branch', () => {
+describe('a new name of another type inside a branch', () => {
   const script = `
     @otherType = (c Boolean) {
       r = 5
       if c {
-        r Text = "x"
-        return r
+        s Text = "x"
+        return s
       }
       return r
     }
@@ -903,29 +903,266 @@ describe('shadowing a name with another type inside a branch', () => {
     otherType = (c Boolean) {
       r = 5
       if c {
-        r Text = "x"
-        return r
+        s Text = "x"
+        return s
       }
       return r
     }
   `;
 
-  it('returns a shadow of another type', async () => {
+  it('returns a new name of another type', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@otherType'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: { id: '1', 'bv-a': ['Text'], re: ['x'], to: 'c' } },
     );
   });
-  it('the path that skips the shadow returns the outer value', async () => {
+  it('the path that skips the branch returns the outer value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], '@otherType'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: { id: '1', 'bv-a': ['Integer'], re: [5], to: 'c' } },
     );
   });
-  it('shadows with another type in a private function', async () => {
+  it('binds another type in a private function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@otherTypeInFunction'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: ['x'], to: 'c' }) },
+    );
+  });
+});
+
+describe('a function param named like an outer name', () => {
+  const script = `
+    @positional = {
+      r = 5
+      f = (r Integer) { return r + 1 }
+      x Integer = f(10)
+      return r, x
+    }
+    @untyped = {
+      r = 5
+      f = (r) { r + 1 }
+      x Integer = f(10)
+      return r, x
+    }
+    @arrow = {
+      r = 5
+      f = (r) -> r + 1
+      x Integer = f(10)
+      return r, x
+    }
+    @named = {
+      r = 5
+      f = (r:) { r + 1 }
+      x Integer = f(r: 10)
+      return r, x
+    }
+    @namedTyped = {
+      r = 5
+      f = (r: Integer) { return r + 1 }
+      x Integer = f(r: 10)
+      return r, x
+    }
+    @keyMapped = {
+      r = 5
+      f = (label: r) { r + 1 }
+      x Integer = f(label: 10)
+      return r, x
+    }
+    @rebound = {
+      r = 5
+      f = (r Integer) {
+        r = r + 1
+        return r
+      }
+      x Integer = f(10)
+      return r, x
+    }
+    @boundAfter = {
+      f = (r Integer) { return r + 1 }
+      x Integer = f(10)
+      r = 5
+      return r, x
+    }
+    @fromFile = {
+      x Integer = addOne(10)
+      return k, x
+    }
+    k = 5
+    addOne = (k Integer) { return k + 1 }
+    @handlerParam = (k Integer) {
+      return k
+    }
+    @handlerNamed = (k: Integer) {
+      return k
+    }
+    @handlerParamByName = (k Integer) {
+      return :k
+    }
+    @handlerParamInBranch = (k Integer) {
+      if k > 0 {
+        return k
+      }
+      return 0
+    }
+  `;
+
+  for (const op of ['@positional', '@untyped', '@arrow', '@named', '@namedTyped', '@keyMapped', '@rebound', '@boundAfter']) {
+    it(`${op}: the param inside the function, the outer value after it`, async () => {
+      await expectBehavior(script,
+        { input: { id: '1', op, from: 'c' } },
+        { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
+      );
+    });
+  }
+  it('a private function param can reuse a name from the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@fromFile', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
+    );
+  });
+  it('a handler param can reuse a name from the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], '@handlerParam'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+  it('keeps its name in a reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], '@handlerParamByName'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: { k: 7 }, to: 'c' }) },
+    );
+  });
+  it('is the param inside a branch too', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], '@handlerParamInBranch'], 'bv-a': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+  it('a named handler param keeps its key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ k: 7 }, '@handlerNamed'], 'bv-a': [{ k: 'Integer' }], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+});
+
+describe('a function bound in a branch', () => {
+  const script = `
+    n *Integer = 0
+
+    @inBranch = (c Boolean) {
+      r = 5
+      if c {
+        f = (r Integer) { return r + 1 }
+        x Integer = f(10)
+        return r, x
+      }
+      return r
+    }
+    @returned = (c Boolean) {
+      if c {
+        f = (a Integer) { return a + 1 }
+        return f(10)
+      }
+      return 0
+    }
+    @untyped = (c Boolean) {
+      if c {
+        f = (a) { a + 1 }
+        x = f(10)
+        return x
+      }
+      return 0
+    }
+    @arrow = (c Boolean) {
+      if c {
+        f = (a) -> a + 1
+        return f(10)
+      }
+      return 0
+    }
+    @captures = (c Boolean) {
+      r = 5
+      if c {
+        s = 2
+        f = (a) { a + r + s }
+        x Integer = f(10)
+        return x
+      }
+      return r
+    }
+    @inElse = (c Boolean) {
+      if c {
+        return 0
+      } else {
+        f = (a Integer) { return a + 1 }
+        return f(10)
+      }
+    }
+    @siblings = (c Boolean) {
+      if c {
+        f = (a Integer) { return a + 1 }
+        return f(10)
+      } else {
+        f = (a Integer) { return a + 2 }
+        return f(10)
+      }
+    }
+    @calledInNested = (c Boolean) {
+      if c {
+        f = (a Integer) { return a + 1 }
+        if c {
+          return f(10)
+        }
+        return 0
+      }
+      return 1
+    }
+    @inLoop = (c Boolean) {
+      repeat while c {
+        f = (a Integer) { return a + 1 }
+        return f(10)
+      }
+      return 0
+    }
+    @writes! = (c Boolean) {
+      if c {
+        bump! = {
+          n <- n + 1
+          return n
+        }
+        x Integer = bump!()
+        return x
+      }
+      return n
+    }
+    @read = {
+      return n
+    }
+  `;
+  const call = (op, c, re) => expectBehavior(script,
+    { input: { id: '1', op: [[c], op], 'bv-a': [['Boolean']], from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re, to: 'c' }) },
+  );
+
+  it('runs, with a param named like an outer name', () => call('@inBranch', true, [5, 11]));
+  it('the path that skips it', () => call('@inBranch', false, [5]));
+  it('returns its call', () => call('@returned', true, [11]));
+  it('returns past it', () => call('@returned', false, [0]));
+  it('binds its call untyped', () => call('@untyped', true, [11]));
+  it('works in arrow form', () => call('@arrow', true, [11]));
+  it('captures outer and branch names', () => call('@captures', true, [17]));
+  it('works in an else branch', () => call('@inElse', false, [11]));
+  it('separate branches keep their own: then', () => call('@siblings', true, [11]));
+  it('separate branches keep their own: else', () => call('@siblings', false, [12]));
+  it('can be called from a nested branch', () => call('@calledInNested', true, [11]));
+  it('works in a loop body', () => call('@inLoop', true, [11]));
+  it('can write a cell', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], '@writes!'], 'bv-a': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+      { input: { id: '2', op: '@read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [1], to: 'c' }) },
     );
   });
 });
@@ -1055,21 +1292,54 @@ describe('if — compile errors', () => {
       }
     `)).toThrow(rebindError);
   });
-  it('allows a typed shadow, a name of its own, and rebinding it', () => {
+  it('a typed bind on an outer name → compile error', () => {
     expect(() => compileSource(`
       @test = (c Boolean) {
         r = 5
         if c {
           r Integer = 2
-          s = 3
-          s = s + 1
-          return s
+          return r
         }
         return r
       }
-    `)).not.toThrow();
+    `)).toThrow(rebindError);
   });
-  it('allows a name first bound after the block', () => {
+  it('a typed destructure on an outer name → compile error', () => {
+    expect(() => compileSource(`
+      f = { return 1, 2 }
+      @test = (c Boolean) {
+        r = 5
+        if c {
+          (r Integer, s Integer) = f()
+        }
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a cell declared in a block on an outer name → compile error', () => {
+    expect(() => compileSource(`
+      @test = (c Boolean) {
+        r = 5
+        if c {
+          r *Integer = 2
+        }
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a typed bind in a loop body → compile error', () => {
+    expect(() => compileSource(`
+      @test = (c Boolean) {
+        r Integer = 5
+        repeat while c {
+          r Integer = 2
+          return r
+        }
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a name bound after the block → compile error', () => {
     expect(() => compileSource(`
       @test = (c Boolean) {
         if c {
@@ -1077,6 +1347,93 @@ describe('if — compile errors', () => {
           return r
         }
         r = 5
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a name bound after the block with a type → compile error', () => {
+    expect(() => compileSource(`
+      @test = (c Boolean) {
+        if c { r Integer = 2 }
+        r Integer = 5
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a local of an assigned function on an outer name → compile error', () => {
+    expect(() => compileSource(`
+      @test = {
+        r = 5
+        f = {
+          r = 2
+          return r
+        }
+        return f()
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a local of a function on a name bound after it → compile error', () => {
+    expect(() => compileSource(`
+      @test = {
+        f = (a) {
+          r = a + 1
+          return :r
+        }
+        :r = f(5)
+        return :r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a local of an inline function on an outer name → compile error', () => {
+    expect(() => compileSource(`
+      @test = {
+        r = 5
+        return run({
+          r = 2
+          return r
+        })
+      }
+      run = (f) { return f() }
+    `)).toThrow(rebindError);
+  });
+  it('a local of a handler on a name from the file → compile error', () => {
+    expect(() => compileSource(`
+      r = 5
+      @test = {
+        r = 2
+        return r
+      }
+    `)).toThrow(rebindError);
+  });
+  it('a block in a function binding that function\'s param → compile error', () => {
+    expect(() => compileSource(`
+      @test = (c Boolean) {
+        f = (r Integer) {
+          if c { r = 2 }
+          return r
+        }
+        return f(1)
+      }
+    `)).toThrow(rebindError);
+  });
+  it('setting a param named like a cell → compile error', () => {
+    expect(() => compileSource(`
+      r *Integer = 1
+      @test = (r Integer) {
+        r <- 2
+        return r
+      }
+    `)).toThrow(/cannot set 'r'/i);
+  });
+  it('allows a name of its own, and rebinding it', () => {
+    expect(() => compileSource(`
+      @test = (c Boolean) {
+        r = 5
+        if c {
+          s Integer = 3
+          s = s + 1
+          return s
+        }
         return r
       }
     `)).not.toThrow();
@@ -1094,15 +1451,15 @@ describe('if — compile errors', () => {
       }
     `)).not.toThrow();
   });
-  it('allows a function param named like an outer name', () => {
+  it('allows a key that matches a name bound after the function', () => {
     expect(() => compileSource(`
-      @test = (c Boolean) {
-        r = 5
-        f = (r Integer) {
-          r = r + 1
-          return r
+      @test = {
+        f = (a) {
+          y = a + 1
+          return x: y
         }
-        return f(r)
+        :x = f(5)
+        return :x
       }
     `)).not.toThrow();
   });

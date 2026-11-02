@@ -49,8 +49,8 @@ const lambdaSingleValue = `
     @sigil
       =
       fn = (a) { x = a + 1; :x }
-      :x = fn(5)
-      return :x
+      x: n = fn(5)
+      return x: n
 `;
 
 describe('implicit return — single value', () => {
@@ -160,14 +160,14 @@ const lambdaMultiValue = `
     @structSigils
       =
       fn = (a, b) { x = a + 1; y = b + 2; :x, :y }
-      :x, :y = fn(3, 4)
-      return :x, :y
+      x: m, y: n = fn(3, 4)
+      return x: m, y: n
 
     @structSigilsParens
       =
       fn = (a, b) { x = a + 1; y = b + 2; (:x, :y) }
-      :x, :y = fn(3, 4)
-      return :x, :y
+      x: m, y: n = fn(3, 4)
+      return x: m, y: n
 `;
 
 describe('implicit return — positional lists', () => {

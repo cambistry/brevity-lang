@@ -75,11 +75,11 @@ describe("function — all forms", () => {
       result Integer = fn(3)
       return :result
 
-    @closureShadow
+    @closureOwnName
       =
       x Integer = 10
       fn = {
-        x Integer = 99
+        y Integer = 99
       }
       result Integer = fn()
       return :x, :result
@@ -237,10 +237,10 @@ describe("function — all forms", () => {
     );
   });
 
-  it("function body shadows outer variable; outer unchanged", async () => {
+  it("a function's own name leaves the outer variable unchanged", async () => {
     await expectBehavior(
       script,
-      { input: { id: "9", op: "@closureShadow", from: "c" } },
+      { input: { id: "9", op: "@closureOwnName", from: "c" } },
       {
         output: {
           id: "9",
