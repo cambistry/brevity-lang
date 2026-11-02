@@ -74,6 +74,14 @@ const METHOD_REGISTRY = {
  * Infer the Brevity type of an expression from its AST node and a type
  * environment (Map<name, typeName>).  Returns the type string or null.
  */
+// Records what a block-local bind makes its name, in the block's own copy of the
+// env. A value that can't be inferred leaves no entry, not the outer name's type.
+export function bindLocalType(env, s) {
+  const type = s.type === 'TypedAssign' ? s.typeName : inferExprType(s.value, env);
+  if (type) env.set(s.name, type);
+  else env.delete(s.name);
+}
+
 export function inferExprType(expr, typeEnv) {
   if (!expr) return null;
 

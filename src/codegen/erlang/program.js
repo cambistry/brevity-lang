@@ -5,9 +5,11 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import { erlCellNotifyLines } from './expressions.js';
+import { bindLocalType } from '../../inference.js';
 import {
   buildTypeEnv,
   buildSSAEnv,
+  branchSSAEnv,
   resolveSSAName,
 } from './types.js';
 import {
@@ -99,49 +101,57 @@ function fileChildRefs(ctx) {
 function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet) {
   const replyCtx = { ...sCtx, stmtIdx: 99999 };
 
-  function genBranchBody(branchBody, indent) {
+  function genBranchBody(branchBody, indent, scope) {
     const branchGuards = branchBody.filter(s =>
       s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
     );
     if (branchGuards.length > 0) {
       const branchTermRet = branchBody.find(s => s.type === 'Return');
       const branchFinal = branchTermRet
-        ? () => makeRet(branchTermRet.fields)
+        ? () => makeRet(branchTermRet.fields, scope)
         : makeFinalRet;
-      return buildLevel(branchGuards, 0, indent, branchFinal);
+      return buildLevel(branchGuards, 0, indent, branchFinal, scope);
     }
     const termRet = branchBody.find(s => s.type === 'Return');
-    return termRet ? makeRet(termRet.fields) : null;
+    return termRet ? makeRet(termRet.fields, scope) : null;
   }
 
   // Writes and calls: what a branch does before it returns or falls through.
-  function branchEffects(branchBody, indent) {
+  // The rest of the branch reads through `scope`, which sees what these bind.
+  function genBranch(branchBody, indent, outer, otherwise) {
     const effects = branchBody.filter(s => s.type !== 'Return' &&
       !(s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr)));
-    return effects.length ? genLocals(ctx, effects, typeEnv, { ...replyCtx, inBranch: true }, indent).map(l => `${l.trim()}\n${indent}`).join('') : '';
+    const stmtIdx = outer.stmtIdx + 1;
+    const ssaEnv = branchSSAEnv(ctx, effects, outer.stmtIdx, outer.ssaEnv);
+    const code = effects.length ? genLocals(ctx, effects, outer.typeEnv, { ...outer, stmtIdx, ssaEnv, inBranch: true }, indent).map(l => `${l.trim()}\n${indent}`).join('') : '';
+    const branchEnv = new Map(outer.typeEnv);
+    for (const s of effects) if (s.type === 'TypedAssign' || s.type === 'Assign') bindLocalType(branchEnv, s);
+    const scope = { ...outer, stmtIdx: stmtIdx + effects.length, ssaEnv, typeEnv: branchEnv };
+    return code + (genBranchBody(branchBody, indent, scope) ?? otherwise());
   }
 
-  function buildLevel(guardsList, idx, indent, fallthrough) {
+  function buildLevel(guardsList, idx, indent, fallthrough, scope) {
     if (idx >= guardsList.length) return fallthrough();
     const ii = indent + '    ';
     const { expr: ifExpr } = guardsList[idx];
-    const condExpr = genExpr(ctx, ifExpr.cond, typeEnv, replyCtx);
+    const condExpr = genExpr(ctx, ifExpr.cond, scope.typeEnv, scope);
 
     const thenBody = ifExpr.then?.body || [];
     const elseBranch = ifExpr.else;
     const elseBody = elseBranch?.body || [];
 
-    const trueExpr = branchEffects(thenBody, ii) + (genBranchBody(thenBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough));
+    const next = () => buildLevel(guardsList, idx + 1, ii, fallthrough, scope);
+    const trueExpr = genBranch(thenBody, ii, scope, next);
     const falseExpr = elseBranch?.type === 'IfExpr'
-      ? buildLevel([{ expr: elseBranch }], 0, ii, () => buildLevel(guardsList, idx + 1, ii, fallthrough))
+      ? buildLevel([{ expr: elseBranch }], 0, ii, next, scope)
       : elseBranch
-      ? branchEffects(elseBody, ii) + (genBranchBody(elseBody, ii) ?? buildLevel(guardsList, idx + 1, ii, fallthrough))
-      : buildLevel(guardsList, idx + 1, ii, fallthrough);
+      ? genBranch(elseBody, ii, scope, next)
+      : next();
 
     return `case is_truthy(${condExpr}) of\n${ii}true -> ${trueExpr};\n${ii}false -> ${falseExpr}\n${indent}end`;
   }
 
-  return buildLevel(guards, 0, I, makeFinalRet);
+  return buildLevel(guards, 0, I, makeFinalRet, { ...replyCtx, typeEnv });
 }
 
 // makeRet callback for genFn context: returns {[posVals], #{namedPairs}}
@@ -156,7 +166,7 @@ function makeErlFnRet(ctx, fields, typeEnv, replyCtx) {
     return 'null';
   });
   const namedPairs = named.map(f => {
-    if ('sigil' in f) return `${erlString(f.sigil)} => ${erlVarName(f.sigil)}`;
+    if ('sigil' in f) return `${erlString(f.sigil)} => ${genExpr(ctx, { type: 'Identifier', name: f.sigil }, typeEnv, replyCtx)}`;
     if (f.key !== undefined) return `${erlString(f.key)} => ${genExpr(ctx, f.value, typeEnv, replyCtx)}`;
     return '';
   }).filter(Boolean);
@@ -169,15 +179,16 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
   if (fields.some(f => f.spread)) return `{ok, ${genReplyBody(ctx, fields, typeEnv, replyCtx)}, null}`;
   if (fields[0]?.selfReturn) return `{ok, ${genReplyBody(ctx, fields, typeEnv, replyCtx)}, ${genBvaBody(ctx, fields, typeEnv, replyCtx)}}`;
   const pos = fields.filter(f => f.positional);
-  const named = fields.filter(f => !f.positional && f.key !== undefined);
+  const named = fields.filter(f => !f.positional && (f.key !== undefined || 'sigil' in f));
   if (named.length > 0 && pos.length === 0) {
     const namedPairs = named.map(f => {
+      if ('sigil' in f) return `${erlString(f.sigil)} => ${genExpr(ctx, { type: 'Identifier', name: f.sigil }, typeEnv, replyCtx)}`;
       const val = f.value !== undefined
         ? genExpr(ctx, f.value, typeEnv, replyCtx)
         : (f.expr ? genExpr(ctx, f.expr, typeEnv, replyCtx) : 'null');
       return `${erlString(f.key)} => ${val}`;
     });
-    return `{ok, #{${namedPairs.join(', ')}}, null}`;
+    return `{ok, #{${namedPairs.join(', ')}}, ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
   }
   const posVals = pos.map(f => {
     if (f.expr) return genExpr(ctx, f.expr, typeEnv, replyCtx);
@@ -240,7 +251,7 @@ function genFn(ctx, fn) {
   const savedWhileEarlyThrow = ctx.whileEarlyThrow;
   if (fnHasEarlyWhile) {
     const throwCtx = { ...sCtx, stmtIdx: body.length };
-    ctx.whileEarlyThrow = (fields) => makeErlFnReturnThrow(ctx, fields, typeEnv, throwCtx);
+    ctx.whileEarlyThrow = (fields, scope) => makeErlFnReturnThrow(ctx, fields, scope?.typeEnv ?? typeEnv, scope ? { ...throwCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv } : throwCtx);
   }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   ctx.whileEarlyThrow = savedWhileEarlyThrow;
@@ -256,7 +267,7 @@ function genFn(ctx, fn) {
 
   if (erlGuards.length > 0) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
-    const makeRet = (fields) => makeErlFnRet(ctx, fields, typeEnv, replyCtx);
+    const makeRet = (fields, scope) => makeErlFnRet(ctx, fields, scope.typeEnv, { ...replyCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv });
 
     let makeFinalRet;
     if (reply) {
@@ -542,7 +553,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   const savedWhileEarlyThrow = ctx.whileEarlyThrow;
   if (opHasEarlyWhile) {
     const throwCtx = { ...sCtx, stmtIdx: body.length };
-    ctx.whileEarlyThrow = (fields) => makeErlOpReturnThrow(ctx, fields, typeEnv, throwCtx);
+    ctx.whileEarlyThrow = (fields, scope) => makeErlOpReturnThrow(ctx, fields, scope?.typeEnv ?? typeEnv, scope ? { ...throwCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv } : throwCtx);
   }
   const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
   ctx.whileEarlyThrow = savedWhileEarlyThrow;
@@ -604,7 +615,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     replyBlock = `${I}{ok, bv_publish_(${erlString(selector)}, ${inst}), ${erlString(`#<@${selector}>`)}}`;
   } else if (erlGuards.length > 0) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
-    const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
+    const makeRet = (fields, scope) => makeErlDispatchRet(ctx, fields, scope.typeEnv, { ...replyCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv });
 
     // When a leading guard owns the assignments, the case's `false` branch
     // emits them as a comma-sequenced prefix before the final return.
@@ -1267,7 +1278,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const savedWhileEarlyThrow = ctx.whileEarlyThrow;
     if (lambdaHasEarlyWhile) {
       const throwCtx = { ...sCtx, stmtIdx: body.length };
-      ctx.whileEarlyThrow = (fields) => makeErlOpReturnThrow(ctx, fields, typeEnv, throwCtx);
+      ctx.whileEarlyThrow = (fields, scope) => makeErlOpReturnThrow(ctx, fields, scope?.typeEnv ?? typeEnv, scope ? { ...throwCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv } : throwCtx);
     }
     const localLines = genLocals(ctx, body, typeEnv, sCtx, I);
     ctx.whileEarlyThrow = savedWhileEarlyThrow;
@@ -1287,7 +1298,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
     if (erlGuards.length > 0) {
       const replyCtx = { ...sCtx, stmtIdx: body.length };
-      const makeRet = (fields) => makeErlDispatchRet(ctx, fields, typeEnv, replyCtx);
+      const makeRet = (fields, scope) => makeErlDispatchRet(ctx, fields, scope.typeEnv, { ...replyCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv });
       let makeFinalRet;
       if (reply) {
         const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);

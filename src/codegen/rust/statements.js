@@ -11,7 +11,7 @@ import { intToValue, valueArray } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
-  genRustCondition, isRustGuardIf, buildRustGuardChainExpr,
+  genRustCondition, isRustGuardIf, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind,
   refFieldInvocationRust, refAddrExpr,
 } from './expressions.js';
 
@@ -968,7 +968,7 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
         handleTypedAssign_IfExpr(s, typeEnv, I, lines);
       } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
         handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns);
-      } else if (s.typeName === 'Object') {
+      } else if (s.typeName === 'Object' && !(s.value.type === 'FunctionCallExpr' && fnDefs.has(s.value.callee?.name))) {
         handleTypedAssign_ObjectType(s, typeEnv, sCtx, I, lines);
       } else if (s.value.type === 'ObjectConstructor') {
         handleTypedAssign_ObjectConstructor(s, typeEnv, I, lines);
@@ -2789,23 +2789,20 @@ function buildWhileGuardBlock(ifExpr, typeEnv, indent, makeRetExpr, retKeyword) 
   const II = I + '    ';
   const cond = genRustCondition(ifExpr.cond, typeEnv, {});
 
-  function genBranchLines(branchBody, branchIndent) {
+  const genBranchLines = (branchBody, branchIndent) => inRustBranchScope(() => {
     const out = [];
+    const env = new Map(typeEnv);
     for (const s of branchBody) {
       if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr)) {
-        out.push(buildWhileGuardBlock(s.expr, typeEnv, branchIndent, makeRetExpr, retKeyword));
+        out.push(buildWhileGuardBlock(s.expr, env, branchIndent, makeRetExpr, retKeyword));
       } else if (s.type === 'Return') {
-        out.push(`${branchIndent}${retKeyword} ${makeRetExpr(s.fields, typeEnv)};`);
-      } else if (s.type === 'TypedAssign') {
-        const val = genRustExpr(s.value, typeEnv);
-        out.push(`${branchIndent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
-      } else if (s.type === 'Assign') {
-        const val = genRustExpr(s.value, typeEnv);
-        out.push(`${branchIndent}let ${rustIdent(s.name)} = ${val};`);
+        out.push(`${branchIndent}${retKeyword} ${makeRetExpr(s.fields, env)};`);
+      } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+        out.push(genRustBranchBind(s, env, branchIndent));
       }
     }
     return out.join('\n');
-  }
+  });
 
   const thenLines = genBranchLines(ifExpr.then?.body || [], II);
   let elseSection = '';

@@ -9,7 +9,7 @@ import { inferExprType } from '../../inference.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
-  genRustCondition, isRustGuardIf,
+  genRustCondition, isRustGuardIf, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall,
   rustCellNotifyLines,
 } from './expressions.js';
 import {
@@ -131,11 +131,11 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const hasLeadingGuard = body.length > 0 && body[0] === guards[0];
   let leadingGuardLines = null;
   let trailingGuards = guards;
-  function makeReturnLines(returnFields, branchIndent) {
+  function makeReturnLines(returnFields, branchIndent, branchEnv = typeEnv) {
     // An early exit from a silent handler sends no reply.
     if (hasSilent) return `${branchIndent}return (None, None, true);`;
-    const reBody = genRustReBody(returnFields, typeEnv, refNames);
-    const bvaBody = genRustBvaBody(returnFields, typeEnv, refNames);
+    const reBody = genRustReBody(returnFields, branchEnv, refNames);
+    const bvaBody = genRustBvaBody(returnFields, branchEnv, refNames);
     const out = [];
     out.push(`${branchIndent}re = Some(${reBody});`);
     if (bvaBody) out.push(`${branchIndent}bva_re = Some(${bvaBody});`);
@@ -192,6 +192,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
           if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
             const fnNode = localFn.node;
             const fnBody = fnNode.body || [];
+            if (precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, `_pvfn_${precomputeIdx}`, lines)) { precomputeIdx++; return; }
             const fnReply = fnBody.find(s => s.type === 'Reply');
             let implRet = fnBody.find(s => s.type === 'ImplicitReturn');
             if (!implRet && !fnReply && fnBody.length > 0 && fnBody[fnBody.length - 1].type === 'ExprStatement') {
@@ -407,29 +408,26 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         const termReturn = fnNode.body.find(s => s.type === 'Return');
         const I = '                ';
 
-        function makeReturnFromFields(fields) {
+        function makeReturnFromFields(fields, env = capTypeEnv) {
           const refNames = new Set();
-          const reBody = genRustReBody(fields, capTypeEnv, refNames);
+          const reBody = genRustReBody(fields, env, refNames);
           return `re = Some(${reBody}); handled = true; return (re, bva_re, handled);`;
         }
 
-        function genBranchLines(branchBody, branchIndent) {
+        const genBranchLines = (branchBody, branchIndent) => inRustBranchScope(() => {
           const out = [];
+          const env = new Map(capTypeEnv);
           for (const bs of branchBody) {
             if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
               out.push(genGuardBlock(bs.expr, branchIndent));
             } else if (bs.type === 'Return') {
-              out.push(`${branchIndent}${makeReturnFromFields(bs.fields)}`);
-            } else if (bs.type === 'TypedAssign') {
-              const val = genRustExpr(bs.value, capTypeEnv);
-              out.push(`${branchIndent}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-            } else if (bs.type === 'Assign') {
-              const val = genRustExpr(bs.value, capTypeEnv);
-              out.push(`${branchIndent}let ${rustIdent(bs.name)} = ${val};`);
+              out.push(`${branchIndent}${makeReturnFromFields(bs.fields, env)}`);
+            } else if (bs.type === 'TypedAssign' || bs.type === 'Assign') {
+              out.push(genRustBranchBind(bs, env, branchIndent));
             }
           }
           return out.join('\n');
-        }
+        });
 
         function genGuardBlock(ifExpr, blockIndent) {
           const bI = blockIndent;
@@ -544,38 +542,25 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
 function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
   const bII = bI + '    ';
   const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
-  const branch = (branchBody) => {
+  const branch = (branchBody) => inRustBranchScope(() => {
     const out = [];
-    const savedScope = G.ctx.ssaScope;
-    const savedCounts = G.ctx.ssaCounts;
-    G.ctx.ssaScope = new Map(savedScope);
-    G.ctx.ssaCounts = new Map(savedCounts);
-    const walk = (bs) => genRustLocals([bs], typeEnv, analyzeFunctions([bs], new Set(), typeEnv), findMutableVars([bs]), bII, undefined, null, enclosing);
+    const env = new Map(typeEnv);
+    const walk = (bs) => genRustLocals([bs], env, analyzeFunctions([bs], new Set(), env), findMutableVars([bs]), bII, undefined, null, enclosing);
     for (const bs of branchBody) {
-      if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && (bs.value?.type === 'DotCallExpr' || bs.value?.type === 'DotAccessExpr')) {
-        // A call waits for its reply, as it does outside a branch.
-        const code = walk(bs);
-        if (code) out.push(code);
-      } else if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
-        out.push(rustGuardBlock(bs.expr, bII, typeEnv, makeReturnLines));
+      if (bs.type === 'ImplicitReturn' && bs.expr?.type === 'IfExpr' && isRustGuardIf(bs.expr)) {
+        out.push(rustGuardBlock(bs.expr, bII, env, makeReturnLines));
       } else if (bs.type === 'Return') {
-        out.push(makeReturnLines(bs.fields, bII));
-      } else if (bs.type === 'TypedAssign') {
-        const val = genRustExpr(bs.value, typeEnv);
-        out.push(`${bII}let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${val};`);
-      } else if (bs.type === 'Assign') {
-        const val = genRustExpr(bs.value, typeEnv);
-        out.push(`${bII}let ${rustIdent(bs.name)} = ${val};`);
+        out.push(makeReturnLines(bs.fields, bII, env));
+      } else if (bs.type === 'TypedAssign' || bs.type === 'Assign') {
+        out.push(genRustBranchBind(bs, env, bII));
       } else {
         // Writes and calls: anything else a branch does before it returns.
         const code = walk(bs);
         if (code) out.push(code);
       }
     }
-    G.ctx.ssaScope = savedScope;
-    G.ctx.ssaCounts = savedCounts;
     return out.join('\n');
-  };
+  });
   const cond = genRustCondition(ifExpr.cond, typeEnv, {});
   const thenLines = branch(ifExpr.then?.body || []);
   let elseSection = '';
@@ -620,7 +605,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
   };
   const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
   G.ctx.enclosingLocals = null;
-  const genChildGuard = (g) => rustGuardBlock(g.expr, '                ', typeEnv, (fields, bI) => `${bI}return ${childReply(fields, typeEnv)};`);
+  const genChildGuard = (g) => rustGuardBlock(g.expr, '                ', typeEnv, (fields, bI, env = typeEnv) => `${bI}return ${childReply(fields, env)};`);
   const leadingChildGuard = body[0] === childGuards[0] ? childGuards[0] : null;
   if (leadingChildGuard) lines.push(genChildGuard(leadingChildGuard));
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, undefined, childReply);
@@ -652,6 +637,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map()) {
         if (localFn && !G.ctx.actorFnNames.has(calleeName)) {
           const fnNode = localFn.node;
           const fnBody = fnNode.body || [];
+          if (precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, `_pvfn_${precomputeIdx}`, lines)) { precomputeIdx++; return; }
           let implRet = fnBody.find(s => s.type === 'ImplicitReturn');
           if (!implRet && fnBody.length > 0 && fnBody[fnBody.length - 1].type === 'ExprStatement') {
             implRet = { expr: fnBody[fnBody.length - 1].expr };

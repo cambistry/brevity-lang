@@ -1,7 +1,7 @@
 // expressions.js — Expression generation for Rust codegen
-import { inferExprType } from '../../inference.js';
+import { inferExprType, bindLocalType } from '../../inference.js';
 import {
-  G, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue, toJsonValue,
+  G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
   classNeedsSpawnedInstances, rustTypeTag, rustTypeWireWrap,
@@ -1453,6 +1453,48 @@ function isRustGuardIf(ifExpr) {
 // produced by `makeValExpr(fields, typeEnv)`. Used for inlined call sites
 // where `return` is unavailable. `guards` are ImplicitReturn(IfExpr) nodes
 // (block-body guards), `terminal` is the fallthrough Return node (or null).
+// A branch's binds are its own: reads inside it see them, and the enclosing
+// names are back when it ends.
+function inRustBranchScope(gen) {
+  const savedScope = G.ctx.ssaScope;
+  const savedCounts = G.ctx.ssaCounts;
+  G.ctx.ssaScope = new Map(savedScope ?? []);
+  G.ctx.ssaCounts = new Map(savedCounts ?? []);
+  const code = gen();
+  G.ctx.ssaScope = savedScope;
+  G.ctx.ssaCounts = savedCounts;
+  return code;
+}
+
+// The value is generated first, so `r = r + 1` reads the enclosing `r`.
+// `typeEnv` is the branch's own copy, and the bind updates it.
+function genRustBranchBind(s, typeEnv, indent) {
+  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr') {
+    // A call waits for its reply, as it does outside a branch.
+    const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
+    const code = genRustLocals([s], typeEnv, analyzeFunctions([s], new Set(), typeEnv), findMutableVars([s]), indent, undefined, null, enclosing);
+    bindLocalType(typeEnv, s);
+    return code;
+  }
+  let val = genRustExpr(s.value, typeEnv);
+  bindLocalType(typeEnv, s);
+  if (s.type !== 'TypedAssign') return `${indent}let ${mintRustSsa(s.name)} = ${val};`;
+  if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+  return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`;
+}
+
+// A local function with a branch returns from inside it, so its call is a block
+// with its params bound: the same as binding the call and reading the reply.
+function precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, tmpVar, lines, indent = '                ') {
+  if (!fnBody.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr))) return false;
+  const bind = { type: 'TypedAssign', name: tmpVar, typeName: 'Object', value: expr };
+  const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
+  const analysis = { fnDefs: functionAnalysis.fnDefs, skipSet: new Set(), capturePoints: new Map() };
+  lines.push(genRustLocals([bind], typeEnv, analysis, findMutableVars([bind]), indent, undefined, null, enclosing));
+  expr._precomputed = `${rustSsaResolve(tmpVar)}.one()`;
+  return true;
+}
+
 function buildRustGuardChainExpr(guards, terminal, typeEnv, indent, makeValExpr) {
   if (guards.length === 0) {
     if (terminal) return makeValExpr(terminal.fields, typeEnv);
@@ -1470,7 +1512,13 @@ function buildRustGuardChainExpr(guards, terminal, typeEnv, indent, makeValExpr)
       s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr),
     );
     const branchTerm = (branchBody || []).find(s => s.type === 'Return') || null;
-    return buildRustGuardChainExpr(branchGuards, branchTerm, typeEnv, branchIndent, makeValExpr);
+    return inRustBranchScope(() => {
+      const env = new Map(typeEnv);
+      const binds = (branchBody || []).filter(s => s.type === 'TypedAssign' || s.type === 'Assign')
+        .map(s => genRustBranchBind(s, env, branchIndent));
+      const value = buildRustGuardChainExpr(branchGuards, branchTerm, env, branchIndent, makeValExpr);
+      return binds.length ? `{\n${binds.join('\n')}\n${branchIndent}${value}\n${I}}` : value;
+    });
   }
 
   const thenExpr = branchExpr(ifExpr.then?.body || [], II);
@@ -1497,23 +1545,20 @@ function buildRustGuardBlock(ifExpr, typeEnv, indent, makeRetExpr) {
   const II = I + '    ';
   const cond = genRustCondition(ifExpr.cond, typeEnv, {});
 
-  function genBranchLines(branchBody, branchIndent) {
+  const genBranchLines = (branchBody, branchIndent) => inRustBranchScope(() => {
     const lines = [];
+    const env = new Map(typeEnv);
     for (const s of branchBody) {
       if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr)) {
-        lines.push(buildRustGuardBlock(s.expr, typeEnv, branchIndent, makeRetExpr));
+        lines.push(buildRustGuardBlock(s.expr, env, branchIndent, makeRetExpr));
       } else if (s.type === 'Return') {
-        lines.push(`${branchIndent}return ${makeRetExpr(s.fields, typeEnv)};`);
-      } else if (s.type === 'TypedAssign') {
-        const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${branchIndent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
-      } else if (s.type === 'Assign') {
-        const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${branchIndent}let ${rustIdent(s.name)} = ${val};`);
+        lines.push(`${branchIndent}return ${makeRetExpr(s.fields, env)};`);
+      } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+        lines.push(genRustBranchBind(s, env, branchIndent));
       }
     }
     return lines.join('\n');
-  }
+  });
 
   const thenLines = genBranchLines(ifExpr.then?.body || [], II);
   let elseSection = '';
@@ -1569,6 +1614,12 @@ function genRustFnMethod({ name: op, params, body }) {
   const guardLines = trailingGuards.length > 0
     ? trailingGuards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
     : '';
+  const fnCallLines = [];
+  (reply?.fields ?? []).forEach((f, idx) => {
+    const e = f.expr || f.value;
+    const local = e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' ? functionAnalysis.fnDefs.get(e.callee.name) : null;
+    if (local) precomputeGuardedFnCall(e, local.node.body || [], typeEnv, functionAnalysis, `_pvfn_${idx}`, fnCallLines, I);
+  });
   const retExpr = reply ? genRustFnReturn(reply.fields, typeEnv) : 'BvObject::empty()';
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
@@ -1578,6 +1629,7 @@ function genRustFnMethod({ name: op, params, body }) {
   if (leadingGuardLines) bodyLines.push(leadingGuardLines);
   if (locals) bodyLines.push(locals);
   if (guardLines) bodyLines.push(guardLines);
+  bodyLines.push(...fnCallLines);
   bodyLines.push(`${I}${retExpr}`);
 
   const fnBaseName = rustIdent(op);
@@ -1783,4 +1835,4 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 
 // Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
 
-export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr };
+export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall };

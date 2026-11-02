@@ -134,6 +134,20 @@ function buildSSAEnv(body) {
   return { counts, assignments };
 }
 
+// A branch's binds are its own. They get names no other branch uses, numbered
+// from just past stmtIdx, where the branch sits, so reads inside the branch see
+// them and reads outside don't. Binds later in the enclosing body aren't visible.
+function branchSSAEnv(ctx, body, stmtIdx, ssaEnv) {
+  const id = ctx.ifScopeCounter++;
+  const own = buildSSAEnv(body).assignments.map(a => ({
+    ...a,
+    stmtIdx: stmtIdx + 1 + a.stmtIdx,
+    ssaName: `${a.name}__b${id}_${a.ssaName.slice(a.name.length + 2)}`,
+  }));
+  const visible = (ssaEnv?.assignments ?? []).filter(a => a.stmtIdx <= stmtIdx);
+  return { counts: ssaEnv?.counts ?? new Map(), assignments: [...visible, ...own] };
+}
+
 function resolveSSAName(name, stmtIdx, ssaEnv) {
   // Find the most recent SSA assignment for `name` before stmtIdx
   let best = name; // default: first assignment
@@ -324,6 +338,7 @@ export {
   inferLiteralType,
   buildTypeEnv,
   buildSSAEnv,
+  branchSSAEnv,
   resolveSSAName,
   getSSANameForAssignment,
   exprType,

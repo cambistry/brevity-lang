@@ -2,9 +2,11 @@
 
 import { erlVarName, erlString, isListOfAnythingType, erlStateKey } from './preambles.js';
 import { returnsOnlySelf } from '../../chains.js';
+import { bindLocalType } from '../../inference.js';
 import {
   inferLiteralType,
   buildSSAEnv,
+  branchSSAEnv,
   resolveSSAName,
   getSSANameForAssignment,
   erlCollectFreeVars,
@@ -281,7 +283,13 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];
-    const stmtCtx = { ...sCtx, stmtIdx: sCtx.inBranch ? sCtx.stmtIdx + i : i, ssaEnv };
+    const stmtIdx = sCtx.inBranch ? sCtx.stmtIdx + i : i;
+    // A bind's value reads the names before it, so `r = r + 1` sees the old `r`.
+    // A function may name itself.
+    const readEnv = (s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type !== 'Function'
+      ? { ...ssaEnv, assignments: ssaEnv.assignments.filter(a => a.stmtIdx !== stmtIdx) }
+      : ssaEnv;
+    const stmtCtx = { ...sCtx, stmtIdx, ssaEnv: readEnv };
 
     {
       const catchCode = tryGenErlCatchOrLabelStmt(ctx, s, typeEnv, stmtCtx, I);
@@ -322,7 +330,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         continue;
       }
 
-      const ssaName = getSSANameForAssignment(s.name, i, ssaEnv);
+      const ssaName = getSSANameForAssignment(s.name, stmtIdx, ssaEnv);
       const varName = erlVarName(ssaName);
 
       // Self(args) — recursive spawn. Bind to a freshly-spawned PID running
@@ -894,21 +902,27 @@ function buildErlWhileGuardCase(ctx, ifExpr, typeEnv, sCtx, makeThrow) {
   function genBranchExpr(branchBody) {
     if (!Array.isArray(branchBody) || branchBody.length === 0) return 'null';
     const exprs = [];
-    for (const s of branchBody) {
+    const baseIdx = (sCtx.stmtIdx ?? 0) + 1;
+    const ssaEnv = branchSSAEnv(ctx, branchBody, baseIdx - 1, sCtx.ssaEnv);
+    const env = new Map(typeEnv);
+    branchBody.forEach((s, i) => {
+      const scope = { ...sCtx, stmtIdx: baseIdx + i, ssaEnv };
       if (s.type === 'Return') {
-        exprs.push(makeThrow(s.fields));
+        exprs.push(makeThrow(s.fields, { ...scope, typeEnv: env }));
       } else if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
-        exprs.push(buildErlWhileGuardCase(ctx, s.expr, typeEnv, sCtx, makeThrow));
-      } else if (s.type === 'TypedAssign') {
-        exprs.push(`${erlVarName(s.name)} = ${genExpr(ctx, s.value, typeEnv, sCtx)}`);
+        exprs.push(buildErlWhileGuardCase(ctx, s.expr, env, scope, makeThrow));
+      } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+        const bind = genLocals(ctx, [s], env, { ...scope, inBranch: true }, '');
+        exprs.push(bind.map(l => l.trim()).join(' ').replace(/,$/, ''));
+        bindLocalType(env, s);
       } else if (s.type === 'SetStatement') {
-        exprs.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+        exprs.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
       } else if (s.type === 'StateAssign') {
-        exprs.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
+        exprs.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
       } else if (s.type === 'ExprStatement') {
-        exprs.push(genExpr(ctx, s.expr, typeEnv, sCtx));
+        exprs.push(genExpr(ctx, s.expr, env, scope));
       }
-    }
+    });
     return exprs.length === 1 ? exprs[0] : `begin ${exprs.join(', ')} end`;
   }
 

@@ -103,12 +103,10 @@ param's tags came with the request.
   arithmetic, before `as` sees a value. Read from the generated code, not run.
 - **A public handler with an empty body** gets no param check on JS or Erlang, since a trailing check
   would become the reply. Rust's decode still fails, and JS's does for Integer.
-- **One reply tag across return paths on JS:** a handler with an early return tags every path from one
-  of its returns, so `if c { return "x" }; return 9` should tag `"x"` as Integer. Read from the
-  generated code, not run. A forwarded reply is exempt.
-- **A typed param with an honest wrong tag:** JS answers `unhandled`, because its type dispatch finds
-  no match. Rust and Erlang report `as Integer: got Text`. A tag that lies gives the message on all three.
-- **A failed `as` in a constructor block on Erlang** should still hang the caller, since
-  `bv_spawn_sync_` waits on a process that has died. Read from the code, not run.
+- **A failed `as` in a class's constructor block:** JS fails the call with `error`. Erlang ignores the
+  failure and the call succeeds. Rust's generated code doesn't build.
+- **A typed param with an honest wrong tag on an instance:** JS answers `unhandled`. Rust and Erlang
+  report `as Integer: got Text`. In a file handler, all three answer `unhandled`. A tag that lies gives
+  the message on all three.
 - **`Anything` params:** the separate bug where a param typed `Anything` refuses a `Text`-tagged
   argument is still open, so the Type tests go through a remote reply.

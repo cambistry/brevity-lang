@@ -250,10 +250,10 @@ function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
   };
   walk(rawBody);
   const forwards = (r) => r.fields?.some(f => f.localObject);
-  if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return bvaLine;
+  if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return `${bvaLine}\n        if (_fnResult.pathTag !== undefined) _bva_re = _fnResult.pathTag ?? undefined;`;
   const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn && !forwards(r));
   const other = valued ? genBvaBody(ctx, valued.fields, typeEnv) : null;
-  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : _fnResult.forwarded ? undefined : ${other ?? 'undefined'};`;
+  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : _fnResult.forwarded ? undefined : _fnResult.pathTag !== undefined ? _fnResult.pathTag ?? undefined : ${other ?? 'undefined'};`;
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -269,6 +269,8 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const { env: typeEnv } = buildTypeEnv(params, body, stateVarEnv, null, ctx.typeDecls);
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
+  const savedTypeEnv = ctx.currentTypeEnv;
+  ctx.currentTypeEnv = typeEnv;
   const locals = genLocals(ctx, body, typeEnv);
   let reLine;
   if (reply) {
@@ -286,6 +288,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   }
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
+  ctx.currentTypeEnv = savedTypeEnv;
   const jsName = methodNameFor(name);
   return `  async #${jsName}Fn(_s) {${destructure}${locals}
     let re;${reLine}

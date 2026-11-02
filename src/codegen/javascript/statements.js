@@ -1,10 +1,11 @@
 import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
+import { bindLocalType } from '../../inference.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genPackedReturn, typeTag,
+  genListDestructureAssign, genPackedReturn, genBvaBody, typeTag,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  jsIdent, mintSsaNameIn, stateKey,
+  jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey,
 } from './expressions.js';
 
 // Escape a string for use inside a #<...> wire address.
@@ -392,7 +393,39 @@ function branchBindValue(ctx, s) {
   return CALL_LIKE.has(s.value.type) ? `BvObject.one(${code}, ${JSON.stringify(s.name)})` : code;
 }
 
+// A block's binds are its own: reads inside it see them, and the enclosing
+// names are back when it ends. The counts stay shared, so every name is unique.
+function inBlockScope(ctx, gen) {
+  const saved = ctx.ssaScope;
+  const savedTypeEnv = ctx.currentTypeEnv;
+  if (saved) ctx.ssaScope = new Map(saved);
+  if (savedTypeEnv) ctx.currentTypeEnv = new Map(savedTypeEnv);
+  const code = gen();
+  ctx.ssaScope = saved;
+  ctx.currentTypeEnv = savedTypeEnv;
+  return code;
+}
+
+// The value is generated first, so `r = r + 1` reads the enclosing `r`.
+function genBlockBind(ctx, s) {
+  const value = branchBindValue(ctx, s);
+  if (ctx.currentTypeEnv) bindLocalType(ctx.currentTypeEnv, s);
+  return `const ${mintSsaName(ctx, s.name)} = ${value};`;
+}
+
+// A return in a branch reads the branch's names, so it carries its own tag.
+function genBranchReturn(ctx, fields) {
+  const packed = genPackedReturn(ctx, fields, ctx.currentTypeEnv);
+  if (fields[0]?.selfReturn || fields.some(f => f.localObject)) return packed;
+  const tag = genBvaBody(ctx, fields, ctx.currentTypeEnv) ?? 'null';
+  return `Object.assign(${packed}, { pathTag: ${tag} })`;
+}
+
 export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
+  return inBlockScope(ctx, () => genIfBlockStatements(ctx, body, tmpVar, _outerEnv));
+}
+
+function genIfBlockStatements(ctx, body, tmpVar, _outerEnv) {
   let code = '';
   let _rIdx = 0;
   let _innerIfIdx = 0;
@@ -403,10 +436,10 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     if (s.type === 'BareTypeDecl') continue;
     if (s.type === 'TypedAssign') {
       lastTypedName = s.name;
-      code += `\n        const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
+      code += `\n        ${genBlockBind(ctx, s)}`;
     } else if (s.type === 'Assign') {
       lastTypedName = null;
-      code += `\n        const ${jsIdent(s.name)} = ${branchBindValue(ctx, s)};`;
+      code += `\n        ${genBlockBind(ctx, s)}`;
     } else if (s.type === 'DestructureAssign') {
       lastTypedName = null;
       if (CALL_LIKE.has(s.source.type) || s.source.type === 'ObjectConstructor') {
@@ -443,7 +476,7 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
       code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
     } else if (s.type === 'Return') {
       lastTypedName = null;
-      code += `\n        return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
+      code += `\n        return ${genBranchReturn(ctx, s.fields)};`;
     } else if (s.type === 'SilentTerminator') {
       // Early exit from a silent function: no reply.
       lastTypedName = null;
@@ -451,7 +484,7 @@ export function genIfBlockBody(ctx, body, tmpVar, _outerEnv) {
     }
   }
   if (lastTypedName !== null) {
-    code += `\n        ${tmpVar} = ${lastTypedName};`;
+    code += `\n        ${tmpVar} = ${ssaResolve(ctx, lastTypedName)};`;
   }
   return code;
 }
