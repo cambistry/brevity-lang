@@ -218,12 +218,12 @@ describe('overload — mixed forms — runtime', () => {
 
     @testText
       =
-      :result Text = echo(msg: "hi")
+      :result Text = @echo(msg: "hi")
       return :result
 
     @testNumber
       =
-      :result Text = echo(msg: 42)
+      :result Text = @echo(msg: 42)
       return :result
   `;
 

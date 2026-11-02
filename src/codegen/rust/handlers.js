@@ -16,6 +16,9 @@ import {
   genRustLocals, genRustReBody, genRustBvaBody,
 } from './statements.js';
 
+// A param typed as a class of this file holds one of its actors.
+const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
+
 function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
   // Skip actorDef constructor clauses — dispatched via actor construction
   if (actorDef) return null;
@@ -151,7 +154,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   }
   if (leadingGuardLines) lines.push(leadingGuardLines);
 
+  G.ctx.classParams = classParamsOf(params);
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, fns, publicRetExpr);
+  G.ctx.classParams = null;
   if (locals) lines.push(locals);
 
   if (trailingGuards.length > 0) {
@@ -310,6 +315,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
 
   // `#new` carries no tags: the caller checked its args against the doc.
   if (name?.startsWith('new@')) guard = '';
+  // Outside, only `@name` is exposed.
+  const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@)/.test(name);
+  if (isPrivate) guard = guard ? ` if !bv_from_wire_caller(from) && (${guard.replace(/^ if /, '')})` : ' if !bv_from_wire_caller(from)';
   return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
@@ -643,7 +651,9 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   const genChildGuard = (g) => rustGuardBlock(g.expr, '                ', typeEnv, (fields, bI, env = typeEnv) => `${bI}return ${childReply(fields, env)};`);
   const leadingChildGuard = body[0] === childGuards[0] ? childGuards[0] : null;
   if (leadingChildGuard) lines.push(genChildGuard(leadingChildGuard));
+  G.ctx.classParams = classParamsOf(params);
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, undefined, undefined, childReply);
+  G.ctx.classParams = null;
   if (locals) lines.push(locals);
   for (const g of childGuards) if (g !== leadingChildGuard) lines.push(genChildGuard(g));
 
@@ -747,7 +757,8 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
-  return `            "${name}"${isPublic ? childTagGuard(fn) : ''} => {\n${lines.join('\n')}\n            }`;
+  // Outside, only `@name` is exposed.
+  return `            "${name}"${isPublic ? childTagGuard(fn) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
 }
 
 function tagWireReply(bvaBody) {

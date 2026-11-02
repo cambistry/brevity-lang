@@ -77,14 +77,12 @@ const CHAIN_ROOTS = { ExprStatement: 'expr', ImplicitReturn: 'expr', Assign: 'va
 // statement, so only a chain that's the statement's whole value can be lowered. The
 // caller reports any other.
 export function lowerSelfChains(program) {
-  const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name.replace(/^@/, ''), a]));
+  const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
+  const typeNames = new Set((program.types || []).map(t => t.name));
   for (const actor of program.actors) {
     const own = [...resolveSuperclassChain(classes, actor).inheritedFunctions, ...(actor.functions || [])]
       .filter(f => f.type === 'FunctionDecl' && typeof f.name === 'string' && !f.actorDef && !f.emptyOverload);
-    const overloads = (name) => {
-      const bare = name.replace(/^[@#]/, '');
-      return own.filter(f => (name === bare ? f.name.replace(/^[@#]/, '') === bare : f.name === name));
-    };
+    const overloads = (name) => own.filter(f => f.name === name);
 
     const asSelfCall = (node) => {
       const member = node.method ?? node.property;
@@ -128,25 +126,56 @@ export function lowerSelfChains(program) {
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, localFunctions);
     };
 
-    // A bare name reaches a public function, unless something nearer holds that name.
+    // `a`, `@a` and `#a` are different names, so a bare name reaches neither of the others.
     const fileNames = new Set([
       ...(actor.stateVarDecls || []).map(d => d.name),
       ...(actor.initParams || []).map(p => p.name),
       ...(actor.initBody || []).filter(s => s.name).map(s => s.name),
-      ...(program.dependencies || []).map(d => d.name),
+      ...(program.dependencies || []).flatMap(d => [d.name, ...(Array.isArray(d.destructures) ? d.destructures.map(e => e.local) : [])]),
       ...classes.keys(),
+      ...typeNames,
+      ...own.map(f => f.name),
     ]);
-    const nameBareCalls = (node, locals) => {
+    const declaredAs = (name) => {
+      if (classes.has('@' + name) || classes.get('@' + name.replace(/!$/, ''))?.sourceName === '@' + name) return `the public class is '@${name}'`;
+      if (overloads('@' + name).length) return `the public function is '@${name}'`;
+      if (overloads('#' + name).length) return `the function is '#${name}'`;
+      return null;
+    };
+    const checkBareCalls = (node, locals) => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(n => nameBareCalls(n, locals)); return; }
+      if (Array.isArray(node)) { node.forEach(n => checkBareCalls(n, locals)); return; }
       if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
         const { name } = node.callee;
-        if (!/^[@#]/.test(name) && !locals.has(name) && !fileNames.has(name) && overloads('@' + name).length && !own.some(f => f.name === name || f.name === '#' + name)) {
-          node.callee = { ...node.callee, name: '@' + name };
+        const declared = /^[@#]/.test(name) || locals.has(name) || fileNames.has(name) ? null : declaredAs(name);
+        if (declared) throw new Error(`'${name}' isn't in scope — ${declared}`);
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') checkBareCalls(v, locals);
+    };
+
+    // A public class is `@Name` as a superclass and a type too.
+    const checkTypeName = (type) => {
+      if (typeof type !== 'string') return;
+      for (const [word] of type.matchAll(/(?<![@\w])\w+/g)) {
+        if (classes.has('@' + word) && !classes.has(word) && !typeNames.has(word) && !fileNames.has(word)) {
+          throw new Error(`'${word}' isn't in scope — the public class is '@${word}'`);
         }
       }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') nameBareCalls(v, locals);
     };
+    const checkTypeNames = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(checkTypeNames); return; }
+      checkTypeName(node.typeName);
+      for (const p of Array.isArray(node.params) ? node.params : []) checkTypeName(p?.type);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') checkTypeNames(v);
+    };
+    for (const st of actor.supertypes || []) checkTypeName(st.supertype);
+    for (const p of actor.initParams || []) checkTypeName(p.type);
+    checkTypeNames(actor.functions);
+    checkTypeNames(actor.stateVarDecls);
+    checkTypeNames(actor.initBody);
+    checkBareCalls(actor.initBody, new Set());
+    checkBareCalls(actor.constructorBody, new Set());
 
     for (const fn of actor.functions || []) {
       const localFunctions = new Set();
@@ -162,7 +191,7 @@ export function lowerSelfChains(program) {
       };
       collect(fn.body);
       visit(fn.body, localFunctions);
-      nameBareCalls(fn.body, locals);
+      checkBareCalls(fn.body, locals);
     }
   }
 }

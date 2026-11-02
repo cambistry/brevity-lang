@@ -803,7 +803,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       // Identifier callee (untyped local, call-result local) routes through
       // call_fn, which returns a Value. Wrap with convertFromValue.
       const cn = s.value.callee.name;
-      if (cn && !G.ctx.actorInfo?.has(cn) && !G.ctx.publicFnNames?.has('@' + cn)
+      if (cn && !G.ctx.actorInfo?.has(cn)
           && !G.ctx.destructuredMembers?.has(cn) && !G.ctx.dependencyNames?.has(cn)) {
         return true;
       }
@@ -877,6 +877,9 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
     val = convertFromValue(val, s.typeName);
   } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead' || s.value.type === 'DotAccessExpr') && s.typeName && rustType(s.typeName) !== 'Value') {
     val = convertFromValue(val, s.typeName);
+  } else if (s.value.type === 'DotCallExpr' && val.startsWith('{ let _cn = ') && s.typeName && rustType(s.typeName) !== 'Value') {
+    // A call on a wrapped superclass answers with a Value.
+    val = convertFromValue(`BvObject::pack(&${val}).one()`, s.typeName);
   } else if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
   if (!isIterExpr2 && s.typeName && s.typeName.includes('|') && s.value.type !== 'NullLiteral' && s.value.type !== 'IfExpr') val = `bv_val(${val})`;
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`);
@@ -1202,13 +1205,9 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
             }
           }
-        } else if (calleeName && (G.ctx.actorFnNames.has(calleeName) || G.ctx.publicFnNames?.has('@' + calleeName))) {
-          // Public function call without @ prefix — route through self_send to @name
-          const effectiveSource = G.ctx.publicFnNames?.has('@' + calleeName) && !G.ctx.actorFnNames.has(calleeName)
-            ? { ...s.source, callee: { ...s.source.callee, name: '@' + calleeName } }
-            : s.source;
+        } else if (calleeName && G.ctx.actorFnNames.has(calleeName)) {
           const tempName = `_r${G.ctx.fnTempCounter++}`;
-          const callExpr = genRustFnCallExpr(effectiveSource, typeEnv);
+          const callExpr = genRustFnCallExpr(s.source, typeEnv);
           lines.push(`${I}let ${tempName} = ${callExpr};`);
           for (const item of s.pattern) {
             if (item.discard) continue;
@@ -1881,7 +1880,7 @@ function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
 // caller scopes what the branch binds.
 function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns, makeRetExpr = null, enclosing = null) {
   const { fnDefs, skipSet, capturePoints } = functionAnalysis;
-  const sCtx = enclosing || { childActorRefs: new Map() };
+  const sCtx = enclosing || { childActorRefs: new Map(), selfSpawnedRefs: new Map(G.ctx.classParams || []) };
   if (!enclosing) G.ctx.enclosingLocals = sCtx;
   const lines = [];
   const I = indent || '                ';

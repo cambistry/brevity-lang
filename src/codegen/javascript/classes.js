@@ -204,6 +204,8 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   } else {
     condition = `opName === "${name}"`;
   }
+  // Outside, only `@name` is exposed.
+  if (isPrivate) condition += ` && (from === '__parent' || from === '__self' || from === '__test' || from === '__emit')`;
   // set@<cell>: after mutation, replay the new value to each registered
   // subscriber using the stored id. Notification shape matches the getter
   // (positional `re` plus `bv-a` type tag). Additionally, for every public

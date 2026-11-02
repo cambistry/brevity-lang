@@ -50,7 +50,8 @@ class named with `!` keeps its literal name: `Svc @W!`.
   backend registers only actors made through `#new`, so an actor the file made for itself can't be
   reached by guessing its address.
 - **Lexer:** `:W!` lexes, for `(:W!)`.
-- **`useBareClassNames`** records `isPublic`, since it strips the `@` that said so.
+- **`useBareClassNames`** records `isPublic`, since it strips the `@` that said so. *Replaced by
+  `renamePublicClasses`: see [session-2026-11-02-at-names](session-2026-11-02-at-names.md).*
 - **`(:W)` stays in the destructure list,** flagged `isClass`, because a template's `<W>` is checked
   against that list, and collisions are still reported. It isn't a destructured member any more.
 - **The DOM takes the same path:** `div()` from `HTML: (:div)` now sends `#new` to `HTML @div`, which

@@ -20,7 +20,7 @@ const isUnnamedHandler = (name) =>
   /^@\d+$/.test(name) || name === 'set' || name === 'update' || name === 'as' || name.startsWith('set@') || name.startsWith('update@') || name.startsWith('subscribe');
 
 // Calls name a class bare, while a public class is declared with its `@`.
-const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name.replace(/^@/, ''), a]));
+const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
 const typeNameOf = (type) => (typeof type === 'string' ? type.trim().replace(/^[*&]/, '') : null);
 
@@ -222,7 +222,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       if (classes.has(name)) return classParams(classes.get(name));
       const dependency = ast.dependencies?.find(d => d.name === name);
       if (dependency) return dependency.constructorParams;
-      return loneParams(functions.filter(f => f.name === name || f.name === '@' + name || f.name === '#' + name));
+      return loneParams(functions.filter(f => f.name === name));
     };
     const methodParams = (object, method, scope) => {
       const rootName = object?.type === 'Identifier' || object?.type === 'RefRead' ? object.name : null;
@@ -370,7 +370,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       if (expr?.type === 'FunctionCallExpr') {
         const n = expr.callee?.name;
         if (!n || isSuffixed(n)) return false;
-        const own = functions.find(f => f.name === n || f.name === '#' + n);
+        const own = functions.find(f => f.name === n);
         return !!own && !yieldsNothing(own);
       }
       if (expr?.type === 'DotCallExpr' && !isSuffixed(expr.method)) {
@@ -478,7 +478,7 @@ export function purportedFunctions(ast, parseDoc) {
     if (node?.type === 'FunctionCallExpr') return node.callee?.name ?? null;
     if (node?.type === 'Identifier' || node?.type === 'RefRead') {
       const bare = node.name.replace(/^@/, '');
-      return known.get(bare) ?? (docClaims.has(bare) || classes.has(bare) ? bare : null);
+      return known.get(bare) ?? (classes.has(node.name) ? node.name : docClaims.has(bare) ? bare : null);
     }
     // A chain on a `!` call stays on its receiver.
     if ((node?.type === 'DotCallExpr' && node.method?.endsWith('!')) || (node?.type === 'DotAccessExpr' && node.property?.endsWith('!'))) {

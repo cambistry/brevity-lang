@@ -262,6 +262,8 @@ Writing tests for the docs work exposed two older bugs, on every target.
 
 ### Public classes are constructed by their bare name
 
+*Superseded by [session-2026-11-02-at-names](session-2026-11-02-at-names.md): `@Pub` and `Pub` are different classes.*
+
 `@Pub = *{…}` beside `Pub()` generated invalid output (`class @Pub`), since codegen stored the
 class with its `@` and looked it up without one. The `@` says the class is public, which only
 docs need. `useBareClassNames` in `src/subclass.js` strips it in place at the top of `compile()`, for

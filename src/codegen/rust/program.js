@@ -15,7 +15,7 @@ import {
   genRustDispatch,
   genRustChildMethods,
 } from './handlers.js';
-import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
+import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { genRustLocals } from './statements.js';
 
@@ -1689,7 +1689,8 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
         if let Some(addr) = _inst_addr {
             let (class, inst) = addr[1..].split_once('/').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
-            let child = format!("{}/{}", class, inst);
+            // Only a public class is published, and its identifier has this suffix.
+            let child = format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst);
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("to".to_string(), json!(from));

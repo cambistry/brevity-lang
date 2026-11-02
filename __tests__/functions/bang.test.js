@@ -430,11 +430,11 @@ describe('effect enforcement', () => {
   });
 
   it('a public parent is found: overriding its `!` needs no write', () => {
-    expect(() => compileSource('@P = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@U = (P |) *{ @g! = { return self } }\n')).not.toThrow();
+    expect(() => compileSource('@P = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@U = (@P |) *{ @g! = { return self } }\n')).not.toThrow();
   });
 
   it('a public class is found: writing a fresh actor of it is no write', () => {
-    expect(() => compileSource('@C = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@go = {\n  c = C()\n  c.g!()\n  return 1\n}\n')).not.toThrow();
+    expect(() => compileSource('@C = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@go = {\n  c = @C()\n  c.g!()\n  return 1\n}\n')).not.toThrow();
   });
 
   describe('discarded reads on typed receivers', () => {
@@ -577,19 +577,19 @@ describe('effect enforcement', () => {
           }
         }
         D = *{
-          c = C()
+          c = @C()
           @viaField = {
             :n Integer = c.g()
             return :n
           }
         }
         @viaLocal = {
-          c = C()
+          c = @C()
           :n Integer = c.g()
           return :n
         }
         @viaFresh = {
-          :n Integer = C().g()
+          :n Integer = @C().g()
           return :n
         }
         @viaTwoClasses = {
@@ -597,7 +597,7 @@ describe('effect enforcement', () => {
           :n Integer = d.viaField()
           return :n
         }
-        @viaParam = (c C) {
+        @viaParam = (c @C) {
           :n Integer = c.g()
           return :n
         }
@@ -607,7 +607,7 @@ describe('effect enforcement', () => {
           return :n
         }
         @certain = {
-          c = C()
+          c = @C()
           :n Integer = c.h()
           return :n
         }
@@ -1040,12 +1040,6 @@ describe('! function — return paths', () => {
 
     @chainTail! = { @inc!(1).inc!(2) }
 
-    @barePublic! = {
-      inc!(6)
-      v Integer = total()
-      return v
-    }
-
     @shadowsEarly = { return first(1) as Integer }
 
     first = (i Integer) { return i + 10 }
@@ -1332,13 +1326,6 @@ describe('! function — return paths', () => {
     );
   });
 
-  it('a bare name reaches a public function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: '@barePublic!', from: 'c' } },
-      { output: { id: '1', re: [6], 'bv-a': ['Integer'], to: 'c' } },
-    );
-  });
-
   it('a chain in tail position returns self', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@chainTail!', from: 'c' } },
@@ -1607,7 +1594,7 @@ describe('a public class named with `!`', () => {
       }
 
       @go! = {
-        p = Pub!()
+        p = @Pub!()
         n Integer = p.one()
         return n
       }

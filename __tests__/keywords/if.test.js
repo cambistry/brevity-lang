@@ -303,7 +303,7 @@ describe('a new name inside a branch', () => {
       return r
     }
     @instance = (c Boolean) {
-      b = Box()
+      b = @Box()
       r = 5
       if c {
         s Integer = b.one()
@@ -386,7 +386,7 @@ describe('a new name inside a branch', () => {
       return r
     }
     @onInstance = (c Boolean) {
-      b = Box()
+      b = @Box()
       return b.rebound(c)
     }
     @viaFunction = (c Boolean) {
@@ -404,7 +404,7 @@ describe('a new name inside a branch', () => {
       return reboundCall(c)
     }
     reboundCall = (c Boolean) {
-      b = Box()
+      b = @Box()
       r = 5
       if c {
         s Integer = b.one()
@@ -413,7 +413,7 @@ describe('a new name inside a branch', () => {
       return r
     }
     @instanceTag = (c Boolean) {
-      b = Box()
+      b = @Box()
       r = 5
       if c {
         s = b.one()

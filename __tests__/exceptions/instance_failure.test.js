@@ -34,13 +34,13 @@ describe('a failed as on a class instance', () => {
       }
     }
 
-    @SubBox = (Box |) *{
+    @SubBox = (@Box |) *{
       @own = (i Integer) { return i }
     }
 
     @Outer = *{
       @viaInstance = {
-        b = Box()
+        b = @Box()
         r = b.bad()
         return r: 9
       }
@@ -51,30 +51,30 @@ describe('a failed as on a class instance', () => {
     @getCell = { return cell }
 
     @bound = {
-      b = Box()
+      b = @Box()
       r = b.bad()
       return r: 7
     }
     @typedBound = {
-      b = Box()
+      b = @Box()
       r Integer = b.bad()
       return r: r
     }
     @ephemeral = {
-      r Integer = Box().bad()
+      r Integer = @Box().bad()
       return r: r
     }
     @then = {
-      b = Box()
+      b = @Box()
       r = b.bad() as Integer
       return r
     }
     @returned = {
-      b = Box()
+      b = @Box()
       return b.bad()
     }
     @returnedGood = {
-      b = Box()
+      b = @Box()
       return b.good()
     }
   `;
@@ -340,12 +340,12 @@ describe('a failed as in a constructor block', () => {
     }
 
     @Nested = *{
-      b = Box(1)
+      b = @Box(1)
 
       @get = { return 1 }
     }
 
-    @Sub = (Good |) *{
+    @Sub = (@Good |) *{
       @more = { return 2 }
     }
 
@@ -359,7 +359,7 @@ describe('a failed as in a constructor block', () => {
       @get = { return n }
     }
 
-    @SubNoParams = (NoParams |) *{
+    @SubNoParams = (@NoParams |) *{
       @more = { return 2 }
     }
 
@@ -369,18 +369,18 @@ describe('a failed as in a constructor block', () => {
       @baseValue = { return v }
     }
 
-    @SubOfBase = (Base |) *{
+    @SubOfBase = (@Base |) *{
       @more = { return 2 }
     }
 
     @ViaSub = *{
-      n Integer = SubOfBase().baseValue() as Integer
+      n Integer = @SubOfBase().baseValue() as Integer
 
       @get = { return n }
     }
 
     @ViaSubFails = *{
-      n Integer = SubNoParams().get() as Integer
+      n Integer = @SubNoParams().get() as Integer
 
       @get = { return n }
     }
@@ -393,13 +393,13 @@ describe('a failed as in a constructor block', () => {
     }
 
     @ViaCall = *{
-      n Integer = Reply().text() as Integer
+      n Integer = @Reply().text() as Integer
 
       @get = { return n }
     }
 
     @ViaCallOk = *{
-      n Integer = Reply().int() as Integer
+      n Integer = @Reply().int() as Integer
 
       @get = { return n }
     }
@@ -408,92 +408,92 @@ describe('a failed as in a constructor block', () => {
 
     @getCell = { return cell }
     @go = {
-      b = Box(1)
+      b = @Box(1)
       return r: 7
     }
     @goTyped = {
-      b = Good("x")
+      b = @Good("x")
       return r: 7
     }
     @goOk = {
-      b = Good(5)
+      b = @Good(5)
       return b.get()
     }
     @goUntyped = {
-      b = Untyped("x")
+      b = @Untyped("x")
       return r: 7
     }
     @goInner = {
-      b = Inner(1)
+      b = @Inner(1)
       return r: 7
     }
     @goNested = {
-      b = Nested()
+      b = @Nested()
       return r: 7
     }
     @goSub = {
-      b = Sub("x")
+      b = @Sub("x")
       return r: 7
     }
     @goChain = {
-      r Integer = Box(1).get()
+      r Integer = @Box(1).get()
       return r: r
     }
     @goNoParams = {
-      b = NoParams()
+      b = @NoParams()
       return r: 7
     }
     @goNoParamsTyped = {
-      r Integer = NoParams().get()
+      r Integer = @NoParams().get()
       return r: r
     }
     @goNoParamsUntyped = {
-      r = NoParams().get()
+      r = @NoParams().get()
       return r: r
     }
     @goNoParamsReturned = {
-      return NoParams().get()
+      return @NoParams().get()
     }
     @goSubNoParams = {
-      b = SubNoParams()
+      b = @SubNoParams()
       return r: 7
     }
     @goSubNoParamsCall = {
-      r = SubNoParams().get()
+      r = @SubNoParams().get()
       return r: r
     }
     @goViaSubFails = {
-      b = ViaSubFails()
+      b = @ViaSubFails()
       return r: 7
     }
     @goBlockRan = {
-      r = Reply().int()
+      r = @Reply().int()
       return r: r
     }
     @goBlockRanStored = {
-      b = Reply()
+      b = @Reply()
       r = b.int()
       return r: r
     }
     @goSubBlockRan = {
-      r = SubOfBase().baseValue()
+      r = @SubOfBase().baseValue()
       return r: r
     }
     @goSubBlockRanStored = {
-      b = SubOfBase()
+      b = @SubOfBase()
       r = b.baseValue()
       return r: r
     }
     @goViaSub = {
-      b = ViaSub()
+      b = @ViaSub()
       return b.get()
     }
     @goViaCall = {
-      b = ViaCall()
+      b = @ViaCall()
       return r: 7
     }
     @goViaCallOk = {
-      b = ViaCallOk()
+      b = @ViaCallOk()
       return b.get()
     }
   `;

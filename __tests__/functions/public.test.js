@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('public function', () => {
   const script = `
@@ -45,5 +45,117 @@ describe('public function', () => {
       { input: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' } },
     );
+  });
+});
+
+describe('f, @f and #f are different functions', () => {
+  const script = `
+    f = { return "private" }
+    @f = { return "public" }
+    #f = { return "hash" }
+
+    g = { return v: "private" }
+    @g = { return v: "public" }
+
+    @onlyPublic = { return "only" }
+
+    @callsPrivate = {
+      t Text = f()
+      return t
+    }
+    @callsPublic = {
+      t Text = @f()
+      return t
+    }
+    @callsHash = {
+      t Text = #f()
+      return t
+    }
+    @destructuresPrivate = {
+      :v Text = g()
+      return :v
+    }
+    @destructuresPublic = {
+      :v Text = @g()
+      return :v
+    }
+    @inPlacePrivate = { return f() }
+    @inPlacePublic = { return @f() }
+  `;
+
+  const reads = (op, value) => expectBehavior(script,
+    { input: { id: '1', op, from: 'c' } },
+    { output: { id: '1', re: [value], 'bv-a': ['Text'], to: 'c' } },
+  );
+
+  it('f() calls f', () => reads('@callsPrivate', 'private'));
+  it('@f() calls @f', () => reads('@callsPublic', 'public'));
+  it('#f() calls #f', () => reads('@callsHash', 'hash'));
+
+  it('f() in place calls f', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@inPlacePrivate', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['private'], to: 'c' }) },
+    );
+  });
+
+  it('@f() in place calls @f', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@inPlacePublic', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
+    );
+  });
+
+  it('a destructured f() calls f', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@destructuresPrivate', from: 'c' } },
+      { output: { id: '1', re: { v: 'private' }, 'bv-a': { v: 'Text' }, to: 'c' } },
+    );
+  });
+
+  it('a destructured @f() calls @f', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@destructuresPublic', from: 'c' } },
+      { output: { id: '1', re: { v: 'public' }, 'bv-a': { v: 'Text' }, to: 'c' } },
+    );
+  });
+
+  it('outside, @f answers', () => reads('@f', 'public'));
+
+  it('outside, f doesn\'t answer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'f', from: 'c' } },
+      { output: { id: '1', ex: { f: 'unhandled' }, to: 'c' } },
+    );
+  });
+
+  it('outside, #f doesn\'t answer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '#f', from: 'c' } },
+      { output: { id: '1', ex: { '#f': 'unhandled' }, to: 'c' } },
+    );
+  });
+
+  it('the doc lists only @f, as f', () => {
+    const { interface: doc } = compileSource(script);
+    expect(doc.service.match(/^ {2}f /gm)).toHaveLength(1);
+    expect(doc.service).toContain('f () -> (Text)');
+  });
+
+  it('a bare name doesn\'t reach @f', () => {
+    expect(() => compileSource('@f = { return 1 }\n@g = { return f() }\n')).toThrow(/'f' isn't in scope — the public function is '@f'/);
+    expect(() => compileSource('@f! = { return 1 }\n@g! = { return f!() }\n')).toThrow(/'f!' isn't in scope — the public function is '@f!'/);
+  });
+
+  it('a bare name doesn\'t reach #f', () => {
+    expect(() => compileSource('#f = { return 1 }\n@g = { return f() }\n')).toThrow(/'f' isn't in scope — the function is '#f'/);
+  });
+
+  it('a chain from a bare name doesn\'t reach @f!', () => {
+    expect(() => compileSource('@a *Integer = 0\n@f! = { @a <- 1 }\n@g! = {\n  f!().a\n}\n')).toThrow(/'f!' isn't in scope — the public function is '@f!'/);
+  });
+
+  it('a param or local named f is its own name', () => {
+    expect(() => compileSource('@f = { return 1 }\n@g = (f (Integer) -> (Integer)) { return f(1) }\n')).not.toThrow();
   });
 });

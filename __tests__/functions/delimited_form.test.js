@@ -297,7 +297,7 @@ describe('delimited form — public function braced body', () => {
     expect(() => compileSource(`
       @go
         =
-        result Integer = test(5)
+        result Integer = @test(5)
         return :result
 
       @test = (x: Integer) { x + 1 }

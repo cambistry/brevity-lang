@@ -618,6 +618,8 @@ export const OBJECT_PREAMBLE = `const BvObject = {
     return { positional: [], named: payload, positional_types: null, named_types: null };
   },
   one(s, name) {
+    // A class constructed in place: the actor itself.
+    if (typeof s?.receive === 'function') return s;
     if (s.selfReturn) return '#<>';
     if (s.positional.length !== 1)
       throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);

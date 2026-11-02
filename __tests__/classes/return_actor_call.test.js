@@ -15,56 +15,56 @@ describe('returning a call on an instance', () => {
     }
 
     @sole = {
-      b = Box()
+      b = @Box()
       return b.one()
     }
     @constructed = {
-      return Box().one()
+      return @Box().one()
     }
     @several = {
-      b = Box()
+      b = @Box()
       return b.two()
     }
     @wholeNamed = {
-      b = Box()
+      b = @Box()
       return b.named()
     }
     @withArg = {
-      b = Box()
+      b = @Box()
       return b.plus(4)
     }
     @withParam = (t Text) {
-      b = Box()
+      b = @Box()
       return b.one()
     }
     @chained = {
-      b = Box()
+      b = @Box()
       return b.inc!().get()
     }
     @oneOfTwo = {
-      b = Box()
+      b = @Box()
       return b.one(), 2
     }
     @namedField = {
-      b = Box()
+      b = @Box()
       return z: b.one()
     }
     @tail = {
-      b = Box()
+      b = @Box()
       b.one()
     }
     @object = {
-      b = Box()
+      b = @Box()
       x = b.one() as Object
       return x
     }
     @objectNamed = {
-      b = Box()
+      b = @Box()
       x = b.named() as Object
       return x
     }
     @typed = {
-      b = Box()
+      b = @Box()
       return b.one() as Integer
     }
   `;
@@ -160,7 +160,7 @@ describe('a call on an instance inside a branch', () => {
     }
 
     @go = (c Boolean) {
-      b = Box()
+      b = @Box()
       if c { return b.bad() }
       return 9
     }
@@ -171,12 +171,12 @@ describe('a call on an instance inside a branch', () => {
     }
 
     @returned = (c Boolean) {
-      b = Box()
+      b = @Box()
       if c { return b.one() }
       return 9
     }
     @bound = (c Boolean) {
-      b = Box()
+      b = @Box()
       if c {
         r = b.one()
         return r
@@ -184,19 +184,19 @@ describe('a call on an instance inside a branch', () => {
       return 9
     }
     @other = (c Boolean) {
-      b = Box()
+      b = @Box()
       if c { return 9 }
       return b.one()
     }
     @nested = (c Boolean) {
-      b = Box()
+      b = @Box()
       if c {
         if c { return b.one() }
       }
       return 9
     }
     @rebound = (c Boolean) {
-      b = Box()
+      b = @Box()
       r = 5
       if c {
         s = b.one()
@@ -206,7 +206,7 @@ describe('a call on an instance inside a branch', () => {
     }
     @Outer = *{
       @viaBranch = (c Boolean) {
-        b = Box()
+        b = @Box()
         if c { return b.one() }
         return 9
       }

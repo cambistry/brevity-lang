@@ -1,17 +1,17 @@
+import { extract } from '../../index.js';
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// A public class is constructed by its bare name in its own file. The `@` says it's
-// part of the file's doc.
+// A public class is named `@Pub` in its own file, and is part of the file's doc.
 
 describe('public class in its own file', () => {
-  it('is constructed by its bare name', async () => {
+  it('is constructed by its name', async () => {
     await expectBehavior(`
       @Pub = *{
         @one = { return 5 }
       }
 
       @go = {
-        p = Pub()
+        p = @Pub()
         n Integer = p.one()
         return n
       }
@@ -28,7 +28,7 @@ describe('public class in its own file', () => {
       }
 
       @go = {
-        p = Pub(7)
+        p = @Pub(7)
         v Integer = p.get()
         return v
       }
@@ -44,12 +44,12 @@ describe('public class in its own file', () => {
         @one = { return 1 }
       }
 
-      @Sub = (Base |) *{
+      @Sub = (@Base |) *{
         @two = { return 2 }
       }
 
       @go = {
-        s = Sub()
+        s = @Sub()
         a Integer = s.one()
         b Integer = s.two()
         return a + b
@@ -61,10 +61,339 @@ describe('public class in its own file', () => {
   });
 
   it('is checked like any class', () => {
-    expect(() => compileSource('@Pub = *{\n  @one = { return 5 }\n}\n@go = {\n  p = Pub()\n  n Integer = p.nope()\n  return n\n}\n')).toThrow(/has no method 'nope'/);
+    expect(() => compileSource('@Pub = *{\n  @one = { return 5 }\n}\n@go = {\n  p = @Pub()\n  n Integer = p.nope()\n  return n\n}\n')).toThrow(/has no method 'nope'/);
   });
 
-  it('can\'t share a name with a private class', () => {
-    expect(() => compileSource('@Pub = *{}\nPub = *{}\n@go = { return 1 }\n')).toThrow(/'Pub' is declared more than once/);
+  it('can\'t be declared twice', () => {
+    expect(() => compileSource('@Pub = *{}\n@Pub = *{}\n@go = { return 1 }\n')).toThrow(/'@Pub' is declared more than once/);
+  });
+
+  it('can\'t share a name with a function', () => {
+    expect(() => compileSource('@Pub = *{}\n@Pub = { return 1 }\n@go = { return 1 }\n')).toThrow(/'@Pub' is declared as both a class and a function/);
+  });
+
+  it('a bare name doesn\'t reach it', () => {
+    expect(() => compileSource('@Pub = *{}\n@go = {\n  p = Pub()\n  return 1\n}\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub = *{}\np = Pub()\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub! = *{}\n@go! = {\n  p = Pub!()\n  return 1\n}\n')).toThrow(/'Pub!' isn't in scope — the public class is '@Pub!'/);
+  });
+
+  it('a bare name doesn\'t reach it as a superclass or a type', () => {
+    expect(() => compileSource('@Pub = *{}\n@Sub = (Pub |) *{}\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub = *{}\n@go = {\n  p Pub = @Pub()\n  return 1\n}\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub = *{}\n@go = (p Pub) { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+  });
+
+  it('a wrapped superclass has to be named', () => {
+    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{}\n@go = { return 1 }\n')).toThrow(/Name the wrapped superclass: '@Pub \*name \|'/);
+  });
+
+  it('errors name it as it\'s written', () => {
+    expect(() => compileSource('@Pub = *{}\n@go = {\n  p = @Pub()\n  n Integer = p.nope()\n  return n\n}\n')).toThrow(/'@Pub' has no method 'nope'/);
+  });
+});
+
+describe('Box and @Box are different classes', () => {
+  const script = `
+    @Box = *{
+      @who = { return "public" }
+    }
+
+    Box = *{
+      @who = { return "private" }
+    }
+
+    @Arg = (n Integer) *{
+      @get = { return n }
+    }
+
+    @PubSub = (@Box |) *{
+      @own = { return "pubsub" }
+    }
+
+    PrivSub = (Box |) *{
+      @own = { return "privsub" }
+    }
+
+    @Wrapper = (@Box *inner |) *{
+      @viaInner = {
+        t Text = inner.who()
+        return t
+      }
+    }
+
+    @Nearer = *{
+      @Box = { return "own function" }
+      @call = {
+        t Text = @Box()
+        return t
+      }
+    }
+
+    held = @Box()
+
+    @public = {
+      b = @Box()
+      t Text = b.who()
+      return t
+    }
+    @private = {
+      b = Box()
+      t Text = b.who()
+      return t
+    }
+    @inPlace = {
+      t Text = @Box().who()
+      return t
+    }
+    @annotated = {
+      b @Box = @Box()
+      t Text = b.who()
+      return t
+    }
+    @withArg = {
+      a = @Arg(7)
+      n Integer = a.get()
+      return n
+    }
+    @viaHeld = {
+      t Text = held.who()
+      return t
+    }
+    @pubSubWho = {
+      s = @PubSub()
+      t Text = s.who()
+      return t
+    }
+    @privSubWho = {
+      s = PrivSub()
+      t Text = s.who()
+      return t
+    }
+    @wrapped = {
+      w = @Wrapper()
+      t Text = w.viaInner()
+      return t
+    }
+    @ownFunctionFirst = {
+      n = @Nearer()
+      t Text = n.call()
+      return t
+    }
+  `;
+
+  const reads = (op, value, type = 'Text') => expectBehavior(script,
+    { input: { id: '1', op, from: 'c' } },
+    { output: { id: '1', re: [value], 'bv-a': [type], to: 'c' } },
+  );
+
+  it('@Box() constructs the public class', () => reads('@public', 'public'));
+  it('Box() constructs the private class', () => reads('@private', 'private'));
+  it('@Box() can be used in place', () => reads('@inPlace', 'public'));
+  it('@Box is a type', () => reads('@annotated', 'public'));
+  it('@Box is a param\'s type', () => {
+    expect(() => compileSource('@Box = *{\n  @who = { return "x" }\n}\n@go = (b @Box) {\n  t Text = b.nope()\n  return t\n}\n')).toThrow(/'@Box' has no method 'nope'/);
+  });
+  it('@Arg() takes args', () => reads('@withArg', 7, 'Integer'));
+  it('a file-level @Box() is held in a cell', () => reads('@viaHeld', 'public'));
+  it('@Box is a superclass', () => reads('@pubSubWho', 'public'));
+  it('Box is a separate superclass', () => reads('@privSubWho', 'private'));
+  it('@Box can be wrapped', () => reads('@wrapped', 'public'));
+  it('a class\'s own @Box comes before the file\'s', () => reads('@ownFunctionFirst', 'own function'));
+
+  it('the doc names only the public class, without its @', () => {
+    const { interface: doc } = compileSource(script);
+    expect(doc.service).toContain('Box () -> *{\n    who () -> (Text)\n  }');
+    expect(doc.service).toContain('PubSub (Box |) -> *{');
+    expect(doc.service).not.toContain('@Box');
+    expect(doc.service).not.toContain('PrivSub');
+  });
+});
+
+describe('#new beside @Box()', () => {
+  const script = `
+    @Box = *{
+      secret = { return "secret" }
+      #hidden = { return "hidden" }
+
+      @who = { return "public" }
+      @viaSecret = {
+        t Text = secret()
+        return t
+      }
+      @viaHidden = {
+        t Text = #hidden()
+        return t
+      }
+    }
+
+    Box = *{
+      @who = { return "private" }
+    }
+
+    @local = {
+      b = @Box()
+      t Text = b.who()
+      return t
+    }
+  `;
+
+  it('#new reaches the public class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+      { input: { id: '2', op: '@who', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['public'], to: 'c', from: '@Box/1' }) },
+    );
+  });
+
+  it('an actor made by #new calls its own private functions', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<@Box/1>' }) },
+      { input: { id: '2', op: '@viaSecret', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['secret'] }) },
+      { input: { id: '3', op: '@viaHidden', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '3', re: ['hidden'] }) },
+    );
+  });
+
+  it('outside, an actor\'s private functions don\'t answer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<@Box/1>' }) },
+      { input: { id: '2', op: 'secret', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', ex: { secret: 'unhandled' } }) },
+      { input: { id: '3', op: '#hidden', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '3', ex: { '#hidden': 'unhandled' } }) },
+    );
+  });
+
+  it('@Box() gives its actor no registered address', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@local', from: 'c' } },
+      { output: { id: '1', re: ['public'], 'bv-a': ['Text'], to: 'c' } },
+      { input: { id: '2', op: '@who', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', ex: expect.anything() }) },
+    );
+  });
+});
+
+describe('passing an actor to a function', () => {
+  const script = `
+    @Box = *{
+      n *Integer = 0
+
+      @who = { return "public" }
+      @get = { return n }
+      @bump! = { n <- n + 1 }
+    }
+
+    Box = *{
+      @who = { return "private" }
+    }
+
+    @takes = (b @Box) {
+      t Text = b.who()
+      return t
+    }
+    takesPrivately = (b @Box) {
+      t Text = b.who()
+      return t
+    }
+    takesTheOther = (b Box) {
+      t Text = b.who()
+      return t
+    }
+    bumps! = (b @Box) {
+      b.bump!()
+    }
+
+    @toPublic = {
+      r Text = @takes(@Box())
+      return r
+    }
+    @toPrivate = {
+      r Text = takesPrivately(@Box())
+      return r
+    }
+    @toPrivateClass = {
+      r Text = takesTheOther(Box())
+      return r
+    }
+    @bound = {
+      b = @Box()
+      r Text = @takes(b)
+      return r
+    }
+    takesNamed = (b: @Box) {
+      t Text = b.who()
+      return t
+    }
+    @named = {
+      b = @Box()
+      r Text = takesNamed(b: b)
+      s Text = b.who()
+      return r + s
+    }
+    @sameActor! = {
+      b = @Box()
+      bumps!(b)
+      n Integer = b.get()
+      return n
+    }
+  `;
+
+  it('the doc names the param\'s type without its @', () => {
+    expect(extract(script).interface.service).toContain('takes (Box) -> (Text)');
+  });
+
+  const reads = (op, value, type = 'Text') => expectBehavior(script,
+    { input: { id: '1', op, from: 'c' } },
+    { output: { id: '1', re: [value], 'bv-a': [type], to: 'c' } },
+  );
+
+  it('a public function can call it', () => reads('@toPublic', 'public'));
+  it('a private function can call it', () => reads('@toPrivate', 'public'));
+  it('a private class\'s actor passes too', () => reads('@toPrivateClass', 'private'));
+  it('one held in a local passes too', () => reads('@bound', 'public'));
+  it('a named arg passes it, and the caller keeps it', () => reads('@named', 'publicpublic'));
+  it('the function reaches the same actor', () => reads('@sameActor!', 1, 'Integer'));
+});
+
+describe('W and @W! are different classes', () => {
+  const script = `
+    @W! = *{
+      @who = { return "public" }
+    }
+
+    W = *{
+      @who = { return "private" }
+    }
+
+    @public! = {
+      w @W = @W!()
+      t Text = w.who()
+      return t
+    }
+    @private = {
+      w = W()
+      t Text = w.who()
+      return t
+    }
+  `;
+
+  it('@W!() constructs the public class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@public!', from: 'c' } },
+      { output: { id: '1', re: ['public'], 'bv-a': ['Text'], to: 'c' } },
+    );
+  });
+
+  it('W() constructs the private class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@private', from: 'c' } },
+      { output: { id: '1', re: ['private'], 'bv-a': ['Text'], to: 'c' } },
+    );
   });
 });

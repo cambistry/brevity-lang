@@ -126,7 +126,7 @@ describe('class interface — mixed with public functions', () => {
         @body = -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
       }
-      @publish. = (doc: Document) {}
+      @publish. = (doc: @Document) {}
     `);
     expect(iface.service).toBe(
       '{\n  publish. (doc: Document) => .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
@@ -343,7 +343,7 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('a public subclass names its public `!` superclass', () => {
-    const doc = docOf('@W! = *{\n  @get = { return 1 }\n}\n@S! = (W! |) *{\n  @h = { return 2 }\n}\n');
+    const doc = docOf('@W! = *{\n  @get = { return 1 }\n}\n@S! = (@W! |) *{\n  @h = { return 2 }\n}\n');
     expect(doc).toBe('{\n  W! () => *{\n    get () -> (Integer)\n  }\n  S! (W! |) => *{\n    ...W!\n    h () -> (Integer)\n  }\n}');
     expect(parseInterface(doc).__types['S!'].supertypes).toEqual([{ supertype: 'W!' }]);
   });
@@ -381,7 +381,7 @@ describe('class interface — a class named with `!`', () => {
 
   it('can\'t share a name with a class without one', () => {
     expect(() => compileSource('W! = *{}\nW = *{}\n@go = { return 1 }\n')).toThrow(/'W' and 'W!' are both declared/);
-    expect(() => compileSource('@W! = *{}\n@W = *{}\n')).toThrow(/'W' and 'W!' are both declared/);
+    expect(() => compileSource('@W! = *{}\n@W = *{}\n')).toThrow(/'@W' and '@W!' are both declared/);
   });
 
   it('is inherited from with its `!`', () => {

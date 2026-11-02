@@ -15,7 +15,7 @@ describe('subclass interface — input side', () => {
   it('empty subclass renders Parent | with nothing on the right', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = (T |) *{}
+      @U = (@T |) *{}
     `);
     expect(s).toContain('U (T |)');
   });
@@ -23,7 +23,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own named param renders after the pipe', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = (T | y: Integer) *{}
+      @U = (@T | y: Integer) *{}
     `);
     expect(s).toContain('U (T | y: Integer)');
   });
@@ -31,7 +31,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own positional param renders after the pipe', () => {
     const s = svc(`
       @T = (x Integer) *{ @a = -> v: x as Integer }
-      @U = (T | y Integer) *{}
+      @U = (@T | y Integer) *{}
     `);
     expect(s).toContain('U (T | Integer)');
   });
@@ -40,7 +40,7 @@ describe('subclass interface — input side', () => {
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
       @B = (b: Integer) *{ @gb = -> v: b as Integer }
-      @C = (A, B | c: Integer) *{}
+      @C = (@A, @B | c: Integer) *{}
     `);
     expect(s).toContain('C (A, B | c: Integer)');
   });
@@ -48,7 +48,7 @@ describe('subclass interface — input side', () => {
   it('wrapped-as marker is hidden from the rendered interface', () => {
     const s = svc(`
       @T = * { @a = -> v: 1 as Integer }
-      @U = (T *sup |) *{ @b = -> v: 2 as Integer }
+      @U = (@T *sup |) *{ @b = -> v: 2 as Integer }
     `);
     expect(s).toContain('U (T |)');
     expect(s).not.toContain('*sup');
@@ -59,7 +59,7 @@ describe('subclass interface — body side', () => {
   it('empty subclass body is just the parent spread', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = (T |) *{}
+      @U = (@T |) *{}
     `);
     expect(s).toContain('U (T |) -> *{\n    ...T\n  }');
   });
@@ -67,7 +67,7 @@ describe('subclass interface — body side', () => {
   it('own methods follow the spread on separate lines', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = (T | y: Integer) *{ @b = -> v: y as Integer }
+      @U = (@T | y: Integer) *{ @b = -> v: y as Integer }
     `);
     expect(s).toContain('...T');
     expect(s).toContain('b () -> (v: Integer)');
@@ -79,7 +79,7 @@ describe('subclass interface — body side', () => {
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
       @B = (b: Integer) *{ @gb = -> v: b as Integer }
-      @C = (A, B | c: Integer) *{}
+      @C = (@A, @B | c: Integer) *{}
     `);
     expect(s).toContain('...A');
     expect(s).toContain('...B');
@@ -94,8 +94,8 @@ describe('subclass interface — chain depth', () => {
     // Consumers expand through B's own entry to resolve A's material.
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
-      @B = (A | b: Integer) *{ @gb = -> v: b as Integer }
-      @C = (B | c: Integer) *{ @gc = -> v: c as Integer }
+      @B = (@A | b: Integer) *{ @gb = -> v: b as Integer }
+      @C = (@B | c: Integer) *{ @gc = -> v: c as Integer }
     `);
     expect(s).toContain('C (B | c: Integer)');
     const cBody = s.slice(s.indexOf('C ('));
@@ -110,7 +110,7 @@ describe('subclass interface — parent render unchanged', () => {
     // The parent does NOT get a `...` spread — spreads only appear on children.
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = (T | y: Integer) *{}
+      @U = (@T | y: Integer) *{}
     `);
     const tBody = s.slice(s.indexOf('T ('), s.indexOf('U ('));
     expect(tBody).toContain('a () -> (v: Integer)');
@@ -126,7 +126,7 @@ describe('subclass interface — private parent', () => {
       @a = { return 'text' }
       @k = { return 1 }
     }
-    P = (G | @p: Integer) *{ @m = { return 2 } }
+    P = (@G | @p: Integer) *{ @m = { return 2 } }
     @U = (T | y: Integer) *{
       @a = { return 2 }
       @b = { return 3 }

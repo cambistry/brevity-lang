@@ -111,6 +111,29 @@ view = *WebView(path: "/main")
 @open. = { view.open... }
 ```
 
+## `a`, `@a`, `#a`
+
+Inside an actor these are three different names, for functions and classes alike. Each may be
+declared beside the others, and a call reaches only the one it spells. Outside, only `@a` is
+exposed: it's `@a` on the wire, and `.a` in the Brevity that calls it.
+
+```brevity
+@Box = *{ @who = -> "public" }
+Box = *{ @who = -> "private" }
+@Sub = (@Box |) *{}              // superclasses and types use the same name
+
+@go = {
+  a = @Box()                     // the public class
+  b = Box()                      // the private class
+  c @Box = @Box()
+  return 1
+}
+
+@status = -> "public"
+status = -> "private"
+@check = { return @status() }    // @status; `status()` would be the private one
+```
+
 ## Public Class From Another File
 
 A file's public class (`@W = *{ … }`) is constructed through the file, or imported by name.

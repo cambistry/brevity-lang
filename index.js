@@ -3,7 +3,7 @@ import { parseInterface } from './src/codegen/javascript/types.js';
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
-import { useBareClassNames } from './src/subclass.js';
+import { renamePublicClasses, validateWithSourceNames } from './src/subclass.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
 import { returnShapes, unionMembers } from './src/return_shapes.js';
 
@@ -29,7 +29,9 @@ function buildAliasMap(dependencies) {
   return map;
 }
 
-function resolveType(typeName, aliasMap) {
+function resolveType(typeNameInFile, aliasMap) {
+  // A doc is the outside view, where a public class has no `@`.
+  const typeName = typeNameInFile?.replace(/@(?=\w)/g, '');
   if (!typeName || aliasMap.size === 0) return typeName;
 
   // Handle "X | null" suffix
@@ -87,7 +89,7 @@ function formatPublicFnSig(fn, aliasMap, purported = null) {
 
 function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->') {
   const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
-  const supertypes = (actor.supertypes || []).map(st => st.sourceName ?? st.supertype);
+  const supertypes = (actor.supertypes || []).map(st => (st.sourceName ?? st.supertype).replace(/^@/, ''));
   // Input: when subtyping, prefix with `Parent1, Parent2 | ` and keep only the
   // subtype's own params on the right of the pipe (inherited params are implied
   // by the spread `...Parent` on the body side).
@@ -718,8 +720,8 @@ export function extract(source) {
 }
 
 export function compile(ast, options = {}) {
-  useBareClassNames(ast);
-  validate(ast, options);
+  renamePublicClasses(ast);
+  validateWithSourceNames(validate, ast, options);
   const name = options.target || process.env.BREVITY_TARGET || 'js';
   const target = getTarget(name);
   if (!target) {

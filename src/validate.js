@@ -617,8 +617,7 @@ export function validate(ast, options = {}) {
     for (const fn of (actor.functions || [])) {
       if (!fn.name || fn.actorDef || fn.emptyOverload) continue;
       functionOwners.set(fn, actor);
-      const bare = fn.name.replace(/^@/, '');
-      functionsByName.set(bare, [...(functionsByName.get(bare) || []), fn]);
+      functionsByName.set(fn.name, [...(functionsByName.get(fn.name) || []), fn]);
     }
   }
 
@@ -2909,10 +2908,9 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
         if (clauses && !dependencyNames?.has(name) && !shadowed(name)) {
           return { label: name, shape: knownReturnShape(clauses.map(c => c.fn)) };
         }
-        const bare = name.replace(/^@/, '');
-        const sole = functionsByName.get(bare);
+        const sole = functionsByName.get(name);
         if (!clauses && sole?.length === 1 && !dependencyNames?.has(name) && !shadowed(name)) {
-          return { label: bare, shape: null, fns: sole };
+          return { label: name, shape: null, fns: sole };
         }
       } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
           && !dependencyNames?.has(callSrc.object.name)) {

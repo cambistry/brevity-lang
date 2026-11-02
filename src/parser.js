@@ -306,6 +306,7 @@ export function parse(tokensIn) {
     let look = startPos;
     while (tokens[look]?.type === 'NEWLINE') look++;
     while (true) {
+      if (tokens[look]?.type === 'AT') look++;
       if (tokens[look]?.type !== 'IDENT') return false;
       look++;
       if (tokens[look]?.type === 'STAR') {
@@ -343,6 +344,7 @@ export function parse(tokensIn) {
   const BUILT_IN_PLURAL = new Set(PLURAL_TO_SINGULAR.keys());
 
   function typeLength(offset) {
+    if (tokens[offset]?.type === 'AT' && tokens[offset + 1]?.type === 'IDENT') return 1 + typeLength(offset + 1);
     if (tokens[offset]?.type !== 'IDENT') return 0;
     let len = 1;
     if (tokens[offset+1]?.type === 'KEYWORD' && tokens[offset+1]?.value === 'of') {
@@ -355,7 +357,7 @@ export function parse(tokensIn) {
       if (tokens[after]?.type !== 'PIPE') break;
       const nxt = tokens[after+1];
       if (nxt?.type === 'KEYWORD' && nxt.value === 'null') { len += 2; continue; }
-      if (nxt?.type === 'IDENT') {
+      if (nxt?.type === 'IDENT' || nxt?.type === 'AT') {
         const inner = typeLength(after + 1);
         if (inner > 0) { len += 1 + inner; continue; }
       }
@@ -369,6 +371,11 @@ export function parse(tokensIn) {
   function parseAtomicType(inOf = false) {
     if (peek().type === 'LPAREN') {
       return parseParenType();
+    }
+    // A public class is `@Name` as a type too.
+    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+      consume();
+      return '@' + consume().value;
     }
     const tok = consume();
     if (tok.type !== 'IDENT')
@@ -435,7 +442,7 @@ export function parse(tokensIn) {
         result = `${result} | null`;
         continue;
       }
-      if (nxt?.type === 'IDENT') {
+      if (nxt?.type === 'IDENT' || (nxt?.type === 'AT' && tokens[pos + 2]?.type === 'IDENT')) {
         consume(); // |
         const member = parseAtomicType(false);
         result = `${result} | ${member}`;
@@ -995,8 +1002,7 @@ export function parse(tokensIn) {
     };
     const peekIsType = () => {
       if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
-      if (peek().type !== 'IDENT') return false;
-      return true;
+      return peek().type === 'IDENT' || (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT');
     };
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
@@ -3106,7 +3112,7 @@ export function parse(tokensIn) {
     if (peek().type !== 'IDENT') return false;
     let ts = pos + 1;
     // Ref-decl annotation: name *Type [...] = expr
-    if (tokens[ts]?.type === 'STAR' && tokens[ts + 1]?.type === 'IDENT') {
+    if (tokens[ts]?.type === 'STAR' && typeLength(ts + 1) > 0) {
       const afterRefType = ts + 1 + typeLength(ts + 1);
       return tokens[afterRefType]?.type === 'EQUALS';
     }
@@ -3136,7 +3142,7 @@ export function parse(tokensIn) {
       }
       return false;
     }
-    if (tokens[ts]?.type !== 'IDENT') return false;
+    if (typeLength(ts) === 0) return false;
     const afterType = ts + typeLength(ts);
     return tokens[afterType]?.type === 'EQUALS';
   }
@@ -3144,7 +3150,7 @@ export function parse(tokensIn) {
   function isBareTypeDeclStart() {
     if (peek().type !== 'IDENT') return false;
     const ts = pos + 1;
-    if (tokens[ts]?.type !== 'IDENT') return false;
+    if (typeLength(ts) === 0) return false;
     const after = tokens[ts + typeLength(ts)]?.type;
     return after !== 'EQUALS' && after !== 'COMMA';
   }
@@ -4186,12 +4192,14 @@ export function parse(tokensIn) {
     const supertypes = [];
     skipNewlines();
     if (looksLikeSupertypePrefix()) {
-      while (peek().type === 'IDENT') {
-        const stName = consume().value;
+      while (peek().type === 'IDENT' || peek().type === 'AT') {
+        const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+        const stName = sigil + expect('IDENT').value;
         const st = { supertype: stName };
         if (peek().type === 'STAR') {
           consume();
           if (peek().type === 'IDENT') st.wrappedAs = consume().value;
+          else if (sigil) throw new Error(`Name the wrapped superclass: '${stName} *name |'`);
           else st.wrappedAs = stName;
         }
         supertypes.push(st);
@@ -5686,17 +5694,16 @@ export function parse(tokensIn) {
     // A class named with `!` (`W!`) is constructed by that name, and its actors have the
     // type `W`. So the class's identifier is `W`, and `sourceName` keeps the `!` for docs
     // and effects.
-    const bangClasses = new Set(program.actors.map(a => a.name?.replace(/^@/, '')).filter(n => n?.endsWith('!')));
+    const bangClasses = new Set(program.actors.map(a => a.name).filter(n => n?.endsWith('!')));
     if (bangClasses.size > 0) {
       const plain = (name) => name.slice(0, -1);
       for (const a of program.actors) {
-        const bare = a.name?.replace(/^@/, '');
-        if (bare && bangClasses.has(`${bare}!`)) throw new Error(`'${bare}' and '${bare}!' are both declared — different effects need different names`);
+        if (a.name && bangClasses.has(`${a.name}!`)) throw new Error(`'${a.name}' and '${a.name}!' are both declared — different effects need different names`);
       }
       const rename = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { node.forEach(rename); return; }
-        if (node.type === 'Actor' && bangClasses.has(node.name?.replace(/^@/, ''))) {
+        if (node.type === 'Actor' && bangClasses.has(node.name)) {
           node.sourceName = node.name;
           node.name = plain(node.name);
         }
@@ -5894,7 +5901,7 @@ export function parse(tokensIn) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(collect); return; }
       if (node.type === 'TypeDecl' && node.name) typeNames.add(node.name);
-      if (node.type === 'Actor' && node.name) typeNames.add(node.name.replace(/^@/, ''));
+      if (node.type === 'Actor' && node.name) typeNames.add(node.name);
       if (node.type === 'ServiceCoercion' && node.name) typeNames.add(node.name);
       if (node.type === 'Dependency') {
         if (node.name) typeNames.add(node.name);

@@ -71,19 +71,19 @@ describe('a caller\'s annotation', () => {
   const rejects = (source, pattern, options) => expect(() => compileSource(source, options)).toThrow(pattern);
 
   it('has to cover every path', () => {
-    rejects(`${MIXED}@g = {\n  x Integer = f(true)\n  return x\n}\n`, /Cannot bind 'x Integer' to 'f\(\)' — it can return Integer \| Text.*'x Integer \| Text'.*as Integer/);
-    accepts(`${MIXED}@g = {\n  x Integer | Text = f(true)\n  return x\n}\n`);
-    accepts(`${MIXED}@g = {\n  x Anything = f(true)\n  return x\n}\n`);
+    rejects(`${MIXED}@g = {\n  x Integer = @f(true)\n  return x\n}\n`, /Cannot bind 'x Integer' to '@f\(\)' — it can return Integer \| Text.*'x Integer \| Text'.*as Integer/);
+    accepts(`${MIXED}@g = {\n  x Integer | Text = @f(true)\n  return x\n}\n`);
+    accepts(`${MIXED}@g = {\n  x Anything = @f(true)\n  return x\n}\n`);
   });
 
   it('accepts a coercion', () => {
-    accepts(`${MIXED}@g = {\n  x Integer = f(true) as Integer\n  return x\n}\n`);
-    accepts(`${MIXED}@g = {\n  y = f(true) as Integer\n  return y\n}\n`);
+    accepts(`${MIXED}@g = {\n  x Integer = @f(true) as Integer\n  return x\n}\n`);
+    accepts(`${MIXED}@g = {\n  y = @f(true) as Integer\n  return y\n}\n`);
   });
 
   it('catches a single shape that doesn\'t match', () => {
-    rejects('@f = { return "x" }\n@g = {\n  t Integer = f()\n  return t\n}\n', /'t Integer' to 'f\(\)' — it can return Text/);
-    accepts('@f = { return 1 }\n@g = {\n  t Integer = f()\n  return t\n}\n');
+    rejects('@f = { return "x" }\n@g = {\n  t Integer = @f()\n  return t\n}\n', /'t Integer' to '@f\(\)' — it can return Text/);
+    accepts('@f = { return 1 }\n@g = {\n  t Integer = @f()\n  return t\n}\n');
   });
 
   it('checks a class\'s method', () => {
@@ -104,17 +104,17 @@ describe('a caller\'s annotation', () => {
 
   it('a destructured key has to be in every shape', () => {
     const named = '@f = (b Boolean) {\n  if b { return a: 1 }\n  return a: 2, c: "x"\n}\n';
-    rejects(`${named}@g = {\n  :c Text = f(true)\n  return :c\n}\n`, /'c' from 'f\(\)' — only some of its paths return it/);
-    accepts(`${named}@g = {\n  :a Integer = f(true)\n  return :a\n}\n`);
-    rejects(`${named}@g = {\n  :a Text = f(true)\n  return :a\n}\n`, /'a Text' to 'f\(\)' — it can return Integer/);
+    rejects(`${named}@g = {\n  :c Text = @f(true)\n  return :c\n}\n`, /'c' from '@f\(\)' — only some of its paths return it/);
+    accepts(`${named}@g = {\n  :a Integer = @f(true)\n  return :a\n}\n`);
+    rejects(`${named}@g = {\n  :a Text = @f(true)\n  return :a\n}\n`, /'a Text' to '@f\(\)' — it can return Integer/);
   });
 
   it('nothing binds to a path that returns only names', () => {
-    rejects('@f = (b Boolean) {\n  if b { return a: 1 }\n  return 2\n}\n@g = {\n  x Integer = f(true)\n  return x\n}\n', /one of its paths returns only named fields \(a\)/);
+    rejects('@f = (b Boolean) {\n  if b { return a: 1 }\n  return 2\n}\n@g = {\n  x Integer = @f(true)\n  return x\n}\n', /one of its paths returns only named fields \(a\)/);
   });
 
   it('nothing binds to a path that returns self', () => {
-    rejects('@a *Integer = 0\n@f! = (b Boolean) {\n  @a <- 1\n  if b { return 1 }\n  return self\n}\n@g! = {\n  x Integer = f!(true)\n  return x\n}\n', /some of its paths return self/);
+    rejects('@a *Integer = 0\n@f! = (b Boolean) {\n  @a <- 1\n  if b { return 1 }\n  return self\n}\n@g! = {\n  x Integer = @f!(true)\n  return x\n}\n', /some of its paths return self/);
   });
 });
 
@@ -125,7 +125,7 @@ describe('at runtime', () => {
       return "x"
     }
     @union = (b Boolean) {
-      x Integer | Text = f(b)
+      x Integer | Text = @f(b)
       return x
     }
   `;

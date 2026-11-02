@@ -117,16 +117,59 @@ export function withInheritedState(actor, { inheritedState, inheritedInit }) {
   return { stateVarDecls, initBody };
 }
 
-// The `@` on a class says it's public, which matters to docs. Calls and supertypes name
-// it bare, as generated code does.
+// `@Box` and `Box` are different classes. Backends need an identifier, which `@Box` can't
+// be, so a public class gets one that nothing in a file can name.
 // Validation writes to the AST and callers read it afterward, so this renames in place.
-export function useBareClassNames(ast) {
+export const PUBLIC_CLASS_SUFFIX = '__pub';
+const SELECTOR_KEYS = new Set(['value', 'op', 'method', 'property', 'key', 'selector']);
+
+export function renamePublicClasses(ast) {
   const seen = new Set();
+  const renames = new Map();
+  const file = ast.actors.find(a => !a.name);
   for (const a of ast.actors) {
     if (!a.name) continue;
-    if (a.name.startsWith('@')) a.isPublic = true;
-    a.name = a.name.replace(/^@/, '');
     if (seen.has(a.name)) throw new Error(`Class '${a.name}' is declared more than once`);
     seen.add(a.name);
+    if (!a.name.startsWith('@')) continue;
+    if (file?.functions?.some(f => f.name === a.name && !f.actorDef && !f.emptyOverload)) {
+      throw new Error(`'${a.name}' is declared as both a class and a function`);
+    }
+    a.isPublic = true;
+    a.selector = (a.sourceName ?? a.name).slice(1);
+    renames.set(a.name, `${a.name.slice(1)}${PUBLIC_CLASS_SUFFIX}`);
+  }
+  if (renames.size === 0) return;
+
+  const classes = buildActorMap(ast);
+  // Inside a class, `@x` is that class's own function or cell before it's a class of the file.
+  const labelsOf = (actor) => new Set([
+    ...[...(actor.functions || []), ...resolveSuperclassChain(classes, actor).inheritedFunctions].filter(f => !f.actorDef).map(f => f.name),
+    ...(actor.stateVarDecls || []).map(d => d.name),
+    ...(actor.initParams || []).map(p => p.name),
+  ]);
+  const AT_NAME = /(?<![\w@])@\w+(?![\w!])/g;
+  const rename = (node, labels) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(n => rename(n, labels)); return; }
+    const inside = node.type === 'Actor' ? labelsOf(node) : labels;
+    for (const [key, v] of Object.entries(node)) {
+      if (v && typeof v === 'object') rename(v, inside);
+      else if (typeof v === 'string' && v.includes('@') && !SELECTOR_KEYS.has(key)) {
+        const ownLabel = key === 'name' && node.type !== 'Actor' && inside.has(v);
+        if (!ownLabel) node[key] = v.replace(AT_NAME, m => renames.get(m) ?? m);
+      }
+    }
+  };
+  rename(ast, new Set());
+}
+
+// A compile error shows a public class by the name in its source.
+export function validateWithSourceNames(validate, ast, options) {
+  try {
+    validate(ast, options);
+  } catch (e) {
+    if (typeof e?.message === 'string') e.message = e.message.replace(new RegExp(`\\b(\\w+)${PUBLIC_CLASS_SUFFIX}\\b`, 'g'), '@$1');
+    throw e;
   }
 }

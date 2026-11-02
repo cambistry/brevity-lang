@@ -23,7 +23,8 @@ writes through `@a`, and a bare read `return a` compiled to an unbound variable 
 - **Only a cell can be written.** `@f <- 1` on a function, or on a cell of the enclosing file from
   inside a class: `Cannot set '@f' — it isn't a published cell of this file`.
 - **Calling a public function by its bare name stays.** `bump!(1)` reaching `@bump!` was decided
-  separately, so functions and cells differ here.
+  separately, so functions and cells differ here. *Superseded by
+  [session-2026-11-02-at-names](session-2026-11-02-at-names.md): a bare name no longer reaches it.*
 
 ## Code
 

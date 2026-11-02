@@ -147,7 +147,7 @@ export function addConstructHandlers(ast) {
   const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   for (const cls of classes.values()) {
     if (!cls.isPublic) continue;
-    const selector = (cls.sourceName || cls.name).replace(/^@/, '');
+    const { selector } = cls;
     const name = `new@${selector}`;
     if (file.functions?.some(f => f.name === name)) continue;
     const { inheritedParams } = resolveSuperclassChain(classes, cls);

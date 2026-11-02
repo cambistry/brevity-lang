@@ -205,6 +205,8 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
   return `{ok, [${posVals.join(', ')}], ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
 }
 
+const isPrivateOp = op => !/^(@|set$|update$|set@|subscribe@|new@)/.test(op);
+
 // ── Public function codegen ──────────────────────────────────────────────────
 
 function genPublicFn(ctx, fn) {
@@ -406,6 +408,8 @@ function genDispatch(ctx, publicFns) {
 
   const clauses = [...genSubscribePrologue('handle_op')];
   for (const [op, variants] of grouped) {
+    // Outside, only `@name` is exposed.
+    if (isPrivateOp(op)) clauses.push(`handle_op(${erlString(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlString(op)}}`);
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
@@ -548,7 +552,9 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     if (p.rest) restVars.add(p.name);
   }
   const childActorRefs = new Map();
-  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(body) };
+  // A param typed as a class of this file holds one of its actors.
+  const classParams = params.filter(p => ctx.actorInfo?.has(p.type)).map(p => p.name);
+  const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set([...fileChildRefs(ctx), ...classParams]), ssaEnv: buildSSAEnv(body) };
 
   const paramLines = genParamDestructure(params, I);
   lines.push(...paramLines);
@@ -846,6 +852,7 @@ function genChildHandleOp(ctx, actor) {
   }
   // Add private function dispatch clauses for child actor
   for (const h of childPrivateFns) {
+    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlString(h.name)}}`);
     const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }

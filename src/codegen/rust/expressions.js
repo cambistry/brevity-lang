@@ -561,11 +561,6 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
-  // Public function call without @ prefix — route through self_send to @name
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.publicFnNames?.has('@' + expr.callee.name)) {
-    const rewritten = { ...expr, callee: { ...expr.callee, name: '@' + expr.callee.name } };
-    return `${genRustFnCallExpr(rewritten, typeEnv)}.one()`;
-  }
   // Destructured member call → route to source service
   // A class in another file, constructed in place.
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
@@ -1616,7 +1611,9 @@ function genRustFnMethod({ name: op, params, body }) {
   // statements after it); later guards run after them, as in public handlers.
   const leadingGuard = guards.length > 0 && body[0] === guards[0] ? guards[0] : null;
   const leadingGuardLines = leadingGuard ? buildRustGuardBlock(leadingGuard.expr, typeEnv, I, fnReturnMaker) : '';
+  G.ctx.classParams = (params || []).filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I, undefined, fnReturnMaker);
+  G.ctx.classParams = null;
   const trailingGuards = leadingGuard ? guards.slice(1) : guards;
   const guardLines = trailingGuards.length > 0
     ? trailingGuards.map(g => buildRustGuardBlock(g.expr, typeEnv, I, fnReturnMaker)).join('\n')
@@ -1702,14 +1699,16 @@ function genRustFnCallExpr(expr, typeEnv) {
       G.ctx.lambdaHandlers.push({ name: lambdaName, fn: a });
       return `Value::String("${lambdaName}".to_string())`;
     }
-    const raw = genRustExpr(a, typeEnv);
+    // A local holding an actor can be used again after the call.
+    const heldActor = a.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(a.name);
+    const raw = `${genRustExpr(a, typeEnv)}${heldActor ? '.clone()' : ''}`;
     const t = typeEnv.get(a.name) || inferLiteralType(a);
     return toJsonValue(raw, t || 'Anything');
   });
   if (namedBag && positionalArgs.length === 0) {
     // Named-only args
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
-      const raw = genRustExpr(val, typeEnv);
+      const raw = `${genRustExpr(val, typeEnv)}${val.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(val.name) ? '.clone()' : ''}`;
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
@@ -1717,7 +1716,7 @@ function genRustFnCallExpr(expr, typeEnv) {
   }
   if (namedBag) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
-      const raw = genRustExpr(val, typeEnv);
+      const raw = `${genRustExpr(val, typeEnv)}${val.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(val.name) ? '.clone()' : ''}`;
       const t = typeEnv.get(val.name) || inferLiteralType(val);
       return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
     }).join(' ');
