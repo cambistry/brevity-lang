@@ -1,4 +1,4 @@
-import { createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
+import { compileSource, createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Binding a remote call's reply. `x T = r.m()` binds the reply's single
@@ -104,11 +104,11 @@ describe('remote reply carrying only a field named like the local — not a sing
     { output: expect.objectContaining({ id: '99', ex: { '@go': 'error' }, to: 'caller' }) },
   ));
 
-  it('x T = r.m()', async () => {
-    await run(`${THING}
+  it('x T = r.m() is a compile error, since the doc shows only a named field', () => {
+    expect(() => compileSource(`${THING}
       t = Thing(a: 5)
       @go = { x Integer = t.pair(); return a1: x }
-    `);
+    `)).toThrow(/returns only named fields \(x\)/);
   });
 
   it('x = r.m() (untyped)', async () => {

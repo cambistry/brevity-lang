@@ -89,9 +89,8 @@ backend uses that one early-return form.
 - **Chain from a call on this actor:** see "References and self-calls" below.
 - **Classes named with `!`:** see "Generated docs" below. File constructors are covered in
   the design note.
-- **Value paths of different shapes:** a doc shows one, preferring the function's own level
-  over a branch: `f (Boolean) -> (Text)` for `if b { return 1 }; return "x"`. Consumers
-  read one return shape, so stating more needs a decision about how callers check them.
+- **Value paths of different shapes:** done, see
+  [session-2026-11-01](session-2026-11-01-return-shapes.md).
 - **Constructing a public class from another file:** done, see
   [session-2026-11-01](session-2026-11-01-public-classes-across-files.md).
 - **Writing a published cell from its own actor:** done, as `@a <- @a + 1`, see

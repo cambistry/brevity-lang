@@ -1,4 +1,5 @@
 import { inferExprType } from '../../inference.js';
+import { fieldAcrossReturns } from '../../return_shapes.js';
 
 export function inferLiteralType(expr) {
   if (!expr) return null;
@@ -254,21 +255,32 @@ function parseSignature(name, text) {
   if (rest === '(self)') throw new Error(`Interface entry '${name}': a self-return takes no parens — write '=> self'`);
   if (/^self\s*\|/.test(rest)) throw new Error(`Interface entry '${name}': 'self' goes last — write '=> (Type) | self'`);
   if (rest.startsWith('(')) {
-    const rEnd = groupEnd(rest, 0);
-    // `(Type) | self`: some paths yield a value and others the receiver.
-    if (rEnd !== -1 && /^\|\s*self$/.test(rest.slice(rEnd).trim())) {
-      const inner = rest.slice(1, rEnd - 1).trim();
-      return { kind: 'function', params, returns: inner ? parseFieldList(inner) : [], returnsSelf: true, effect };
+    // `(A) | (B) | self`: what comes back depends on the path. Each shape prints once.
+    const shapes = [];
+    let tail = rest;
+    let orSelf = false;
+    for (;;) {
+      const rEnd = groupEnd(tail, 0);
+      if (rEnd === -1) break;
+      shapes.push(tail.slice(1, rEnd - 1).trim());
+      tail = tail.slice(rEnd).trim();
+      if (/^\|\s*self$/.test(tail)) { orSelf = true; tail = ''; break; }
+      if (!/^\|\s*\(/.test(tail)) break;
+      tail = tail.slice(1).trim();
     }
-    if (rEnd !== rest.length) {
-      const extra = rEnd === -1 ? rest : rest.slice(rEnd).trim();
+    if (tail) {
       throw new Error(
-        `Interface entry '${name}': unexpected text after return: '${extra}'` +
-        (extra.startsWith('|') ? ' (overloads go on separate lines, repeating the name)' : ''),
+        `Interface entry '${name}': unexpected text after return: '${tail}'` +
+        (tail.startsWith('|') || /^[-=~]>/.test(tail) ? ' (overloads go on separate lines, repeating the name)' : ''),
       );
     }
-    const inner = rest.slice(1, -1).trim();
-    return { kind: 'function', params, returns: inner ? parseFieldList(inner) : null, effect };
+    const parsedShapes = shapes.map(inner => (inner ? parseFieldList(inner) : []));
+    const sole = shapes.length === 1 && !shapes[0] && !orSelf ? null : parsedShapes[0];
+    return {
+      kind: 'function', params, returns: sole, effect,
+      ...(orSelf ? { returnsSelf: true } : {}),
+      ...(parsedShapes.length > 1 ? { returnAlternatives: parsedShapes } : {}),
+    };
   }
   if (!rest) {
     throw new Error(
@@ -299,7 +311,7 @@ function parseConstructor(name, paramsInner, bodyInner) {
   const setters = [];
   for (const e of parseEntries(bodyInner)) {
     if (e.kind === 'function') {
-      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}) });
+      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}) });
     } else if (e.kind === 'field') {
       // A field reads as a zero-arg getter; a ref cell is also settable.
       functions.push({ name: e.name, params: [], returns: [{ name: null, type: e.type, positional: true }] });
@@ -349,7 +361,7 @@ function parseEntry(text) {
     if (sig.kind === 'constructor') {
       return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, sig.paramsInner, sig.bodyInner) };
     }
-    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.silent ? { silent: true } : {}) };
+    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}) };
   }
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
   const readOnly = !rest.startsWith('*');
@@ -394,7 +406,7 @@ export function parseInterface(manifestStr) {
       result.__types[e.name] = { effect, supertypes, initParams, functions, setters };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
-      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.silent ? { silent: true } : {}) });
+      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });
     } else if (e.kind === 'field') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: [], returns: [{ name: null, type: e.type, positional: true }] });
@@ -462,10 +474,10 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null, t
             // Op-form: parsed[method] = [{ params, returns }, ...].
             // Type-form: parsed.__types[actorName].functions = [{ name, params, returns }, ...]
             // where the dep alias names a typed singleton (e.g. document).
-            const returns = parsed?.[methodName]?.[0]?.returns
-              || parsed?.__types?.[actorName]?.functions?.find(f => f.name === methodName)?.returns;
-            if (returns) {
-              const match = returns.find(r => r.name === item.name);
+            const sig = parsed?.[methodName]?.[0]
+              || parsed?.__types?.[actorName]?.functions?.find(f => f.name === methodName);
+            if (sig) {
+              const match = fieldAcrossReturns(sig, item.name);
               if (match?.type) {
                 typeName = match.type;
                 remoteInferred.add(item.name);

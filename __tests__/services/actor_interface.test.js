@@ -460,7 +460,11 @@ describe('class interface — return paths', () => {
   });
 
   it('other text after a return is still rejected', () => {
-    expect(() => parseInterface('{ go! () => (Integer) | (Text) }')).toThrow(/overloads go on separate lines/);
+    expect(() => parseInterface('{ go! () => (Integer) | nope }')).toThrow(/unexpected text after return/);
+  });
+
+  it('a doc can state several shapes', () => {
+    expect(parseInterface('{ go! () => (Integer) | (Text) }')['go!'][0]).toMatchObject({ returnAlternatives: [[{ type: 'Integer' }], [{ type: 'Text' }]] });
   });
 
   it('a function type can state both', () => {

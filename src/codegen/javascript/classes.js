@@ -1,6 +1,7 @@
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
+import { unionMembers } from '../../return_shapes.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -429,9 +430,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
           const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
           // Op-form: parsed[method][0].returns. Type-form: methods live
           // inside parsed.__types[objName].functions.
-          const retType = parsed?.[method]?.[0]?.returns?.[0]?.type
-            || parsed?.__types?.[objName]?.functions?.find(f => f.name === method)?.returns?.[0]?.type;
-          if (retType && !VALUE_TYPES.has(retType)) {
+          const retSig = parsed?.[method]?.[0] || parsed?.__types?.[objName]?.functions?.find(f => f.name === method);
+          const retType = retSig?.returnAlternatives ? null : retSig?.returns?.[0]?.type;
+          if (retType && !unionMembers(retType).some(t => VALUE_TYPES.has(t))) {
             ctx.remoteInstanceVars.add(s.name);
           }
         }

@@ -375,8 +375,8 @@ describe('effect arrows in signatures', () => {
         return :n
       }
       @indirect = {
-        v Integer = helper()
-        return v
+        :n Integer = helper()
+        return :n
       }
       @plain = { return 1 }
     `);
@@ -550,7 +550,7 @@ describe('effect enforcement', () => {
     });
 
     it('a `!` function may rest on an own function that calls it', () => {
-      expect(() => compileSource(`${SVC}helper = {\n  :n Integer = s.guess()\n  return :n\n}\n@a! = {\n  v Integer = helper()\n  x Integer = v\n}\n`)).not.toThrow();
+      expect(() => compileSource(`${SVC}helper = {\n  :n Integer = s.guess()\n  return :n\n}\n@a! = {\n  :n Integer = helper()\n  x Integer = n\n}\n`)).not.toThrow();
     });
 
     it('a silent function may rest on it alone', () => {

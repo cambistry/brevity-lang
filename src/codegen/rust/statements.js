@@ -978,7 +978,7 @@ function genRustTypedAssign(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutable
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn));
+        return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn) || G.ctx.dependencyNames?.has(dn));
       })()) {
         handleTypedAssign_DotCallExpr(s, typeEnv, I, lines);
       } else if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && sCtx?.selfSpawnedRefs?.has(s.value.object.name)) {

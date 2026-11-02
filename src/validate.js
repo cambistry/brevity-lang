@@ -5,6 +5,7 @@ import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
+import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
@@ -481,13 +482,13 @@ export function validate(ast, options = {}) {
       const functions = (t.functions || []).map(f => ({
         name: '@' + f.name,
         params: f.params || [],
-        body: f.returns ? [{
+        // Positional returns carry no `key` — a defined key reads as a named field.
+        body: f.returns ? (f.returnAlternatives ?? [f.returns]).map(alt => ({
           type: 'Reply',
-          // Positional returns carry no `key` — a defined key reads as a named field.
-          fields: (f.returns || []).map(r => (r.positional
+          fields: alt.map(r => (r.positional
             ? { name: r.name, type: r.type, positional: true }
             : { key: r.name, name: r.name, type: r.type, positional: r.positional })),
-        }] : [],
+        })) : [],
       }));
       const synthetic = {
         name: typeName,
@@ -608,6 +609,16 @@ export function validate(ast, options = {}) {
   // fnName → [{ params }]. Built from every FunctionDecl in every actor that
   // isn't a constructor (no actorDef) and isn't itself a public @-method
   // (those live under methods). Used to type-check bare-name function calls.
+  functionsByName = new Map();
+  for (const actor of ast.actors) {
+    for (const fn of (actor.functions || [])) {
+      if (!fn.name || fn.actorDef || fn.emptyOverload) continue;
+      functionOwners.set(fn, actor);
+      const bare = fn.name.replace(/^@/, '');
+      functionsByName.set(bare, [...(functionsByName.get(bare) || []), fn]);
+    }
+  }
+
   const localFunctionSigs = new Map();
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
@@ -780,11 +791,11 @@ export function validate(ast, options = {}) {
             const methodName = s.source.method;
             const iface = remotesParsed[actorName];
             if (!iface) continue;
-            const returns = iface[methodName]?.[0]?.returns || iface['@' + methodName]?.[0]?.returns;
-            if (!returns) continue;
+            const sig = iface[methodName]?.[0] || iface['@' + methodName]?.[0];
+            if (!sig?.returns) continue;
             for (const item of s.pattern) {
               if (item.discard || !item.name || item.type) continue;
-              if (returns.find(r => r.name === item.name && r.type)) {
+              if (fieldAcrossReturns(sig, item.name)?.type) {
                 remoteInferred.add(item.name);
               }
             }
@@ -2881,7 +2892,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
               }
             }
             // Check return types
-            if (sig && spec.returns && sig.returns) {
+            if (sig && spec.returns && sig.returns && !sig.returnAlternatives) {
               for (const cr of spec.returns) {
                 const ar = sig.returns.find(sr => sr.name === cr.name);
                 if (ar && cr.type && ar.type && cr.type !== ar.type) {
@@ -2919,6 +2930,11 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
         if (clauses && !dependencyNames?.has(name) && !shadowed(name)) {
           return { label: name, shape: knownReturnShape(clauses.map(c => c.fn)) };
         }
+        const bare = name.replace(/^@/, '');
+        const sole = functionsByName.get(bare);
+        if (!clauses && sole?.length === 1 && !dependencyNames?.has(name) && !shadowed(name)) {
+          return { label: bare, shape: null, fns: sole };
+        }
       } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
           && !dependencyNames?.has(callSrc.object.name)) {
         const typeName = resolveObjType(callSrc.object.name);
@@ -2944,7 +2960,7 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
           const classTypes = new Map();
           for (const v of (cls.stateVarDecls || [])) if (v.typeName) classTypes.set(v.name, v.typeName);
           for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
-          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes) };
+          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes), fns };
         }
         // An auto-accessor replies with its param's value, positionally.
         const hasAccessor = (c, seen = new Set()) => {
@@ -2962,6 +2978,10 @@ function validateBody(body, outerNames, actorInfo, dependencyNames, remotesParse
     if (callShape) {
       if (s.type === 'DestructureAssign') checkNamedReturns(s.pattern, callShape.label, callShape.shape);
       else checkPositionalReturn(s, callShape.label, callShape.shape);
+    }
+    if (callSrc && !callSrc.attestedAs) {
+      const called = callShape?.fns?.length === 1 ? { label: callShape.label, shapes: returnShapes(callShape.fns[0], fnOuterTypes(callShape.fns[0])) } : remoteReturnShapes(callSrc, remotesParsed, typeEnv, dependencyNames);
+      if (called) checkAnnotationCovers(s, called.label, called.shapes, actorByName);
     }
 
     // Constructor call validation in function bodies
@@ -3222,6 +3242,79 @@ function checkNamedReturns(pattern, calleeLabel, shape) {
       const typed = item.type ? `${item.name} ${item.type}` : item.name;
       throw new Error(`Cannot destructure '${key}' from '${calleeLabel}()' — it returns no named '${key}' (to bind a positional result, write '${typed} = ${calleeLabel}()')`);
     }
+  }
+}
+
+// ── A caller's annotation against what comes back ────────────────────────────
+// `x T = f()` has to hold for every path of f. A slot typed `Anything` can't be
+// judged, and neither can a type this file knows nothing about.
+const functionOwners = new WeakMap();
+let functionsByName = new Map();
+const COMPARABLE_SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'null']);
+
+function fnOuterTypes(fn) {
+  const owner = functionOwners.get(fn);
+  const types = new Map();
+  for (const v of (owner?.stateVarDecls || [])) if (v.typeName) types.set(v.name, v.typeName);
+  for (const p of (owner?.initParams || [])) if (p.type) types.set(p.name, p.type);
+  return types;
+}
+
+function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames) {
+  if (call.type !== 'DotCallExpr' || call.object?.type !== 'Identifier') return null;
+  const name = call.object.name;
+  const dep = dependencyNames?.has(name) ? name : typeEnv?.get(name);
+  const doc = remotesParsed[dep];
+  if (!doc) return null;
+  const sigs = doc[call.method] ?? doc.__types?.[dep]?.functions?.filter(f => f.name === call.method);
+  if (sigs?.length !== 1) return null;
+  return { label: `${name}.${call.method}`, shapes: docReturnShapes(sigs[0]) };
+}
+
+function canJudge(type, actorByName) {
+  return unionMembers(type).every(t => t === 'Anything' || COMPARABLE_SCALARS.has(t)
+    || (actorByName?.has(t) && !actorByName.get(t).asClauses?.length));
+}
+
+function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actorByName) {
+  if (opaque || alternatives.length === 0) return;
+  const mismatch = (declared, actual) => canJudge(declared, actorByName) && canJudge(actual, actorByName)
+    && isAssignable(actual, declared, actorByName) === false;
+
+  if (s.type === 'TypedAssign') {
+    const declared = s.typeName;
+    if (!declared || declared === 'Anything') return;
+    const slots = alternatives.map(alt => alt.find(slot => slot.name === null));
+    const missing = alternatives.find((alt, i) => alt.length > 0 && !slots[i]);
+    if (missing) {
+      const names = missing.map(slot => slot.name).join(', ');
+      if (alternatives.length === 1) {
+        throw new Error(`Cannot bind '${s.name}' to '${label}()' — it returns only named fields (${names}); destructure instead: '${missing[0].name}: ${s.name} ${declared} = ${label}()'`);
+      }
+      throw new Error(`Cannot bind '${s.name}' to '${label}()' — one of its paths returns only named fields (${names}); handle its shapes separately`);
+    }
+    if (orSelf) throw new Error(`Cannot bind '${s.name} ${declared}' to '${label}()' — some of its paths return self, not a value`);
+    const known = slots.filter(Boolean).map(slot => slot.type);
+    const bad = known.find(type => mismatch(declared, type));
+    if (bad) {
+      const all = [...new Set(known.flatMap(unionMembers))].join(' | ');
+      throw new Error(`Cannot bind '${s.name} ${declared}' to '${label}()' — it can return ${all}. Annotate '${s.name} ${all}', or coerce: '${s.name} ${declared} = ${label}() as ${declared}'`);
+    }
+    return;
+  }
+
+  for (const item of s.pattern || []) {
+    if (item.discard) continue;
+    const key = item.key !== undefined ? item.key : item.named ? item.name : null;
+    if (key === null) continue;
+    for (const alt of alternatives) {
+      const slot = alt.find(c => c.name === key);
+      if (!slot) throw new Error(`Cannot destructure '${key}' from '${label}()' — only some of its paths return it`);
+      if (item.type && mismatch(item.type, slot.type)) {
+        throw new Error(`Cannot bind '${key} ${item.type}' to '${label}()' — it can return ${slot.type} there`);
+      }
+    }
+    if (orSelf) throw new Error(`Cannot destructure '${key}' from '${label}()' — some of its paths return self`);
   }
 }
 

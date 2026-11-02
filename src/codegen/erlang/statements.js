@@ -643,7 +643,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        const needsAwait = (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName)))
+        const needsAwait = (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName) || ctx.dependencyNames?.has(dotObjName)))
           || refFieldInvocationErl(ctx, dotObj, s.value.method, typeEnv)?.discipline === 'callback';
         if (needsAwait) {
           lines.push(`${I}${varName} = bv_object_one(${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);

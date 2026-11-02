@@ -401,7 +401,9 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
 
 - **`emit` counts as a write, `.subscribe` doesn't.**
 - **Mixed return paths in docs:** `=> (Type) | self`, and nothing chains on one. See "Generated
-  docs" in [the session note](session-2026-10-31-mutation-suffix.md).
+  docs" in [the session note](session-2026-10-31-mutation-suffix.md). Value paths that differ among
+  themselves: `(Integer | Text)` or `(a: Integer) | (Integer)`, in
+  [session-2026-11-01](session-2026-11-01-return-shapes.md).
 - **A class named with `!`:** its doc entry is `W! () => *{ … }`, and its actors are annotated
   `x W`; `x W!` is an error.
 - **File constructors:** `"widget.bv": Widget! (a: Integer) => *{ … }`. `=>` is the fact

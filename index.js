@@ -5,7 +5,7 @@ import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
 import { useBareClassNames } from './src/subclass.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
-import { inferExprType } from './src/inference.js';
+import { returnShapes, unionMembers } from './src/return_shapes.js';
 
 await loadTargets();
 
@@ -69,97 +69,19 @@ function formatParam(param, aliasMap) {
   return `${opt}${param.key || param.name}: ${resolved}`;
 }
 
-function formatReplyField(field, index, aliasMap, typeEnv) {
-  let typeName = field?.type;
-  if (!typeName && typeEnv) {
-    // Try inference: sigil name, positional name, identifier value, or expression
-    const expr = field?.value ?? field?.expr;
-    if ('sigil' in field) {
-      typeName = typeEnv.get(field.sigil) || inferExprType(expr, typeEnv);
-    } else if (field.name && !expr) {
-      // Positional field referencing a variable by name (e.g., `-> retries`)
-      typeName = typeEnv.get(field.name);
-    } else {
-      typeName = inferExprType(expr, typeEnv);
-    }
-  }
-  if (!typeName) return `arg${index + 1}: Anything`;
-  const resolved = resolveType(typeName, aliasMap);
-  if (field.positional) return resolved;
-  if ('sigil' in field) return `${field.sigil}: ${resolved}`;
-  if (field.key !== undefined) return `${field.key}: ${resolved}`;
-  return `arg${index + 1}: ${resolved}`;
-}
-
-function buildExtractTypeEnv(params, body, outer = null) {
-  const env = new Map(outer ?? []);
-  for (const p of params || []) {
-    if (p.rest) continue;
-    if (p.name && p.type) env.set(p.name, p.type);
-  }
-  for (const s of body || []) {
-    if (s?.type === 'TypedAssign' || s?.type === 'BareTypeDecl') {
-      env.set(s.name, s.typeName);
-    } else if (s?.type === 'Assign') {
-      const t = inferExprType(s.value, env);
-      if (t) env.set(s.name, t);
-    } else if (s?.type === 'RefDecl' && s.typeName) {
-      env.set(s.name, s.typeName);
-    }
-  }
-  return env;
-}
-
-// Every return on the function's own paths, with the locals in scope at each.
-function returnPaths(fn) {
-  const paths = [];
-  const walk = (node, env) => {
-    if (!node || typeof node !== 'object' || node.type === 'Function') return;
-    if (Array.isArray(node)) {
-      const scope = buildExtractTypeEnv(null, node, env);
-      node.forEach(n => walk(n, scope));
-      return;
-    }
-    if (node.type === 'Reply' || node.type === 'Return') {
-      paths.push({ node, env });
-      return;
-    }
-    for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v, env);
-  };
-  const root = buildExtractTypeEnv(fn.params, null);
-  walk(fn.body, root);
-  // A tail `if` returns the value each of its branches ends in.
-  const tailIf = (branch, env) => {
-    if (branch?.type === 'IfExpr') {
-      tailIf(branch.then, env);
-      tailIf(branch.else, env);
-      return;
-    }
-    const scope = buildExtractTypeEnv(null, branch?.body, env);
-    const last = branch?.body?.at(-1);
-    if (last?.type !== 'ImplicitReturn') return;
-    if (last.expr?.type === 'IfExpr') tailIf(last.expr, scope);
-    else paths.push({ node: { fields: [{ positional: true, expr: last.expr, type: last.typeName }] }, env: scope });
-  };
-  const tail = fn.body.at(-1);
-  if (tail?.type === 'ImplicitReturn' && tail.expr?.type === 'IfExpr') tailIf(tail.expr, root);
-  return paths;
-}
+const formatSlot = ({ name, type }, aliasMap) => {
+  const resolved = unionMembers(type).map(t => resolveType(t, aliasMap)).join(' | ');
+  return name === null ? resolved : `${name}: ${resolved}`;
+};
 
 function formatPublicFnSig(fn, aliasMap, purported = null) {
   const input = fn.params.map(p => formatParam(p, aliasMap)).join(', ');
   // Bodies are checked by the compiler, so a generated arrow states the fact.
   const arrow = fn.name.endsWith('!') ? '=>' : (purported?.has(fn.name) ? '~>' : '->');
   if (fn.body.some(stmt => stmt.type === 'SilentTerminator')) return `(${input}) => .`;
-  const paths = returnPaths(fn);
-  const values = paths.filter(p => !p.node.fields?.[0]?.selfReturn);
-  const orSelf = values.length < paths.length;
-  // Value paths that differ in shape still show one, preferring the function's own level.
-  const value = values.find(p => fn.body.includes(p.node)) ?? values[0];
-  if (value) {
-    const output = (value.node.fields ?? []).map((f, i) => formatReplyField(f, i, aliasMap, value.env)).join(', ');
-    return `(${input}) ${arrow} (${output})${orSelf ? ' | self' : ''}`;
-  }
+  const { alternatives, orSelf } = returnShapes(fn);
+  const values = alternatives.map(alt => `(${alt.map(slot => formatSlot(slot, aliasMap)).join(', ')})`);
+  if (values.length > 0) return `(${input}) ${arrow} ${values.join(' | ')}${orSelf ? ' | self' : ''}`;
   return orSelf ? `(${input}) ${arrow} self` : `(${input}) ${arrow} ()`;
 }
 

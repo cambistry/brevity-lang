@@ -17,9 +17,9 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const GT_MANIFEST = `(text Text) -> *{
-  size () -> (Integer)
+  size () -> (result: Integer)
   empty? () -> (Boolean)
-  first () -> (Text)
+  first () -> (result: Text)
   last () -> (Text)
   reverse () -> (Text)
   repeat (Integer) -> (Text)

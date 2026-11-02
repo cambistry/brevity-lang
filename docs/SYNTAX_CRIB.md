@@ -158,6 +158,24 @@ return result: 42
 return :value
 ```
 
+## Return Paths
+
+A doc shows every path. Paths with the same slots merge, and others alternate, with `self` last.
+
+```
+f (Boolean) -> (Integer | Text)            // if b { return 1 }; return "x"
+f (Boolean) -> (a: Integer) | (Integer)    // if b { return a: 1 }; return 2
+f! (Boolean) => (Integer) | self
+g (Boolean) -> (Anything)                  // a path whose type can't be inferred
+```
+
+An annotation on a call has to hold for every path, and a destructured key has to be in every shape.
+
+```brevity
+x Integer | Text = f(true)
+y Integer = f(true) as Integer             // takes your word for it; nothing checks at runtime
+```
+
 ## Silent Functions
 
 ```brevity

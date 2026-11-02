@@ -574,40 +574,51 @@ export function parse(tokensIn) {
       consume();
       return { ...AST.functionType(inputs, []), returnsSelf: true, arrow };
     }
-    expect('LPAREN');
-    const outputs = [];
-    while (peek().type !== 'RPAREN') {
-      if (peek().type === 'COMMA') { consume(); continue; }
-      if (peek().type === 'IDENT') {
-        const name = peek().value;
-        if (tokens[pos + 1]?.type === 'COLON') {
-          // name: Type — named field (trailing colon)
-          consume(); // name
-          consume(); // COLON
-          const type = parseType();
-          outputs.push({ name, type });
-        } else if (tokens[pos + 1]?.type === 'IDENT') {
-          // name Type — named field (whitespace)
-          consume(); // name
-          const type = parseType();
-          outputs.push({ name, type });
+    const parseOutputs = () => {
+      expect('LPAREN');
+      const outputs = [];
+      while (peek().type !== 'RPAREN') {
+        if (peek().type === 'COMMA') { consume(); continue; }
+        if (peek().type === 'IDENT') {
+          const name = peek().value;
+          if (tokens[pos + 1]?.type === 'COLON') {
+            // name: Type — named field (trailing colon)
+            consume(); // name
+            consume(); // COLON
+            const type = parseType();
+            outputs.push({ name, type });
+          } else if (tokens[pos + 1]?.type === 'IDENT') {
+            // name Type — named field (whitespace)
+            consume(); // name
+            const type = parseType();
+            outputs.push({ name, type });
+          } else {
+            // Unnamed type
+            const type = parseType();
+            outputs.push({ type });
+          }
         } else {
-          // Unnamed type
-          const type = parseType();
-          outputs.push({ type });
+          throw new Error('Expected identifier or type in function type output');
         }
-      } else {
-        throw new Error('Expected identifier or type in function type output');
       }
+      expect('RPAREN');
+      return outputs;
+    };
+    const outputs = parseOutputs();
+    // `-> (Integer) | (Text)`: what comes back depends on the path.
+    const alternatives = [outputs];
+    while (peek().type === 'PIPE' && tokens[pos + 1]?.type === 'LPAREN') {
+      consume();
+      alternatives.push(parseOutputs());
     }
-    expect('RPAREN');
+    const shapes = alternatives.length > 1 ? { alternatives } : {};
     // `=> (Integer) | self`: some paths yield a value and others the receiver.
     if (peek().type === 'PIPE' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1].value === 'self') {
       consume();
       consume();
-      return { ...AST.functionType(inputs, outputs), orSelf: true, arrow };
+      return { ...AST.functionType(inputs, outputs), ...shapes, orSelf: true, arrow };
     }
-    return { ...AST.functionType(inputs, outputs), arrow };
+    return { ...AST.functionType(inputs, outputs), ...shapes, arrow };
   }
 
   function functionTypeToString(functionType) {
@@ -618,7 +629,8 @@ export function parse(tokensIn) {
     const arrow = functionType.arrow ?? '->';
     if (functionType.silent) return `(${fmtSide(functionType.inputs)}) => .`;
     if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) ${arrow} self`;
-    return `(${fmtSide(functionType.inputs)}) ${arrow} (${fmtSide(functionType.outputs)})${functionType.orSelf ? ' | self' : ''}`;
+    const shapes = (functionType.alternatives ?? [functionType.outputs]).map(alt => `(${fmtSide(alt)})`).join(' | ');
+    return `(${fmtSide(functionType.inputs)}) ${arrow} ${shapes}${functionType.orSelf ? ' | self' : ''}`;
   }
 
   function getFunctionLiteralSignature(fnNode) {
@@ -2894,6 +2906,7 @@ export function parse(tokensIn) {
     let firstType = null;
     if (isTypeAttestation()) {
       firstType = consumeTypeAttestation();
+      value.attestedAs = firstType;
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
     if (peek().type === 'COLON' && value.type === 'Identifier' && firstType === null) {
@@ -3053,6 +3066,7 @@ export function parse(tokensIn) {
           if (!isFnType && rhsType !== typeName && rhsType !== baseType) {
             throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
           }
+          value.attestedAs = rhsType;
         }
       }
     }
