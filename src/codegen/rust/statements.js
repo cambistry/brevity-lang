@@ -1776,19 +1776,19 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
       if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
         const argTag = a => { const tag = rustTypeTag(a.typeName || null); return tag ? `"${tag}"` : 'null'; };
-        let bvaJson;
+        let tyJson;
         if (positional.length > 0 && named.length > 0) {
-          const posBva = positional.map(argTag).join(', ');
-          const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-          bvaJson = `json!([${posBva}, {${namedBva}}])`;
+          const posTy = positional.map(argTag).join(', ');
+          const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+          tyJson = `json!([${posTy}, {${namedTy}}])`;
         } else if (named.length > 0) {
-          const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-          bvaJson = `json!([{${namedBva}}])`;
+          const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+          tyJson = `json!([{${namedTy}}])`;
         } else {
-          const posBva = positional.map(argTag).join(', ');
-          bvaJson = `json!([[${posBva}]])`;
+          const posTy = positional.map(argTag).join(', ');
+          tyJson = `json!([[${posTy}]])`;
         }
-        lines.push(`${I}    send_msg.insert("ty".to_string(), ${bvaJson});`);
+        lines.push(`${I}    send_msg.insert("ty".to_string(), ${tyJson});`);
       }
       lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
       lines.push(`${I}    send_id`);
@@ -2205,7 +2205,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             const selector = fnFullName;
             const bare = fnFullName.slice(1);
             if (inChild) {
-              // Child subs are stored as JSON array of {id, from, args, bva}.
+              // Child subs are stored as JSON array of {id, from, args, ty}.
               lines.push(`${I}{`);
               lines.push(`${I}    let _fn_subs = self.state.get(&${subsKeyFor(fnFullName)}).and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
               lines.push(`${I}    for _sub in _fn_subs {`);
@@ -2230,18 +2230,18 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}    }`);
               lines.push(`${I}}`);
             } else {
-              // Main actor subs are stored in cell_subs as (id, from, args, bva).
+              // Main actor subs are stored in cell_subs as (id, from, args, ty).
               lines.push(`${I}{`);
               lines.push(`${I}    let _fn_subs = self.cell_subs.get(${JSON.stringify(bare)}).cloned().unwrap_or_default();`);
-              lines.push(`${I}    for (_fn_sub_id, _fn_sub_from, _fn_sub_args, _fn_sub_bva) in _fn_subs {`);
+              lines.push(`${I}    for (_fn_sub_id, _fn_sub_from, _fn_sub_args, _fn_sub_ty) in _fn_subs {`);
               lines.push(`${I}        let _fn_op = "${selector}";`);
               lines.push(`${I}        let _fn_payload = _fn_sub_args.clone();`);
               lines.push(`${I}        let mut _fn_msg = Map::new();`);
               lines.push(`${I}        _fn_msg.insert("id".to_string(), json!(_fn_sub_id.clone()));`);
               lines.push(`${I}        _fn_msg.insert("op".to_string(), json!(_fn_op));`);
-              lines.push(`${I}        if !_fn_sub_bva.is_null() { _fn_msg.insert("ty".to_string(), _fn_sub_bva.clone()); }`);
+              lines.push(`${I}        if !_fn_sub_ty.is_null() { _fn_msg.insert("ty".to_string(), _fn_sub_ty.clone()); }`);
               lines.push(`${I}        let _fn_msg_v = Value::Object(_fn_msg);`);
-              lines.push(`${I}        let (_fn_re_opt, _fn_bva_opt, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
+              lines.push(`${I}        let (_fn_re_opt, _fn_ty_opt, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
               lines.push(`${I}        let _fn_re = _fn_re_opt.unwrap_or(Value::Null);`);
               lines.push(`${I}        if _fn_sub_from == "__parent" {`);
               lines.push(`${I}            if let Some(slot_val) = self.sub_slots.get(&format!("{}", _fn_sub_id)).cloned() {`);
@@ -2252,7 +2252,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}            let mut _fn_resp = Map::new();`);
               lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
               lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
-              lines.push(`${I}            if let Some(_b) = _fn_bva_opt { _fn_resp.insert("ty".to_string(), _b); }`);
+              lines.push(`${I}            if let Some(_b) = _fn_ty_opt { _fn_resp.insert("ty".to_string(), _b); }`);
               lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
               lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
               lines.push(`${I}        }`);
@@ -2331,14 +2331,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
         const valAsValue = toJsonValue(val, typeHint || 'Anything');
-        const bvaPart = typeHint
+        const tyPart = typeHint
           ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
           : '';
         const toFieldStr = '#<' + s.objectName + ' ' + toSelector + '>';
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
         lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("#set")]));`);
-        lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));${bvaPart}`);
+        lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));${tyPart}`);
         lines.push(`${I}    let _ = self.binding.send(Value::Object(set_msg));`);
         lines.push(`${I}}`);
       }
@@ -2477,7 +2477,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           body: s.expr.body,
         });
 
-        // Build op + payload + bva from the subscribe's caller-side args.
+        // Build op + payload + ty from the subscribe's caller-side args.
         const args = s.expr.args || [];
         const positional = args.filter(a => a.positional);
         const named = args.filter(a => !a.positional);
@@ -2510,23 +2510,23 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const wireOpExpr = buildOpExpr(wireOp);
         const internalOpExpr = buildOpExpr(internalSelector);
         let payloadExpr = 'Value::Null';
-        let bvaExpr = null;
+        let tyExpr = null;
         if (named.length > 0 && positional.length === 0) {
           const pInserts = named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
           payloadExpr = `{ let mut _pnm = Map::new(); ${pInserts} Value::Object(_pnm) }`;
-          const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
-          bvaExpr = `{ let mut _bn = Map::new(); ${bvaInserts} Value::Array(vec![Value::Object(_bn)]) }`;
+          const tyInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
+          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![Value::Object(_bn)]) }`;
         } else if (positional.length > 0 && named.length === 0) {
           const vals = positional.map(wrapArg).join(', ');
           payloadExpr = `Value::Array(vec![${vals}])`;
-          const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
-          bvaExpr = `Value::Array(vec![Value::Array(vec![${bvaVals}])])`;
+          const tyVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
+          tyExpr = `Value::Array(vec![Value::Array(vec![${tyVals}])])`;
         } else if (positional.length > 0 && named.length > 0) {
           const vals = positional.map(wrapArg).join(', ');
           payloadExpr = `{ let mut _pnm = Map::new(); ${named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ')} Value::Array(vec![${vals}, Value::Object(_pnm)]) }`;
-          const bvaVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
-          const bvaInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
-          bvaExpr = `{ let mut _bn = Map::new(); ${bvaInserts} Value::Array(vec![${bvaVals}, Value::Object(_bn)]) }`;
+          const tyVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
+          const tyInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
+          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![${tyVals}, Value::Object(_bn)]) }`;
         }
 
         const isRemoteDep = !isSelfTarget &&
@@ -2545,7 +2545,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    let mut sub_msg = Map::new();`);
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id.clone()));`);
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${internalOpExpr});`);
-          if (bvaExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${bvaExpr});`);
+          if (tyExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${tyExpr});`);
           lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(internalSelector)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
@@ -2561,7 +2561,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id));`);
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${wireOpExpr});`);
           lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));`);
-          if (bvaExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${bvaExpr});`);
+          if (tyExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${tyExpr});`);
           lines.push(`${I}    let _ = self.binding.send(Value::Object(sub_msg));`);
           lines.push(`${I}}`);
         } else if (childActorType) {
@@ -3243,7 +3243,7 @@ function genRustReBody(fields, typeEnv, refNames) {
   }
 }
 
-function genRustBvaBody(fields, typeEnv, refNames) {
+function genRustTyBody(fields, typeEnv, refNames) {
   // A self-return carries no tag: the parent that made this actor adds its class.
   if (fields[0]?.selfReturn) return null;
   const spread = fields.find(f => f.spread);
@@ -3314,15 +3314,15 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   if (named.length > 0 && pos.length === 0) {
     const pairs = namedTypes.map(n => {
       if (n.dynamic) {
-        return `bva_map.insert("${n.key}".to_string(), ${n.expr});`;
+        return `ty_map.insert("${n.key}".to_string(), ${n.expr});`;
       } else {
-        return `bva_map.insert("${n.key}".to_string(), json!(${n.val}));`;
+        return `ty_map.insert("${n.key}".to_string(), json!(${n.val}));`;
       }
     });
-    return `{ let mut bva_map = Map::new(); ${pairs.join(' ')} Value::Object(bva_map) }`;
+    return `{ let mut ty_map = Map::new(); ${pairs.join(' ')} Value::Object(ty_map) }`;
   }
   // For now, return null for complex dynamic cases (pos + named with dynamic)
   return null;
 }
 
-export { genRustLiftedLambda, genRustTypedAssign, genRustDestructureAssign, genRustAssignFnCall, genRustAssignChildDotCall, genRustAssignRemoteDotCall, genRustLocals, genRustWhileStatement, genRustListDestructure, genRustIfStatementBody, genRustIfStatement, genRustReBody, genRustBvaBody };
+export { genRustLiftedLambda, genRustTypedAssign, genRustDestructureAssign, genRustAssignFnCall, genRustAssignChildDotCall, genRustAssignRemoteDotCall, genRustLocals, genRustWhileStatement, genRustListDestructure, genRustIfStatementBody, genRustIfStatement, genRustReBody, genRustTyBody };

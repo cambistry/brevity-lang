@@ -771,7 +771,7 @@ ${subRegLines.join('\n')}
         if (enclosing) {
           return `self.child_${enclosing}_dispatch_at(${idExpr}, ${method}, &${payloadX}, "", "__parent")`;
         }
-        return `{ let (re, bva, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); let re = re.unwrap_or(Value::Null); bva.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
+        return `{ let (re, ty, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); let re = re.unwrap_or(Value::Null); ty.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
     }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
@@ -797,7 +797,7 @@ ${subRegLines.join('\n')}
         payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
       }
       if (spawnClass === '__self__') {
-        return `{ let (re, bva, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); let re = re.unwrap_or(Value::Null); bva.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
+        return `{ let (re, ty, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); let re = re.unwrap_or(Value::Null); ty.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
       const lc = spawnClass.toLowerCase();
       return `self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent")`;
@@ -895,24 +895,24 @@ ${subRegLines.join('\n')}
       return rustTypeWireWrap(`(${jv})`, t) || jv;
     };
     const argTag = a => { const tag = rustTypeTag(argType(a)); return tag ? `"${tag}"` : 'null'; };
-    let opExpr, bvaExpr;
+    let opExpr, tyExpr;
     if (positional.length > 0 && named.length > 0) {
       const posVals = positional.map(genArgValWrapped).join(', ');
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
       opExpr = `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
-      const posBva = positional.map(argTag).join(', ');
-      const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-      bvaExpr = `json!([${posBva}, {${namedBva}}])`;
+      const posTy = positional.map(argTag).join(', ');
+      const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+      tyExpr = `json!([${posTy}, {${namedTy}}])`;
     } else if (named.length > 0) {
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
       opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
-      const namedBva = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-      bvaExpr = `json!([{${namedBva}}])`;
+      const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
+      tyExpr = `json!([{${namedTy}}])`;
     } else {
       const posVals = positional.map(genArgValWrapped);
       opExpr = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
-      const posBva = positional.map(argTag).join(', ');
-      bvaExpr = `json!([[${posBva}]])`;
+      const posTy = positional.map(argTag).join(', ');
+      tyExpr = `json!([[${posTy}]])`;
     }
     return `{
         let seq = self.send_seq.get();
@@ -922,7 +922,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(send_id));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        send_msg.insert("ty".to_string(), ${bvaExpr});
+        send_msg.insert("ty".to_string(), ${tyExpr});
         let _ = self.binding.send(Value::Object(send_msg));
         Value::Null
     }`;

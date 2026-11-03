@@ -49,8 +49,8 @@ export function domHostAddr(ctx, tag) {
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function genCellNotify(cell, cellType) {
-  const bvaPart = cellType ? `, 'ty': [${JSON.stringify(cellType)}]` : '';
-  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cell)}]${bvaPart}, to: _sub.from }); }`;
+  const tyPart = cellType ? `, 'ty': [${JSON.stringify(cellType)}]` : '';
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cell)}]${tyPart}, to: _sub.from }); }`;
 }
 
 export function collectFreeVars(ctx, funcNode) {
@@ -1063,13 +1063,13 @@ export function genExpr(ctx, expr) {
     if (positional.length === 0 && named.length === 0) {
       return `this.#send(${method}, ${to})`;
     }
-    const { posVals, namedFields, posBva, namedBva } = genArgSlots(ctx, positional, named);
+    const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
     if (positional.length > 0 && named.length > 0) {
-      return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posBva}, {${namedBva}}])`;
+      return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posTy}, {${namedTy}}])`;
     } else if (named.length > 0) {
-      return `this.#send([{${namedFields}}, ${method}], ${to}, [{${namedBva}}])`;
+      return `this.#send([{${namedFields}}, ${method}], ${to}, [{${namedTy}}])`;
     } else {
-      return `this.#send([[${posVals}], ${method}], ${to}, [[${posBva}]])`;
+      return `this.#send([[${posVals}], ${method}], ${to}, [[${posTy}]])`;
     }
   }
   if (expr.type === 'SelfValue') return '"#<>"';
@@ -1339,17 +1339,17 @@ export function argWireVal(ctx, a) {
 
 // Build the parallel value + ty slot strings for a posted call's arguments.
 // Type-valued args are wire-serialized and carry the authority-address tag;
-// primitives keep their bare tag. Mirrors reply-slot handling (genBvaBody).
+// primitives keep their bare tag. Mirrors reply-slot handling (genTyBody).
 export function genArgSlots(ctx, positional, named) {
   return {
     posVals: positional.map(a => argWireVal(ctx, a)).join(', '),
     namedFields: named.map(a => `${a.name}: ${argWireVal(ctx, a)}`).join(', '),
-    posBva: positional.map(a => JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))).join(', '),
-    namedBva: named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))}`).join(', '),
+    posTy: positional.map(a => JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))).join(', '),
+    namedTy: named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))}`).join(', '),
   };
 }
 
-export function genBvaBody(ctx, fields, typeEnv) {
+export function genTyBody(ctx, fields, typeEnv) {
   // A self-return carries no tag: the parent that made this actor adds its class.
   if (fields[0]?.selfReturn) return null;
   const pos = fields.filter(f => f.positional);

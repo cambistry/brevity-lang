@@ -7,7 +7,7 @@ import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMB
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
-  CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
+  CALL_LIKE, genExpr, genDestructure, genReBody, genTyBody,
   genTypeCondition, genDefaultValue, stateKey, childBinding,
   genPackedReturn, genCellNotify,
 } from './expressions.js';
@@ -128,7 +128,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let reLine;
   if (name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
-    reLine = `\n        re = '#<' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _bva_re = ${JSON.stringify(`#<@${selector}>`)};`;
+    reLine = `\n        re = '#<' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(`#<@${selector}>`)};`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (isBareSelfReturn) {
@@ -152,18 +152,18 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     reLine = '\n        re = [];';
   }
   // `set`/`update` are fire-and-forget — no reply, no ack
-  let bvaLine = '';
+  let tyLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      if (!reply.fields.some(f => f.localObject)) bvaLine = `\n        _bva_re = _bva != null ? _bva[0] : undefined;`;
+      if (!reply.fields.some(f => f.localObject)) tyLine = `\n        _ty_re = _ty != null ? _ty[0] : undefined;`;
     } else {
-      const bvaBody = genBvaBody(ctx, reply.fields, typeEnv);
-      if (bvaBody !== null) {
-        bvaLine = `\n        _bva_re = ${bvaBody};`;
+      const tyBody = genTyBody(ctx, reply.fields, typeEnv);
+      if (tyBody !== null) {
+        tyLine = `\n        _ty_re = ${tyBody};`;
       }
     }
   } else if (isBareSelfReturn) {
-    bvaLine = `\n        _bva_re = 'Class';`;
+    tyLine = `\n        _ty_re = 'Class';`;
   }
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
@@ -235,15 +235,15 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     if (rawBody.some(s => s.type === 'SilentTerminator')) {
       return { condition, block: `${destructure}\n        await this.#${jsName}Fn(${arg});\n        _handled = true;` };
     }
-    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv)}\n        _handled = true;` };
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${delegatedTyLine(ctx, rawBody, tyLine, typeEnv)}\n        _handled = true;` };
   }
-  return { condition, block: `${destructure}${locals}${reLine}${bvaLine}${notifyBlock}\n        _handled = true;` };
+  return { condition, block: `${destructure}${locals}${reLine}${tyLine}${notifyBlock}\n        _handled = true;` };
 }
 
 // A delegated body can return from several paths, and only one tag is computed
 // up front. When any path returns self or forwards a reply, which carries no tag,
 // the reply's tag is decided per path.
-function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
+function delegatedTyLine(ctx, rawBody, tyLine, typeEnv) {
   const returns = [];
   const walk = (n) => {
     if (!n || typeof n !== 'object' || n.type === 'Function') return;
@@ -253,10 +253,10 @@ function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
   };
   walk(rawBody);
   const forwards = (r) => r.fields?.some(f => f.localObject);
-  if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return `${bvaLine}\n        if (_fnResult.pathTag !== undefined) _bva_re = _fnResult.pathTag ?? undefined;`;
+  if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return `${tyLine}\n        if (_fnResult.pathTag !== undefined) _ty_re = _fnResult.pathTag ?? undefined;`;
   const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn && !forwards(r));
-  const other = valued ? genBvaBody(ctx, valued.fields, typeEnv) : null;
-  return `\n        _bva_re = _fnResult.selfReturn ? undefined : _fnResult.forwarded ? undefined : _fnResult.pathTag !== undefined ? _fnResult.pathTag ?? undefined : ${other ?? 'undefined'};`;
+  const other = valued ? genTyBody(ctx, valued.fields, typeEnv) : null;
+  return `\n        _ty_re = _fnResult.selfReturn ? undefined : _fnResult.forwarded ? undefined : _fnResult.pathTag !== undefined ? _fnResult.pathTag ?? undefined : ${other ?? 'undefined'};`;
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -710,14 +710,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       : `_rawPayload === ${JSON.stringify(clause.targetType)}`;
     return {
       condition: `opName === "as" && typeof _rawPayload === "string" && ${typeCond}`,
-      block: `\n        re = [${val}];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
+      block: `\n        re = [${val}];\n        _ty_re = [_rawPayload];\n        _handled = true;`,
     };
   });
   if (hasReturnAs) {
     const returnAsType = actor.declarationReturn.typeName;
     asClauseParts.push({
       condition: `opName === "as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
-      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _bva_re = [_rawPayload];\n        _handled = true;`,
+      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [_rawPayload];\n        _handled = true;`,
     });
   }
 
@@ -733,15 +733,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const objectLine = (usesObject || hasLambdas)
     ? '\n    const _s = BvObject.pack(payload);'
     : '';
-  const bvaDecl = "\n    const _bva = message['ty'];";
+  const tyDecl = "\n    const _ty = message['ty'];";
   // Slice 12 inbound: when the message carries a parallel ty tag set, walk
   // the packed object and reconstruct any `::Name`-tagged type values
   // before destructure runs. `_bv_unwire_packed` no-ops when types is null
   // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
   const typesLines = usesTypeMatching
-    ? `\n    const _types = _bva != null ? BvObject.pack(_bva[0] ?? null) : null;${(usesObject || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
+    ? `\n    const _types = _ty != null ? BvObject.pack(_ty[0] ?? null) : null;${(usesObject || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
     : ((usesObject || hasLambdas)
-        ? `\n    const _types = _bva != null ? BvObject.pack(_bva[0] ?? null) : null;\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));`
+        ? `\n    const _types = _ty != null ? BvObject.pack(_ty[0] ?? null) : null;\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));`
         : '');
 
   // Generate remote ref from-check for payload validation bypass
@@ -936,7 +936,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return instance;
   }
 
-  async #send(op, to, bva) {
+  async #send(op, to, ty) {
     const id = String(++this.#nextId);
     // Locally-held lambda in a reply-awaiting callback field: a local-form
     // self-address (#<@N>, no path) names a handler on us, so dispatch it to
@@ -949,7 +949,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
       const _msg = { id, op, to };
-      if (bva !== undefined) _msg['ty'] = bva;
+      if (ty !== undefined) _msg['ty'] = ty;
       this.#binding.post(_msg);
     });
   }
@@ -971,12 +971,12 @@ ${fieldSection ? fieldSection + '\n' : ''}
     this.#binding.post({ id, op, to });
   }
 
-  async #sendRef(op, to, bva) {
+  async #sendRef(op, to, ty) {
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
       const _msg = { id, op, to };
-      if (bva !== undefined) _msg['ty'] = bva;
+      if (ty !== undefined) _msg['ty'] = ty;
       this.#binding.post(_msg);
     });
   }
@@ -1213,9 +1213,9 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
-    const payload = _rawPayload ?? {};${objectLine}${bvaDecl}${typesLines}
+    const payload = _rawPayload ?? {};${objectLine}${tyDecl}${typesLines}
     let re;
-    let _bva_re;
+    let _ty_re;
     let _handled = false;
     try {
 ${ifChain}
@@ -1229,7 +1229,7 @@ ${ifChain}
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
       const _post = { id, re, to: _replyTo };
-      if (_bva_re !== undefined) _post['ty'] = _bva_re;
+      if (_ty_re !== undefined) _post['ty'] = _ty_re;
       _route(_post);
     }
   }

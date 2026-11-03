@@ -13,7 +13,7 @@ import {
   rustCellNotifyLines,
 } from './expressions.js';
 import {
-  genRustLocals, genRustReBody, genRustBvaBody,
+  genRustLocals, genRustReBody, genRustTyBody,
 } from './statements.js';
 
 // A param typed as a class of this file holds one of its actors.
@@ -119,9 +119,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const refNamesForRet = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
   const publicRetExpr = (fields, te) => {
     const reBody = genRustReBody(fields, te, refNamesForRet);
-    const bvaBody = genRustBvaBody(fields, te, refNamesForRet);
-    const bvaPart = bvaBody ? `Some(${bvaBody})` : 'None';
-    return `(Some(${reBody}), ${bvaPart}, true)`;
+    const tyBody = genRustTyBody(fields, te, refNamesForRet);
+    const tyPart = tyBody ? `Some(${tyBody})` : 'None';
+    return `(Some(${reBody}), ${tyPart}, true)`;
   };
   // Conditional-return guards: ImplicitReturn(IfExpr) with block bodies
   // containing Return nodes. A *leading* guard (body[0] is one) needs to run
@@ -138,12 +138,12 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     // An early exit from a silent handler sends no reply.
     if (hasSilent) return `${branchIndent}return (None, None, true);`;
     const reBody = genRustReBody(returnFields, branchEnv, refNames);
-    const bvaBody = genRustBvaBody(returnFields, branchEnv, refNames);
+    const tyBody = genRustTyBody(returnFields, branchEnv, refNames);
     const out = [];
     out.push(`${branchIndent}re = Some(${reBody});`);
-    if (bvaBody) out.push(`${branchIndent}bva_re = Some(${bvaBody});`);
+    if (tyBody) out.push(`${branchIndent}ty_re = Some(${tyBody});`);
     out.push(`${branchIndent}handled = true;`);
-    out.push(`${branchIndent}return (re, bva_re, handled);`);
+    out.push(`${branchIndent}return (re, ty_re, handled);`);
     return out.join('\n');
   }
   const genGuardBlock = (ifExpr, blockIndent) => rustGuardBlock(ifExpr, blockIndent, typeEnv, makeReturnLines);
@@ -173,10 +173,10 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       lines.push(`                re = Some(bv_val(&${spreadName}));`);
       // Passthrough ty from incoming message
       if (!spreadField.localObject) {
-        lines.push(`                if let Some(bva) = message.get("ty") {`);
-        lines.push(`                    if let Some(arr) = bva.as_array() {`);
+        lines.push(`                if let Some(ty) = message.get("ty") {`);
+        lines.push(`                    if let Some(arr) = ty.as_array() {`);
         lines.push(`                        if !arr.is_empty() {`);
-        lines.push(`                            bva_re = Some(BvObject::splat_bva(&arr[0]));`);
+        lines.push(`                            ty_re = Some(BvObject::splat_ty(&arr[0]));`);
         lines.push(`                        }`);
         lines.push(`                    }`);
         lines.push(`                }`);
@@ -261,9 +261,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
         }
       }
       lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
-      const bva = genRustBvaBody(reply.fields, typeEnv, refNames);
-      if (bva) {
-        lines.push(`                bva_re = Some(${bva});`);
+      const ty = genRustTyBody(reply.fields, typeEnv, refNames);
+      if (ty) {
+        lines.push(`                ty_re = Some(${ty});`);
       }
     }
   } else if (implicitReturn && guards.length === 0) {
@@ -274,7 +274,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       && implicitReturn.expr.name === 'Self';
     if (isBareSelfReturn) {
       lines.push(`                re = Some(${genRustExpr(implicitReturn.expr, typeEnv)});`);
-      lines.push(`                bva_re = Some(Value::String("Class".to_string()));`);
+      lines.push(`                ty_re = Some(Value::String("Class".to_string()));`);
     } else {
       const raw = genRustExpr(implicitReturn.expr, typeEnv);
       const retType = inferExprType(implicitReturn.expr, typeEnv);
@@ -300,7 +300,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     lines.push(`                let _addr = format!("@${selector}/{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);
     lines.push(`                re = Some(Value::String(format!("#<{}>", _addr)));`);
-    lines.push(`                bva_re = Some(json!(${JSON.stringify(`#<@${selector}>`)}));`);
+    lines.push(`                ty_re = Some(json!(${JSON.stringify(`#<@${selector}>`)}));`);
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
@@ -396,23 +396,23 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       const savedSsaScope = G.ctx.ssaScope;
       const savedSsaCounts = G.ctx.ssaCounts;
       // Lambda inlined inside handle_op match arm: early returns short-circuit
-      // handle_op via the `(re, bva_re, handled)` tuple.
+      // handle_op via the `(re, ty_re, handled)` tuple.
       const lambdaRetExpr = (fields, te) => {
         const refNames = new Set();
         const reBody = genRustReBody(fields, te, refNames);
-        const bvaBody = genRustBvaBody(fields, te, refNames);
-        const bvaPart = bvaBody ? `Some(${bvaBody})` : 'None';
-        return `(Some(${reBody}), ${bvaPart}, true)`;
+        const tyBody = genRustTyBody(fields, te, refNames);
+        const tyPart = tyBody ? `Some(${tyBody})` : 'None';
+        return `(Some(${reBody}), ${tyPart}, true)`;
       };
       const locals = genRustLocals(fnNode.body, capTypeEnv, functionAnalysis, mutableVars, '                ', privateFns, lambdaRetExpr);
       if (locals) lambdaLines.push(locals);
       if (reply) {
         const refNames = new Set();
         lambdaLines.push(`                re = Some(${genRustReBody(reply.fields, capTypeEnv, refNames)});`);
-        const bva = genRustBvaBody(reply.fields, capTypeEnv, refNames);
-        if (bva) lambdaLines.push(`                bva_re = Some(${bva});`);
+        const ty = genRustTyBody(reply.fields, capTypeEnv, refNames);
+        if (ty) lambdaLines.push(`                ty_re = Some(${ty});`);
       } else if (guards.length > 0) {
-        // Conditional-return lambda: emit early-return `if cond { re = ...; handled = true; return (re, bva_re, handled); }`
+        // Conditional-return lambda: emit early-return `if cond { re = ...; handled = true; return (re, ty_re, handled); }`
         // chains for each guard, then a fallthrough using the terminal Return node.
         const termReturn = fnNode.body.find(s => s.type === 'Return');
         const I = '                ';
@@ -420,7 +420,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         function makeReturnFromFields(fields, env = capTypeEnv) {
           const refNames = new Set();
           const reBody = genRustReBody(fields, env, refNames);
-          return `re = Some(${reBody}); handled = true; return (re, bva_re, handled);`;
+          return `re = Some(${reBody}); handled = true; return (re, ty_re, handled);`;
         }
 
         const genBranchLines = (branchBody, branchIndent) => inRustBranchScope(() => {
@@ -466,8 +466,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
         const refNames = new Set();
         const ret = fnNode.body.find(s => s.type === 'Return');
         lambdaLines.push(`                re = Some(${genRustReBody(ret.fields, capTypeEnv, refNames)});`);
-        const bva = genRustBvaBody(ret.fields, capTypeEnv, refNames);
-        if (bva) lambdaLines.push(`                bva_re = Some(${bva});`);
+        const ty = genRustTyBody(ret.fields, capTypeEnv, refNames);
+        if (ty) lambdaLines.push(`                ty_re = Some(${ty});`);
       } else {
         // Implicit return — last expression in body
         const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');
@@ -537,15 +537,15 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     const val = genRustExpr(clause.expr, {});
     const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                bva_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
     } else {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                bva_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
+      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
     }
   }
   // Memoized return-as dispatch arm
   if (declarationReturn && declarationReturn.typeName) {
     const t = declarationReturn.typeName;
-    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                bva_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
+    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                ty_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
   }
 
   arms.push('            _ => {}');
@@ -642,10 +642,10 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   // return is a plain `return`. The parent gets typed values decoded.
   const childReply = (fields, te) => {
     const reBody = genRustReBody(fields, te, refNames);
-    const bvaBody = genRustBvaBody(fields, te, refNames);
-    if (!bvaBody) return reBody;
-    const unwire = bvaBody.includes('::') ? `if from == "__parent" { bv_unwire_reply(&_r, &${bvaBody}) } else { _r }` : '_r';
-    return `{ let _r = ${reBody}; ${tagWireReply(bvaBody)} ${unwire} }`;
+    const tyBody = genRustTyBody(fields, te, refNames);
+    if (!tyBody) return reBody;
+    const unwire = tyBody.includes('::') ? `if from == "__parent" { bv_unwire_reply(&_r, &${tyBody}) } else { _r }` : '_r';
+    return `{ let _r = ${reBody}; ${tagWireReply(tyBody)} ${unwire} }`;
   };
   const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
   G.ctx.enclosingLocals = null;
@@ -725,14 +725,14 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
 
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
     // In process there's no ty channel, so the parent gets typed values decoded.
-    const childBva = genRustBvaBody(reply.fields, typeEnv, refNames);
-    if (childBva) lines.push(`                ${tagWireReply(childBva)}`);
+    const childTy = genRustTyBody(reply.fields, typeEnv, refNames);
+    if (childTy) lines.push(`                ${tagWireReply(childTy)}`);
     const spreadField = reply.fields.find(f => f.spread);
     if (spreadField && !spreadField.localObject) {
-      lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("ty").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_bva); }`);
+      lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("ty").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_ty); }`);
     }
-    if (childBva?.includes('::')) {
-      lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childBva})); }`);
+    if (childTy?.includes('::')) {
+      lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childTy})); }`);
     }
   } else if (implicitReturn && !childGuards.includes(implicitReturn)) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv, eCtx);
@@ -763,8 +763,8 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   return `            "${name}"${isPublic ? childTagGuard(fn) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
 }
 
-function tagWireReply(bvaBody) {
-  return `if bv_from_wire_caller(from) { self.wire_tag = Some(${bvaBody}); }`;
+function tagWireReply(tyBody) {
+  return `if bv_from_wire_caller(from) { self.wire_tag = Some(${tyBody}); }`;
 }
 
 function genRustChildDispatch(actor) {
@@ -872,7 +872,7 @@ function genRustChildDispatch(actor) {
             let sigil = op.chars().nth("subscribe".len()).unwrap_or('@');
             let target = &op["subscribe".len() + 1..];
             let sub_args = payload.clone();
-            let sub_bva = Value::Null;
+            let sub_ty = Value::Null;
             let subs_key = format!("${name}_cell_subs_{}", target);
             let mut subs = self
                 .state
@@ -883,7 +883,7 @@ function genRustChildDispatch(actor) {
                 "id": id,
                 "from": from,
                 "args": sub_args,
-                "bva": sub_bva,
+                "ty": sub_ty,
             }));
             self.state.insert(subs_key, Value::Array(subs));
             let rewritten = format!("{}{}", sigil, target);

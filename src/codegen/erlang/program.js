@@ -22,7 +22,7 @@ import {
   genErlDefaultValue,
   genReplyBody,
   genReplyFieldVal,
-  genBvaBody,
+  genTyBody,
 } from './statements.js';
 
 // ── Conditional return chain builder ────────────────────────────────────────
@@ -60,8 +60,8 @@ function bodyHasErlWhileEarlyReturn(body) {
 // the dispatch return shape so the surrounding catch can re-raise it.
 function makeErlOpReturnThrow(ctx, fields, typeEnv, sCtx) {
   const reBody = genReplyBody(ctx, fields, typeEnv, sCtx);
-  const bvaBody = genBvaBody(ctx, fields, typeEnv, sCtx);
-  return `throw({'__brevity_op_return__', ${reBody}, ${bvaBody || 'null'}})`;
+  const tyBody = genTyBody(ctx, fields, typeEnv, sCtx);
+  return `throw({'__brevity_op_return__', ${reBody}, ${tyBody || 'null'}})`;
 }
 
 // Build the throw for an early return inside a while body in a private _fn
@@ -196,14 +196,14 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
         : (f.expr ? genReturnValue(ctx, f.expr, typeEnv, replyCtx) : 'null');
       return `${erlString(f.key)} => ${val}`;
     });
-    return `{ok, #{${namedPairs.join(', ')}}, ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
+    return `{ok, #{${namedPairs.join(', ')}}, ${genTyBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
   }
   const posVals = pos.map(f => {
     if (f.expr) return genReturnValue(ctx, f.expr, typeEnv, replyCtx);
     if (f.name) return genExpr(ctx, { type: 'Identifier', name: f.name }, typeEnv, replyCtx);
     return 'null';
   });
-  return `{ok, [${posVals.join(', ')}], ${genBvaBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
+  return `{ok, [${posVals.join(', ')}], ${genTyBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
 }
 
 const isPrivateOp = op => !/^(@|set$|update$|set@|subscribe@|new@)/.test(op);
@@ -380,17 +380,17 @@ function genSubscribePrologue(fnName) {
   return [
     `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
-    SubBva_ = maps:get(<<"ty">>, Message, null),
+    SubTy_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
     ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
     `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
-    SubBva_ = maps:get(<<"ty">>, Message, null),
+    SubTy_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
     ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
   ];
 }
@@ -565,7 +565,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   ctx.currentTypeEnv = typeEnv;
   // subscribe registration is handled by the generic prologue clause in
   // handle_op (see genSubscribePrologue). No per-fn registration code here.
-  // While-body early return: throws `{__brevity_op_return__, Re, Bva}` from
+  // While-body early return: throws `{__brevity_op_return__, Re, Ty}` from
   // inside the loop, caught by the wrapping try/catch around the body below.
   const opHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
   const savedWhileEarlyThrow = ctx.whileEarlyThrow;
@@ -597,7 +597,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     // additional replay block here.
   }
 
-  let replyExpr, bvaExpr;
+  let replyExpr, tyExpr;
   if (reply) {
     // Set stmtIdx to body length so SSA resolves to the latest binding
     const replyCtx = { ...sCtx, stmtIdx: body.length };
@@ -613,10 +613,10 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       } else {
         replyExpr = `structure_splat(${sn})`;
       }
-      bvaExpr = null;
+      tyExpr = null;
     } else {
       replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-      bvaExpr = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
+      tyExpr = genTyBody(ctx, reply.fields, typeEnv, replyCtx);
     }
   }
 
@@ -645,8 +645,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     if (reply) {
       const replyCtxF = { ...sCtx, stmtIdx: body.length };
       const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtxF);
-      const bvaExprF = genBvaBody(ctx, reply.fields, typeEnv, replyCtxF);
-      makeFinalRet = () => `${finalRetPrefix}${I}{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
+      const tyExprF = genTyBody(ctx, reply.fields, typeEnv, replyCtxF);
+      makeFinalRet = () => `${finalRetPrefix}${I}{ok, ${replyExprF}, ${tyExprF || 'null'}}`;
     } else if (implicitReturn) {
       const replyCtxF = { ...sCtx, stmtIdx: body.length };
       const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtxF);
@@ -662,13 +662,13 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const isSpread = reply.fields.some(f => f.spread && !f.localObject);
     if (isSpread) {
       replyBlock = `${I}Re = ${replyExpr},\n` +
-        `${I}BvaRe = case maps:find(<<"ty">>, Message) of\n` +
-        `${I}    {ok, [BvaFirst|_]} -> structure_splat_bva(BvaFirst);\n` +
+        `${I}TyRe = case maps:find(<<"ty">>, Message) of\n` +
+        `${I}    {ok, [TyFirst|_]} -> structure_splat_ty(TyFirst);\n` +
         `${I}    _ -> null\n` +
         `${I}end,\n` +
-        `${I}{ok, Re, BvaRe}`;
-    } else if (bvaExpr) {
-      replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, ${bvaExpr}}`;
+        `${I}{ok, Re, TyRe}`;
+    } else if (tyExpr) {
+      replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, ${tyExpr}}`;
     } else {
       replyBlock = `${I}Re = ${replyExpr},\n${I}{ok, Re, null}`;
     }
@@ -717,12 +717,12 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   let innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
 
   if (opHasEarlyWhile) {
-    // Wrap the body in `try ... catch throw:{__brevity_op_return__, Re_, Bva_}
-    // -> {ok, Re_, Bva_} end` so a Return inside a `repeat while` short-circuits
+    // Wrap the body in `try ... catch throw:{__brevity_op_return__, Re_, Ty_}
+    // -> {ok, Re_, Ty_} end` so a Return inside a `repeat while` short-circuits
     // the loop and the handler in one step. The body's trailing `,` (from the
     // last local line) before replyBlock is already correct for try-block
     // statement chaining.
-    innerBody = `${I}try\n${innerBody}\n${I}catch\n${I}    throw:{'__brevity_op_return__', Re_, Bva_} -> {ok, Re_, Bva_}\n${I}end`;
+    innerBody = `${I}try\n${innerBody}\n${I}catch\n${I}    throw:{'__brevity_op_return__', Re_, Ty_} -> {ok, Re_, Ty_}\n${I}end`;
   }
 
   if (typeCheck) {
@@ -1237,7 +1237,7 @@ function genChildActorCode(ctx, actors) {
     // Generate child-specific self_send if the child has functions to call
     if (mergedActor.functions.some(f => f.type === 'FunctionDecl' && f.name)) {
       const prefix = `child_${name.toLowerCase()}`;
-      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Bva} = bv_call_self_(fun() -> ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),\n    bv_object_pack(Re).`);
+      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Ty} = bv_call_self_(fun() -> ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),\n    bv_object_pack(Re).`);
     }
 
     // Generate per-class start_internal_<class>/1 + bv_loop_<class>/0 so
@@ -1247,7 +1247,7 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    put(bv_outer_, Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WBva_} -> From_ ! {bv_wire_reply, Id_, WRe_, WBva_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    put(bv_outer_, Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Ty_)};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1313,7 +1313,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     const ssaEnv = buildSSAEnv(body);
     const sCtx = { restVars: new Set(), refVars: new Set(), childActorRefs: new Map(), selfSpawnedRefs: fileChildRefs(ctx), ssaEnv };
     // Lambdas dispatch through handle_op so their early returns share the
-    // op_return throw shape; the wrap below catches it and produces {ok,Re,Bva}.
+    // op_return throw shape; the wrap below catches it and produces {ok,Re,Ty}.
     const lambdaHasEarlyWhile = bodyHasErlWhileEarlyReturn(body);
     const savedWhileEarlyThrow = ctx.whileEarlyThrow;
     if (lambdaHasEarlyWhile) {
@@ -1342,8 +1342,8 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
       let makeFinalRet;
       if (reply) {
         const replyExprF = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-        const bvaExprF = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
-        makeFinalRet = () => `{ok, ${replyExprF}, ${bvaExprF || 'null'}}`;
+        const tyExprF = genTyBody(ctx, reply.fields, typeEnv, replyCtx);
+        makeFinalRet = () => `{ok, ${replyExprF}, ${tyExprF || 'null'}}`;
       } else if (returnNode) {
         const retExprF = genReplyBody(ctx, returnNode.fields, typeEnv, replyCtx);
         makeFinalRet = () => `{ok, ${retExprF}, null}`;
@@ -1354,15 +1354,15 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     } else if (reply) {
       const replyCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-      const bvaExpr = genBvaBody(ctx, reply.fields, typeEnv, replyCtx);
+      const tyExpr = genTyBody(ctx, reply.fields, typeEnv, replyCtx);
       lines.push(`${I}Re = ${replyExpr},`);
-      lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
+      lines.push(`${I}{ok, Re, ${tyExpr || 'null'}}`);
     } else if (returnNode) {
       const retCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, returnNode.fields, typeEnv, retCtx);
-      const bvaExpr = genBvaBody(ctx, returnNode.fields, typeEnv, retCtx);
+      const tyExpr = genTyBody(ctx, returnNode.fields, typeEnv, retCtx);
       lines.push(`${I}Re = ${replyExpr},`);
-      lines.push(`${I}{ok, Re, ${bvaExpr || 'null'}}`);
+      lines.push(`${I}{ok, Re, ${tyExpr || 'null'}}`);
     } else if (implicitReturn) {
       const retCtx = { ...sCtx, stmtIdx: body.length };
       const retExpr = genExpr(ctx, implicitReturn.expr, typeEnv, retCtx);
@@ -1388,7 +1388,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     }
     if (lambdaHasEarlyWhile) {
       lines.push(`${I}catch`);
-      lines.push(`${I}    throw:{'__brevity_op_return__', Re_, Bva_} -> {ok, Re_, Bva_}`);
+      lines.push(`${I}    throw:{'__brevity_op_return__', Re_, Ty_} -> {ok, Re_, Ty_}`);
       lines.push(`${I}end`);
     }
   } else if (fnNode.expr) {
@@ -1923,11 +1923,11 @@ ${testTypeClauses || '                _ -> null'};
 ${dispatchInner}
     end.
 
-handle_result({ok, Re, BvaRe}, Id, From, _OpName) when Re =/= null ->
+handle_result({ok, Re, TyRe}, Id, From, _OpName) when Re =/= null ->
     Resp0 = #{<<"id">> => Id, <<"re">> => Re, <<"to">> => From},
-    Resp = case BvaRe of
+    Resp = case TyRe of
         null -> Resp0;
-        _ -> Resp0#{<<"ty">> => BvaRe}
+        _ -> Resp0#{<<"ty">> => TyRe}
     end,
     io:put_chars([json_encode(Resp), $\n]);
 handle_result({ok, null, _}, _Id, _From, _OpName) ->
@@ -2015,7 +2015,7 @@ bv_loop() ->
             case Result_ of
                 %% A self-return: to the parent, this instance's address is its pid.
                 {ok, <<"#<>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()};
-                {ok, Re_, Bva_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Bva_)};
+                {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_unwire_reply(Re_, Ty_)};
                 {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};
                 _ -> From_ ! {bv_error, Id_, <<"error">>}
             end,
@@ -2093,7 +2093,7 @@ read_loop() ->
   const needsSelfSend = privateFns.length > 0 || ctx.lambdaHandlers.length > 0 || ctx.publicFnNames.size > 0;
   const selfSendFn = needsSelfSend ? `
 self_send(OpName, Payload) ->
-    {ok, Re, _Bva} = bv_call_self_(fun() -> handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),
+    {ok, Re, _Ty} = bv_call_self_(fun() -> handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),
     bv_object_pack(Re).
 ` : '';
 
@@ -2113,7 +2113,7 @@ emit_await_(Event, Payload) ->
     case Subs of
         [] -> null;
         [Cb|_] ->
-            {ok, Re, _Bva} = Cb(Event, Payload),
+            {ok, Re, _Ty} = Cb(Event, Payload),
             bv_object_pack(Re)
     end.
 ` : '';
@@ -2145,10 +2145,10 @@ bv_unwire_slot(Tag, V) when is_binary(Tag) ->
             end
     end;
 bv_unwire_slot(_, V) -> V.
-bv_unwire_reply(Re, Bva) when is_list(Re), is_list(Bva), length(Re) =:= length(Bva) ->
-    lists:zipwith(fun bv_unwire_slot/2, Bva, Re);
-bv_unwire_reply(Re, Bva) when is_map(Re), is_map(Bva) ->
-    maps:map(fun(K, V) -> bv_unwire_slot(maps:get(K, Bva, null), V) end, Re);
+bv_unwire_reply(Re, Ty) when is_list(Re), is_list(Ty), length(Re) =:= length(Ty) ->
+    lists:zipwith(fun bv_unwire_slot/2, Ty, Re);
+bv_unwire_reply(Re, Ty) when is_map(Re), is_map(Ty) ->
+    maps:map(fun(K, V) -> bv_unwire_slot(maps:get(K, Ty, null), V) end, Re);
 bv_unwire_reply(Re, _) -> Re.
 
 bv_unwire_payload(Message, Payload) ->

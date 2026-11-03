@@ -723,7 +723,7 @@ bv_await_ready_(Pid) ->
     receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed);
         {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_ready_(Pid) end.
 bv_await_wire_(Id) ->
-    receive {bv_wire_reply, Id, Re_, Bva_} -> {ok, Re_, Bva_}; {bv_error, Id, Fail_} -> {failed, Fail_};
+    receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
         {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_wire_(Id) end.
 %% A constructor block failed: there's no actor, and whoever is constructing it is told.
 bv_init_failed_() ->
@@ -768,18 +768,18 @@ structure_splat({Pos, Named}) ->
         true -> Named
     end.
 
-structure_splat_bva(BvaFirst) when is_list(BvaFirst) ->
-    case BvaFirst of
+structure_splat_ty(TyFirst) when is_list(TyFirst) ->
+    case TyFirst of
         [] -> [];
         _ ->
-            Last = lists:last(BvaFirst),
+            Last = lists:last(TyFirst),
             case is_map(Last) of
-                true when length(BvaFirst) =:= 1 -> Last;
-                _ -> BvaFirst
+                true when length(TyFirst) =:= 1 -> Last;
+                _ -> TyFirst
             end
     end;
-structure_splat_bva(M) when is_map(M) -> M;
-structure_splat_bva(_) -> null.
+structure_splat_ty(M) when is_map(M) -> M;
+structure_splat_ty(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
 %% Bare type name of a parameter annotation (Alias::Name -> Name, Name -> Name).
@@ -810,8 +810,8 @@ type_member_of(_, _) -> false.
 
 match_types(Message, Pairs) ->
     case maps:find(<<"ty">>, Message) of
-        {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
-            TypesObj = hd(BvA),
+        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
+            TypesObj = hd(Ty),
             lists:all(fun({Name, TypeName}) ->
                 case maps:find(Name, TypesObj) of
                     {ok, _} when TypeName =:= <<"Anything">> -> true;
@@ -829,8 +829,8 @@ match_types_positional(Message, PosTypes, NamedTypes) ->
 
 match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
     case maps:find(<<"ty">>, Message) of
-        {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
-            TypesArr = hd(BvA),
+        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
+            TypesArr = hd(Ty),
             case is_list(TypesArr) of
                 true ->
                     PosCount = length([X || X <- TypesArr, not is_map(X)]),
@@ -1298,7 +1298,7 @@ brevity_list_unique([H|T], Acc) ->
 // Reserved names used in generated Erlang dispatch code — user vars must not collide
 const RESERVED_ERL_VARS = new Set([
   'Message', 'Payload', 'Id', 'From', 'OpVal', 'OpName', 'OpName0', 'HasPayload',
-  'Result', 'Re', 'Resp', 'Resp0', 'Ex', 'BvaRe', 'BvaFirst',
+  'Result', 'Re', 'Resp', 'Resp0', 'Ex', 'TyRe', 'TyFirst',
   'S_pos', 'S_named', 'Args_pos', 'Args_named',
 ]);
 

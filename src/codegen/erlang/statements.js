@@ -138,24 +138,24 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const wireOpExpr = buildOpExpr(wireOp);
   const internalOpExpr = buildOpExpr(internalSelector);
   let payloadExpr = 'null';
-  let bvaExpr = null;
+  let tyExpr = null;
   if (named.length > 0 && positional.length === 0) {
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
+    const tyFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `#{${fields}}`;
-    bvaExpr = `[#{${bvaFields}}]`;
+    tyExpr = `[#{${tyFields}}]`;
   } else if (positional.length > 0 && named.length === 0) {
     const vals = positional.map(genArgVal).join(', ');
-    const bvaVals = positional.map(a => tagOf(a)).join(', ');
+    const tyVals = positional.map(a => tagOf(a)).join(', ');
     payloadExpr = `[${vals}]`;
-    bvaExpr = `[[${bvaVals}]]`;
+    tyExpr = `[[${tyVals}]]`;
   } else if (positional.length > 0 && named.length > 0) {
     const vals = positional.map(genArgVal).join(', ');
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-    const bvaVals = positional.map(a => tagOf(a)).join(', ');
-    const bvaFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
+    const tyVals = positional.map(a => tagOf(a)).join(', ');
+    const tyFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `[${vals}, #{${fields}}]`;
-    bvaExpr = `[${bvaVals}, #{${bvaFields}}]`;
+    tyExpr = `[${tyVals}, #{${tyFields}}]`;
   }
 
   const isRemoteDep = !isSelfTarget &&
@@ -169,22 +169,22 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
     // selector too so the prologue's args extraction (hd(op) when list) still
     // finds args at position 0.
-    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
+    const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${tyField}},`);
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
     // Remote wire: bare verb in op, full address as "#<alias selector>".
-    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
+    const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
     const toBin = `<<"#<${objectName} ${toSelector}>">>`;
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${tyField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType || _sCtx?.selfSpawnedRefs?.has(objectName)) {
     // Instance process: subscribe there; its later notifications come back
     // as {bv_notify, ...} messages and run the fun stored here.
     const pid = genExpr(ctx, { type: _sCtx?.refVars?.has(objectName) ? 'RefRead' : 'Identifier', name: objectName }, _typeEnv, _sCtx);
-    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
-    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
+    const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
+    outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${tyField}},`);
     outLines.push(`${I}${V('Sub_init_re_')} = bv_inst_sub_(${pid}, ${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else {
@@ -784,11 +784,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             // their notifications are handled separately above.
             lines.push(`${I}lists:foreach(fun`);
             lines.push(`${I}    ({inproc, _, _, _}) -> ok;`);
-            lines.push(`${I}    ({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubBva${sfx}_}) ->`);
+            lines.push(`${I}    ({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubTy${sfx}_}) ->`);
             lines.push(`${I}    FnOp${sfx}_ = case FnSubArgs${sfx}_ of null -> ${selectorBin}; _ -> [FnSubArgs${sfx}_, ${selectorBin}] end,`);
-            lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"ty">> => FnSubBva${sfx}_} end,`);
+            lines.push(`${I}    FnMsg${sfx}_ = case FnSubTy${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"ty">> => FnSubTy${sfx}_} end,`);
             lines.push(`${I}    case ${dispatchFn}(${selectorBin}, FnMsg${sfx}_, FnSubArgs${sfx}_, FnSubId${sfx}_, <<"__parent">>) of`);
-            lines.push(`${I}        {ok, FnRe${sfx}_, FnBva${sfx}_} ->`);
+            lines.push(`${I}        {ok, FnRe${sfx}_, FnTy${sfx}_} ->`);
             lines.push(`${I}            case FnSubFrom${sfx}_ of`);
             lines.push(`${I}                <<"__parent">> ->`);
             lines.push(`${I}                    case get({pending_subscribe, FnSubId${sfx}_}) of`);
@@ -799,7 +799,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}                    FnSubPid${sfx}_ ! {bv_notify, FnSubId${sfx}_, FnRe${sfx}_};`);
             lines.push(`${I}                _ ->`);
             lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
-            lines.push(`${I}                    FnResp${sfx}_ = case FnBva${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"ty">> => FnBva${sfx}_} end,`);
+            lines.push(`${I}                    FnResp${sfx}_ = case FnTy${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"ty">> => FnTy${sfx}_} end,`);
             lines.push(`${I}                    io:put_chars([json_encode(FnResp${sfx}_), $\\n])`);
             lines.push(`${I}            end;`);
             lines.push(`${I}        _ -> ok`);
@@ -862,11 +862,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
-        const bvaField = typeHint
+        const tyField = typeHint
           ? `, <<"ty">> => [[<<"${typeHint}">>]]`
           : '';
         const toBin = `<<"#<${s.objectName} ${toSelector}>">>`;
-        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${bvaField}},`);
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${tyField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }
@@ -1573,7 +1573,7 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
   return `#{${entries.join(', ')}}`;
 }
 
-function genBvaBody(ctx, fields, typeEnv, sCtx) {
+function genTyBody(ctx, fields, typeEnv, sCtx) {
   // A self-return carries no tag: the parent that made this actor adds its class.
   if (fields[0]?.selfReturn) return null;
   const spread = fields.find(f => f.spread);
@@ -1644,7 +1644,7 @@ export {
   genReplyBody,
   genReplyFieldVal,
   genReplyNamedMap,
-  genBvaBody,
+  genTyBody,
   erlSetTarget,
   genErlDefaultValue,
 };

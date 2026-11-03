@@ -3,7 +3,7 @@ import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genPackedReturn, genBvaBody, typeTag,
+  genListDestructureAssign, genPackedReturn, genTyBody, typeTag,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
   jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey,
 } from './expressions.js';
@@ -66,7 +66,7 @@ export function genSubscribeCall(ctx, expr) {
   const positional = args.filter(a => a.positional);
   const named = args.filter(a => !a.positional);
   let opExpr;
-  let bvaField = '';
+  let tyField = '';
   if (positional.length === 0 && named.length === 0) {
     opExpr = JSON.stringify(selector);
   } else {
@@ -74,17 +74,17 @@ export function genSubscribeCall(ctx, expr) {
     const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
-    const posBva = positional.map(a => JSON.stringify(typeTag(ctx, typeOf(a)))).join(', ');
-    const namedBva = named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, typeOf(a)))}`).join(', ');
+    const posTy = positional.map(a => JSON.stringify(typeTag(ctx, typeOf(a)))).join(', ');
+    const namedTy = named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, typeOf(a)))}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
       opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
-      bvaField = `, 'ty': [${posBva}, {${namedBva}}]`;
+      tyField = `, 'ty': [${posTy}, {${namedTy}}]`;
     } else if (named.length > 0) {
       opExpr = `[{${namedFields}}, ${JSON.stringify(selector)}]`;
-      bvaField = `, 'ty': [{${namedBva}}]`;
+      tyField = `, 'ty': [{${namedTy}}]`;
     } else {
       opExpr = `[[${posVals}], ${JSON.stringify(selector)}]`;
-      bvaField = `, 'ty': [[${posBva}]]`;
+      tyField = `, 'ty': [[${posTy}]]`;
     }
   }
 
@@ -96,7 +96,7 @@ export function genSubscribeCall(ctx, expr) {
     const toExpr = JSON.stringify(toSelector);
     return `
         {${pendingSetup}
-          this.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+          this.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
   }
   // Cell-handle subscribe: target is a state var holding `{host, cell}`. The
@@ -106,7 +106,7 @@ export function genSubscribeCall(ctx, expr) {
     const handle = `this.#${stateKey(target.name)}`;
     return `
         {${pendingSetup}
-          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
   }
   // Remote dep (declared via `( "Alias": Alias { ... } ) *{ }`): post through
@@ -115,7 +115,7 @@ export function genSubscribeCall(ctx, expr) {
     const toExpr = JSON.stringify('#<' + encAddr(objectName) + ' ' + encAddr(toSelector) + '>');
     return `
         {${pendingSetup}
-          this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${bvaField} });
+          this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${tyField} });
         }`;
   }
   // Local or state-held child actor instance: route via child.receive. `to`
@@ -130,7 +130,7 @@ export function genSubscribeCall(ctx, expr) {
   const toExpr = JSON.stringify(toSelector);
   return `
         {${pendingSetup}
-          ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${bvaField} });
+          ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
 }
 
@@ -423,7 +423,7 @@ function genBlockBind(ctx, s, outerEnv) {
 function genBranchReturn(ctx, fields) {
   const packed = genPackedReturn(ctx, fields, ctx.currentTypeEnv);
   if (fields[0]?.selfReturn || fields.some(f => f.localObject)) return packed;
-  const tag = genBvaBody(ctx, fields, ctx.currentTypeEnv) ?? 'null';
+  const tag = genTyBody(ctx, fields, ctx.currentTypeEnv) ?? 'null';
   return `Object.assign(${packed}, { pathTag: ${tag} })`;
 }
 
@@ -895,9 +895,9 @@ export function genLocals(ctx, body, outerEnv) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
-        const bvaField = typeHint ? `, 'ty': [[${JSON.stringify(typeHint)}]]` : '';
+        const tyField = typeHint ? `, 'ty': [[${JSON.stringify(typeHint)}]]` : '';
         const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
-        return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${bvaField} });`;
+        return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${tyField} });`;
       }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {

@@ -528,14 +528,14 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
                 (name, p)
             } else { return; };
-            let (re, bva_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test", id);
+            let (re, ty_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test", id);
             if !handled {
                 let mut ex = Map::new(); ex.insert(op_name, json!("unhandled"));
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
             } else if let Some(re_val) = re {
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from));
-                if let Some(b) = bva_re { resp.insert("ty".to_string(), b); }
+                if let Some(b) = ty_re { resp.insert("ty".to_string(), b); }
                 let _ = self.binding.send(Value::Object(resp));
             }
         }
@@ -677,11 +677,11 @@ ${bodyLines}
                 Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
                 _ => Value::Null,
             };
-            let sub_bva = message.get("ty").cloned().unwrap_or(Value::Null);
+            let sub_ty = message.get("ty").cloned().unwrap_or(Value::Null);
             self.cell_subs
                 .entry(target.to_string())
                 .or_insert_with(Vec::new)
-                .push((id.to_string(), from.to_string(), sub_args, sub_bva));
+                .push((id.to_string(), from.to_string(), sub_args, sub_ty));
             let rewritten = format!("{}{}", sigil, target);
             return self.handle_op(&rewritten, message, payload, from, id);
         }
@@ -727,15 +727,15 @@ ${bodyLines}
         }
         let payload = &_payload_owned;
         let _s = BvObject::pack(payload);
-        let _bva_msg = message.get("ty");
+        let _ty_msg = message.get("ty");
         let _ = id;
         let mut re: Option<Value> = None;
-        let mut bva_re: Option<Value> = None;
+        let mut ty_re: Option<Value> = None;
         let mut handled = false;
         match op_name {
 ${matchArms}
         }
-        (re, bva_re, handled)
+        (re, ty_re, handled)
     }${fileClassNeedsSelfPool ? `
 
     // Per-instance dispatch on a Self()-spawned sibling. Same pattern as
@@ -775,7 +775,7 @@ ${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's o
 
     fn self_send(&mut self, op_name: &str, payload: &Value) -> Value {
         let empty_msg = json!({});
-        let (re, _bva, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self", "");
+        let (re, _ty, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self", "");
         re.unwrap_or(Value::Null)
     }`;
 
@@ -784,7 +784,7 @@ ${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's o
             self.handle_op(op_name.as_str(), message, &payload, from, id)
         }));
         match result {
-            Ok((re, bva_re, handled)) => {
+            Ok((re, ty_re, handled)) => {
                 if !handled {
                     let mut ex = Map::new();
                     ex.insert(op_name.clone(), json!("unhandled"));
@@ -798,8 +798,8 @@ ${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's o
                     resp.insert("id".to_string(), json!(id));
                     resp.insert("re".to_string(), re_val);
                     resp.insert("to".to_string(), json!(from));
-                    if let Some(bva) = bva_re {
-                        resp.insert("ty".to_string(), bva);
+                    if let Some(ty) = ty_re {
+                        resp.insert("ty".to_string(), ty);
                     }
                     let _ = self.binding.send(Value::Object(resp));
                 }
@@ -1304,8 +1304,8 @@ fn bv_unwire_slot(tag: &Value, v: &Value) -> Value {
         None => v.clone(),
     }
 }
-fn bv_unwire_reply(re: &Value, bva: &Value) -> Value {
-    match (re, bva) {
+fn bv_unwire_reply(re: &Value, ty: &Value) -> Value {
+    match (re, ty) {
         (Value::Array(vs), Value::Array(ts)) => Value::Array(vs.iter().enumerate()
             .map(|(i, v)| ts.get(i).map_or_else(|| v.clone(), |t| bv_unwire_slot(t, v))).collect()),
         (Value::Object(vs), Value::Object(ts)) => Value::Object(vs.iter()

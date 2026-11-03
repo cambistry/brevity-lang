@@ -27,11 +27,11 @@ const TAG_MATCHES_FN = `fn tag_matches(tag: &Value, expected: &str) -> bool {
 }`;
 
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
-    let bva = match message.get("ty") {
+    let ty = match message.get("ty") {
         Some(v) => v,
         None => return pairs.is_empty(),
     };
-    let arr = match bva.as_array() {
+    let arr = match ty.as_array() {
         Some(a) => a,
         None => return pairs.is_empty(),
     };
@@ -53,11 +53,11 @@ const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, po
 }
 
 fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)], min_pos: usize) -> bool {
-    let bva = match message.get("ty") {
+    let ty = match message.get("ty") {
         Some(v) => v,
         None => return pos_types.is_empty() && named_types.is_empty(),
     };
-    let arr = match bva.as_array() {
+    let arr = match ty.as_array() {
         Some(a) => a,
         None => return pos_types.is_empty() && named_types.is_empty(),
     };
@@ -154,8 +154,8 @@ impl BvObject {
         }
         self.positional[0].clone()
     }
-    fn splat_bva(bva_first: &Value) -> Value {
-        if let Some(arr) = bva_first.as_array() {
+    fn splat_ty(ty_first: &Value) -> Value {
+        if let Some(arr) = ty_first.as_array() {
             if arr.is_empty() {
                 return Value::Array(vec![]);
             }
@@ -167,8 +167,8 @@ impl BvObject {
             }
             return Value::Array(arr.clone());
         }
-        if let Some(_obj) = bva_first.as_object() {
-            return bva_first.clone();
+        if let Some(_obj) = ty_first.as_object() {
+            return ty_first.clone();
         }
         Value::Null
     }

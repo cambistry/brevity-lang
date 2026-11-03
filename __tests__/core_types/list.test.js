@@ -127,7 +127,7 @@ describe('List type matching + Anything + BV-A', () => {
         items List = [1, 2, 3]
         return result: items
 
-      @buildMixedBva
+      @buildMixedTy
         =
         items List of Anything = [1, "two"]
         return result: items
@@ -163,7 +163,7 @@ describe('List type matching + Anything + BV-A', () => {
   });
 
   it('List of Anything → component types in ty', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@buildMixedBva', from: 'c' } }, { output: { id: '5', 'ty': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@buildMixedTy', from: 'c' } }, { output: { id: '5', 'ty': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
   });
 
   it('List param accepts component ty from caller', async () => {

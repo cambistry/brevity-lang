@@ -17,7 +17,7 @@ import { genErlCatchStatement } from './statements.js';
 
 function erlSendVars(ctx) {
   const n = ctx.sendCounter++;
-  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, bva: `Send_bva_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}`, locsig: `Send_locsig_${n}` };
+  return { seq: `Send_seq_${n}`, n: `Send_n_${n}`, id: `Send_id_${n}`, op: `Send_op_${n}`, ty: `Send_ty_${n}`, msg: `Send_msg_${n}`, addr: `Send_addr_${n}`, locsig: `Send_locsig_${n}` };
 }
 
 // The CAM address an XML `<tag>` constructs against: the element-factory selector
@@ -56,17 +56,17 @@ function erlArgSlots(positional, named, method, { argVal, argTag }) {
   if (positional.length > 0 && named.length > 0) {
     const posVals = positional.map(argVal).join(', ');
     const namedFields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
-    const posBva = positional.map(argTag).join(', ');
-    const namedBva = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
-    return { opExpr: `[${posVals}, #{${namedFields}}, ${method}]`, bvaExpr: `[${posBva}, #{${namedBva}}]` };
+    const posTy = positional.map(argTag).join(', ');
+    const namedTy = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
+    return { opExpr: `[${posVals}, #{${namedFields}}, ${method}]`, tyExpr: `[${posTy}, #{${namedTy}}]` };
   } else if (named.length > 0) {
     const namedFields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
-    const namedBva = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
-    return { opExpr: `[#{${namedFields}}, ${method}]`, bvaExpr: `[#{${namedBva}}]` };
+    const namedTy = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
+    return { opExpr: `[#{${namedFields}}, ${method}]`, tyExpr: `[#{${namedTy}}]` };
   }
   const posVals = positional.map(argVal).join(', ');
-  const posBva = positional.map(argTag).join(', ');
-  return { opExpr: `[[${posVals}], ${method}]`, bvaExpr: `[[${posBva}]]` };
+  const posTy = positional.map(argTag).join(', ');
+  return { opExpr: `[[${posVals}], ${method}]`, tyExpr: `[[${posTy}]]` };
 }
 
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix.
@@ -148,10 +148,10 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
   const value = `get(${erlStateKey(ctx, '@' + cell)})`;
-  const bvaPart = cellType ? `, <<"ty">> => [${erlString(cellType)}]` : '';
+  const tyPart = cellType ? `, <<"ty">> => [${erlString(cellType)}]` : '';
   return [
     `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
-    `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubBva${sfx}_}) ->`,
+    `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,
     `${I}    case SubFrom${sfx}_ of`,
     `${I}        <<"__parent">> ->`,
     // In-process subscriber: invoke the parent actor's registered fun directly,
@@ -163,7 +163,7 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
     `${I}        SubPid${sfx}_ when is_pid(SubPid${sfx}_) ->`,
     `${I}            SubPid${sfx}_ ! {bv_notify, SubId${sfx}_, [${value}]};`,
     `${I}        _ ->`,
-    `${I}            Resp${sfx}_ = #{<<"id">> => SubId${sfx}_, <<"re">> => [${value}], <<"to">> => SubFrom${sfx}_${bvaPart}},`,
+    `${I}            Resp${sfx}_ = #{<<"id">> => SubId${sfx}_, <<"re">> => [${value}], <<"to">> => SubFrom${sfx}_${tyPart}},`,
     `${I}            io:put_chars([json_encode(Resp${sfx}_), $\\n])`,
     `${I}    end;`,
     `${I}    (_) -> ok`,
@@ -818,13 +818,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     end`;
     }
     const argHelpers = erlArgHelpers(ctx, typeEnv, sCtx);
-    const { opExpr, bvaExpr } = erlArgSlots(positional, named, method, argHelpers);
+    const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
     return `begin
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
         ${v2.op} = ${opExpr},
-        ${v2.bva} = ${bvaExpr},
-        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.bva}},
+        ${v2.ty} = ${tyExpr},
+        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
         null
     end`;
@@ -977,14 +977,14 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     end`;
   }
   const argHelpers = erlArgHelpers(ctx, null, null);
-  const { opExpr, bvaExpr } = erlArgSlots(positional, named, method, argHelpers);
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
   return `begin
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.op} = ${opExpr},
-        ${v2.bva} = ${bvaExpr},
-        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.bva}},
+        ${v2.ty} = ${tyExpr},
+        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
         bv_object_pack(await_response_(${v2.id}))
     end`;
