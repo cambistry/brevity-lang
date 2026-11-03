@@ -4,7 +4,7 @@ import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
-  classNeedsSpawnedInstances, rustTypeTag, rustTypeWireWrap,
+  classNeedsSpawnedInstances, rustTypeTag, rustTypeWireWrap, outerRead,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
@@ -232,6 +232,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   }
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'Value::Null';
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return outerRead(expr);
   if (expr.type === 'Identifier') {
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     // `Self` in expression position resolves to the class wire address.

@@ -402,7 +402,7 @@ function toJsonValue(expr, brevityType) {
   }
   if (brevityType === 'Integer') {
     // If expression is already a Value (state read, ref read, fn call result), don't wrap
-    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(')
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(')
         || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
         || expr.startsWith('bv_bigint_to_value(')
         // SSA-resolved state/ref reads: e.g. _s.positional.get(...).cloned()...
@@ -412,7 +412,7 @@ function toJsonValue(expr, brevityType) {
     return intToValue(expr);
   }
   if (brevityType === 'Decimal') {
-    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(')
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(')
         || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
         || expr.startsWith('bv_decimal_to_value(')
         || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))
@@ -484,6 +484,17 @@ function createRustContext() {
     catchLabelStack: [],
     catchLabelCounter: 0,
   };
+}
+
+// A read of the file actor's state from one of its classes (src/outer_reads.js): the
+// file's key, with no class prefix, as a typed value (a ref read stays a Value).
+function outerRead(expr) {
+  const bare = expr.name.replace(/^[@#]/, '');
+  const prefix = expr.name.startsWith('@') ? 'a_' : expr.name.startsWith('#') ? 'h_' : 'b_';
+  const read = `self.outer_read("${prefix}${bare}")`;
+  // A ref read is a Value here, as a class's own cell is.
+  if (expr.type === 'RefRead') return read;
+  return `(${convertFromValue(read, G.ctx.outerTypes?.get(expr.name))})`;
 }
 
 function stateKey(name) {
@@ -796,5 +807,5 @@ function classRefersToSelf(actor) {
 
 export {
   TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
-  RUST_KEYWORDS, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances, classRefersToSelf,
+  RUST_KEYWORDS, outerRead, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances, classRefersToSelf,
 };

@@ -14,6 +14,13 @@ export function jsIdent(rawName) {
 // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
 // Codegen-internal names use the __ prefix and are emitted directly — they
 // must not flow through this function.
+// The binding a class constructed here gets: its parent, and the file actor it reads
+// cells from (src/outer_reads.js).
+export function childBinding(ctx) {
+  if (!ctx.readsOuter) return '{post: (msg) => this.receive(msg)}';
+  return `{post: (msg) => this.receive(msg), outer: ${ctx.inClass ? 'this.#outer' : 'this'}}`;
+}
+
 export function stateKey(name) {
   if (typeof name !== 'string') return name;
   if (name.startsWith('@')) return `a_${name.slice(1)}`;
@@ -395,6 +402,7 @@ export function genExpr(ctx, expr) {
     if (attrsJs) topFields.push(attrsJs);
     return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(expr.name)}))`;
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;
   if (expr.type === 'RefArg')        return expr.name;
@@ -696,7 +704,7 @@ export function genExpr(ctx, expr) {
       // so a subclass that calls Self() builds a subclass instance.
       if (name === 'Self') {
         ctx.usesChildSend = true;
-        const binding = `{post: (msg) => this.receive(msg)}`;
+        const binding = childBinding(ctx);
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
         return vals ? `await this.constructor.create(${binding}, ${vals})` : `await this.constructor.create(${binding})`;
@@ -737,7 +745,7 @@ export function genExpr(ctx, expr) {
           const paramList = initParams.map(p => jsIdent(p.name)).join(', ');
           return `(await (async (${paramList}) => ${tailJs})(${orderedArgs.join(', ')}))`;
         }
-        const binding = `{post: (msg) => this.receive(msg)}`;
+        const binding = childBinding(ctx);
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         // Overloaded constructor: dispatch based on arity + types
         if (ctx.constructorOverloads?.has(name)) {

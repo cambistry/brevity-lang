@@ -557,3 +557,67 @@ describe('end to end', () => {
     }, 120000);
   });
 });
+
+// A class reads the cells of the actor that made it (see classes/outer_reads.test.js).
+// `Svc.Reader()` asks the shared actor and `s.Reader()` asks `s`, so they read different
+// `total`s. The relay holds the shared actor, and makes a fresh one for `#new` to `Svc`.
+describe('end to end: Svc.W() and s.W() read different actors', () => {
+  const READER_SVC = `
+    total *Integer = 4
+
+    @Reader = *{
+      @get = { return total }
+    }
+
+    @bump! = { total <- total + 10 }
+  `;
+  const readerRemotes = [{ path: 'svc.bv', service: '{ Reader () -> *{\n  get () -> (Integer)\n}\nbump! () => self }' }];
+  const shared = `*\n  "svc.bv": Svc\n*\n@read = { return Svc.Reader().get() }\n`;
+  const own = `*\n  "svc.bv": Svc #\n*\n@read = {\n  s = Svc()\n  return s.Reader().get()\n}\n`;
+
+  const promote = (v, name) => {
+    if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
+    if (Array.isArray(v)) return v.map(x => promote(x, name));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x, name)]));
+    return v;
+  };
+  const settle = async (actor, count) => {
+    for (let i = 0; i < 200 && actor.posts.length <= count; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  };
+
+  async function read(callerSource) {
+    const svc = await (await compileActor(READER_SVC)).spawn();
+    await svc.sendAsync({ id: 'b', op: '@bump!', from: 'other' });
+    await settle(svc, 0);
+    const actors = { Svc: { actor: svc, served: 1 } };
+    const caller = await (await compileActor(callerSource, { compileOptions: { remotes: readerRemotes } })).spawn();
+    await caller.sendAsync({ id: 'x', op: '@read', from: 'c' });
+    let answered = 0;
+    for (let step = 0; step < 20; step++) {
+      await settle(caller, answered);
+      const msg = caller.posts[answered++];
+      if (msg.to === 'c') return msg.re;
+      if (msg.to === 'Svc' && Array.isArray(msg.op) && msg.op[1] === '#new') {
+        actors['Svc/7'] = { actor: await (await compileActor(READER_SVC)).spawn(), served: 0 };
+        await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'bv-a': '#<Svc>', from: 'Svc' });
+        continue;
+      }
+      const name = msg.to.startsWith('Svc/7') ? 'Svc/7' : 'Svc';
+      const target = actors[name];
+      const to = msg.to.slice(name.length).trim();
+      await target.actor.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
+      await settle(target.actor, target.served);
+      const reply = target.actor.posts[target.served++];
+      await caller.sendAsync({ ...promote(reply, name), to: undefined, from: reply.from ? `${name} ${reply.from}` : name });
+    }
+    throw new Error('the caller never replied');
+  }
+
+  it('Svc.Reader() reads the shared actor', async () => {
+    expect(await read(shared)).toEqual([14]);
+  }, 120000);
+
+  it('s.Reader() reads s', async () => {
+    expect(await read(own)).toEqual([4]);
+  }, 120000);
+});

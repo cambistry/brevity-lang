@@ -8,6 +8,7 @@ import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
+import { markOuterReads } from './outer_reads.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
@@ -842,6 +843,7 @@ export function validate(ast, options = {}) {
   lowerParamScope(ast);
   lowerOwnCellWrites(ast);
   addConstructHandlers(ast);
+  markOuterReads(ast);
   // Last, so every check above reads `as` as written.
   lowerAs(ast);
   lowerBranchOrder(ast);

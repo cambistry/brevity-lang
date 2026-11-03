@@ -545,7 +545,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           } else {
             initArgsExpr = `[${s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
           }
-          lines.push(`${I}${varName} = bv_spawn_sync_(spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}])),`);
+          lines.push(`${I}${varName} = bv_spawn_sync_(spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}, bv_outer_()])),`);
           sCtx.selfSpawnedRefs?.add(s.name);
           // If any named arg corresponds to a host state cell AND the
           // class declared a SubscribeCall on that constructor param,

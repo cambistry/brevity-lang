@@ -270,6 +270,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'null';
 
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
+    return `bv_outer_get_(${erlStateKey({}, expr.name)})`;
+  }
   if (expr.type === 'Identifier') {
     const name = expr.name;
     if (ctx.stateVarNames.has(name)) return `get(${erlStateKey(ctx, name)})`;
@@ -530,8 +533,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
             }
           }
           const iifeBody = subRegLines.length > 0
-            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}])), ${subRegLines.join(', ')}, NewPid_`
-            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}])), NewPid_`;
+            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_()])), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_()])), NewPid_`;
           return `(fun() -> ${iifeBody} end)()`;
         }
       }

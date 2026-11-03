@@ -2,12 +2,13 @@ import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
+import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genBvaBody,
-  genTypeCondition, genDefaultValue, stateKey,
+  genTypeCondition, genDefaultValue, stateKey, childBinding,
   genPackedReturn, genCellNotify,
 } from './expressions.js';
 import {
@@ -302,6 +303,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
+  ctx.inClass = !!actor.name;
   ctx.lambdaCounter = 0;
   ctx.lambdaHandlers = [];
   ctx.lambdaVarNames = new Set();
@@ -470,6 +472,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   ctx.emitNames = emitDecls;
   const stateVarEnv = new Map([
+    // The file's names a class reads (src/outer_reads.js); its own come after, and win.
+    ...(actor.name && ctx.readsOuter ? [...ctx.outerTypes].filter(([, t]) => t) : []),
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
@@ -848,7 +852,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       if (superIngests.length > 0 && actor.declarationReturn) {
         ingestArg = `, ${genExpr(ctx, actor.declarationReturn.expr)}`;
       }
-      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create({post: (msg) => this.receive(msg)}${args}${ingestArg});`);
+      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx)}${args}${ingestArg});`);
     }
   }
   // Regenerate initMethodBody with on-handler lines
@@ -877,6 +881,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // field entirely.
   const classUsesSelfAsValue = astUsesSelfAsValue(actor);
   const publishesClasses = (actor.functions || []).some(f => f.name?.startsWith('new@'));
+  // A class reads its file actor's cells by asking it (src/outer_reads.js).
+  const readsOuter = !!actor.name && hasOuterReads({ actors: [mergedActor] });
+  const outerCells = !actor.name && ctx.readsOuter
+    ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
+    : '';
   const classAddressField = classUsesSelfAsValue
     ? `\n  static classAddress = ${JSON.stringify('#<' + ctx.fileName + '>')}`
     : '';
@@ -887,9 +896,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()' : ''}
-  #_remoteRoutes = null${classAddressField}
+  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding; }
+  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null;' : ''} }
 
   _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; return old; }${hasEmits ? `
 
@@ -1066,7 +1075,23 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     }
   }
 
-  async #selfSend(op) {
+${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, so it asks.
+  async #outerRead(name) {
+    const id = String(++this.#nextId);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
+      this.#outer.receive({ id, op: 'get@' + name, from: '__child', _route: (msg) => this.receive(msg) });
+    });
+  }
+
+` : ''}${outerCells ? `  // A class of this file reading one of our cells.
+  #_outerGet(message) {
+    const cells = { ${outerCells} };
+    const name = message.op.slice(4);
+    message._route(name in cells ? { id: message.id, re: [cells[name]()] } : { id: message.id, ex: { [message.op]: 'unhandled' } });
+  }
+
+` : ''}  async #selfSend(op) {
     const _opName = Array.isArray(op) ? op[op.length - 1] : op;
     const id = String(++this.#nextId);${silentFnNames.size > 0 ? `
     if (${JSON.stringify([...silentFnNames])}.includes(_opName)) {
@@ -1106,7 +1131,8 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       this.#_testFwd.delete(message.id);
       cb(message);
       return;
-    }
+    }${outerCells ? `
+    if (message.from === '__child' && typeof message.op === 'string' && message.op.startsWith('get@')) { this.#_outerGet(message); return; }` : ''}
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
       if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
@@ -1370,6 +1396,8 @@ export function codegen(ast, options = {}) {
     ctx.typeAuthority.set(info.name, info.path || '');
   }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
+  ctx.readsOuter = hasOuterReads(ast);
+  ctx.outerTypes = fileOuterNames(ast);
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
     const { inheritedParams } = resolveSuperclassChain(ctx.actorNodes, a);

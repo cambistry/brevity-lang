@@ -17,6 +17,7 @@ import {
 } from './handlers.js';
 import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
+import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
@@ -275,6 +276,10 @@ ${bvTypeFieldsArms}
     newArgs.push('inst_depth: 0');
     structFields.push('    pending_subs: Vec<(i64, Value)>');
     newArgs.push('pending_subs: Vec::new()');
+  }
+  if (G.ctx.readsOuter) {
+    structFields.push('    outer_states: Vec<std::collections::HashMap<String, Value>>');
+    newArgs.push('outer_states: Vec::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
@@ -757,7 +762,13 @@ ${actor.initParams && actor.initParams.length > 0 ? actor.initParams.map((p, i) 
         self.state = saved_state;
     }` : ''}
 
-    fn call_fn(&mut self, fn_val: &Value, payload: &Value) -> Value {
+${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's own state is swapped in while
+    // it runs, and the file's is the first one set aside (src/outer_reads.js).
+    fn outer_read(&self, key: &str) -> Value {
+        self.outer_states.first().unwrap_or(&self.state).get(key).cloned().unwrap_or(Value::Null)
+    }
+
+` : ''}    fn call_fn(&mut self, fn_val: &Value, payload: &Value) -> Value {
         let fn_name = fn_val.as_str().unwrap_or("");
         self.self_send(fn_name, payload)
     }
@@ -1852,6 +1863,8 @@ function codegenRust(ast, options = {}) {
   const active = ast.actors.filter(a => a.asClauses?.length > 0 || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
+  G.ctx.readsOuter = hasOuterReads(ast);
+  G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.actorFnNames = new Set();
   G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   // Authority (defining path) per type key: '' for local (#<::Name>, filled by
