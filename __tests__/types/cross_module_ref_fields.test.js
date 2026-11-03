@@ -58,20 +58,20 @@ describe('cross-module type with reference fields', () => {
 
   it('invoking c.press... fires to the endpoint address the value carries', async () => {
     const actor = await (await compileActor(handler('{ c.press... }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@press1' && p.to === '#<Widget @press1>')).toBe(true);
   });
 
   it('invoking c.release... fires to the release endpoint, not press', async () => {
     const actor = await (await compileActor(handler('{ c.release... }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@release1' && p.to === '#<Widget @release1>')).toBe(true);
     expect(actor.posts.some(p => p.op === '@press1')).toBe(false);
   });
 
   it('invoking c.reset... fires to the reset endpoint', async () => {
     const actor = await (await compileActor(handler('{ c.reset... }'), { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: '#<Widget ::Control>' }], from: 'c' });
     expect(actor.posts.some(p => p.op === '@reset1' && p.to === '#<Widget @reset1>')).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe('cross-module type with reference fields', () => {
       handler('-> label: (c.label ?? "none")', '@handle'),
       { compileOptions: { remotes } },
     )).spawn();
-    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'bv-a': [{ c: '#<Widget ::Control>' }], from: 'c' });
+    await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle'], 'ty': [{ c: '#<Widget ::Control>' }], from: 'c' });
     const post = actor.posts.find(p => p.id === '1' && 're' in p);
     expect(post).toEqual(expect.objectContaining({ id: '1', re: { label: 'ready' }, to: 'c' }));
   });

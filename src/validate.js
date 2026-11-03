@@ -301,7 +301,7 @@ export function validate(ast, options = {}) {
   // ── Cross-module type references (Service::Name) ────────────────────────
   // Slice 15: where a type annotation contains `Alias::Name`, validate that
   // `Alias` is a declared dep, and (when the iface is parsed) that `Name`
-  // is exported as a type. Loud failures here keep `bv-a` annotations and
+  // is exported as a type. Loud failures here keep `ty` annotations and
   // codegen from silently routing to a missing target.
   validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed);
 

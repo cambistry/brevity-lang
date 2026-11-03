@@ -149,7 +149,7 @@ C().inc!(5).inc!(2).total
 A final value in a `!` function is an error, because it would be discarded. So is a
 value on one path and falling off the end on another: write `return self` on the
 second. `self` is only a value in return position. On the wire a self-return is
-`{ re: {}, 'bv-a': '#<>' }`, where `#<>` is the sender's own address in local form
+`{ re: {}, 'ty': '#<>' }`, where `#<>` is the sender's own address in local form
 and its parent promotes it, like any other local address.
 
 A signature's arrow states its effect, in service docs and function types. A name

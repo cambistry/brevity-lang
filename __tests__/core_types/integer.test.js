@@ -16,16 +16,16 @@ const script = `
 `;
 
 function inp2(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Integer', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Integer', 'Integer']], from: 'c' } };
 }
 function inp3(op, a, b, c) {
-  return { input: { id: '1', op: [[a, b, c], op], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b, c], op], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } };
 }
 function inp4(op, a, b, c, d) {
-  return { input: { id: '1', op: [[a, b, c, d], op], 'bv-a': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b, c, d], op], 'ty': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } };
 }
 function out(result, type = 'Integer') {
-  return { output: { id: '1', 'bv-a': { result: type }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: type }, re: { result }, to: 'c' } };
 }
 async function expectN(script, input, expected) {
   // For tests where BigInt inputs produce results that fit in safe integer range.
@@ -34,11 +34,11 @@ async function expectN(script, input, expected) {
   await actor.sendAsync(input.input);
   const post = actor.posts[0];
   expect(post.id).toBe('1');
-  expect(post['bv-a']).toEqual({ result: 'Integer' });
+  expect(post['ty']).toEqual({ result: 'Integer' });
   expect(Number(post.re.result)).toBe(expected);
 }
 function outBool(matches) {
-  return { output: { id: '1', 'bv-a': { matches: 'Boolean' }, re: { matches }, to: 'c' } };
+  return { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches }, to: 'c' } };
 }
 
 // ─── Addition ────────────────────────────────────────────────────────────────
@@ -537,13 +537,13 @@ describe('Integer type conversions', () => {
   `;
 
   function inpI(op, a) {
-    return { input: { id: '1', op: [[a], op], 'bv-a': [['Integer']], from: 'c' } };
+    return { input: { id: '1', op: [[a], op], 'ty': [['Integer']], from: 'c' } };
   }
   function outFloat(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
   }
   function outDecimal(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
   it('to_float(42) = 42.0', async () => {
@@ -582,10 +582,10 @@ describe('Integer conversion via ref cell dot method', () => {
   `;
 
   function outFloat(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
   }
   function outDecimal(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
   it('x.to_float on *Integer ref', async () => {

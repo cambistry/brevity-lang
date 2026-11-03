@@ -27,7 +27,7 @@ const TAG_MATCHES_FN = `fn tag_matches(tag: &Value, expected: &str) -> bool {
 }`;
 
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
-    let bva = match message.get("bv-a") {
+    let bva = match message.get("ty") {
         Some(v) => v,
         None => return pairs.is_empty(),
     };
@@ -53,7 +53,7 @@ const MATCH_TYPES_POSITIONAL_FN = `fn match_types_positional(message: &Value, po
 }
 
 fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: &[(&str, &str)], min_pos: usize) -> bool {
-    let bva = match message.get("bv-a") {
+    let bva = match message.get("ty") {
         Some(v) => v,
         None => return pos_types.is_empty() && named_types.is_empty(),
     };

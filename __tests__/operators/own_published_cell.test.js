@@ -65,7 +65,7 @@ describe('@a <- v', () => {
       @items *List of Integers = []
       @add! = (n Integer) { @items <- @items.append(n) }
     `,
-      { input: { id: '1', op: [[5], '@add!'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { id: '1', op: [[5], '@add!'], 'ty': [['Integer']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<>' }) },
       { input: { id: '2', op: '@items', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [[5]] }) },
@@ -79,7 +79,7 @@ describe('@a <- v', () => {
         if b { @a <- 9 }
       }
     `,
-      { input: { id: '1', op: [[true], '@set_if!'], 'bv-a': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], '@set_if!'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<>' }) },
       { input: { id: '2', op: '@a', from: 'c' } },
       { output: reply('2', 9) },

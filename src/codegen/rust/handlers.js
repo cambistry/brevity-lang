@@ -171,9 +171,9 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       const spreadField = reply.fields.find(f => f.spread);
       const spreadName = rustSsaResolve(spreadField.name);
       lines.push(`                re = Some(bv_val(&${spreadName}));`);
-      // Passthrough bv-a from incoming message
+      // Passthrough ty from incoming message
       if (!spreadField.localObject) {
-        lines.push(`                if let Some(bva) = message.get("bv-a") {`);
+        lines.push(`                if let Some(bva) = message.get("ty") {`);
         lines.push(`                    if let Some(arr) = bva.as_array() {`);
         lines.push(`                        if !arr.is_empty() {`);
         lines.push(`                            bva_re = Some(BvObject::splat_bva(&arr[0]));`);
@@ -268,7 +268,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     }
   } else if (implicitReturn && guards.length === 0) {
     // Handler body is bare `Self` — reply with the class wire address as a
-    // bare value (mirrors #new's reply shape: bare `re`, bare `bv-a` tag).
+    // bare value (mirrors #new's reply shape: bare `re`, bare `ty` tag).
     // Skip the standard positional array wrapping.
     const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
       && implicitReturn.expr.name === 'Self';
@@ -304,7 +304,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
-  // `re` with optional `bv-a` type tag). Derived fn replay for this cell is
+  // `re` with optional `ty` type tag). Derived fn replay for this cell is
   // emitted by the underlying SetStatement codegen (set@<cell>'s body is
   // `<cell> <- _v`), so no additional fn replay here.
   if (name && name.startsWith('set@')) {
@@ -591,7 +591,7 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
 
 // With nothing required, a call can leave out every arg, and so every tag.
 function untaggedOk(params, message) {
-  return params.some(p => !p.defaultValue && !p.rest) ? '' : `${message}.get("bv-a").is_none() || `;
+  return params.some(p => !p.defaultValue && !p.rest) ? '' : `${message}.get("ty").is_none() || `;
 }
 
 // A call from outside an instance has its tags checked, as a file handler's are.
@@ -724,12 +724,12 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
     }
 
     lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
-    // In process there's no bv-a channel, so the parent gets typed values decoded.
+    // In process there's no ty channel, so the parent gets typed values decoded.
     const childBva = genRustBvaBody(reply.fields, typeEnv, refNames);
     if (childBva) lines.push(`                ${tagWireReply(childBva)}`);
     const spreadField = reply.fields.find(f => f.spread);
     if (spreadField && !spreadField.localObject) {
-      lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("bv-a").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_bva); }`);
+      lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("ty").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_bva); }`);
     }
     if (childBva?.includes('::')) {
       lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childBva})); }`);

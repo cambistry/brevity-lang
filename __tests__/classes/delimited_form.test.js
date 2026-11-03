@@ -79,21 +79,21 @@ describe('constructor delimited form — runtime', () => {
   it('no-param constructor works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testGreeter', from: 'c' } },
-      { output: { id: '1', 'bv-a': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
+      { output: { id: '1', 'ty': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
     );
   });
 
   it('constructor with param works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testCounter', from: 'c' } },
-      { output: { id: '1', 'bv-a': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
     );
   });
 
   it('multiple params work', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testPair', from: 'c' } },
-      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
     );
   });
 });
@@ -179,28 +179,28 @@ describe('constructor delimited form — optional args — runtime', () => {
   it('both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testPairBoth', from: 'c' } },
-      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
     );
   });
 
   it('optional omitted — default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testPairDefault', from: 'c' } },
-      { output: { id: '2', 'bv-a': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
+      { output: { id: '2', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
     );
   });
 
   it('all-default params — both provided', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@testDefaultsBoth', from: 'c' } },
-      { output: { id: '3', 'bv-a': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
     );
   });
 
   it('all-default params — none provided', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@testDefaultsNone', from: 'c' } },
-      { output: { id: '4', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
+      { output: { id: '4', 'ty': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
   });
 });

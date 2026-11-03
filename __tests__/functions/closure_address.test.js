@@ -27,8 +27,8 @@ import { expectBehavior } from '../helpers.js';
 //   subscriber: { id: '1', op: '@subscribe', to: '@0', from: 'c' }
 //   publisher:  { id: '1', re: ['initial'], to: 'c' }
 //
-// bv-a on the reply is not asserted — closure subscribes follow the existing
-// fn-subscribe shape (no bv-a emitted), which is consistent with @pub-style
+// ty on the reply is not asserted — closure subscribes follow the existing
+// fn-subscribe shape (no ty emitted), which is consistent with @pub-style
 // fns today. Type annotation on fn-subscribe replies is an orthogonal
 // improvement that applies uniformly.
 //
@@ -52,7 +52,7 @@ describe('closure-as-address — primitive', () => {
     await expectBehavior(singleClosure,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['initial'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'updated' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'updated' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['updated'], to: 'c' } },
     );
   });
@@ -61,9 +61,9 @@ describe('closure-as-address — primitive', () => {
     await expectBehavior(singleClosure,
       { input: { id: '1', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '1', re: ['initial'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'a' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'a' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['a'], to: 'c' } },
-      { input: { id: '3', op: [{ v: 'b' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [{ v: 'b' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['b'], to: 'c' } },
     );
   });
@@ -85,7 +85,7 @@ describe('closure-as-address — primitive', () => {
       { output: { id: 'A', re: ['hi'], to: 'a' } },
       { input: { id: 'B', op: '@subscribe', to: '@1', from: 'b' } },
       { output: { id: 'B', re: ['hi'], to: 'b' } },
-      { input: { id: 'C', op: [{ v: 'bye' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: 'C', op: [{ v: 'bye' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: 'A', re: ['bye'], to: 'a' } },
       { output: { id: 'B', re: ['bye'], to: 'b' } },
     );
@@ -95,7 +95,7 @@ describe('closure-as-address — primitive', () => {
   // @0 and a public handler at @bump coexist without collision.
   it('numeric @0 and alphabetic @bump dispatch independently', async () => {
     await expectBehavior(singleClosure,
-      { input: { id: '1', op: [{ v: 'x' }, '@bump.'], 'bv-a': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '1', op: [{ v: 'x' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { input: { id: '2', op: '@subscribe', to: '@0', from: 'c' } },
       { output: { id: '2', re: ['x'], to: 'c' } },
     );

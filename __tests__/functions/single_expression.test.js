@@ -24,7 +24,7 @@ describe('single-expression — fn = (params) ->  side_effect .', () => {
   it('fn = (n) ->  side_effect . — silent function mutates state', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@test!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 8 }, to: 'c' } },
+      { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 8 }, to: 'c' } },
     );
   });
 });
@@ -53,28 +53,28 @@ describe('single-expression — public function forms', () => {
   it('@op = -> "Hello" as Text', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@greet', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Text'], re: ['Hello from Brevity!'], to: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['Hello from Brevity!'], to: 'c' } },
     );
   });
 
   it('@op = -> 42 as Integer', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@answer', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('@op = (n: Integer) -> :n', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, '@echo'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },
+      { input: { id: '1', op: [{ n: 7 }, '@echo'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },
     );
   });
 
   it('@op = -> true as Boolean', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@alive', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Boolean'], re: [true], to: 'c' } },
+      { output: { id: '1', 'ty': ['Boolean'], re: [true], to: 'c' } },
     );
   });
 });

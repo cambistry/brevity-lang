@@ -50,7 +50,7 @@ export function _bv_from_wire(tag, payload, _bv_types) {
   return out;
 }
 
-// A reply's counterpart to `_bv_unwire_packed`: `re` and its parallel `bv-a`, in
+// A reply's counterpart to `_bv_unwire_packed`: `re` and its parallel `ty`, in
 // wire shape. A positional reply tags per slot, with named slots in a trailing
 // object; a named reply tags per key. Slots whose tag is not `::Name` pass through.
 export function _bv_unwire_reply(re, bva, _bv_types) {
@@ -80,7 +80,7 @@ export function _bv_sel(addr) {
 }
 
 // Slice 12 inbound: walk a packed Object (`positional` + `named`)
-// alongside the parallel bv-a tag object and reconstruct any
+// alongside the parallel ty tag object and reconstruct any
 // type-valued slot. Slots whose tag is not `::Name` pass through.
 export function _bv_unwire_packed(s, types, _bv_types) {
   if (!types || !s) return s;

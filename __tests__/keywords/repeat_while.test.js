@@ -80,11 +80,11 @@ describe('repeat while — single-line body (stateful)', () => {
 
 describe('repeat while — lexical scope', () => {
   it('reads and writes actor state inside block body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: [[3], '@lexicalBlock!'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[3], '@lexicalBlock!'], 'ty': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [9], to: 'c' }) });
   });
 
   it('reads and writes actor state inside single-line body', async () => {
-    await expectBehavior(statefulScript, { input: { id: '1', op: [[5], '@lexicalSingleLine!'], 'bv-a': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
+    await expectBehavior(statefulScript, { input: { id: '1', op: [[5], '@lexicalSingleLine!'], 'ty': [['Integer']], from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) });
   });
 });
 

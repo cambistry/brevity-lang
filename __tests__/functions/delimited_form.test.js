@@ -349,21 +349,21 @@ describe('delimited form — runtime', () => {
   it('braced lambda returns correct value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@goBraced', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('arrow + braced lambda `(a) -> { ... }` returns the same as the no-arrow form', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@goArrowBraced', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('braced lambda with type annotation returns correct value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@goTyped', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 });
@@ -469,21 +469,21 @@ describe('delimited form — optional args — runtime', () => {
   it('lambda with default — both provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@goBoth', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
   it('lambda with default — omitted uses default', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@goDefault', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
     );
   });
 
   it('single-expr lambda with inferred default', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@goSingleExpr', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
     );
   });
 });

@@ -65,6 +65,6 @@ a value from `notify`.
 
 - Use `:name Type` for named parameters in current examples.
 - Use `-> :name` or `-> field: expr` for replies.
-- Include `bv-a` when describing raw wire input/output expectations.
+- Include `ty` when describing raw wire input/output expectations.
 - Treat `Remote.get(...)` as syntax for a typed actor message, not a local method
   call.

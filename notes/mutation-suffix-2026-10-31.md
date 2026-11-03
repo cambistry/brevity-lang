@@ -128,14 +128,14 @@ Being a valid final statement is separate from being a return value:
 
 Revised 2026-11-03 (`notes/session-2026-11-03-self-return-like-new.md`). A
 self-return replies like `#new`: the actor's address in `re`, its class's address
-in `bv-a`.
+in `ty`.
 
 ```
 child:   { id, re: '#<>' }
-parent:  { id, re: '#<@Counter/1>', 'bv-a': '#<@Counter>' }
+parent:  { id, re: '#<@Counter/1>', 'ty': '#<@Counter>' }
 ```
 
-- **The child says "me" with a bare `#<>` and no `bv-a`.** An empty selector means
+- **The child says "me" with a bare `#<>` and no `ty`.** An empty selector means
   the actor that's replying. An actor can't name its own address or its class, so
   any tag would be a stand-in. `#<Self>` would read as a global address called
   `Self`.
@@ -143,15 +143,15 @@ parent:  { id, re: '#<@Counter/1>', 'bv-a': '#<@Counter>' }
   as the reply to `#new` and a handler returning bare `Self`. `self` is a lone
   return in v1, so `['#<>']` doesn't come up.
 - **The parent that made the child names it.** It sees `re: '#<>'`, promotes it to
-  the child's address, and adds `bv-a` with the child's class address. The marker
+  the child's address, and adds `ty` with the child's class address. The marker
   in the reply is the trigger, not the child's profile.
-- **Higher parents translate `re` and `bv-a` alike.** Only the first parent adds
-  `bv-a`.
+- **Higher parents translate `re` and `ty` alike.** Only the first parent adds
+  `ty`.
 - **Parents translate in-process children too.** An untranslated `#<>` reaching a
   caller would mean the caller itself, so the child-reply paths swap in the
   caller's handle for the child.
 - **A host of many sub-actors names the sub-actor.** The DOM runtime replies with
-  `{ re: '#<HTML @div/1>', 'bv-a': '#<HTML @div>' }`, as it does to `#new`.
+  `{ re: '#<HTML @div/1>', 'ty': '#<HTML @div>' }`, as it does to `#new`.
 - **`self` is a return-position value only in v1:** `return self` and a tail `self`.
   `x = self` and `f(self)` are errors for now, and can be widened later.
 

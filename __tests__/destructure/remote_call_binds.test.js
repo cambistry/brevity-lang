@@ -20,7 +20,7 @@ const constructed = (src) => createActor(src, {
   expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) }],
 });
 
-const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'bv-a': '#<Thing>', from: 'Thing' } };
+const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': '#<Thing>', from: 'Thing' } };
 
 describe('remote actor (constructor-block construction)', () => {
   it('x T = r.m() binds a one-element positional reply', async () => {
@@ -32,7 +32,7 @@ describe('remote actor (constructor-block construction)', () => {
       NEW_REPLY,
       { input: { id: '99', op: '@go', from: 'caller' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
-      { input: { id: '2', re: [17], 'bv-a': ['Integer'] } },
+      { input: { id: '2', re: [17], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
     );
   });
@@ -46,7 +46,7 @@ describe('remote actor (constructor-block construction)', () => {
       NEW_REPLY,
       { input: { id: '99', op: '@go', from: 'caller' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
-      { input: { id: '2', re: [17], 'bv-a': ['Integer'] } },
+      { input: { id: '2', re: [17], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
     );
   });
@@ -79,13 +79,13 @@ describe('remote actor (handler-local construction)', () => {
   it('x T = r.m() binds the unnamed reply', async () => {
     await run(`${THING}
       @go = { t = Thing(a: 5); x Integer = t.get(); return a1: x }
-    `, { re: [17], 'bv-a': ['Integer'] });
+    `, { re: [17], 'ty': ['Integer'] });
   });
 
   it('x = r.m() (untyped) binds the unnamed reply', async () => {
     await run(`${THING}
       @go = { t = Thing(a: 5); x = t.get(); return a1: x }
-    `, { re: [17], 'bv-a': ['Integer'] });
+    `, { re: [17], 'ty': ['Integer'] });
   });
 
   it(':x T = r.m() destructures a named reply', async () => {
@@ -134,7 +134,7 @@ describe('destructured service member — bare read', () => {
     ));
 
   it('binds the unnamed reply', async () => {
-    await run({ re: [17], 'bv-a': ['Integer'] }, { re: { a1: 17 } });
+    await run({ re: [17], 'ty': ['Integer'] }, { re: { a1: 17 } });
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {
@@ -148,14 +148,14 @@ describe('reference-field callback — typed bind', () => {
     @go = (c: Call) { out Integer = c.fn(c.arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,
-    { input: { id: '50', op: [{ c: [200, '#<caller @cb>'] }, '@go'], 'bv-a': [{ c: '::Call' }], from: 'caller' } },
+    { input: { id: '50', op: [{ c: [200, '#<caller @cb>'] }, '@go'], 'ty': [{ c: '::Call' }], from: 'caller' } },
     { output: expect.objectContaining({ id: '1', op: [[200], '@cb'], to: '#<caller @cb>' }) },
     { input: { id: '1', ...reply } },
     { output: expect.objectContaining({ id: '50', ...expected, to: 'caller' }) },
   );
 
   it('binds the unnamed reply', async () => {
-    await run({ re: [999], 'bv-a': ['Integer'] }, { re: { a1: 999 } });
+    await run({ re: [999], 'ty': ['Integer'] }, { re: { a1: 999 } });
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {

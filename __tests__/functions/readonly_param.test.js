@@ -27,7 +27,7 @@ describe('readonly param — &Type permits reads', () => {
         return :result
     `,
       { input: { id: '1', op: '@run', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'List of Integers' }, re: { result: [10, 20, 30] }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'List of Integers' }, re: { result: [10, 20, 30] }, to: 'c' } },
     );
   });
 });

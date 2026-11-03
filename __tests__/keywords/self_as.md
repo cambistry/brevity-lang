@@ -34,7 +34,7 @@ File-level actors can respond to type projection messages:
 The reply is positional with the projected value:
 
 ```json
-{ "re": [42], "bv-a": ["Integer"] }
+{ "re": [42], "ty": ["Integer"] }
 ```
 
 ## Tested Behavior

@@ -39,10 +39,10 @@ The pieces are almost all in place. Investigation found:
      (established in the [Event note](event-as-value-type-2026-10-25.md)).
 
 2. **Type fields already serialize and tag themselves.** All-required →
-   positional `[1,2]`; optional-bearing → named map; each slot carries a `bv-a`
+   positional `[1,2]`; optional-bearing → named map; each slot carries a `ty`
    type tag (`::Point`, `Integer`, …) so the receiver can reconstruct
    (`types/type_wire.test.js`). A string-valued field needs no new encoding, and
-   the `bv-a` channel is exactly the hook we need to mark a slot as an *address*
+   the `ty` channel is exactly the hook we need to mark a slot as an *address*
    (see CAM expression below).
 
 3. **Invoking a reference held in a binding already compiles.** When a callee is
@@ -175,7 +175,7 @@ out to be already solved — see below.
   "re": { "type": "keydown", "key": "Enter",
           "prevent": "#<main _evt_prevent_7>",
           "stop":    "#<main _evt_stop_7>" },
-  "bv-a": { "e": "::Event" }
+  "ty": { "e": "::Event" }
 }
 ```
 
@@ -221,7 +221,7 @@ The discriminator is the leading char inside the angles: **local** (`@` / `#`)
 → prepend; **global** (word-char) → leave alone. Locally-minted
 endpoints/closures are already emitted in local form (`'@' + counter`,
 `brevity.js:100`), so they ride this path for free. The earlier "v2 needs a
-`bv-a` address tag" idea is therefore unnecessary — the field's *static* type
+`ty` address tag" idea is therefore unnecessary — the field's *static* type
 (`logger: Logger`) already tells the receiver the slot is an invocable address,
 and translation needs no tag at all.
 
@@ -283,7 +283,7 @@ only). Coarse first (key the error to the handler + op), add offsets later.
 ## What reuses vs. adds
 
 - **Reuses:** address-as-string wire form; Object field serialization +
-  `bv-a` tags; Function-typed self-send lowering; silent fire-and-forget `#send`;
+  `ty` tags; Function-typed self-send lowering; silent fire-and-forget `#send`;
   `remoteInstanceVars` per-method routing; local field-read; the field-type
   grammar for valued/void function sigs + class names; **payload-wide address
   translation — references in value fields are already perspective-translated

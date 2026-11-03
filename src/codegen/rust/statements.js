@@ -1788,7 +1788,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
           const posBva = positional.map(argTag).join(', ');
           bvaJson = `json!([[${posBva}]])`;
         }
-        lines.push(`${I}    send_msg.insert("bv-a".to_string(), ${bvaJson});`);
+        lines.push(`${I}    send_msg.insert("ty".to_string(), ${bvaJson});`);
       }
       lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
       lines.push(`${I}    send_id`);
@@ -2239,7 +2239,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}        let mut _fn_msg = Map::new();`);
               lines.push(`${I}        _fn_msg.insert("id".to_string(), json!(_fn_sub_id.clone()));`);
               lines.push(`${I}        _fn_msg.insert("op".to_string(), json!(_fn_op));`);
-              lines.push(`${I}        if !_fn_sub_bva.is_null() { _fn_msg.insert("bv-a".to_string(), _fn_sub_bva.clone()); }`);
+              lines.push(`${I}        if !_fn_sub_bva.is_null() { _fn_msg.insert("ty".to_string(), _fn_sub_bva.clone()); }`);
               lines.push(`${I}        let _fn_msg_v = Value::Object(_fn_msg);`);
               lines.push(`${I}        let (_fn_re_opt, _fn_bva_opt, _) = self.handle_op(_fn_op, &_fn_msg_v, &_fn_payload, "__parent", &_fn_sub_id);`);
               lines.push(`${I}        let _fn_re = _fn_re_opt.unwrap_or(Value::Null);`);
@@ -2252,7 +2252,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}            let mut _fn_resp = Map::new();`);
               lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
               lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
-              lines.push(`${I}            if let Some(_b) = _fn_bva_opt { _fn_resp.insert("bv-a".to_string(), _b); }`);
+              lines.push(`${I}            if let Some(_b) = _fn_bva_opt { _fn_resp.insert("ty".to_string(), _b); }`);
               lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
               lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
               lines.push(`${I}        }`);
@@ -2324,7 +2324,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Remote dep declared via `( "Alias": Alias { ... } ) *{ }`: post the
         // set message via binding.send with bare "set" op and the full
         // address as "#<alias selector>" (hash-angle delimited).
-        // Include bv-a with the value's type so the remote's schema/type
+        // Include ty with the value's type so the remote's schema/type
         // check passes. Route val through toJsonValue so typed RHS (e.g.
         // BigInt) lands as a serializable Value in the op payload.
         const typeHint = s.value?.type === 'Identifier'
@@ -2332,7 +2332,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           : (inferLiteralType(s.value) || null);
         const valAsValue = toJsonValue(val, typeHint || 'Anything');
         const bvaPart = typeHint
-          ? `\n${I}    set_msg.insert("bv-a".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
+          ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
           : '';
         const toFieldStr = '#<' + s.objectName + ' ' + toSelector + '>';
         lines.push(`${I}{`);
@@ -2545,7 +2545,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    let mut sub_msg = Map::new();`);
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id.clone()));`);
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${internalOpExpr});`);
-          if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
+          if (bvaExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${bvaExpr});`);
           lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(internalSelector)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
@@ -2561,7 +2561,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id));`);
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${wireOpExpr});`);
           lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));`);
-          if (bvaExpr) lines.push(`${I}    sub_msg.insert("bv-a".to_string(), ${bvaExpr});`);
+          if (bvaExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${bvaExpr});`);
           lines.push(`${I}    let _ = self.binding.send(Value::Object(sub_msg));`);
           lines.push(`${I}}`);
         } else if (childActorType) {
@@ -3247,7 +3247,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   // A self-return carries no tag: the parent that made this actor adds its class.
   if (fields[0]?.selfReturn) return null;
   const spread = fields.find(f => f.spread);
-  if (spread) return null; // bv-a handled separately for spread
+  if (spread) return null; // ty handled separately for spread
 
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   // Type-valued slots emit the type's authority address (see rustTypeTag);
@@ -3299,7 +3299,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
   }
 
   if (!hasDynamic) {
-    // Static bv-a — use json! macro
+    // Static ty — use json! macro
     if (pos.length > 0 && named.length > 0) {
       return `json!([${posTypes.map(p => p.val).join(', ')}, {${namedTypes.map(n => `"${n.key}": ${n.val}`).join(', ')}}])`;
     } else if (pos.length > 0) {
@@ -3310,7 +3310,7 @@ function genRustBvaBody(fields, typeEnv, refNames) {
     return null;
   }
 
-  // Dynamic bv-a — build at runtime with Map
+  // Dynamic ty — build at runtime with Map
   if (named.length > 0 && pos.length === 0) {
     const pairs = namedTypes.map(n => {
       if (n.dynamic) {

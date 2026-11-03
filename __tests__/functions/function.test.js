@@ -109,7 +109,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "1",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 6 },
           to: "c",
         },
@@ -124,7 +124,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "2",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 7 },
           to: "c",
         },
@@ -139,7 +139,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "3",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 42 },
           to: "c",
         },
@@ -154,7 +154,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "4",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 11 },
           to: "c",
         },
@@ -169,7 +169,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "4b",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 11 },
           to: "c",
         },
@@ -184,7 +184,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "5",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 14 },
           to: "c",
         },
@@ -199,7 +199,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "6",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 7 },
           to: "c",
         },
@@ -214,7 +214,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "7",
-          "bv-a": { result: "Float" },
+          "ty": { result: "Float" },
           re: { result: 1.5 },
           to: "c",
         },
@@ -229,7 +229,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "8",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 10 },
           to: "c",
         },
@@ -244,7 +244,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "9",
-          "bv-a": { x: "Integer", result: "Integer" },
+          "ty": { x: "Integer", result: "Integer" },
           re: { x: 10, result: 99 },
           to: "c",
         },
@@ -259,7 +259,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "10",
-          "bv-a": { x: "Integer", y: "Integer" },
+          "ty": { x: "Integer", y: "Integer" },
           re: { x: 9, y: 25 },
           to: "c",
         },
@@ -274,7 +274,7 @@ describe("function — all forms", () => {
       {
         output: {
           id: "11",
-          "bv-a": { x: "Integer", y: "Integer" },
+          "ty": { x: "Integer", y: "Integer" },
           re: { x: 8, y: 12 },
           to: "c",
         },

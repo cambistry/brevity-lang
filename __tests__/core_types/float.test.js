@@ -18,25 +18,25 @@ const script = `
 `;
 
 function inpFF(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Float', 'Float']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Float', 'Float']], from: 'c' } };
 }
 function inpFI(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Float', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Float', 'Integer']], from: 'c' } };
 }
 function inpIF(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Integer', 'Float']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Integer', 'Float']], from: 'c' } };
 }
 function inpFD(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Float', 'Decimal']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Float', 'Decimal']], from: 'c' } };
 }
 function inpDF(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Decimal', 'Float']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Decimal', 'Float']], from: 'c' } };
 }
 function out(result) {
-  return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
 }
 function outBool(field, value) {
-  return { output: { id: '1', 'bv-a': { [field]: 'Boolean' }, re: { [field]: value }, to: 'c' } };
+  return { output: { id: '1', 'ty': { [field]: 'Boolean' }, re: { [field]: value }, to: 'c' } };
 }
 
 // ─── Addition ────────────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ describe('Float exponentiation', () => {
     const rassocScript = `
         @rassoc = (a Float, b Float, c Float) -> result: a ** b ** c
     `;
-    const inp = { input: { id: '1', op: [[2.0e0, 3.0e0, 2.0e0], '@rassoc'], 'bv-a': [['Float', 'Float', 'Float']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[2.0e0, 3.0e0, 2.0e0], '@rassoc'], 'ty': [['Float', 'Float', 'Float']], from: 'c' } };
     await expectBehavior(rassocScript, inp, out(512.0));
   });
 
@@ -296,7 +296,7 @@ describe('Per-operation type promotion', () => {
   `;
 
   it('(Integer + Float) * Integer → Float (per-op promotion)', async () => {
-    const inp = { input: { id: '1', op: [[2, 1.5e0, 4], '@chain'], 'bv-a': [['Integer', 'Float', 'Integer']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[2, 1.5e0, 4], '@chain'], 'ty': [['Integer', 'Float', 'Integer']], from: 'c' } };
     await expectBehavior(perOpScript, inp, out(14.0));
   });
 
@@ -305,7 +305,7 @@ describe('Per-operation type promotion', () => {
   `;
 
   it('(Decimal + Float) * Decimal → Float (per-op promotion)', async () => {
-    const inp = { input: { id: '1', op: [[2.0, 1.5e0, 4.0], '@chain2'], 'bv-a': [['Decimal', 'Float', 'Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[2.0, 1.5e0, 4.0], '@chain2'], 'ty': [['Decimal', 'Float', 'Decimal']], from: 'c' } };
     await expectBehavior(perOpScript2, inp, out(14.0));
   });
 });
@@ -322,7 +322,7 @@ describe('Float order of operations', () => {
       @rightAssocExp = (a Float, b Float, c Float) -> result: a ** b ** c
   `;
   function inpF3(op, a, b, c) {
-    return { input: { id: '1', op: [[a, b, c], op], 'bv-a': [['Float', 'Float', 'Float']], from: 'c' } };
+    return { input: { id: '1', op: [[a, b, c], op], 'ty': [['Float', 'Float', 'Float']], from: 'c' } };
   }
 
   it('multiplication before addition: 2.0 + 3.0 * 4.0 = 14.0', async () => {
@@ -512,13 +512,13 @@ describe('Float type conversions', () => {
   `;
 
   function inpF(op, a) {
-    return { input: { id: '1', op: [[a], op], 'bv-a': [['Float']], from: 'c' } };
+    return { input: { id: '1', op: [[a], op], 'ty': [['Float']], from: 'c' } };
   }
   function outI(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Integer' }, re: { result }, to: 'c' } };
   }
   function outD(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
   it('to_integer(3.7) = 3 (truncates toward zero)', async () => {
@@ -561,10 +561,10 @@ describe('Float conversion via ref cell dot method', () => {
   `;
 
   function outI(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Integer' }, re: { result }, to: 'c' } };
   }
   function outD(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
   }
 
   it('x.to_integer on *Float ref', async () => {

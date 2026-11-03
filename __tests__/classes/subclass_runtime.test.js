@@ -34,14 +34,14 @@ describe('subclass runtime — inherited method on subclass value', () => {
   it('inherited method returns the superclass-declared value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@callInherited', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('own method returns the subclass-declared value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@callOwn', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
     );
   });
 });
@@ -79,14 +79,14 @@ describe('subclass runtime — override fires on the subclass actor', () => {
   it('superclass actor runs superclass @a', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@superCall', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('subclass actor runs subclass override of @a', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@subCall', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 });
@@ -112,7 +112,7 @@ describe('subclass runtime — inherited method that writes the superclass\'s st
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [4], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [4], 'ty': ['Integer'], to: 'c' } },
     );
   });
 });
@@ -141,7 +141,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [45], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [45], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -158,7 +158,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [4], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [4], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -176,7 +176,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [104], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [104], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -195,7 +195,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [54], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [54], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -216,7 +216,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [20], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [20], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -236,7 +236,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [43], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [43], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -254,7 +254,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [8], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [8], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -274,7 +274,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [39], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [39], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -293,7 +293,7 @@ describe('subclass runtime — inherited state', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [7], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
 });

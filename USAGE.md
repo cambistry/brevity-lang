@@ -194,13 +194,13 @@ Simple op:
 Op with payload:
 
 ```json
-{ "id": "2", "op": [{ "n": 5 }, "@double"], "bv-a": [{ "n": "Integer" }], "from": "caller" }
+{ "id": "2", "op": [{ "n": 5 }, "@double"], "ty": [{ "n": "Integer" }], "from": "caller" }
 ```
 
 Reply:
 
 ```json
-{ "id": "2", "re": { "result": 10 }, "bv-a": { "result": "Integer" }, "to": "caller" }
+{ "id": "2", "re": { "result": 10 }, "ty": { "result": "Integer" }, "to": "caller" }
 ```
 
 Unhandled message:
@@ -209,7 +209,7 @@ Unhandled message:
 { "id": "3", "ex": { "@missing": "unhandled" }, "to": "caller" }
 ```
 
-`bv-a` is the type attestation attached to payloads and replies.
+`ty` is the type attestation attached to payloads and replies.
 
 ## Special senders
 

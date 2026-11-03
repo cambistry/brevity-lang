@@ -4,7 +4,7 @@ import { expectBehavior } from '../helpers.js';
 // Text methods — simple (no regex, no List return)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const out = (id, type, value) => ({ output: { id, 'bv-a': { result: type }, re: { result: value }, to: 'c' } });
+const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { result: value }, to: 'c' } });
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 describe('Text.upper / Text.lower', () => {

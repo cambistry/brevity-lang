@@ -169,13 +169,13 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
     // selector too so the prologue's args extraction (hd(op) when list) still
     // finds args at position 0.
-    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
     // Remote wire: bare verb in op, full address as "#<alias selector>".
-    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
     const toBin = `<<"#<${objectName} ${toSelector}>">>`;
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${bvaField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
@@ -183,7 +183,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // Instance process: subscribe there; its later notifications come back
     // as {bv_notify, ...} messages and run the fun stored here.
     const pid = genExpr(ctx, { type: _sCtx?.refVars?.has(objectName) ? 'RefRead' : 'Identifier', name: objectName }, _typeEnv, _sCtx);
-    const bvaField = bvaExpr ? `, <<"bv-a">> => ${bvaExpr}` : '';
+    const bvaField = bvaExpr ? `, <<"ty">> => ${bvaExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${bvaField}},`);
     outLines.push(`${I}${V('Sub_init_re_')} = bv_inst_sub_(${pid}, ${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
@@ -786,7 +786,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}    ({inproc, _, _, _}) -> ok;`);
             lines.push(`${I}    ({FnSubId${sfx}_, FnSubFrom${sfx}_, FnSubArgs${sfx}_, FnSubBva${sfx}_}) ->`);
             lines.push(`${I}    FnOp${sfx}_ = case FnSubArgs${sfx}_ of null -> ${selectorBin}; _ -> [FnSubArgs${sfx}_, ${selectorBin}] end,`);
-            lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"bv-a">> => FnSubBva${sfx}_} end,`);
+            lines.push(`${I}    FnMsg${sfx}_ = case FnSubBva${sfx}_ of null -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_}; _ -> #{<<"id">> => FnSubId${sfx}_, <<"op">> => FnOp${sfx}_, <<"ty">> => FnSubBva${sfx}_} end,`);
             lines.push(`${I}    case ${dispatchFn}(${selectorBin}, FnMsg${sfx}_, FnSubArgs${sfx}_, FnSubId${sfx}_, <<"__parent">>) of`);
             lines.push(`${I}        {ok, FnRe${sfx}_, FnBva${sfx}_} ->`);
             lines.push(`${I}            case FnSubFrom${sfx}_ of`);
@@ -799,7 +799,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}                    FnSubPid${sfx}_ ! {bv_notify, FnSubId${sfx}_, FnRe${sfx}_};`);
             lines.push(`${I}                _ ->`);
             lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
-            lines.push(`${I}                    FnResp${sfx}_ = case FnBva${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"bv-a">> => FnBva${sfx}_} end,`);
+            lines.push(`${I}                    FnResp${sfx}_ = case FnBva${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"ty">> => FnBva${sfx}_} end,`);
             lines.push(`${I}                    io:put_chars([json_encode(FnResp${sfx}_), $\\n])`);
             lines.push(`${I}            end;`);
             lines.push(`${I}        _ -> ok`);
@@ -858,12 +858,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep: post to stdout with bare verb + angle-delimited alias + sel.
-        // Include `bv-a` so the remote's schema_required check passes.
+        // Include `ty` so the remote's schema_required check passes.
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
         const bvaField = typeHint
-          ? `, <<"bv-a">> => [[<<"${typeHint}">>]]`
+          ? `, <<"ty">> => [[<<"${typeHint}">>]]`
           : '';
         const toBin = `<<"#<${s.objectName} ${toSelector}>">>`;
         lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${bvaField}},`);

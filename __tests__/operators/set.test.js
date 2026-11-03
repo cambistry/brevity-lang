@@ -118,7 +118,7 @@ describe("set operation", () => {
       {
         output: {
           id: "1",
-          "bv-a": { value: "Integer" },
+          "ty": { value: "Integer" },
           re: { value: 42 },
           to: "c",
         },
@@ -133,7 +133,7 @@ describe("set operation", () => {
       {
         output: {
           id: "2",
-          "bv-a": { value: "Integer" },
+          "ty": { value: "Integer" },
           re: { value: 11 },
           to: "c",
         },
@@ -148,7 +148,7 @@ describe("set operation", () => {
       {
         output: {
           id: "3",
-          "bv-a": { count: "Integer" },
+          "ty": { count: "Integer" },
           re: { count: 99 },
           to: "c",
         },
@@ -163,7 +163,7 @@ describe("set operation", () => {
       {
         output: {
           id: "4",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 5 },
           to: "c",
         },
@@ -178,7 +178,7 @@ describe("set operation", () => {
       {
         output: {
           id: "5",
-          "bv-a": { value: "Integer" },
+          "ty": { value: "Integer" },
           re: { value: 77 },
           to: "c",
         },
@@ -193,7 +193,7 @@ describe("set operation", () => {
       {
         output: {
           id: "6",
-          "bv-a": { value: "Integer" },
+          "ty": { value: "Integer" },
           re: { value: 55 },
           to: "c",
         },
@@ -301,27 +301,27 @@ describe("set — public refs (set@name, silent)", () => {
   it("set@val then @val reads the new value", async () => {
     await expectBehavior(
       script,
-      { input: { op: [[42], "set@val"], "bv-a": [["Integer"]], from: "c" } },
+      { input: { op: [[42], "set@val"], "ty": [["Integer"]], from: "c" } },
       { input: { id: "1", op: "@val", from: "c" } },
-      { output: { id: "1", "bv-a": ["Integer"], re: [42], to: "c" } },
+      { output: { id: "1", "ty": ["Integer"], re: [42], to: "c" } },
     );
   });
 
   it("set@val emits no reply (next output is the subsequent get)", async () => {
     await expectBehavior(
       script,
-      { input: { op: [[99], "set@val"], "bv-a": [["Integer"]], from: "c" } },
+      { input: { op: [[99], "set@val"], "ty": [["Integer"]], from: "c" } },
       { input: { id: "g1", op: "@val", from: "c" } },
-      { output: { id: "g1", "bv-a": ["Integer"], re: [99], to: "c" } },
+      { output: { id: "g1", "ty": ["Integer"], re: [99], to: "c" } },
     );
   });
 
   it("set@name on text field", async () => {
     await expectBehavior(
       script,
-      { input: { op: [["hello"], "set@name"], "bv-a": [["Text"]], from: "c" } },
+      { input: { op: [["hello"], "set@name"], "ty": [["Text"]], from: "c" } },
       { input: { id: "1", op: "@name", from: "c" } },
-      { output: { id: "1", "bv-a": ["Text"], re: ["hello"], to: "c" } },
+      { output: { id: "1", "ty": ["Text"], re: ["hello"], to: "c" } },
     );
   });
 
@@ -342,7 +342,7 @@ describe("set — public refs (set@name, silent)", () => {
       {
         output: {
           id: "1",
-          "bv-a": { result: "Integer" },
+          "ty": { result: "Integer" },
           re: { result: 77 },
           to: "c",
         },

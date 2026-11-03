@@ -13,7 +13,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //     node.
 //
 // The discriminator is the `#<…>` delimiter itself (per the CAM address
-// convention), not bv-a or any out-of-band hint.
+// convention), not ty or any out-of-band hint.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function expectBehavior(actor, ...steps) {

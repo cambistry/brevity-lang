@@ -90,19 +90,19 @@ const script = `
 `;
 
 function inp(op, args, types) {
-  return { input: { id: '1', op: [args, op], 'bv-a': [types], from: 'c' } };
+  return { input: { id: '1', op: [args, op], 'ty': [types], from: 'c' } };
 }
 function inp0(op) {
   return { input: { id: '1', op, from: 'c' } };
 }
 function outF(result) {
-  return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
 }
 function outI(result) {
-  return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: 'Integer' }, re: { result }, to: 'c' } };
 }
 function outD(result) {
-  return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
 }
 
 // ─── ceil ────────────────────────────────────────────────────────────────
@@ -623,7 +623,7 @@ describe('Math hyperbolic', () => {
 
   it('atanh(Decimal 0.5) ≈ 0.5493...', async () => {
     await expectBehavior(script, inp('@atanhD', [0.5], ['Decimal']),
-      { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result: expect.closeTo(Math.atanh(0.5), 14) }, to: 'c' } });
+      { output: { id: '1', 'ty': { result: 'Float' }, re: { result: expect.closeTo(Math.atanh(0.5), 14) }, to: 'c' } });
   });
 });
 

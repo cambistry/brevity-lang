@@ -991,10 +991,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const subRepsByElement = new Map(); // Element → { kind → addr }
 
   // A node's self-return has the shape of its reply to `#new`: its address in
-  // `re`, its class in `bv-a`. A node's address is `HTML @kind/N`, and its
+  // `re`, its class in `ty`. A node's address is `HTML @kind/N`, and its
   // class is `HTML @kind`.
   function selfReply(addr) {
-    return { re: '#<' + addr + '>', 'bv-a': '#<' + addr.replace(/\/[0-9]+$/, '') + '>' };
+    return { re: '#<' + addr + '>', 'ty': '#<' + addr.replace(/\/[0-9]+$/, '') + '>' };
   }
 
   function getOrMintSubRep(kind, el, attachHandler) {
@@ -1951,7 +1951,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             // value (positional arg, tagged with its authority address). The
             // consumer reads value fields freely and invokes endpoint fields
             // in-frame; see buildEventValue.
-            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'bv-a': [['#<HTML ::Event>']] });
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['#<HTML ::Event>']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;
@@ -2013,7 +2013,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const payload = Array.isArray(op) ? op[0] : {};
     const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
-      id, re: '#<' + addr + '>', 'bv-a': '#<HTML @' + tag + '>', from: 'HTML', to: from,
+      id, re: '#<' + addr + '>', 'ty': '#<HTML @' + tag + '>', from: 'HTML', to: from,
     }));
   }
 
@@ -2149,7 +2149,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             } else {
               el.insertAdjacentHTML('beforeend', val);
             }
-            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
             return;
           }
           if (opName === '@inner_html') {
@@ -2206,7 +2206,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.querySelector(selector);
         if (el) {
           const addr = registerElement(selector, el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
         }
         return;
       }
@@ -2214,7 +2214,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.body;
         if (el) {
           const addr = registerElement('body', el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'bv-a': '#<Element>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
         }
         return;
       }
@@ -2229,7 +2229,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // Indirect eval — runs at global scope, no access to runtime locals.
         const result = (0, eval)(typeof js === 'string' ? js : '');
         const text = result == null ? '' : String(result);
-        Promise.resolve().then(() => route({ id, re: text, 'bv-a': 'Text', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: text, 'ty': 'Text', from: 'document', to: from }));
         return;
       }
       if (typeof opName !== 'string' || !opName.startsWith('@')) return;

@@ -39,29 +39,29 @@ describe('arguments', () => {
 
   it('positional args — explicit inline', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[3, 5], '@multInline'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'c' } },
+      { input: { id: '1', op: [[3, 5], '@multInline'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [15], to: 'c' } },
     );
   });
 
   it('positional args — lineal form', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [[3, 5], '@multOpen'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Integer'], re: [15], to: 'c' } },
+      { input: { id: '2', op: [[3, 5], '@multOpen'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [15], to: 'c' } },
     );
   });
 
   it('key-mapped arg — outer: inner Text', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'bv-a': [{ outer: 'Text' }], from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { input: { id: '3', op: [{ outer: 'hello' }, '@keyMapped'], 'ty': [{ outer: 'Text' }], from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('mixed positional + named args', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [[1, 2, { message: 'add this' }], '@mixed'], 'bv-a': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' } },
-      { output: { id: '4', 'bv-a': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'c' } },
+      { input: { id: '4', op: [[1, 2, { message: 'add this' }], '@mixed'], 'ty': [['Integer', 'Integer', { message: 'Text' }]], from: 'c' } },
+      { output: { id: '4', 'ty': ['Integer', { comment: 'Text' }], re: [3, { comment: 'add this' }], to: 'c' } },
     );
   });
 });
@@ -109,50 +109,50 @@ describe('optional arguments — positional', () => {
 
   it('typed — both args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[3, 7], '@posTyped'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [10], to: 'c' } },
+      { input: { id: '1', op: [[3, 7], '@posTyped'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [10], to: 'c' } },
     );
   });
 
   it('typed — optional omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [[3], '@posTyped'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Integer'], re: [3], to: 'c' } },
+      { input: { id: '2', op: [[3], '@posTyped'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [3], to: 'c' } },
     );
   });
 
   it('inferred — both args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[3, 7], '@posInferred'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '3', 'bv-a': ['Integer'], re: [10], to: 'c' } },
+      { input: { id: '3', op: [[3, 7], '@posInferred'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '3', 'ty': ['Integer'], re: [10], to: 'c' } },
     );
   });
 
   it('inferred — optional omitted, default 100 fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [[3], '@posInferred'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '4', 'bv-a': ['Integer'], re: [103], to: 'c' } },
+      { input: { id: '4', op: [[3], '@posInferred'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '4', 'ty': ['Integer'], re: [103], to: 'c' } },
     );
   });
 
   it('delimited — both args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [[10, 20], '@posDelimited'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '5', 'bv-a': ['Integer'], re: [30], to: 'c' } },
+      { input: { id: '5', op: [[10, 20], '@posDelimited'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '5', 'ty': ['Integer'], re: [30], to: 'c' } },
     );
   });
 
   it('delimited — optional omitted, default 5 fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [[10], '@posDelimited'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '6', 'bv-a': ['Integer'], re: [15], to: 'c' } },
+      { input: { id: '6', op: [[10], '@posDelimited'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '6', 'ty': ['Integer'], re: [15], to: 'c' } },
     );
   });
 
   it('delimited inferred — optional omitted, default 50 fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: [[10], '@posInferredDelimited'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '7', 'bv-a': ['Integer'], re: [60], to: 'c' } },
+      { input: { id: '7', op: [[10], '@posInferredDelimited'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '7', 'ty': ['Integer'], re: [60], to: 'c' } },
     );
   });
 });
@@ -184,29 +184,29 @@ describe('optional arguments — named', () => {
 
   it('typed — both named args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 'hey', b: 'there' }, '@namedTyped'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
+      { input: { id: '1', op: [{ a: 'hey', b: 'there' }, '@namedTyped'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
     );
   });
 
   it('typed — optional named omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'hello' }, '@namedTyped'], 'bv-a': [{ a: 'Text' }], from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+      { input: { id: '2', op: [{ a: 'hello' }, '@namedTyped'], 'ty': [{ a: 'Text' }], from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
 
   it('inferred — both named args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 'hey', b: 'there' }, '@namedInferred'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
+      { input: { id: '3', op: [{ a: 'hey', b: 'there' }, '@namedInferred'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
     );
   });
 
   it('inferred — optional named omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 'hello' }, '@namedInferred'], 'bv-a': [{ a: 'Text' }], from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Text' }, re: { result: 'hello default' }, to: 'c' } },
+      { input: { id: '4', op: [{ a: 'hello' }, '@namedInferred'], 'ty': [{ a: 'Text' }], from: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello default' }, to: 'c' } },
     );
   });
 });
@@ -228,15 +228,15 @@ describe('optional arguments — mixed', () => {
 
   it('positional + named both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[10, { b: 5 }], '@mixedOpt'], 'bv-a': [['Integer', { b: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [15], to: 'c' } },
+      { input: { id: '1', op: [[10, { b: 5 }], '@mixedOpt'], 'ty': [['Integer', { b: 'Integer' }]], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [15], to: 'c' } },
     );
   });
 
   it('named optional omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [[10], '@mixedOpt'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Integer'], re: [109], to: 'c' } },
+      { input: { id: '2', op: [[10], '@mixedOpt'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [109], to: 'c' } },
     );
   });
 });
@@ -269,14 +269,14 @@ describe('optional arguments — lineal function', () => {
   it('lineal fn — both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@testLinealBoth', from: 'c' } },
-      { output: { id: '1', 'bv-a': { r: 'Integer' }, re: { r: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { r: 'Integer' }, re: { r: 7 }, to: 'c' } },
     );
   });
 
   it('lineal fn — optional uses default 1000', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@testLinealDefault', from: 'c' } },
-      { output: { id: '2', 'bv-a': { r: 'Integer' }, re: { r: 1005 }, to: 'c' } },
+      { output: { id: '2', 'ty': { r: 'Integer' }, re: { r: 1005 }, to: 'c' } },
     );
   });
 });
@@ -360,7 +360,7 @@ describe('a call that leaves out every arg', () => {
   `;
   const newBox = [
     { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
   ];
   const atBox = { to: '@Box/1', from: 'c' };
   const fromBox = { to: 'c', from: '@Box/1' };
@@ -374,13 +374,13 @@ describe('a call that leaves out every arg', () => {
     it('uses its defaults in a file handler', async () => {
       await expectBehavior(script,
         { input: { id: '1', op, from: 'c' } },
-        { output: { id: '1', re, 'bv-a': tag, to: 'c' } },
+        { output: { id: '1', re, 'ty': tag, to: 'c' } },
       );
     });
     it('uses its defaults in an instance', async () => {
       await expectBehavior(script, ...newBox,
         { input: { id: '2', op, ...atBox } },
-        { output: { id: '2', re, 'bv-a': tag, ...fromBox } },
+        { output: { id: '2', re, 'ty': tag, ...fromBox } },
       );
     });
   });
@@ -408,9 +408,9 @@ describe('a call that leaves out every arg', () => {
   describe('an optional param given an arg', () => {
     it('still answers unhandled for a wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@one'], 'bv-a': [['Text']], ...atBox } },
+        { input: { id: '2', op: [['x'], '@one'], 'ty': [['Text']], ...atBox } },
         { output: { id: '2', ex: { '@one': 'unhandled' }, ...fromBox } },
-        { input: { id: '3', op: [['x'], '@one'], 'bv-a': [['Text']], from: 'c' } },
+        { input: { id: '3', op: [['x'], '@one'], 'ty': [['Text']], from: 'c' } },
         { output: { id: '3', ex: { '@one': 'unhandled' }, to: 'c' } },
       );
     });
@@ -424,10 +424,10 @@ describe('a call that leaves out every arg', () => {
     });
     it('still takes a right tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[5], '@one'], 'bv-a': [['Integer']], ...atBox } },
-        { output: { id: '2', re: [5], 'bv-a': ['Integer'], ...fromBox } },
-        { input: { id: '3', op: [[5], '@one'], 'bv-a': [['Integer']], from: 'c' } },
-        { output: { id: '3', re: [5], 'bv-a': ['Integer'], to: 'c' } },
+        { input: { id: '2', op: [[5], '@one'], 'ty': [['Integer']], ...atBox } },
+        { output: { id: '2', re: [5], 'ty': ['Integer'], ...fromBox } },
+        { input: { id: '3', op: [[5], '@one'], 'ty': [['Integer']], from: 'c' } },
+        { output: { id: '3', re: [5], 'ty': ['Integer'], to: 'c' } },
       );
     });
   });

@@ -25,7 +25,7 @@ describe('browser inline script — document.eval', () => {
     await page.send({ id: '1', test: { get: 'result' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: '3', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: '3', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -52,7 +52,7 @@ describe('browser inline script — document.eval reads page state', () => {
     await page.send({ id: '1', test: { get: 'result' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hello Eval', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: 'Hello Eval', from: 'script#main', to: 't' },
     ]);
   });
 });

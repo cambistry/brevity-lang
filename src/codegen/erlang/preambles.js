@@ -690,7 +690,7 @@ bv_instance_at_(_) -> none.
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
-    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"bv-a">>, Message) of
+    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
         true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"schema_required">>}}), $\n]);
         false ->
             Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
@@ -701,13 +701,13 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 %% A self-return: we made this actor, so we name it and its class, as for #new.
                 {ok, <<"#<>"/utf8>>, _} ->
                     [Class_ | _] = binary:split(Addr, <<"/">>),
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"bv-a">> => <<"#<", Class_/binary, ">">>}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => <<"#<", Class_/binary, ">">>}), $\n]);
                 {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
-                {ok, V_, Tag_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_, <<"bv-a">> => Tag_}), $\n]);
+                {ok, V_, Tag_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_, <<"ty">> => Tag_}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
             end
     end.
-%% A subscribe carries its whole message (op args, bv-a) and its id.
+%% A subscribe carries its whole message (op args, ty) and its id.
 bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
     Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
     R_ = bv_await_(Id),
@@ -809,7 +809,7 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
 type_member_of(_, _) -> false.
 
 match_types(Message, Pairs) ->
-    case maps:find(<<"bv-a">>, Message) of
+    case maps:find(<<"ty">>, Message) of
         {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
             TypesObj = hd(BvA),
             lists:all(fun({Name, TypeName}) ->
@@ -828,7 +828,7 @@ match_types_positional(Message, PosTypes, NamedTypes) ->
     match_types_positional(Message, PosTypes, NamedTypes, length(PosTypes)).
 
 match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
-    case maps:find(<<"bv-a">>, Message) of
+    case maps:find(<<"ty">>, Message) of
         {ok, BvA} when is_list(BvA), length(BvA) > 0 ->
             TypesArr = hd(BvA),
             case is_list(TypesArr) of
@@ -894,7 +894,7 @@ list_to_json(null) -> [];
 list_to_json([]) -> [];
 list_to_json(L) when is_list(L) -> L.
 
-%% Compute component types for List of Anything bv-a
+%% Compute component types for List of Anything ty
 list_component_types(null) -> [];
 list_component_types(L) when is_list(L) ->
     [brevity_typeof(E) || E <- L].
@@ -1093,16 +1093,16 @@ brevity_re_after(Bin, Re) ->
         nomatch -> <<>>
     end.
 
-%% A reply whose whole value is one actor: its address is in re, and bv-a, if
+%% A reply whose whole value is one actor: its address is in re, and ty, if
 %% any, names its class.
 bv_self_reply_(<<"#<", _/binary>> = Re, Message) ->
-    case maps:find(<<"bv-a">>, Message) of
+    case maps:find(<<"ty">>, Message) of
         error -> [Re];
         {ok, <<"#<", _/binary>> = Class} ->
             case binary:match(Class, <<"::">>) of nomatch -> [Re]; _ -> Re end;
         _ -> Re
     end;
-bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"bv-a">>, Message, null)).
+bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
 
 await_response_(Id) ->
     case io:get_line("") of

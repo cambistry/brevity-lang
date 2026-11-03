@@ -84,31 +84,31 @@ describe('lineal function — param styles', () => {
   `;
 
   it('no-arg — single =', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@noArgSingle', from: 'c' } }, { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@noArgSingle', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
   it('no-arg — double =', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@noArgDouble', from: 'c' } }, { output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@noArgDouble', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
   it('single positional param', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@singlePos', from: 'c' } }, { output: { id: '3', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@singlePos', from: 'c' } }, { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('multiple positional params', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@multiPos', from: 'c' } }, { output: { id: '4', 'bv-a': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@multiPos', from: 'c' } }, { output: { id: '4', 'ty': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
   });
 
   it('named param (sigil)', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@named', from: 'c' } }, { output: { id: '5', 'bv-a': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@named', from: 'c' } }, { output: { id: '5', 'ty': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
   });
 
   it('mixed positional + named', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@mixed', from: 'c' } }, { output: { id: '6', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@mixed', from: 'c' } }, { output: { id: '6', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('key-mapped param', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@keyed', from: 'c' } }, { output: { id: '7', 'bv-a': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: '@keyed', from: 'c' } }, { output: { id: '7', 'ty': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
   });
 });
 
@@ -175,24 +175,24 @@ describe('lineal function — body and return forms', () => {
   `;
 
   it('multi-statement body', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@multiStmt', from: 'c' } }, { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@multiStmt', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
   });
 
   it('lineal return (-> on own line, fields below)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@spaciousReturn', from: 'c' } }, { output: { id: '2', 'bv-a': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@spaciousReturn', from: 'c' } }, { output: { id: '2', 'ty': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
   });
 
   it('delimited return — single-line ->(…)', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@denseInline', from: 'c' } },
-      { output: { id: '3', 'bv-a': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' } },
+      { output: { id: '3', 'ty': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' } },
     );
   });
 
   it('delimited return — multiline ->(…)', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@denseMulti', from: 'c' } },
-      { output: { id: '4', 'bv-a': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' } },
+      { output: { id: '4', 'ty': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' } },
     );
   });
 });
@@ -248,15 +248,15 @@ describe('lineal function — composition', () => {
   `;
 
   it('multiple lineal functions in same actor', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@multiFn', from: 'c' } }, { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@multiFn', from: 'c' } }, { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
   });
 
   it('lineal function calls another lineal function', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@crossCall', from: 'c' } }, { output: { id: '2', 'bv-a': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@crossCall', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
   });
 
   it('lineal top-level + delimited lambda in public function', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@denseSpacious', from: 'c' } }, { output: { id: '3', 'bv-a': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@denseSpacious', from: 'c' } }, { output: { id: '3', 'ty': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
   });
 });
 
@@ -319,27 +319,27 @@ describe('lineal function — optional params', () => {
   `;
 
   it('typed default — both provided', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@testTypedBoth', from: 'c' } }, { output: { id: '1', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@testTypedBoth', from: 'c' } }, { output: { id: '1', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
   it('typed default — omitted uses 0', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@testTypedDefault', from: 'c' } }, { output: { id: '2', 'bv-a': { r: 'Integer' }, re: { r: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@testTypedDefault', from: 'c' } }, { output: { id: '2', 'ty': { r: 'Integer' }, re: { r: 3 }, to: 'c' } });
   });
 
   it('inferred default — both provided', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@testInferredBoth', from: 'c' } }, { output: { id: '3', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@testInferredBoth', from: 'c' } }, { output: { id: '3', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
   it('inferred default — omitted uses 1000', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@testInferredDefault', from: 'c' } }, { output: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 1003 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@testInferredDefault', from: 'c' } }, { output: { id: '4', 'ty': { r: 'Integer' }, re: { r: 1003 }, to: 'c' } });
   });
 
   it('named default — both provided', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@testNamedBoth', from: 'c' } }, { output: { id: '5', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@testNamedBoth', from: 'c' } }, { output: { id: '5', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
   it('named default — omitted uses 50', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@testNamedDefault', from: 'c' } }, { output: { id: '6', 'bv-a': { r: 'Integer' }, re: { r: 53 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@testNamedDefault', from: 'c' } }, { output: { id: '6', 'ty': { r: 'Integer' }, re: { r: 53 }, to: 'c' } });
   });
 });
 
@@ -452,7 +452,7 @@ const edgeCaseScript = `
 
 describe('lineal function — silent (. stop)', () => {
   it('side-effect-only function with dot', async () => {
-    await expectBehavior(edgeCaseScript, { input: { id: '1', op: '@goSilent!', from: 'c' } }, { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
+    await expectBehavior(edgeCaseScript, { input: { id: '1', op: '@goSilent!', from: 'c' } }, { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } });
   });
 });
 
@@ -460,21 +460,21 @@ describe('lineal function — edge cases', () => {
   it('result assigned as whole Object, then destructured', async () => {
     await expectBehavior(edgeCaseScript,
       { input: { id: '1', op: '@fooStruct', from: 'caller' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 100 }, to: 'caller' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 100 }, to: 'caller' } },
     );
   });
 
   it('same function called twice with different args', async () => {
     await expectBehavior(edgeCaseScript,
       { input: { id: '1', op: '@fooDblCall', from: 'caller' } },
-      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 25 }, to: 'caller' } },
     );
   });
 
   it('plain assign from function returning 1 positional unwraps correctly', async () => {
     await expectBehavior(edgeCaseScript,
       { input: { id: '1', op: '@testUnwrap', from: 'caller' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'caller' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'caller' } },
     );
   });
 

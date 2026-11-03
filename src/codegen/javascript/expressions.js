@@ -49,7 +49,7 @@ export function domHostAddr(ctx, tag) {
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function genCellNotify(cell, cellType) {
-  const bvaPart = cellType ? `, 'bv-a': [${JSON.stringify(cellType)}]` : '';
+  const bvaPart = cellType ? `, 'ty': [${JSON.stringify(cellType)}]` : '';
   return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cell)}]${bvaPart}, to: _sub.from }); }`;
 }
 
@@ -1209,7 +1209,7 @@ export function genReplyField(ctx, field, typeEnv) {
     if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
     // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
     // form (positional list when all fields are required, named map when any
-    // optional). The bv-a `::Tag` annotation tells the receiver how to read.
+    // optional). The ty `::Tag` annotation tells the receiver how to read.
     if (isType(t)) return `_bv_to_wire(${expr})`;
     if (t === 'Object') return `((v) => (v !== null && typeof v === 'object' && Array.isArray(v.positional) ? BvObject.splat(v) : v))(${expr})`;
     return expr;
@@ -1337,7 +1337,7 @@ export function argWireVal(ctx, a) {
   return (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `_bv_to_wire(${base})` : base;
 }
 
-// Build the parallel value + bv-a slot strings for a posted call's arguments.
+// Build the parallel value + ty slot strings for a posted call's arguments.
 // Type-valued args are wire-serialized and carry the authority-address tag;
 // primitives keep their bare tag. Mirrors reply-slot handling (genBvaBody).
 export function genArgSlots(ctx, positional, named) {

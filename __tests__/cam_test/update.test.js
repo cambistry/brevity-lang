@@ -13,7 +13,7 @@ describe('test.update — single named param via update handler', () => {
     await expectBehavior(script,
       { input: { test: { update: { name: 'Alice' } }, from: 't' } },
       { input: { id: '1', test: { get: 'name' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Text', re: 'Alice', to: 't' } },
+      { output: { id: '1', 'ty': 'Text', re: 'Alice', to: 't' } },
     );
   });
 
@@ -22,7 +22,7 @@ describe('test.update — single named param via update handler', () => {
       { input: { test: { update: { name: 'Bob' } }, from: 't' } },
       { input: { test: { update: { name: 'Carol' } }, from: 't' } },
       { input: { id: '1', test: { get: 'name' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Text', re: 'Carol', to: 't' } },
+      { output: { id: '1', 'ty': 'Text', re: 'Carol', to: 't' } },
     );
   });
 });
@@ -49,8 +49,8 @@ describe('test.update — mixed positional + named args', () => {
       { input: { test: { update: [11, { label: 'eleven' }] }, from: 't' } },
       { input: { id: '1', test: { get: 'p' }, from: 't' } },
       { input: { id: '2', test: { get: 'label' }, from: 't' } },
-      { output: { id: '1', 'bv-a': 'Integer', re: 11, to: 't' } },
-      { output: { id: '2', 'bv-a': 'Text', re: 'eleven', to: 't' } },
+      { output: { id: '1', 'ty': 'Integer', re: 11, to: 't' } },
+      { output: { id: '2', 'ty': 'Text', re: 'eleven', to: 't' } },
     );
   });
 });
@@ -75,7 +75,7 @@ describe('test.update — then mutate with public function', () => {
         { input: { id: '1', test: { op: '@inc!' }, from: 't' } },
         { input: { id: '2', test: { get: 'count' }, from: 't' } },
         { output: expect.objectContaining({ id: '1', re: { count: 11 } }) },
-        { output: { id: '2', 'bv-a': 'Integer', re: 11, to: 't' } },
+        { output: { id: '2', 'ty': 'Integer', re: 11, to: 't' } },
     );
   });
 });
@@ -102,7 +102,7 @@ describe('test.update — child actor via normal dispatch', () => {
   it('update handler works through child dispatch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@updateAndGet', from: 'c' } },
-      { output: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' } },
+      { output: { id: '1', 'ty': { name: 'Text' }, re: { name: 'Alice' }, to: 'c' } },
     );
   });
 });

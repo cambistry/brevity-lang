@@ -186,14 +186,14 @@ describe('Q3: external set on lifted ref cell', () => {
 
   it('external set on @color updates style to red', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    await page.send({ id: '1', op: [['red'], '#set'], to: '#<factory.bv @color>', from: 'test', 'bv-a': [['Text']] });
+    await page.send({ id: '1', op: [['red'], '#set'], to: '#<factory.bv @color>', from: 'test', 'ty': [['Text']] });
     const style = await page.evaluate(() => document.querySelector('div').getAttribute('style'));
     expect(style).toBe('color: red');
   });
 
   it('external set on @color updates style to blue', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    await page.send({ id: '1', op: [['blue'], '#set'], to: '#<factory.bv @color>', from: 'test', 'bv-a': [['Text']] });
+    await page.send({ id: '1', op: [['blue'], '#set'], to: '#<factory.bv @color>', from: 'test', 'ty': [['Text']] });
     const style = await page.evaluate(() => document.querySelector('div').getAttribute('style'));
     expect(style).toBe('color: blue');
   });

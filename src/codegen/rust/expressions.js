@@ -118,7 +118,7 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
     '        _resp.insert("id".to_string(), json!(_sub_id));',
     '        _resp.insert("re".to_string(), json!([_cur]));',
     '        _resp.insert("to".to_string(), json!(_sub_from));',
-    ...(cellType ? [`        _resp.insert("bv-a".to_string(), json!([${JSON.stringify(cellType)}]));`] : []),
+    ...(cellType ? [`        _resp.insert("ty".to_string(), json!([${JSON.stringify(cellType)}]));`] : []),
     '        let _ = self.binding.send(Value::Object(_resp));',
     '    }',
     '}',
@@ -922,7 +922,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(send_id));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        send_msg.insert("bv-a".to_string(), ${bvaExpr});
+        send_msg.insert("ty".to_string(), ${bvaExpr});
         let _ = self.binding.send(Value::Object(send_msg));
         Value::Null
     }`;

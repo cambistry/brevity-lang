@@ -43,7 +43,7 @@ maybe Text | null = null
 
 ## Wire Notes
 
-- Tagged type values use `::Type` annotations in `bv-a`.
+- Tagged type values use `::Type` annotations in `ty`.
 - All-required positional types can travel as positional payloads.
 - Optional-bearing types can travel as named maps with absent optional fields
   omitted.

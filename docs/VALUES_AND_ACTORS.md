@@ -132,7 +132,7 @@ becomes load-bearing:
 
 On the wire (CAM messages), this distinction is direct:
 
-- Values appear inline in `op`, `re`, and `bv-a` payloads.
+- Values appear inline in `op`, `re`, and `ty` payloads.
 - Actors appear as address tokens (`#<Type/id>` style).
 
 This is why `Point` and `*Point` are not just two ways to spell the same thing.

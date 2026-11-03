@@ -87,8 +87,8 @@ describe('semicolon — function body', () => {
 describe('semicolon — lineal param declaration', () => {
   it('public function params separated by semicolons', async () => {
     await expectBehavior(inlineParamScript,
-      { input: { id: '1', op: [{ n: 3, m: 4 }, '@add'], 'bv-a': [{ n: 'Integer', m: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { input: { id: '1', op: [{ n: 3, m: 4 }, '@add'], 'ty': [{ n: 'Integer', m: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 });

@@ -80,70 +80,70 @@ describe('function params — all forms', () => {
   it('(:name) ->  binds named field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@namedSigil', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('(n: Integer) ->  typed sigil', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@namedTyped', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(label: x) ->  binds key to local name', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@keyMapped', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(first: a, last: b) ->  two key-mapped params', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@keyMappedTwo', from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(label: x Integer) ->  key-mapped with type', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@keyMappedTyped', from: 'c' } },
-      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(a, :b) ->  positional + named', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@mixedPosNamed', from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(:a, :b) ->  two named-only params', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@twoNamed', from: 'c' } },
-      { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
+      { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
 
   it('(a, b) ->  untyped positional', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: '@twoPosUntyped', from: 'c' } },
-      { output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(a Integer, b Integer) ->  typed positional', async () => {
     await expectBehavior(script,
       { input: { id: '9', op: '@twoPosTyped', from: 'c' } },
-      { output: { id: '9', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '9', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('no params — bare braces { 42 }', async () => {
     await expectBehavior(script,
       { input: { id: '10', op: '@noParam', from: 'c' } },
-      { output: { id: '10', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '10', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 });
@@ -240,49 +240,49 @@ describe('function params — optional defaults', () => {
   it('positional default — omitted', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@posDefault', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
     );
   });
 
   it('positional default — provided', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@posDefaultProvided', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
   it('inferred default — omitted', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@inferredDefault', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 107 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 107 }, to: 'c' } },
     );
   });
 
   it('named default — omitted', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@namedDefault', from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 53 }, to: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 53 }, to: 'c' } },
     );
   });
 
   it('named default — provided', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@namedDefaultProvided', from: 'c' } },
-      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('mixed positional + named default — named omitted', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@mixedDefault', from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
     );
   });
 
   it('string default — omitted', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@stringDefault', from: 'c' } },
-      { output: { id: '7', 'bv-a': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+      { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
 });

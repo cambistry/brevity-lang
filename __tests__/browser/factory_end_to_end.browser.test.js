@@ -84,7 +84,7 @@ describe('factory end-to-end', () => {
     await factory.sendAsync({
       id: '2',
       op: [{ v: 'updated' }, '@bump.'],
-      'bv-a': [{ v: 'Text' }],
+      'ty': [{ v: 'Text' }],
       from: 'caller',
     });
 
@@ -108,7 +108,7 @@ describe('factory end-to-end', () => {
       await factory.sendAsync({
         id: seq,
         op: [{ v: value }, '@bump.'],
-        'bv-a': [{ v: 'Text' }],
+        'ty': [{ v: 'Text' }],
         from: 'caller',
       });
       await expectBehavior(el,

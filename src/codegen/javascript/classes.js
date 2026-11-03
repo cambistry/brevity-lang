@@ -121,7 +121,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@') && !name.startsWith('new@');
   // Handler body is bare `Self` — reply with the class address as a bare wire
   // value (mirrors the #new reply shape: bare string in `re`, bare metatype
-  // tag in `bv-a`). Skip the standard positional array wrapping.
+  // tag in `ty`). Skip the standard positional array wrapping.
   const isBareSelfReturn = !reply && implicitReturn
     && implicitReturn.expr?.type === 'Identifier'
     && implicitReturn.expr?.name === 'Self';
@@ -209,7 +209,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   if (isPrivate) condition += ` && (from === '__parent' || from === '__self' || from === '__test' || from === '__emit')`;
   // set@<cell>: after mutation, replay the new value to each registered
   // subscriber using the stored id. Notification shape matches the getter
-  // (positional `re` plus `bv-a` type tag). Additionally, for every public
+  // (positional `re` plus `ty` type tag). Additionally, for every public
   // fn whose body captures this cell, re-dispatch `@<fn>` per subscriber so
   // derived computations get re-evaluated and replayed.
   let notifyBlock = '';
@@ -733,8 +733,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const objectLine = (usesObject || hasLambdas)
     ? '\n    const _s = BvObject.pack(payload);'
     : '';
-  const bvaDecl = "\n    const _bva = message['bv-a'];";
-  // Slice 12 inbound: when the message carries a parallel bv-a tag set, walk
+  const bvaDecl = "\n    const _bva = message['ty'];";
+  // Slice 12 inbound: when the message carries a parallel ty tag set, walk
   // the packed object and reconstruct any `::Name`-tagged type values
   // before destructure runs. `_bv_unwire_packed` no-ops when types is null
   // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
@@ -949,7 +949,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
       const _msg = { id, op, to };
-      if (bva !== undefined) _msg['bv-a'] = bva;
+      if (bva !== undefined) _msg['ty'] = bva;
       this.#binding.post(_msg);
     });
   }
@@ -976,7 +976,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
       const _msg = { id, op, to };
-      if (bva !== undefined) _msg['bv-a'] = bva;
+      if (bva !== undefined) _msg['ty'] = bva;
       this.#binding.post(_msg);
     });
   }
@@ -1060,7 +1060,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
         _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
       }
       const _post = { id: message.id, re: _v, to: message.from };
-      if (_types[t.get]) _post['bv-a'] = _types[t.get];
+      if (_types[t.get]) _post['ty'] = _types[t.get];
       this.#binding.post(_post);
     } else if ('set' in t) {
       const _sv = t.set;
@@ -1119,7 +1119,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     // A self-return says "me" with a bare \`#<>\`. We made this actor, so we add its class.
     inst._adoptBinding({ post: (msg) => {
       const out = { ...local(msg), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr };
-      if (msg.re === '#<>' && !('bv-a' in msg)) out['bv-a'] = '#<@' + cls + '>';
+      if (msg.re === '#<>' && !('ty' in msg)) out['ty'] = '#<@' + cls + '>';
       this.#binding.post(out);
     } });
     return addr;
@@ -1143,8 +1143,8 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
       const pending = this.#pending.get(message.id);
       if (pending) {
-        if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['bv-a'])); return; }
-        this.#pending.delete(message.id); pending.resolve(_bv_unwire_reply(message.re, message['bv-a'])); return;
+        if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['ty'])); return; }
+        this.#pending.delete(message.id); pending.resolve(_bv_unwire_reply(message.re, message['ty'])); return;
       }
       // No matching pending — may need to forward to a proxy via remote routes
     }
@@ -1209,7 +1209,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== 'as' && !opName.startsWith('new@') && !('bv-a' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== 'as' && !opName.startsWith('new@') && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }
@@ -1229,7 +1229,7 @@ ${ifChain}
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
       const _post = { id, re, to: _replyTo };
-      if (_bva_re !== undefined) _post['bv-a'] = _bva_re;
+      if (_bva_re !== undefined) _post['ty'] = _bva_re;
       _route(_post);
     }
   }

@@ -7,7 +7,7 @@ import { expectBehavior } from '../helpers.js';
 // Statement-level only: validate.js rejects `>>` used as a sub-expression.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const out = (id, type, value) => ({ output: { id, 'bv-a': { result: type }, re: { result: value }, to: 'c' } });
+const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { result: value }, to: 'c' } });
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 describe('>> single-value prepend', () => {

@@ -123,7 +123,7 @@ describe('capture — function reference state', () => {
     const actor = await createActor(script);
     await actor.sendAsync({ id: '1', op: '@useDouble.', from: 'c' });
     await expectActorBehavior(actor,
-      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'ty': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: 10 } }) },
     );
   });
@@ -144,7 +144,7 @@ describe('capture — function reference state', () => {
     const actor = await createActor(script);
     await actor.sendAsync({ id: '1', op: '@useNegate.', from: 'c' });
     await expectActorBehavior(actor,
-      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 5 }, '@apply'], 'ty': [{ n: 'Integer' }], from: 'c' } },
       { output: expect.objectContaining({ re: { result: -5 } }) },
     );
   });

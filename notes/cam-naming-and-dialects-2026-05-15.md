@@ -49,10 +49,10 @@ Versioning is inline (`op-1` → `op-2`), not split into a separate field. New v
 
 ## Type shadowing
 
-Project already uses `bv-a` as a shadow field paralleling payload shape:
+Project already uses `ty` as a shadow field paralleling payload shape:
 
-- Args: `"bv-a": [["Integer", "Integer"]]` parallels positional args in `op`
-- Returns: `"bv-a": {"coords": "::Point"}` parallels `re`
+- Args: `"ty": [["Integer", "Integer"]]` parallels positional args in `op`
+- Returns: `"ty": {"coords": "::Point"}` parallels `re`
 - Shapes prefixed `::`, scalars bare (`"Integer"`, `"Text"`, etc.)
 
 Open question: should `op-1` reserve a **language-agnostic** type-shadow field (e.g., `tp`) with namespaced types?

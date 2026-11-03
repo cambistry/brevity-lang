@@ -36,28 +36,28 @@ describe('silent public functions + type matching', () => {
 
   it('replying function still works alongside silent function', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('overloaded — Text message gets reply', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
-      { output: { id: '2', 'bv-a': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
+      { input: { id: '2', op: [{ msg: 'hello' }, '@overloaded'], 'ty': [{ msg: 'Text' }], from: 'c' } },
+      { output: { id: '2', 'ty': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
     );
   });
 
   it('spawn + silent private function — reply ok', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@spawnTest!', from: 'c' } },
-      { output: { id: '3', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+      { output: { id: '3', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
   });
 
   it('type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ msg: 42 }, '@notify.'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ msg: 42 }, '@notify.'], 'ty': [{ msg: 'Integer' }], from: 'c' } },
       { output: { id: '4', ex: { '@notify.': 'unhandled' }, to: 'c' } },
     );
   });
@@ -71,9 +71,9 @@ describe('silent public functions + type matching', () => {
 
   it.skip('silent messages produce no output', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ msg: 'attention' }, '@notify.'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
-      { input: { id: '7', op: [{ info: 'hello' }, '@log.'], 'bv-a': [{ info: 'Text' }], from: 'c' } },
-      { input: { id: '8', op: [{ msg: 42 }, '@overloaded.'], 'bv-a': [{ msg: 'Integer' }], from: 'c' } },
+      { input: { id: '6', op: [{ msg: 'attention' }, '@notify.'], 'ty': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: '7', op: [{ info: 'hello' }, '@log.'], 'ty': [{ info: 'Text' }], from: 'c' } },
+      { input: { id: '8', op: [{ msg: 42 }, '@overloaded.'], 'ty': [{ msg: 'Integer' }], from: 'c' } },
       // is this testing anything?
       { output: [] },
     );
@@ -135,7 +135,7 @@ describe('stateful silent functions + lambdas', () => {
 
   it('dot on same line — store is silent, state persists', async () => {
     await expectBehavior(script,
-      { input: { id: 's1', op: [{ msg: 'hello' }, '@store.'], 'bv-a': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: 's1', op: [{ msg: 'hello' }, '@store.'], 'ty': [{ msg: 'Text' }], from: 'c' } },
       { input: { id: 'c1', op: '@check', from: 'c' } },
       { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) },
     );
@@ -215,7 +215,7 @@ describe('silent function — empty lineal body', () => {
   it('lineal private function — empty body is silent', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@spaciousEmpty!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+      { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
   });
 

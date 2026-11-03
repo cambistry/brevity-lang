@@ -320,7 +320,7 @@ describe('destructure params — outgoing messages', () => {
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'caller', 'bv-a': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'caller', 'ty': [{ name: 'Text' }] });
 
     const outgoing = actor.posts.find(p => p.op && (
       (typeof p.op === 'string' && p.op === '@greet') ||
@@ -366,7 +366,7 @@ describe('destructure params — full roundtrip', () => {
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '42', op: [{ name: 'Alice' }, '@hello'], from: 'caller', 'bv-a': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '42', op: [{ name: 'Alice' }, '@hello'], from: 'caller', 'ty': [{ name: 'Text' }] });
 
     const outgoing = actor.posts.find(p => p.op && (
       (typeof p.op === 'string' && p.op === '@greet') ||
@@ -453,7 +453,7 @@ describe('destructure params — uniform addressable ops', () => {
 
     const actor = await compiled.spawn();
 
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@useFunction'], from: 'caller', 'bv-a': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@useFunction'], from: 'caller', 'ty': [{ name: 'Text' }] });
     const fnOut = actor.posts.find(p => p.op && (
       (typeof p.op === 'string' && p.op === '@greet') ||
       (Array.isArray(p.op) && p.op.includes('@greet'))

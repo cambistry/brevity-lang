@@ -67,7 +67,7 @@ describe('test.op — with args', () => {
       { input: { id: '3', test: { get: 'x' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { x: 3 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 10 } }) },
-      { output: { id: '3', 'bv-a': 'Integer', re: 10, to: 't' } },
+      { output: { id: '3', 'ty': 'Integer', re: 10, to: 't' } },
     );
   });
 });
@@ -77,7 +77,7 @@ describe('test.op — bypasses schema validation', () => {
     @echo = (msg: Text) -> :msg
   `;
 
-  it('no bv-a required', async () => {
+  it('no ty required', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: [{ msg: 'hello' }, '@echo'] }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { msg: 'hello' } }) },

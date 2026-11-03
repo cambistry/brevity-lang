@@ -113,7 +113,7 @@ reply comes back as `re` with the same `id`.
   "id": "100",
   "op": [{ "url": "https://example.com" }, "@get"],
   "from": "Primary",
-  "bv-a": [{ "url": "Text" }]
+  "ty": [{ "url": "Text" }]
 }
 ```
 
@@ -122,11 +122,11 @@ reply comes back as `re` with the same `id`.
   "id": "100",
   "re": { "response": "hello" },
   "to": "Primary",
-  "bv-a": { "response": "Text" }
+  "ty": { "response": "Text" }
 }
 ```
 
-The `id` is the correlation key. `from` and `to` describe routing. `bv-a`
+The `id` is the correlation key. `from` and `to` describe routing. `ty`
 carries Brevity's type attestation for the message payload or reply.
 
 An operation with no payload can be just a selector:
@@ -149,7 +149,7 @@ and the reply supplies an address that later messages can target:
 ```
 
 ```json
-{ "id": "1", "re": "#<WebView/1>", "bv-a": "#<WebView>", "from": "WebView" }
+{ "id": "1", "re": "#<WebView/1>", "ty": "#<WebView>", "from": "WebView" }
 ```
 
 After that, ordinary messages go to the returned actor address:
@@ -173,17 +173,17 @@ For a local or remote value subscription, the request can look like this:
 The first reply carries the current value:
 
 ```json
-{ "id": "9", "re": [0], "to": "Subscriber", "bv-a": ["Integer"] }
+{ "id": "9", "re": [0], "to": "Subscriber", "ty": ["Integer"] }
 ```
 
 Later changes replay through the same correlation:
 
 ```json
-{ "id": "9", "re": [7], "to": "Subscriber", "bv-a": ["Integer"] }
+{ "id": "9", "re": [7], "to": "Subscriber", "ty": ["Integer"] }
 ```
 
 ```json
-{ "id": "9", "re": [20], "to": "Subscriber", "bv-a": ["Integer"] }
+{ "id": "9", "re": [20], "to": "Subscriber", "ty": ["Integer"] }
 ```
 
 Remote function subscriptions use the same idea with an addressed member:

@@ -29,7 +29,7 @@ Exercises an actor's `update` path through the test harness.
 ## `test.op`
 
 Dispatches public or private ops directly for tests. It bypasses normal schema
-validation in tested cases, so no `bv-a` is required.
+validation in tested cases, so no `ty` is required.
 
 ## LLM Rules
 

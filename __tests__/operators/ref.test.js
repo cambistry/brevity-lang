@@ -34,23 +34,23 @@ describe('ref — declaration and put basics', () => {
   `;
 
   it('a *Integer = 0 declares and initialises', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@declInt', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@declInt', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('a *Text = "hello" works with Text', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@declText', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@declText', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 
   it('a <- 1 updates the ref', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@putSimple', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@putSimple', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('multiple puts in sequence', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@putMultiple', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@putMultiple', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('put with expression on RHS', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@putExpr', from: 'c' } }, { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@putExpr', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 });
 
@@ -99,23 +99,23 @@ describe('ref — inner scope reads and puts', () => {
   `;
 
   it('if branch reads ref from outer scope', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@readIf', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@readIf', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('function reads ref from outer scope', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@readFn', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@readFn', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('if branch puts to outer ref', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@putIf', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@putIf', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('function puts to outer ref', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@putFn', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@putFn', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } });
   });
 
   it('while body puts to outer ref', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@putWhile', from: 'c' } }, { output: { id: '5', 'bv-a': { counter: 'Integer' }, re: { counter: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@putWhile', from: 'c' } }, { output: { id: '5', 'ty': { counter: 'Integer' }, re: { counter: 3 }, to: 'c' } });
   });
 });
 
@@ -182,27 +182,27 @@ describe('ref — closure put and return value', () => {
   `;
 
   it('closure puts to outer ref and returns the new value', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@closurePut', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@closurePut', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('closure returns an outer ref by name', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@closureReturnsCell', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@closureReturnsCell', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('closure returns an outer ref under a key', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@closureReturnsNamedCell', from: 'c' } }, { output: { id: '6', 'bv-a': { value: 'Integer' }, re: { value: 4 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: '@closureReturnsNamedCell', from: 'c' } }, { output: { id: '6', 'ty': { value: 'Integer' }, re: { value: 4 }, to: 'c' } });
   });
 
   it('closure called twice increments ref twice', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@closureTwice', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@closureTwice', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
   });
 
   it('closure reads ref after external put', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@closureAfterPut', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@closureAfterPut', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('two closures sharing the same ref see each others puts', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@closureShared', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@closureShared', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
   });
 });
 
@@ -251,23 +251,23 @@ describe('ref — pass by reference', () => {
   `;
 
   it('fn(ref x) x <- 1 mutates caller ref via *a', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@passRef!', from: 'c' } }, { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: '@passRef!', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('pass-by-ref with expression: x <- x + 10', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@passRefExpr!', from: 'c' } }, { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: '@passRefExpr!', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('pass-by-ref called multiple times', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@passRefMulti!', from: 'c' } }, { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: '@passRefMulti!', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('pass-by-ref with additional positional args', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@passRefExtra!', from: 'c' } }, { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: '@passRefExtra!', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('pass-by-ref with named argument', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@passRefNamed!', from: 'c' } }, { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: '@passRefNamed!', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 });
 
@@ -370,47 +370,47 @@ describe('ref — public (@name *Type)', () => {
   it('get @val returns initial integer', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@val', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [0], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [0], to: 'c' } },
     );
   });
 
   it('get @name returns initial text', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@name', from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Text'], re: ['hi'], to: 'c' } },
+      { output: { id: '2', 'ty': ['Text'], re: ['hi'], to: 'c' } },
     );
   });
 
   it('get @flag returns initial boolean', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@flag', from: 'c' } },
-      { output: { id: '3', 'bv-a': ['Boolean'], re: [false], to: 'c' } },
+      { output: { id: '3', 'ty': ['Boolean'], re: [false], to: 'c' } },
     );
   });
 
   it('set@val then @val reflects new value', async () => {
     await expectBehavior(script,
-      { input: { op: [[7], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { op: [[7], 'set@val'], 'ty': [['Integer']], from: 'c' } },
       { input: { id: '1', op: '@val', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [7], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
   });
 
   it('sequential set@val — last wins', async () => {
     await expectBehavior(script,
-      { input: { op: [[1], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
-      { input: { op: [[2], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
-      { input: { op: [[3], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { op: [[1], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[2], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[3], 'set@val'], 'ty': [['Integer']], from: 'c' } },
       { input: { id: '1', op: '@val', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [3], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [3], to: 'c' } },
     );
   });
 
   it('set@name on text ref', async () => {
     await expectBehavior(script,
-      { input: { op: [['bye'], 'set@name'], 'bv-a': [['Text']], from: 'c' } },
+      { input: { op: [['bye'], 'set@name'], 'ty': [['Text']], from: 'c' } },
       { input: { id: '1', op: '@name', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Text'], re: ['bye'], to: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['bye'], to: 'c' } },
     );
   });
 });
@@ -440,14 +440,14 @@ describe('ref — public via in-script class', () => {
   it('wrapper reads initial from child public ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@readInitial', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
     );
   });
 
   it('wrapper writes via c.val <- n then reads', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@writeThenRead', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 });
@@ -477,14 +477,14 @@ describe('ref — public refs initialized from class param', () => {
   it('reads ref seeded from named param', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@fromParam', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 100 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 100 }, to: 'c' } },
     );
   });
 
   it('writes to ref that was seeded from param', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@overrideParam', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 101 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 101 }, to: 'c' } },
     );
   });
 });
@@ -524,7 +524,7 @@ describe('ref — bare and @ namespaces are independent', () => {
   it('bare val and @val coexist with independent values', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@both', from: 'c' } },
-      { output: { id: '1', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 22 }, to: 'c' } },
+      { output: { id: '1', 'ty': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 22 }, to: 'c' } },
     );
   });
 
@@ -532,22 +532,22 @@ describe('ref — bare and @ namespaces are independent', () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bumpBare.', from: 'c' } },
       { input: { id: '2', op: '@both', from: 'c' } },
-      { output: { id: '2', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 111, q: 22 }, to: 'c' } },
+      { output: { id: '2', 'ty': { p: 'Integer', q: 'Integer' }, re: { p: 111, q: 22 }, to: 'c' } },
     );
   });
 
   it('mutating @val via set@val does not change bare val', async () => {
     await expectBehavior(script,
-      { input: { op: [[99], 'set@val'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { op: [[99], 'set@val'], 'ty': [['Integer']], from: 'c' } },
       { input: { id: '2', op: '@both', from: 'c' } },
-      { output: { id: '2', 'bv-a': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 99 }, to: 'c' } },
+      { output: { id: '2', 'ty': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 99 }, to: 'c' } },
     );
   });
 
   it('@val getter is independent of bare val', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@val', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer'], re: [22], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [22], to: 'c' } },
     );
   });
 });
@@ -567,15 +567,15 @@ describe('ref — bare idents starting with __ are usable', () => {
   it('__foo and __bar are readable as protected refs', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@get', from: 'c' } },
-      { output: { id: '1', 'bv-a': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 42, __bar: 'hi' }, to: 'c' } },
+      { output: { id: '1', 'ty': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 42, __bar: 'hi' }, to: 'c' } },
     );
   });
 
   it('__foo is mutable via <-', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, '@setFoo.'], 'bv-a': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [{ n: 7 }, '@setFoo.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
       { input: { id: '2', op: '@get', from: 'c' } },
-      { output: { id: '2', 'bv-a': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 7, __bar: 'hi' }, to: 'c' } },
+      { output: { id: '2', 'ty': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 7, __bar: 'hi' }, to: 'c' } },
     );
   });
 });

@@ -380,14 +380,14 @@ function genSubscribePrologue(fnName) {
   return [
     `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
-    SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    SubBva_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
     ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
     `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
-    SubBva_ = maps:get(<<"bv-a">>, Message, null),
+    SubBva_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubBva_}]),
@@ -509,7 +509,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
         // With nothing required, a call can leave out every arg, and so every tag.
-        const untaggedOk = params.some(p => !p.defaultValue && !p.rest) ? '' : 'not maps:is_key(<<"bv-a">>, Message) orelse ';
+        const untaggedOk = params.some(p => !p.defaultValue && !p.rest) ? '' : 'not maps:is_key(<<"ty">>, Message) orelse ';
         typeCheck = `(${exempt} orelse ${untaggedOk}match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
       } else {
         typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
@@ -589,7 +589,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional Re
-  // + optional bv-a type tag).
+  // + optional ty type tag).
   if (fn.name && fn.name.startsWith('set@')) {
     lines.push(...erlCellNotifyLines(ctx, fn.name.slice('set@'.length), params[0]?.type, I));
     // Derived fn replay for this cell is emitted by the underlying
@@ -662,7 +662,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const isSpread = reply.fields.some(f => f.spread && !f.localObject);
     if (isSpread) {
       replyBlock = `${I}Re = ${replyExpr},\n` +
-        `${I}BvaRe = case maps:find(<<"bv-a">>, Message) of\n` +
+        `${I}BvaRe = case maps:find(<<"ty">>, Message) of\n` +
         `${I}    {ok, [BvaFirst|_]} -> structure_splat_bva(BvaFirst);\n` +
         `${I}    _ -> null\n` +
         `${I}end,\n` +
@@ -675,7 +675,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   } else if (implicitReturn) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
     // Handler body is bare `Self` — reply with the class wire address as a
-    // bare value (mirrors #new's reply shape: bare `re`, bare `bv-a` tag).
+    // bare value (mirrors #new's reply shape: bare `re`, bare `ty` tag).
     // Skip the standard positional array wrapping.
     const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
       && implicitReturn.expr.name === 'Self';
@@ -1791,7 +1791,7 @@ ${getClauses}                            _ -> null
 ${typeClauses}                            _ -> null
                         end,
                         TResp0 = #{<<"id">> => Id, <<"re">> => TVal, <<"to">> => From},
-                        TResp = case TType of null -> TResp0; _ -> TResp0#{<<"bv-a">> => TType} end,
+                        TResp = case TType of null -> TResp0; _ -> TResp0#{<<"ty">> => TType} end,
                         io:put_chars([json_encode(TResp), $\n]);
                     error ->
                         case maps:find(<<"set">>, Test) of
@@ -1828,7 +1828,7 @@ ${testTypeClauses || '                _ -> null'};
                 _ -> null
             end,
             Resp0 = #{<<"id">> => Id, <<"re">> => Val, <<"to">> => From},
-            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"bv-a">> => BvType} end,
+            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"ty">> => BvType} end,
             io:put_chars([json_encode(Resp), $\n]);
         error ->
     case maps:find(<<"set">>, Test) of
@@ -1867,7 +1867,7 @@ ${testTypeClauses || '                _ -> null'};
         _ -> false
     end,
     IsNew = case OpName of <<"new@", _/binary>> -> true; _ -> false end,
-    case HasPayload andalso not IsNew andalso not maps:is_key(<<"bv-a">>, Message) of
+    case HasPayload andalso not IsNew andalso not maps:is_key(<<"ty">>, Message) of
         true ->
             Ex = #{OpName => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
@@ -1927,7 +1927,7 @@ handle_result({ok, Re, BvaRe}, Id, From, _OpName) when Re =/= null ->
     Resp0 = #{<<"id">> => Id, <<"re">> => Re, <<"to">> => From},
     Resp = case BvaRe of
         null -> Resp0;
-        _ -> Resp0#{<<"bv-a">> => BvaRe}
+        _ -> Resp0#{<<"ty">> => BvaRe}
     end,
     io:put_chars([json_encode(Resp), $\n]);
 handle_result({ok, null, _}, _Id, _From, _OpName) ->
@@ -2121,7 +2121,7 @@ emit_await_(Event, Payload) ->
 
   // Slice 12+13: per-program type registry. `bv_type_fields/1` returns the
   // declared field list for a given type so `bv_unwire_payload/2` can walk
-  // bv-a annotations and reconstruct ::Name-tagged values from wire form.
+  // ty annotations and reconstruct ::Name-tagged values from wire form.
   const _seenErlType = new Set();
   const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).filter(t => {
     if (_seenErlType.has(t.name)) return false; // dedup: keyed under alias + canonical name
@@ -2132,7 +2132,7 @@ emit_await_(Event, Payload) ->
     return `bv_type_fields(${erlString(t.name)}) -> [${fields}];`;
   }).join('\n');
   const bvTypeFieldsBlock = `${typeArms}\nbv_type_fields(_) -> undefined.\n\n` +
-`%% A reply's re and its parallel bv-a, in wire shape: a positional reply tags per
+`%% A reply's re and its parallel ty, in wire shape: a positional reply tags per
 %% slot, with named slots in a trailing map, and a named reply tags per key.
 bv_unwire_slot(Tag, V) when is_list(Tag); is_map(Tag) -> bv_unwire_reply(V, Tag);
 bv_unwire_slot(Tag, V) when is_binary(Tag) ->
@@ -2152,7 +2152,7 @@ bv_unwire_reply(Re, Bva) when is_map(Re), is_map(Bva) ->
 bv_unwire_reply(Re, _) -> Re.
 
 bv_unwire_payload(Message, Payload) ->
-    case maps:find(<<"bv-a">>, Message) of
+    case maps:find(<<"ty">>, Message) of
         {ok, [Types | _]} when is_map(Types) andalso is_map(Payload) ->
             maps:fold(fun
                 (K, Tag, Acc) when is_binary(Tag) ->

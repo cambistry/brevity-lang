@@ -477,7 +477,7 @@ ${getClauses}
                             resp.insert("id".to_string(), json!(id));
                             resp.insert("re".to_string(), tval);
                             resp.insert("to".to_string(), json!(from));
-                            if let Some(t) = ttype { resp.insert("bv-a".to_string(), json!(t)); }
+                            if let Some(t) = ttype { resp.insert("ty".to_string(), json!(t)); }
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
@@ -512,7 +512,7 @@ ${[...G.ctx.stateVarNames].map(n => {
             resp.insert("id".to_string(), json!(id));
             resp.insert("re".to_string(), val);
             resp.insert("to".to_string(), json!(from));
-            if let Some(t) = bv_type { resp.insert("bv-a".to_string(), json!(t)); }
+            if let Some(t) = bv_type { resp.insert("ty".to_string(), json!(t)); }
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
@@ -535,7 +535,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let _ = self.binding.send(Value::Object(resp));
             } else if let Some(re_val) = re {
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from));
-                if let Some(b) = bva_re { resp.insert("bv-a".to_string(), b); }
+                if let Some(b) = bva_re { resp.insert("ty".to_string(), b); }
                 let _ = self.binding.send(Value::Object(resp));
             }
         }
@@ -677,7 +677,7 @@ ${bodyLines}
                 Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
                 _ => Value::Null,
             };
-            let sub_bva = message.get("bv-a").cloned().unwrap_or(Value::Null);
+            let sub_bva = message.get("ty").cloned().unwrap_or(Value::Null);
             self.cell_subs
                 .entry(target.to_string())
                 .or_insert_with(Vec::new)
@@ -692,7 +692,7 @@ ${bodyLines}
         // both payload.get(...) and BvObject::pack downstream see it.
         let _payload_owned = payload.clone();
         let mut _payload_owned = _payload_owned;
-        if let Some(Value::Array(_arr)) = message.get("bv-a") {
+        if let Some(Value::Array(_arr)) = message.get("ty") {
             if let Some(_types) = _arr.first() {
                 if let Some(_types_obj) = _types.as_object() {
                     if let Value::Object(_p_map) = &mut _payload_owned {
@@ -727,7 +727,7 @@ ${bodyLines}
         }
         let payload = &_payload_owned;
         let _s = BvObject::pack(payload);
-        let _bva_msg = message.get("bv-a");
+        let _bva_msg = message.get("ty");
         let _ = id;
         let mut re: Option<Value> = None;
         let mut bva_re: Option<Value> = None;
@@ -799,7 +799,7 @@ ${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's o
                     resp.insert("re".to_string(), re_val);
                     resp.insert("to".to_string(), json!(from));
                     if let Some(bva) = bva_re {
-                        resp.insert("bv-a".to_string(), bva);
+                        resp.insert("ty".to_string(), bva);
                     }
                     let _ = self.binding.send(Value::Object(resp));
                 }
@@ -1294,7 +1294,7 @@ impl BvStr for str { fn bv_str(&self) -> String { self.to_string() } }
 // Slice 12+13 wire format helpers. The codegen passes the field set per
 // call-site (no global registry), so each type-valued reply slot picks up
 // its own field order + optionality flag at codegen time.
-// A reply's re and its parallel bv-a, in wire shape: a positional reply tags per
+// A reply's re and its parallel ty, in wire shape: a positional reply tags per
 // slot, with named slots in a trailing object, and a named reply tags per key.
 fn bv_unwire_slot(tag: &Value, v: &Value) -> Value {
     if tag.is_array() || tag.is_object() { return bv_unwire_reply(v, tag); }
@@ -1685,7 +1685,7 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address.
         let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
             to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
         });
-` : ''}        if has_payload && !op_name.starts_with("new@") && message.get("bv-a").is_none() {
+` : ''}        if has_payload && !op_name.starts_with("new@") && message.get("ty").is_none() {
             let mut ex = Map::new();
             ex.insert(op_name.clone(), json!("schema_required"));
             let mut resp = Map::new();
@@ -1724,12 +1724,12 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // A self-return: we made this actor, so we name it and its class, as for #new.
                 Ok(v) if v == json!(child) => {
                     let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
-                    resp.insert("bv-a".to_string(), json!(format!("#<{}>", class)));
+                    resp.insert("ty".to_string(), json!(format!("#<{}>", class)));
                     resp.insert("re".to_string(), json!(format!("#<{}>", addr)));
                 }
                 Ok(v) => {
                     resp.insert("re".to_string(), v);
-                    if let Some(t) = tag { resp.insert("bv-a".to_string(), t); }
+                    if let Some(t) = tag { resp.insert("ty".to_string(), t); }
                 }
                 Err(e) => {
                     let mut ex = Map::new();
@@ -1756,11 +1756,11 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
                                 // A reply whose whole value is one actor: its address is in re,
-                                // and bv-a, if any, names its class.
-                                if re.as_str().is_some_and(|t| t.starts_with("#<")) && msg.get("bv-a").is_none_or(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
+                                // and ty, if any, names its class.
+                                if re.as_str().is_some_and(|t| t.starts_with("#<")) && msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
                                     return Value::Array(vec![re.clone()]);
                                 }
-                                return msg.get("bv-a").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
+                                return msg.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
                             }
                         }
                         if msg.get("ex").is_some() && msg_id == target_id {

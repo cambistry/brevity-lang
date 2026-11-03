@@ -148,7 +148,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
   const value = `get(${erlStateKey(ctx, '@' + cell)})`;
-  const bvaPart = cellType ? `, <<"bv-a">> => [${erlString(cellType)}]` : '';
+  const bvaPart = cellType ? `, <<"ty">> => [${erlString(cellType)}]` : '';
   return [
     `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
     `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubBva${sfx}_}) ->`,
@@ -824,7 +824,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v2.seq} + 1),
         ${v2.op} = ${opExpr},
         ${v2.bva} = ${bvaExpr},
-        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
+        ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.bva}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
         null
     end`;
@@ -966,7 +966,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const method = erlString('@' + expr.method);
   const v2 = erlSendVars(ctx);
   if (positional.length === 0 && named.length === 0) {
-    // No args — op is just the method string, no bv-a
+    // No args — op is just the method string, no ty
     return `begin
         ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
         put(send_seq_, ${v2.seq} + 1),
@@ -984,7 +984,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.op} = ${opExpr},
         ${v2.bva} = ${bvaExpr},
-        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"bv-a">> => ${v2.bva}},
+        ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.bva}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
         bv_object_pack(await_response_(${v2.id}))
     end`;

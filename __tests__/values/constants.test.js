@@ -15,27 +15,27 @@ describe('public constants — literal initializers', () => {
   it('text literal constant', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@magic', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Text'], re: ['magic_string'], to: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['magic_string'], to: 'c' } },
     );
   });
 
   it('integer literal constant', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@answer', from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Integer'], re: [42], to: 'c' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('boolean literal constant', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@yes', from: 'c' } },
-      { output: { id: '3', 'bv-a': ['Boolean'], re: [true], to: 'c' } },
+      { output: { id: '3', 'ty': ['Boolean'], re: [true], to: 'c' } },
     );
   });
 
   it('list literal constant', async () => {
-    // bv-a for lists differs across targets (js emits element types, erlang
-    // emits "List"); assert the value round-trips and leave bv-a looser.
+    // ty for lists differs across targets (js emits element types, erlang
+    // emits "List"); assert the value round-trips and leave ty looser.
     await expectBehavior(script,
       { input: { id: '4', op: '@xs', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [[1, 2, 3]], to: 'c' }) },
@@ -52,14 +52,14 @@ describe('public constants — type-call initialized', () => {
   it('Text(...) constant', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@t', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Text'], re: ['constant'], to: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['constant'], to: 'c' } },
     );
   });
 
   it('Integer(...) constant', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@n', from: 'c' } },
-      { output: { id: '2', 'bv-a': ['Integer'], re: [7], to: 'c' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
   });
 });
@@ -78,7 +78,7 @@ describe('public constants — in-script class', () => {
   it('wrapper reads constant from child', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@readTag', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 });

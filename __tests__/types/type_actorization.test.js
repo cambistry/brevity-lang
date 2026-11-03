@@ -5,7 +5,7 @@ import { createActor } from '../helpers.js';
 // built-in scalars: they store a tagged value, support whole-cell mutation
 // via `<-` inside handlers, and trigger re-emission to any subscribed `@fn`
 // that reads them. Wire flow goes through slices 12+13 (positional/named
-// payload + `::Name` bv-a annotation).
+// payload + `::Name` ty annotation).
 //
 // Capability sigil is prefix `*Type` per notes/capability-sigils-2026-05-06.md.
 
@@ -28,11 +28,11 @@ describe('type actorization — *Point state cell', () => {
     }
   `;
 
-  it('@get returns wire-formatted Point with ::Point bv-a', async () => {
+  it('@get returns wire-formatted Point with ::Point ty', async () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: '@get', from: 'c' } },
-        { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
+        { output: { id: '1', 'ty': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
       ],
     });
   });
@@ -40,10 +40,10 @@ describe('type actorization — *Point state cell', () => {
   it('@shift! mutates the cell via `coords <- Point(...)`; reply reflects new value', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: [[3, 4], '@shift!'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-        { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [3, 4] }, to: 'c' } },
+        { input: { id: '1', op: [[3, 4], '@shift!'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+        { output: { id: '1', 'ty': { coords: '#<::Point>' }, re: { coords: [3, 4] }, to: 'c' } },
         { input: { id: '2', op: '@get', from: 'c' } },
-        { output: { id: '2', 'bv-a': { coords: '#<::Point>' }, re: { coords: [3, 4] }, to: 'c' } },
+        { output: { id: '2', 'ty': { coords: '#<::Point>' }, re: { coords: [3, 4] }, to: 'c' } },
       ],
     });
   });
@@ -52,11 +52,11 @@ describe('type actorization — *Point state cell', () => {
     await createActor(script, {
       expects: [
         { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
-        { output: { id: 'sub-1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
-        { input: { id: '2', op: [[1, 2], '@shift!'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
+        { output: { id: 'sub-1', 'ty': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
+        { input: { id: '2', op: [[1, 2], '@shift!'], 'ty': [['Integer', 'Integer']], from: 'c' } },
         // Handler-body re-emit fires before the handler's own reply.
-        { output: { id: 'sub-1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [1, 2] }, to: 'c' } },
-        { output: { id: '2', 'bv-a': { coords: '#<::Point>' }, re: { coords: [1, 2] }, to: 'c' } },
+        { output: { id: 'sub-1', 'ty': { coords: '#<::Point>' }, re: { coords: [1, 2] }, to: 'c' } },
+        { output: { id: '2', 'ty': { coords: '#<::Point>' }, re: { coords: [1, 2] }, to: 'c' } },
       ],
     });
   });
@@ -64,10 +64,10 @@ describe('type actorization — *Point state cell', () => {
   it('whole-cell replace via `coords <- Point(0, 0)` resets the slot', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: [[5, 6], '@shift!'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-        { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [5, 6] }, to: 'c' } },
+        { input: { id: '1', op: [[5, 6], '@shift!'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+        { output: { id: '1', 'ty': { coords: '#<::Point>' }, re: { coords: [5, 6] }, to: 'c' } },
         { input: { id: '2', op: '@reset!', from: 'c' } },
-        { output: { id: '2', 'bv-a': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
+        { output: { id: '2', 'ty': { coords: '#<::Point>' }, re: { coords: [0, 0] }, to: 'c' } },
       ],
     });
   });

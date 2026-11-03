@@ -22,28 +22,28 @@ describe('public function', () => {
   it('@hello — lineal form', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@helloOpen', from: 'c' } },
-      { output: { id: '1', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
+      { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('@hello = -> — delimited inline', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@helloInline', from: 'c' } },
-      { output: { id: '2', 'bv-a': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
+      { output: { id: '2', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('@echo — named param round-trip', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ text: 'abc' }, '@echo'], 'bv-a': [{ text: 'Text' }], from: 'c' } },
-      { output: { id: '3', 'bv-a': { text: 'Text' }, re: { text: 'abc' }, to: 'c' } },
+      { input: { id: '3', op: [{ text: 'abc' }, '@echo'], 'ty': [{ text: 'Text' }], from: 'c' } },
+      { output: { id: '3', 'ty': { text: 'Text' }, re: { text: 'abc' }, to: 'c' } },
     );
   });
 
   it('whitespace-only blank line between params and body', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
-      { output: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 7 }, to: 'c' } },
+      { input: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } },
     );
   });
 });
@@ -85,7 +85,7 @@ describe('f, @f and #f are different functions', () => {
 
   const reads = (op, value) => expectBehavior(script,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', re: [value], 'bv-a': ['Text'], to: 'c' } },
+    { output: { id: '1', re: [value], 'ty': ['Text'], to: 'c' } },
   );
 
   it('f() calls f', () => reads('@callsPrivate', 'private'));
@@ -109,14 +109,14 @@ describe('f, @f and #f are different functions', () => {
   it('a destructured f() calls f', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@destructuresPrivate', from: 'c' } },
-      { output: { id: '1', re: { v: 'private' }, 'bv-a': { v: 'Text' }, to: 'c' } },
+      { output: { id: '1', re: { v: 'private' }, 'ty': { v: 'Text' }, to: 'c' } },
     );
   });
 
   it('a destructured @f() calls @f', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@destructuresPublic', from: 'c' } },
-      { output: { id: '1', re: { v: 'public' }, 'bv-a': { v: 'Text' }, to: 'c' } },
+      { output: { id: '1', re: { v: 'public' }, 'ty': { v: 'Text' }, to: 'c' } },
     );
   });
 

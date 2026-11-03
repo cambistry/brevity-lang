@@ -252,10 +252,10 @@ describe('named construction — runtime field placement', () => {
     @textNamed = -> result: (Person(age: 30, name: "ann").name)
   `;
 
-  const expectOp = (op, re, bvA) => expectBehavior(
+  const expectOp = (op, re, ty) => expectBehavior(
     fixture,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', ...(bvA ? { 'bv-a': { result: bvA } } : {}), re: { result: re }, to: 'c' } },
+    { output: { id: '1', ...(ty ? { 'ty': { result: ty } } : {}), re: { result: re }, to: 'c' } },
   );
 
   it('all-named, declared order → fields carry their values', async () => {

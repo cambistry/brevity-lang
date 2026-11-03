@@ -86,56 +86,56 @@ describe('higher-order functions', () => {
   it('function literal as positional arg', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@literalPos', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('function literal as named arg', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@literalNamed', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('&function reference as arg', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@fnRef', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('Function-typed local variable', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@fnTypedLocal', from: 'c' } },
-      { output: { id: '4', 'bv-a': { r: 'Integer' }, re: { r: 10 }, to: 'c' } },
+      { output: { id: '4', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } },
     );
   });
 
   it('&fnVar passes a local function variable by reference', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@fnVarRef', from: 'c' } },
-      { output: { id: '5', 'bv-a': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('forward &function reference', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@forwardRef', from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
     );
   });
 
   it('function returning a function (lineal)', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: '@returnFn', from: 'c' } },
-      { output: { id: '7', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('lambda returning a function', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: '@returnFnLambda', from: 'c' } },
-      { output: { id: '8', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 });
@@ -525,21 +525,21 @@ describe('calling a function value', () => {
   it('in an interpolated string', async () => {
     await expectBehavior(script,
       { input: { id: '24', op: '@interpolated', from: 'c' } },
-      { output: { id: '24', 'bv-a': { r: 'Text' }, re: { r: 'v2' }, to: 'c' } },
+      { output: { id: '24', 'ty': { r: 'Text' }, re: { r: 'v2' }, to: 'c' } },
     );
   });
 
   it('in arithmetic', async () => {
     await expectBehavior(script,
       { input: { id: '25', op: '@inArithmetic', from: 'c' } },
-      { output: { id: '25', 'bv-a': { r: 'Integer' }, re: { r: 12 }, to: 'c' } },
+      { output: { id: '25', 'ty': { r: 'Integer' }, re: { r: 12 }, to: 'c' } },
     );
   });
 
   it('in a condition', async () => {
     await expectBehavior(script,
       { input: { id: '26', op: '@inCondition', from: 'c' } },
-      { output: { id: '26', 'bv-a': { r: 'Integer' }, re: { r: 5 }, to: 'c' } },
+      { output: { id: '26', 'ty': { r: 'Integer' }, re: { r: 5 }, to: 'c' } },
     );
   });
 
@@ -548,7 +548,7 @@ describe('calling a function value', () => {
       { input: { id: '27', op: '@oneCall!', from: 'c' } },
       { output: { id: '27', re: { r: 1 }, to: 'c' } },
       { input: { id: '28', op: '@calls', from: 'c' } },
-      { output: { id: '28', 'bv-a': { r: 'Integer' }, re: { r: 1 }, to: 'c' } },
+      { output: { id: '28', 'ty': { r: 'Integer' }, re: { r: 1 }, to: 'c' } },
     );
   });
 

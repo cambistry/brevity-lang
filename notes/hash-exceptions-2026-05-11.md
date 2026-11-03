@@ -14,7 +14,7 @@ Any unhandled hash tag is an exception. Invoking a hash tag is always a throw �
 Uncaught, this leaves the actor with a CAM payload along the lines of:
 
 ```
-{id: "123", ex: ["division by zero", "#error"], "bv-a": ["Text"]}
+{id: "123", ex: ["division by zero", "#error"], "ty": ["Text"]}
 ```
 
 (RPN-ish ordering for the cause chain — the inner cause first, outer tag last.)
@@ -204,7 +204,7 @@ These are the cheap control-flow tags: `#break`, `#continue`, `#return`-style lo
 Travels CAM as:
 
 ```
-{id: "123", ex: {message: "fail"}, bv-a: "Exception"}
+{id: "123", ex: {message: "fail"}, ty: "Exception"}
 ```
 
 - The tag *is* the Type — the name in the `#` is the Type name.
@@ -217,7 +217,7 @@ Travels CAM as:
   }
   ```
 
-- The wire format reuses Brevity's existing typed-Structure encoding (`bv-a` carries the Type name, `ex` carries the payload). No new wire mechanism — exceptions ride the existing rails.
+- The wire format reuses Brevity's existing typed-Structure encoding (`ty` carries the Type name, `ex` carries the payload). No new wire mechanism — exceptions ride the existing rails.
 
 Case probably does the throw-site disambiguation: lowercase `#break` = bare label, capitalized `#Exception` = Type reference, matching Brevity's existing convention.
 

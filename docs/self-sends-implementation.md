@@ -35,7 +35,7 @@ Self-sends use the same op format as external messages:
 ```
 
 The `from: "__self"` marker tells dispatch to:
-- Skip schema/bv-a validation (self knows its own types)
+- Skip schema/ty validation (self knows its own types)
 - Skip type matching guards (the caller already resolved the right handler)
 - Route the reply back internally rather than to the external binding
 
@@ -204,7 +204,7 @@ handle_op(Op, _Message, _Payload, _Id, _From) -> {error, Op}.
 
 ### Type Matching Bypass
 
-Erlang type matching uses `try_op_N` helper functions that check `bv-a`. For self-sends, `From` is passed through to the try functions:
+Erlang type matching uses `try_op_N` helper functions that check `ty`. For self-sends, `From` is passed through to the try functions:
 
 ```erlang
 try_double_0(Message, Payload, From) ->
@@ -424,7 +424,7 @@ All three targets implement the same semantics:
 
 1. **Private functions are dispatch handlers** — added to the same match/if chain as public functions
 2. **Self-sends bypass type matching** — `from === "__self"` / `From =:= <<"__self">>` / `from == "__self"`
-3. **Self-sends bypass schema validation** — no `bv-a` required
+3. **Self-sends bypass schema validation** — no `ty` required
 4. **Reply routing is internal** — self-send replies go back to the caller, not to the external binding
 5. **Wire format is identical** — `[payload, "opName"]` regardless of whether the caller is internal or external
 

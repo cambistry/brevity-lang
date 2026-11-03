@@ -12,7 +12,7 @@ describe('interop — two-actor request-reply', () => {
         -> response: "hello from remote"
     `;
     await expectBehavior(script,
-      { input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'bv-a': [{ url: 'Text' }] } },
+      { input: { id: 'R1', op: [{ url: 'http://example.com' }, '@get'], from: 'Primary', 'ty': [{ url: 'Text' }] } },
       { output: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }) },
     );
   });
@@ -32,7 +32,7 @@ describe('interop — two-actor request-reply', () => {
         :response Text = Remote.get(:url)
         return :response
     `);
-    await actor.sendAsync({ id: '100', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'Tester', 'bv-a': [{ url: 'Text' }] });
+    await actor.sendAsync({ id: '100', op: [{ url: 'http://example.com' }, '@call_remote'], from: 'Tester', 'ty': [{ url: 'Text' }] });
     await actor.sendAsync({ id: '1', re: { response: 'hello from remote' } });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '100', re: { response: 'hello from remote' }, to: 'Tester' }));
@@ -57,7 +57,7 @@ describe('interop — cross-call to silent public function', () => {
         spawn Store.notify.(:msg)
         return ack: "ok"
     `);
-    await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify!'], from: 'Tester', 'bv-a': [{ msg: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ msg: 'hello' }, '@send_notify!'], from: 'Tester', 'ty': [{ msg: 'Text' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ msg: 'hello' }, '@notify.'], to: 'Store' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'Tester' }));
   });
@@ -77,7 +77,7 @@ describe('interop — cross-call to silent public function', () => {
         -> last: last
     `;
     await expectBehavior(script,
-      { input: { id: 'N1', op: [{ msg: 'hello' }, '@notify.'], from: 'Caller', 'bv-a': [{ msg: 'Text' }] } },
+      { input: { id: 'N1', op: [{ msg: 'hello' }, '@notify.'], from: 'Caller', 'ty': [{ msg: 'Text' }] } },
       { input: { id: '2', op: '@check', from: 'Tester' } },
       { output: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }) },
     );
@@ -96,7 +96,7 @@ describe('interop — three-actor chain', () => {
         -> result: (n * 2)
     `;
     await expectBehavior(script,
-      { input: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'bv-a': [{ n: 'Integer' }] } },
+      { input: { id: 'B1', op: [{ n: 5 }, '@compute'], from: 'Middle', 'ty': [{ n: 'Integer' }] } },
       { output: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }) },
     );
   });
@@ -116,7 +116,7 @@ describe('interop — three-actor chain', () => {
         :result Integer = Backend.compute(:n)
         return result: (result + 1)
     `);
-    await actor.sendAsync({ id: 'M1', op: [{ n: 5 }, '@process'], from: 'Front', 'bv-a': [{ n: 'Integer' }] });
+    await actor.sendAsync({ id: 'M1', op: [{ n: 5 }, '@process'], from: 'Front', 'ty': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 10 } });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ n: 5 }, '@compute'], to: 'Backend' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'M1', re: { result: 11 }, to: 'Front' }));
@@ -137,7 +137,7 @@ describe('interop — three-actor chain', () => {
         :result Integer = Middle.process(:n)
         return answer: result
     `);
-    await actor.sendAsync({ id: 'F1', op: [{ n: 5 }, '@start'], from: 'Tester', 'bv-a': [{ n: 'Integer' }] });
+    await actor.sendAsync({ id: 'F1', op: [{ n: 5 }, '@start'], from: 'Tester', 'ty': [{ n: 'Integer' }] });
     await actor.sendAsync({ id: '1', re: { result: 11 } });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [{ n: 5 }, '@process'], to: 'Middle' }));
     expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'F1', re: { answer: 11 }, to: 'Tester' }));

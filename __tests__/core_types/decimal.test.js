@@ -23,16 +23,16 @@ const mixedScript = `
 `;
 
 function inpDD(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Decimal', 'Decimal']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Decimal', 'Decimal']], from: 'c' } };
 }
 function inpID(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Integer', 'Decimal']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Integer', 'Decimal']], from: 'c' } };
 }
 function inpDI(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'bv-a': [['Decimal', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[a, b], op], 'ty': [['Decimal', 'Integer']], from: 'c' } };
 }
 function out(result) {
-  return { output: { id: '1', 'bv-a': { result: 'Decimal' }, re: { result }, to: 'c' } };
+  return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
 }
 
 // ─── Addition ────────────────────────────────────────────────────────────────
@@ -252,7 +252,7 @@ const expScript = `
     @exp = (base Decimal, power Integer) -> result: base ** power
 `;
 function inpExp(base, power) {
-  return { input: { id: '1', op: [[base, power], '@exp'], 'bv-a': [['Decimal', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[base, power], '@exp'], 'ty': [['Decimal', 'Integer']], from: 'c' } };
 }
 
 describe('Decimal exponentiation', () => {
@@ -305,7 +305,7 @@ describe('Decimal precision at scale', () => {
     const chainScript = `
         @calc = (a Decimal, b Decimal, c Decimal) -> result: (a + b) * c
     `;
-    const inp = { input: { id: '1', op: [[0.1, 0.2, 10.0], '@calc'], 'bv-a': [['Decimal', 'Decimal', 'Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[0.1, 0.2, 10.0], '@calc'], 'ty': [['Decimal', 'Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(chainScript, inp, out(3.0));
   });
 
@@ -314,7 +314,7 @@ describe('Decimal precision at scale', () => {
     const sumScript = `
         @sum10 = (v Decimal) -> result: v + v + v + v + v + v + v + v + v + v
     `;
-    const inp = { input: { id: '1', op: [[0.1], '@sum10'], 'bv-a': [['Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[0.1], '@sum10'], 'ty': [['Decimal']], from: 'c' } };
     await expectBehavior(sumScript, inp, out(1.0));
   });
 
@@ -322,7 +322,7 @@ describe('Decimal precision at scale', () => {
     const rtScript = `
         @roundTrip = (a Decimal, b Decimal) -> result: a * b / b
     `;
-    const inp = { input: { id: '1', op: [[3.14, 2.5], '@roundTrip'], 'bv-a': [['Decimal', 'Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[3.14, 2.5], '@roundTrip'], 'ty': [['Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(rtScript, inp, out(3.14));
   });
 });
@@ -362,7 +362,7 @@ const E_500 =
   '77078544996996794686445490598793163688923009879312';
 
 function outEqual(value) {
-  return { output: { id: '1', 'bv-a': { equal: 'Boolean' }, re: { equal: value }, to: 'c' } };
+  return { output: { id: '1', 'ty': { equal: 'Boolean' }, re: { equal: value }, to: 'c' } };
 }
 
 describe('Truly long decimals (500 fractional digits)', () => {
@@ -505,13 +505,13 @@ describe('Decimal type conversions', () => {
   `;
 
   function inpD(op, a) {
-    return { input: { id: '1', op: [[a], op], 'bv-a': [['Decimal']], from: 'c' } };
+    return { input: { id: '1', op: [[a], op], 'ty': [['Decimal']], from: 'c' } };
   }
   function outI(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Integer' }, re: { result }, to: 'c' } };
   }
   function outF(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
   }
 
   it('to_integer(3.7) = 3 (truncates toward zero)', async () => {
@@ -562,10 +562,10 @@ describe('Decimal conversion via ref cell dot method', () => {
   `;
 
   function outI(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Integer' }, re: { result }, to: 'c' } };
   }
   function outF(result) {
-    return { output: { id: '1', 'bv-a': { result: 'Float' }, re: { result }, to: 'c' } };
+    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
   }
 
   it('x.to_integer on *Decimal ref', async () => {

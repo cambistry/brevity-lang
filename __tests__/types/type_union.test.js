@@ -62,14 +62,14 @@ describe('Type | null — runtime behaviour', () => {
   it('Text | null var holding a Text value replies correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@textNonNull', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text | null' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('Float | null var holding null replies correctly', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@floatNull', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Float | null' }, re: { result: null }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Float | null' }, re: { result: null }, to: 'c' } },
     );
   });
 });
@@ -155,28 +155,28 @@ describe('General unions — runtime behaviour', () => {
   it('Integer | Text slot holding an Integer replies correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@intSlot', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer | Text' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer | Text' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('Integer | Text slot holding a Text replies correctly', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@textSlot', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer | Text' }, re: { result: 'hi' }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer | Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
   it('Integer | Text public param accepts an Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[99], '@echo'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer | Text' }, re: { result: 99 }, to: 'c' } },
+      { input: { id: '3', op: [[99], '@echo'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer | Text' }, re: { result: 99 }, to: 'c' } },
     );
   });
 
   it('Integer | Text public param accepts a Text', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [['hi'], '@echo'], 'bv-a': [['Text']], from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Integer | Text' }, re: { result: 'hi' }, to: 'c' } },
+      { input: { id: '4', op: [['hi'], '@echo'], 'ty': [['Text']], from: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer | Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 });

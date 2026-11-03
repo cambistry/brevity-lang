@@ -123,7 +123,7 @@ describe('RHS object literal', () => {
   it('a, b = s where s was built as a literal', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: '@roundtrip', from: 'c' } },
-      { output: { id: '8', 'bv-a': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } },
+      { output: { id: '8', 'ty': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } },
     );
   });
 });
@@ -167,7 +167,7 @@ describe('Object coercion + named-field destructure', () => {
   it('(:a, :b) = Object(a: 1, b: 2) succeeds', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@namedFieldOk', from: 'c' } },
-      { output: { id: '3', 'bv-a': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
     );
   });
 });

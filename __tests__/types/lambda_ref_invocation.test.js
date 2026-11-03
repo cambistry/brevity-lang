@@ -68,7 +68,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
   it('invokes a generic lambda assigned to the field (fires to the carried address)', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: [{ sig: sigWire }, '@generic.'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
+      { input: { id: '1', op: [{ sig: sigWire }, '@generic.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
       { output: { id: expect.any(String), op: '@d', to: '#<caller @d>' } },
     );
   });
@@ -76,7 +76,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
   it('invokes a correctly-typed lambda assigned to the field', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '2', op: [{ sig: sigWire }, '@typed.'], 'bv-a': [{ sig: sigTag }], from: 'caller' } },
+      { input: { id: '2', op: [{ sig: sigWire }, '@typed.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
       { output: { id: expect.any(String), op: '@d', to: '#<caller @d>' } },
     );
   });
@@ -121,7 +121,7 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     await actor.sendAsync({
       id: '2',
       op: [[sigWire], selector],
-      'bv-a': [[sigTag]],
+      'ty': [[sigTag]],
       to: `#<here ${selector}>`,
       from: 'Widget',
     });

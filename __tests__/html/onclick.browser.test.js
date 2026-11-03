@@ -205,14 +205,14 @@ describe('Q3: external set on host ref cell', () => {
 
   it('external set on @count updates DOM to 1', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
-    await page.send({ id: '1', op: [[1], '#set'], to: '#<factory.bv @count>', from: 'test', 'bv-a': [['Integer']] });
+    await page.send({ id: '1', op: [[1], '#set'], to: '#<factory.bv @count>', from: 'test', 'ty': [['Integer']] });
     const text = await page.evaluate(() => document.querySelector('div').textContent);
     expect(text).toBe('1');
   });
 
   it('external set on @count updates DOM to 5', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
-    await page.send({ id: '1', op: [[5], '#set'], to: '#<factory.bv @count>', from: 'test', 'bv-a': [['Integer']] });
+    await page.send({ id: '1', op: [[5], '#set'], to: '#<factory.bv @count>', from: 'test', 'ty': [['Integer']] });
     const text = await page.evaluate(() => document.querySelector('div').textContent);
     expect(text).toBe('5');
   });

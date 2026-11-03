@@ -55,14 +55,14 @@ describe('update operator (<|)', () => {
   it('update with named param — actor receives via update handler', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@singleNamed', from: 'c' } },
-      { output: { id: '1', 'bv-a': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' } },
+      { output: { id: '1', 'ty': { name: 'Text' }, re: { name: 'Somebody' }, to: 'c' } },
     );
   });
 
   it('update with positional + named — multi-arg dispatch', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@multiArg', from: 'c' } },
-      { output: { id: '2', 'bv-a': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
+      { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
     );
   });
 });

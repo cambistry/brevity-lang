@@ -132,18 +132,18 @@ describe('at runtime', () => {
 
   it('each path returns its own value', async () => {
     await expectBehavior(SOURCE,
-      { input: { id: '1', op: [[true], '@f'], 'bv-a': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], '@f'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1] }) },
-      { input: { id: '2', op: [[false], '@f'], 'bv-a': [['Boolean']], from: 'c' } },
+      { input: { id: '2', op: [[false], '@f'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['x'] }) },
     );
   });
 
   it('a union annotation holds either', async () => {
     await expectBehavior(SOURCE,
-      { input: { id: '1', op: [[true], '@union'], 'bv-a': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], '@union'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1] }) },
-      { input: { id: '2', op: [[false], '@union'], 'bv-a': [['Boolean']], from: 'c' } },
+      { input: { id: '2', op: [[false], '@union'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['x'] }) },
     );
   });
@@ -153,7 +153,7 @@ describe('at runtime', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go', from: 'c' } },
       { output: expect.objectContaining({ op: '@f', to: 'Svc' }) },
-      { input: { id: '1', re: [4], 'bv-a': ['Integer'], from: 'Svc' } },
+      { input: { id: '1', re: [4], 'ty': ['Integer'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: [5] }) },
     );
   });
@@ -163,7 +163,7 @@ describe('at runtime', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go', from: 'c' } },
       { output: expect.objectContaining({ op: '@f', to: 'Svc' }) },
-      { input: { id: '1', re: ['y'], 'bv-a': ['Text'], from: 'Svc' } },
+      { input: { id: '1', re: ['y'], 'ty': ['Text'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: ['y'] }) },
     );
   });
@@ -206,7 +206,7 @@ describe('a reply\'s tag', () => {
   `;
   const newBox = [
     { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
   ];
 
   const paths = [
@@ -220,28 +220,28 @@ describe('a reply\'s tag', () => {
   describe.each(paths)('%s', (op, earlyRe, earlyTag, lateRe, lateTag) => {
     it('tags each path in a file handler', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [[true], op], 'bv-a': [['Boolean']], from: 'c' } },
-        { output: { id: '1', re: earlyRe, 'bv-a': earlyTag, to: 'c' } },
-        { input: { id: '2', op: [[false], op], 'bv-a': [['Boolean']], from: 'c' } },
-        { output: { id: '2', re: lateRe, 'bv-a': lateTag, to: 'c' } },
+        { input: { id: '1', op: [[true], op], 'ty': [['Boolean']], from: 'c' } },
+        { output: { id: '1', re: earlyRe, 'ty': earlyTag, to: 'c' } },
+        { input: { id: '2', op: [[false], op], 'ty': [['Boolean']], from: 'c' } },
+        { output: { id: '2', re: lateRe, 'ty': lateTag, to: 'c' } },
       );
     });
     it('tags each path in a class', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[true], op], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', re: earlyRe, 'bv-a': earlyTag, to: 'c', from: '@Box/1' } },
-        { input: { id: '3', op: [[false], op], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
-        { output: { id: '3', re: lateRe, 'bv-a': lateTag, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[true], op], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
+        { output: { id: '2', re: earlyRe, 'ty': earlyTag, to: 'c', from: '@Box/1' } },
+        { input: { id: '3', op: [[false], op], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
+        { output: { id: '3', re: lateRe, 'ty': lateTag, to: 'c', from: '@Box/1' } },
       );
     });
   });
 
   it('tags a path by the type of the param it returns', async () => {
     await expectBehavior(script, ...newBox,
-      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'bv-a': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: ['x'], 'bv-a': ['Text'], to: 'c', from: '@Box/1' } },
-      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'bv-a': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
-      { output: { id: '3', re: [9], 'bv-a': ['Integer'], to: 'c', from: '@Box/1' } },
+      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c', from: '@Box/1' } },
+      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
+      { output: { id: '3', re: [9], 'ty': ['Integer'], to: 'c', from: '@Box/1' } },
     );
   });
 });

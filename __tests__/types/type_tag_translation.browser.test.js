@@ -37,21 +37,21 @@ async function forwardingActor(selfAddr) {
 describe('type authority tag — perspective translation (browser)', () => {
   it('local #<::Name> tag gets the parent address prepended on the way out', async () => {
     const actor = await forwardingActor('main');
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'ty': [{ p: '#<::Point>' }] });
     // The parent ('main') prepends itself: local-form `#<::Point>` →
     // global-form `#<main ::Point>`. Payload stays wire-shaped.
     expect(actor.posts[0]).toEqual(expect.objectContaining({
       op: [{ p: [3, 4] }, '@take'],
       to: 'Sink',
-      'bv-a': [{ p: '#<main ::Point>' }],
+      'ty': [{ p: '#<main ::Point>' }],
     }));
   });
 
   it('without a parent frame the tag stays local form (same-process)', async () => {
     const actor = await forwardingActor(undefined);
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'bv-a': [{ p: '#<::Point>' }] });
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'ty': [{ p: '#<::Point>' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      'bv-a': [{ p: '#<::Point>' }],
+      'ty': [{ p: '#<::Point>' }],
     }));
   });
 });

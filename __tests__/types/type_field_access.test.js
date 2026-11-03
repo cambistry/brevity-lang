@@ -13,7 +13,7 @@ describe('type field access — value.field', () => {
       @get_x = -> result: Point(7, 8).x as Integer
     `,
       { input: { id: '1', op: '@get_x', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
@@ -26,7 +26,7 @@ describe('type field access — value.field', () => {
       }
     `,
       { input: { id: '2', op: '@get_y', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
@@ -36,7 +36,7 @@ describe('type field access — value.field', () => {
       @sum = -> result: Mixed(3, "hi", true).count as Integer
     `,
       { input: { id: '3', op: '@sum', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
     );
   });
 

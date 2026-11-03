@@ -34,14 +34,14 @@ describe('param capabilities — *Integer write-cap on lambda', () => {
   it('*Integer param mutates caller cell when granted *n', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bumpOnce!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('repeated *Integer grants accumulate on caller cell', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@bumpTwice!', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 });
@@ -63,7 +63,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
   it('whole-cell replace via *Point grant propagates to caller', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@replace!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { coords: '#<::Point>' }, re: { coords: [7, 8] }, to: 'c' } },
+      { output: { id: '1', 'ty': { coords: '#<::Point>' }, re: { coords: [7, 8] }, to: 'c' } },
     );
   });
 });
@@ -88,7 +88,7 @@ describe('param capabilities — *List write-cap on lambda', () => {
   it('whole-cell replace via *List grant propagates to caller', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@whole_replace!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { ns: 'List of Integers' }, re: { ns: [9, 8, 7] }, to: 'c' } },
+      { output: { id: '1', 'ty': { ns: 'List of Integers' }, re: { ns: [9, 8, 7] }, to: 'c' } },
     );
   });
 });

@@ -144,21 +144,21 @@ describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
     await expectBehavior(silentEmitScript,
       { input: { id: '1', op: '@noSub', from: 'c' } },
-      { output: { id: '1', 'bv-a': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+      { output: { id: '1', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
     );
   });
 
   it('emit with subscriber triggers handler', async () => {
     await expectBehavior(silentEmitScript,
       { input: { id: '1', op: '@oneSub!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
 
   it('multiple fires accumulate', async () => {
     await expectBehavior(silentEmitScript,
       { input: { id: '1', op: '@threeFires!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
     );
   });
 });
@@ -171,7 +171,7 @@ describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
     await expectBehavior(argsEmitScript,
       { input: { id: '1', op: '@test!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
+      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
   });
 });
@@ -211,7 +211,7 @@ describe('emit — multiple subscribers', () => {
     `;
     await expectBehavior(script,
       { input: { id: '1', op: '@test!', from: 'c' } },
-      { output: { id: '1', 'bv-a': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
 });

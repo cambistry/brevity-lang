@@ -126,7 +126,7 @@ describe('positional result — bind by position', () => {
       @test = { result Integer = double(21); return :result }
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 });

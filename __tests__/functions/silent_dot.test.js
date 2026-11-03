@@ -155,7 +155,7 @@ describe('silent name — on the wire', () => {
 
   it('a silent public handler is addressed with its dot and sends no reply', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[5], '@put.'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { id: '1', op: [[5], '@put.'], 'ty': [['Integer']], from: 'c' } },
       { input: { id: '2', op: '@get', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [5], to: 'c' }) },
     );

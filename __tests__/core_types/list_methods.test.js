@@ -10,7 +10,7 @@ import { expectBehavior } from '../helpers.js';
 // Out-of-range indices clamp silently to match slice/take/from on Text/Blob.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const out = (id, type, value) => ({ output: { id, 'bv-a': { result: type }, re: { result: value }, to: 'c' } });
+const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { result: value }, to: 'c' } });
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 // ─── Tier 1: meta + index access ──────────────────────────────────────────────

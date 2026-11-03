@@ -57,42 +57,42 @@ describe('implicit return — single value', () => {
   it('integer expression', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@intExpr', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('integer expression with explicit type annotation', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@intExprTyped', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('string literal', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@strLit', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('boolean literal', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@boolLit', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
 
   it('variable reference', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@varRef', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
   it('assignment resolves to assigned value', async () => {
     await expectBehavior(lambdaSingleValue,
       { input: { id: '1', op: '@assignReturn', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 });
@@ -293,28 +293,28 @@ describe('implicit return — public handler braced body', () => {
   it('single sigil: :x', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@bracedSigil', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('multiple sigils: :x, :y', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@bracedMultiSigils', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@bracedParenSigils', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@bracedMixed', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
 
@@ -345,28 +345,28 @@ describe('implicit return — public handler lineal body', () => {
   it('single sigil: :x', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@linealSigil', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('multiple sigils: :x, :y', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@linealMultiSigils', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@linealParenSigils', from: 'c' } },
-      { output: { id: '1', 'bv-a': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     await expectBehavior(publicHandlers,
       { input: { id: '1', op: '@linealMixed', from: 'c' } },
-      { output: { id: '1', 'bv-a': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
+      { output: { id: '1', 'ty': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
 });
@@ -433,14 +433,14 @@ describe('implicit return — function-typed assignment', () => {
   it('LHS function-type provides return type for braced literal', async () => {
     await expectBehavior(fnTypedFixture,
       { input: { id: '1', op: '@fnTypedSimple', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
 
   it('multi-statement body — last expression takes LHS return type', async () => {
     await expectBehavior(fnTypedFixture,
       { input: { id: '1', op: '@fnTypedMultistep', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 });

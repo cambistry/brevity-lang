@@ -74,7 +74,7 @@ describe('lineal class grammar — accepted forms', () => {
       @test = { b = Box(99); :result = b.get(); return :result as Integer }
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
 
@@ -88,7 +88,7 @@ describe('lineal class grammar — accepted forms', () => {
       @test = { b = Box(); :result = b.get(); return :result as Integer }
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
     );
   });
 });

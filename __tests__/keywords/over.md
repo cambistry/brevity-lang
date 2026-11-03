@@ -38,7 +38,7 @@ result List of Integers = over nums
 - Inline trailing blocks and lineal trailing blocks are supported.
 - `&fn` works for file-level helpers and local lambdas.
 - Empty lists map to `[]`.
-- Untyped bodies can emit per-element `bv-a` component types.
+- Untyped bodies can emit per-element `ty` component types.
 - A bare function name without `&` is a compile error.
 
 ## LLM Rules

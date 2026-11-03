@@ -50,7 +50,7 @@ describe('destructure — key: X resolves by scope', () => {
   it('key: v binds the local at runtime', async () => {
     await expectBehavior(`${f}@go = { value: v Integer = f(7); return result: v }\n`,
       { input: { id: '1', op: [{}, '@go'], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 });

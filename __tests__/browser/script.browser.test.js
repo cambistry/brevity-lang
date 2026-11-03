@@ -25,7 +25,7 @@ describe('browser inline script — test.get', () => {
     await page.send({ id: '1', test: { get: 'x' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Integer', re: 100, from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Integer', re: 100, from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -56,7 +56,7 @@ describe('browser inline script — document DI', () => {
     await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Page Title', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: 'Page Title', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -82,7 +82,7 @@ describe('browser inline script — element rep', () => {
     await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hello', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: 'Hello', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -108,7 +108,7 @@ describe('browser inline script — document.body()', () => {
     await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hello', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: 'Hello', from: 'script#main', to: 't' },
     ]);
   });
 });
@@ -134,7 +134,7 @@ describe('browser inline script — first by ID', () => {
     await page.send({ id: '1', test: { get: 'content' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
-      { id: '1', 'bv-a': 'Text', re: 'Hi there', from: 'script#main', to: 't' },
+      { id: '1', 'ty': 'Text', re: 'Hi there', from: 'script#main', to: 't' },
     ]);
   });
 });

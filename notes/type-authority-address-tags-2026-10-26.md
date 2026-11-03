@@ -1,6 +1,6 @@
 # Type wire identity = authority address (2026-10-26)
 
-Design decision + implementation plan. A type's `bv-a` wire tag must carry the
+Design decision + implementation plan. A type's `ty` wire tag must carry the
 type's **authority address** — where it is defined — not a bare `::Name`. This
 was always the intent (types-implementation-plan-2026-04-27, lines 297/326:
 `#<geometry.bv ::Point>`); the type-wire slices shipped the simplified bare
@@ -106,7 +106,7 @@ work.
 
 ## Follow-ups resolved (2026-10-26)
 
-- **Argument bv-a tags — DONE.** A type value forwarded as a call *argument*
+- **Argument ty tags — DONE.** A type value forwarded as a call *argument*
   now serializes to wire form (`bv_to_wire` → positional list / named map) and
   carries its authority-address tag, exactly like a reply/param slot. The gap
   was larger than a bare-vs-authority tag: the posted arg went out as the raw

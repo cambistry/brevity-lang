@@ -59,7 +59,7 @@ describe('optional arrow — compiles and runs', () => {
         return :result
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
@@ -67,8 +67,8 @@ describe('optional arrow — compiles and runs', () => {
     await expectBehavior(`
       @add = (a: Integer, b: Integer) -> { return sum: a + b }
     `,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
@@ -80,7 +80,7 @@ describe('optional arrow — compiles and runs', () => {
       @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `,
       { input: { id: '1', op: '@test', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 

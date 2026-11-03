@@ -60,7 +60,7 @@ export function genSubscribeCall(ctx, expr) {
           });`;
 
   // Parameterized subscribe: args ride on the op as `[argsPayload, selector]`,
-  // with `bv-a` paralleling the payload shape. Mirrors the DotCallExpr remote
+  // with `ty` paralleling the payload shape. Mirrors the DotCallExpr remote
   // pattern in expressions.js.
   const args = expr.args || [];
   const positional = args.filter(a => a.positional);
@@ -78,13 +78,13 @@ export function genSubscribeCall(ctx, expr) {
     const namedBva = named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, typeOf(a)))}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
       opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
-      bvaField = `, 'bv-a': [${posBva}, {${namedBva}}]`;
+      bvaField = `, 'ty': [${posBva}, {${namedBva}}]`;
     } else if (named.length > 0) {
       opExpr = `[{${namedFields}}, ${JSON.stringify(selector)}]`;
-      bvaField = `, 'bv-a': [{${namedBva}}]`;
+      bvaField = `, 'ty': [{${namedBva}}]`;
     } else {
       opExpr = `[[${posVals}], ${JSON.stringify(selector)}]`;
-      bvaField = `, 'bv-a': [[${posBva}]]`;
+      bvaField = `, 'ty': [[${posBva}]]`;
     }
   }
 
@@ -889,13 +889,13 @@ export function genLocals(ctx, body, outerEnv) {
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via *( "Alias": Alias { ... } )): post via
       // binding addressed to "<<alias selector>>" — the whole address is one
-      // hash-angle delimited "#<alias selector>". Include `bv-a` so the
+      // hash-angle delimited "#<alias selector>". Include `ty` so the
       // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
-        const bvaField = typeHint ? `, 'bv-a': [[${JSON.stringify(typeHint)}]]` : '';
+        const bvaField = typeHint ? `, 'ty': [[${JSON.stringify(typeHint)}]]` : '';
         const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
         return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${bvaField} });`;
       }

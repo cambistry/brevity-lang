@@ -49,7 +49,7 @@ describe('a class reads its file\'s cells', () => {
       { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
       { input: { id: '2', op: '@get', to: '@W/1', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [4], 'bv-a': ['Integer'] }) },
+      { output: expect.objectContaining({ id: '2', re: [4], 'ty': ['Integer'] }) },
     );
   });
 
@@ -105,7 +105,7 @@ describe('a class reads its file\'s cells', () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
-      { input: { id: '2', op: [[7], '@param'], 'bv-a': [['Integer']], to: '@W/1', from: 'c' } },
+      { input: { id: '2', op: [[7], '@param'], 'ty': [['Integer']], to: '@W/1', from: 'c' } },
       { output: reply('2', 7) },
     );
   });

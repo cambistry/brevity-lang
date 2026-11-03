@@ -1,6 +1,6 @@
 import { expectBehavior } from '../helpers.js';
 
-const out = (id, type, value) => ({ output: { id, 'bv-a': { result: type }, re: { result: value }, to: 'c' } });
+const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { result: value }, to: 'c' } });
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 // ═══════════════════════════════════════════════════════════════════════════════

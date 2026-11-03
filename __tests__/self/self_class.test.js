@@ -10,7 +10,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // This file covers a third: Self in *bare value* position. Evaluating `Self`
 // (no call) yields the class address — the same wire identity #new is sent
 // to. Its type is `Class`: a base metatype whose values are class addresses,
-// sitting alongside Integer/Text/Boolean/etc. on the bv-a ladder.
+// sitting alongside Integer/Text/Boolean/etc. on the ty ladder.
 //
 // A class author opts in to exposing its class via an ordinary public
 // handler:
@@ -23,8 +23,8 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // this purpose — class reflection is opt-in.)
 //
 // Wire shape on the @class reply mirrors #new's reply shape inverted:
-//   #new       reply: re: "#<C/1>"   bv-a: "#<C>"     (instance addr, class metatype)
-//   @class     reply: re: "#<C>"     bv-a: "Class"    (class addr,    Class metatype)
+//   #new       reply: re: "#<C/1>"   ty: "#<C>"     (instance addr, class metatype)
+//   @class     reply: re: "#<C>"     ty: "Class"    (class addr,    Class metatype)
 //
 // Scope of this ticket: the Self alias as a value and the wire encoding of
 // the resulting reply. Class equality, reflection over DI bindings, and any
@@ -74,19 +74,19 @@ describe('Self as value — compilation', () => {
 //
 // `fileName` declares the wire path this source pretends to live at. The
 // compiled class is provisioned with that address; `Self` in a handler body
-// reads it back out, and the reply serializes `re: "#<c.bv>"` with bv-a
+// reads it back out, and the reply serializes `re: "#<c.bv>"` with ty
 // "Class". In a real (filesystem-rooted) compile the path is supplied by
 // the compiler; tests stand in for that source.
 
 describe('Self as value — wire shape', () => {
-  it('@class reply carries the class address with bv-a "Class"', async () => {
+  it('@class reply carries the class address with ty "Class"', async () => {
     const actor = await createActor(`
       *
       @class = { Self }
     `, { fileName: 'c.bv' });
     await expectActorBehavior(actor,
       { input: { id: '1', op: '@class', from: 'caller' } },
-      { output: { id: '1', re: '#<c.bv>', 'bv-a': 'Class', to: 'caller' } },
+      { output: { id: '1', re: '#<c.bv>', 'ty': 'Class', to: 'caller' } },
     );
   });
 });

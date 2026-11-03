@@ -17,7 +17,7 @@ describe('public class in its own file', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [5], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -34,7 +34,7 @@ describe('public class in its own file', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [7], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -56,7 +56,7 @@ describe('public class in its own file', () => {
       }
     `,
       { input: { id: '1', op: '@go', from: 'c' } },
-      { output: { id: '1', re: [3], 'bv-a': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
@@ -184,7 +184,7 @@ describe('Box and @Box are different classes', () => {
 
   const reads = (op, value, type = 'Text') => expectBehavior(script,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', re: [value], 'bv-a': [type], to: 'c' } },
+    { output: { id: '1', re: [value], 'ty': [type], to: 'c' } },
   );
 
   it('@Box() constructs the public class', () => reads('@public', 'public'));
@@ -211,7 +211,7 @@ describe('Box and @Box are different classes', () => {
 });
 
 // A self-return from an actor made by `#new` replies as `#new` did: the actor's
-// address in `re`, its class in `bv-a`. The file actor made it, so it adds the class.
+// address in `re`, its class in `ty`. The file actor made it, so it adds the class.
 describe('a self-return from an actor made by #new', () => {
   const script = `
     @Box = *{
@@ -236,9 +236,9 @@ describe('a self-return from an actor made by #new', () => {
   it('names the actor and its class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-      { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
       { input: { id: '2', op: '@bump!', to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { output: { id: '2', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
     );
   });
 
@@ -246,10 +246,10 @@ describe('a self-return from an actor made by #new', () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@Box/1>' }) },
-      { input: { id: '2', op: [[true], '@maybe!'], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
-      { input: { id: '3', op: [[false], '@maybe!'], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
-      { output: { id: '3', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { input: { id: '2', op: [[true], '@maybe!'], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { input: { id: '3', op: [[false], '@maybe!'], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
+      { output: { id: '3', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
       { input: { id: '4', op: '@get', to: '@Box/1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [10] }) },
     );
@@ -258,9 +258,9 @@ describe('a self-return from an actor made by #new', () => {
   it('a class named with ! keeps it in its class address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Pub!', from: 'c' } },
-      { output: { id: '1', re: '#<@Pub!/1>', 'bv-a': '#<@Pub!>', to: 'c' } },
+      { output: { id: '1', re: '#<@Pub!/1>', 'ty': '#<@Pub!>', to: 'c' } },
       { input: { id: '2', op: '@go!', to: '@Pub!/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Pub!/1>', 'bv-a': '#<@Pub!>', to: 'c', from: '@Pub!/1' } },
+      { output: { id: '2', re: '#<@Pub!/1>', 'ty': '#<@Pub!>', to: 'c', from: '@Pub!/1' } },
     );
   });
 });
@@ -296,7 +296,7 @@ describe('#new beside @Box()', () => {
   it('#new reaches the public class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-      { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
       { input: { id: '2', op: '@who', to: '@Box/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['public'], to: 'c', from: '@Box/1' }) },
     );
@@ -327,7 +327,7 @@ describe('#new beside @Box()', () => {
   it('@Box() gives its actor no registered address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@local', from: 'c' } },
-      { output: { id: '1', re: ['public'], 'bv-a': ['Text'], to: 'c' } },
+      { output: { id: '1', re: ['public'], 'ty': ['Text'], to: 'c' } },
       { input: { id: '2', op: '@who', to: '@Box/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', ex: expect.anything() }) },
     );
@@ -415,7 +415,7 @@ describe('passing an actor to a function', () => {
 
   const reads = (op, value, type = 'Text') => expectBehavior(script,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', re: [value], 'bv-a': [type], to: 'c' } },
+    { output: { id: '1', re: [value], 'ty': [type], to: 'c' } },
   );
 
   it('a public function can call it', () => reads('@toPublic', 'public'));
@@ -464,14 +464,14 @@ describe('W and @W! are different classes', () => {
   it('@W!() constructs the public class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@public!', from: 'c' } },
-      { output: { id: '1', re: ['public'], 'bv-a': ['Text'], to: 'c' } },
+      { output: { id: '1', re: ['public'], 'ty': ['Text'], to: 'c' } },
     );
   });
 
   it('W() constructs the private class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@private', from: 'c' } },
-      { output: { id: '1', re: ['private'], 'bv-a': ['Text'], to: 'c' } },
+      { output: { id: '1', re: ['private'], 'ty': ['Text'], to: 'c' } },
     );
   });
 });

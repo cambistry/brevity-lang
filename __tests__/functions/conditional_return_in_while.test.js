@@ -160,13 +160,13 @@ describe('conditional return inside repeat while — lambda', () => {
   it('block-body guard inside lambda + while', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@check', from: 'c' } },
-      { output: { id: '1', 'bv-a': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
+      { output: { id: '1', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
   });
 
   it('single-line guard inside lambda + while', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@checkSingleLine', from: 'c' } },
-      { output: { id: '2', 'bv-a': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
+      { output: { id: '2', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
   });
 });
 
@@ -222,24 +222,24 @@ describe('conditional return inside repeat while — lineal', () => {
   it('lineal — repeat while guard fires', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@hitTest', from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
   });
 
   it('lineal — repeat while guard never fires, falls through', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@missTest', from: 'c' } },
-      { output: { id: '2', 'bv-a': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });
+      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });
   });
 
   it('lineal — repeat until guard fires', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@untilHit', from: 'c' } },
-      { output: { id: '3', 'bv-a': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
+      { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
   });
 
   it('lineal — repeat until guard never fires, falls through', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@untilMiss', from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });
+      { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });
   });
 });

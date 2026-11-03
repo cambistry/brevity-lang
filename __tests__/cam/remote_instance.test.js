@@ -6,7 +6,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // When an actor has `view = *WebView(path: "...")` at the top level
 // (where WebView is a declared dependency), actor initialization emits a
 // `new` message on the wire. The reply carries the new actor's address
-// in angle-delimited `re`, with bv-a: "#<Type>".
+// in angle-delimited `re`, with ty: "#<Type>".
 // Subsequent calls to the actor route to that address.
 //
 // Each test asserts the construction `new` outbound directly via
@@ -45,7 +45,7 @@ describe('remote actor — method calls after init', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<WebView/1>', 'bv-a': '#<WebView>', from: 'WebView' } },
+      { input: { id: '1', re: '#<WebView/1>', 'ty': '#<WebView>', from: 'WebView' } },
       { input: { id: '99', op: '@open.', from: 'caller' } },
       { output: expect.objectContaining({ op: '@open.', to: 'WebView/1' }) },
     );
@@ -60,12 +60,12 @@ describe('remote actor — sequential calls to actor', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<WebView/42>', 'bv-a': '#<WebView>', from: 'WebView' } },
+      { input: { id: '1', re: '#<WebView/42>', 'ty': '#<WebView>', from: 'WebView' } },
       { input: { id: '100', op: '@workflow!', from: 'caller' } },
       { output: expect.objectContaining({ op: '@open.', to: 'WebView/42' }) },
       { input: { id: '2', re: {} } }, // reply to open
       { output: expect.objectContaining({ op: '@getTitle', to: 'WebView/42' }) },
-      { input: { id: '3', re: { title: 'My Page' }, 'bv-a': { title: 'Text' } } }, // reply to getTitle
+      { input: { id: '3', re: { title: 'My Page' }, 'ty': { title: 'Text' } } }, // reply to getTitle
       { output: expect.objectContaining({ op: '@close.', to: 'WebView/42' }) },
       { input: { id: '4', re: {} } }, // reply to close
       { output: expect.objectContaining({ id: '100', re: { title: 'My Page' }, to: 'caller' }) },
@@ -101,8 +101,8 @@ describe('remote actor — multiple actors', () => {
     });
     await expectActorBehavior(actor,
       // Replies in seq order: id '1' = v1, id '2' = v2
-      { input: { id: '1', re: '#<WebView/a1>', 'bv-a': '#<WebView>', from: 'WebView' } },
-      { input: { id: '2', re: '#<WebView/b1>', 'bv-a': '#<WebView>', from: 'WebView' } },
+      { input: { id: '1', re: '#<WebView/a1>', 'ty': '#<WebView>', from: 'WebView' } },
+      { input: { id: '2', re: '#<WebView/b1>', 'ty': '#<WebView>', from: 'WebView' } },
       // v1
       { input: { id: '10', op: '@open_a', from: 'caller' } },
       { output: expect.objectContaining({ op: '@open', to: 'WebView/a1' }) },
@@ -141,7 +141,7 @@ describe('remote actor — named class args', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Database/1>', 'bv-a': '#<Database>', from: 'Database' } },
+      { input: { id: '1', re: '#<Database/1>', 'ty': '#<Database>', from: 'Database' } },
       { input: { id: '99', op: '@ping', from: 'caller' } },
       { output: expect.objectContaining({ op: '@ping', to: 'Database/1' }) },
       { input: { id: '2', re: { ok: 'pong' } } },

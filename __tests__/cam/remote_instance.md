@@ -31,7 +31,7 @@ Construction sends a `#new` message:
 The reply supplies the actor address:
 
 ```json
-{ "re": "#<WebView/1>", "bv-a": "#<WebView>", "from": "WebView" }
+{ "re": "#<WebView/1>", "ty": "#<WebView>", "from": "WebView" }
 ```
 
 After that, `view.open()` routes to the returned address:

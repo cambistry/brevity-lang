@@ -9,33 +9,33 @@ describe('type matching — named params', () => {
 
   it('exact named match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { input: { id: '1', op: [{ a: 3, b: 4 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('named type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'x', b: 'y' }, '@add'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ a: 'x', b: 'y' }, '@add'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
       { output: { id: '2', ex: { '@add': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('required named param absent → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 3 }, '@add'], 'bv-a': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ a: 3 }, '@add'], 'ty': [{ a: 'Integer' }], from: 'c' } },
       { output: { id: '3', ex: { '@add': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('extra named field still matches', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4, c: 99 }, '@add'], 'bv-a': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' } },
-      { output: { id: '4', 'bv-a': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { input: { id: '4', op: [{ a: 3, b: 4, c: 99 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' } },
+      { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
-  it('missing bv-a → schema_required', async () => {
+  it('missing ty → schema_required', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: [{ a: 3, b: 4 }, '@add'], from: 'c' } },
       { output: { id: '5', ex: { '@add': 'schema_required' }, to: 'c' } },
@@ -52,28 +52,28 @@ describe('type matching — positional params', () => {
 
   it('exact positional match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[3, 5], '@mult'], 'bv-a': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '1', 'bv-a': { product: 'Integer' }, re: { product: 15 }, to: 'c' } },
+      { input: { id: '1', op: [[3, 5], '@mult'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', 'ty': { product: 'Integer' }, re: { product: 15 }, to: 'c' } },
     );
   });
 
   it('positional type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [['a', '@b'], '@mult'], 'bv-a': [['Text', 'Text']], from: 'c' } },
+      { input: { id: '2', op: [['a', '@b'], '@mult'], 'ty': [['Text', 'Text']], from: 'c' } },
       { output: { id: '2', ex: { '@mult': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('too few positionals → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[3], '@mult'], 'bv-a': [['Integer']], from: 'c' } },
+      { input: { id: '3', op: [[3], '@mult'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '3', ex: { '@mult': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('too many positionals → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [[3, 5, 7], '@mult'], 'bv-a': [['Integer', 'Integer', 'Integer']], from: 'c' } },
+      { input: { id: '4', op: [[3, 5, 7], '@mult'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } },
       { output: { id: '4', ex: { '@mult': 'unhandled' }, to: 'c' } },
     );
   });
@@ -91,33 +91,33 @@ describe('type matching — mixed params + ...args', () => {
 
   it('mixed positional + named match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[3, 4, { label: 'hi' }], '@mash'], 'bv-a': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { input: { id: '1', op: [[3, 4, { label: 'hi' }], '@mash'], 'ty': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('mixed — positional type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [['x', 'y', { label: 'hi' }], '@mash'], 'bv-a': [['Text', 'Text', { label: 'Text' }]], from: 'c' } },
+      { input: { id: '2', op: [['x', 'y', { label: 'hi' }], '@mash'], 'ty': [['Text', 'Text', { label: 'Text' }]], from: 'c' } },
       { output: { id: '2', ex: { '@mash': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('mixed — named type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[3, 4, { label: 42 }], '@mash'], 'bv-a': [['Integer', 'Integer', { label: 'Integer' }]], from: 'c' } },
+      { input: { id: '3', op: [[3, 4, { label: 42 }], '@mash'], 'ty': [['Integer', 'Integer', { label: 'Integer' }]], from: 'c' } },
       { output: { id: '3', ex: { '@mash': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('...args matches named payload with bv-a', async () => {
+  it('...args matches named payload with ty', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ x: 1 }, '@import'], 'bv-a': [{ x: 'Integer' }], from: 'c' } },
-      { output: { id: '4', 'bv-a': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+      { input: { id: '4', op: [{ x: 1 }, '@import'], 'ty': [{ x: 'Integer' }], from: 'c' } },
+      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
-  it('...args without bv-a → schema_required', async () => {
+  it('...args without ty → schema_required', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: [{ x: 1 }, '@import'], from: 'c' } },
       { output: { id: '5', ex: { '@import': 'schema_required' }, to: 'c' } },
@@ -137,21 +137,21 @@ describe('type matching — overloading', () => {
 
   it('Integer message routes to first overload', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ name: 42 }, '@greet'], 'bv-a': [{ name: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { msg: 'Text' }, re: { msg: 'number' }, to: 'c' } },
+      { input: { id: '1', op: [{ name: 42 }, '@greet'], 'ty': [{ name: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { msg: 'Text' }, re: { msg: 'number' }, to: 'c' } },
     );
   });
 
   it('Text message routes to second overload', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ name: 'Alice' }, '@greet'], 'bv-a': [{ name: 'Text' }], from: 'c' } },
-      { output: { id: '2', 'bv-a': { msg: 'Text' }, re: { msg: 'text' }, to: 'c' } },
+      { input: { id: '2', op: [{ name: 'Alice' }, '@greet'], 'ty': [{ name: 'Text' }], from: 'c' } },
+      { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'text' }, to: 'c' } },
     );
   });
 
   it('Boolean message → unhandled (no matching overload)', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ name: true }, '@greet'], 'bv-a': [{ name: 'Boolean' }], from: 'c' } },
+      { input: { id: '3', op: [{ name: true }, '@greet'], 'ty': [{ name: 'Boolean' }], from: 'c' } },
       { output: { id: '3', ex: { '@greet': 'unhandled' }, to: 'c' } },
     );
   });
@@ -170,49 +170,49 @@ describe('type matching — key-mapped params', () => {
 
   it('exact key-mapped match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 'hello', b: 42 }, '@lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Integer' }], from: 'c' } },
-      { output: { id: '1', 'bv-a': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { input: { id: '1', op: [{ a: 'hello', b: 42 }, '@lettersTwo'], 'ty': [{ a: 'Text', b: 'Integer' }], from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('key-mapped type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'hello', b: 'nope' }, '@lettersTwo'], 'bv-a': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ a: 'hello', b: 'nope' }, '@lettersTwo'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
       { output: { id: '2', ex: { '@lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('key-mapped missing key → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 'hello' }, '@lettersTwo'], 'bv-a': [{ a: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [{ a: 'hello' }, '@lettersTwo'], 'ty': [{ a: 'Text' }], from: 'c' } },
       { output: { id: '3', ex: { '@lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('key-mapped + positional match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [[7, { a: 'hi' }], '@mashKeyed'], 'bv-a': [['Integer', { a: 'Text' }]], from: 'c' } },
-      { output: { id: '4', 'bv-a': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { input: { id: '4', op: [[7, { a: 'hi' }], '@mashKeyed'], 'ty': [['Integer', { a: 'Text' }]], from: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('key-mapped + positional — positional type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [['nope', { a: 'hi' }], '@mashKeyed'], 'bv-a': [['Text', { a: 'Text' }]], from: 'c' } },
+      { input: { id: '5', op: [['nope', { a: 'hi' }], '@mashKeyed'], 'ty': [['Text', { a: 'Text' }]], from: 'c' } },
       { output: { id: '5', ex: { '@mashKeyed': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('key-mapped + sigil shorthand match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ a: 'hi', c: 5 }, '@lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Integer' }], from: 'c' } },
-      { output: { id: '6', 'bv-a': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
+      { input: { id: '6', op: [{ a: 'hi', c: 5 }, '@lettersSigil'], 'ty': [{ a: 'Text', c: 'Integer' }], from: 'c' } },
+      { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
   it('key-mapped + sigil — sigil type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: [{ a: 'hi', c: 'nope' }, '@lettersSigil'], 'bv-a': [{ a: 'Text', c: 'Text' }], from: 'c' } },
+      { input: { id: '7', op: [{ a: 'hi', c: 'nope' }, '@lettersSigil'], 'ty': [{ a: 'Text', c: 'Text' }], from: 'c' } },
       { output: { id: '7', ex: { '@lettersSigil': 'unhandled' }, to: 'c' } },
     );
   });
