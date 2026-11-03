@@ -12,9 +12,6 @@ const isChainReceiver = (node, actorNames) =>
   (node?.type === 'DotAccessExpr' && node.property?.endsWith('!')) ||
   isCtorCall(node, actorNames);
 
-const isMemberOnCall = (node, actorNames) =>
-  (node?.type === 'DotCallExpr' || node?.type === 'DotAccessExpr') && isChainReceiver(node.object, actorNames);
-
 // Whether every return path of a `!` function yields self, so that its result is
 // a handle to the receiver. `settleBangDecls` has already made each path explicit.
 export function returnsOnlySelf(fn) {
@@ -196,8 +193,22 @@ export function lowerSelfChains(program) {
   }
 }
 
-export function lowerChains(program) {
+// A construction through a dependency has no address until its reply arrives, on any
+// target, so a call on one is hoisted the same way: `Svc.W().get()` binds the new actor.
+// A call passed to a construction is hoisted too, since its args have to be values by
+// the time `#new` goes out.
+export function lowerConstructionChains(program, constructions) {
+  lowerChains(program, {
+    isReceiver: (node) => isCtorCall(node, constructions),
+    isCallArgOf: (node) => isCtorCall(node, constructions),
+    prefix: 'new_tmp',
+  });
+}
+
+export function lowerChains(program, options = {}) {
   const actorNames = new Set(program.actors.map(a => a.name).filter(Boolean));
+  const isReceiver = options.isReceiver ?? ((node) => isChainReceiver(node, actorNames));
+  const prefix = options.prefix ?? 'chain_tmp';
   let nextTemp = 0;
   // Hoists the receivers in `node` into temps pushed onto `hoisted`, in order.
   const hoistIn = (node, hoisted) => {
@@ -208,11 +219,24 @@ export function lowerChains(program) {
       node.forEach(n => hoistIn(n, hoisted));
       return;
     }
-    if (isMemberOnCall(node, actorNames)) {
+    if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && isReceiver(node.object)) {
       hoistIn(node.object, hoisted);
-      const name = `chain_tmp${nextTemp++}`;
+      const name = `${prefix}${nextTemp++}`;
       hoisted.push({ type: 'Assign', name, value: node.object });
       node.object = { type: 'Identifier', name };
+    }
+    if (options.isCallArgOf?.(node)) {
+      const hoistArg = (holder, key) => {
+        if (holder[key]?.type !== 'DotCallExpr') return;
+        hoistIn(holder[key], hoisted);
+        const name = `${prefix}${nextTemp++}`;
+        hoisted.push({ type: 'Assign', name, value: holder[key] });
+        holder[key] = { type: 'Identifier', name };
+      };
+      node.args.forEach((arg, i) => {
+        if (arg.type === 'NamedArgsBag') Object.keys(arg.fields).forEach(k => hoistArg(arg.fields, k));
+        else hoistArg(node.args, i);
+      });
     }
     for (const v of Object.values(node)) if (v && typeof v === 'object') hoistIn(v, hoisted);
   };

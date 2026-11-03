@@ -280,7 +280,15 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
   // Per-handler-body local actor vars from dep constructor calls
   // A branch's statements read the names bound before it, so they count from past
   // the enclosing body, and they keep its local actors.
-  if (!sCtx.inBranch) ctx.localInstanceVars = new Set();
+  // Nothing says what an untyped param holds, and one typed as a class from another
+  // file holds an address, so a call on either goes to its value.
+  if (!sCtx.inBranch) {
+    ctx.localInstanceVars = new Set();
+    for (const [name, t] of typeEnv) {
+      const holdsAddress = t === null || t === 'Anything' || (ctx.remoteClassNames?.has(t) && !ctx.actorInfo?.has(t));
+      if (holdsAddress && !ctx.stateVarNames.has(name)) ctx.localInstanceVars.add(name);
+    }
+  }
 
   for (let i = 0; i < body.length; i++) {
     const s = body[i];

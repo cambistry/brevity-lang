@@ -347,8 +347,9 @@ export function parse(tokensIn) {
     if (tokens[offset]?.type === 'AT' && tokens[offset + 1]?.type === 'IDENT') return 1 + typeLength(offset + 1);
     if (tokens[offset]?.type !== 'IDENT') return 0;
     let len = 1;
-    if (tokens[offset+1]?.type === 'KEYWORD' && tokens[offset+1]?.value === 'of') {
-      const inner = typeLength(offset + 2);
+    if (tokens[offset+1]?.type === 'DCOLON' && tokens[offset+2]?.type === 'IDENT') len = 3;
+    if (tokens[offset+len]?.type === 'KEYWORD' && tokens[offset+len]?.value === 'of') {
+      const inner = typeLength(offset + len + 1);
       if (inner > 0) len += 1 + inner;
     }
     // Union suffix: | Type or | null, repeatable
@@ -2576,7 +2577,7 @@ export function parse(tokensIn) {
                 const args = parseSendArgs();
                 exprNode = AST.dotCallExpr(exprNode, method, args);
               } else {
-                exprNode = AST.dotAccess(exprNode, method);
+                exprNode = AST.dotAccessExpr(exprNode, method);
               }
             } else {
               const args = parseCallArgs();

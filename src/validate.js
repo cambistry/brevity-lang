@@ -2643,6 +2643,10 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // use spaces, pipes, and "of" as separators.
   const substituteSelf = (type, selfName) =>
     (type && selfName) ? type.replace(/\bSelf\b/g, selfName) : type;
+  // A class from another file is `Svc.Counter` as a construction and `Counter` as a
+  // type, the same way `w Counter = Svc.Counter(…)` names it.
+  const acceptsArg = (argType, expected) => isAssignable(argType, expected, actorByName)
+    || isAssignable(argType.replace(/^\w+\.(\w+)!?$/, '$1'), expected, actorByName);
   // Check arg-to-param type compatibility for a call that already matched
   // `clause`. Runs isAssignable on each arg whose type can be inferred.
   // Throws with a locating message on first mismatch.
@@ -2655,7 +2659,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
       if (!argType) continue;
       const expected = substituteSelf(sp.type, selfName);
-      if (!isAssignable(argType, expected, actorByName)) {
+      if (!acceptsArg(argType, expected)) {
         throw new Error(`${label} positional arg ${i + 1}: '${argType}' is not assignable to '${expected}'`);
       }
     }
@@ -2666,7 +2670,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
       if (!argType) continue;
       const expected = substituteSelf(sp.type, selfName);
-      if (!isAssignable(argType, expected, actorByName)) {
+      if (!acceptsArg(argType, expected)) {
         throw new Error(`${label} named arg '${key}': '${argType}' is not assignable to '${expected}'`);
       }
     }

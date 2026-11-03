@@ -56,4 +56,17 @@ describe('type cross-module reference — Foo::Bar', () => {
     expect(decl.name).toBe('p');
     expect(decl.typeName).toBe('Geom::Point');
   });
+
+  it('parses Foo::Bar as a typed local with a value', () => {
+    const { ast } = extract(`
+      @go = {
+        p Geom::Point = other()
+        return result: 1
+      }
+    `);
+    const fn = ast.actors[0].functions.find(f => f.name === '@go');
+    const decl = fn.body.find(s => s.type === 'TypedAssign');
+    expect(decl.name).toBe('p');
+    expect(decl.typeName).toBe('Geom::Point');
+  });
 });

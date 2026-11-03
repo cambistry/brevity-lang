@@ -167,8 +167,6 @@ export const functionCallExpr = (callee, args) =>
 export const dotCallExpr = (object, method, args) =>
   ({ type: 'DotCallExpr', object, method, args });
 
-export const dotAccess = (object, property) =>
-  ({ type: 'DotAccess', object, property });
 
 export const dotAccessExpr = (object, property) =>
   ({ type: 'DotAccessExpr', object, property });

@@ -4,6 +4,8 @@ import { compileActor, compileSource, createActor, expectActorBehavior, expectBe
 // the reply's address names a sub-actor of whichever actor constructed it.
 
 const SVC = `
+  ::Point (x: Integer)
+
   @Counter = (start Integer, step: Integer) *{
     n *Integer = start
     @get = { return n }
@@ -15,9 +17,11 @@ const SVC = `
   }
 
   @plain = { return 1 }
+
+  @origin = { return Point(x: 1) }
 `;
 
-const DOC = '{ Counter (Integer, step: Integer) -> *{\n  get () -> (Integer)\n  inc! () => self\n}\nW! () => *{\n  one () -> (Integer)\n}\nplain () -> (Integer) }';
+const DOC = '{ Counter (Integer, step: Integer) -> *{\n  get () -> (Integer)\n  inc! () => self\n}\nW! () => *{\n  one () -> (Integer)\n}\nplain () -> (Integer)\n::Point (x: Integer)\norigin () -> (Point) }';
 const remotes = [{ path: 'svc.bv', service: DOC }];
 
 describe('caller side', () => {
@@ -40,7 +44,7 @@ describe('caller side', () => {
   }
 
   it('an instance constructs through its own address', async () => {
-    const actor = await createActor(`*\n  "svc.bv": Svc\n*\n@go = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`.replace('@go =', '@go! ='), { compileOptions: { remotes } });
+    const actor = await createActor(`*\n  "svc.bv": Svc #\n*\n@go! = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go!', from: 'c' } },
       { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
@@ -76,10 +80,6 @@ describe('checks', () => {
     expect(() => compile(`${header}@go! = {\n  w W = Svc.W!()\n  return 1\n}\n`)).not.toThrow();
   });
 
-  it('must be bound before use', () => {
-    expect(() => compile(`${header}@go = {\n  return Svc.Counter(1, step: 1).get()\n}\n`)).toThrow(/Bind the new 'Counter' first/);
-  });
-
   it('a header-bound class can be constructed in place', async () => {
     const actor = await createActor('*\n  "svc.bv": (:Counter)\n*\n@go = {\n  return Counter(1, step: 1)\n}\n', { compileOptions: { remotes } });
     await expectActorBehavior(actor,
@@ -97,6 +97,294 @@ describe('checks', () => {
 
   it('a function in the doc is still a call', () => {
     expect(() => compile(`${header}@go = {\n  v Integer = Svc.plain()\n  return v\n}\n`)).not.toThrow();
+  });
+});
+
+// A new actor needn't be bound first: `Svc` is an actor, and this is a message to it.
+describe('a new actor used in place', () => {
+  const script = `
+    *
+      "svc.bv": Svc
+    *
+
+    read = (w) { return w.get() }
+
+    @chain = { return Svc.Counter(5, step: 2).get() }
+    @give = { return Svc.Counter(5, step: 2) }
+    @pass = { return read(Svc.Counter(5, step: 2)) }
+  `;
+  const compileOptions = { remotes };
+
+  it('in a chain: #new, then a call to the address in the reply', async () => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: '@chain', from: 'c' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'bv-a': '#<Svc @Counter>', from: 'Svc' } },
+      { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
+    );
+  });
+
+  it('in a return: #new, and the reply carries the address', async () => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: '@give', from: 'c' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'bv-a': '#<Svc @Counter>', from: 'Svc' } },
+      { output: expect.objectContaining({ id: 'x', re: ['Svc @Counter/1'], to: 'c' }) },
+    );
+  });
+
+  it('as an argument: the function calls the address it was given', async () => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: '@pass', from: 'c' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'bv-a': '#<Svc @Counter>', from: 'Svc' } },
+      { output: expect.objectContaining({ op: '@get', to: 'Svc @Counter/1' }) },
+    );
+  });
+
+  describe('through an instance', () => {
+    const script = `
+      *
+        "svc.bv": Svc #
+      *
+
+      read = (w) { return w.get() }
+
+      @chain = {
+        s = Svc()
+        return s.Counter(5, step: 2).get()
+      }
+      @give = {
+        s = Svc()
+        return s.Counter(5, step: 2)
+      }
+      @pass = {
+        s = Svc()
+        return read(s.Counter(5, step: 2))
+      }
+      @own = { return Svc().plain() }
+    `;
+
+    it('asks that instance, not the shared address', async () => {
+      const actor = await createActor(script, { compileOptions });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: '@chain', from: 'c' } },
+        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'bv-a': '#<Svc>', from: 'Svc' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+        { input: { id: '2', re: '#<Svc/7 @Counter/1>', 'bv-a': '#<Svc/7 @Counter>', from: 'Svc/7' } },
+        { output: expect.objectContaining({ id: '3', op: '@get', to: 'Svc/7 @Counter/1' }) },
+      );
+    });
+
+    it('returned, it still asks that instance', async () => {
+      const actor = await createActor(script, { compileOptions });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: '@give', from: 'c' } },
+        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'bv-a': '#<Svc>', from: 'Svc' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+      );
+    });
+
+    it('as an argument, it still asks that instance', async () => {
+      const actor = await createActor(script, { compileOptions });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: '@pass', from: 'c' } },
+        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'bv-a': '#<Svc>', from: 'Svc' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+      );
+    });
+
+    it('a # entry can be constructed and called in place', async () => {
+      const actor = await createActor(script, { compileOptions });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: '@own', from: 'c' } },
+        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'bv-a': '#<Svc>', from: 'Svc' } },
+        { output: expect.objectContaining({ id: '2', op: '@plain', to: 'Svc/7' }) },
+      );
+    });
+  });
+
+  describe('from a header binding', () => {
+    const script = `
+      *
+        "svc.bv": (:Counter)
+      *
+
+      @chain = { return Counter(5, step: 2).get() }
+    `;
+
+    it('in a chain', async () => {
+      const actor = await createActor(script, { compileOptions });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: '@chain', from: 'c' } },
+        { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'svc.bv @Counter' } },
+        { input: { id: '1', re: '#<Svc @Counter/1>', 'bv-a': '#<Svc @Counter>', from: 'Svc' } },
+        { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
+      );
+    });
+  });
+
+  it('a param typed as a different class refuses it', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      read = (w W) { return w.one() }
+      @go = { return read(Svc.Counter(1, step: 1)) }
+    `, { remotes })).toThrow(/not assignable to 'W'/);
+  });
+
+  it('checks members of the new actor', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = { return Svc.Counter(1, step: 1).nope() }
+    `, { remotes })).toThrow(/no method 'nope'/);
+  });
+
+  it('a file-level construction can\'t be used in place', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      n Integer = Svc.Counter(1, step: 1).get()
+      @go = { return n }
+    `, { remotes })).toThrow(/Bind the new 'Counter' first/);
+  });
+
+  it('a class named with ! still counts as a write for its caller', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = { return Svc.W!().one() }
+    `, { remotes })).toThrow(/'@go' writes/);
+  });
+});
+
+// A bare entry is an actor to talk to; `#` is something to construct one from.
+describe('bare and # headers', () => {
+  it('a bare entry is already an actor, so it can\'t be constructed', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = {
+        s = Svc()
+        return 1
+      }
+    `, { remotes })).toThrow(/'Svc' is already an actor.*"svc\.bv": Svc #/);
+  });
+
+  it('nor constructed in place', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = { return Svc() }
+    `, { remotes })).toThrow(/'Svc' is already an actor/);
+  });
+
+  it('a # entry has to be constructed before it can be messaged', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc #
+      *
+      @go = { return Svc.plain() }
+    `, { remotes })).toThrow(/'Svc' isn't an actor yet.*x = Svc\(/);
+  });
+
+  it('nor can it be asked for a class', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc #
+      *
+      @go = {
+        w = Svc.Counter(1, step: 1)
+        return 1
+      }
+    `, { remotes })).toThrow(/'Svc' isn't an actor yet/);
+  });
+
+  it('a declared constructor follows the # rule', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc () -> *{ get () -> (Integer) }
+      *
+      @go = { return Svc.get() }
+    `)).toThrow(/'Svc' isn't an actor yet/);
+  });
+
+  it('a declared constructor can be constructed', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc () -> *{ get () -> (Integer) }
+      *
+      @go = {
+        s = Svc()
+        v Integer = s.get()
+        return v
+      }
+    `)).not.toThrow();
+  });
+
+  it('an inline interface is an actor too', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc { get () -> (Integer) }
+      *
+      @go = {
+        s = Svc()
+        return 1
+      }
+    `)).toThrow(/'Svc' is already an actor/);
+  });
+});
+
+// `::` names types. A class has no `::` form: `w W` is how to annotate one.
+describe('qualified annotations', () => {
+  it('a wrong qualified type is refused', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = {
+        p Svc::Nope = Svc.origin()
+        return 1
+      }
+    `, { remotes })).toThrow(/Nope/);
+  });
+
+  it('an alias that isn\'t in the header is refused', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = {
+        p Other::Point = Svc.origin()
+        return 1
+      }
+    `, { remotes })).toThrow(/Other/);
+  });
+
+  it('a class has no :: form', () => {
+    expect(() => compileSource(`
+      *
+        "svc.bv": Svc
+      *
+      @go = {
+        w Svc::Counter = Svc.Counter(1, step: 1)
+        return 1
+      }
+    `, { remotes })).toThrow(/'Svc::Counter' names a class.*w Counter/);
   });
 });
 
@@ -188,4 +476,84 @@ describe('end to end', () => {
   it('constructs a class named with ! and calls it', async () => {
     expect(await run(`*\n  "svc.bv": Svc\n*\n@go! = {\n  w W = Svc.W!()\n  v Integer = w.one()\n  return v\n}\n`, '@go!')).toEqual([1]);
   }, 120000);
+
+  describe('in place', () => {
+    const script = `
+      *
+        "svc.bv": Svc
+      *
+
+      read = (w) { return w.get() }
+      readTyped = (w Counter) { return w.get() }
+
+      @chain = { return Svc.Counter(5, step: 2).get() }
+      @passTyped = { return readTyped(Svc.Counter(5, step: 2)) }
+      @writes = { return Svc.Counter(5, step: 2).inc!().get() }
+      @pass = { return read(Svc.Counter(5, step: 2)) }
+      @nested = { return Svc.Counter(Svc.Counter(1, step: 1).get(), step: 2).get() }
+      @assign = {
+        v Integer = Svc.Counter(5, step: 2).get()
+        return v
+      }
+      @point = {
+        p Svc::Point = Svc.origin()
+        return p.x
+      }
+      @lineal = -> Svc.Counter(5, step: 2).get()
+      @branch = {
+        if 1 > 0 { return Svc.Counter(5, step: 2).get() }
+        return 0
+      }
+    `;
+
+    it('a chain', async () => {
+      expect(await run(script, '@chain')).toEqual([5]);
+    }, 120000);
+
+    it('a chain through a write', async () => {
+      expect(await run(script, '@writes')).toEqual([7]);
+    }, 120000);
+
+    it('an argument', async () => {
+      expect(await run(script, '@pass')).toEqual([5]);
+    }, 120000);
+
+    it('an argument to a param typed as the class', async () => {
+      expect(await run(script, '@passTyped')).toEqual([5]);
+    }, 120000);
+
+    it('as an arg to another construction', async () => {
+      expect(await run(script, '@nested')).toEqual([1]);
+    }, 120000);
+
+    it('bound to a typed local', async () => {
+      expect(await run(script, '@assign')).toEqual([5]);
+    }, 120000);
+
+    it('a lineal body', async () => {
+      expect(await run(script, '@lineal')).toEqual([5]);
+    }, 120000);
+
+    it('a branch', async () => {
+      expect(await run(script, '@branch')).toEqual([5]);
+    }, 120000);
+
+    it('a local annotated with a qualified type', async () => {
+      expect(await run(script, '@point')).toEqual([1]);
+    }, 120000);
+  });
+
+  describe('in place, from a header binding', () => {
+    const script = `
+      *
+        "svc.bv": (:Counter)
+      *
+
+      @chain = { return Counter(5, step: 2).get() }
+    `;
+
+    it('a chain', async () => {
+      expect(await run(script, '@chain')).toEqual([5]);
+    }, 120000);
+  });
 });

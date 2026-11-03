@@ -309,6 +309,16 @@ describe('passing an actor to a function', () => {
       b.bump!()
     }
 
+    returnsItsCall = (b @Box) { return b.who() }
+    untyped = (b) { return b.who() }
+
+    @returnsTyped = { return returnsItsCall(@Box()) }
+    @returnsUntyped = { return untyped(@Box()) }
+    @returnsUntypedBound = {
+      b = @Box()
+      return untyped(b)
+    }
+
     @toPublic = {
       r Text = @takes(@Box())
       return r
@@ -359,6 +369,19 @@ describe('passing an actor to a function', () => {
   it('one held in a local passes too', () => reads('@bound', 'public'));
   it('a named arg passes it, and the caller keeps it', () => reads('@named', 'publicpublic'));
   it('the function reaches the same actor', () => reads('@sameActor!', 1, 'Integer'));
+  // Nothing annotates these returns, so there's no type to tag the reply with.
+  it('a function can return its call on it', () => expectBehavior(script,
+    { input: { id: '1', op: '@returnsTyped', from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
+  ));
+  it('an untyped param takes it', () => expectBehavior(script,
+    { input: { id: '1', op: '@returnsUntyped', from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
+  ));
+  it('an untyped param takes one held in a local', () => expectBehavior(script,
+    { input: { id: '1', op: '@returnsUntypedBound', from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
+  ));
 });
 
 describe('W and @W! are different classes', () => {

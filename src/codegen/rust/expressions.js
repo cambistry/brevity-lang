@@ -572,7 +572,10 @@ ${subRegLines.join('\n')}
     const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `"${k}": ${wrap(v)}`).join(', ')}}` : null;
     const payload = positional.length ? `json!([${[...positional, ...(fields ? [fields] : [])].join(', ')}])` : `json!(${fields ?? '{}'})`;
     G.ctx.needsAwaitNew = true;
-    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); send_msg.insert("op".to_string(), json!([${payload}, "#new"])); send_msg.insert("to".to_string(), json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
+    const newTo = expr.viaInstance
+      ? `json!(format!("{} ${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
+      : `json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})`;
+    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); send_msg.insert("op".to_string(), json!([${payload}, "#new"])); send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
@@ -1473,7 +1476,9 @@ function genRustBranchBind(s, typeEnv, indent) {
     return lines.join('\n');
   }
   const callsLocalFunction = s.value?.type === 'FunctionCallExpr' && G.ctx.lambdaVarNames.has(s.value.callee?.name);
-  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr' || callsLocalFunction) {
+  const constructsDep = s.value?.type === 'FunctionCallExpr' && G.ctx.dependencyNames.has(s.value.callee?.name)
+    && !G.ctx.destructuredMembers?.has(s.value.callee?.name);
+  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr' || callsLocalFunction || constructsDep) {
     // A call waits for its reply, as it does outside a branch.
     const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
     const code = genRustLocals([s], typeEnv, analyzeFunctions([s], new Set(), typeEnv), findMutableVars([s]), indent, undefined, null, enclosing);

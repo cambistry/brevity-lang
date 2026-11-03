@@ -1891,8 +1891,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     // Fresh SSA scope for this body walk
     G.ctx.ssaScope = new Map();
     G.ctx.ssaCounts = new Map();
-    // Per-handler-body local actor vars from dep constructor calls
+    // Per-handler-body local actor vars from dep constructor calls. Nothing says what
+    // an untyped param holds, and one typed as a class from another file holds an
+    // address, so a call on either goes to its value.
     G.ctx.localInstanceVars = new Set();
+    for (const [name, t] of typeEnv) {
+      const holdsAddress = t === null || t === 'Anything' || (G.ctx.remoteClassNames?.has(t) && !G.ctx.actorInfo?.has(t));
+      if (holdsAddress && !G.ctx.stateVarNames.has(name)) G.ctx.localInstanceVars.add(name);
+    }
   }
   // Stash the active early-return expression maker on the context so nested
   // helpers (e.g. handleTypedAssign_FunctionCallExpr → inlined lambdas with a

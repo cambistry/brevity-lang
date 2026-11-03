@@ -2254,6 +2254,7 @@ export function codegenErlang(ast, options = {}) {
   if (active.length === 0) return '';
 
   const ctx = createErlContext();
+  ctx.remoteClassNames = ast.remoteClassNames;
 
   // Wire late bindings for circular dependencies
   ctx.genExpr = genExpr;

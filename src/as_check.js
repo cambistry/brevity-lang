@@ -126,6 +126,13 @@ export function lowerAs(ast) {
   const onActor = (e) => (e?.type === 'DotCallExpr' || e?.type === 'DotAccessExpr')
     && (isCtorCall(e.object) || actorRef(e.object) || onActor(e.object));
   const isMemberCall = (e) => e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && members_.has(e.callee.name);
+  // Nothing says what an untyped param holds, so a call on it may be a call on an actor.
+  // A param typed as a class, here or in another file, certainly is.
+  const onUntyped = (e, env) => {
+    if (e?.type !== 'DotCallExpr' || e.object?.type !== 'Identifier' || !env.has(e.object.name)) return false;
+    const t = env.get(e.object.name);
+    return t === null || t === 'Anything' || classes.has(t) || ast.remoteClassNames?.has(t);
+  };
 
   // Not in a lambda: its body returns through the call that runs it.
   let lambdaDepth = 0;
@@ -134,7 +141,7 @@ export function lowerAs(ast) {
     if (lambdaDepth > 0) return;
     for (const f of fields) {
       const source = f.expr ?? f.value;
-      if (f.type || f.spread || f.selfReturn || !(onActor(source) || isMemberCall(source))) continue;
+      if (f.type || f.spread || f.selfReturn || !(onActor(source) || isMemberCall(source) || onUntyped(source, env))) continue;
       const whole = fields.length === 1 && f.expr && source.type !== 'DotAccessExpr' && !source.method?.endsWith('!');
       const name = raw('r');
       pre.push(whole

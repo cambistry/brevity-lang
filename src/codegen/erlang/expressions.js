@@ -427,11 +427,14 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const fields = bag ? `#{${Object.entries(bag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ')}}` : null;
     const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '#{}');
     const seq = ctx.sendCounter++;
+    const newTo = expr.viaInstance
+      ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, " ${expr.viaSelector}"/utf8>>`
+      : erlString(ctx.constructorCoercions.get(expr.callee.name));
     return `begin
         New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,
         put(send_seq_, New_seq_${seq} + 1),
         New_id_${seq} = integer_to_binary(New_seq_${seq}),
-        io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, <<"op">> => [${payload}, <<"#new">>], <<"to">> => ${erlString(ctx.constructorCoercions.get(expr.callee.name))}}), $\n]),
+        io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, <<"op">> => [${payload}, <<"#new">>], <<"to">> => ${newTo}}), $\n]),
         await_new_response_(New_id_${seq})
     end`;
   }

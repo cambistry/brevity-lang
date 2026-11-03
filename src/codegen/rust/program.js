@@ -1876,6 +1876,7 @@ function codegenRust(ast, options = {}) {
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   G.ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
+  G.ctx.remoteClassNames = ast.remoteClassNames;
   // Map dep alias -> interface (as declared in the constructor block). Used by
   // SubscribeCall to infer the target field's type so the re callback's
   // param gets a typed local, not a raw Value.

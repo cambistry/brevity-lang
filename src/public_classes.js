@@ -10,6 +10,7 @@
 // public class, which `#new` normalizes to the way `set` normalizes to `set@a`.
 
 import * as AST from './ast.js';
+import { lowerConstructionChains } from './chains.js';
 import { resolveSuperclassChain } from './subclass.js';
 
 // A constructor entry as the document of what it constructs.
@@ -21,9 +22,9 @@ function docOfClass(type) {
 }
 
 // `x W = W!()` names the class this construction produces, so nothing needs coercing.
-const namesClass = (typeName, remote, local, alias) => {
+const namesClass = (typeName, remote, local) => {
   const bare = remote.replace(/!$/, '');
-  return typeName === bare || typeName === local?.replace(/!$/, '') || typeName === `${alias}::${bare}`;
+  return typeName === bare || typeName === local?.replace(/!$/, '');
 };
 
 const constructionArgs = (args) => {
@@ -91,18 +92,57 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     };
   };
 
-  const walk = (node, instances) => {
+  // A bare entry is an actor to talk to. `#` or a declared constructor is something to
+  // construct one from. An entry with no document might be a type, so it isn't checked.
+  const depNamed = (name) => ast.dependencies.find(d => d.name === name && !d.wireTarget);
+  const constructsActors = (dep) => Boolean(dep.generic || dep.constructorParams);
+  const checkHeaderKind = (node) => {
+    if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
+      const dep = depNamed(node.callee.name);
+      if (dep && !constructsActors(dep) && (dep.interface || remotesParsed[dep.name])) {
+        throw new Error(`'${dep.name}' is already an actor, with no constructor signature, so there's nothing to construct — message it, or to construct one, import it as '"${dep.path}": ${dep.name} #'`);
+      }
+    }
+    if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
+      const dep = depNamed(node.object.name);
+      if (dep && constructsActors(dep)) {
+        throw new Error(`'${dep.name}' isn't an actor yet, so it can't be messaged — construct one first: 'x = ${dep.name}(…)'`);
+      }
+    }
+  };
+
+  // `Svc::Point` names a type in Svc's document. A class has no `::` form.
+  const checkQualifiedType = (node) => {
+    if (node.type !== 'TypedAssign' || typeof node.typeName !== 'string') return;
+    for (const [written, alias, member] of node.typeName.matchAll(/(\w+)::(\w+)/g)) {
+      const dep = depNamed(alias);
+      if (!dep) throw new Error(`'${alias}' in '${written}' isn't in the header`);
+      const doc = remotesParsed[alias];
+      if (!doc) continue;
+      if (doc.__types?.[member]) {
+        throw new Error(`'${written}' names a class, and '::' is for types — annotate it '${node.name} ${member}'`);
+      }
+      if (!doc.__typeDecls?.[member]) throw new Error(`'${alias}' has no type '${member}'`);
+    }
+  };
+
+  const walk = (node, instances, inFunction = false) => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { node.forEach(n => walk(n, instances)); return; }
-    const scope = node.type === 'FunctionDecl' || node.type === 'Function' ? new Map(instances) : instances;
+    if (Array.isArray(node)) { node.forEach(n => walk(n, instances, inFunction)); return; }
+    const isFunction = node.type === 'FunctionDecl' || node.type === 'Function';
+    const scope = isFunction ? new Map(instances) : instances;
+    const inside = inFunction || isFunction;
+    checkHeaderKind(node);
+    checkQualifiedType(node);
     if (['Assign', 'TypedAssign', 'StateAssign'].includes(node.type)) {
+      if (node.value && typeof node.value === 'object') checkHeaderKind(node.value);
       const call = doesConstruct(node.value, scope);
       if (call) {
         const { method, object } = node.value;
         if (call.viaInstance && node.type === 'StateAssign') {
           throw new Error(`Cannot construct '${method}' on '${object.name}' at file level — '${object.name}' has no address yet; do it in a function`);
         }
-        if (node.type === 'TypedAssign' && namesClass(node.typeName, method, null, call.dep)) {
+        if (node.type === 'TypedAssign' && namesClass(node.typeName, method, null)) {
           node.type = 'Assign';
           delete node.typeName;
         }
@@ -111,7 +151,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       }
       if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.type === 'Identifier') {
         const dep = ast.dependencies.find(d => d.name === node.value.callee.name);
-        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeName, dep.wireTarget.split(' @')[1], dep.name, dep.wireTarget.split(' @')[0])) {
+        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeName, dep.wireTarget.split(' @')[1], dep.name)) {
           node.type = 'Assign';
           delete node.typeName;
         } else if (typesOf(dep?.name) && !dep.wireTarget) {
@@ -120,13 +160,32 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       }
     }
     const nested = doesConstruct(node, scope);
-    if (nested) throw new Error(`Bind the new '${node.method}' first: 'x = ${node.object.name}.${node.method}(…)'`);
+    if (nested) {
+      // Nothing outside a function can wait for the reply mid-expression.
+      if (!inside) throw new Error(`Bind the new '${node.method}' first: 'x = ${node.object.name}.${node.method}(…)'`);
+      const lowered = lower(node, nested);
+      for (const key of Object.keys(node)) delete node[key];
+      Object.assign(node, lowered);
+    }
     for (const key of ['constructorBody', ...Object.keys(node)]) {
       const v = node[key];
-      if (v && typeof v === 'object') walk(v, scope);
+      if (v && typeof v === 'object') walk(v, scope, inside);
     }
   };
   walk(ast.actors, new Map());
+
+  // A param can be typed as a class from another file, which holds that actor's address.
+  ast.remoteClassNames = new Set(Object.values(remotesParsed)
+    .flatMap(doc => Object.keys(doc?.__types || {}))
+    .map(name => name.replace(/!$/, '')));
+
+  inferActorParams(ast);
+
+  // A call on a new actor needs its address first.
+  lowerConstructionChains(
+    { actors: ast.actors },
+    new Set(ast.dependencies.filter(d => d.wireTarget || constructsActors(d)).map(d => d.name)),
+  );
 
   // The parser marks a file-level construction of a dependency as a reference, but
   // it couldn't tell these apart from calls.
@@ -136,6 +195,49 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       s.isRef = true;
       const decl = actor.stateVarDecls?.find(v => v.name === s.name);
       if (decl) Object.assign(decl, { typeName: s.value.callee.name, isRef: true });
+    }
+  }
+}
+
+// An untyped param of a private function can hold an actor of this file. Rust and Erlang
+// have to know that at compile time, unlike an address, and a private function's callers
+// are all here: when they agree on one class, that's the param's type.
+function inferActorParams(ast) {
+  const classNames = new Set(ast.actors.map(a => a.name).filter(Boolean));
+  for (const actor of ast.actors) {
+    const functions = (actor.functions || []).filter(f => f.type === 'FunctionDecl' && typeof f.name === 'string' && !/^[@#]/.test(f.name));
+    const candidates = new Map();
+    for (const f of functions) {
+      const untyped = (f.params || []).map((p, i) => ({ p, i })).filter(({ p }) => p.positional && (!p.type || p.type === 'Anything') && !p.rest);
+      if (untyped.length && functions.filter(o => o.name === f.name).length === 1) candidates.set(f.name, { untyped, seen: new Map() });
+    }
+    if (!candidates.size) continue;
+
+    const classOfArg = (arg, locals) => {
+      if (arg?.type === 'FunctionCallExpr' && classNames.has(arg.callee?.name)) return arg.callee.name;
+      if (arg?.type === 'Identifier') return locals.get(arg.name) ?? null;
+      return null;
+    };
+    const visit = (node, locals) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visit(n, locals)); return; }
+      if (node.type === 'Assign' && node.name) {
+        const cls = classOfArg(node.value, locals);
+        if (cls) locals.set(node.name, cls);
+      }
+      const target = node.type === 'FunctionCallExpr' && candidates.get(node.callee?.name);
+      if (target) {
+        for (const { p, i } of target.untyped) {
+          const cls = classOfArg(node.args?.[i], locals);
+          const previous = target.seen.get(p);
+          target.seen.set(p, previous === undefined || previous === cls ? cls : null);
+        }
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, locals);
+    };
+    for (const f of actor.functions || []) visit(f.body, new Map());
+    for (const { seen } of candidates.values()) {
+      for (const [p, cls] of seen) if (cls) p.type = cls;
     }
   }
 }

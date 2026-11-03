@@ -839,7 +839,10 @@ export function genExpr(ctx, expr) {
         const bag = expr.args.find(a => a.type === 'NamedArgsBag');
         const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(ctx, v)}`).join(', ')}}` : null;
         const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '{}');
-        return `BvObject.pack([await this.#sendNew(${payload}, ${JSON.stringify(ctx.constructorCoercions.get(name))})])`;
+        const to = expr.viaInstance
+          ? `${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance })} + ${JSON.stringify(' ' + expr.viaSelector)}`
+          : JSON.stringify(ctx.constructorCoercions.get(name));
+        return `BvObject.pack([await this.#sendNew(${payload}, ${to})])`;
       }
       // Destructured member call → route to source service. A lambda argument
       // crosses to another actor, so it travels as a routable self-address.
