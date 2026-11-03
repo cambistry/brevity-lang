@@ -116,6 +116,104 @@ describe('a caller\'s annotation', () => {
   it('nothing binds to a path that returns self', () => {
     rejects('@a *Integer = 0\n@f! = (b Boolean) {\n  @a <- 1\n  if b { return 1 }\n  return self\n}\n@g! = {\n  x Integer = @f!(true)\n  return x\n}\n', /some of its paths return self/);
   });
+
+  it('checks a function with params', () => {
+    rejects('h = (b Boolean) { return "a" }\n@g = {\n  x Integer = h(true)\n  return x\n}\n', /'x Integer' to 'h\(\)' — it can return Text/);
+  });
+});
+
+describe('a caller\'s annotation on a value that isn\'t a call', () => {
+  const accepts = (source) => expect(() => compileSource(source)).not.toThrow();
+  const rejects = (source, pattern) => expect(() => compileSource(source)).toThrow(pattern);
+
+  it('checks a name', () => {
+    rejects('@g = (y Text) {\n  x Integer = y\n  return x\n}\n', /Cannot bind 'x Integer' to 'y', which is Text.*'x Integer = y as Integer'/);
+    rejects('n *Text = "a"\n@g = {\n  x Integer = n\n  return x\n}\n', /'x Integer' to 'n', which is Text/);
+    rejects('@g = {\n  m = "s"\n  x Integer = m\n  return x\n}\n', /'x Integer' to 'm', which is Text/);
+    accepts('@g = (y Integer) {\n  x Integer | Text = y\n  return x\n}\n');
+  });
+
+  it('checks a literal', () => {
+    rejects('@g = {\n  x Integer = "a"\n  return x\n}\n', /'x Integer' to a value that is Text/);
+    rejects('@g = {\n  x Integer = true\n  return x\n}\n', /'x Integer' to a value that is Boolean/);
+  });
+
+  it('a literal takes the form its annotation asks for', () => {
+    accepts('@g = {\n  b Blob = "hi"\n  d Decimal = 0\n  e Float = 1 + 2\n  return 1\n}\n');
+  });
+
+  it('a union name may have been narrowed, so one member that fits is enough', () => {
+    accepts('@g = (y Integer | null) {\n  if y == null { return 0 }\n  x Integer = y\n  return x\n}\n');
+    accepts('@g = (y Integer | null) {\n  x Integer = y ?? 0\n  return x\n}\n');
+    rejects('@g = (y Text | null) {\n  x Integer = y\n  return x\n}\n', /'x Integer' to 'y', which can be Text \| null/);
+  });
+
+  it('leaves an actor to its `as` at run time', () => {
+    accepts('T = (x Integer) *{ @a = -> v: x as Integer }\n@g = {\n  t = T(1)\n  n Integer = t\n  return 1\n}\n');
+  });
+
+  it('checks a call inside an expression', () => {
+    rejects('f = { return 1 }\n@g = {\n  x Text = f() + 1\n  return x\n}\n', /'x Text' to a value that is Integer/);
+    rejects('f = { return 1 }\n@g = {\n  x Integer = f() < 3\n  return x\n}\n', /'x Integer' to a value that is Boolean/);
+    accepts('f = { return 1 }\n@g = {\n  x Integer = f() + 1\n  return x\n}\n');
+  });
+
+  it('a pair with no rule is left alone', () => {
+    accepts('f = { return "a" }\n@g = {\n  x Integer = f() + 1\n  return x\n}\n');
+  });
+});
+
+describe('a caller\'s annotation on an overload', () => {
+  const accepts = (source, options) => expect(() => compileSource(source, options)).not.toThrow();
+  const rejects = (source, pattern, options) => expect(() => compileSource(source, options)).toThrow(pattern);
+  const PICK = 'pick = (n Integer) { return "a" }\npick << (n Text) { return 1 }\n';
+
+  it('holds for the clause the args select', () => {
+    rejects(`${PICK}@g = {\n  x Integer = pick(1)\n  return x\n}\n`, /'x Integer' to 'pick\(\)' — it can return Text/);
+    accepts(`${PICK}@g = (v Text) {\n  x Integer = pick(v)\n  return x\n}\n`);
+  });
+
+  it('holds for every clause when the args can\'t decide', () => {
+    rejects(`${PICK}@g = (v Integer | Text) {\n  x Integer = pick(v)\n  return x\n}\n`, /it can return Text \| Integer/);
+    accepts(`${PICK}@g = (v Integer | Text) {\n  x Integer | Text = pick(v)\n  return x\n}\n`);
+  });
+
+  it('an earlier clause that takes anything wins', () => {
+    rejects('pick = (n) { return "a" }\npick << (n Text) { return 1 }\n@g = {\n  x Integer = pick("q")\n  return x\n}\n', /it can return Text/);
+  });
+
+  it('selects by arity', () => {
+    const pick = 'pick = (n Integer) { return "a" }\npick << (a Integer, b Integer) { return 1 }\n';
+    accepts(`${pick}@g = {\n  x Integer = pick(1, 2)\n  return x\n}\n`);
+    rejects(`${pick}@g = {\n  x Text = pick(1, 2)\n  return x\n}\n`, /'x Text' to 'pick\(\)' — it can return Integer/);
+  });
+
+  it('checks a public handler', () => {
+    rejects('@pick = (n Integer) { return "a" }\n@pick << (n Text) { return 1 }\n@g = {\n  x Integer = @pick(1)\n  return x\n}\n', /'x Integer' to '@pick\(\)' — it can return Text/);
+  });
+
+  it('checks a doc', () => {
+    const h = '*\n  "s.bv": Svc\n*\n';
+    const docs = { remotes: [{ path: 's.bv', service: '{ f (Integer) -> (Text)\n f (Text) -> (Integer) }' }] };
+    rejects(`${h}@g = {\n  x Integer = Svc.f(1)\n  return x\n}\n`, /'x Integer' to 'Svc\.f\(\)' — it can return Text/, docs);
+    accepts(`${h}@g = {\n  x Integer = Svc.f("a")\n  return x\n}\n`, docs);
+  });
+});
+
+describe('a dependency instance held in a handler\'s local', () => {
+  const h = '*\n  "thing.bv": Thing (a: Integer) -> *{ get () -> (Text) }\n*\n';
+
+  it('checks its members', () => {
+    expect(() => compileSource(`${h}@g = {\n  t = Thing(a: 5)\n  t.nope()\n  return 1\n}\n`)).toThrow(/'Thing' has no function 'nope'/);
+  });
+
+  it('checks a caller\'s annotation', () => {
+    expect(() => compileSource(`${h}@g = {\n  t = Thing(a: 5)\n  x Integer = t.get()\n  return x\n}\n`)).toThrow(/'x Integer' to 't\.get\(\)' — it can return Text/);
+  });
+
+  it('can be annotated with its own class', () => {
+    expect(() => compileSource(`${h}@g = {\n  t Thing = Thing(a: 5)\n  x Text = t.get()\n  return x\n}\n`)).not.toThrow();
+  });
 });
 
 describe('at runtime', () => {

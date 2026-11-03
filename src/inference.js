@@ -82,6 +82,31 @@ export function bindLocalType(env, s) {
   else env.delete(s.name);
 }
 
+// The type of `lt op rt` for any operator but `??`. Null when either side is
+// unknown or the pair has no rule (`Text + Integer`).
+export function binaryResultType(op, lt, rt) {
+  if (!lt || !rt) return null;
+
+  // Comparison operators always produce Boolean
+  if (['==', '!=', '===', '!==', '<', '>', '<=', '>='].includes(op)) return 'Boolean';
+
+  // Numeric arithmetic
+  if (NUMERIC_TYPES.has(lt) && NUMERIC_TYPES.has(rt)) return promoteNumeric(lt, rt);
+
+  // String concatenation
+  if (lt === 'Text' && rt === 'Text') return 'Text';
+
+  // List + List → concat (synonym of List.concat). Element types must match;
+  // we adopt the more-specific of the two when one is `List of Anything`.
+  if (op === '+' && typeof lt === 'string' && typeof rt === 'string'
+      && lt.startsWith('List') && rt.startsWith('List')) {
+    if (lt === 'List of Anything' || lt === 'List') return rt;
+    return lt;
+  }
+
+  return null;
+}
+
 export function inferExprType(expr, typeEnv) {
   if (!expr) return null;
 
@@ -127,26 +152,7 @@ export function inferExprType(expr, typeEnv) {
       if (rt === 'null') return lt;
       return lt || rt;
     }
-    if (!lt || !rt) return null;
-
-    // Comparison operators always produce Boolean
-    if (['==', '!=', '===', '!==', '<', '>', '<=', '>='].includes(expr.op)) return 'Boolean';
-
-    // Numeric arithmetic
-    if (NUMERIC_TYPES.has(lt) && NUMERIC_TYPES.has(rt)) return promoteNumeric(lt, rt);
-
-    // String concatenation
-    if (lt === 'Text' && rt === 'Text') return 'Text';
-
-    // List + List → concat (synonym of List.concat). Element types must match;
-    // we adopt the more-specific of the two when one is `List of Anything`.
-    if (expr.op === '+' && typeof lt === 'string' && typeof rt === 'string'
-        && lt.startsWith('List') && rt.startsWith('List')) {
-      if (lt === 'List of Anything' || lt === 'List') return rt;
-      return lt;
-    }
-
-    return null;
+    return binaryResultType(expr.op, lt, rt);
   }
 
   // ── Built-in type methods ─────────────────────────────────────────────

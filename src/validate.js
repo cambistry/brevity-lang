@@ -9,12 +9,12 @@ import { lowerParamScope } from './param_scope.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { markOuterReads } from './outer_reads.js';
-import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers } from './return_shapes.js';
+import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
-import { inferExprType as inferExprTypeFull, listElementType, typesCompatible } from './inference.js';
+import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
 
 // `Self` in value position: any Identifier with name 'Self' that isn't the
@@ -2035,7 +2035,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
 
   for (const fn of actor.functions) {
     checkFunctionBinds(fn, actorNames);
-    const typeEnv = buildTypeEnv(fn.params, fn.body);
+    const typeEnv = buildTypeEnv(fn.params, fn.body, null, localDepNames);
     // Merge state var types so actor-reference variables are visible
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
@@ -2373,7 +2373,9 @@ function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
 
 // ── Scope name collection (mirrors buildTypeEnv in codegen.js) ──────────
 
-function buildTypeEnv(params, body, typeDecls = null) {
+// `depNames`: a local constructed from one of these, `t = Thing()`, is a Thing,
+// as it is for the file's own cells.
+function buildTypeEnv(params, body, typeDecls = null, depNames = null) {
   const env = new Map();
   for (const p of params) {
     if (p.rest) continue;
@@ -2385,7 +2387,9 @@ function buildTypeEnv(params, body, typeDecls = null) {
     } else if (s.type === 'RefDecl' && s.typeName) {
       env.set(s.name, s.typeName);
     } else if (s.type === 'Assign') {
-      const t = inferLiteralType(s.value);
+      const t = inferLiteralType(s.value)
+        || (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier'
+          && depNames?.has(s.value.callee.name) ? s.value.callee.name : null);
       if (t) env.set(s.name, t);
     } else if (s.type === 'DestructureAssign' && typeDecls) {
       const src = s.source;
@@ -2769,6 +2773,160 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   };
   for (const s of body) walkForCallChecks(s);
 
+  // A call to something in this file: its label, the shape of its returns for
+  // the named-field checks, and the definitions it can reach (`fns`).
+  const shadowed = (name) => body.some(b => (b.type === 'Assign' || b.type === 'TypedAssign') && b.name === name);
+  const resolveCall = (callSrc) => {
+    if (callSrc.type === 'FunctionCallExpr' && callSrc.callee?.type === 'Identifier') {
+      const name = callSrc.callee.name;
+      if (dependencyNames?.has(name) || shadowed(name)) return null;
+      const fns = functionsByName.get(name);
+      const clauses = localFunctionSigs.get(name);
+      if (clauses) return { label: name, shape: knownReturnShape(clauses.map(c => c.fn)), fns };
+      if (fns?.length === 1) return { label: name, shape: null, fns };
+      // Overloads without params of their own, `f = { … }` then `f << (a) { … }`.
+      if (fns?.length) return { label: name, shape: null, fns };
+    } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
+        && !dependencyNames?.has(callSrc.object.name)) {
+      const typeName = resolveObjType(callSrc.object.name);
+      const method = callSrc.method.startsWith('@') ? callSrc.method : '@' + callSrc.method;
+      // The class that declares the method: the receiver's class, else the
+      // nearest ancestor (later supertypes win, as in resolveSuperclassChain).
+      // Its own state/param types decide what its returns can carry.
+      const declares = (c) => (c.functions || []).some(f => f.name === method && !f.emptyOverload);
+      const definingClass = (c, seen = new Set()) => {
+        if (!c || seen.has(c)) return null;
+        seen.add(c);
+        if (declares(c)) return c;
+        const sups = c.supertypes || [];
+        for (let i = sups.length - 1; i >= 0; i--) {
+          const found = definingClass(actorByName.get(sups[i].supertype), seen);
+          if (found) return found;
+        }
+        return null;
+      };
+      const cls = typeName ? definingClass(actorByName.get(typeName)) : null;
+      const fns = (cls?.functions || []).filter(f => f.name === method && !f.emptyOverload);
+      if (fns.length > 0) {
+        const classTypes = new Map();
+        for (const v of (cls.stateVarDecls || [])) if (v.typeName) classTypes.set(v.name, v.typeName);
+        for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
+        return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes), fns };
+      }
+      // An auto-accessor replies with its param's value, positionally.
+      const hasAccessor = (c, seen = new Set()) => {
+        if (!c || seen.has(c)) return false;
+        seen.add(c);
+        if ((c.initParams || []).some(p => p.accessor && '@' + p.accessor === method)) return true;
+        return (c.supertypes || []).some(sup => hasAccessor(actorByName.get(sup.supertype), seen));
+      };
+      if (typeName && hasAccessor(actorByName.get(typeName))) {
+        return { label: `${callSrc.object.name}.${callSrc.method}`, shape: { keys: new Set(), hasPositional: true } };
+      }
+    }
+    return null;
+  };
+
+  // The clauses of an overload a call could select. Clauses match in order, so a
+  // clause the args certainly fit ends the list; one they might fit joins it and
+  // the search goes on; one they can't fit is passed over. Empty when none fits.
+  const argFit = (argExpr, param) => {
+    if (!param?.type || param.type === 'Anything') return 'yes';
+    const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
+    if (!argType) return 'maybe';
+    if (param.rest) return 'maybe';
+    if (acceptsArg(argType, param.type)) return 'yes';
+    if (!canJudge(argType, actorByName) || !canJudge(param.type, actorByName)) return 'maybe';
+    // A union arg, or a class that a subclass value could fill, might still fit.
+    const could = unionMembers(argType).some(m => isAssignable(m, param.type, actorByName) || isAssignable(param.type, m, actorByName));
+    return could ? 'maybe' : 'no';
+  };
+  const clauseFit = (params, call) => {
+    const { sigPos, sigNamed } = clauseArity({ params });
+    const restPos = params.find(p => p.positional && p.rest);
+    const fits = [
+      ...call.positional.map((a, i) => argFit(a?.expr || a, sigPos[i] ?? restPos)),
+      ...sigNamed.filter(p => call.named.has(p.key || p.name)).map(p => argFit(call.named.get(p.key || p.name), p)),
+    ];
+    return fits.includes('no') ? 'no' : fits.includes('maybe') ? 'maybe' : 'yes';
+  };
+  const selectClauses = (clauses, callExpr, paramsOf) => {
+    if (clauses.length === 1) return clauses;
+    const call = extractCallArgs(callExpr);
+    const chosen = [];
+    for (const clause of clauses) {
+      const params = paramsOf(clause) || [];
+      if (!clauseAccepts({ params }, call)) continue;
+      const fit = clauseFit(params, call);
+      if (fit === 'no') continue;
+      chosen.push(clause);
+      if (fit === 'yes') break;
+    }
+    return chosen;
+  };
+
+  // What a call gives back, across every clause it could select: `{ label, shapes }`,
+  // or null when that can't be known.
+  const callReturns = (callSrc, resolved = resolveCall(callSrc)) => {
+    const fns = resolved?.fns;
+    if (fns?.length) {
+      if (new Set(fns.map(fn => functionOwners.get(fn))).size !== 1) return null;
+      const chosen = selectClauses(fns, callSrc, fn => fn.params);
+      if (chosen.length === 0) return null;
+      return { label: resolved.label, shapes: mergeShapes(chosen.map(fn => returnShapes(fn, fnOuterTypes(fn)))) };
+    }
+    return remoteReturnShapes(callSrc, remotesParsed, typeEnv, dependencyNames,
+      (sigs) => selectClauses(sigs, callSrc, sig => sig.params));
+  };
+
+  // The type of a value that isn't a call, for `x T = value`. `narrowable` marks
+  // one that a name's declared type flows into: a guard earlier in the body may
+  // have narrowed that name, so only a type no member of could fit is wrong.
+  // `literal` marks one a literal flows into, which takes its annotation's form.
+  const isCall = (e) => e?.type === 'FunctionCallExpr' || e?.type === 'DotCallExpr';
+  const mentions = (test) => {
+    const walk = (node) => !!node && typeof node === 'object'
+      && (test(node) || Object.values(node).some(v => (Array.isArray(v) ? v.some(walk) : v?.type && walk(v))));
+    return walk;
+  };
+  const mentionsName = mentions(n => n.type === 'Identifier' || n.type === 'RefRead');
+  const mentionsCall = mentions(n => isCall(n) || n.type === 'Function');
+  const mentionsLiteral = mentions(n => LITERAL_FORMS.has(inferLiteralType(n)) && n.type !== 'TypeConstruction');
+  const valueType = (expr) => {
+    if (!expr) return null;
+    if (isCall(expr)) {
+      if (expr.attestedAs) return null;
+      const shapes = callReturns(expr)?.shapes;
+      if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
+      const slots = shapes.alternatives.map(alt => alt.find(slot => slot.name === null));
+      if (slots.some(slot => !slot)) return null;
+      return { type: slots.map(slot => slot.type).reduce(mergeTypes), narrowable: false, literal: false };
+    }
+    if (expr.type === 'ParenExpr') return valueType(expr.expr);
+    if (expr.type === 'Identifier' || expr.type === 'RefRead') {
+      if (dependencyNames?.has(expr.name)) return null;
+      const type = typeEnv.get(expr.name) || localActorTypes.get(expr.name);
+      return type ? { type, narrowable: true, literal: false } : null;
+    }
+    if (expr.type === 'BinaryExpr') {
+      const l = valueType(expr.left);
+      const r = valueType(expr.right);
+      if (!l || !r) return null;
+      const flags = { narrowable: l.narrowable || r.narrowable, literal: l.literal || r.literal };
+      if (expr.op === '??') {
+        const present = unionMembers(l.type).filter(m => m !== 'null');
+        if (present.length === unionMembers(l.type).length) return l;
+        return { type: present.length ? mergeTypes(present.join(' | '), r.type) : r.type, ...flags };
+      }
+      const type = binaryResultType(expr.op, l.type, r.type);
+      return type ? { type, ...flags } : null;
+    }
+    if (expr.type === 'UnaryExpr' && expr.op === '-') return valueType(expr.operand ?? expr.arg);
+    if (mentionsCall(expr)) return null;
+    const type = inferExprTypeFull(expr, typeEnv);
+    return type ? { type, narrowable: mentionsName(expr), literal: mentionsLiteral(expr) } : null;
+  };
+
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);
 
@@ -2907,65 +3065,15 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const callSrc = s.type === 'DestructureAssign' ? s.source
       : (s.type === 'TypedAssign' && s.typeName !== 'Object' ? s.value : null);
     if (s.type === 'DestructureAssign') checkNamedFields(s.pattern, s.source);
-    const callShape = callSrc ? (() => {
-      const shadowed = (name) => body.some(b => (b.type === 'Assign' || b.type === 'TypedAssign') && b.name === name);
-      if (callSrc.type === 'FunctionCallExpr' && callSrc.callee?.type === 'Identifier') {
-        const name = callSrc.callee.name;
-        const clauses = localFunctionSigs.get(name);
-        if (clauses && !dependencyNames?.has(name) && !shadowed(name)) {
-          return { label: name, shape: knownReturnShape(clauses.map(c => c.fn)) };
-        }
-        const sole = functionsByName.get(name);
-        if (!clauses && sole?.length === 1 && !dependencyNames?.has(name) && !shadowed(name)) {
-          return { label: name, shape: null, fns: sole };
-        }
-      } else if (callSrc.type === 'DotCallExpr' && (callSrc.object?.type === 'Identifier' || callSrc.object?.type === 'RefRead')
-          && !dependencyNames?.has(callSrc.object.name)) {
-        const typeName = resolveObjType(callSrc.object.name);
-        const method = callSrc.method.startsWith('@') ? callSrc.method : '@' + callSrc.method;
-        // The class that declares the method: the receiver's class, else the
-        // nearest ancestor (later supertypes win, as in resolveSuperclassChain).
-        // Its own state/param types decide what its returns can carry.
-        const declares = (c) => (c.functions || []).some(f => f.name === method && !f.emptyOverload);
-        const definingClass = (c, seen = new Set()) => {
-          if (!c || seen.has(c)) return null;
-          seen.add(c);
-          if (declares(c)) return c;
-          const sups = c.supertypes || [];
-          for (let i = sups.length - 1; i >= 0; i--) {
-            const found = definingClass(actorByName.get(sups[i].supertype), seen);
-            if (found) return found;
-          }
-          return null;
-        };
-        const cls = typeName ? definingClass(actorByName.get(typeName)) : null;
-        const fns = (cls?.functions || []).filter(f => f.name === method && !f.emptyOverload);
-        if (fns.length > 0) {
-          const classTypes = new Map();
-          for (const v of (cls.stateVarDecls || [])) if (v.typeName) classTypes.set(v.name, v.typeName);
-          for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
-          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes), fns };
-        }
-        // An auto-accessor replies with its param's value, positionally.
-        const hasAccessor = (c, seen = new Set()) => {
-          if (!c || seen.has(c)) return false;
-          seen.add(c);
-          if ((c.initParams || []).some(p => p.accessor && '@' + p.accessor === method)) return true;
-          return (c.supertypes || []).some(sup => hasAccessor(actorByName.get(sup.supertype), seen));
-        };
-        if (typeName && hasAccessor(actorByName.get(typeName))) {
-          return { label: `${callSrc.object.name}.${callSrc.method}`, shape: { keys: new Set(), hasPositional: true } };
-        }
-      }
-      return null;
-    })() : null;
+    const callShape = callSrc ? resolveCall(callSrc) : null;
     if (callShape) {
       if (s.type === 'DestructureAssign') checkNamedReturns(s.pattern, callShape.label, callShape.shape);
       else checkPositionalReturn(s, callShape.label, callShape.shape);
     }
     if (callSrc && !callSrc.attestedAs) {
-      const called = callShape?.fns?.length === 1 ? { label: callShape.label, shapes: returnShapes(callShape.fns[0], fnOuterTypes(callShape.fns[0])) } : remoteReturnShapes(callSrc, remotesParsed, typeEnv, dependencyNames);
+      const called = callReturns(callSrc, callShape);
       if (called) checkAnnotationCovers(s, called.label, called.shapes, actorByName);
+      else if (s.type === 'TypedAssign' && !isCall(callSrc)) checkAnnotationValue(s, valueType(callSrc), actorByName);
     }
 
     // Constructor call validation in function bodies
@@ -2983,7 +3091,8 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     if (s.type === 'TypedAssign' && s.typeName) {
       const depName = s.value?.type === 'Identifier' ? s.value.name
         : (s.value?.type === 'FunctionCallExpr' ? s.value.callee?.name : null);
-      if (depName && dependencyNames.has(depName) && remotesParsed[depName]) {
+      // A dependency's own class is no conversion: `t Thing = Thing()`.
+      if (depName && depName !== s.typeName && dependencyNames.has(depName) && remotesParsed[depName]) {
         const asTypes = remotesParsed[depName].__asTypes;
         if (asTypes && !asTypes.includes(s.typeName)) {
           throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${s.typeName}'`);
@@ -3069,7 +3178,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     // Function literal validation
     if ((s.type === 'TypedAssign' || s.type === 'Assign') && s.value?.type === 'Function' && s.value.body) {
       checkWhileReturnType(s.value);
-      const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body);
+      const fnTypeEnv = buildTypeEnv(s.value.params || [], s.value.body, null, dependencyNames);
       validateBody(s.value.body, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
     }
   }
@@ -3253,15 +3362,18 @@ function fnOuterTypes(fn) {
   return types;
 }
 
-function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames) {
+// `select` narrows a doc's signatures to those the call could select.
+function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, select) {
   if (call.type !== 'DotCallExpr' || call.object?.type !== 'Identifier') return null;
   const name = call.object.name;
   const dep = dependencyNames?.has(name) ? name : typeEnv?.get(name);
   const doc = remotesParsed[dep];
   if (!doc) return null;
   const sigs = doc[call.method] ?? doc.__types?.[dep]?.functions?.filter(f => f.name === call.method);
-  if (sigs?.length !== 1) return null;
-  return { label: `${name}.${call.method}`, shapes: docReturnShapes(sigs[0]) };
+  if (!sigs?.length) return null;
+  const chosen = select(sigs);
+  if (chosen.length === 0) return null;
+  return { label: `${name}.${call.method}`, shapes: mergeShapes(chosen.map(docReturnShapes)) };
 }
 
 function canJudge(type, actorByName) {
@@ -3309,6 +3421,36 @@ function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actor
     }
     if (orSelf) throw new Error(`Cannot destructure '${key}' from '${label}()' — some of its paths return self`);
   }
+}
+
+// `x T = value` for a value that isn't a call: a name, a literal, an expression.
+// A narrowable value is wrong only when no member of its type could hold a T;
+// any other, when some member can't.
+// A literal takes the form its annotation asks for: `d Decimal = 0`, `b Blob = "hi"`.
+const NUMERIC_FORMS = ['Integer', 'Decimal', 'Float'];
+const LITERAL_FORMS = new Map([
+  ['Integer', NUMERIC_FORMS], ['Decimal', NUMERIC_FORMS], ['Float', NUMERIC_FORMS], ['Text', ['Text', 'Blob']],
+]);
+
+function checkAnnotationValue(s, value, actorByName) {
+  const declared = s.typeName;
+  if (!value || !declared || declared === 'Anything') return;
+  const { type, narrowable, literal } = value;
+  if (!canJudge(declared, actorByName) || !canJudge(type, actorByName)) return;
+  const members = unionMembers(type);
+  // A name holding an actor is asked for `as` at run time, and may hold a
+  // subclass that has clauses: that's the runtime's to judge.
+  const holds = (m) => isAssignable(m, declared, actorByName)
+    || (literal && LITERAL_FORMS.get(m)?.includes(declared))
+    || (narrowable && actorByName?.has(m));
+  const wrong = narrowable ? !members.some(holds) : !members.every(holds);
+  if (!wrong) return;
+  const is = members.length > 1 ? 'can be' : 'is';
+  const named = s.value?.type === 'Identifier' || s.value?.type === 'RefRead' ? s.value.name : null;
+  if (named) {
+    throw new Error(`Cannot bind '${s.name} ${declared}' to '${named}', which ${is} ${type}. Annotate '${s.name} ${type}', or coerce: '${s.name} ${declared} = ${named} as ${declared}'`);
+  }
+  throw new Error(`Cannot bind '${s.name} ${declared}' to a value that ${is} ${type}. Annotate '${s.name} ${type}', or coerce it with 'as ${declared}'`);
 }
 
 // `x T = f()` binds f's positional result. When f returns only named fields,

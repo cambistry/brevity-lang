@@ -223,7 +223,7 @@ describe('a `!` function by name', () => {
     });
 
     it('rejects one in a doc param', () => {
-      expect(() => compileSource(`*\n  "svc.bv": Svc () -> *{ run (f: () -> ()) -> (n: Integer) }\n*\n${FILE}@go! = {\n  s = Svc()\n  n Integer = s.run(f: &bump!)\n  return n\n}\n`)).toThrow(rejected);
+      expect(() => compileSource(`*\n  "svc.bv": Svc () -> *{ run (f: () -> ()) -> (n: Integer) }\n*\n${FILE}@go! = {\n  s = Svc()\n  :n Integer = s.run(f: &bump!)\n  return :n\n}\n`)).toThrow(rejected);
     });
 
     it('accepts a read-only function', () => {
@@ -712,8 +712,8 @@ describe('effect enforcement', () => {
     });
 
     it.each([
-      ['named', `n Integer = s.take(f: ${WRITER})`],
-      ['positional', `n Integer = s.pos(${WRITER})`],
+      ['named', `:n Integer = s.take(f: ${WRITER})`],
+      ['positional', `:n Integer = s.pos(${WRITER})`],
     ])('rejects a writing function in a %s doc param', (_, lines) => {
       expect(() => compileSource(remote(lines))).toThrow(/takes a read-only function/);
     });

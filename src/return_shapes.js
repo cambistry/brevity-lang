@@ -88,10 +88,17 @@ export const unionMembers = (type) => {
   return parts;
 };
 
-const mergeTypes = (a, b) => {
+export const mergeTypes = (a, b) => {
   const members = [...new Set([...unionMembers(a), ...unionMembers(b)])];
   return members.includes('Anything') ? 'Anything' : members.join(' | ');
 };
+
+// Adds one path's slots, merging them into an alternative with the same slots.
+function addAlternative(alternatives, slots) {
+  const same = alternatives.find(alt => alt.length === slots.length && alt.every((s, i) => s.name === slots[i].name));
+  if (same) same.forEach((s, i) => { s.type = mergeTypes(s.type, slots[i].type); });
+  else alternatives.push(slots.map(s => ({ ...s })));
+}
 
 // `{ alternatives: [[{ name, type }]], orSelf }`. A `name` is null for a positional slot.
 export function returnShapes(fn, outer = null) {
@@ -102,12 +109,16 @@ export function returnShapes(fn, outer = null) {
     const fields = node.fields ?? [];
     if (fields[0]?.selfReturn) { orSelf = true; continue; }
     if (fields.some(f => f.spread || f.rest)) opaque = true;
-    const slots = fields.map(f => ({ name: fieldName(f), type: fieldType(f, env) || 'Anything' }));
-    const same = alternatives.find(alt => alt.length === slots.length && alt.every((s, i) => s.name === slots[i].name));
-    if (same) same.forEach((s, i) => { s.type = mergeTypes(s.type, slots[i].type); });
-    else alternatives.push(slots);
+    addAlternative(alternatives, fields.map(f => ({ name: fieldName(f), type: fieldType(f, env) || 'Anything' })));
   }
   return { alternatives, orSelf, opaque };
+}
+
+// What several clauses can return between them, as one shape.
+export function mergeShapes(shapes) {
+  const alternatives = [];
+  for (const shape of shapes) for (const alt of shape.alternatives) addAlternative(alternatives, alt);
+  return { alternatives, orSelf: shapes.some(s => s.orSelf), opaque: shapes.some(s => s.opaque) };
 }
 
 // The same shape from a doc entry.

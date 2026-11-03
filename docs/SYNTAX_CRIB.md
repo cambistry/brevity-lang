@@ -198,6 +198,9 @@ An annotation on a call has to hold for every path, and a destructured key has t
 x Integer | Text = f(true)
 y Integer = f(true) as Integer             // fails the call if it's not an Integer
 z Integer = Svc.t()                        // a remote reply is checked, with or without `as`
+w Integer = pick(1)                        // an overload: every clause the args could select
+v Integer = f() + 1                        // a call in an expression, by its positional returns
+u Integer = y                              // a name: an error only if no member of its type fits
 ```
 
 `as T` renders a value as T or fails the enclosing call with an `ex`, which can't be caught. It never
