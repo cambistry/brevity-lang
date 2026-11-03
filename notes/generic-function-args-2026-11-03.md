@@ -74,6 +74,40 @@ The three cross-file cases above still **work at run time**, through `ty` and `a
 - higher-order helpers lose their result type;
 - `Signed of X` / `Cosigned of X` transitions across a service boundary lose X statically.
 
+## Would removing it simplify compilation? No
+
+Removing it brings better checking, not a simpler compiler.
+
+**Untyped params aren't the only source of `Anything`.** Explicit `Anything` slots, values from the
+wire, results of calls to function values, docs saying `List of Anything`, and return paths that
+widen to `Anything` (`return_shapes.js`) all stay. So does the runtime machinery for them: the
+dynamic arithmetic helpers (js `_bv_num_op` / `_bv_div`, rust `bv_dyn_arith`, erlang `bv_num_op/3`,
+see `session-2026-10-29-untyped-param-arithmetic.md`), Rust's `Value` path, and the `Anything`
+branches across the backends. Fewer values would take those paths; the paths wouldn't go away.
+
+**The replacements cost more than they save:**
+
+- **One type per param (the union of callers)** is cheap, but a union-typed param is still dynamic
+  in the backends, so codegen doesn't simplify. Only the validator gains.
+- **Return typed per call site** means re-typing a body for each set of arg types, plus a fixed
+  point for recursion. If codegen uses the result, that also means a copy per type signature on
+  three targets, with mangled names that tags, docs and dispatch must agree on. If codegen ignores
+  it, it's validator-only work.
+
+**The real benefit is correctness:**
+
+- The class of bug from 10-29, where codegen guesses an untyped operand's type from the other
+  operand, shrinks inside private functions.
+- The annotation check's unknown-arg case mostly closes, so overload selection becomes "the
+  selected clause" more often than "every clause the args could select".
+- Rust could use concrete types instead of `Value`, but only with codegen specialisation, the
+  expensive option.
+
+**What would simplify compilation is fewer sources of `Anything`,** for example docs and function
+types that state element and result types. That is the cross-file type variable weighed above. So
+the trade-off runs the other way from what you'd expect: a small, explicit generic in signatures
+would remove more `Anything` handling than taking implicit generics out of private functions would.
+
 ## Open
 
 Whether that cost justifies a type variable in docs depends mostly on how much boundary types should
