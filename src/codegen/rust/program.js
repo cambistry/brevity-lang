@@ -865,6 +865,26 @@ fn bv_val(v: impl IntoValue) -> Value { v.into_value() }
 // A class instance reference is "<class>/<id>". The id half routes to the
 // instance's state pool; a bare number is accepted for the file's Self pool.
 fn bv_inst_ref(class: &str, id: u32) -> Value { Value::String(format!("{}/{}", class, id)) }
+// A child's "me" as one slot of several: its parent swaps in what it knows the
+// child as, at any depth. The matching ty slot holds a bare @, "my class".
+#[allow(dead_code)]
+fn bv_swap_self(v: &Value, me: &Value, with: &Value) -> Value {
+    match v {
+        _ if v == me => with.clone(),
+        Value::Array(a) => Value::Array(a.iter().map(|x| bv_swap_self(x, me, with)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_swap_self(x, me, with))).collect()),
+        _ => v.clone(),
+    }
+}
+#[allow(dead_code)]
+fn bv_swap_self_tag(t: &Value, class: &str) -> Value {
+    match t {
+        Value::String(s) if s == "@" => Value::String(class.to_string()),
+        Value::Array(a) => Value::Array(a.iter().map(|x| bv_swap_self_tag(x, class)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_swap_self_tag(x, class))).collect()),
+        _ => t.clone(),
+    }
+}
 fn bv_inst_id_opt(v: &Value) -> Option<u32> {
     if let Some(n) = v.as_u64() { return Some(n as u32); }
     v.as_str().and_then(|s| s.rsplit('/').next()).and_then(|n| n.parse().ok())
@@ -886,15 +906,10 @@ fn bv_sel(addr: &str) -> String {
     }
 }
 
-// A type's wire tag is its authority address carrying a ::Name selector
-// (#<path ::Name> / #<::Name>), or a bare ::Name. Returns the bare type name
-// when the tag denotes a type, None otherwise (e.g. a scalar tag).
+// A type's wire tag is ::Name or authority ::Name. Returns the bare type
+// name when the tag denotes a type, None otherwise (e.g. a scalar tag).
 fn bv_type_name(tag: &str) -> Option<&str> {
-    let s = if tag.starts_with("#<") && tag.ends_with('>') {
-        let inner = &tag[2..tag.len() - 1];
-        match inner.rfind(' ') { Some(i) => &inner[i + 1..], None => inner }
-    } else { tag };
-    s.strip_prefix("::")
+    tag.rfind("::").map(|i| &tag[i + 2..])
 }
 
 // Whether a call came from outside the process, so it has tags to check.
@@ -1724,12 +1739,14 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // A self-return: we made this actor, so we name it and its class, as for #new.
                 Ok(v) if v == json!(child) => {
                     let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
-                    resp.insert("ty".to_string(), json!(format!("#<{}>", class)));
+                    resp.insert("ty".to_string(), json!(class));
                     resp.insert("re".to_string(), json!(format!("#<{}>", addr)));
                 }
+                // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
-                    resp.insert("re".to_string(), v);
-                    if let Some(t) = tag { resp.insert("ty".to_string(), t); }
+                    let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
+                    resp.insert("re".to_string(), bv_swap_self(&v, &json!(child), &json!(format!("#<{}>", addr))));
+                    if let Some(t) = tag { resp.insert("ty".to_string(), bv_swap_self_tag(&t, class)); }
                 }
                 Err(e) => {
                     let mut ex = Map::new();
@@ -1756,8 +1773,11 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
                                 // A reply whose whole value is one actor: its address is in re,
-                                // and ty, if any, names its class.
-                                if re.as_str().is_some_and(|t| t.starts_with("#<")) && msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
+                                // and ty, if any, is that address without its /N, its class.
+                                let one_actor = re.as_str().and_then(|t| t.strip_prefix("#<")).and_then(|t| t.strip_suffix('>')).is_some_and(|x| {
+                                    msg.get("ty").is_none_or(|a| a.as_str() == Some(x.rsplit_once('/').map_or(x, |(c, _)| c)))
+                                });
+                                if one_actor {
                                     return Value::Array(vec![re.clone()]);
                                 }
                                 return msg.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));

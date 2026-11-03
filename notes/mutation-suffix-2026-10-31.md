@@ -132,7 +132,7 @@ in `ty`.
 
 ```
 child:   { id, re: '#<>' }
-parent:  { id, re: '#<@Counter/1>', 'ty': '#<@Counter>' }
+parent:  { id, re: '#<@Counter/1>', 'ty': '@Counter' }
 ```
 
 - **The child says "me" with a bare `#<>` and no `ty`.** An empty selector means
@@ -140,20 +140,26 @@ parent:  { id, re: '#<@Counter/1>', 'ty': '#<@Counter>' }
   any tag would be a stand-in. `#<Self>` would read as a global address called
   `Self`.
 - **A reply whose whole value is one actor is a bare address in `re`.** Same group
-  as the reply to `#new` and a handler returning bare `Self`. `self` is a lone
-  return in v1, so `['#<>']` doesn't come up.
+  as the reply to `#new` and a handler returning bare `Self`.
+- **`self` can be one slot of several** (2026-11-03): `return (self, 1)` is
+  `{ re: ['#<>', 1], ty: ['@', 'Integer'] }`, and `return (me: self, n: 1)` is the
+  named form. A bare `@` in `ty` is "my class", the class-level `#<>`; `ty` keeps the
+  value's shape, so the slot needs it. When the whole value is `#<>`, the `@` is
+  implied and `ty` is left out. The parent replaces both, slot by slot.
 - **The parent that made the child names it.** It sees `re: '#<>'`, promotes it to
   the child's address, and adds `ty` with the child's class address. The marker
   in the reply is the trigger, not the child's profile.
 - **Higher parents translate `re` and `ty` alike.** Only the first parent adds
-  `ty`.
+  `ty`. `ty` has no `#<…>` (2026-11-03, `session-2026-11-03-ty-without-brackets.md`):
+  a tag that starts with a delimiter is local and gets the parent's address.
 - **Parents translate in-process children too.** An untranslated `#<>` reaching a
   caller would mean the caller itself, so the child-reply paths swap in the
   caller's handle for the child.
 - **A host of many sub-actors names the sub-actor.** The DOM runtime replies with
-  `{ re: '#<HTML @div/1>', 'ty': '#<HTML @div>' }`, as it does to `#new`.
-- **`self` is a return-position value only in v1:** `return self` and a tail `self`.
-  `x = self` and `f(self)` are errors for now, and can be widened later.
+  `{ re: '#<HTML @div/1>', 'ty': 'HTML @div' }`, as it does to `#new`.
+- **`self` is a return-position value only in v1:** `return self`, a tail `self`, and
+  a slot of a return list. `x = self` and `f(self)` are errors for now, and can be
+  widened later.
 
 ## Functions
 

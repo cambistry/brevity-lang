@@ -154,17 +154,26 @@ export default {
             const target = alias;
             if (target && instances[target]) {
               // A parent translates what its child sends: a local address gains
-              // the sender's name, and so does a sub-actor's `from`.
+              // the sender's name, and so does a sub-actor's `from`. Local starts
+              // with a delimiter; global starts with a word character.
               const promote = (v) => {
-                if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
+                if (typeof v === 'string') return v.replace(/#<([^\w>][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
                 if (Array.isArray(v)) return v.map(promote);
                 if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x)]));
                 return v;
               };
+              // `ty` has no brackets: a local tag gains the sender's name.
+              const promoteTy = (v) => {
+                if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : `${name} ${v}`;
+                if (Array.isArray(v)) return v.map(promoteTy);
+                if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promoteTy(x)]));
+                return v;
+              };
               const from = msg.from ? `${name} ${msg.from}` : name;
+              const { ty, ...rest } = msg;
               // Deliver with `to` rewritten to bare selector (alias resolves
               // to the receiver = self, so the addr portion collapses).
-              const forwarded = { ...promote(msg), to: selector || undefined, from };
+              const forwarded = { ...promote(rest), ...('ty' in msg ? { ty: promoteTy(ty) } : {}), to: selector || undefined, from };
               instances[target].instance.receive(forwarded);
             } else {
               external.push(normalizeBigInts(msg));

@@ -2488,17 +2488,26 @@ export function parse(tokensIn) {
     return { name, type: typeName };
   }
 
-  // `self` as a return value: the whole reply, never one field of several.
+  // `self` as a return value: the whole reply (`return self`), or one slot of
+  // several (`return (self, n)`, `return (me: self, n: n)`). A slot is a
+  // `SelfValue` expression: `#<>` in `re`, a bare `@` in `ty`.
   const atSelfValue = () => peek().type === 'KEYWORD' && peek().value === 'self' &&
     !(tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as');
   const selfReturnFields = () => [{ selfReturn: true, positional: true, expr: AST.selfValue(), type: null }];
+  const isSelfSlot = (f) => f.positional && f.expr?.type === 'SelfValue' && !f.selfReturn;
 
   function parseReplyFields(sameLine = false) {
-    if (atSelfValue()) {
+    if (atSelfValue() && tokens[pos + 1]?.type !== 'COMMA') {
       consume(); // self
-      if (peek().type === 'COMMA') throw new Error("'self' can't be one of several return values");
       return selfReturnFields();
     }
+    const fields = parseReplyFieldList(sameLine);
+    // `(self)` alone is the whole reply, as `self` is.
+    if (fields.length === 1 && isSelfSlot(fields[0]) && !fields[0].type) return selfReturnFields();
+    return fields;
+  }
+
+  function parseReplyFieldList(sameLine) {
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
     if (hasParen) consume();
@@ -2530,7 +2539,7 @@ export function parse(tokensIn) {
         } else if (peek().type === 'COLON') {
           consume();
           // key-value: key: expr [as Type]
-          const value = parseExpr();
+          const value = atSelfValue() ? (consume(), AST.selfValue()) : parseExpr();
           let fieldType = null;
           if (isTypeAttestation()) fieldType = consumeTypeAttestation();
           fields.push({ key: name, value, type: fieldType });
@@ -2628,10 +2637,13 @@ export function parse(tokensIn) {
         // Keyword used as named field key: type: expr, set: expr, etc.
         const name = consume().value;
         consume(); // COLON
-        const value = parseExpr();
+        const value = atSelfValue() ? (consume(), AST.selfValue()) : parseExpr();
         let fieldType = null;
         if (isTypeAttestation()) fieldType = consumeTypeAttestation();
         fields.push({ key: name, value, type: fieldType });
+      } else if (atSelfValue()) {
+        consume(); // self
+        fields.push({ expr: AST.selfValue(), type: null, positional: true });
       } else if (peek().type === 'HTML_CONSTRUCTOR') {
         const tok = consume();
         let domExpr;

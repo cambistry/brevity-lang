@@ -300,7 +300,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     lines.push(`                let _addr = format!("@${selector}/{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);
     lines.push(`                re = Some(Value::String(format!("#<{}>", _addr)));`);
-    lines.push(`                ty_re = Some(json!(${JSON.stringify(`#<@${selector}>`)}));`);
+    lines.push(`                ty_re = Some(json!(${JSON.stringify(`@${selector}`)}));`);
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
@@ -1274,7 +1274,7 @@ function genRustChildMethods(allActors) {
         // A self-return replies with the bare local self address.
         // We're the parent, so its address, in our frame, is this handle.
         if result.as_str() == Some("#<>") { return bv_inst_ref("${lc}", instance_id); }
-        result
+        bv_swap_self(&result, &json!("#<>"), &bv_inst_ref("${lc}", instance_id))
     }
 
     // Allocate a fresh instance, run init, register any subscribe-on-param

@@ -23,24 +23,12 @@ bv_to_wire(V, Fields, AllRequired) ->
             end
     end.
 
-%% A type's wire tag is its authority address carrying a ::Name selector
-%% (#<path ::Name> / #<::Name>), or a bare ::Name. Returns the bare type name,
-%% or undefined when the tag does not denote a type.
+%% A type's wire tag is ::Name or authority ::Name. Returns the bare type
+%% name, or undefined when the tag does not denote a type.
 bv_type_name(Tag) when is_binary(Tag) ->
-    Sel = case Tag of
-        <<"#<", _/binary>> ->
-            L = byte_size(Tag),
-            case binary:at(Tag, L - 1) of
-                $> ->
-                    Inner = binary:part(Tag, 2, L - 3),
-                    lists:last(binary:split(Inner, <<" ">>, [global]));
-                _ -> Tag
-            end;
-        _ -> Tag
-    end,
-    case Sel of
-        <<"::", Name/binary>> -> Name;
-        _ -> undefined
+    case binary:matches(Tag, <<"::">>) of
+        [] -> undefined;
+        Ms -> {P, _} = lists:last(Ms), binary:part(Tag, P + 2, byte_size(Tag) - P - 2)
     end;
 bv_type_name(_) -> undefined.
 
@@ -701,12 +689,25 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 %% A self-return: we made this actor, so we name it and its class, as for #new.
                 {ok, <<"#<>"/utf8>>, _} ->
                     [Class_ | _] = binary:split(Addr, <<"/">>),
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => <<"#<", Class_/binary, ">">>}), $\n]);
-                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
-                {ok, V_, Tag_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_, <<"ty">> => Tag_}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => Class_}), $\n]);
+                %% "Me" as one slot of several: the same naming, slot by slot.
+                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_swap_self_(V_, <<"#<", Addr/binary, ">">>)}), $\n]);
+                {ok, V_, Tag_} ->
+                    [SlotClass_ | _] = binary:split(Addr, <<"/">>),
+                    io:put_chars([json_encode(Base_#{<<"re">> => bv_swap_self_(V_, <<"#<", Addr/binary, ">">>), <<"ty">> => bv_swap_tag_(Tag_, SlotClass_)}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
             end
     end.
+%% A child's "me" (#<>) as one slot of several: its parent swaps in what it knows
+%% the child as, at any depth. The matching ty slot holds a bare @, "my class".
+bv_swap_self_(<<"#<>">>, With) -> With;
+bv_swap_self_(L, With) when is_list(L) -> [bv_swap_self_(X, With) || X <- L];
+bv_swap_self_(M, With) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_self_(X, With) end, M);
+bv_swap_self_(V, _) -> V.
+bv_swap_tag_(<<"@">>, Class) -> Class;
+bv_swap_tag_(L, Class) when is_list(L) -> [bv_swap_tag_(X, Class) || X <- L];
+bv_swap_tag_(M, Class) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_tag_(X, Class) end, M);
+bv_swap_tag_(T, _) -> T.
 %% A subscribe carries its whole message (op args, ty) and its id.
 bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
     Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
@@ -1094,12 +1095,16 @@ brevity_re_after(Bin, Re) ->
     end.
 
 %% A reply whose whole value is one actor: its address is in re, and ty, if
-%% any, names its class.
-bv_self_reply_(<<"#<", _/binary>> = Re, Message) ->
+%% any, is that address without its /N, its class.
+bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary_part(Re, byte_size(Re), -1) =:= <<">">> ->
+    Addr_ = binary:part(Re, 2, byte_size(Re) - 3),
+    Class_ = case binary:matches(Addr_, <<"/">>) of
+        [] -> Addr_;
+        Ms_ -> {P_, _} = lists:last(Ms_), binary:part(Addr_, 0, P_)
+    end,
     case maps:find(<<"ty">>, Message) of
         error -> [Re];
-        {ok, <<"#<", _/binary>> = Class} ->
-            case binary:match(Class, <<"::">>) of nomatch -> [Re]; _ -> Re end;
+        {ok, Class_} -> [Re];
         _ -> Re
     end;
 bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).

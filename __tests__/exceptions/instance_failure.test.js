@@ -81,7 +81,7 @@ describe('a failed as on a class instance', () => {
 
   const newBox = [
     { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
   ];
 
   describe('on the handler it failed in', () => {
@@ -144,7 +144,7 @@ describe('a failed as on a class instance', () => {
     it('answers unhandled on a superclass handler and its own', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: [{}, '#new'], to: '@SubBox', from: 'c' } },
-        { output: { id: '1', re: '#<@SubBox/1>', 'ty': '#<@SubBox>', to: 'c' } },
+        { output: { id: '1', re: '#<@SubBox/1>', 'ty': '@SubBox', to: 'c' } },
         { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '@SubBox/1', from: 'c' } },
         { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '@SubBox/1' } },
         { input: { id: '3', op: [['x'], '@own'], 'ty': [['Text']], to: '@SubBox/1', from: 'c' } },
@@ -221,7 +221,7 @@ describe('a failed as on a class instance', () => {
     it('another instance', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: [{}, '#new'], to: '@Outer', from: 'c' } },
-        { output: { id: '1', re: '#<@Outer/1>', 'ty': '#<@Outer>', to: 'c' } },
+        { output: { id: '1', re: '#<@Outer/1>', 'ty': '@Outer', to: 'c' } },
         { input: { id: '2', op: '@viaInstance', to: '@Outer/1', from: 'c' } },
         { output: { id: '2', ex: { '@viaInstance': 'error' }, to: 'c', from: '@Outer/1' } },
       );
@@ -576,7 +576,7 @@ describe('a failed as in a constructor block', () => {
         newGood('1', 'x'),
         { output: { id: '1', ex: { 'new@Good': 'error' }, to: 'c' } },
         newGood('2', 5),
-        { output: { id: '2', re: '#<@Good/1>', 'ty': '#<@Good>', to: 'c' } },
+        { output: { id: '2', re: '#<@Good/1>', 'ty': '@Good', to: 'c' } },
         { input: { id: '3', op: '@get', to: '@Good/1', from: 'c' } },
         { output: expect.objectContaining({ id: '3', re: { n: 5, m: 1, k: 1, t: 1 }, to: 'c', from: '@Good/1' }) },
       );

@@ -3,8 +3,8 @@
 import { erlStateKey, erlString } from './preambles.js';
 import { inferExprType } from '../../inference.js';
 
-// Authority-address wire tag for a type-valued slot: `#<path ::Name>` for an
-// imported/cross-module type, `#<::Name>` for a local one. Non-type tags
+// Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
+// type, `::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
@@ -12,7 +12,7 @@ function erlTypeTag(ctx, t) {
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  return authority ? `${authority} ::${name}` : `::${name}`;
 }
 
 // Wrap a value expression with `bv_to_wire` when its type is a type decl;

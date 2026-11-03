@@ -1,7 +1,7 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
 import { erlVarName, erlString, isListOfAnythingType, erlStateKey } from './preambles.js';
-import { returnsOnlySelf } from '../../chains.js';
+import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
 import { bindLocalType } from '../../inference.js';
 import {
   inferLiteralType,
@@ -690,6 +690,15 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const member = '@' + (src.method ?? src.property);
         const declared = [...(ctx.actorInfo?.values() || [])].flatMap(i => i.actor?.functions || []).filter(f => f.name === member);
         if (member.endsWith('!') && declared.every(returnsOnlySelf)) stmtCtx.selfSpawnedRefs.add(bound);
+      }
+      // `(a, n) = c.pair()` where every path of `pair` has self in a's slot: `a` is a
+      // handle to the receiver too.
+      if (s.type === 'DestructureAssign' && src?.type === 'DotCallExpr' && src.object?.type === 'Identifier'
+          && (stmtCtx.selfSpawnedRefs?.has(src.object.name) || stmtCtx.childActorRefs?.has(src.object.name))) {
+        const declared = [...(ctx.actorInfo?.values() || [])].flatMap(i => i.actor?.functions || []).filter(f => f.name === '@' + src.method);
+        for (const item of s.pattern) {
+          if (item.name && !item.type && !item.discard && declared.length > 0 && declared.every(fn => slotOnlySelf(fn, item))) stmtCtx.selfSpawnedRefs?.add(item.name);
+        }
       }
       // A remote's self-return yields an address, so the new name is an instance.
       if (bound && (s.type === 'Assign' || s.type === 'DestructureAssign') && src?.type === 'DotCallExpr' && src.method?.endsWith('!')
@@ -1595,6 +1604,8 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
 
   const posTypes = [];
   for (const f of pos) {
+    // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString('@')); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
     posTypes.push(erlString(tagFor(t)));
@@ -1603,6 +1614,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varExpr;
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString('@')}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

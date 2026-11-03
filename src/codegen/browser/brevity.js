@@ -411,26 +411,36 @@ async function compileAndLoad(source, compileOptions = {}) {
 //   - Self address `#<>` (local form, no selector) → `#<selfAddr>`.
 //     Global-form addresses (word-char start inside the angles) are left
 //     alone; the discriminator is leading non-word-char = local.
+//   - `ty` has no brackets: a tag that starts with a delimiter (`::Point`,
+//     `@Box`, a bare `@`) → `selfAddr ::Point`; a global tag is left alone.
 //   - Missing `from` → filled in with selfAddr.
 //   - Local-form `from: '@N'` → prepended to `from: 'selfAddr @N'`.
 //   - `to` field is untouched; the sender writes it in its own DI frame
 //     already (e.g. 'HTML @div'), which is application-absolute for now.
 //
-// The rewrite runs as a raw-text regex on serialized JSON because `#<` can
-// only appear inside JSON string values (never structural) — one-scan pass
-// with no object-tree walk.
+// The address rewrite runs as a raw-text regex on serialized JSON because `#<`
+// can only appear inside JSON string values (never structural); `ty` is walked.
 
 const handles = new Map();
 const compiled = new Map();
 let nextId = 0;
 
+function rewriteLocalTags(v, selfAddr) {
+  if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : `${selfAddr} ${v}`;
+  if (Array.isArray(v)) return v.map(x => rewriteLocalTags(x, selfAddr));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rewriteLocalTags(x, selfAddr)]));
+  return v;
+}
+
 function rewriteLocalAddresses(msg, selfAddr) {
-  const json = JSON.stringify(msg);
-  const rewritten = json.replace(/#<([@#:][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
+  const { ty, ...rest } = msg;
+  const json = JSON.stringify(rest);
+  const rewritten = json.replace(/#<([^\w>][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
   const out = JSON.parse(rewritten);
+  if ('ty' in msg) out.ty = rewriteLocalTags(ty, selfAddr);
   if (out.from == null || out.from === '') {
     out.from = selfAddr;
-  } else if (typeof out.from === 'string' && /^[@#]/.test(out.from)) {
+  } else if (typeof out.from === 'string' && !/^\w/.test(out.from)) {
     out.from = selfAddr + ' ' + out.from;
   }
   return out;

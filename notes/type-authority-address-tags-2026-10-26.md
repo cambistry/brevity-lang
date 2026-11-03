@@ -9,6 +9,12 @@ form and the refactor across the type system and all three targets.
 
 Status: **decided, implementing.** Settled with the user 2026-10-26.
 
+> **Revised 2026-11-03** (`session-2026-11-03-ty-without-brackets.md`): tags in
+> `ty` have no `#<…>`. The authority idea stands; read `#<::Name>` below as
+> `::Name`, `#<path ::Name>` as `path ::Name`, `#<HTML ::Event>` as `HTML ::Event`.
+> `ty` is a translated field, so a local tag (one that starts with a delimiter)
+> still gets each parent's address.
+
 ---
 
 ## Why

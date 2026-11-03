@@ -1170,7 +1170,7 @@ describe('HTML element runtime — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ children: ['Hello'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': '#<HTML @div>', from: 'HTML' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div', from: 'HTML' }) },
     );
   });
 
@@ -1196,11 +1196,11 @@ describe('HTML element runtime — service side', () => {
 
     await expectBehavior(domDiv,
       { input: { id: '1', op: [{ children: ['First'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': '#<HTML @div>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div' }) },
       { input: { id: '2', op: [{ children: ['Second'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '2', re: '#<HTML @div/2>', 'ty': '#<HTML @div>' }) },
+      { output: expect.objectContaining({ id: '2', re: '#<HTML @div/2>', 'ty': 'HTML @div' }) },
       { input: { id: '3', op: [{ children: ['Third'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '3', re: '#<HTML @div/3>', 'ty': '#<HTML @div>' }) },
+      { output: expect.objectContaining({ id: '3', re: '#<HTML @div/3>', 'ty': 'HTML @div' }) },
     );
   });
 
@@ -1217,12 +1217,12 @@ describe('HTML element runtime — service side', () => {
     await domP.sendAsync({ id: '4', op: [{ children: ['p2'] }, '#new'] });
 
     expect(domDiv.posts).toEqual([
-      expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': '#<HTML @div>' }),
-      expect.objectContaining({ id: '3', re: '#<HTML @div/2>', 'ty': '#<HTML @div>' }),
+      expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div' }),
+      expect.objectContaining({ id: '3', re: '#<HTML @div/2>', 'ty': 'HTML @div' }),
     ]);
     expect(domP.posts).toEqual([
-      expect.objectContaining({ id: '2', re: '#<HTML @p/1>', 'ty': '#<HTML @p>' }),
-      expect.objectContaining({ id: '4', re: '#<HTML @p/2>', 'ty': '#<HTML @p>' }),
+      expect.objectContaining({ id: '2', re: '#<HTML @p/1>', 'ty': 'HTML @p' }),
+      expect.objectContaining({ id: '4', re: '#<HTML @p/2>', 'ty': 'HTML @p' }),
     ]);
   });
 
@@ -1299,7 +1299,7 @@ describe('HTML element runtime — service side', () => {
     const { el } = await makeAttached(page, 'div');
     await expectBehavior(el,
       { input: { id: 's', op: [['data-x', 'one'], '@set_attribute!'] } },
-      { output: expect.objectContaining({ re: expect.stringMatching(/^#<HTML @div\/[0-9]+>$/), 'ty': '#<HTML @div>' }) },
+      { output: expect.objectContaining({ re: expect.stringMatching(/^#<HTML @div\/[0-9]+>$/), 'ty': 'HTML @div' }) },
     );
     const value = await page.evaluate(() => document.querySelector('div').getAttribute('data-x'));
     expect(value).toBe('one');

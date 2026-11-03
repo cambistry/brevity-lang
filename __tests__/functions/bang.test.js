@@ -47,8 +47,10 @@ describe('self as a value — validation', () => {
     expect(() => compileSource('@go = { x = self\n return 1 }\n')).toThrow(/self/);
   });
 
-  it('cannot be one of several return values', () => {
-    expect(() => compileSource('@go = { return self, 7 }\n')).toThrow(/several return values/);
+  it('can be one of several return values', () => {
+    expect(() => compileSource('@go = { return (self, 7) }\n')).not.toThrow();
+    expect(() => compileSource('@go = { return self, 7 }\n')).not.toThrow();
+    expect(() => compileSource('@go = { return (me: self, n: 7) }\n')).not.toThrow();
   });
 });
 
@@ -1575,10 +1577,10 @@ describe('chained calls through a remote', () => {
       expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) }],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '99', op: '@go!', from: 'caller' } },
       { output: expect.objectContaining({ op: [[2], '@inc!'], to: 'Thing/1' }) },
-      { input: { id: '2', re: '#<Thing/9>', 'ty': '#<Thing>' } },
+      { input: { id: '2', re: '#<Thing/9>', 'ty': 'Thing' } },
       { output: expect.objectContaining({ op: '@total', to: '#<Thing/9>' }) },
       { input: { id: '3', re: { value: 7 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 7 }, to: 'caller' }) },

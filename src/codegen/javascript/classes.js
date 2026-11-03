@@ -128,7 +128,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let reLine;
   if (name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
-    reLine = `\n        re = '#<' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(`#<@${selector}>`)};`;
+    reLine = `\n        re = '#<' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(`@${selector}`)};`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (isBareSelfReturn) {
@@ -996,8 +996,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       // A child's self-return arrives untranslated. We're its parent, so the
-      // translation is ours: its local-form self address means this handle.
-      this.#pending.set(id, { resolve: (v) => resolve(v === '#<>' ? child : v), reject });
+      // translation is ours: its local-form self address means this handle,
+      // as the whole value or one slot of several.
+      const mine = (v) => {
+        if (v === '#<>') return child;
+        if (Array.isArray(v)) return v.map(mine);
+        if (v && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mine(x)]));
+        return v;
+      };
+      this.#pending.set(id, { resolve: (v) => resolve(mine(v)), reject });
       child.receive({ id, op, from: '__parent', _route: (msg) => this.receive(msg) });
     });
   }
@@ -1110,16 +1117,28 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     this.#_instanceSeq.set(cls, n);
     const addr = '@' + cls + '/' + n;
     this.#_instances.set(addr, inst);
+    // A local address or tag starts with a delimiter; a global starts with a
+    // word character and is left alone.
     const local = (v) => {
-      if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? '#<' + addr + ' ' + c + '>' : '#<' + addr + '>'));
+      if (typeof v === 'string') return v.replace(/#<([^\\w>][^>]*)?>/g, (_, c) => (c ? '#<' + addr + ' ' + c + '>' : '#<' + addr + '>'));
       if (Array.isArray(v)) return v.map(local);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
       return v;
     };
-    // A self-return says "me" with a bare \`#<>\`. We made this actor, so we add its class.
+    // \`ty\` has no brackets. A bare \`@\` is the sender's own class, which we know.
+    const localTy = (v) => {
+      if (v === '@') return '@' + cls;
+      if (typeof v === 'string') return v === '' || /^\\w/.test(v) ? v : addr + ' ' + v;
+      if (Array.isArray(v)) return v.map(localTy);
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
+      return v;
+    };
+    // A self-return says "me" with a bare \`#<>\` and leaves out its \`@\` tag.
     inst._adoptBinding({ post: (msg) => {
-      const out = { ...local(msg), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr };
-      if (msg.re === '#<>' && !('ty' in msg)) out['ty'] = '#<@' + cls + '>';
+      const { ty, ...rest } = msg;
+      const out = { ...local(rest), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr };
+      if ('ty' in msg) out['ty'] = localTy(ty);
+      else if (msg.re === '#<>') out['ty'] = '@' + cls;
       this.#binding.post(out);
     } });
     return addr;

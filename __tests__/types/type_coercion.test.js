@@ -66,7 +66,7 @@ describe('type coercion — declared in the header', () => {
     await expectBehavior(script,
       { input: { id: '99', op: '@serviceInt', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [{}, '#new'], to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': '#<Service>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
       { output: expect.objectContaining({ id: '2', op: ['Integer', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
@@ -77,7 +77,7 @@ describe('type coercion — declared in the header', () => {
     await expectBehavior(script,
       { input: { id: '99', op: '@serviceText', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [{}, '#new'], to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': '#<Service>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
       { output: expect.objectContaining({ id: '2', op: ['Text', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: ['hello'], 'ty': ['Text'] } },
       { output: { id: '99', re: ['hello'], 'ty': ['Text'], to: 'caller' } },
@@ -149,7 +149,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
     await expectActorBehavior(await spawn(),
       { input: { id: '99', op: '@serviceInt', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [{}, '#new'], to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': '#<Service>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
       { output: expect.objectContaining({ id: '2', op: ['Integer', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
@@ -160,7 +160,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
     await expectActorBehavior(await spawn(),
       { input: { id: '99', op: '@serviceText', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [{}, '#new'], to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': '#<Service>', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
       { output: expect.objectContaining({ id: '2', op: ['Text', 'as'], to: 'Service/1' }) },
       { input: { id: '2', re: ['hello'], 'ty': ['Text'] } },
       { output: { id: '99', re: ['hello'], 'ty': ['Text'], to: 'caller' } },
@@ -179,7 +179,7 @@ describe('type coercion — class ref constructed at the top level', () => {
   `;
   const construct = [{ output: expect.objectContaining({ op: [{}, '#new'], to: 'Service' }) }];
   const steps = [
-    { input: { id: '1', re: '#<Service/1>', 'ty': '#<Service>', from: 'Service' } },
+    { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
     { input: { id: '99', op: '@asInt', from: 'caller' } },
     { output: expect.objectContaining({ op: ['Integer', 'as'], to: 'Service/1' }) },
     { input: { id: '2', re: [42], 'ty': ['Integer'] } },
@@ -751,7 +751,7 @@ describe('as — remote replies', () => {
       await expectBehavior(script,
         { input: { id: '99', op: '@point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: '@any', to: 'Svc' }) },
-        { input: { id: '1', re: [[1, 2]], 'ty': ['#<::Point>'] } },
+        { input: { id: '1', re: [[1, 2]], 'ty': ['::Point'] } },
         { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
     });

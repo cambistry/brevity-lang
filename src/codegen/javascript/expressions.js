@@ -1303,16 +1303,16 @@ export function genDefaultValue(node) {
   return 'undefined';
 }
 
-// The authority-address wire tag for a type-valued slot: `#<path ::Name>` for
-// an imported/cross-module type, `#<::Name>` for a local one (authority filled
-// by perspective translation as the value rises). Non-type tags (primitives
+// The wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
+// type, `::Name` for a local one (authority filled by perspective translation as
+// the value rises; `ty` is a translated field, so it needs no `#<…>`). Non-type tags (primitives
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  return authority ? `${authority} ::${name}` : `::${name}`;
 }
 
 // Resolve a call argument's declared/inferred type for wire tagging. Covers
@@ -1361,6 +1361,8 @@ export function genTyBody(ctx, fields, typeEnv) {
   const tagFor = t => typeTag(ctx, t);
   const posTypes = [];
   for (const f of pos) {
+    // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push('"@"'); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
@@ -1377,6 +1379,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: "@"`); continue; }
     if ('sigil' in f) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {

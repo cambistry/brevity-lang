@@ -23,7 +23,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // this purpose — class reflection is opt-in.)
 //
 // Wire shape on the @class reply mirrors #new's reply shape inverted:
-//   #new       reply: re: "#<C/1>"   ty: "#<C>"     (instance addr, class metatype)
+//   #new       reply: re: "#<C/1>"   ty: "C"        (instance addr, class metatype)
 //   @class     reply: re: "#<C>"     ty: "Class"    (class addr,    Class metatype)
 //
 // Scope of this ticket: the Self alias as a value and the wire encoding of

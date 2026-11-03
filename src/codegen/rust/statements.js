@@ -1766,6 +1766,22 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
         opJson = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
       }
       const tempName = `_dc${G.ctx.fnTempCounter++}`;
+      // A local can hold one of our own children, e.g. a slot of a self-return
+      // ("<class>/<id>"): that call stays in process.
+      const childNames = [...(G.ctx.actorInfo?.keys() ?? [])].map(n => n.toLowerCase());
+      if (isLocalInst && childNames.length > 0) {
+        let payloadJson;
+        if (positional.length === 0 && named.length === 0) payloadJson = 'json!({})';
+        else if (named.length > 0) {
+          const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
+          payloadJson = positional.length > 0
+            ? `{ let mut _arr: Vec<Value> = vec![${positional.map(genArgValW).join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`
+            : `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+        } else payloadJson = `Value::Array(vec![${positional.map(genArgValW).join(', ')}])`;
+        lines.push(`${I}let ${tempName}_to: String = ${to};`);
+        lines.push(`${I}let ${tempName}_mine = ${tempName}_to.split_once('/').is_some_and(|(c, _)| ${JSON.stringify(childNames)}.contains(&c));`);
+        lines.push(`${I}let ${tempName} = if ${tempName}_mine { self.child_dispatch(&${tempName}_to, ${method}, &${payloadJson}, "", "__parent") } else {`);
+      }
       lines.push(`${I}let ${tempName}_id = {`);
       lines.push(`${I}    let seq = self.send_seq.get();`);
       lines.push(`${I}    self.send_seq.set(seq + 1);`);
@@ -1793,7 +1809,11 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       lines.push(`${I}    let _ = self.binding.send(Value::Object(send_msg));`);
       lines.push(`${I}    send_id`);
       lines.push(`${I}};`);
-      lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+      if (isLocalInst && childNames.length > 0) {
+        lines.push(`${I}self.await_response(&${tempName}_id) };`);
+      } else {
+        lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
+      }
       G.ctx.needsAwaitNew = true;
       return tempName;
 }
@@ -3262,6 +3282,8 @@ function genRustTyBody(fields, typeEnv, refNames) {
   // Collect types for positional fields
   const posTypes = [];
   for (const f of pos) {
+    // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push({ dynamic: false, val: '"@"' }); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isListOfAny(t)) {
@@ -3278,6 +3300,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
+    if (f.value?.type === 'SelfValue') { namedTypes.push({ dynamic: false, key: f.key, val: '"@"' }); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

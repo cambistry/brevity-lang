@@ -26,6 +26,27 @@ export function returnsOnlySelf(fn) {
   return only;
 }
 
+// Whether every return path of a function puts self in one slot of its reply,
+// `(self, n)` or `(me: self, n: n)`: a destructured name bound from that slot is
+// a handle to the receiver. `item` is a destructure pattern item.
+export function slotOnlySelf(fn, item) {
+  let any = false;
+  let only = true;
+  const walk = (n) => {
+    if (!n || typeof n !== 'object' || n.type === 'Function') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === 'Reply' || n.type === 'Return') {
+      any = true;
+      const fields = n.fields ?? [];
+      const f = item.positional ? fields.filter(x => x.positional)[item.idx] : fields.find(x => x.key === (item.key ?? item.name));
+      if (!f || f.selfReturn || (f.expr ?? f.value)?.type !== 'SelfValue') only = false;
+    }
+    for (const v of Object.values(n)) if (v && typeof v === 'object') walk(v);
+  };
+  walk(fn.body);
+  return any && only;
+}
+
 // A member of a chain needs a receiver. On a class in this file a `!` function that
 // returns a value isn't one: a typed value only decodes against a declared type, so
 // it has to be bound first. A remote's return shape isn't checked here.

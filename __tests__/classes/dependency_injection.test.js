@@ -106,7 +106,7 @@ describe('explicit form — actor routing', () => {
     });
     await expectActorBehavior(actor,
       // Reply to `new` (id '1'), supplying the actor address
-      { input: { id: '1', re: '#<Thing/1>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       // Trigger the user-facing handler
       { input: { id: '99', op: '@go', from: 'caller' } },
       // First post after the cursor: t.get() routed to the actor
@@ -125,7 +125,7 @@ describe('explicit form — actor routing', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/77>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/77>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '2', op: '@notify.', from: 'caller' } },
       { output: expect.objectContaining({ op: '@ping.', to: 'Thing/77' }) },
     );
@@ -160,8 +160,8 @@ describe('explicit form — multiple actors', () => {
     });
     await expectActorBehavior(actor,
       // Reply to both `new`s in seq order: id '1' = a, id '2' = b
-      { input: { id: '1', re: '#<Thing/A>', 'ty': '#<Thing>', from: 'Thing' } },
-      { input: { id: '2', re: '#<Thing/B>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/A>', 'ty': 'Thing', from: 'Thing' } },
+      { input: { id: '2', re: '#<Thing/B>', 'ty': 'Thing', from: 'Thing' } },
       // Hit a
       { input: { id: '10', op: '@ping_a', from: 'caller' } },
       { output: expect.objectContaining({ op: '@ping', to: 'Thing/A' }) },
@@ -199,7 +199,7 @@ describe('explicit form — full roundtrip', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Math/1>', 'ty': '#<Math>', from: 'Math' } },
+      { input: { id: '1', re: '#<Math/1>', 'ty': 'Math', from: 'Math' } },
       { input: { id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'ty': [{ n: 'Integer' }] } },
       { output: expect.objectContaining({ op: [{ n: 5 }, '@double'], to: 'Math/1' }) },
       { input: { id: '2', re: { result: 10 } } },
@@ -222,7 +222,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@spawn.', from: 'caller' } },
       { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
-      { input: { id: '1', re: '#<Thing/1>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
     );
   });
 
@@ -241,7 +241,7 @@ describe('explicit form — deferred (function-body) construction', () => {
     await expectActorBehavior(actor,
       { input: { id: '99', op: '@go', from: 'caller' } },
       { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
-      { input: { id: '1', re: '#<Thing/42>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/42>', 'ty': 'Thing', from: 'Thing' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 17 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 17 }, to: 'caller' }) },
@@ -422,7 +422,7 @@ describe('# form — manifest from options.remotes', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/9>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/9>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '50', op: '@go', from: 'caller' } },
       { output: expect.objectContaining({ op: '@get', to: 'Thing/9' }) },
       { input: { id: '2', re: { value: 17 } } },
@@ -503,7 +503,7 @@ describe('coercion to typed class — runtime', () => {
     await expectActorBehavior(actor,
       // `new` is addressed to the underlying dep 'Thing', so the reply
       // arrives under id '1' and supplies the actor address.
-      { input: { id: '1', re: '#<Thing/42>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/42>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '7', op: '@go', from: 'caller' } },
       // The actor address came from the Thing reply, not 'Coerced/...'
       { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },

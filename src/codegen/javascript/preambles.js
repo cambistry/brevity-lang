@@ -640,25 +640,17 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
-  // A type value's wire tag is its authority address carrying a ::Name
-  // selector (#<path ::Name> / #<::Name>), or a bare ::Name. The parameter
+  // A type value's wire tag is \`::Name\` or \`authority ::Name\`. The parameter
   // spells the type by name (possibly Alias::Name). Match on the bare type
   // name; authority is identity that travels, not a v1 match key.
   const bareName = (t) => {
     if (typeof t !== 'string') return t;
-    let s = t;
-    if (s.startsWith('#<') && s.endsWith('>')) {
-      const inner = s.slice(2, -1);
-      const sp = inner.lastIndexOf(' ');
-      s = sp === -1 ? inner : inner.slice(sp + 1);
-    }
-    if (s.startsWith('::')) return s.slice(2);
-    if (s.indexOf('::') !== -1) return s.slice(s.lastIndexOf('::') + 2);
-    return s;
+    if (t.indexOf('::') !== -1) return t.slice(t.lastIndexOf('::') + 2);
+    return t;
   };
   const memberOf = (actual, expected) => {
     if (actual === expected || expected === 'Anything') return true;
-    const isTypeTag = typeof actual === 'string' && (actual.startsWith('::') || actual.startsWith('#<'));
+    const isTypeTag = typeof actual === 'string' && actual.indexOf('::') !== -1;
     if (isTypeTag && bareName(actual) === bareName(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
       return expected.split('|').some(m => m.trim() === actual || (isTypeTag && bareName(actual) === bareName(m.trim())));

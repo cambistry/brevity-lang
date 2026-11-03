@@ -109,7 +109,7 @@ describe('a typed reply from a class in the same file', () => {
   it('re-encodes when returned onward', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@onward', from: 'c' } },
-      { output: { id: '1', re: [['x']], 'ty': ['#<::Item>'], to: 'c' } },
+      { output: { id: '1', re: [['x']], 'ty': ['::Item'], to: 'c' } },
     );
   });
 
@@ -149,10 +149,10 @@ describe('a typed reply from a remote', () => {
       expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) }],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': '#<Thing>', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '99', op: '@go', from: 'caller' } },
       { output: expect.objectContaining({ op: '@pop', to: 'Thing/1' }) },
-      { input: { id: '2', re: [['x']], 'ty': ['#<thing.bv ::Item>'] } },
+      { input: { id: '2', re: [['x']], 'ty': ['thing.bv ::Item'] } },
       { output: expect.objectContaining({ id: '99', re: ['x'], to: 'caller' }) },
     );
   });

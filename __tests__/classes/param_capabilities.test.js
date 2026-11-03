@@ -68,7 +68,7 @@ describe('class params — file-level *Point write-cap', () => {
       { input: { id: '2', op: '@get', from: 'caller' } },
       { output: expect.objectContaining({
         id: '2',
-        'ty': { coords: '#<::Point>' },
+        'ty': { coords: '::Point' },
         re: { coords: [3, 4] },
         to: 'caller',
       }) },

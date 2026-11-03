@@ -206,7 +206,7 @@ describe('a reply\'s tag', () => {
   `;
   const newBox = [
     { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
+    { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
   ];
 
   const paths = [

@@ -8,6 +8,9 @@ before:  { re: {}, 'bv-a': '#<@Counter/1>' }
 after:   { re: '#<@Counter/1>', 'bv-a': '#<@Counter>' }
 ```
 
+> Later the same day `ty` dropped its brackets: the parent now adds `ty: '@Counter'`
+> (`session-2026-11-03-ty-without-brackets.md`). `bv-a` below is `ty`.
+
 Before, `#<…>` in `bv-a` had two meanings: "re is an actor of this class" (reply to `#new`) and
 "the value is this actor" (self-return). Design rules are in "Self on the wire" in
 `mutation-suffix-2026-10-31.md`.

@@ -222,15 +222,15 @@ const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 
 export const G = { ctx: null };
 export function setCtx(newCtx) { G.ctx = newCtx; }
 
-// Authority-address wire tag for a type-valued slot: `#<path ::Name>` for an
-// imported/cross-module type, `#<::Name>` for a local one. Non-type tags
+// Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
+// type, `::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
   const name = G.ctx.typeDecls.get(t).name || t;
   const authority = G.ctx.typeAuthority?.get(t) || '';
-  return authority ? `#<${authority} ::${name}>` : `#<::${name}>`;
+  return authority ? `${authority} ::${name}` : `::${name}`;
 }
 
 // Wrap a Value expression with `bv_to_wire` when its type is a type decl

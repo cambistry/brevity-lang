@@ -994,7 +994,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // `re`, its class in `ty`. A node's address is `HTML @kind/N`, and its
   // class is `HTML @kind`.
   function selfReply(addr) {
-    return { re: '#<' + addr + '>', 'ty': '#<' + addr.replace(/\/[0-9]+$/, '') + '>' };
+    return { re: '#<' + addr + '>', 'ty': addr.replace(/\/[0-9]+$/, '') };
   }
 
   function getOrMintSubRep(kind, el, attachHandler) {
@@ -1951,7 +1951,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             // value (positional arg, tagged with its authority address). The
             // consumer reads value fields freely and invokes endpoint fields
             // in-frame; see buildEventValue.
-            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['#<HTML ::Event>']] });
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML ::Event']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;
@@ -2013,7 +2013,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const payload = Array.isArray(op) ? op[0] : {};
     const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
-      id, re: '#<' + addr + '>', 'ty': '#<HTML @' + tag + '>', from: 'HTML', to: from,
+      id, re: '#<' + addr + '>', 'ty': 'HTML @' + tag, from: 'HTML', to: from,
     }));
   }
 
@@ -2149,7 +2149,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             } else {
               el.insertAdjacentHTML('beforeend', val);
             }
-            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
+            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
             return;
           }
           if (opName === '@inner_html') {
@@ -2206,7 +2206,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.querySelector(selector);
         if (el) {
           const addr = registerElement(selector, el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
         }
         return;
       }
@@ -2214,7 +2214,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.body;
         if (el) {
           const addr = registerElement('body', el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': '#<Element>', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
         }
         return;
       }
@@ -2255,11 +2255,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   // Parent-layer address translation for runtime-loaded actors. Payload
   // `#<>`/`#<@N>`/`#<#N>` addresses get the sender's address prepended; `from`
-  // is filled in if missing, prepended if local-form. Structural walk
+  // is filled in if missing, prepended if local-form. Local starts with a
+  // delimiter; global starts with a word character. `ty` has no brackets, so
+  // its local tags (`::Point`, `@Box`) are prefixed whole. Structural walk
   // (not JSON round-trip) so BigInt and other non-JSON primitives survive.
   function rewriteAddressStrings(v, selfAddr) {
     if (typeof v === 'string') {
-      return v.replace(/#<([@#:][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
+      return v.replace(/#<([^\w>][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
     }
     if (Array.isArray(v)) return v.map(el => rewriteAddressStrings(el, selfAddr));
     if (v && typeof v === 'object') {
@@ -2269,11 +2271,23 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
     return v;
   }
+  function rewriteTyTags(v, selfAddr) {
+    if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : selfAddr + ' ' + v;
+    if (Array.isArray(v)) return v.map(x => rewriteTyTags(x, selfAddr));
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v)) out[k] = rewriteTyTags(v[k], selfAddr);
+      return out;
+    }
+    return v;
+  }
   function translateOutbound(msg, selfAddr) {
-    const out = rewriteAddressStrings(msg, selfAddr);
+    const { ty, ...rest } = msg;
+    const out = rewriteAddressStrings(rest, selfAddr);
+    if ('ty' in msg) out['ty'] = rewriteTyTags(ty, selfAddr);
     if (out.from == null || out.from === '') {
       out.from = selfAddr;
-    } else if (typeof out.from === 'string' && /^[@#]/.test(out.from)) {
+    } else if (typeof out.from === 'string' && !/^\w/.test(out.from)) {
       out.from = selfAddr + ' ' + out.from;
     }
     return out;

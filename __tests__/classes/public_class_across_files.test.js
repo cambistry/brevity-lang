@@ -37,7 +37,7 @@ describe('caller side', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@go', from: 'c' } },
         { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: target[label] } },
-        { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': '#<Svc @Counter>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
         { output: expect.objectContaining({ op: '@get', to: 'Svc @Counter/1' }) },
       );
     });
@@ -48,7 +48,7 @@ describe('caller side', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go!', from: 'c' } },
       { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
-      { input: { id: '1', re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' } },
+      { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
       { output: { id: '2', op: [{}, '#new'], to: 'Svc/7 @W!' } },
     );
   });
@@ -120,7 +120,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@chain', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
-      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': '#<Svc @Counter>', from: 'Svc' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
     );
   });
@@ -130,7 +130,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@give', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
-      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': '#<Svc @Counter>', from: 'Svc' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: ['Svc @Counter/1'], to: 'c' }) },
     );
   });
@@ -140,7 +140,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@pass', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
-      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': '#<Svc @Counter>', from: 'Svc' } },
+      { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ op: '@get', to: 'Svc @Counter/1' }) },
     );
   });
@@ -173,9 +173,9 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@chain', from: 'c' } },
         { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
-        { input: { id: '2', re: '#<Svc/7 @Counter/1>', 'ty': '#<Svc/7 @Counter>', from: 'Svc/7' } },
+        { input: { id: '2', re: '#<Svc/7 @Counter/1>', 'ty': 'Svc/7 @Counter', from: 'Svc/7' } },
         { output: expect.objectContaining({ id: '3', op: '@get', to: 'Svc/7 @Counter/1' }) },
       );
     });
@@ -185,7 +185,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@give', from: 'c' } },
         { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
       );
     });
@@ -195,7 +195,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@pass', from: 'c' } },
         { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
       );
     });
@@ -205,7 +205,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@own', from: 'c' } },
         { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: expect.objectContaining({ id: '2', op: '@plain', to: 'Svc/7' }) },
       );
     });
@@ -225,7 +225,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@chain', from: 'c' } },
         { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'svc.bv @Counter' } },
-        { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': '#<Svc @Counter>', from: 'Svc' } },
+        { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
         { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
       );
     });
@@ -392,7 +392,7 @@ describe('receiver side', () => {
   it('constructs, replies with an address, and routes to the new actor', async () => {
     await expectBehavior(SVC,
       { input: { id: '1', op: [[5, { step: 2 }], '#new'], to: '@Counter', from: 'c' } },
-      { output: { id: '1', re: '#<@Counter/1>', 'ty': '#<@Counter>', to: 'c' } },
+      { output: { id: '1', re: '#<@Counter/1>', 'ty': '@Counter', to: 'c' } },
       { input: { id: '2', op: '@get', to: '@Counter/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [5], to: 'c', from: '@Counter/1' }) },
     );
@@ -405,7 +405,7 @@ describe('receiver side', () => {
       { input: { id: '2', op: [[10, { step: 1 }], '#new'], to: '@Counter', from: 'c' } },
       { output: expect.objectContaining({ re: '#<@Counter/2>' }) },
       { input: { id: '3', op: '@inc!', to: '@Counter/1', from: 'c' } },
-      { output: { id: '3', re: '#<@Counter/1>', 'ty': '#<@Counter>', to: 'c', from: '@Counter/1' } },
+      { output: { id: '3', re: '#<@Counter/1>', 'ty': '@Counter', to: 'c', from: '@Counter/1' } },
       { input: { id: '4', op: '@get', to: '@Counter/1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [7] }) },
       { input: { id: '5', op: '@get', to: '@Counter/2', from: 'c' } },
@@ -416,7 +416,7 @@ describe('receiver side', () => {
   it('keeps the ! in the selector', async () => {
     await expectBehavior(SVC,
       { input: { id: '1', op: [{}, '#new'], to: '@W!', from: 'c' } },
-      { output: { id: '1', re: '#<@W!/1>', 'ty': '#<@W!>', to: 'c' } },
+      { output: { id: '1', re: '#<@W!/1>', 'ty': '@W!', to: 'c' } },
       { input: { id: '2', op: '@one', to: '@W!/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [1] }) },
     );
@@ -431,10 +431,17 @@ describe('receiver side', () => {
 });
 
 // Two compiled files talking, on every target. The relay plays the parent: it strips
-// the alias from `to`, and promotes the sender's local addresses as they leave.
+// the alias from `to`, and promotes the sender's local addresses and `ty` tags as they
+// leave. Local starts with a delimiter; `ty` tags have no `#<…>`.
 describe('end to end', () => {
+  const promoteTy = (v, name) => {
+    if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : `${name} ${v}`;
+    if (Array.isArray(v)) return v.map(x => promoteTy(x, name));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promoteTy(x, name)]));
+    return v;
+  };
   const promote = (v, name) => {
-    if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
+    if (typeof v === 'string') return v.replace(/#<([^\w>][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
     if (Array.isArray(v)) return v.map(x => promote(x, name));
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x, name)]));
     return v;
@@ -457,7 +464,8 @@ describe('end to end', () => {
       await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
       await settle(svc, served);
       const reply = svc.posts[served++];
-      await caller.sendAsync({ ...promote(reply, 'Svc'), to: undefined, from: reply.from ? `Svc ${reply.from}` : 'Svc' });
+      const { ty, ...rest } = reply;
+      await caller.sendAsync({ ...promote(rest, 'Svc'), ...('ty' in reply ? { ty: promoteTy(ty, 'Svc') } : {}), to: undefined, from: reply.from ? `Svc ${reply.from}` : 'Svc' });
     }
     throw new Error('the caller never replied');
   }
@@ -599,7 +607,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
       if (msg.to === 'c') return msg.re;
       if (msg.to === 'Svc' && Array.isArray(msg.op) && msg.op[1] === '#new') {
         actors['Svc/7'] = { actor: await (await compileActor(READER_SVC)).spawn(), served: 0 };
-        await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'ty': '#<Svc>', from: 'Svc' });
+        await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' });
         continue;
       }
       const name = msg.to.startsWith('Svc/7') ? 'Svc/7' : 'Svc';

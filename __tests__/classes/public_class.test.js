@@ -236,9 +236,9 @@ describe('a self-return from an actor made by #new', () => {
   it('names the actor and its class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-      { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
       { input: { id: '2', op: '@bump!', to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { output: { id: '2', re: '#<@Box/1>', 'ty': '@Box', to: 'c', from: '@Box/1' } },
     );
   });
 
@@ -247,9 +247,9 @@ describe('a self-return from an actor made by #new', () => {
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@Box/1>' }) },
       { input: { id: '2', op: [[true], '@maybe!'], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { output: { id: '2', re: '#<@Box/1>', 'ty': '@Box', to: 'c', from: '@Box/1' } },
       { input: { id: '3', op: [[false], '@maybe!'], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
-      { output: { id: '3', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { output: { id: '3', re: '#<@Box/1>', 'ty': '@Box', to: 'c', from: '@Box/1' } },
       { input: { id: '4', op: '@get', to: '@Box/1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [10] }) },
     );
@@ -258,9 +258,65 @@ describe('a self-return from an actor made by #new', () => {
   it('a class named with ! keeps it in its class address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Pub!', from: 'c' } },
-      { output: { id: '1', re: '#<@Pub!/1>', 'ty': '#<@Pub!>', to: 'c' } },
+      { output: { id: '1', re: '#<@Pub!/1>', 'ty': '@Pub!', to: 'c' } },
       { input: { id: '2', op: '@go!', to: '@Pub!/1', from: 'c' } },
-      { output: { id: '2', re: '#<@Pub!/1>', 'ty': '#<@Pub!>', to: 'c', from: '@Pub!/1' } },
+      { output: { id: '2', re: '#<@Pub!/1>', 'ty': '@Pub!', to: 'c', from: '@Pub!/1' } },
+    );
+  });
+});
+
+// `self` as one slot of several: `#<>` in `re`, a bare `@` in `ty`. The parent that
+// made the actor fills in both, as for a whole-value self-return.
+describe('self as one of several return values', () => {
+  const script = `
+    @Box = *{
+      n *Integer = 0
+
+      @pair! = {
+        n <- n + 1
+        return (self, n)
+      }
+      @named! = {
+        n <- n + 1
+        return (me: self, n: n)
+      }
+    }
+
+    Box = *{
+      @pair = { return (self, 5) }
+      @get = { return 7 }
+    }
+
+    @local = {
+      b = Box()
+      (a, k) = b.pair()
+      v Integer = a.get()
+      return (v, k)
+    }
+  `;
+
+  it('positional: the parent names the actor and its class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
+      { input: { id: '2', op: '@pair!', to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: ['#<@Box/1>', 1], 'ty': ['@Box', 'Integer'], to: 'c', from: '@Box/1' } },
+    );
+  });
+
+  it('named: the parent names the actor and its class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
+      { input: { id: '2', op: '@named!', to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: { me: '#<@Box/1>', n: 1 }, 'ty': { me: '@Box', n: 'Integer' }, to: 'c', from: '@Box/1' } },
+    );
+  });
+
+  it('in process: the caller gets the actor it called', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@local', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7, 5], to: 'c' }) },
     );
   });
 });
@@ -296,7 +352,7 @@ describe('#new beside @Box()', () => {
   it('#new reaches the public class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-      { output: { id: '1', re: '#<@Box/1>', 'ty': '#<@Box>', to: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
       { input: { id: '2', op: '@who', to: '@Box/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['public'], to: 'c', from: '@Box/1' }) },
     );

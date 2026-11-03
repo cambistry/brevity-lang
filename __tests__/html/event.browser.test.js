@@ -68,7 +68,7 @@ describe('HTML::Event — emitted on a real DOM event (browser)', () => {
     const page = await loadPage(PAGE);
     const events = await fireAndCapture(page, { on: 'onclick', event: CLICK });
     expect(events).toHaveLength(1);
-    expect(events[0]['ty']).toEqual([['#<HTML ::Event>']]);
+    expect(events[0]['ty']).toEqual([['HTML ::Event']]);
   });
 
   it('carries every endpoint field as an HTML-rooted address', async () => {
