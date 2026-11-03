@@ -210,7 +210,7 @@ describe('template emission — structured children wire shape', () => {
     it('the self address `#<>` in a reply is promoted to the sender', async () => {
       await expectEmission('a *Integer = 0\n@inc! = (i Integer) { a <- a + i }\n',
         { input: { id: '1', op: [[1], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-        { output: expect.objectContaining({ id: '1', re: {}, 'bv-a': '#<main>', from: 'main' }) },
+        { output: expect.objectContaining({ id: '1', re: '#<main>', from: 'main' }) },
       );
     });
   });

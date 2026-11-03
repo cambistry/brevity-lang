@@ -990,6 +990,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const subRepCounters = { aria: 0, classlist: 0, dataset: 0 };
   const subRepsByElement = new Map(); // Element → { kind → addr }
 
+  // A node's self-return has the shape of its reply to `#new`: its address in
+  // `re`, its class in `bv-a`. A node's address is `HTML @kind/N`, and its
+  // class is `HTML @kind`.
+  function selfReply(addr) {
+    return { re: '#<' + addr + '>', 'bv-a': '#<' + addr.replace(/\/[0-9]+$/, '') + '>' };
+  }
+
   function getOrMintSubRep(kind, el, attachHandler) {
     let perEl = subRepsByElement.get(el);
     if (perEl) {
@@ -1047,7 +1054,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
           el.classList.value = value == null ? '' : String(value);
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
@@ -1077,13 +1084,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           case 'add!': {
             const tokens = tokensFromPayload(payload);
             el.classList.add(...tokens);
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
             return;
           }
           case 'remove!': {
             const tokens = tokensFromPayload(payload);
             el.classList.remove(...tokens);
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
             return;
           }
           case 'toggle!': {
@@ -1157,13 +1164,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             else if (payload && typeof payload === 'object') { key = payload.key; value = payload.value; }
             if (typeof key !== 'string' || typeof value !== 'string') return;
             el.dataset[key] = value;
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
             return;
           }
           case 'remove!': {
             const key = extractSingle(payload, 'key');
             if (typeof key === 'string') delete el.dataset[key];
-            Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
             return;
           }
           case 'keys': {
@@ -1254,7 +1261,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const value = payload && payload.length > 0 ? payload[0] : null;
           el[setter.prop] = setter.coerce(value);
           Promise.resolve().then(() => route({
-            id: eid, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: efrom,
+            id: eid, ...selfReply(addr), from: addr, to: efrom,
           }));
           return;
         }
@@ -1267,7 +1274,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(eop) ? eop[0] : null;
           if (handleElementMutator(tag, cls, el, eopName, payload)) {
             Promise.resolve().then(() => route({
-              id: eid, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: efrom,
+              id: eid, ...selfReply(addr), from: addr, to: efrom,
             }));
           }
           return;
@@ -1425,7 +1432,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
           node.nodeValue = value == null ? '' : String(value);
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
         if (typeof opName !== 'string' || !opName.startsWith('@')) return;
@@ -1434,7 +1441,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // replies self so chaining works uniformly across node kinds.
         if (opName === '@normalize!') {
           node.normalize();
-          Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<' + addr + '>', from: addr, to: from }));
+          Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
         const accessorName = opName.slice(1);
@@ -2213,7 +2220,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
       if (opName === '@normalize!') {
         document.normalize();
-        Promise.resolve().then(() => route({ id, re: {}, 'bv-a': '#<document>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: '#<document>', from: 'document', to: from }));
         return;
       }
       if (opName === '@eval') {

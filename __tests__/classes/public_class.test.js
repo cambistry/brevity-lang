@@ -210,6 +210,61 @@ describe('Box and @Box are different classes', () => {
   });
 });
 
+// A self-return from an actor made by `#new` replies as `#new` did: the actor's
+// address in `re`, its class in `bv-a`. The file actor made it, so it adds the class.
+describe('a self-return from an actor made by #new', () => {
+  const script = `
+    @Box = *{
+      n *Integer = 0
+
+      @bump! = { n <- n + 1 }
+      @maybe! = (c Boolean) {
+        if c { return self }
+        n <- 10
+        return self
+      }
+      @get = { return n }
+    }
+
+    @Pub! = *{
+      n *Integer = 0
+
+      @go! = { n <- 1 }
+    }
+  `;
+
+  it('names the actor and its class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: { id: '1', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c' } },
+      { input: { id: '2', op: '@bump!', to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
+    );
+  });
+
+  it('from an early return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<@Box/1>' }) },
+      { input: { id: '2', op: [[true], '@maybe!'], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
+      { output: { id: '2', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { input: { id: '3', op: [[false], '@maybe!'], 'bv-a': [['Boolean']], to: '@Box/1', from: 'c' } },
+      { output: { id: '3', re: '#<@Box/1>', 'bv-a': '#<@Box>', to: 'c', from: '@Box/1' } },
+      { input: { id: '4', op: '@get', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '4', re: [10] }) },
+    );
+  });
+
+  it('a class named with ! keeps it in its class address', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '#new'], to: '@Pub!', from: 'c' } },
+      { output: { id: '1', re: '#<@Pub!/1>', 'bv-a': '#<@Pub!>', to: 'c' } },
+      { input: { id: '2', op: '@go!', to: '@Pub!/1', from: 'c' } },
+      { output: { id: '2', re: '#<@Pub!/1>', 'bv-a': '#<@Pub!>', to: 'c', from: '@Pub!/1' } },
+    );
+  });
+});
+
 describe('#new beside @Box()', () => {
   const script = `
     @Box = *{

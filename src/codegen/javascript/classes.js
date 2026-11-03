@@ -256,7 +256,7 @@ function delegatedBvaLine(ctx, rawBody, bvaLine, typeEnv) {
   if (!returns.some(r => r.fields?.[0]?.selfReturn || forwards(r))) return `${bvaLine}\n        if (_fnResult.pathTag !== undefined) _bva_re = _fnResult.pathTag ?? undefined;`;
   const valued = returns.find(r => r.fields?.length && !r.fields[0].selfReturn && !forwards(r));
   const other = valued ? genBvaBody(ctx, valued.fields, typeEnv) : null;
-  return `\n        _bva_re = _fnResult.selfReturn ? "#<>" : _fnResult.forwarded ? undefined : _fnResult.pathTag !== undefined ? _fnResult.pathTag ?? undefined : ${other ?? 'undefined'};`;
+  return `\n        _bva_re = _fnResult.selfReturn ? undefined : _fnResult.forwarded ? undefined : _fnResult.pathTag !== undefined ? _fnResult.pathTag ?? undefined : ${other ?? 'undefined'};`;
 }
 
 function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
@@ -1116,7 +1116,12 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
       return v;
     };
-    inst._adoptBinding({ post: (msg) => this.#binding.post({ ...local(msg), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr }) });
+    // A self-return says "me" with a bare \`#<>\`. We made this actor, so we add its class.
+    inst._adoptBinding({ post: (msg) => {
+      const out = { ...local(msg), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr };
+      if (msg.re === '#<>' && !('bv-a' in msg)) out['bv-a'] = '#<@' + cls + '>';
+      this.#binding.post(out);
+    } });
     return addr;
   }
 
@@ -1139,7 +1144,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       const pending = this.#pending.get(message.id);
       if (pending) {
         if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['bv-a'])); return; }
-        this.#pending.delete(message.id); pending.resolve(typeof message['bv-a'] === 'string' && message['bv-a'].startsWith('#<') && !message['bv-a'].includes('::') && message.re && typeof message.re === 'object' && !Array.isArray(message.re) && Object.keys(message.re).length === 0 ? message['bv-a'] : _bv_unwire_reply(message.re, message['bv-a'])); return;
+        this.#pending.delete(message.id); pending.resolve(_bv_unwire_reply(message.re, message['bv-a'])); return;
       }
       // No matching pending — may need to forward to a proxy via remote routes
     }

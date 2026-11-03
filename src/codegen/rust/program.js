@@ -1721,9 +1721,11 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                     resp.insert("ex".to_string(), Value::Object(ex));
                 }
                 Ok(Value::Null) => return,
+                // A self-return: we made this actor, so we name it and its class, as for #new.
                 Ok(v) if v == json!(child) => {
-                    resp.insert("re".to_string(), json!({}));
-                    resp.insert("bv-a".to_string(), json!(format!("#<{}>", addr)));
+                    let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
+                    resp.insert("bv-a".to_string(), json!(format!("#<{}>", class)));
+                    resp.insert("re".to_string(), json!(format!("#<{}>", addr)));
                 }
                 Ok(v) => {
                     resp.insert("re".to_string(), v);
@@ -1753,11 +1755,10 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
-                                // A self-return's value is the address in its bv-a.
-                                if re.as_object().is_some_and(|o| o.is_empty()) {
-                                    if let Some(addr) = msg.get("bv-a").filter(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
-                                        return Value::Array(vec![addr.clone()]);
-                                    }
+                                // A reply whose whole value is one actor: its address is in re,
+                                // and bv-a, if any, names its class.
+                                if re.as_str().is_some_and(|t| t.starts_with("#<")) && msg.get("bv-a").is_none_or(|a| a.as_str().is_some_and(|t| t.starts_with("#<") && !t.contains("::"))) {
+                                    return Value::Array(vec![re.clone()]);
                                 }
                                 return msg.get("bv-a").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
                             }

@@ -3145,8 +3145,8 @@ function genRustReBody(fields, typeEnv, refNames) {
   refNames = refNames || new Set();
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return 'Value::Array(vec![])';
-  // Self-return: no data; the address travels in `bv-a`.
-  if (fields[0].selfReturn) return 'Value::Object(Map::new())';
+  // Self-return: the bare local self address. The parent promotes it.
+  if (fields[0].selfReturn) return 'json!("#<>")';
   const spread = fields.find(f => f.spread);
   if (spread) return `bv_val(&${rustSsaResolve(spread.name)})`;
 
@@ -3244,7 +3244,8 @@ function genRustReBody(fields, typeEnv, refNames) {
 }
 
 function genRustBvaBody(fields, typeEnv, refNames) {
-  if (fields[0]?.selfReturn) return 'json!("#<>")';
+  // A self-return carries no tag: the parent that made this actor adds its class.
+  if (fields[0]?.selfReturn) return null;
   const spread = fields.find(f => f.spread);
   if (spread) return null; // bv-a handled separately for spread
 

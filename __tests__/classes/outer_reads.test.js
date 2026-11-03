@@ -58,7 +58,7 @@ describe('a class reads its file\'s cells', () => {
       { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
       { input: { id: '2', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: {} }) },
+      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
       { input: { id: '3', op: '@get', to: '@W/1', from: 'c' } },
       { output: reply('3', 14) },
       { input: { id: '4', op: '@check', to: '@W/1', from: 'c' } },
@@ -71,7 +71,7 @@ describe('a class reads its file\'s cells', () => {
       { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
       { input: { id: '2', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: {} }) },
+      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
       { input: { id: '3', op: '@seed', to: '@W/1', from: 'c' } },
       { output: reply('3', 4) },
     );

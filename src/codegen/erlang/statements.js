@@ -1479,8 +1479,8 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
 // ── Reply field codegen ─────────────────────────────────────────────────────
 
 function genReplyBody(ctx, fields, typeEnv, sCtx) {
-  // Self-return: no data; the address travels in `bv-a`.
-  if (fields[0]?.selfReturn) return '#{}';
+  // Self-return: the bare local self address. The parent promotes it.
+  if (fields[0]?.selfReturn) return '<<"#<>"/utf8>>';
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   const spread = fields.find(f => f.spread);
@@ -1574,7 +1574,8 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
 }
 
 function genBvaBody(ctx, fields, typeEnv, sCtx) {
-  if (fields[0]?.selfReturn) return '<<"#<>"/utf8>>';
+  // A self-return carries no tag: the parent that made this actor adds its class.
+  if (fields[0]?.selfReturn) return null;
   const spread = fields.find(f => f.spread);
   if (spread) return null; // handled separately
 

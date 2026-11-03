@@ -1350,7 +1350,8 @@ export function genArgSlots(ctx, positional, named) {
 }
 
 export function genBvaBody(ctx, fields, typeEnv) {
-  if (fields[0]?.selfReturn) return '"#<>"';
+  // A self-return carries no tag: the parent that made this actor adds its class.
+  if (fields[0]?.selfReturn) return null;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
@@ -1413,8 +1414,8 @@ export function genPackedReturn(ctx, fields, typeEnv, declaredReturnType = null)
 export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
-  // Self-return: no data; the address travels in `bv-a`.
-  if (fields[0].selfReturn) return '{}';
+  // Self-return: the bare local self address. The parent promotes it.
+  if (fields[0].selfReturn) return '"#<>"';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;

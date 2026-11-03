@@ -1271,9 +1271,9 @@ function genRustChildMethods(allActors) {
             Err(e) if from != "__parent" => std::panic::resume_unwind(e),
             Err(_) => panic!("ex_response"),
         };
-        // A self-return has an empty Object for its reply and no other reply does.
+        // A self-return replies with the bare local self address.
         // We're the parent, so its address, in our frame, is this handle.
-        if result.as_object().is_some_and(|o| o.is_empty()) { return bv_inst_ref("${lc}", instance_id); }
+        if result.as_str() == Some("#<>") { return bv_inst_ref("${lc}", instance_id); }
         result
     }
 

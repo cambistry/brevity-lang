@@ -126,25 +126,32 @@ Being a valid final statement is separate from being a return value:
 
 ### Self on the wire
 
-A self-return is an empty reply whose `bv-a` is the local-form self address:
+Revised 2026-11-03 (`notes/session-2026-11-03-self-return-like-new.md`). A
+self-return replies like `#new`: the actor's address in `re`, its class's address
+in `bv-a`.
 
 ```
-{ id, re: {}, 'bv-a': '#<>' }
+child:   { id, re: '#<>' }
+parent:  { id, re: '#<@Counter/1>', 'bv-a': '#<@Counter>' }
 ```
 
-- **`#<>` is the canonical self address:** local form, no selector. An actor doesn't
-  know what it's called, so it can't name its class or address. By the
-  leading-character rule a non-word start is local, so the parent promotes it to
-  `#<addr>` like any other local address. `#<self>` would read as a global.
-- **`re: {}` is a placeholder.** `re` is what marks a message as a reply, but a
-  self-return carries no data.
-- **The caller reads `bv-a` as well as `re`.** After translation `bv-a` is the actor's
-  address in the caller's frame, and that address is the call's value.
+- **The child says "me" with a bare `#<>` and no `bv-a`.** An empty selector means
+  the actor that's replying. An actor can't name its own address or its class, so
+  any tag would be a stand-in. `#<Self>` would read as a global address called
+  `Self`.
+- **A reply whose whole value is one actor is a bare address in `re`.** Same group
+  as the reply to `#new` and a handler returning bare `Self`. `self` is a lone
+  return in v1, so `['#<>']` doesn't come up.
+- **The parent that made the child names it.** It sees `re: '#<>'`, promotes it to
+  the child's address, and adds `bv-a` with the child's class address. The marker
+  in the reply is the trigger, not the child's profile.
+- **Higher parents translate `re` and `bv-a` alike.** Only the first parent adds
+  `bv-a`.
 - **Parents translate in-process children too.** An untranslated `#<>` reaching a
-  caller would mean the caller itself, so the child-reply paths must swap in the
+  caller would mean the caller itself, so the child-reply paths swap in the
   caller's handle for the child.
-- **A host of many sub-actors names the sub-actor.** The DOM runtime replies with the
-  element's address rather than `#<>`, which would mean the HTML node.
+- **A host of many sub-actors names the sub-actor.** The DOM runtime replies with
+  `{ re: '#<HTML @div/1>', 'bv-a': '#<HTML @div>' }`, as it does to `#new`.
 - **`self` is a return-position value only in v1:** `return self` and a tail `self`.
   `x = self` and `f(self)` are errors for now, and can be widened later.
 

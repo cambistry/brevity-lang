@@ -24,7 +24,7 @@ unaffected.
 
 ## Wire
 
-A self-return is `{ re: {}, 'bv-a': '#<>' }`. Both translators promote `#<>` to
+A self-return was `{ re: {}, 'bv-a': '#<>' }` (now `{ re: '#<>' }`, promoted by the parent to the `#new` shape: `notes/session-2026-11-03-self-return-like-new.md`). Both translators promote `#<>` to
 `#<addr>`. They also disagreed on `:` (`runtime.js` matched only `[@#]`, so it left
 `#<::Point>` alone), and now match the same set. The DOM runtime replies with the
 element's address. The self-dispatch checks treat `#<>` as "me".

@@ -4,7 +4,7 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // A `!` function writes. Its return paths say what it yields: falling off the end
 // returns self, `return v` returns v, and there is no tail return. A self-return
-// is `{ re: {}, 'bv-a': '#<>' }`, with the parent promoting the address.
+// is `{ re: '#<>' }`, with the parent promoting the address.
 // Design: notes/mutation-suffix-2026-10-31.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1050,16 +1050,16 @@ describe('! function — return paths', () => {
   it('falling off the end returns self', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
     );
   });
 
   it('the write takes effect', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: [[2], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '2', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '2', re: '#<>', to: 'c' } },
       { input: { id: '3', op: '@total', from: 'c' } },
       { output: { id: '3', re: [7], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1068,14 +1068,14 @@ describe('! function — return paths', () => {
   it('`return self` returns self, even when it is the only path', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], '@explicit!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
     );
   });
 
   it('`return v` returns v', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@take!', from: 'c' } },
       { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1084,7 +1084,7 @@ describe('! function — return paths', () => {
   it('a bare `return` exits as falling off the end does', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[0], '@guarded!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [0], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1093,7 +1093,7 @@ describe('! function — return paths', () => {
   it('every path may return self explicitly, and a write in a returning branch takes effect', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@every!'], 'bv-a': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [1], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1104,14 +1104,14 @@ describe('! function — return paths', () => {
       { input: { id: '1', op: [[true], '@either!'], 'bv-a': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [1], 'bv-a': ['Integer'], to: 'c' } },
       { input: { id: '2', op: [[false], '@either!'], 'bv-a': [['Boolean']], from: 'c' } },
-      { output: { id: '2', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '2', re: '#<>', to: 'c' } },
     );
   });
 
   it('a write and a call in a tail `if` take effect', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], '@tailIf!'], 'bv-a': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1120,7 +1120,7 @@ describe('! function — return paths', () => {
   it('a tail `if` not taken returns self', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], '@tailIf!'], 'bv-a': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [0], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1129,7 +1129,7 @@ describe('! function — return paths', () => {
   it.each([[1, 10], [2, 20], [3, 30]])('a tail `if`/`else if`/`else` takes one branch: %i', async (c, expected) => {
     await expectBehavior(script,
       { input: { id: '1', op: [[c], '@branches!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [expected], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1138,7 +1138,7 @@ describe('! function — return paths', () => {
   it('a final write in arrow form is a statement', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[2], '@arrow!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [2], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1147,7 +1147,7 @@ describe('! function — return paths', () => {
   it('a lineal `!` function returns self', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@lineal!', from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
     );
   });
 
@@ -1170,14 +1170,14 @@ describe('! function — return paths', () => {
   it('a bare tail `self` in a read-only function is an ordinary tail return', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@me', from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
     );
   });
 
   it('`return self` in a read-only function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@meExplicit', from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
     );
   });
 
@@ -1186,7 +1186,7 @@ describe('! function — return paths', () => {
       { input: { id: '1', op: '@same', from: 'c' } },
       { output: { id: '1', re: [1], 'bv-a': ['Integer'], to: 'c' } },
       { input: { id: '2', op: '@same!', from: 'c' } },
-      { output: { id: '2', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '2', re: '#<>', to: 'c' } },
     );
   });
 
@@ -1305,7 +1305,7 @@ describe('! function — return paths', () => {
   it('a `@x(…)` self-call reads', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3], '@inc!'], 'bv-a': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@selfCallRead', from: 'c' } },
       { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
       { input: { id: '3', op: '@selfCallReturned', from: 'c' } },
@@ -1329,7 +1329,7 @@ describe('! function — return paths', () => {
   it('a chain in tail position returns self', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@chainTail!', from: 'c' } },
-      { output: { id: '1', re: {}, 'bv-a': '#<>', to: 'c' } },
+      { output: { id: '1', re: '#<>', to: 'c' } },
       { input: { id: '2', op: '@total', from: 'c' } },
       { output: { id: '2', re: [3], 'bv-a': ['Integer'], to: 'c' } },
     );
@@ -1578,7 +1578,7 @@ describe('chained calls through a remote', () => {
       { input: { id: '1', re: '#<Thing/1>', 'bv-a': '#<Thing>', from: 'Thing' } },
       { input: { id: '99', op: '@go!', from: 'caller' } },
       { output: expect.objectContaining({ op: [[2], '@inc!'], to: 'Thing/1' }) },
-      { input: { id: '2', re: {}, 'bv-a': '#<Thing/9>' } },
+      { input: { id: '2', re: '#<Thing/9>', 'bv-a': '#<Thing>' } },
       { output: expect.objectContaining({ op: '@total', to: '#<Thing/9>' }) },
       { input: { id: '3', re: { value: 7 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 7 }, to: 'caller' }) },

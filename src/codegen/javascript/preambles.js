@@ -625,7 +625,10 @@ export const OBJECT_PREAMBLE = `const BvObject = {
       throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);
     return s.positional[0];
   },
-  splat({ positional, named }) {
+  splat(s) {
+    // A self-return's reply is the bare local self address.
+    if (s.selfReturn) return '#<>';
+    const { positional, named } = s;
     const hasPos = positional.length > 0;
     const hasNamed = Object.keys(named).length > 0;
     if (hasPos && hasNamed) return [...positional, named];

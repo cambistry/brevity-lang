@@ -405,7 +405,7 @@ describe('receiver side', () => {
       { input: { id: '2', op: [[10, { step: 1 }], '#new'], to: '@Counter', from: 'c' } },
       { output: expect.objectContaining({ re: '#<@Counter/2>' }) },
       { input: { id: '3', op: '@inc!', to: '@Counter/1', from: 'c' } },
-      { output: { id: '3', re: {}, 'bv-a': '#<@Counter/1>', to: 'c', from: '@Counter/1' } },
+      { output: { id: '3', re: '#<@Counter/1>', 'bv-a': '#<@Counter>', to: 'c', from: '@Counter/1' } },
       { input: { id: '4', op: '@get', to: '@Counter/1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [7] }) },
       { input: { id: '5', op: '@get', to: '@Counter/2', from: 'c' } },

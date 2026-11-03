@@ -698,7 +698,10 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
             bv_drain_notify_(),
             case R_ of
                 {ok, null, _} -> ok;
-                {ok, _, <<"#<>"/utf8>>} -> io:put_chars([json_encode(Base_#{<<"re">> => #{}, <<"bv-a">> => <<"#<", Addr/binary, ">">>}), $\n]);
+                %% A self-return: we made this actor, so we name it and its class, as for #new.
+                {ok, <<"#<>"/utf8>>, _} ->
+                    [Class_ | _] = binary:split(Addr, <<"/">>),
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"bv-a">> => <<"#<", Class_/binary, ">">>}), $\n]);
                 {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => V_}), $\n]);
                 {ok, V_, Tag_} -> io:put_chars([json_encode(Base_#{<<"re">> => V_, <<"bv-a">> => Tag_}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
@@ -1090,12 +1093,13 @@ brevity_re_after(Bin, Re) ->
         nomatch -> <<>>
     end.
 
-%% A self-return's value is the address in its bv-a.
-bv_self_reply_(Re, Message) when map_size(Re) =:= 0 ->
+%% A reply whose whole value is one actor: its address is in re, and bv-a, if
+%% any, names its class.
+bv_self_reply_(<<"#<", _/binary>> = Re, Message) ->
     case maps:find(<<"bv-a">>, Message) of
-        {ok, <<"#<", _/binary>> = Addr} ->
-            case binary:match(Addr, <<"::">>) of nomatch -> [Addr]; _ -> Re end;
-        {ok, Bva} -> bv_unwire_reply(Re, Bva);
+        error -> [Re];
+        {ok, <<"#<", _/binary>> = Class} ->
+            case binary:match(Class, <<"::">>) of nomatch -> [Re]; _ -> Re end;
         _ -> Re
     end;
 bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"bv-a">>, Message, null)).
