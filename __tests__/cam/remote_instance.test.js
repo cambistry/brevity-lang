@@ -1,4 +1,4 @@
-import { createActor, expectActorBehavior } from '../helpers.js';
+import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Remote actor — caller perspective
@@ -107,11 +107,13 @@ describe('a call that doesn\'t wait for a reply', () => {
     *
       "svc.bv": Svc {
         log (Text) => .
+        note. (Text) => .
         ping! () => self
       }
     *
     @go! = {
       Svc.log("x")...
+      Svc.note.("z")...
       Svc.ping!()...
       return 1
     }
@@ -133,9 +135,16 @@ describe('a call that doesn\'t wait for a reply', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', op: '@go!', from: 'c' } },
       { output: expect.objectContaining({ op: [['x'], '@log'], to: 'Svc' }) },
+      { output: expect.objectContaining({ op: [['z'], '@note.'], to: 'Svc' }) },
       { output: expect.objectContaining({ op: '@ping!', to: 'Svc' }) },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
+  });
+
+  it('a doc\'s silent function needs its `...`, as one named with a dot does', () => {
+    const src = (call) => `*\n  "svc.bv": Svc {\n    log (Text) => .\n    note. (Text) => .\n  }\n*\n@go! = {\n  ${call}\n  return 1\n}\n`;
+    expect(() => compileSource(src('Svc.log("x")'))).toThrow(/'Svc\.log' is silent — call it 'Svc\.log\(…\)\.\.\.'/);
+    expect(() => compileSource(src('Svc.note.("x")'))).toThrow(/'Svc\.note\.' is silent/);
   });
 
   it('nor from a class', async () => {

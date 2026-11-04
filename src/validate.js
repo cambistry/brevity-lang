@@ -876,6 +876,11 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
     if (node.type === 'DotCallExpr' && node.method?.endsWith('.') && !launched) {
       throw new Error(`'${shown(node)}' is silent — call it '${shown(node)}(…)...' (fire-and-forget)`);
     }
+    // A doc can make a foreign function silent without the dot: `log (Text) => .`.
+    // Nothing would answer a wait for it either.
+    if (node.type === 'DotCallExpr' && !launched && remotesParsed[node.object?.name]?.[node.method]?.some?.(sig => sig.silent)) {
+      throw new Error(`'${shown(node)}' is silent — call it '${shown(node)}(…)...' (fire-and-forget)`);
+    }
     for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, false);
   };
   for (const actor of ast.actors || []) {
