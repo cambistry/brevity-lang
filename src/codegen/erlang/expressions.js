@@ -140,8 +140,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   const selfSend = `${selfSendFn}(bv_sel_(${v.addr}), [${argVals}])`;
   const selfTail = awaitReply ? selfSend : `begin ${selfSend}, null end`;
-  const postBranch = `${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-                put(send_seq_, ${v.seq} + 1),
+  const postBranch = `${v.seq} = bv_next_seq_(),
                 ${v.id} = integer_to_binary(${v.seq}),
                 ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${v.addr}},
                 io:put_chars([json_encode(${v.msg}), $\\n]),
@@ -264,8 +263,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const v = erlSendVars(ctx);
       const to = erlString(erlDomHostAddr(ctx, dc.tag));
       return `begin
-        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-        put(send_seq_, ${v.seq} + 1),
+        ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [#{${payloadPairs.join(', ')}}, ${erlString('#new')}], <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\\n]),
@@ -446,8 +444,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, " ${expr.viaSelector}"/utf8>>`
       : erlString(ctx.constructorCoercions.get(expr.callee.name));
     return `begin
-        New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,
-        put(send_seq_, New_seq_${seq} + 1),
+        New_seq_${seq} = bv_next_seq_(),
         New_id_${seq} = integer_to_binary(New_seq_${seq}),
         io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, <<"op">> => [${payload}, <<"#new">>], <<"to">> => ${newTo}}), $\n]),
         await_new_response_(New_id_${seq})
@@ -471,8 +468,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     }
     const v = erlSendVars(ctx);
     return `begin
-        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-        put(send_seq_, ${v.seq} + 1),
+        ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\n]),
@@ -545,8 +541,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
             }
           }
           const iifeBody = subRegLines.length > 0
-            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_()])), ${subRegLines.join(', ')}, NewPid_`
-            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_()])), NewPid_`;
+            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_ctx_()])), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_ctx_()])), NewPid_`;
           return `(fun() -> ${iifeBody} end)()`;
         }
       }
@@ -809,8 +805,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       }
       const v = erlSendVars(ctx);
       return `begin
-        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-        put(send_seq_, ${v.seq} + 1),
+        ${v.seq} = bv_next_seq_(),
         ${v.msg} = #{<<"id">> => integer_to_binary(${v.seq}), <<"op">> => ${opExpr}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\n]),
         ${awaitUnlessSilent(v.seq)}
@@ -827,8 +822,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const v2 = erlSendVars(ctx);
     if (positional.length === 0 && named.length === 0) {
       return `begin
-        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
-        put(send_seq_, ${v2.seq} + 1),
+        ${v2.seq} = bv_next_seq_(),
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${method}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
         ${awaitUnlessSilent(v2.seq)}
@@ -837,8 +831,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const argHelpers = erlArgHelpers(ctx, typeEnv, sCtx);
     const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
     return `begin
-        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
-        put(send_seq_, ${v2.seq} + 1),
+        ${v2.seq} = bv_next_seq_(),
         ${v2.op} = ${opExpr},
         ${v2.ty} = ${tyExpr},
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
@@ -969,8 +962,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     }
     const v = erlSendVars(ctx);
     return `begin
-        ${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,
-        put(send_seq_, ${v.seq} + 1),
+        ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\n]),
@@ -986,8 +978,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   if (positional.length === 0 && named.length === 0) {
     // No args — op is just the method string, no ty
     return `begin
-        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
-        put(send_seq_, ${v2.seq} + 1),
+        ${v2.seq} = bv_next_seq_(),
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${method}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
@@ -997,8 +988,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const argHelpers = erlArgHelpers(ctx, null, null);
   const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
   return `begin
-        ${v2.seq} = case get(send_seq_) of undefined -> 1; ${v2.n} -> ${v2.n} end,
-        put(send_seq_, ${v2.seq} + 1),
+        ${v2.seq} = bv_next_seq_(),
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.op} = ${opExpr},
         ${v2.ty} = ${tyExpr},

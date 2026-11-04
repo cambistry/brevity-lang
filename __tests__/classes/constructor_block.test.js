@@ -191,3 +191,44 @@ describe('a class calling its file\'s dependency', () => {
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 });
+
+describe('a class using an actor it got from a dependency', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        ping! () => self
+        Thing () -> *{ poke! () => self }
+      }
+    *
+    W = *{
+      @go! = {
+        Svc.ping!()
+        t = Svc.Thing()
+        t.poke!()
+        return 2
+      }
+    }
+    @run! = {
+      w = W()
+      n Integer = w.go!()
+      return n
+    }
+  `;
+
+  // Each message goes out under an id that varies by target, and the replies take it.
+  // The file actor sends them all, so no two share an id.
+  it('constructs it and calls it, through its file actor', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@run!', from: 'c' });
+    const ping = actor.posts.find(p => p.op === '@ping!');
+    await actor.sendAsync({ id: ping.id, re: '#<Svc>', from: 'Svc' });
+    const made = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
+    expect(made).toEqual(expect.objectContaining({ op: [{}, '#new'], to: 'Svc @Thing' }));
+    await actor.sendAsync({ id: made.id, re: '#<Svc @Thing/1>', 'ty': 'Svc @Thing', from: 'Svc' });
+    const poke = actor.posts.find(p => p.op === '@poke!');
+    expect(poke).toEqual(expect.objectContaining({ to: 'Svc @Thing/1' }));
+    expect(new Set([ping.id, made.id, poke.id]).size).toBe(3);
+    await actor.sendAsync({ id: poke.id, re: '#<Svc @Thing/1>', from: 'Svc @Thing/1' });
+    expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
+  });
+});

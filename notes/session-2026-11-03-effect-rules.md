@@ -64,14 +64,23 @@ plus the constructor-block and dependency gaps the work ran into. Uncommitted.
   `cam/remote_instance.test.js` shows it on every target despite Rust's replaying harness:
   a bump that arrives while `@go!` waits on `Svc` is handled first, so `@go!` returns 1.
   That also pins down that an actor answers other messages while it waits.
-- **On Erlang a class's dependency call went out from the class,** under its own
-  process's ids. The file actor now makes it (`bv_outer_call_`), answering in each of its
-  waits as it does a read. Rust needs nothing: a class shares its file actor's struct.
-  `constructor_block.test.js` checks that a class's call doesn't reuse the file actor's id.
+- **A class's outgoing messages are its file actor's, on every target.** On JS a class
+  posted to whichever actor constructed it, so only calls on a dependency named directly
+  worked; constructing a dependency's class (`Svc.Thing()`) or calling an actor got that
+  way was "unhandled". Now everything a JS class sends to anyone else (`#send`, `#fire`,
+  `#sendRef`, `#sendNew`) leaves through `#out`: the file actor sends it under its own id
+  and routes the reply back. Every class gets `#outer`. On Erlang a class process sent
+  under its own counter, so its ids collided with the file actor's; the file actor and its
+  classes now share one counter (`bv_next_seq_`, an `atomics` passed down at spawn), and a
+  call on a dependency named directly goes through the file actor (`bv_outer_call_`). Rust
+  needs nothing: a class shares its file actor's struct. `constructor_block.test.js`
+  checks the ids on every target.
 - **A launched call didn't know it was launched.** Validation now marks every `…...` call
   (`launched`), so a doc's silent function without its dot, or `ping!()...`, doesn't wait
   on any target. Constructor blocks are checked too.
 - **JS dispatched a reply nobody was waiting for** as an op, and threw. It drops it now.
+- **A function silent by its doc,** `log (Text) => .`, needs its `...` like one named
+  `note.`. Without it the call waited for a reply nothing sends.
 
 ## Known gaps
 

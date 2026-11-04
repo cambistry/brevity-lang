@@ -653,6 +653,12 @@ bv_await_(Id) ->
 %% The file actor a class reads cells from (see src/outer_reads.js): a class has it
 %% from whoever spawned it, and the file actor is its own.
 bv_outer_() -> case get(bv_outer_) of undefined -> self(); O_ -> O_ end.
+%% Message ids. A class's messages leave as its file actor's, so the file actor and
+%% its classes share one counter, made on first use and passed down at spawn.
+bv_seq_ref_() -> case get(bv_seq_ref_) of undefined -> R_ = atomics:new(1, []), put(bv_seq_ref_, R_), R_; R_ -> R_ end.
+bv_next_seq_() -> atomics:add_get(bv_seq_ref_(), 1, 1).
+bv_outer_ctx_() -> {bv_outer_(), bv_seq_ref_()}.
+bv_adopt_outer_({Pid, Ref}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref).
 %% A class reading one of its file actor's cells. The file actor answers while it
 %% waits on anything, which it is whenever one of its classes is running.
 bv_outer_get_(Key) ->
@@ -675,8 +681,7 @@ bv_outer_call_(Msg, Silent) ->
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
 bv_outer_send_(Msg, Silent) ->
-    Seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
-    put(send_seq_, Seq_ + 1),
+    Seq_ = bv_next_seq_(),
     Id_ = integer_to_binary(Seq_),
     io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
     case Silent of true -> null; false -> await_response_(Id_) end.

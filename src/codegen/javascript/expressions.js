@@ -1060,12 +1060,11 @@ export function genExpr(ctx, expr) {
       return `this.#childSend(${resolved}, ${op})`;
     }
     // A call on a dependency. A silent one (`note.`) has no reply to wait for. In a
-    // class, the dependency is the file's, so the file actor makes the call.
+    // class, the file actor makes it (`#out`).
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
     const send = (op, ty) => {
-      if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to}${expr.outerCall ? ', true' : ''})`;
-      if (expr.outerCall) return `this.#send(${op}, ${to}, ${ty ?? 'undefined'}, true)`;
+      if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
       return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
     };
     if (positional.length === 0 && named.length === 0) return send(method);

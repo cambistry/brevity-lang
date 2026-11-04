@@ -223,8 +223,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   // Emit `new` and synchronously await the reply (returning the instance addr).
   // Use a unique seq slot per call site so the var names don't collide.
   const seq = ctx.sendCounter++;
-  lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
-  lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
+  lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${toExpr}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
@@ -233,8 +232,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
 
 function genErlAsSend(ctx, varName, typeName, target, I, lines) {
   const v = erlSendVars(ctx);
-  lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
-  lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+  lines.push(`${I}${v.seq} = bv_next_seq_(),`);
   lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
   lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"as">>], <<"to">> => ${target}},`);
   lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
@@ -261,8 +259,7 @@ function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, line
     argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
   }
   const seq = ctx.sendCounter++;
-  lines.push(`${I}New_seq_${seq} = case get(send_seq_) of undefined -> 1; New_n_${seq} -> New_n_${seq} end,`);
-  lines.push(`${I}put(send_seq_, New_seq_${seq} + 1),`);
+  lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
@@ -432,8 +429,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           const to = erlString(service);
           const method = erlString('@' + remote);
           const v = erlSendVars(ctx);
-          lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
-          lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+          lines.push(`${I}${v.seq} = bv_next_seq_(),`);
           lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
           lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},`);
           lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
@@ -545,7 +541,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           } else {
             initArgsExpr = `[${s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
           }
-          lines.push(`${I}${varName} = bv_spawn_sync_(spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}, bv_outer_()])),`);
+          lines.push(`${I}${varName} = bv_spawn_sync_(spawn(?MODULE, start_internal_${actorName.toLowerCase()}, [${initArgsExpr}, bv_outer_ctx_()])),`);
           sCtx.selfSpawnedRefs?.add(s.name);
           // If any named arg corresponds to a host state cell AND the
           // class declared a SubscribeCall on that constructor param,
@@ -1284,8 +1280,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
       opExpr = `[[${vals}], ${method}]`;
     }
     const v = erlSendVars(ctx);
-    lines.push(`${I}${v.seq} = case get(send_seq_) of undefined -> 1; ${v.n} -> ${v.n} end,`);
-    lines.push(`${I}put(send_seq_, ${v.seq} + 1),`);
+    lines.push(`${I}${v.seq} = bv_next_seq_(),`);
     lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
     lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},`);
     lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);

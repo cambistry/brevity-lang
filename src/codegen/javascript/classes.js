@@ -882,7 +882,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const classUsesSelfAsValue = astUsesSelfAsValue(actor);
   const publishesClasses = (actor.functions || []).some(f => f.name?.startsWith('new@'));
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
-  const readsOuter = !!actor.name && hasOuterReads({ actors: [mergedActor] });
+  const readsOuter = !!actor.name && ctx.readsOuter;
   const outerCells = !actor.name && ctx.readsOuter
     ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
     : '';
@@ -936,8 +936,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return instance;
   }
 
-  async #send(op, to, ty, viaOuter) {${readsOuter ? `
-    if (viaOuter) return this.#outerCall(op, to, ty, false);` : ''}
+  async #send(op, to, ty) {
     const id = String(++this.#nextId);
     // Locally-held lambda in a reply-awaiting callback field: a local-form
     // self-address (#<@N>, no path) names a handler on us, so dispatch it to
@@ -951,12 +950,11 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#pending.set(id, { resolve, reject });
       const _msg = { id, op, to };
       if (ty !== undefined) _msg['ty'] = ty;
-      this.#binding.post(_msg);
+      this.#out(_msg);
     });
   }
 
-  #fire(op, to, viaOuter) {${readsOuter ? `
-    if (viaOuter) { this.#outerCall(op, to, undefined, true); return; }` : ''}
+  #fire(op, to) {
     // Fire-and-forget: post with no pending and no reply awaited. Used for
     // silent reference-field invocations (v.endpoint!) -- there is no reply
     // to consume, and unlike #send the caller never suspends on one.
@@ -970,7 +968,15 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#dispatch({ id, op, from: '__self' });
       return;
     }
-    this.#binding.post({ id, op, to });
+    this.#out({ id, op, to }, true);
+  }
+
+  // What this actor sends to anyone else. A class sends it through its file actor,
+  // which makes the call as its own and routes the reply back by id; a file actor
+  // posts it itself. A silent message has no reply to route.
+  #out(msg, silent = false) {${readsOuter ? `
+    if (this.#outer) { this.#outer.receive({ ...msg, from: '__child', _route: (m) => this.receive(m), _silent: silent }); return; }` : ''}
+    this.#binding.post(msg);
   }
 
   async #sendRef(op, to, ty) {
@@ -979,7 +985,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#_newPending.set(id, resolve);
       const _msg = { id, op, to };
       if (ty !== undefined) _msg['ty'] = ty;
-      this.#binding.post(_msg);
+      this.#out(_msg);
     });
   }
 
@@ -988,7 +994,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
       const _msg = { id, op: [args, '#new'], to };
-      this.#binding.post(_msg);
+      this.#out(_msg);
     });
   }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesChildSend ? `
 
@@ -1090,19 +1096,6 @@ ${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, 
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
       this.#outer.receive({ id, op: 'get@' + name, from: '__child', _route: (msg) => this.receive(msg) });
-    });
-  }
-
-  // A call on one of the file's dependencies. The dependency is the file actor's,
-  // so it makes the call, and the reply comes back here. A silent call has none.
-  #outerCall(op, to, ty, silent) {
-    const id = String(++this.#nextId);
-    const msg = { id, op, to, from: '__child', _route: (m) => this.receive(m), _silent: silent };
-    if (ty !== undefined) msg['ty'] = ty;
-    if (silent) { this.#outer.receive(msg); return; }
-    return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
-      this.#outer.receive(msg);
     });
   }
 
@@ -1453,7 +1446,9 @@ export function codegen(ast, options = {}) {
     ctx.typeAuthority.set(info.name, info.path || '');
   }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
-  ctx.readsOuter = hasOuterReads(ast);
+  // A class reads its file actor's cells through it, and sends everything bound
+  // outside itself through it too, so every class gets it.
+  ctx.readsOuter = hasOuterReads(ast) || ast.actors.some(a => a.name);
   ctx.outerTypes = fileOuterNames(ast);
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
