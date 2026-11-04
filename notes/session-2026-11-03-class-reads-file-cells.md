@@ -70,9 +70,7 @@ k = 5
 
 ## Known gaps (from reading the code, not tested)
 
-- **Erlang, when the file actor is idle.** The file actor blocks on stdin in `read_loop`, so a class
-  that runs while the file actor isn't waiting can't get an answer until it next waits. Examples
-  are a fire-and-forget call to the class and a subscription callback. Its read would hang.
+- **Erlang, when the file actor is idle.** Fixed: see `session-2026-11-03-stdin-one-reader.md`.
 - **Rust, `Self()` file instances.** `handle_op_at` swaps state without the stack, so a class
   that a `Self()`-spawned file instance constructs reads the primary file actor's cells.
 - **A class declared inside a class** still closes over the file, not the enclosing class.

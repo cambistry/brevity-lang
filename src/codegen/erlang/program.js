@@ -2041,17 +2041,12 @@ bv_loop() ->
         bv_stop -> ok
     end.
 
+%% The file actor's idle wait. It serves its classes while it waits (bv_next_line_).
 read_loop() ->
     bv_drain_notify_(),
-    case io:get_line("") of
+    case bv_next_line_() of
         eof -> ok;
-        {error, _} -> ok;
-        Line ->
-            Bin = unicode:characters_to_binary(string:trim(Line)),
-            case Bin of
-                <<>> -> read_loop();
-                _ ->
-                    Message = json_decode(Bin),
+        {line, Message} ->
                     case maps:find(<<"re">>, Message) of
                         ${newReplyHandler};
                         error ->
@@ -2089,7 +2084,6 @@ read_loop() ->
                         end
                     end,
                     read_loop()
-            end
     end.`;
 
   const fnSection = fnDefs.length > 0 ? '\n' + fnDefs.join('\n\n') + '\n' : '';
@@ -2271,7 +2265,8 @@ function createErlContext() {
 export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
-  const _hasPublicOrOn = a => a.asClauses?.length > 0 || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
+  // A class with no functions of its own still has to be constructible.
+  const _hasPublicOrOn = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
   const active = ast.actors.filter(_hasPublicOrOn);
   if (active.length === 0) return '';
 

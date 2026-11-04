@@ -1,4 +1,4 @@
-import { compileSource, expectBehavior } from '../helpers.js';
+import { compileActor, compileSource, expectBehavior } from '../helpers.js';
 
 // A class closes over the file actor it's declared in. It's its own actor, so each read
 // of a file's cell is a message to that actor, and sees the cell as it is then.
@@ -122,6 +122,105 @@ describe('a class reads its file\'s cells', () => {
       { input: { id: '1', op: '@fromSubclass', from: 'c' } },
       { output: reply('1', 4) },
     );
+  });
+});
+
+// A class can run while its file actor has nothing to wait on: a launched call, or a
+// subscription callback. Its file actor still answers its reads and makes its calls.
+// What the class sends and what the file actor replies can come in either order.
+describe('a class reaches its file actor while the file actor is idle', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        note. (Integer) => .
+        Log (Integer) -> *{}
+      }
+    *
+    total *Integer = 4
+    @n *Integer = 0
+
+    W = *{
+      @read. = { log = Svc.Log(total) }
+      @call. = { Svc.note.(total)... }
+    }
+
+    Reader = (:P *Integer) *{
+      P.subscribe (v Integer) { log = Svc.Log(v + total) }
+    }
+
+    Caller = (:P *Integer) *{
+      P.subscribe (v Integer) { Svc.note.(v + total)... }
+    }
+
+    @read = {
+      w = W()
+      w.read.()...
+      return 1
+    }
+
+    @call! = {
+      w = W()
+      w.call.()...
+      return 1
+    }
+
+    @watchRead = {
+      r = Reader(P: @n)
+      return 1
+    }
+
+    @watchCall = {
+      c = Caller(P: @n)
+      return 1
+    }
+
+    @bump! = { @n <- @n + 1 }
+  `;
+
+  const made = (actor) => actor.posts.filter(p => Array.isArray(p.op) && p.op[1] === '#new');
+  const notes = (actor) => actor.posts.filter(p => Array.isArray(p.op) && p.op[1] === '@note.');
+  const replies = (actor) => actor.posts.filter(p => p.to === 'c');
+
+  it('a launched call reads a file cell', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@read', from: 'c' });
+    const [log] = made(actor);
+    expect(log).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc @Log' }));
+    await actor.sendAsync({ id: log.id, re: '#<Svc @Log/1>', 'ty': 'Svc @Log', from: 'Svc' });
+    expect(replies(actor)).toEqual([{ id: '1', re: [1], 'ty': ['Integer'], to: 'c' }]);
+  });
+
+  it('a launched call calls a file dependency', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@call!', from: 'c' });
+    expect(notes(actor)).toEqual([expect.objectContaining({ op: [[4], '@note.'], to: 'Svc' })]);
+    expect(replies(actor)).toEqual([{ id: '1', re: [1], 'ty': ['Integer'], to: 'c' }]);
+  });
+
+  it('a subscription callback reads a file cell', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@watchRead', from: 'c' });
+    const [first] = made(actor);
+    expect(first).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc @Log' }));
+    await actor.sendAsync({ id: first.id, re: '#<Svc @Log/1>', 'ty': 'Svc @Log', from: 'Svc' });
+    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
+    const [, second] = made(actor);
+    expect(second).toEqual(expect.objectContaining({ op: [[5], '#new'], to: 'Svc @Log' }));
+    await actor.sendAsync({ id: second.id, re: '#<Svc @Log/2>', 'ty': 'Svc @Log', from: 'Svc' });
+    expect(replies(actor)).toEqual([
+      { id: '1', re: [1], 'ty': ['Integer'], to: 'c' },
+      expect.objectContaining({ id: '2', re: '#<>', to: 'c' }),
+    ]);
+  });
+
+  it('a subscription callback calls a file dependency', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@watchCall', from: 'c' });
+    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
+    expect(notes(actor)).toEqual([
+      expect.objectContaining({ op: [[4], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[5], '@note.'], to: 'Svc' }),
+    ]);
   });
 });
 

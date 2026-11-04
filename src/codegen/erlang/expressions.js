@@ -537,7 +537,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
               const sn = ctx.ephCounter++;
               subRegLines.push(`InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end`);
               subRegLines.push(`put(${subsKey}, InpSubs_${sn}_ ++ [{inproc, NewPid_, ${erlString(lc)}, ${erlString(ps.callbackName)}}])`);
-              subRegLines.push(`NewPid_ ! {bv_dispatch, self(), ${erlString(ps.callbackName)}, [${stateRef}], integer_to_binary(erlang:unique_integer([positive]))}`);
+              subRegLines.push(`bv_launch_(NewPid_, ${erlString(ps.callbackName)}, [${stateRef}])`);
             }
           }
           const iifeBody = subRegLines.length > 0

@@ -995,6 +995,8 @@ export function genExpr(ctx, expr) {
         }).join(', ');
         op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
       }
+      // A silent function sends no reply, so a call to one can't wait for it.
+      if (expr.method.endsWith('.') || expr.launched) return `this.#childFire(${target}, ${op})`;
       return `this.#childSend(${target}, ${op})`;
     }
     const objName = expr.object.type === 'Identifier' ? expr.object.name : (expr.object.type === 'RefRead' ? expr.object.name : null);
@@ -1057,6 +1059,7 @@ export function genExpr(ctx, expr) {
           op = `[[${posVals}], ${JSON.stringify(wireMethod)}]`;
         }
       }
+      if (expr.method.endsWith('.') || expr.launched) return `this.#childFire(${resolved}, ${op})`;
       return `this.#childSend(${resolved}, ${op})`;
     }
     // A call on a dependency. A silent one (`note.`) has no reply to wait for. In a

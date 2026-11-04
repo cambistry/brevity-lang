@@ -336,6 +336,11 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastSetName = null;
       code += genWhileStatement(ctx, s, '  ', outerEnv, counters);
+    } else if (s.type === 'ExprStatement') {
+      // A statement call waits, unless it's launched.
+      _lastTypedName = null;
+      _lastSetName = null;
+      code += `\n  await ${genExpr(ctx, s.expr)};`;
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastSetName = null;

@@ -770,7 +770,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Detect any `this.#childSend(` emission across all generated body code,
   // so the helper is declared even for named classes that don't use Self()
   // but do dispatch to ref-cell-held actor refs (e.g. @peer Self | null).
-  if (allParts.some(p => p.block?.includes('#childSend(')) || fnSection.includes('#childSend(')) {
+  const childCall = /#child(Send|Fire)\(/;
+  if (allParts.some(p => p.block && childCall.test(p.block)) || childCall.test(fnSection)) {
     ctx.usesChildSend = true;
   }
 
@@ -1015,6 +1016,13 @@ ${fieldSection ? fieldSection + '\n' : ''}
       this.#pending.set(id, { resolve: (v) => resolve(mine(v)), reject });
       child.receive({ id, op, from: '__parent', _route: (msg) => this.receive(msg) });
     });
+  }
+
+  // A launched call, or one to a silent function: nothing waits for a reply, so
+  // any that comes is dropped.
+  #childFire(child, op) {
+    if (typeof child === 'string') { this.#fire(op, child); return; }
+    child.receive({ id: String(++this.#nextId), op, from: '__parent', _route: () => {} });
   }
 
   // A call on the result of a call. The receiver is whatever the first call

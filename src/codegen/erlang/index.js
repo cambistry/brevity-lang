@@ -1,6 +1,6 @@
 export { codegenErlang } from './program.js';
 import { codegenErlang } from './program.js';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, statSync } from 'fs';
 import { execSync, spawn as spawnChild } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -43,9 +43,9 @@ export default {
       const erlDir = join(baseDir, 'erlang', `w${workerId}`);
       mkdirSync(erlDir, { recursive: true });
 
-      // Compile the router if not already compiled
+      // Compile the router if it isn't compiled, or its source has changed since
       const routerBeam = join(erlDir, 'brevity_router.beam');
-      if (!existsSync(routerBeam)) {
+      if (!existsSync(routerBeam) || statSync(routerBeam).mtimeMs < statSync(ROUTER_ERL).mtimeMs) {
         execSync(`erlc -o ${erlDir} ${ROUTER_ERL}`, { stdio: 'pipe' });
       }
 

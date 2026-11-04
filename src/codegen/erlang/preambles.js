@@ -1,5 +1,16 @@
 // ── Preamble constants and pure utilities for Erlang codegen ─────────────────
 
+// What a file actor does for its classes in every wait: answer a read of one of its
+// cells, make a call to one of its dependencies, and take note of a class waiting on
+// a reply from the wire. `loop` is the wait to go back to.
+const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, ${loop};
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, ${loop};
+        {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
+
+// A wait on something other than the wire. A line that comes meanwhile goes to the
+// class waiting on it, or is kept for the file actor's own loop.
+const asideLine = (loop) => `{io_reply, LRef_, LData_} -> bv_line_aside_(LRef_, LData_), ${loop}`;
+
 const PREAMBLE = `
 %% ── Slice 12+13 wire format helpers ──────────────────────────────────────
 %% Outbound: strip __type from a tagged object and reshape to wire form.
@@ -648,8 +659,8 @@ bv_call_self_(F) ->
 %% The reply to a call on an instance. A call that receives a failure fails in turn.
 bv_await_(Id) ->
     receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id, _} -> error(bv_call_failed);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_(Id);
-        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_(Id) end.
+        ${serveClasses('bv_await_(Id)')};
+        ${asideLine('bv_await_(Id)')} end.
 %% The file actor a class reads cells from (see src/outer_reads.js): a class has it
 %% from whoever spawned it, and the file actor is its own.
 bv_outer_() -> case get(bv_outer_) of undefined -> self(); O_ -> O_ end.
@@ -659,8 +670,8 @@ bv_seq_ref_() -> case get(bv_seq_ref_) of undefined -> R_ = atomics:new(1, []), 
 bv_next_seq_() -> atomics:add_get(bv_seq_ref_(), 1, 1).
 bv_outer_ctx_() -> {bv_outer_(), bv_seq_ref_()}.
 bv_adopt_outer_({Pid, Ref}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref).
-%% A class reading one of its file actor's cells. The file actor answers while it
-%% waits on anything, which it is whenever one of its classes is running.
+%% A class reading one of its file actor's cells. The file actor answers in every
+%% wait, its idle one included.
 bv_outer_get_(Key) ->
     case bv_outer_() of
         Self_ when Self_ =:= self() -> get(Key);
@@ -671,7 +682,7 @@ bv_outer_get_(Key) ->
     end.
 %% A class calling one of its file's dependencies: the dependency is the file
 %% actor's, so the file actor makes the call, under an id of its own, and passes the
-%% reply back. It answers while it waits on anything, as for a read.
+%% reply back. It answers in every wait, as for a read.
 bv_outer_call_(Msg, Silent) ->
     case bv_outer_() of
         Self_ when Self_ =:= self() -> bv_outer_send_(Msg, Silent);
@@ -685,6 +696,134 @@ bv_outer_send_(Msg, Silent) ->
     Id_ = integer_to_binary(Seq_),
     io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
     case Silent of true -> null; false -> await_response_(Id_) end.
+
+%% ── Stdin ───────────────────────────────────────────────────────────────
+%% The file actor is stdin's one reader. It asks for a line without blocking (the io
+%% protocol's own request), so it can serve its classes while it waits, and it hands
+%% each reply on to whoever is waiting for it. Its classes never read stdin: a class
+%% waiting on a reply asks its file actor for it (bv_await_line_).
+%% At most one request is out at a time, and only while someone wants a line.
+bv_want_line_() ->
+    case get(bv_line_ref_) of
+        undefined ->
+            Ref_ = make_ref(),
+            group_leader() ! {io_request, self(), Ref_, {get_line, unicode, ""}},
+            put(bv_line_ref_, Ref_);
+        _ -> ok
+    end.
+%% A line has come. A reply a class is waiting on goes to that class (taken); the
+%% file actor gets anything else.
+bv_take_line_(Ref, Data) ->
+    case get(bv_line_ref_) of
+        Ref ->
+            erase(bv_line_ref_),
+            case Data of
+                eof -> bv_lines_end_(), eof;
+                {error, _} -> bv_lines_end_(), eof;
+                _ ->
+                    case unicode:characters_to_binary(string:trim(Data)) of
+                        <<>> -> taken;
+                        Bin_ ->
+                            Message_ = json_decode(Bin_),
+                            Id_ = maps:get(<<"id">>, Message_, <<>>),
+                            IsReply_ = maps:is_key(<<"re">>, Message_) orelse maps:is_key(<<"ex">>, Message_),
+                            case IsReply_ andalso erase({bv_line_waiter, Id_}) of
+                                Pid_ when is_pid(Pid_) ->
+                                    put(bv_line_waiters_, get(bv_line_waiters_) - 1),
+                                    Pid_ ! {bv_line, Id_, Message_},
+                                    taken;
+                                _ -> {line, Message_}
+                            end
+                    end
+            end;
+        _ -> taken
+    end.
+bv_lines_end_() ->
+    [Pid_ ! {bv_line, Id_, eof} || {{bv_line_waiter, Id_}, Pid_} <- get()],
+    ok.
+bv_add_line_waiter_(Pid, Id) ->
+    put({bv_line_waiter, Id}, Pid),
+    put(bv_line_waiters_, case get(bv_line_waiters_) of undefined -> 1; N_ -> N_ + 1 end),
+    bv_want_line_().
+bv_line_waiters_() -> case get(bv_line_waiters_) of undefined -> 0; N_ -> N_ end.
+%% A line that came while the file actor waited on something else: it keeps it for
+%% its own loop, and asks for another if a class is still waiting.
+bv_line_aside_(Ref, Data) ->
+    case bv_take_line_(Ref, Data) of
+        taken -> ok;
+        L_ -> put(bv_line_q_, bv_line_q_() ++ [L_])
+    end,
+    case bv_line_waiters_() > 0 of true -> bv_want_line_(); false -> ok end.
+bv_line_q_() -> case get(bv_line_q_) of undefined -> []; Q_ -> Q_ end.
+%% The reply to a message this actor sent on the wire: {re, Message}, {ex, Message}
+%% or eof. Anything else that comes meanwhile is handled as it comes.
+bv_await_line_(Id) ->
+    case bv_outer_() of
+        Self_ when Self_ =:= self() ->
+            case lists:partition(fun({line, M_}) -> maps:get(<<"id">>, M_, <<>>) =:= Id andalso bv_is_reply_(M_); (_) -> false end, bv_line_q_()) of
+                {[{line, M_} | _], Rest_} -> put(bv_line_q_, Rest_), bv_reply_kind_(M_);
+                _ -> bv_want_line_(), bv_await_line_loop_(Id)
+            end;
+        Outer_ ->
+            Outer_ ! {bv_await_line, self(), Id},
+            receive {bv_line, Id, eof} -> eof; {bv_line, Id, M_} -> bv_reply_kind_(M_) end
+    end.
+bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
+bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.
+bv_await_line_loop_(Id) ->
+    receive
+        {io_reply, LRef_, LData_} ->
+            case bv_take_line_(LRef_, LData_) of
+                eof -> eof;
+                taken -> bv_want_line_(), bv_await_line_loop_(Id);
+                {line, M_} ->
+                    MsgId_ = maps:get(<<"id">>, M_, <<>>),
+                    case maps:is_key(<<"re">>, M_) of
+                        true when MsgId_ =:= Id -> {re, M_};
+                        %% Another reply: it isn't this wait's, and no one else waits on it.
+                        true -> bv_want_line_(), bv_await_line_loop_(Id);
+                        false ->
+                            case maps:is_key(<<"ex">>, M_) of
+                                true when MsgId_ =:= Id -> {ex, M_};
+                                _ -> dispatch(M_), bv_want_line_(), bv_await_line_loop_(Id)
+                            end
+                    end
+            end;
+        ${serveClasses('bv_await_line_loop_(Id)')}
+    end.
+%% The file actor's next message of its own. Before it asks for one, what it launched
+%% into its classes has finished, unless one of them is waiting on the wire too.
+bv_next_line_() ->
+    case bv_line_q_() of
+        [L_ | Rest_] -> put(bv_line_q_, Rest_), L_;
+        [] ->
+            case bv_launched_() of [] -> bv_want_line_(); _ -> ok end,
+            receive
+                {io_reply, LRef_, LData_} ->
+                    case bv_take_line_(LRef_, LData_) of
+                        taken -> bv_next_line_();
+                        L_ -> L_
+                    end;
+                {bv_reply, LId_, _} -> bv_landed_(LId_), bv_next_line_();
+                {bv_error, LId_, _} -> bv_landed_(LId_), bv_next_line_();
+                {bv_notify, SubId_, Re_} ->
+                    case get({pending_subscribe, SubId_}) of
+                        F_ when is_function(F_) -> F_(Re_);
+                        _ -> ok
+                    end,
+                    bv_next_line_();
+                ${serveClasses('bv_next_line_()')}
+            end
+    end.
+%% A call into a class that nothing waits on, such as a subscription callback.
+bv_launch_(Pid, Op, Payload) ->
+    Id_ = integer_to_binary(erlang:unique_integer([positive])),
+    Pid ! {bv_dispatch, self(), Op, Payload, Id_},
+    put(bv_launched_, [Id_ | bv_launched_()]),
+    ok.
+bv_launched_() -> case get(bv_launched_) of undefined -> []; L_ -> L_ end.
+bv_landed_(Id) -> put(bv_launched_, lists:delete(Id, bv_launched_())).
+
 %% An actor made by \`#new\` has its own address, kept here so it can be reached.
 bv_publish_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
@@ -745,12 +884,12 @@ bv_spawn_sync_(Pid) ->
     bv_await_ready_(Pid).
 bv_await_ready_(Pid) ->
     receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_ready_(Pid);
-        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_ready_(Pid) end.
+        ${serveClasses('bv_await_ready_(Pid)')};
+        ${asideLine('bv_await_ready_(Pid)')} end.
 bv_await_wire_(Id) ->
     receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_wire_(Id);
-        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_wire_(Id) end.
+        ${serveClasses('bv_await_wire_(Id)')};
+        ${asideLine('bv_await_wire_(Id)')} end.
 %% A constructor block failed: there's no actor, and whoever is constructing it is told.
 bv_init_failed_() ->
     receive {bv_init_sync, From_} -> From_ ! {bv_init_failed, self()} end.
@@ -761,8 +900,8 @@ bv_inst_emit_(Pid, Ev, Payload) ->
     bv_await_emit_(Id_).
 bv_await_emit_(Id_) ->
     receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null;
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_emit_(Id_);
-        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_emit_(Id_) end.
+        ${serveClasses('bv_await_emit_(Id_)')};
+        ${asideLine('bv_await_emit_(Id_)')} end.
 %% Register this process for an emitter instance's event.
 bv_on_(Pid, Ev) when is_pid(Pid) ->
     Ref_ = make_ref(),
@@ -1136,52 +1275,23 @@ bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary
 bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
 
 await_response_(Id) ->
-    case io:get_line("") of
-        eof -> null;
-        {error, _} -> null;
-        Line ->
-            Bin = unicode:characters_to_binary(string:trim(Line)),
-            Message = json_decode(Bin),
-            MsgId = maps:get(<<"id">>, Message, <<>>),
-            case maps:find(<<"re">>, Message) of
-                {ok, Re} when MsgId =:= Id -> bv_self_reply_(Re, Message);
-                {ok, _} -> await_response_(Id);
-                error ->
-                    case maps:find(<<"ex">>, Message) of
-                        {ok, _Ex} when MsgId =:= Id -> error({ex_response, Message});
-                        _ ->
-                            dispatch(Message),
-                            await_response_(Id)
-                    end
-            end
+    case bv_await_line_(Id) of
+        {re, Message} -> bv_self_reply_(maps:get(<<"re">>, Message), Message);
+        {ex, Message} -> error({ex_response, Message});
+        eof -> null
     end.
 
 await_new_response_(Id) ->
-    case io:get_line("") of
-        eof -> null;
-        {error, _} -> null;
-        Line ->
-            Bin = unicode:characters_to_binary(string:trim(Line)),
-            Message = json_decode(Bin),
-            MsgId = maps:get(<<"id">>, Message, <<>>),
-            case maps:find(<<"re">>, Message) of
-                {ok, Re} when MsgId =:= Id ->
-                    case Re of
-                        <<"#<", Rest/binary>> ->
-                            Len = byte_size(Rest) - 1,
-                            <<Addr:Len/binary, ">">> = Rest,
-                            Addr;
-                        _ -> maps:get(<<"from">>, Message, null)
-                    end;
-                {ok, _} -> await_new_response_(Id);
-                error ->
-                    case maps:find(<<"ex">>, Message) of
-                        {ok, _} when MsgId =:= Id -> null;
-                        _ ->
-                            dispatch(Message),
-                            await_new_response_(Id)
-                    end
-            end
+    case bv_await_line_(Id) of
+        {re, Message} ->
+            case maps:get(<<"re">>, Message) of
+                <<"#<", Rest/binary>> ->
+                    Len = byte_size(Rest) - 1,
+                    <<Addr:Len/binary, ">">> = Rest,
+                    Addr;
+                _ -> maps:get(<<"from">>, Message, null)
+            end;
+        _ -> null
     end.
 
 %% ── Wire-format helpers ─────────────────────────────────────────────────────

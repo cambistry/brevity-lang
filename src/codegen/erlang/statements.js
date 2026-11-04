@@ -553,7 +553,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             for (const ps of paramSubs) {
               const argExpr = namedFields[ps.paramName];
               if (!argExpr) continue;
-              if (argExpr.type !== 'Identifier') continue;
+              if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
               const cellName = argExpr.name;
               if (!ctx.stateVarNames.has(cellName)) continue;
               const subsKey = `{cell_subs, ${erlString(cellName)}}`;
@@ -561,7 +561,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
               const sn = ctx.ephCounter++;
               lines.push(`${I}InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end,`);
               lines.push(`${I}put(${subsKey}, InpSubs_${sn}_ ++ [{inproc, ${varName}, ${erlString(actorName.toLowerCase())}, ${erlString(ps.callbackName)}}]),`);
-              lines.push(`${I}${varName} ! {bv_dispatch, self(), ${erlString(ps.callbackName)}, [${stateRef}], integer_to_binary(erlang:unique_integer([positive]))},`);
+              lines.push(`${I}bv_launch_(${varName}, ${erlString(ps.callbackName)}, [${stateRef}]),`);
             }
           }
           continue;
@@ -764,7 +764,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}InprocSubs_${sn}_ = case get(${subsKeyL}) of undefined -> []; LL_${sn}_ -> LL_${sn}_ end,`);
           lines.push(`${I}lists:foreach(fun`);
           lines.push(`${I}    ({inproc, IpcPid_${sn}_, _IpcCls_${sn}_, IpcCb_${sn}_}) ->`);
-          lines.push(`${I}        IpcPid_${sn}_ ! {bv_dispatch, self(), IpcCb_${sn}_, [get(${erlSetTarget(ctx, s.name)})], integer_to_binary(erlang:unique_integer([positive])) };`);
+          lines.push(`${I}        bv_launch_(IpcPid_${sn}_, IpcCb_${sn}_, [get(${erlSetTarget(ctx, s.name)})]);`);
           lines.push(`${I}    (_) -> ok`);
           lines.push(`${I}end, InprocSubs_${sn}_),`);
         }

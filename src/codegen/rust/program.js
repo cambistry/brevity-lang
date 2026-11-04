@@ -1896,7 +1896,8 @@ function codegenRust(ast, options = {}) {
   // as a bare value. Stash it for handlers/expressions to read.
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
-  const active = ast.actors.filter(a => a.asClauses?.length > 0 || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
+  // A class with no functions of its own still has to be constructible.
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   G.ctx.readsOuter = hasOuterReads(ast);

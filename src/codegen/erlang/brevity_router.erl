@@ -99,23 +99,31 @@ handle_cmd(#{<<"cmd">> := <<"stop">>, <<"id">> := Id}, Instances) ->
 
 %% ── Group leader: intercepts actor I/O ─────────────────────────────────────
 %%
-%% The actor process uses standard io:get_line/io:put_chars calls.
+%% The actor process uses standard io:get_line/io:put_chars calls, or sends the
+%% io protocol's get_line request itself so it can do other things while it waits.
 %% This group leader:
 %%   - Feeds input lines from {input_line, Bin} messages
-%%   - Captures output and emits {"ev":"out",...} events
+%%   - Captures output and emits {"ev":"out",...} events, a read pending or not
 %%   - Emits {"ev":"ready",...} when the actor requests more input
 
 group_leader_loop(Id, Router) ->
     receive
         {set_actor, _Pid} -> ok
     end,
-    gl_loop(Id, Router, queue:new()).
+    gl_loop(Id, Router, queue:new(), queue:new()).
 
-gl_loop(Id, Router, InputQ) ->
+%% Readers are the get_line requests waiting on input ({From, Ref}), oldest first.
+gl_loop(Id, Router, InputQ, Readers) ->
     receive
         %% Input line queued from router
         {input_line, LineBin} ->
-            gl_loop(Id, Router, queue:in(LineBin, InputQ));
+            case queue:out(Readers) of
+                {{value, {From, Ref}}, Readers2} ->
+                    gl_reply_line(From, Ref, LineBin),
+                    gl_loop(Id, Router, InputQ, Readers2);
+                {empty, _} ->
+                    gl_loop(Id, Router, queue:in(LineBin, InputQ), Readers)
+            end;
 
         %% io:put_chars request from actor
         {io_request, From, Ref, {put_chars, Enc, Chars}} ->
@@ -123,64 +131,55 @@ gl_loop(Id, Router, InputQ) ->
                 unicode -> unicode:characters_to_binary(Chars);
                 _ -> iolist_to_binary(Chars)
             end,
-            %% Strip trailing newline if present (the actor adds \n)
-            Trimmed = strip_newline(Data),
-            case Trimmed of
-                <<>> -> ok;
-                _ ->
-                    Router ! {emit, ["{\"ev\":\"out\",\"id\":\"", Id, "\",\"data\":", Trimmed, "}\n"]}
-            end,
+            gl_emit_out(Id, Router, Data),
             From ! {io_reply, Ref, ok},
-            gl_loop(Id, Router, InputQ);
+            gl_loop(Id, Router, InputQ, Readers);
 
         %% io:put_chars without encoding
         {io_request, From, Ref, {put_chars, Chars}} ->
-            Data = iolist_to_binary(Chars),
-            Trimmed = strip_newline(Data),
-            case Trimmed of
-                <<>> -> ok;
-                _ ->
-                    Router ! {emit, ["{\"ev\":\"out\",\"id\":\"", Id, "\",\"data\":", Trimmed, "}\n"]}
-            end,
+            gl_emit_out(Id, Router, iolist_to_binary(Chars)),
             From ! {io_reply, Ref, ok},
-            gl_loop(Id, Router, InputQ);
+            gl_loop(Id, Router, InputQ, Readers);
 
         %% io:get_line request from actor
         {io_request, From, Ref, {get_line, _Enc, _Prompt}} ->
-            %% Signal that previous message processing is complete
-            Router ! {emit, ["{\"ev\":\"ready\",\"id\":\"", Id, "\"}\n"]},
-            gl_wait_input(Id, Router, InputQ, From, Ref);
+            gl_get_line(Id, Router, InputQ, Readers, From, Ref);
 
         %% io:get_line (without encoding)
         {io_request, From, Ref, {get_line, _Prompt}} ->
-            Router ! {emit, ["{\"ev\":\"ready\",\"id\":\"", Id, "\"}\n"]},
-            gl_wait_input(Id, Router, InputQ, From, Ref);
+            gl_get_line(Id, Router, InputQ, Readers, From, Ref);
 
         %% Catch-all for other io_requests (e.g. getopts, setopts)
         {io_request, From, Ref, _Request} ->
             From ! {io_reply, Ref, {error, enotsup}},
-            gl_loop(Id, Router, InputQ);
+            gl_loop(Id, Router, InputQ, Readers);
 
         %% Handle actor process exit
         {'EXIT', _Pid, _Reason} ->
+            [RFrom ! {io_reply, RRef, eof} || {RFrom, RRef} <- queue:to_list(Readers)],
             ok
     end.
 
-%% Wait for an input line to satisfy a pending io:get_line request
-gl_wait_input(Id, Router, InputQ, From, Ref) ->
+%% Signal that previous message processing is complete, then answer the read from
+%% the queue, or keep it until a line comes.
+gl_get_line(Id, Router, InputQ, Readers, From, Ref) ->
+    Router ! {emit, ["{\"ev\":\"ready\",\"id\":\"", Id, "\"}\n"]},
     case queue:out(InputQ) of
         {{value, LineBin}, InputQ2} ->
-            From ! {io_reply, Ref, unicode:characters_to_list(<<LineBin/binary, "\n">>)},
-            gl_loop(Id, Router, InputQ2);
+            gl_reply_line(From, Ref, LineBin),
+            gl_loop(Id, Router, InputQ2, Readers);
         {empty, _} ->
-            receive
-                {input_line, LineBin} ->
-                    From ! {io_reply, Ref, unicode:characters_to_list(<<LineBin/binary, "\n">>)},
-                    gl_loop(Id, Router, InputQ);
-                {'EXIT', _Pid, _Reason} ->
-                    From ! {io_reply, Ref, eof},
-                    ok
-            end
+            gl_loop(Id, Router, InputQ, queue:in({From, Ref}, Readers))
+    end.
+
+gl_reply_line(From, Ref, LineBin) ->
+    From ! {io_reply, Ref, unicode:characters_to_list(<<LineBin/binary, "\n">>)}.
+
+gl_emit_out(Id, Router, Data) ->
+    %% Strip trailing newline if present (the actor adds \n)
+    case strip_newline(Data) of
+        <<>> -> ok;
+        Trimmed -> Router ! {emit, ["{\"ev\":\"out\",\"id\":\"", Id, "\",\"data\":", Trimmed, "}\n"]}
     end.
 
 strip_newline(<<>>) -> <<>>;
