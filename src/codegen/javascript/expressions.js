@@ -1028,7 +1028,7 @@ export function genExpr(ctx, expr) {
           op = `[[${posVals}], ${JSON.stringify(method)}]`;
         }
       }
-      return expr.method.endsWith('.') ? `this.#fire(${op}, ${to})` : `this.#send(${op}, ${to})`;
+      return expr.method.endsWith('.') || expr.launched ? `this.#fire(${op}, ${to})` : `this.#send(${op}, ${to})`;
     }
     // If the object isn't a registered service alias, it's a local variable
     // (e.g., a lambda parameter from `over(peers) |p|`) holding an actor ref.
@@ -1064,7 +1064,7 @@ export function genExpr(ctx, expr) {
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
     const send = (op, ty) => {
-      if (expr.method.endsWith('.')) return `this.#fire(${op}, ${to}${expr.outerCall ? ', true' : ''})`;
+      if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to}${expr.outerCall ? ', true' : ''})`;
       if (expr.outerCall) return `this.#send(${op}, ${to}, ${ty ?? 'undefined'}, true)`;
       return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
     };

@@ -868,6 +868,8 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
       if (node.ellipsis && name && !call.silentField && !docSilent && !name.endsWith('.') && !name.endsWith('!')) {
         throw new Error(`'${shown(call)}' returns a value; '...' needs a silent '${name}.'`);
       }
+      // A launched call doesn't wait for a reply, whatever made it silent.
+      if (node.ellipsis && call.type === 'DotCallExpr') call.launched = true;
       visit(call, true);
       return;
     }
@@ -876,7 +878,10 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
     }
     for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, false);
   };
-  for (const actor of ast.actors || []) visit(actor.functions, false);
+  for (const actor of ast.actors || []) {
+    visit(actor.functions, false);
+    visit(actor.initBody, false);
+  }
 }
 
 // ── Type declaration registry checks ──────────────────────────────────────

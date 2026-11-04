@@ -857,6 +857,11 @@ describe('a fresh actor writes only itself — validation', () => {
     expect(() => compileSource(src)).toThrow(/'@go' writes/);
   });
 
+  it('an emit doesn\'t reach past the fresh actor', () => {
+    const src = 'W = *{\n  emit fired() => .\n  @fire! = { fired() }\n}\n@go = {\n  w = W()\n  w.fire!()\n  return 1\n}\n';
+    expect(() => compileSource(src)).not.toThrow();
+  });
+
   it('a fresh actor of a dependency\'s class always counts', () => {
     expect(() => compileSource(`${SVC}@go = {\n  t = Svc.Thing()\n  t.poke!()\n  return 1\n}\n`)).toThrow(/'@go' writes/);
   });

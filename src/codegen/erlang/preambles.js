@@ -648,7 +648,8 @@ bv_call_self_(F) ->
 %% The reply to a call on an instance. A call that receives a failure fails in turn.
 bv_await_(Id) ->
     receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id, _} -> error(bv_call_failed);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_(Id) end.
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_(Id);
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_(Id) end.
 %% The file actor a class reads cells from (see src/outer_reads.js): a class has it
 %% from whoever spawned it, and the file actor is its own.
 bv_outer_() -> case get(bv_outer_) of undefined -> self(); O_ -> O_ end.
@@ -662,6 +663,23 @@ bv_outer_get_(Key) ->
             Outer_ ! {bv_outer_get, self(), Key, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
+%% A class calling one of its file's dependencies: the dependency is the file
+%% actor's, so the file actor makes the call, under an id of its own, and passes the
+%% reply back. It answers while it waits on anything, as for a read.
+bv_outer_call_(Msg, Silent) ->
+    case bv_outer_() of
+        Self_ when Self_ =:= self() -> bv_outer_send_(Msg, Silent);
+        Outer_ ->
+            Ref_ = make_ref(),
+            Outer_ ! {bv_outer_call, self(), Msg, Silent, Ref_},
+            receive {bv_reply, Ref_, V_} -> V_ end
+    end.
+bv_outer_send_(Msg, Silent) ->
+    Seq_ = case get(send_seq_) of undefined -> 1; N_ -> N_ end,
+    put(send_seq_, Seq_ + 1),
+    Id_ = integer_to_binary(Seq_),
+    io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
+    case Silent of true -> null; false -> await_response_(Id_) end.
 %% An actor made by \`#new\` has its own address, kept here so it can be reached.
 bv_publish_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
@@ -722,10 +740,12 @@ bv_spawn_sync_(Pid) ->
     bv_await_ready_(Pid).
 bv_await_ready_(Pid) ->
     receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_ready_(Pid) end.
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_ready_(Pid);
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_ready_(Pid) end.
 bv_await_wire_(Id) ->
     receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_wire_(Id) end.
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_wire_(Id);
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_wire_(Id) end.
 %% A constructor block failed: there's no actor, and whoever is constructing it is told.
 bv_init_failed_() ->
     receive {bv_init_sync, From_} -> From_ ! {bv_init_failed, self()} end.
@@ -736,7 +756,8 @@ bv_inst_emit_(Pid, Ev, Payload) ->
     bv_await_emit_(Id_).
 bv_await_emit_(Id_) ->
     receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null;
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_emit_(Id_) end.
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_emit_(Id_);
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, bv_await_emit_(Id_) end.
 %% Register this process for an emitter instance's event.
 bv_on_(Pid, Ev) when is_pid(Pid) ->
     Ref_ = make_ref(),

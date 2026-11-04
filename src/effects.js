@@ -237,7 +237,9 @@ export function checkEffects(ast, remotesParsed = {}) {
         if (classes.get(name).sourceName) scope.write(`${name}!(…)`);
         return;
       }
-      if (emits.has(name)) { scope.write(`${name}(…)`); return; }
+      // An emit sets nothing: what subscribers do is theirs. So it doesn't reach past
+      // the actor, though it still counts as a write for the emitting function's name.
+      if (emits.has(name)) { if (!scope.reachOnly) scope.write(`${name}(…)`); return; }
       const local = scope.localFunctions.get(name);
       if (local) {
         if (local.writesOutside) scope.write(`${name}(…)`);
@@ -457,6 +459,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           localFunctions: new Map(),
           writingParams: new Set(writingParamsOf(fn)),
           ownCallsByReach: true,
+          reachOnly: true,
           write: () => { out = true; },
           discard: () => {},
         };

@@ -1097,7 +1097,7 @@ ${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, 
   // so it makes the call, and the reply comes back here. A silent call has none.
   #outerCall(op, to, ty, silent) {
     const id = String(++this.#nextId);
-    const msg = { id, op, to, from: '__child', _route: (m) => this.receive(m) };
+    const msg = { id, op, to, from: '__child', _route: (m) => this.receive(m), _silent: silent };
     if (ty !== undefined) msg['ty'] = ty;
     if (silent) { this.#outer.receive(msg); return; }
     return new Promise((resolve, reject) => {
@@ -1109,10 +1109,9 @@ ${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, 
 ` : ''}${!actor.name && ctx.readsOuter ? `  // A class of this file calling one of our dependencies: we make the call as our
   // own, and pass its reply back.
   #_outerCall(message) {
-    const { _route, from, id: childId, ...call } = message;
+    const { _route, _silent, from, id: childId, ...call } = message;
     const id = String(++this.#nextId);
-    const opName = Array.isArray(call.op) ? call.op[call.op.length - 1] : call.op;
-    if (!String(opName).endsWith('.')) this.#_outerFwd.set(id, { route: _route, id: childId });
+    if (!_silent) this.#_outerFwd.set(id, { route: _route, id: childId });
     this.#binding.post({ ...call, id });
   }
 
@@ -1223,6 +1222,8 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       const proxy = this.#_remoteRoutes.get(message.from);
       if (proxy) { proxy.receive(message); return; }
     }
+    // A reply nobody is waiting for, such as one to a silent call, has nothing to run.
+    if (!('op' in message) && ('re' in message || 'ex' in message)) return;
     this.#dispatch(message);
   }
 

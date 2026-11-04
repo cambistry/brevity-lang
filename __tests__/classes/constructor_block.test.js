@@ -4,7 +4,7 @@ import { expectBehavior, compileSource, compileActor } from '../helpers.js';
 // A constructor block calls its own functions as statements: `@reg!(1)` and
 // `#mark!()` run while constructing. After `@` or `#`, a declaration needs `=` or a
 // newline after its name, so a name followed by `(` is a call. A bare name is a call
-// once it's declared above, since it can't be declared twice.
+// when this body declares it, above or below, since it can't be declared twice.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('a self-call in a constructor block — validation', () => {
@@ -17,6 +17,11 @@ describe('a self-call in a constructor block — validation', () => {
     const { interface: doc } = compileSource('b *Integer = 0\nmark! = { b <- 5 }\nmark!()\n@go = { return b }\n');
     expect(doc.service).toMatch(/go \(\)/);
   });
+
+  it('so is a bare name declared below', () => {
+    const { interface: doc } = compileSource('b *Integer = 0\nmark!()\nmark! = { b <- 5 }\n@go = { return b }\n');
+    expect(doc.service).toMatch(/go \(\)/);
+  });
 });
 
 describe('a self-call in a constructor block', () => {
@@ -24,6 +29,8 @@ describe('a self-call in a constructor block', () => {
     a *Integer = 0
     b *Integer = 0
     d *Integer = 0
+    f *Integer = 0
+    early!()
     @reg! = (i Integer) { a <- i }
     #mark! = { b <- 5 }
     bump! = { d <- 7 }
@@ -32,6 +39,7 @@ describe('a self-call in a constructor block', () => {
     #mark!()
     bump!()
     e Integer = @seed()
+    early! = { f <- 8 }
 
     C = *{
       n *Integer = 0
@@ -41,7 +49,7 @@ describe('a self-call in a constructor block', () => {
       @get = { return n }
     }
 
-    @file = { return (a, b, d, e) }
+    @file = { return (a, b, d, e, f) }
 
     @child = {
       c = C()
@@ -53,7 +61,7 @@ describe('a self-call in a constructor block', () => {
   it('runs in the file\'s constructor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@file', from: 'c' } },
-      { output: { id: '1', re: [3, 5, 7, 9], 'ty': ['Integer', 'Integer', 'Integer', 'Integer'], to: 'c' } },
+      { output: { id: '1', re: [3, 5, 7, 9, 8], 'ty': ['Integer', 'Integer', 'Integer', 'Integer', 'Integer'], to: 'c' } },
     );
   });
 

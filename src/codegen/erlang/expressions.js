@@ -72,6 +72,17 @@ function erlArgSlots(positional, named, method, { argVal, argTag }) {
 // Helper: resolve set target — state vars use state_ prefix, local refs use ref_ prefix.
 // AST names carry their full sigil (`@val`, `#val`, or bare `val`); erlStateKey
 // applies the per-namespace prefix.
+// A class's call on one of its file's dependencies, made by the file actor
+// (src/outer_reads.js). A silent one has no reply to wait for.
+function erlOuterCall(ctx, expr, positional, named, method, to, argHelpers) {
+  const silent = expr.method.endsWith('.') || !!expr.launched;
+  if (positional.length === 0 && named.length === 0) {
+    return `bv_outer_call_(#{<<"op">> => ${method}, <<"to">> => ${to}}, ${silent})`;
+  }
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
+  return `bv_outer_call_(#{<<"op">> => ${opExpr}, <<"to">> => ${to}, <<"ty">> => ${tyExpr}}, ${silent})`;
+}
+
 function erlSetTarget(ctx, name) {
   return ctx.stateVarNames.has(name) ? erlStateKey(ctx, name) : `ref_${name}`;
 }
@@ -776,6 +787,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         bv_object_pack(_Wr_re)
     end`;
     }
+    // A call waits for its reply, as on every target, unless it's silent (`note.`) or
+    // launched (`…...`).
+    const awaitUnlessSilent = (seq) => (expr.method.endsWith('.') || expr.launched ? 'null' : `await_response_(integer_to_binary(${seq}))`);
     if (isRemote) {
       const to = `get(${erlStateKey(ctx, dotObjName)})`;
       const method = erlString('@' + expr.method);
@@ -799,7 +813,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v.seq} + 1),
         ${v.msg} = #{<<"id">> => integer_to_binary(${v.seq}), <<"op">> => ${opExpr}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\n]),
-        null
+        ${awaitUnlessSilent(v.seq)}
     end`;
     }
     const named = expr.args.filter(a => !a.positional);
@@ -808,6 +822,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       ? erlVarName(resolveSSAName(dotObjName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
       : erlString(expr.object.name);
     const method = erlString('@' + expr.method);
+    // In a class, the file actor makes a call on its dependency.
+    if (expr.outerCall) return erlOuterCall(ctx, expr, positional, named, method, to, erlArgHelpers(ctx, typeEnv, sCtx));
     const v2 = erlSendVars(ctx);
     if (positional.length === 0 && named.length === 0) {
       return `begin
@@ -815,7 +831,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         put(send_seq_, ${v2.seq} + 1),
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${method}, <<"to">> => ${to}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
-        null
+        ${awaitUnlessSilent(v2.seq)}
     end`;
     }
     const argHelpers = erlArgHelpers(ctx, typeEnv, sCtx);
@@ -827,7 +843,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v2.ty} = ${tyExpr},
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
         io:put_chars([json_encode(${v2.msg}), $\n]),
-        null
+        ${awaitUnlessSilent(v2.seq)}
     end`;
   }
 
@@ -965,6 +981,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const positional = expr.args.filter(a => a.positional);
   const to = erlString(expr.object.name);
   const method = erlString('@' + expr.method);
+  if (expr.outerCall) return `bv_object_pack(${erlOuterCall(ctx, expr, positional, named, method, to, erlArgHelpers(ctx, null, null))})`;
   const v2 = erlSendVars(ctx);
   if (positional.length === 0 && named.length === 0) {
     // No args — op is just the method string, no ty

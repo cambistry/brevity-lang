@@ -808,9 +808,10 @@ ${subRegLines.join('\n')}
     // body — they hold the actor address as a Value::String directly,
     // not via state.
     const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
-    // A call waits for its reply, as on every target, unless it's silent (`note.`).
+    // A call waits for its reply, as on every target, unless it's silent (`note.`) or
+    // launched (`…...`).
     const awaitUnlessSilent = (id) => {
-      if (expr.method.endsWith('.')) return 'Value::Null';
+      if (expr.method.endsWith('.') || expr.launched) return 'Value::Null';
       G.ctx.needsAwaitNew = true;
       return `self.await_response(&${id})`;
     };

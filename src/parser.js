@@ -4109,6 +4109,25 @@ export function parse(tokensIn) {
     return AST.asClause(targetType, negated, expr);
   }
 
+  // Whether this body declares `name` further on (`name = …`, or `name` then `=` on
+  // the next line). A bare `name(…)` above that can't be the same declaration, which
+  // would be a duplicate, so it's a call.
+  function declaredLaterInBody(name) {
+    let depth = 0;
+    for (let i = pos + 1; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.type === 'LBRACE' || t.type === 'LPAREN' || t.type === 'LBRACKET') depth++;
+      else if (t.type === 'RBRACE' || t.type === 'RPAREN' || t.type === 'RBRACKET') {
+        if (--depth < 0) return false;
+      } else if (depth === 0 && t.type === 'IDENT' && t.value === name && ['NEWLINE', 'BLOCK_SEP'].includes(tokens[i - 1]?.type)) {
+        let j = i + 1;
+        while (tokens[j]?.type === 'NEWLINE' || tokens[j]?.type === 'BLOCK_SEP') j++;
+        if (tokens[j]?.type === 'EQUALS') return true;
+      }
+    }
+    return false;
+  }
+
   // Whether the parens opening at `open` are followed by a body opener, as in a
   // declaration missing its `=`: `@go(n: Integer) -> :n`. A call never is.
   function opensBodyAfterParens(open) {
@@ -4721,7 +4740,8 @@ export function parse(tokensIn) {
         constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
       } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
                  || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
-                 || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && functions.some(f => f.name === peek().value)))
+                 || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN'
+                     && (functions.some(f => f.name === peek().value) || declaredLaterInBody(peek().value))))
                  && !opensBodyAfterParens(tokens.findIndex((t, i) => i > pos && t.type === 'LPAREN'))) {
         // A call to this actor's own function, run while constructing. After `@`
         // or `#`, a declaration needs `=` or a newline after the name. A bare name

@@ -72,6 +72,68 @@ describe('remote actor — sequential calls to actor', () => {
   });
 });
 
+describe('a call that doesn\'t wait for a reply', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        log (Text) => .
+        ping! () => self
+      }
+    *
+    @go! = {
+      Svc.log("x")...
+      Svc.ping!()...
+      return 1
+    }
+    W = *{
+      @go! = {
+        Svc.log("y")...
+        return 2
+      }
+    }
+    @inClass! = {
+      w = W()
+      n Integer = w.go!()
+      return n
+    }
+  `;
+
+  it('a doc\'s silent function, and a launched one, don\'t wait', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@go!', from: 'c' } },
+      { output: expect.objectContaining({ op: [['x'], '@log'], to: 'Svc' }) },
+      { output: expect.objectContaining({ op: '@ping!', to: 'Svc' }) },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('nor from a class', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@inClass!', from: 'c' } },
+      { output: expect.objectContaining({ op: [['y'], '@log'], to: 'Svc' }) },
+      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+});
+
+describe('remote actor — a reply nobody is waiting for', () => {
+  it('is ignored, and the actor carries on', async () => {
+    const actor = await createActor(singleViewSource, {
+      expects: [
+        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '#new'], to: 'WebView' }) },
+      ],
+    });
+    await expectActorBehavior(actor,
+      { input: { id: '1', re: '#<WebView/42>', 'ty': 'WebView', from: 'WebView' } },
+      { input: { id: '77', re: {}, from: 'WebView/42' } },
+      { input: { id: '100', op: '@status', from: 'caller' } },
+      { output: expect.objectContaining({ id: '100', re: { ok: 'ready' }, to: 'caller' }) },
+    );
+  });
+});
+
 describe('remote actor — multiple actors', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
