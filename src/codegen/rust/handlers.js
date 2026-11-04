@@ -5,18 +5,22 @@ import {
   findMutableVars, classNeedsSpawnedInstances,
 } from './types.js';
 import { intFromValue } from './int_repr.js';
+import { isOwnCallStatement as isOwnCall } from '../../ast.js';
 import { inferExprType } from '../../inference.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaultValue,
   genRustCondition, isRustGuardIf, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall,
-  rustCellNotifyLines,
+  rustCellNotifyLines, genRustFnCallExpr,
 } from './expressions.js';
 import {
   genRustLocals, genRustReBody, genRustTyBody,
 } from './statements.js';
 
 // A param typed as a class of this file holds one of its actors.
+// A constructor-block statement calling the actor's own function: `@reg!(1)`.
+const isOwnCallStatement = (s) => isOwnCall(s, G.ctx.actorFnNames);
+
 const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
 
 function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
@@ -954,7 +958,13 @@ function genRustChildInit(actor) {
 
   // Pre-ingest body statements
   for (const s of preIngestBody) {
-    if (s.type === 'StateAssign') {
+    if (isOwnCallStatement(s)) {
+      // A call to the class's own function, run while constructing.
+      lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
+    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+        // A write or a call in the constructor block, generated as in a function body.
+        lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
+      } else if (s.type === 'StateAssign') {
       if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
         const childName = s.value.callee.name.toLowerCase();
         const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
@@ -993,7 +1003,12 @@ function genRustChildInit(actor) {
     }
     // Post-ingest body statements
     for (const s of postIngestBody) {
-      if (s.type === 'StateAssign') {
+      if (isOwnCallStatement(s)) {
+        lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
+      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+        // A write or a call in the constructor block, generated as in a function body.
+        lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
+      } else if (s.type === 'StateAssign') {
         const val = genRustExpr(s.value, initTypeEnv);
         const t = initTypeEnv.get(s.name);
         lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
@@ -1352,4 +1367,4 @@ ${arms}
   return parts.join('\n');
 }
 
-export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods };
+export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods, isOwnCallStatement };

@@ -6,6 +6,7 @@
 
 import { parseInterface } from './codegen/javascript/types.js';
 import { resolveSuperclassChain } from './subclass.js';
+import { settleWriterBody, eachReturn } from './writer_body.js';
 
 const isSuffixed = (name) => name.endsWith('!') || name.endsWith('.');
 
@@ -24,16 +25,39 @@ const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [
 
 const typeNameOf = (type) => (typeof type === 'string' ? type.trim().replace(/^[*&]/, '') : null);
 
-// A function type's own arrow, skipping any inside its params or result.
-function functionTypeArrow(type) {
+// A function type's own arrow, skipping any inside its params or result, and what
+// follows it.
+function functionTypeArrowAt(type) {
   if (typeof type !== 'string') return null;
   let depth = 0;
   for (let i = 0; i < type.length; i++) {
     if ('({'.includes(type[i])) depth++;
     else if (')}'.includes(type[i])) depth--;
-    else if (depth === 0 && /^[-=~]>/.test(type.slice(i, i + 2))) return type.slice(i, i + 2);
+    else if (depth === 0 && /^[-=~]>/.test(type.slice(i, i + 2))) return { arrow: type.slice(i, i + 2), result: type.slice(i + 2).trim() };
   }
   return null;
+}
+const functionTypeArrow = (type) => functionTypeArrowAt(type)?.arrow ?? null;
+
+// An anonymous function in a `=>` slot follows the rules of a `!` function, and
+// what it yields has to be what the slot's result says: self for `=> self`, a value
+// for `=> (T)`, nothing for `=> .`. An empty `=> ()` takes falling off the end.
+function settleWritingSlot(fn, type, calleeLabel) {
+  const result = functionTypeArrowAt(type).result;
+  if (result === '.') {
+    eachReturn(fn.body || [], (r) => {
+      if (r.fields?.length) throw new Error(`'${calleeLabel}' takes a silent function here ('=> .'), but this one returns a value`);
+    });
+    return;
+  }
+  const yields = settleWriterBody(fn);
+  if (/\|\s*self\s*$/.test(result) || /^\(\s*\)$/.test(result)) return;
+  if (result === 'self' && yields !== 'self') {
+    throw new Error(`'${calleeLabel}' takes a function that returns self here ('=> self'), but this one returns a value`);
+  }
+  if (result !== 'self' && yields !== 'value') {
+    throw new Error(`'${calleeLabel}' takes a function that returns a value here ('=> ${result}'), but this one ${yields === 'self' ? 'falls off the end, which returns self' : 'returns self on a path'} — write 'return' with the value`);
+  }
 }
 
 export function checkEffects(ast, remotesParsed = {}) {
@@ -49,7 +73,12 @@ export function checkEffects(ast, remotesParsed = {}) {
     if (!writes && d.name.endsWith('!')) throw new Error(`'${d.name}' is declared with '->', so its alias can't carry '!'`);
   }
 
-  for (const actor of ast.actors) {
+  // Whether a function's writes reach past its own actor, by function. A call on a
+  // fresh actor, or a constructor's call to its own function, is exempt only when
+  // they don't. Computed for every function in the file to a fixed point first.
+  const reach = new Map();
+
+  const contexts = ast.actors.map((actor) => {
     const untrackedNames = new Set(
       [...(actor.stateVarDecls || []), ...(actor.functions || [])].filter(d => d.untracked).map(d => d.name.replace(/^@/, '')),
     );
@@ -60,6 +89,10 @@ export function checkEffects(ast, remotesParsed = {}) {
     const inherits = new Set();
     for (const sup of actor.supertypes || []) {
       for (const f of functionsOf(classes.get(sup.supertype) || {})) inherits.add(f.name);
+      // A parent from a dependency's doc lists its members without the `@`.
+      for (const doc of Object.values(remotesParsed)) {
+        for (const f of doc?.__types?.[sup.sourceName ?? sup.supertype]?.functions || []) inherits.add('@' + f.name);
+      }
     }
 
     // A dependency's signature for `obj.method`, by alias or by the alias it was
@@ -115,6 +148,8 @@ export function checkEffects(ast, remotesParsed = {}) {
           if (isConstruction(root) || (root?.type === 'Identifier' && scope.fresh.has(root.name))) scope.fresh.add(node.name);
           if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.name) scope.instances.set(node.name, node.value.callee.name);
           else if (typeNameOf(node.typeName)) scope.instances.set(node.name, typeNameOf(node.typeName));
+          // A chain on a fresh actor binds that actor: `d = c.inc!(5)`.
+          else if (root?.type === 'Identifier' && scope.fresh.has(node.name) && scope.instances.has(root.name)) scope.instances.set(node.name, scope.instances.get(root.name));
           if (node.value?.type === 'Identifier') scope.fresh.delete(node.value.name);
           return;
         }
@@ -210,8 +245,17 @@ export function checkEffects(ast, remotesParsed = {}) {
       }
       if (scope.writingParams.has(name)) { scope.write(`${name}(…)`); return; }
       if (claimed.has(name)) scope.mightWrite();
+      // Calling its own function, an actor is still writing only itself unless that
+      // function reaches past it.
+      const own = scope.ownCallsByReach ? ownFunction(name) : null;
+      if (own) {
+        if (reach.get(own)) scope.write(`${name}(…)`);
+        return;
+      }
       if (isSuffixed(name) && !untrackedNames.has(name.replace(/^@/, ''))) scope.write(`${name}(…)`);
     };
+    const ownAndInherited = [...functions, ...functionsOf({ functions: resolveSuperclassChain(classes, actor).inheritedFunctions })];
+    const ownFunction = (name) => ownAndInherited.find(f => f.name === name || f.name === '@' + name.replace(/^@/, ''));
 
     // Overloads may differ in a slot's arrow, so only a lone signature decides it.
     const loneParams = (sigs) => (sigs?.length === 1 ? sigs[0].params : null);
@@ -252,6 +296,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       ];
       for (const [arg, type] of passed) {
         const value = arg.expr ?? arg;
+        if (functionTypeArrow(type) === '=>' && value?.type === 'Function') settleWritingSlot(value, type, calleeLabel);
         if (functionTypeArrow(type) !== '->') continue;
         if (value?.type === 'FnRef' && refWrites(value, scope)) {
           throw new Error(`'${calleeLabel}' takes a read-only function here, but '&${value.name}' writes. Its param type would need '=>'`);
@@ -285,9 +330,18 @@ export function checkEffects(ast, remotesParsed = {}) {
         walk(a.expr ?? a, scope);
       }
       const root = receiverRoot(node.object);
-      if (isConstruction(root)) return;
       const rootName = root?.type === 'Identifier' || root?.type === 'RefRead' ? root.name : null;
-      if (rootName && scope.fresh.has(rootName)) return;
+      // A fresh actor of a class in this file writes only itself, unless the
+      // function called reaches past it. A dependency's doc can't say, so a fresh
+      // one of those counts as written to.
+      const freshClass = isConstruction(root) ? root.callee.name
+        : rootName && scope.fresh.has(rootName) ? scope.instances.get(rootName) : null;
+      if (freshClass && classes.has(freshClass)) {
+        const fn = classMethods(classes.get(freshClass), name)[0];
+        if (fn && reach.get(fn)) scope.write(`${rootName ?? freshClass + '()'}.${name}(…)`);
+        return;
+      }
+      if (freshClass && !dependencyNames.has(freshClass)) return;
       if (rootName && untrackedNames.has(rootName.replace(/^@/, ''))) return;
       const ownClass = rootName ? classes.get(scope.instances.get(rootName) ?? instanceOf.get(rootName.replace(/^@/, ''))) : null;
       if (ownClass?.functions?.some(f => f.untracked && f.name === '@' + name)) return;
@@ -386,6 +440,37 @@ export function checkEffects(ast, remotesParsed = {}) {
       return false;
     };
 
+    // Whether each of this actor's functions writes past it: its own cells, and its
+    // own functions that don't, are its own. Says whether anything changed.
+    const allState = new Set([...stateNames, ...(resolveSuperclassChain(classes, actor).inheritedState || []).map(d => d.name.replace(/^@/, ''))]);
+    const ownCells = new Set([...allState, ...[...allState].map(n => '@' + n)]);
+    const reachPass = () => {
+      let changed = false;
+      for (const fn of functions) {
+        if (isUnnamedHandler(fn.name) || reach.get(fn)) continue;
+        let out = false;
+        const scope = {
+          mightWrite: () => {},
+          locals: new Set(ownCells),
+          fresh: new Set(),
+          instances: new Map(),
+          localFunctions: new Map(),
+          writingParams: new Set(writingParamsOf(fn)),
+          ownCallsByReach: true,
+          write: () => { out = true; },
+          discard: () => {},
+        };
+        for (const p of fn.params || []) {
+          if (!p.ref) scope.locals.add(p.name);
+          if (typeNameOf(p.type)) scope.instances.set(p.name, typeNameOf(p.type));
+        }
+        walk(fn.body, scope);
+        if (out) { reach.set(fn, true); changed = true; }
+      }
+      return changed;
+    };
+
+    const checks = () => {
     for (const fn of functions) {
       if (isUnnamedHandler(fn.name)) continue;
       let why = null;
@@ -425,34 +510,44 @@ export function checkEffects(ast, remotesParsed = {}) {
     }
 
     // A constructor that writes to something else takes `!`. Its own setup doesn't
-    // count: initializing its refs, calling its own functions, constructing children.
+    // count: initializing its cells, calling its own functions that write only it,
+    // constructing children.
     if (actor.name) {
       let why = null;
+      let might = false;
+      // A param passed by reference is someone else's cell, as in a function.
       const scope = {
-        locals: new Set([...stateNames, ...(actor.initParams || []).map(p => p.name)]),
+        locals: new Set([...ownCells, ...(actor.initParams || []).filter(p => !p.ref).map(p => p.name)]),
         fresh: new Set(),
         instances: new Map(),
         localFunctions: new Map(),
-        writingParams: new Set(),
+        writingParams: new Set(writingParamsOf({ params: actor.initParams })),
+        ownCallsByReach: true,
         write: (reason) => { why ??= reason; },
-        mightWrite: () => {},
+        mightWrite: () => { might = true; },
         discard: () => {},
       };
-      const ownCalls = new Set([...functions.map(f => f.name), ...functions.map(f => f.name.replace(/^@/, ''))]);
-      const saved = untrackedNames.size;
-      for (const n of ownCalls) untrackedNames.add(n);
       walk(actor.initBody, scope);
-      if (untrackedNames.size !== saved) for (const n of ownCalls) if (!functions.some(f => f.untracked && f.name.replace(/^@/, '') === n)) untrackedNames.delete(n);
+      const parent = (actor.supertypes || []).find(st => classes.get(st.supertype)?.sourceName
+        || Object.values(remotesParsed).some(doc => doc?.__types?.[st.supertype]?.effect === 'write'));
       if (!actor.sourceName) {
-        const parent = (actor.supertypes || []).find(st => classes.get(st.supertype)?.sourceName
-          || Object.values(remotesParsed).some(doc => doc?.__types?.[st.supertype]?.effect === 'write'));
         if (parent) throw new Error(`Class '${actor.name.replace(/^@/, '')}' inherits from '${parent.sourceName ?? parent.supertype}', which writes while constructing, so it must be named '${actor.name.replace(/^@/, '')}!'`);
       }
       if (why && !actor.sourceName) {
         throw new Error(`Class '${actor.name}' writes (${why}) while constructing, so it must be named '${actor.name}!'`);
       }
+      // A constructor follows the rules of a function: a `!` one must write.
+      if (actor.sourceName && !why && !might && !parent) {
+        throw new Error(`Class '${actor.sourceName.replace(/^@/, '')}' never writes while constructing, so it shouldn't be named with '!'`);
+      }
     }
-  }
+    };
+
+    return { reachPass, checks };
+  });
+
+  while (contexts.some(c => c.reachPass()));
+  for (const c of contexts) c.checks();
 }
 
 // The functions whose read-only claim rests on a `~>` in an inline doc, directly or

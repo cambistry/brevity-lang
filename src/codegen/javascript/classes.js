@@ -896,7 +896,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()' : ''}
-  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null' : ''}
+  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null;' : ''} }
 
@@ -936,7 +936,8 @@ ${fieldSection ? fieldSection + '\n' : ''}
     return instance;
   }
 
-  async #send(op, to, ty) {
+  async #send(op, to, ty, viaOuter) {${readsOuter ? `
+    if (viaOuter) return this.#outerCall(op, to, ty, false);` : ''}
     const id = String(++this.#nextId);
     // Locally-held lambda in a reply-awaiting callback field: a local-form
     // self-address (#<@N>, no path) names a handler on us, so dispatch it to
@@ -954,7 +955,8 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }
 
-  #fire(op, to) {
+  #fire(op, to, viaOuter) {${readsOuter ? `
+    if (viaOuter) { this.#outerCall(op, to, undefined, true); return; }` : ''}
     // Fire-and-forget: post with no pending and no reply awaited. Used for
     // silent reference-field invocations (v.endpoint!) -- there is no reply
     // to consume, and unlike #send the caller never suspends on one.
@@ -1091,6 +1093,29 @@ ${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, 
     });
   }
 
+  // A call on one of the file's dependencies. The dependency is the file actor's,
+  // so it makes the call, and the reply comes back here. A silent call has none.
+  #outerCall(op, to, ty, silent) {
+    const id = String(++this.#nextId);
+    const msg = { id, op, to, from: '__child', _route: (m) => this.receive(m) };
+    if (ty !== undefined) msg['ty'] = ty;
+    if (silent) { this.#outer.receive(msg); return; }
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
+      this.#outer.receive(msg);
+    });
+  }
+
+` : ''}${!actor.name && ctx.readsOuter ? `  // A class of this file calling one of our dependencies: we make the call as our
+  // own, and pass its reply back.
+  #_outerCall(message) {
+    const { _route, from, id: childId, ...call } = message;
+    const id = String(++this.#nextId);
+    const opName = Array.isArray(call.op) ? call.op[call.op.length - 1] : call.op;
+    if (!String(opName).endsWith('.')) this.#_outerFwd.set(id, { route: _route, id: childId });
+    this.#binding.post({ ...call, id });
+  }
+
 ` : ''}${outerCells ? `  // A class of this file reading one of our cells.
   #_outerGet(message) {
     const cells = { ${outerCells} };
@@ -1156,7 +1181,14 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       cb(message);
       return;
     }${outerCells ? `
-    if (message.from === '__child' && typeof message.op === 'string' && message.op.startsWith('get@')) { this.#_outerGet(message); return; }` : ''}
+    if (message.from === '__child' && typeof message.op === 'string' && message.op.startsWith('get@')) { this.#_outerGet(message); return; }` : ''}${!actor.name && ctx.readsOuter ? `
+    if (message.from === '__child' && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
+    if (('re' in message || 'ex' in message) && this.#_outerFwd.has(message.id)) {
+      const fwd = this.#_outerFwd.get(message.id);
+      this.#_outerFwd.delete(message.id);
+      fwd.route({ ...message, id: fwd.id });
+      return;
+    }` : ''}
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
       if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }

@@ -240,7 +240,11 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
   // Check if any args are function-typed (Function, FnRef) — need fn inlining
   const hasFunctionArgs = s.value.args.some(a =>
     a.type === 'Function' || a.type === 'FnRef');
-  const fnDef = hasFunctionArgs && fns ? fns.find(f => f.name === s.value.callee.name) : null;
+  // Inlining substitutes a lambda's one expression for its call. A lambda with
+  // statements takes the general path, where it runs as a function of its own.
+  const oneExpression = (a) => a.type !== 'Function' || a.expr
+    || (a.body || []).every(st => st.type === 'ImplicitReturn') && (a.body || []).length <= 1;
+  const fnDef = hasFunctionArgs && s.value.args.every(oneExpression) && fns ? fns.find(f => f.name === s.value.callee.name) : null;
   if (fnDef && hasFunctionArgs) {
     // Inline the fn body, resolving function params
     const fnParams = fnDef.params || [];

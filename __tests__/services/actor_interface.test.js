@@ -357,8 +357,11 @@ describe('class interface — a class named with `!`', () => {
     expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@go = { return 1 }\n')).toBe('{\n  go () -> (Integer)\n}');
   });
 
+  // A class named with `!` has to write while constructing.
+  const SVC = '*\n  "svc.bv": Svc {\n    note. () => .\n  }\n*\n';
+
   it('the annotation is the class name without `!`', () => {
-    const body = (type) => `W! = *{\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
+    const body = (type) => `${SVC}W! = *{\n  Svc.note.()...\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
     expect(() => compileSource(body('W'))).not.toThrow();
     expect(() => compileSource(body('W!'))).toThrow(/a type name takes no '!'/);
   });
@@ -389,8 +392,23 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('passes its effect to a subclass', () => {
-    expect(() => compileSource('W! = *{}\nS = (W! |) *{}\n@go = { return 1 }\n')).toThrow(/Class 'S' inherits from 'W!'.*must be named 'S!'/);
-    expect(() => compileSource('W! = *{}\nS! = (W! |) *{}\n@go! = {\n  S!()\n}\n')).not.toThrow();
+    const W = `${SVC}W! = *{\n  Svc.note.()...\n}\n`;
+    expect(() => compileSource(`${W}S = (W! |) *{}\n@go = { return 1 }\n`)).toThrow(/Class 'S' inherits from 'W!'.*must be named 'S!'/);
+    expect(() => compileSource(`${W}S! = (W! |) *{}\n@go! = {\n  S!()\n}\n`)).not.toThrow();
+  });
+
+  it('must write while constructing', () => {
+    expect(() => compileSource('W! = *{\n  @get = { return 1 }\n}\n@go = { return 1 }\n')).toThrow(/Class 'W!' never writes while constructing, so it shouldn't be named with '!'/);
+  });
+
+  it('writing its own cells while constructing isn\'t a write', () => {
+    expect(() => compileSource('W! = *{\n  n *Integer = 0\n  n <- 1\n}\n@go = { return 1 }\n')).toThrow(/never writes while constructing/);
+  });
+
+  it('a subclass may be purer than a foreign parent\'s `!` member', () => {
+    const header = '*\n  "Svc": Svc\n*\n';
+    const docs = { remotes: [{ path: 'Svc', service: '{ Base () -> *{ g! () => self } }' }] };
+    expect(() => compileSource(`${header}C = (Base |) *{\n  @g! = { return self }\n}\n@go = { return 1 }\n`, docs)).not.toThrow();
   });
 
   it('a doc\'s writing constructor passes its effect too', () => {

@@ -77,16 +77,17 @@ function erlSetTarget(ctx, name) {
 }
 
 // Reference-field invocation (Erlang). If `objExpr` is a typed value whose field
-// `rawName` (bang stripped) is behavioral, classify the discipline
+// `rawName` is behavioral, classify the discipline
 // ('silent' | 'callback' | 'value'); null otherwise.
 export function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
-  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
   let t;
   if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
   else t = inferExprType(objExpr, typeEnv);
   const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
   if (!decl) return null;
+  // A writing field keeps its `!` in its name: `run!`.
+  const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';

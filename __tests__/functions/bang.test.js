@@ -65,16 +65,8 @@ describe('! names — validation', () => {
 });
 
 describe('<- as an expression — validation', () => {
-  it('`return a <- x` parses, and is reported as not yet supported', () => {
-    expect(() => compileSource('a *Integer = 0\n@go = { return a <- 1 }\n')).toThrow(/as a value isn't supported yet/);
-  });
-
-  it('parens regroup: `a <- (b <- c)` uses a write as a value', () => {
-    expect(() => compileSource('a *Integer = 0\nb *Integer = 0\n@go = { a <- (b <- 1)\n return 1 }\n')).toThrow(/as a value isn't supported yet/);
-  });
-
-  it('a comma in a return list belongs to the list', () => {
-    expect(() => compileSource('a *Integer = 0\n@go = { return a <- 1, 2 }\n')).toThrow(/as a value isn't supported yet/);
+  it('can\'t be a value on the right of `??`, which may not run', () => {
+    expect(() => compileSource('a *Integer = 0\n@go! = { x Integer = a ?? (a <- 1)\n return x }\n')).toThrow(/right of '\?\?'/);
   });
 
   it('the left side must be a cell', () => {
@@ -83,6 +75,59 @@ describe('<- as an expression — validation', () => {
 
   it('a non-cell target is an error', () => {
     expect(() => compileSource('@go = (a Integer) { return a <- 2 }\n')).toThrow(/only '\*Type' variables/);
+  });
+});
+
+describe('<- as a value', () => {
+  const script = `
+    a *Integer = 0
+    b *Integer = 0
+    @p *Integer = 0
+
+    @ret! = { return a <- 5 }
+    @regroup! = {
+      a <- (b <- 3)
+      return (a, b)
+    }
+    @inList! = { return a <- 1, 2 }
+    @chain! = { return a <- 1 <- 9 }
+    @operand! = {
+      x Integer = (a <- 4) + 1
+      return x
+    }
+    @published! = { return @p <- 6 }
+    @local = {
+      c *Integer = 0
+      return c <- 7
+    }
+    @branch! = (c Boolean) {
+      x Integer = if c -> a <- 8 else -> 0
+      return (x, a)
+    }
+  `;
+
+  it.each([
+    ['@ret!', [5], ['Integer']],
+    ['@regroup!', [3, 3], ['Integer', 'Integer']],
+    ['@inList!', [1, 2], ['Integer', 'Integer']],
+    ['@chain!', [9], ['Integer']],
+    ['@operand!', [5], ['Integer']],
+    ['@published!', [6], ['Integer']],
+    ['@local', [7], ['Integer']],
+  ])('%s yields the cell\'s new value', async (op, re, ty) => {
+    await expectBehavior(script,
+      { input: { id: '1', op, from: 'c' } },
+      { output: { id: '1', re, 'ty': ty, to: 'c' } },
+    );
+  });
+
+  it('a write in an `if` branch runs only on that branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], '@branch!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [8, 8], 'ty': ['Integer', 'Integer'], to: 'c' } },
+      { input: { id: '2', op: [[false], '@branch!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: [0, 8], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
   });
 });
 
@@ -690,7 +735,7 @@ describe('effect enforcement', () => {
   describe('`->` slots', () => {
     const WRITER = '() -> { a <- 1 }';
     const CLASSES = `
-      ::R (f: () -> (), g: () => ())
+      ::R (f: () -> (), g!: () => ())
       a *Integer = 0
       C = (f: () -> ()) *{
         @take = (f () -> ()) { return 1 }
@@ -703,7 +748,7 @@ describe('effect enforcement', () => {
     const remote = (lines) => `*\n  "svc.bv": Svc () -> *${service}\n*\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
 
     it.each([
-      ['a type field', `r = R(f: ${WRITER}, g: () -> { a <- 2 })`],
+      ['a type field', `r = R(f: ${WRITER}, g!: () -> { a <- 2 })`],
       ['a class method', `n Integer = c.take(${WRITER})`],
       ['a class param', `x = C(f: ${WRITER})`],
       ['an inherited class param', `x = D(f: ${WRITER})`],
@@ -719,7 +764,7 @@ describe('effect enforcement', () => {
     });
 
     it('accepts a writing function in a `=>` slot', () => {
-      expect(() => compileSource(body(`r = R(f: () -> { b Integer = 1 }, g: ${WRITER})`))).not.toThrow();
+      expect(() => compileSource(body(`r = R(f: () -> { b Integer = 1 }, g!: ${WRITER})`))).not.toThrow();
       expect(() => compileSource(body(`c.give!(${WRITER})`))).not.toThrow();
       expect(() => compileSource(remote(`s.give(f: ${WRITER})`))).not.toThrow();
     });
@@ -731,8 +776,8 @@ describe('effect enforcement', () => {
     it('reads the slot\'s own arrow, not one inside its params', () => {
       expect(() => compileSource(`
         a *Integer = 0
-        run! = (f () => (g: () -> ())) { f() }
-        @go! = { run!(() -> { a <- 1 }) }
+        run! = (f (g: () -> ()) => ()) { a <- 1 }
+        @go! = { run!((g) -> { a <- 1 }) }
       `)).not.toThrow();
     });
   });
@@ -795,9 +840,77 @@ describe('effect enforcement', () => {
   });
 });
 
+describe('a fresh actor writes only itself — validation', () => {
+  const SVC = '*\n  "svc.bv": Svc {\n    ping! () => self\n    Thing () -> *{ poke! () => self }\n  }\n*\n';
+  const W = (body) => `${SVC}W = *{\n  n *Integer = 0\n  @hit! = { ${body} }\n}\n`;
+
+  it('a call that writes only the fresh actor isn\'t a write', () => {
+    expect(() => compileSource(`${W('n <- 1')}@go = {\n  w = W()\n  w.hit!()\n  return 1\n}\n`)).not.toThrow();
+  });
+
+  it('a call that writes past the fresh actor is', () => {
+    expect(() => compileSource(`${W('Svc.ping!()')}@go = {\n  w = W()\n  w.hit!()\n  return 1\n}\n`)).toThrow(/'@go' writes \(w\.hit!\(…\)\)/);
+  });
+
+  it('through its own function, too', () => {
+    const src = `${SVC}W = *{\n  @hit! = { @out!() }\n  @out! = { Svc.ping!() }\n}\n@go = {\n  w = W()\n  w.hit!()\n  return 1\n}\n`;
+    expect(() => compileSource(src)).toThrow(/'@go' writes/);
+  });
+
+  it('a fresh actor of a dependency\'s class always counts', () => {
+    expect(() => compileSource(`${SVC}@go = {\n  t = Svc.Thing()\n  t.poke!()\n  return 1\n}\n`)).toThrow(/'@go' writes/);
+  });
+
+  it('a constructor calling its own function that writes only itself doesn\'t write', () => {
+    expect(() => compileSource(`${W('n <- 1')}V = (W |) *{\n  @hit!()\n}\n@go = { return 1 }\n`)).not.toThrow();
+  });
+
+  it('a constructor calling its own function that writes past it does', () => {
+    expect(() => compileSource(`${SVC}W = *{\n  @hit! = { Svc.ping!() }\n  @hit!()\n}\n@go = { return 1 }\n`)).toThrow(/Class 'W' writes \(@hit!\(…\)\) while constructing/);
+  });
+});
+
+describe('an anonymous function in a `=>` slot — validation', () => {
+  const slot = (result, fn) => `a *Integer = 0\nrun! = (f () => ${result}) { a <- 0 }\n@go! = {\n  run!(${fn})\n}\n`;
+
+  it('has no tail return', () => {
+    expect(() => compileSource(slot('(Integer)', '() -> {\n    a <- 1\n    2\n  }'))).toThrow(/has no tail return.*Did you mean 'return'/);
+  });
+
+  it('gives a value with `return`', () => {
+    expect(() => compileSource(slot('(Integer)', '() -> {\n    a <- 1\n    return 2\n  }'))).not.toThrow();
+  });
+
+  it('falling off the end returns self, which a value slot refuses', () => {
+    expect(() => compileSource(slot('(Integer)', '() -> { a <- 1 }'))).toThrow(/returns a value here.*falls off the end, which returns self/);
+  });
+
+  it('a `=> self` slot takes falling off the end, and a tail write', () => {
+    expect(() => compileSource(slot('self', '() -> { a <- 1 }'))).not.toThrow();
+    expect(() => compileSource(slot('self', '(i) -> a <- 1'))).not.toThrow();
+  });
+
+  it('a `=> self` slot refuses a value', () => {
+    expect(() => compileSource(slot('self', '() -> {\n    a <- 1\n    return 2\n  }'))).toThrow(/returns self here.*returns a value/);
+  });
+
+  it('a `=> .` slot refuses a value', () => {
+    expect(() => compileSource(slot('.', '() -> {\n    a <- 1\n    return 2\n  }'))).toThrow(/takes a silent function here/);
+  });
+
+  it('a `->` slot keeps its tail return', () => {
+    expect(() => compileSource('run = (f () -> (Integer)) { return f() }\n@go = {\n  n Integer = run(() -> { return 2 })\n  return n\n}\n')).not.toThrow();
+  });
+});
+
 describe('untracked', () => {
   it('a write to an untracked cell doesn\'t count', () => {
     expect(() => compileSource('untracked hits *Integer = 0\n@go = { hits <- 1\n return 1 }\n')).not.toThrow();
+  });
+
+  it('a write to an untracked published cell doesn\'t count, from its own actor', () => {
+    expect(() => compileSource('untracked @log *Text = ""\n@get = {\n  @log <- @log + "x"\n  return 1\n}\n')).not.toThrow();
+    expect(() => compileSource('untracked @log *Text = ""\nuntracked @write. = (m Text) { @log <- @log + m }\n@get = {\n  @write.("x")...\n  return 1\n}\n')).not.toThrow();
   });
 
   it('a call to an untracked function doesn\'t count', () => {
@@ -836,6 +949,49 @@ describe('untracked', () => {
 });
 
 // ── Runtime ──────────────────────────────────────────────────────────────────
+
+describe('an anonymous function in a `=> (Integer)` slot', () => {
+  const script = `
+    a *Integer = 0
+    run! = (f () => (Integer)) { return f() }
+    @go! = {
+      n Integer = run!(() -> {
+        a <- 5
+        v Integer = a + 1
+        return v
+      })
+      return (n, a)
+    }
+  `;
+
+  it('writes, and returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@go!', from: 'c' } },
+      { output: { id: '1', re: [6, 5], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+});
+
+describe('an untracked published cell, logged from a read-only function', () => {
+  const script = `
+    untracked @log *Text = ""
+    untracked @write. = (m Text) { @log <- @log + m }
+    @get = {
+      @write.("x")...
+      return 1
+    }
+    @read = { return @log }
+  `;
+
+  it('takes the write', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@get', from: 'c' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: '@read', from: 'c' } },
+      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c' } },
+    );
+  });
+});
 
 describe('! function — return paths', () => {
   const script = `
@@ -1348,7 +1504,14 @@ describe('! function — return paths', () => {
 });
 
 describe('chained calls', () => {
+  // A class named with `!` writes while constructing: here it tells `Svc`.
   const script = `
+    *
+      "svc.bv": Svc {
+        note. () => .
+      }
+    *
+
     ::Item (name: Text)
 
     C = *{
@@ -1376,6 +1539,7 @@ describe('chained calls', () => {
 
     W! = *{
       a *Integer = 0
+      Svc.note.()...
       @add! = (i Integer) { a <- a + i }
       @get = { return a }
     }
@@ -1423,6 +1587,7 @@ describe('chained calls', () => {
     }
 
     Base! = *{
+      Svc.note.()...
       @one = { return 1 }
     }
 
@@ -1519,6 +1684,7 @@ describe('chained calls', () => {
   it('an actor of a class named with `!` is annotated without the `!`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bangClassAnnotated!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1526,6 +1692,7 @@ describe('chained calls', () => {
   it('a subclass inherits from a class named with `!`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bangSuper!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: [11], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1533,6 +1700,7 @@ describe('chained calls', () => {
   it('a class named with `!` is constructed and chains on the new actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@bangClass!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1591,7 +1759,14 @@ describe('chained calls through a remote', () => {
 describe('a public class named with `!`', () => {
   it('is constructed by that name in its own file', async () => {
     await expectBehavior(`
+      *
+        "svc.bv": Svc {
+          note. () => .
+        }
+      *
+
       @Pub! = *{
+        Svc.note.()...
         @one = { return 5 }
       }
 
@@ -1602,7 +1777,60 @@ describe('a public class named with `!`', () => {
       }
     `,
       { input: { id: '1', op: '@go!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+});
+
+describe('a type field\'s name matches its arrow — validation', () => {
+  it('a writing field must be named with `!`', () => {
+    expect(() => compileSource('::T (run: () => (Integer))\n@go = { return 1 }\n')).toThrow(/Field 'run' holds a writing function \('=>'\), so it must be named 'run!'/);
+  });
+
+  it('a read-only field takes no `!`', () => {
+    expect(() => compileSource('::T (run!: () -> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!' — name it 'run'/);
+    expect(() => compileSource('::T (run!: () ~> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!'/);
+  });
+
+  it('a value field takes no `!`', () => {
+    expect(() => compileSource('::T (n!: Integer)\n@go = { return 1 }\n')).toThrow(/Field 'n!' is a value/);
+  });
+
+  it('a silent field is named with `.` alone', () => {
+    expect(() => compileSource('::T (run!: () => .)\n@go = { return 1 }\n')).toThrow(/name it 'run\.', without '!'/);
+  });
+
+  it('reads the field\'s own arrow, not one inside its params', () => {
+    expect(() => compileSource('::T (run: (f: () => ()) -> (Integer))\n@go = { return 1 }\n')).not.toThrow();
+  });
+
+  it('a writing field is called by its whole name', () => {
+    expect(() => compileSource('::T (run!: () => (Integer))\n@go! = (t T) { return t.run() }\n')).toThrow(/Field 'run!' on '::T' writes — call it '.run!\(…\)'/);
+  });
+
+  it('calling a writing field is a write', () => {
+    expect(() => compileSource('::T (run!: () => (Integer))\n@go = (t T) { return t.run!() }\n')).toThrow(/'@go' writes \(t\.run!\(…\)\)/);
+    expect(() => compileSource('::T (run!: () => (Integer))\n@go! = (t T) { return t.run!() }\n')).not.toThrow();
+  });
+});
+
+describe('a writing type field', () => {
+  const script = `
+    ::Act (arg Integer, run!: (value: Integer) => (out: Integer))
+
+    @go! = (a: Act) {
+      out: Integer = a.run!(a.arg)
+      return result: out
+    }
+  `;
+
+  it('is invoked at the address it holds', async () => {
+    await expectBehavior(script,
+      { input: { id: '50', op: [{ a: [200, '#<caller @cb>'] }, '@go!'], 'ty': [{ a: '::Act' }], from: 'caller' } },
+      { output: expect.objectContaining({ id: '1', op: [[200], '@cb'], to: '#<caller @cb>' }) },
+      { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
+      { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },
     );
   });
 });

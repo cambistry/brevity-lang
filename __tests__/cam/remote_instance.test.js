@@ -62,12 +62,11 @@ describe('remote actor — sequential calls to actor', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<WebView/42>', 'ty': 'WebView', from: 'WebView' } },
       { input: { id: '100', op: '@workflow!', from: 'caller' } },
+      // `open.` and `close.` are silent: nothing replies, and nothing waits.
       { output: expect.objectContaining({ op: '@open.', to: 'WebView/42' }) },
-      { input: { id: '2', re: {} } }, // reply to open
       { output: expect.objectContaining({ op: '@getTitle', to: 'WebView/42' }) },
       { input: { id: '3', re: { title: 'My Page' }, 'ty': { title: 'Text' } } }, // reply to getTitle
       { output: expect.objectContaining({ op: '@close.', to: 'WebView/42' }) },
-      { input: { id: '4', re: {} } }, // reply to close
       { output: expect.objectContaining({ id: '100', re: { title: 'My Page' }, to: 'caller' }) },
     );
   });

@@ -1,8 +1,8 @@
 # `!` means the function writes: mutation, return paths, and service docs — 2026-10-31
 
 Status: **Phases 1-4 IMPLEMENTED, 2026-10-31 to 11-01**
-([session note](session-2026-10-31-mutation-suffix.md)), with `<-` as a value still a
-compile error. Phase 4 is uncommitted for review. Supersedes
+([session note](session-2026-10-31-mutation-suffix.md)). The open effect rules were
+settled and implemented 2026-11-03 (below). Supersedes
 [bang-returns-self](bang-returns-self-2026-10-27.md). Builds on
 [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md) (name
 match at the call site, kept) and
@@ -85,23 +85,19 @@ ordinary tail return: legal, if rarely useful.
 
 ### The value of `<-`
 
-`acc <- v` is a set on the cell, so it evaluates to a reference to the cell.
+Revised 2026-11-03 (was: a reference to the cell). `acc <- v` evaluates to the
+cell `acc`, which now holds the new value, so used as a value it gives that value.
 Being a valid final statement is separate from being a return value:
 
 ```brevity
 @inc! = (i Integer) { acc <- acc + i }            // returns self
-@inc! = (i Integer) { return acc <- acc + i }     // returns a reference to acc
+@inc! = (i Integer) { return acc <- acc + i }     // returns acc's new value
 ```
 
-- `return acc <- x` is exactly equivalent to `acc <- x; return *acc`, with the
-  same capability rules. This is an explicit handoff of write capability.
-- **Not implemented yet.** `return *acc` doesn't exist: cells can't leave a function,
-  and cross-actor scalar cell handoff is explicitly deferred
-  (`__tests__/classes/param_capabilities.test.js`). So `<-` as a value parses and
-  reports a compile error. Statements and chains work. See open decision 2.
-- Readers from C will expect the new number. The compiler reports a reference
-  where the caller expects `Integer`, rather than dereferencing it silently. To
-  return the number: `acc <- x; return acc`.
+- `return acc <- x` is exactly `acc <- x; return acc`. `<|` and `>>` likewise give
+  the cell's new contents.
+- No cell leaves the function, so no capability is handed over.
+- **Not implemented yet:** a value use is still a compile error.
 
 **Grammar.** `<-` is usable wherever an expression is, with no parens required:
 
@@ -117,8 +113,8 @@ Being a valid final statement is separate from being a return value:
 - **Readers of C will expect `a = b = c`**, writing both. Here `b` isn't written,
   and if the types match nothing reports it. Accepted, since the chain follows
   directly from `<-` evaluating to its target.
-- **Parens still regroup.** `a <- (b <- c)` writes `c` to `b`, then puts a reference
-  to `b` in `a`, which is a type error unless `a` holds references.
+- **Parens still regroup.** `a <- (b <- c)` writes `c` to `b`, then writes `b`'s new
+  value, `c`, to `a`. This is the C-style double write.
 - **A comma in a list belongs to the list.** The statement `a <- 1, 2` is a
   multi-argument set (`src/parser.js:1276`), so `return a <- 1, 2` would otherwise
   be ambiguous. It means `return (a <- 1), 2`. A multi-argument set inside a list
@@ -174,7 +170,8 @@ bump! = (i) -> acc <- acc + i      // returns the captured self
 Inline anonymous functions have no name to carry a suffix:
 
 - A write in one makes it a mutating function, so it has no tail return. It falls
-  through to the captured `self`, unless the slot it fills is silent.
+  through to the captured `self`, unless the slot it fills is silent. Settled
+  2026-11-03: the slot's arrow decides, by the same rules as a named function.
 - v1: its writes are attributed to the function that defines it, which must then
   be `!`. This is conservative: a function that only creates and returns a writing
   closure also gets a bang.
@@ -193,7 +190,8 @@ y = RegisteredWidget!(2).add!(z)     // chains on the new actor
 ```
 
 - **The actor's own setup doesn't count:** initializing its refs, calling its own
-  `!` functions, constructing its children.
+  `!` functions, constructing its children. Narrowed 2026-11-03: its own functions
+  count when their writes reach past the actor (see "Settled 2026-11-03").
 - **A class body's tail is not a return:** it feeds `ingest`, and is unaffected.
 - **Inheritance:** a superclass constructor's effect carries to the subclass.
 - **Overloads:** the suffix is part of the name, so all overloads share one effect
@@ -405,10 +403,34 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
    writing op called `push` has to name it `push!`, so the wire names don't match.
    Only affects serving, since a call to a foreign name keeps it literally. Deferred;
    nothing needs it yet.
-2. **What `<-` yields as a value.** The design says a reference to the cell, which
-   needs a wire form for a returned cell, including one that isn't `@`-published. No
-   such mechanism exists, so a value use is a compile error for now. Until this is
-   settled, the expression form is also limited to local cells, not `el.field`.
+2. ~~What `<-` yields as a value.~~ Settled 2026-11-03: the cell's new value. See below.
+
+## Settled 2026-11-03: the open effect rules
+
+**Implemented 2026-11-03,** with what it took, in the
+[session note](session-2026-11-03-effect-rules.md).
+
+- **Fresh actors only exempt writes to themselves.** A call on an actor created in this
+  function, before it escapes, is exempt only if the callee writes nothing but its own
+  actor's state. The same applies to a constructor's calls to its own functions, since
+  inside a constructor `self` is a fresh actor. This needs a second fact per function in
+  this file: whether its writes reach past its own actor. A dependency's doc can't state
+  that, so calls on a fresh dependency always count. An emit reaches past the actor.
+- **A constructor follows the same rules as a function.** A class named `!` that never
+  writes is an error. Overriding a `!` member of a foreign parent may be purer than the
+  parent, as with a parent in this file. No `return` is required in a constructor block:
+  its tail feeds `ingest`.
+- **Tail-return rules don't depend on whether a function is named.** An anonymous
+  function in a `=>` slot follows the rules for a `!` function: no tail return, it falls
+  through to the captured `self`, and a value needs `return`. In a `=> .` slot it yields
+  nothing. In a `->` slot it's read-only, with an implicit tail return.
+- **A type field's name must match its arrow.** `=>` with a value or self needs `run!`,
+  `=> .` needs `run.`, `->` needs a bare name, and a value field can't take `!`. A
+  call on a `run!` field is a write by its name.
+- **`<-` as a value yields the cell's new value.** `return a <- x` is `a <- x; return a`.
+  Cells only, not `el.field`.
+- **`untracked @log` from inside its own actor** works, since
+  [session-2026-11-01-own-published-cells](session-2026-11-01-own-published-cells.md).
 
 ## Settled decisions
 

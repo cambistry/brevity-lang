@@ -65,7 +65,7 @@ describe('lambda param inference — C1 local type callback field', () => {
     // the explicit type sticks by confirming `s.code` is NOT validated as a
     // Signal field access (it compiles, because Integer has no decl to check).
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel(onpress.: (s: Integer) { return ok: 1 }, label: "x")
+      @make = -> p: Panel(onpress.: (s: Integer) { use: Integer = s . }, label: "x")
     `)).not.toThrow();
   });
 

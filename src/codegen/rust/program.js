@@ -9,11 +9,12 @@ import {
   rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances, classRefersToSelf,
 } from './types.js';
 import {
-  genRustExpr, genRustFnMethod,
+  genRustExpr, genRustFnMethod, genRustFnCallExpr,
 } from './expressions.js';
 import {
   genRustDispatch,
   genRustChildMethods,
+  isOwnCallStatement,
 } from './handlers.js';
 import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
@@ -337,6 +338,18 @@ ${bvTypeFieldsArms}
     }
     const initBody = actor.initBody || [];
     for (const s of initBody) {
+      if (isOwnCallStatement(s)) {
+        // A call to the file's own function, run while constructing. Setup runs
+        // in main, where the actor is `actor`.
+        stateInitLines.push(`    let _ = ${genRustFnCallExpr(s.expr, initTypeEnv).replace(/\bself\./g, 'actor.')};`);
+        continue;
+      }
+      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+        // A write or a call in the constructor block, generated as in a function body.
+        const lines = genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '        ', new Map());
+        stateInitLines.push(`    {\n${lines.replace(/\bself\./g, 'actor.')}\n    }`);
+        continue;
+      }
       if (s.type === 'StateAssign' && G.ctx.remoteInstanceVars.has(s.name)) {
         // Remote construction: send `new`, await reply, extract from
         const calleeName = s.value.callee.name;
@@ -391,9 +404,11 @@ ${bvTypeFieldsArms}
             : 'json!([])';
           stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id)); }`);
         } else {
-          const val = genRustExpr(s.value, initTypeEnv);
+          // There's no `self` in main: a self-call here goes through `actor`, so
+          // the value is bound before `actor.state` is borrowed.
+          const val = genRustExpr(s.value, initTypeEnv).replace(/\bself\./g, 'actor.');
           const t = initTypeEnv.get(s.name);
-          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
+          stateInitLines.push(`    { let _v = ${forceJsonWrap(toJsonValue(val, t))}; actor.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
         }
       }
     }

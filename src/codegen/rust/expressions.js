@@ -13,16 +13,17 @@ import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_
 
 // Classify the source numeric type of an operand for coercion
 // Reference-field invocation (Rust). Mirrors the JS classifier: if `objExpr`
-// is a typed value whose field `rawName` (bang stripped) is behavioral,
+// is a typed value whose field `rawName` is behavioral,
 // classify the discipline ('silent' | 'callback' | 'value'); null otherwise.
 export function refFieldInvocationRust(objExpr, rawName, typeEnv) {
-  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
   let t;
   if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
   else t = inferExprType(objExpr, typeEnv);
   const decl = (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? G.ctx.typeDecls.get(t) : null;
   if (!decl) return null;
+  // A writing field keeps its `!` in its name: `run!`.
+  const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';
@@ -807,7 +808,12 @@ ${subRegLines.join('\n')}
     // body — they hold the actor address as a Value::String directly,
     // not via state.
     const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
-    // Fire-and-forget send
+    // A call waits for its reply, as on every target, unless it's silent (`note.`).
+    const awaitUnlessSilent = (id) => {
+      if (expr.method.endsWith('.')) return 'Value::Null';
+      G.ctx.needsAwaitNew = true;
+      return `self.await_response(&${id})`;
+    };
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInst || isLocalInst) {
@@ -838,7 +844,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
         let _ = self.binding.send(Value::Object(send_msg));
-        Value::Null
+        ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
     // Wrapped child param: dispatch through child_dispatch
@@ -878,7 +884,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("op".to_string(), json!(${method}));
         send_msg.insert("to".to_string(), json!(${to}));
         let _ = self.binding.send(Value::Object(send_msg));
-        Value::Null
+        ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
     const genArgValRaw = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
@@ -924,7 +930,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("to".to_string(), json!(${to}));
         send_msg.insert("ty".to_string(), ${tyExpr});
         let _ = self.binding.send(Value::Object(send_msg));
-        Value::Null
+        ${awaitUnlessSilent('send_id')}
     }`;
   }
   if (expr.type === 'FnRef' && G.ctx.actorFnNames.has(expr.name)) {

@@ -108,8 +108,9 @@ export function withInheritedState(actor, { inheritedState, inheritedInit }) {
   const stateNames = new Set(stateVarDecls.map(v => v.name));
   // The nearest class's initial value for a name is its only one.
   const seen = new Set();
+  // A write in a constructor block isn't an initial value.
   const initBody = [...inheritedInit, ...(actor.initBody || [])].reverse().filter((s) => {
-    if (!stateNames.has(s.name)) return true;
+    if (s.type !== 'StateAssign' || !stateNames.has(s.name)) return true;
     if (seen.has(s.name)) return false;
     seen.add(s.name);
     return true;

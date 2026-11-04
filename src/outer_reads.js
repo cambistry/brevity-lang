@@ -45,7 +45,10 @@ function fileFunctionNames(program, outer) {
 export function markOuterReads(program) {
   const outer = fileOuterNames(program);
   const fileFunctions = fileFunctionNames(program, outer);
-  if (outer.size === 0 && fileFunctions.size === 0) return;
+  // A dependency in the file's header is the file actor's, so a class's call on it
+  // is made by the file actor (`outerCall`), as a read of its cell is.
+  const dependencies = new Set((program.dependencies || []).map(d => d.name));
+  if (outer.size === 0 && fileFunctions.size === 0 && dependencies.size === 0) return;
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
   for (const actor of program.actors) {
     if (!actor.name) continue;
@@ -77,6 +80,10 @@ export function markOuterReads(program) {
         if (locals.length) bound = new Set([...bound, ...locals]);
       }
       if (node.type === 'FunctionCallExpr') checkCall(node, bound);
+      if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier' && dependencies.has(node.object.name)
+          && !own.has(node.object.name) && !bound.has(node.object.name)) {
+        node.outerCall = true;
+      }
       if ((node.type === 'Identifier' || node.type === 'RefRead') && reaches(node.name, bound)) {
         node.outer = true;
         return;
@@ -109,13 +116,13 @@ export function markOuterReads(program) {
   }
 }
 
-// Whether any class in the program reads its file actor.
+// Whether any class in the program reads its file actor, or calls its dependencies.
 export function hasOuterReads(program) {
   let found = false;
   const walk = (node) => {
     if (found || !node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
-    if (node.outer === true) { found = true; return; }
+    if (node.outer === true || node.outerCall === true) { found = true; return; }
     for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
   };
   for (const a of program.actors) if (a.name) walk(a);

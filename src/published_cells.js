@@ -41,8 +41,9 @@ export function lowerOwnCellWrites(ast) {
             if (!declared.has(s.name)) check(s.name);
             continue;
           }
+          // A public constant (`@magic = "x"`) is state, but not a cell.
           const cell = state.get(s.name);
-          if (!cell) throw new Error(`Cannot set '${s.name}' — it isn't a published cell of this ${actor.name ? 'class' : 'file'}`);
+          if (!cell || cell.isRef === false) throw new Error(`Cannot set '${s.name}' — it isn't a published cell of this ${actor.name ? 'class' : 'file'}`);
           node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name.slice(1), cellType: cell.typeName } });
         }
         return;

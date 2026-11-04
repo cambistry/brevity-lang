@@ -1,6 +1,7 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import * as AST from '../../ast.js';
+import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { fileOuterNames } from '../../outer_reads.js';
@@ -1626,6 +1627,8 @@ function genProgram(ctx, actor, allActors, options = {}) {
 
   // Generate state initialization lines (run at startup before read_loop)
   const stateInitLines = [];
+  // A cell set from a call to the file's own function holds the reply's one value.
+  const soleValueOf = (s, val) => (s.soleValue && s.value.type !== 'AsExpr' ? `bv_object_one(${val})` : val);
   for (const v of stateVarDecls) {
     if (v.isRef && actor.initBody) {
       const initStmt = actor.initBody.find(s => s.name === v.name);
@@ -1661,7 +1664,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
           // Local child actor construction — a fresh instance; the cell holds its pid
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, initStmt.value, new Map(), {})})`);
         } else {
-          const val = genExpr(ctx, initStmt.value, new Map(), {});
+          const val = soleValueOf(initStmt, genExpr(ctx, initStmt.value, new Map(), {}));
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${val})`);
         }
       }
@@ -1679,7 +1682,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
       stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, val, new Map(), {})})`);
       continue;
     }
-    const valExpr = genExpr(ctx, val, new Map(), {});
+    const valExpr = soleValueOf(initStmt, genExpr(ctx, val, new Map(), {}));
     stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${valExpr})`);
   }
   for (const p of constructorParams) {
@@ -1708,6 +1711,22 @@ ${putLines},
 ${putLines},
             ok
     end`);
+  }
+
+  // Calls to the file's own functions and writes, run while constructing in
+  // source order, once every cell and param is set.
+  const ownFnNames = new Set((actor.functions || []).map(f => f.name));
+  const ownCallEnv = new Map([
+    ...stateVarDecls.map(v => [v.name, v.typeName]),
+    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+  ]);
+  for (const s of actor.initBody || []) {
+    if (isOwnCallStatement(s, ownFnNames)) stateInitLines.push(`    _ = ${genExpr(ctx, s.expr, ownCallEnv, {})}`);
+    if (s.type === 'SetStatement') {
+      const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv([s]) };
+      const body = genLocals(ctx, [s], ownCallEnv, sCtx, '    ').join('\n').replace(/,\s*$/, '');
+      stateInitLines.push(body);
+    }
   }
 
   // Memoized return-as value for main actor

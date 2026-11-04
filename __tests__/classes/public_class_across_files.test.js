@@ -3,7 +3,14 @@ import { compileActor, compileSource, createActor, expectActorBehavior, expectBe
 // A public class constructed from another file. `#new` with the class as selector;
 // the reply's address names a sub-actor of whichever actor constructed it.
 
+// `@W!` writes while constructing, as a class named with `!` must: it tells `Log`.
 const SVC = `
+  *
+    "log.bv": Log {
+      note. () => .
+    }
+  *
+
   ::Point (x: Integer)
 
   @Counter = (start Integer, step: Integer) *{
@@ -13,6 +20,7 @@ const SVC = `
   }
 
   @W! = *{
+    Log.note.()...
     @one = { return 1 }
   }
 
@@ -416,6 +424,7 @@ describe('receiver side', () => {
   it('keeps the ! in the selector', async () => {
     await expectBehavior(SVC,
       { input: { id: '1', op: [{}, '#new'], to: '@W!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Log' }) },
       { output: { id: '1', re: '#<@W!/1>', 'ty': '@W!', to: 'c' } },
       { input: { id: '2', op: '@one', to: '@W!/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [1] }) },
@@ -462,8 +471,12 @@ describe('end to end', () => {
       if (msg.to === 'c') return msg;
       const to = msg.to.startsWith('Svc') ? msg.to.slice(3).trim() : msg.to;
       await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
-      await settle(svc, served);
-      const reply = svc.posts[served++];
+      // The service's own calls, such as `@W!` telling `Log`, aren't replies.
+      let reply;
+      do {
+        await settle(svc, served);
+        reply = svc.posts[served++];
+      } while (reply && 'op' in reply);
       const { ty, ...rest } = reply;
       await caller.sendAsync({ ...promote(rest, 'Svc'), ...('ty' in reply ? { ty: promoteTy(ty, 'Svc') } : {}), to: undefined, from: reply.from ? `Svc ${reply.from}` : 'Svc' });
     }
@@ -478,7 +491,7 @@ describe('end to end', () => {
   };
 
   it('constructs a class from another file and calls it', async () => {
-    expect(await run(`*\n  "svc.bv": Svc\n*\n@go = {\n  w = Svc.Counter(5, step: 2)\n  w.inc!()\n  v Integer = w.get()\n  return v\n}\n`, '@go')).toEqual([7]);
+    expect(await run(`*\n  "svc.bv": Svc\n*\n@go! = {\n  w = Svc.Counter(5, step: 2)\n  w.inc!()\n  v Integer = w.get()\n  return v\n}\n`, '@go!')).toEqual([7]);
   }, 120000);
 
   it('constructs a class named with ! and calls it', async () => {
@@ -496,7 +509,7 @@ describe('end to end', () => {
 
       @chain = { return Svc.Counter(5, step: 2).get() }
       @passTyped = { return readTyped(Svc.Counter(5, step: 2)) }
-      @writes = { return Svc.Counter(5, step: 2).inc!().get() }
+      @writes! = { return Svc.Counter(5, step: 2).inc!().get() }
       @pass = { return read(Svc.Counter(5, step: 2)) }
       @nested = { return Svc.Counter(Svc.Counter(1, step: 1).get(), step: 2).get() }
       @assign = {
@@ -519,7 +532,7 @@ describe('end to end', () => {
     }, 120000);
 
     it('a chain through a write', async () => {
-      expect(await run(script, '@writes')).toEqual([7]);
+      expect(await run(script, '@writes!')).toEqual([7]);
     }, 120000);
 
     it('an argument', async () => {

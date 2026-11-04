@@ -1310,8 +1310,13 @@ function checkTypeFieldAccess(ast) {
         const raw = expr.type === 'DotAccessExpr' ? expr.property : expr.method;
         const bang = raw.endsWith('!');
         const dotted = raw.endsWith('.');
+        // A writing field keeps its `!`: `run!` is its whole name.
+        if (bang && fieldDiscipline(decl, raw) === 'callback') return walkChildren(expr, env);
         const name = bang || dotted ? raw.slice(0, -1) : raw;
         const disc = fieldDiscipline(decl, name);
+        if (disc === null && !bang && !dotted && fieldDiscipline(decl, name + '!')) {
+          throw new Error(`Field '${name}!' on '::${tname}' writes — call it '.${name}!(…)'`);
+        }
         if (disc === null) {
           throw new Error(`Type '::${tname}' has no field '${name}'`);
         }
@@ -1328,8 +1333,8 @@ function checkTypeFieldAccess(ast) {
           expr.silentField = true;
         }
         // A trailing '!' is part of a member's name and may appear only on a
-        // function member declared with it. A type field is never bang-named
-        // (its name is a plain identifier), so a '!' here is always spurious:
+        // function member declared with it. A writing field declared `foo!` was
+        // found above, so a '!' here names a member that doesn't exist:
         // `.foo!` and `.foo` are distinct members, and only `.foo` exists.
         if (bang) {
           throw new Error(
@@ -1344,6 +1349,10 @@ function checkTypeFieldAccess(ast) {
         }
       }
     }
+    walkChildren(expr, env);
+  }
+
+  function walkChildren(expr, env) {
     for (const k of Object.keys(expr)) {
       if (k === 'type') continue;
       walkExpr(expr[k], env);
@@ -2143,6 +2152,8 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
     const hasSilent = fn.body.some(s => s.type === 'SilentTerminator');
     if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) silentFns.add(fn.name);
   }
+  // A public function is silent by its name: `@write.`.
+  for (const fn of actor.functions) if (fn.name?.startsWith('@') && fn.name.endsWith('.')) silentFns.add(fn.name);
   // `call...` launches without waiting, so its callee must be silent (`spawn`
   // stays permissive). A value-returning `fn` reached by `fn...` names it. A
   // launch of one of this actor's own functions is a `spawn`.

@@ -308,16 +308,17 @@ export function mintSsaName(ctx, name) {
 }
 
 // Reference-field invocation. If `objExpr` is a typed value whose field
-// `rawName` (bang stripped) is declared with a behavioral (function-signature)
+// `rawName` is declared with a behavioral (function-signature)
 // type, classify the call discipline. `silent` (`() -> .`) is fire-and-forget;
 // `callback` (any other `->` output) is reply-awaiting; `value` means the field
 // is not behavioral and so cannot be invoked (the validator reports it).
 // Returns null when the object is not a known typed value or has no such field.
 export function refFieldInvocation(ctx, objExpr, rawName) {
-  const field = rawName.endsWith('!') ? rawName.slice(0, -1) : rawName;
   const t = inferExprType(objExpr, ctx.currentTypeEnv);
   const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
   if (!decl) return null;
+  // A writing field keeps its `!` in its name: `run!`.
+  const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
   const pt = f.paramType || '';
@@ -946,7 +947,7 @@ export function genExpr(ctx, expr) {
     {
       const ref = refFieldInvocation(ctx, expr.object, expr.method);
       if (ref && ref.discipline !== 'value') {
-        const addr = `${genExpr(ctx, expr.object)}.${ref.field}`;
+        const addr = `${genExpr(ctx, expr.object)}[${JSON.stringify(ref.field)}]`;
         const positional = expr.args.filter(a => a.positional);
         const argVals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
         const op = positional.length ? `[[${argVals}], _bv_sel(${addr})]` : `_bv_sel(${addr})`;
@@ -1027,7 +1028,7 @@ export function genExpr(ctx, expr) {
           op = `[[${posVals}], ${JSON.stringify(method)}]`;
         }
       }
-      return `this.#send(${op}, ${to})`;
+      return expr.method.endsWith('.') ? `this.#fire(${op}, ${to})` : `this.#send(${op}, ${to})`;
     }
     // If the object isn't a registered service alias, it's a local variable
     // (e.g., a lambda parameter from `over(peers) |p|`) holding an actor ref.
@@ -1058,19 +1059,23 @@ export function genExpr(ctx, expr) {
       }
       return `this.#childSend(${resolved}, ${op})`;
     }
+    // A call on a dependency. A silent one (`note.`) has no reply to wait for. In a
+    // class, the dependency is the file's, so the file actor makes the call.
     const to = JSON.stringify(expr.object.name);
     const method = JSON.stringify('@' + expr.method);
-    if (positional.length === 0 && named.length === 0) {
-      return `this.#send(${method}, ${to})`;
-    }
+    const send = (op, ty) => {
+      if (expr.method.endsWith('.')) return `this.#fire(${op}, ${to}${expr.outerCall ? ', true' : ''})`;
+      if (expr.outerCall) return `this.#send(${op}, ${to}, ${ty ?? 'undefined'}, true)`;
+      return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
+    };
+    if (positional.length === 0 && named.length === 0) return send(method);
     const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
     if (positional.length > 0 && named.length > 0) {
-      return `this.#send([${posVals}, {${namedFields}}, ${method}], ${to}, [${posTy}, {${namedTy}}])`;
+      return send(`[${posVals}, {${namedFields}}, ${method}]`, `[${posTy}, {${namedTy}}]`);
     } else if (named.length > 0) {
-      return `this.#send([{${namedFields}}, ${method}], ${to}, [{${namedTy}}])`;
-    } else {
-      return `this.#send([[${posVals}], ${method}], ${to}, [[${posTy}]])`;
+      return send(`[{${namedFields}}, ${method}]`, `[{${namedTy}}]`);
     }
+    return send(`[[${posVals}], ${method}]`, `[[${posTy}]]`);
   }
   if (expr.type === 'SelfValue') return '"#<>"';
   if (expr.type === 'DotAccessExpr') {
@@ -1085,7 +1090,7 @@ export function genExpr(ctx, expr) {
     if (expr.property.endsWith('!')) {
       const ref = refFieldInvocation(ctx, expr.object, expr.property);
       if (ref && ref.discipline !== 'value') {
-        const addr = `${genExpr(ctx, expr.object)}.${ref.field}`;
+        const addr = `${genExpr(ctx, expr.object)}[${JSON.stringify(ref.field)}]`;
         return ref.discipline === 'silent'
           ? `this.#fire(_bv_sel(${addr}), ${addr})`
           : `this.#send(_bv_sel(${addr}), ${addr})`;

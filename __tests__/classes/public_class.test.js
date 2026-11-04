@@ -213,7 +213,14 @@ describe('Box and @Box are different classes', () => {
 // A self-return from an actor made by `#new` replies as `#new` did: the actor's
 // address in `re`, its class in `ty`. The file actor made it, so it adds the class.
 describe('a self-return from an actor made by #new', () => {
+  // A class named with `!` writes while constructing: here it tells `Svc`.
   const script = `
+    *
+      "svc.bv": Svc {
+        note. () => .
+      }
+    *
+
     @Box = *{
       n *Integer = 0
 
@@ -228,6 +235,7 @@ describe('a self-return from an actor made by #new', () => {
 
     @Pub! = *{
       n *Integer = 0
+      Svc.note.()...
 
       @go! = { n <- 1 }
     }
@@ -258,6 +266,7 @@ describe('a self-return from an actor made by #new', () => {
   it('a class named with ! keeps it in its class address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [{}, '#new'], to: '@Pub!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: '#<@Pub!/1>', 'ty': '@Pub!', to: 'c' } },
       { input: { id: '2', op: '@go!', to: '@Pub!/1', from: 'c' } },
       { output: { id: '2', re: '#<@Pub!/1>', 'ty': '@Pub!', to: 'c', from: '@Pub!/1' } },
@@ -497,7 +506,14 @@ describe('passing an actor to a function', () => {
 
 describe('W and @W! are different classes', () => {
   const script = `
+    *
+      "svc.bv": Svc {
+        note. () => .
+      }
+    *
+
     @W! = *{
+      Svc.note.()...
       @who = { return "public" }
     }
 
@@ -520,6 +536,7 @@ describe('W and @W! are different classes', () => {
   it('@W!() constructs the public class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@public!', from: 'c' } },
+      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
       { output: { id: '1', re: ['public'], 'ty': ['Text'], to: 'c' } },
     );
   });

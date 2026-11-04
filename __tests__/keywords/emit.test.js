@@ -15,7 +15,7 @@ const silentEmitScript = `
     @count = -> :count
   }
 
-  @noSub
+  @noSub!
     =
     f = Firer()
     f.fire!()
@@ -143,7 +143,7 @@ describe('emit — compilation', () => {
 describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@noSub', from: 'c' } },
+      { input: { id: '1', op: '@noSub!', from: 'c' } },
       { output: { id: '1', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
     );
   });

@@ -254,3 +254,8 @@ export const destructureAssign = (pattern, source) =>
 
 export const listDestructure = (pattern, source) =>
   ({ type: 'ListDestructure', pattern, source });
+
+// A constructor-block statement calling one of the actor's own functions, by a
+// name in `names`: `@reg!(1)`, `#mark!()`, `bump!()`.
+export const isOwnCallStatement = (s, names) => s.type === 'ExprStatement' && s.expr?.type === 'FunctionCallExpr'
+  && s.expr.callee?.type === 'Identifier' && names.has(s.expr.callee.name);

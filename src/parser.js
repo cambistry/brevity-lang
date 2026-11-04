@@ -1,3 +1,4 @@
+import { settleWriterBody } from './writer_body.js';
 import * as AST from './ast.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
@@ -4108,6 +4109,19 @@ export function parse(tokensIn) {
     return AST.asClause(targetType, negated, expr);
   }
 
+  // Whether the parens opening at `open` are followed by a body opener, as in a
+  // declaration missing its `=`: `@go(n: Integer) -> :n`. A call never is.
+  function opensBodyAfterParens(open) {
+    let depth = 0;
+    for (let i = open; i < tokens.length; i++) {
+      if (tokens[i].type === 'LPAREN') depth++;
+      else if (tokens[i].type === 'RPAREN' && --depth === 0) {
+        return ['->', 'LBRACE', 'EQUALS'].includes(tokens[i + 1]?.type);
+      }
+    }
+    return false;
+  }
+
   function isActorBodyStart() {
     // Detects whether the lineal-form body of a named `name = ... = body`
     // declaration is an actor body (becomes a class) vs. a regular function
@@ -4696,6 +4710,24 @@ export function parse(tokensIn) {
           body = parseBody();
         }
         functions.push(AST.onHandler(source, eventName, params, body));
+      } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
+        // A write in the constructor block: `n <- n + 1`, `@a <- 1`, `log <| x`.
+        const name = peek().value;
+        if (!isRef(name)) {
+          if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
+          throw new Error(`Cannot set '${name}' — only '*Type' variables support '<-'`);
+        }
+        const expr = parseExpr();
+        constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
+      } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
+                 || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
+                 || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && functions.some(f => f.name === peek().value)))
+                 && !opensBodyAfterParens(tokens.findIndex((t, i) => i > pos && t.type === 'LPAREN'))) {
+        // A call to this actor's own function, run while constructing. After `@`
+        // or `#`, a declaration needs `=` or a newline after the name. A bare name
+        // declared above can't be declared again, so it's a call too.
+        const expr = parseExpr();
+        pushExprOrBang(constructorBody, expr);
       } else if (peek().type === 'AT') {
         const node = parsePublicFunction(constructorBody);
         if (Array.isArray(node)) {
@@ -5118,7 +5150,7 @@ export function parse(tokensIn) {
           if (inferred && isCall(stmt.expr)) stmt.typeFromCallee = true;
         }
         declarationReturn = stmt;
-      } else if (stmt.type === 'ExprStatement') {
+      } else if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement') {
         initBody.push(stmt);
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
         const isIngest = stmt.value?.type === 'IngestExpr';
@@ -5156,15 +5188,37 @@ export function parse(tokensIn) {
   // A field holding a silent function is named with the silent `.`
   // (`press.: () -> .`); the stored name drops it — a type can't hold both
   // `press` and `press.`, and the dot is restored wherever the type is shown.
+  //
+  // A field's name matches its arrow, as a function's name matches its body: a
+  // `=>` field that returns is `name!`, a `->` or `~>` field is bare, and a value
+  // field takes no suffix. The `!` stays in the stored name.
   function silentFieldName(name, paramType) {
     const silentType = typeof paramType === 'string' && /=>\s*\.\s*$/.test(paramType);
     if (name.endsWith('.') && !silentType) {
       throw new Error(`Field '${name}' is silent by its name — its type is a silent function '(…) -> .'`);
     }
     if (silentType && !name.endsWith('.')) {
-      throw new Error(`Field '${name}' holds a silent function — name it '${name}.'`);
+      throw new Error(`Field '${name}' holds a silent function — name it '${name.replace(/!$/, '')}.'${name.endsWith('!') ? ", without '!'" : ''}`);
     }
-    return silentType ? name.slice(0, -1) : name;
+    if (silentType) return name.slice(0, -1);
+    const arrow = typeArrow(paramType);
+    const bang = name.endsWith('!');
+    if (bang && !arrow) throw new Error(`Field '${name}' is a value — only a function field takes '!'`);
+    if (bang && arrow !== '=>') throw new Error(`Field '${name}' holds a read-only function ('${arrow}'), so it takes no '!' — name it '${name.slice(0, -1)}'`);
+    if (!bang && arrow === '=>') throw new Error(`Field '${name}' holds a writing function ('=>'), so it must be named '${name}!'`);
+    return name;
+  }
+
+  // A function type's own arrow, skipping any inside its params or result.
+  function typeArrow(type) {
+    if (typeof type !== 'string') return null;
+    let depth = 0;
+    for (let i = 0; i < type.length; i++) {
+      if ('({['.includes(type[i])) depth++;
+      else if (')}]'.includes(type[i])) depth--;
+      else if (depth === 0 && /^[-=~]>/.test(type.slice(i, i + 2))) return type.slice(i, i + 2);
+    }
+    return null;
   }
 
   function parseTypeField() {
@@ -5735,85 +5789,8 @@ export function parse(tokensIn) {
       };
       rename(program.actors);
     }
-    const PURE_TAIL = new Set(['Identifier', 'RefRead', 'BinaryExpr', 'UnaryExpr', 'IntLiteral', 'BigIntLiteral', 'DecimalLiteral',
-      'FloatLiteral', 'NumberLiteral', 'TextLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'ListLiteral', 'StructureLiteral', 'ObjectLiteral', 'Function']);
-    const tailValueError = (fn) => new Error(`'${fn.name}' is a '!' function, which has no tail return — a final value is discarded. Did you mean 'return'?`);
-    const isReturn = (s) => s?.type === 'Reply' || s?.type === 'Return';
-    const isSelfReturn = (s) => s.fields?.[0]?.selfReturn === true;
     const classNames = new Set(program.actors.map(a => a.name).filter(Boolean));
-    // Whether a statement list always returns ('returns') or can reach its end
-    // ('falls'), rejecting tail values and dropping implicit-return wrappers.
-    const settleTail = (fn, stmts) => {
-      const last = stmts[stmts.length - 1];
-      if (!last) return 'falls';
-      // A final write is a statement, even in arrow form: `bump! = (i) -> a <- i`.
-      const tailWrite = last.type === 'ImplicitReturn' ? last.expr
-        : (isReturn(last) && last.tailValue && last.fields?.length === 1 ? last.fields[0].expr : null);
-      if (tailWrite?.type === 'SetExpr') {
-        stmts[stmts.length - 1] = AST.setStatement(tailWrite.name, tailWrite.value, { updateOp: tailWrite.updateOp });
-        return 'falls';
-      }
-      if (isReturn(last)) {
-        if (last.tailValue) {
-          if (isSelfReturn(last)) throw new Error(`'${fn.name}' returns self by falling off the end — delete the bare 'self', or write 'return self'`);
-          throw tailValueError(fn);
-        }
-        return 'returns';
-      }
-      if (last.type === 'ImplicitReturn' && last.expr?.type === 'IfExpr') {
-        settleIf(fn, last.expr);
-        // Each path through a tail `if` ends the function, so each returns self
-        // unless it says otherwise. That gives backends their one early-return form.
-        return returnSelfFromBranches(last.expr);
-      }
-      if (last.type === 'ImplicitReturn' || last.type === 'ExprStatement') {
-        if (PURE_TAIL.has(last.expr?.type)) throw tailValueError(fn);
-        if (last.type === 'ImplicitReturn') stmts[stmts.length - 1] = AST.exprStatement(last.expr);
-      }
-      return 'falls';
-    };
-    const returnSelfFromBranches = (ifExpr) => {
-      const close = (branch) => {
-        if (branch.type === 'IfExpr') return returnSelfFromBranches(branch);
-        if (!isReturn(branch.body[branch.body.length - 1])) branch.body.push(AST.returnNode(selfReturnFields()));
-        return 'returns';
-      };
-      const thenPath = close(ifExpr.then);
-      if (!ifExpr.else) return 'falls';
-      const elsePath = close(ifExpr.else);
-      return thenPath === 'returns' && elsePath === 'returns' ? 'returns' : 'falls';
-    };
-    const settleBranch = (fn, branch) => {
-      if (branch.type === 'IfExpr') return settleIf(fn, branch);
-      if (!branch.body) throw tailValueError(fn);
-      return settleTail(fn, branch.body);
-    };
-    const settleIf = (fn, ifExpr) => {
-      const thenPath = settleBranch(fn, ifExpr.then);
-      if (!ifExpr.else) return 'falls';
-      const elsePath = settleBranch(fn, ifExpr.else);
-      return thenPath === 'returns' && elsePath === 'returns' ? 'returns' : 'falls';
-    };
-    // Visits returns on this function's own paths, not those of nested functions.
-    const eachReturn = (node, visit) => {
-      if (!node || typeof node !== 'object' || node.type === 'Function') return;
-      if (Array.isArray(node)) { node.forEach(n => eachReturn(n, visit)); return; }
-      if (isReturn(node)) { visit(node); return; }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') eachReturn(v, visit);
-    };
-    const settle = (fn) => {
-      const body = fn.body || (fn.body = []);
-      const paths = settleTail(fn, body);
-      let returnsValue = false;
-      eachReturn(body, (r) => {
-        // A bare `return` exits the way falling off the end does.
-        if (!r.fields?.length) r.fields = selfReturnFields();
-        else if (!isSelfReturn(r)) returnsValue = true;
-      });
-      if (paths === 'returns') return;
-      if (returnsValue) throw new Error(`'${fn.name}' returns a value on one path and falls off the end on another — write 'return self' to make that deliberate`);
-      body.push(AST.reply(selfReturnFields()));
-    };
+    const settle = (fn) => { settleWriterBody(fn); };
     const visit = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(visit); return; }
@@ -5878,27 +5855,90 @@ export function parse(tokensIn) {
   }
 
   // Spreads a write chain into one statement per link, in source order. A write
-  // used as a value needs a returned cell reference, which doesn't exist yet:
-  // cells can't leave a function (notes/mutation-suffix-2026-10-31.md).
+  // used as a value evaluates to its cell, which now holds the new value, so
+  // `return a <- x` is `a <- x` then `return a`: the write moves to a statement
+  // just before the one using it, and the value reads the cell
+  // (notes/mutation-suffix-2026-10-31.md).
   function settleWrites(program) {
     const spread = (stmt) => {
       const chain = stmt.value;
       return [{ ...stmt, value: chain.first }, ...chain.rest.map(r => ({ ...stmt, value: r.value, updateOp: r.updateOp }))];
     };
+    let statementIf = null;
+    const hasWrite = (node) => !!node && typeof node === 'object' && node.type !== 'Function'
+      && (node.type === 'SetExpr' || node.type === 'SetChain' || Object.values(node).some(hasWrite));
+    // Replaces each write in a statement's expressions with a read of its cell,
+    // collecting the writes in evaluation order. Statement lists inside it, such as
+    // `if` branches, and nested functions, are visited on their own, so a write in a
+    // branch stays on that branch.
+    const hoist = (node, sets) => {
+      if (!node || typeof node !== 'object' || node.type === 'Function') return node;
+      if (Array.isArray(node)) return node.map(n => hoist(n, sets));
+      if (node.type === 'SetChain') throw new Error("A chain of writes used as a value needs a target: write 'a <- b <- c'");
+      if (node.type === 'SetExpr') {
+        const links = node.value?.type === 'SetChain'
+          ? [{ value: node.value.first, updateOp: node.updateOp }, ...node.value.rest]
+          : [{ value: node.value, updateOp: node.updateOp }];
+        for (const link of links) sets.push(AST.setStatement(node.name, hoist(link.value, sets), { updateOp: link.updateOp }));
+        return AST.refRead(node.name);
+      }
+      // Moving a write out of a part that may not run would make it run.
+      if (node.type === 'BinaryExpr' && node.op === '??' && hasWrite(node.right)) {
+        throw new Error("'<-' can't be used as a value on the right of '??', which may not run");
+      }
+      // A one-line branch of an `if` used as a value (`if c -> a <- 1 else -> 0`)
+      // holds its value as a lone `return`. With the write ahead of it, it takes
+      // the braced form: the write, then the value.
+      // Every one-line branch then takes that form, since an `if` gives a value when
+      // its branches agree.
+      if (node.type === 'IfExpr' && node !== statementIf) {
+        const lone = (branch) => {
+          const only = branch?.body?.length === 1 ? branch.body[0] : null;
+          return only?.type === 'Return' && only.fields?.length === 1 ? only : null;
+        };
+        const branches = [];
+        for (let b = node; b; b = b.else?.type === 'IfExpr' ? b.else : null) branches.push(b.then, ...(b.else?.type === 'IfExpr' ? [] : [b.else]));
+        if (branches.some(b => lone(b) && hasWrite(lone(b).fields[0].expr))) {
+          for (const branch of branches) {
+            const only = lone(branch);
+            if (!only) continue;
+            const branchSets = [];
+            const value = hoist(only.fields[0].expr, branchSets);
+            branch.body = [...branchSets, AST.implicitReturn(value)];
+          }
+        }
+      }
+      const out = { ...node };
+      for (const [k, v] of Object.entries(node)) {
+        if (k === 'body' || k === 'then' || k === 'else' || !v || typeof v !== 'object') continue;
+        out[k] = hoist(v, sets);
+      }
+      return out;
+    };
+    const settleList = (list) => {
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (list[i]?.value?.type === 'SetChain') list.splice(i, 1, ...spread(list[i]));
+      }
+      for (let i = 0; i < list.length; i++) {
+        if (!hasWrite(list[i])) continue;
+        // An `if` that is the whole statement isn't a value: a one-line branch's
+        // `return` there leaves the function.
+        statementIf = (list[i].type === 'ExprStatement' || list[i].type === 'ImplicitReturn') && list[i].expr?.type === 'IfExpr' ? list[i].expr : null;
+        const sets = [];
+        const stmt = hoist(list[i], sets);
+        // A tail write, `(i) -> a <- i`: a writer drops the read again.
+        if (list[i].type === 'ImplicitReturn' && list[i].expr?.type === 'SetExpr') stmt.fromTailWrite = true;
+        list.splice(i, 1, ...sets, stmt);
+        i += sets.length;
+      }
+    };
     const visit = (node) => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) {
-        for (let i = node.length - 1; i >= 0; i--) {
-          if (node[i]?.value?.type === 'SetChain') node.splice(i, 1, ...spread(node[i]));
-        }
-        node.forEach(visit);
-        return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      for (const [k, v] of Object.entries(node)) {
+        if ((k === 'body' || k === 'initBody') && Array.isArray(v)) settleList(v);
+        if (v && typeof v === 'object') visit(v);
       }
-      if (node.type === 'SetChain') throw new Error("A chain of writes must be a statement: '<-' as a value isn't supported yet");
-      if (node.type === 'SetExpr') {
-        throw new Error(`'${node.name} <- …' as a value isn't supported yet — it would hand out a reference to the cell. Write the set, then 'return ${node.name}'`);
-      }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
     };
     visit(program.actors);
   }
