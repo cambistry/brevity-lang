@@ -237,9 +237,9 @@ export function checkEffects(ast, remotesParsed = {}) {
         if (classes.get(name).sourceName) scope.write(`${name}!(…)`);
         return;
       }
-      // An emit sets nothing: what subscribers do is theirs. So it doesn't reach past
-      // the actor, though it still counts as a write for the emitting function's name.
-      if (emits.has(name)) { if (!scope.reachOnly) scope.write(`${name}(…)`); return; }
+      // An emit sets nothing: what subscribers do is theirs
+      // (notes/emit-not-a-write-2026-11-03.md).
+      if (emits.has(name)) return;
       const local = scope.localFunctions.get(name);
       if (local) {
         if (local.writesOutside) scope.write(`${name}(…)`);
@@ -418,23 +418,30 @@ export function checkEffects(ast, remotesParsed = {}) {
     };
 
     // A function with no value to give back. Discarding a call to it loses nothing.
-    const yieldsNothing = (fn) => !fn?.body?.some(st =>
-      ((st.type === 'Reply' || st.type === 'Return') && st.fields?.length) || st.type === 'ImplicitReturn'
-      || (st === fn.body[fn.body.length - 1] && st.type === 'ExprStatement'));
+    // A tail call to a silent emit (`emit fired() => .`) gives back nothing either.
+    const silentEmitsOf = (owner) => new Set((owner?.constructorBody || []).filter(d => d.type === 'EmitDecl' && d.silent).map(d => d.name));
+    const yieldsNothing = (fn, owner) => {
+      const silentEmits = silentEmitsOf(owner);
+      const valueless = (st) => (st.type === 'ImplicitReturn' || st.type === 'ExprStatement')
+        && st.expr?.type === 'FunctionCallExpr' && silentEmits.has(st.expr.callee?.name);
+      return !fn?.body?.some(st => !valueless(st) && (
+        ((st.type === 'Reply' || st.type === 'Return') && st.fields?.length) || st.type === 'ImplicitReturn'
+        || (st === fn.body[fn.body.length - 1] && st.type === 'ExprStatement')));
+    };
     const discardedName = (expr) => (expr.type === 'DotCallExpr' ? `.${expr.method}()` : `${expr.callee.name}()`);
     const isReadCall = (expr, scope) => {
       if (expr?.type === 'FunctionCallExpr') {
         const n = expr.callee?.name;
         if (!n || isSuffixed(n)) return false;
         const own = functions.find(f => f.name === n);
-        return !!own && !yieldsNothing(own);
+        return !!own && !yieldsNothing(own, actor);
       }
       if (expr?.type === 'DotCallExpr' && !isSuffixed(expr.method)) {
         const rootName = expr.object?.type === 'Identifier' || expr.object?.type === 'RefRead' ? expr.object.name : null;
         if (!rootName) return false;
         const ownClass = classes.get(scope.instances.get(rootName) ?? instanceOf.get(rootName.replace(/^@/, '')));
         const own = ownClass && classMethods(ownClass, expr.method)[0];
-        if (own) return !yieldsNothing(own);
+        if (own) return !yieldsNothing(own, ownClass);
         const alias = depAliasFor(rootName, scope);
         const sigs = alias && docSignatures(alias, expr.method);
         return !!sigs && sigs.every(sig => sig.effect === 'read' && sig.returns?.length);
@@ -459,7 +466,6 @@ export function checkEffects(ast, remotesParsed = {}) {
           localFunctions: new Map(),
           writingParams: new Set(writingParamsOf(fn)),
           ownCallsByReach: true,
-          reachOnly: true,
           write: () => { out = true; },
           discard: () => {},
         };

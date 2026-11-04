@@ -1,8 +1,7 @@
 # `emit` isn't a write — 2026-11-03
 
-Status: **decided 2026-11-03.** Reverses "`emit` counts as a write" in
-[mutation-suffix](mutation-suffix-2026-10-31.md) (Settled decisions). Partly implemented:
-see "Status" below.
+Status: **decided and implemented 2026-11-03.** Reverses "`emit` counts as a write" in
+[mutation-suffix](mutation-suffix-2026-10-31.md) (Settled decisions).
 
 ## Decision
 
@@ -41,11 +40,18 @@ the transaction work tracks that itself. The suffix won't show it.
 
 Refinements may follow.
 
-## Status
+## Implementation
 
-- **Implemented** on the effect-rules ticket
-  ([session-2026-11-03-effect-rules](session-2026-11-03-effect-rules.md)): for the
-  fresh-actor exemption, an emit doesn't reach past the actor. `w = W(); w.fire!()` where
-  `fire!` only emits is no write for the caller.
-- **Not yet:** an emit still counts as a write when naming the function that emits, and in
-  a constructor block. That's the follow-up ticket.
+- **`src/effects.js`:** a call to an emit isn't a write anywhere: in naming, in a
+  constructor block, or for the fresh-actor exemption. A tail call to a silent emit
+  (`=> .`) gives back no value, so discarding a call to a function that ends in one isn't
+  a discarded read.
+- **Fallout:** a `!` function that only emits is "never writes". In
+  `keywords/emit.test.js`, `@fire!` became `@trigger` (a public `@fire` would clash with
+  the bare emit `fire()`), `@send!` and `@validate!` lost their `!`, and so did handlers
+  whose only writes went through them.
+
+## Open
+
+- **An emit declaration's arrow.** `emit fired() => .` still says `=>`. Decide whether it
+  becomes `->`, or stays as "subscribers may act".

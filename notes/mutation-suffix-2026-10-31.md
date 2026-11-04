@@ -209,6 +209,8 @@ The compiler infers this. There is no effect analysis in `src/validate.js` today
 - Calling a remote function whose doc doesn't declare it read-only.
 
 **Not writes:**
+- An `emit`, and `.subscribe`: what a subscriber does is its own
+  ([emit-not-a-write](emit-not-a-write-2026-11-03.md)).
 - Local cells that don't escape the function.
 - Writes to an actor created in this function that hasn't escaped yet. Without
   this exemption every factory would need a suffix:
