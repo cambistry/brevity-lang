@@ -415,7 +415,8 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
   actor's state. The same applies to a constructor's calls to its own functions, since
   inside a constructor `self` is a fresh actor. This needs a second fact per function in
   this file: whether its writes reach past its own actor. A dependency's doc can't state
-  that, so calls on a fresh dependency always count. An emit reaches past the actor.
+  that, so calls on a fresh dependency always count. An emit doesn't reach past the actor
+  ([emit-not-a-write](emit-not-a-write-2026-11-03.md)).
 - **A constructor follows the same rules as a function.** A class named `!` that never
   writes is an error. Overriding a `!` member of a foreign parent may be purer than the
   parent, as with a parent in this file. No `return` is required in a constructor block:
@@ -434,7 +435,8 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
 
 ## Settled decisions
 
-- **`emit` counts as a write, `.subscribe` doesn't.**
+- ~~**`emit` counts as a write, `.subscribe` doesn't.**~~ Reversed 2026-11-03: neither is a
+  write ([emit-not-a-write](emit-not-a-write-2026-11-03.md)).
 - **Mixed return paths in docs:** `=> (Type) | self`, and nothing chains on one. See "Generated
   docs" in [the session note](session-2026-10-31-mutation-suffix.md). Value paths that differ among
   themselves: `(Integer | Text)` or `(a: Integer) | (Integer)`, in
