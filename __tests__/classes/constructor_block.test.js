@@ -149,6 +149,13 @@ describe('a class calling its file\'s dependency', () => {
       n Integer = p.get!()
       return n
     }
+
+    @both! = {
+      Svc.ping!()
+      p = P()
+      n Integer = p.get!()
+      return n
+    }
   `;
 
   it('is made by its file actor', async () => {
@@ -167,6 +174,20 @@ describe('a class calling its file\'s dependency', () => {
     const call = actor.posts.find(p => p.op === '@ping!');
     expect(call).toEqual(expect.objectContaining({ to: 'Svc' }));
     await actor.sendAsync({ id: call.id, re: '#<Svc>', from: 'Svc' });
+    expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
+  });
+
+  // The file actor makes the class's call, so it can't reuse an id the file actor has
+  // already used.
+  it('goes out under an id of the file actor\'s', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@both!', from: 'c' });
+    const first = actor.posts.find(p => p.op === '@ping!');
+    await actor.sendAsync({ id: first.id, re: '#<Svc>', from: 'Svc' });
+    const second = actor.posts.filter(p => p.op === '@ping!')[1];
+    expect(second).toEqual(expect.objectContaining({ to: 'Svc' }));
+    expect(second.id).not.toEqual(first.id);
+    await actor.sendAsync({ id: second.id, re: '#<Svc>', from: 'Svc' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 });

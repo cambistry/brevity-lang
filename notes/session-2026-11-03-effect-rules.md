@@ -61,12 +61,13 @@ plus the constructor-block and dependency gaps the work ran into. Uncommitted.
   call now takes the general path.
 
 - **Erlang didn't wait on a call used as a statement** either. It does now (`bcdc63a`).
-  The test checks only the caller's final reply, not that it came after `Svc`'s: checking
-  the order would fail on Rust, whose harness replays every message into a fresh process,
-  so a call waiting on a reply not sent yet stops at the end of input.
+  `cam/remote_instance.test.js` shows it on every target despite Rust's replaying harness:
+  a bump that arrives while `@go!` waits on `Svc` is handled first, so `@go!` returns 1.
+  That also pins down that an actor answers other messages while it waits.
 - **On Erlang a class's dependency call went out from the class,** under its own
   process's ids. The file actor now makes it (`bv_outer_call_`), answering in each of its
   waits as it does a read. Rust needs nothing: a class shares its file actor's struct.
+  `constructor_block.test.js` checks that a class's call doesn't reuse the file actor's id.
 - **A launched call didn't know it was launched.** Validation now marks every `…...` call
   (`launched`), so a doc's silent function without its dot, or `ping!()...`, doesn't wait
   on any target. Constructor blocks are checked too.

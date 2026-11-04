@@ -72,6 +72,36 @@ describe('remote actor — sequential calls to actor', () => {
   });
 });
 
+// A call used as a statement waits for its reply. While it waits, the actor answers
+// other messages, so a bump that arrives first is seen by the waiting handler.
+describe('a call used as a statement waits for its reply', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        ping! () => self
+      }
+    *
+    n *Integer = 0
+    @bump! = { n <- n + 1 }
+    @go! = {
+      Svc.ping!()
+      return n
+    }
+  `;
+
+  it('and returns only once the reply comes', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@go!', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', op: '@ping!', to: 'Svc' }) },
+      { input: { id: '2', op: '@bump!', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', to: 'c' }) },
+      { input: { id: '1', re: '#<Svc>', from: 'Svc' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+});
+
 describe('a call that doesn\'t wait for a reply', () => {
   const script = `
     *
