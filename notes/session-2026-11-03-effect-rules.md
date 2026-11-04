@@ -11,7 +11,8 @@ plus the constructor-block and dependency gaps the work ran into. Uncommitted.
    ones included. `src/effects.js` now builds a context per actor, computes "reaches
    past its actor" for every function in the file to a fixed point, and only then runs
    the checks. A function's own cells (inherited too) and its own functions that
-   don't reach out are its own; anything else, an emit included, reaches out. `d =
+   don't reach out are its own; anything else reaches out. An emit isn't a write at all
+   ([emit-not-a-write](emit-not-a-write-2026-11-03.md)). `d =
    c.inc!(5)` binds `d` to `c`'s class. A fresh actor of a dependency's class
    (`Svc.Counter(…)`, `Svc()`) always counts, since a doc can't say.
 2. **A constructor follows the rules of a function.** A class named `!` whose
@@ -39,7 +40,7 @@ plus the constructor-block and dependency gaps the work ran into. Uncommitted.
 - **Constructor blocks couldn't call or write.** At the top of a body, a line starting
   with a name was read as a declaration: `@reg!(1)` and `n <- 1` were parse errors, and
   at file level `reg!()` silently turned the rest of the file into a class. Now
-  `@name(…)`, `#name(…)`, a bare `name(…)` declared above, and `<-` work on every
+  `@name(…)`, `#name(…)`, a bare `name(…)` this body declares (above or below), and `<-` work on every
   target. A public constant (`@magic = "x"`) still can't be written. Rust and Erlang
   ignored these statements in setup; Erlang's file setup runs them after every cell and
   param is set. `x = @f()` at file level holds the one value. The inheritance merge was
@@ -53,25 +54,29 @@ plus the constructor-block and dependency gaps the work ran into. Uncommitted.
   comes. A test in `cam/remote_instance.test.js` fed replies to silent calls; those steps
   are gone.
 - **Launching your own public silent function,** `@write.("x")...`, never compiled.
-
 - **Rust didn't wait on a call used as a statement,** `Svc.ping!()`, to a dependency or
   a remote instance. It does now, unless the call is silent. JS already did.
 - **Rust compiled `n Integer = run(() -> { … })` to `Value::Null`** when the lambda had
   more than one statement: the inlining path only knew a one-expression lambda. Such a
   call now takes the general path.
 
+- **Erlang didn't wait on a call used as a statement** either. It does now (`bcdc63a`).
+  The test checks only the caller's final reply, not that it came after `Svc`'s: checking
+  the order would fail on Rust, whose harness replays every message into a fresh process,
+  so a call waiting on a reply not sent yet stops at the end of input.
+- **On Erlang a class's dependency call went out from the class,** under its own
+  process's ids. The file actor now makes it (`bv_outer_call_`), answering in each of its
+  waits as it does a read. Rust needs nothing: a class shares its file actor's struct.
+- **A launched call didn't know it was launched.** Validation now marks every `…...` call
+  (`launched`), so a doc's silent function without its dot, or `ping!()...`, doesn't wait
+  on any target. Constructor blocks are checked too.
+- **JS dispatched a reply nobody was waiting for** as an op, and threw. It drops it now.
+
 ## Known gaps
 
-- **Erlang doesn't wait on a call used as a statement** either. The test for it checks
-  only the caller's final reply, not that it came after `Svc`'s: checking the order would
-  fail on Rust, whose harness replays every message into a fresh process, so a call
-  waiting on a reply not sent yet stops at the end of input.
-- **On Rust and Erlang a class's dependency call goes out from the class**, not through
-  its file actor.
-- **A foreign silent function documented without its dot** is still awaited on JS: the
-  JS context has no parsed docs, so silence is read from the name.
-- Calls to an undeclared own function (`@nope(1)`) aren't reported. An unannotated
-  `x = @f()` is `Anything`: types aren't inferred through calls.
+Ticketed separately: calls to an undeclared own function (`@nope(1)`) aren't reported;
+the Rust test harness can't show that a call waits; an unannotated `x = @f()` is
+`Anything`, since types aren't inferred through calls.
 
 ## Tests
 
@@ -81,6 +86,6 @@ fresh actors, `=>` slots, field names, `<-` as a value, `untracked @log`. In
 `bang`, `actor_interface`, `public_class` and `public_class_across_files` now write
 while constructing, through a silent dependency call, and their runtime tests expect
 that message. Functions that now count as writers were renamed with `!` (`peer`,
-`emit`, `public_class_across_files`).
+`public_class_across_files`).
 
 JS: every project directory except `browser`'s own project is green (161 suites).
