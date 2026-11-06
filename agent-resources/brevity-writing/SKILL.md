@@ -13,6 +13,8 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 - Use `@name` for the public message surface.
 - Use a top-level `*` … `*` header (each star alone on its line) for dependencies or constructor-like inputs.
 - Prefer named parameters and named returns.
+- Name a function that writes with `!` (or `.` if it doesn't reply); leave read-only
+  functions unmarked. End a `!` function with its write or a `return`.
 - Prefer explicit intermediate bindings over clever one-liners.
 - Keep message flow visible: request, reply, transform, return.
 - If a construct is not covered by this pack, choose a simpler shape instead of inventing syntax.

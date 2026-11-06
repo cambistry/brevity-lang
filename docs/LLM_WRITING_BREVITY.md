@@ -44,7 +44,7 @@ lineal: params, then local work, then reply.
 ```brevity
 count *Integer = 0
 
-@inc = {
+@inc! = {
   count <- count + 1
   return value: count
 }
@@ -54,14 +54,55 @@ count *Integer = 0
 actor-shaped binding rather than a plain Integer value. Use `<-` for cell
 mutation. Use `=` for binding. Pass a cell with `*name` when a function
 parameter expects `*Type` (the call-site `*` grants write capability).
+A function that writes is named `!` (see Effects below).
 
 ```brevity
-@bump = {
-  inc = (target *Integer) { target <- target + 1 }
-  inc(*count)
+count *Integer = 0
+
+@bump! = {
+  inc! = (target *Integer) { target <- target + 1 }
+  inc!(*count)
   return value: count
 }
 ```
+
+## Effects
+
+A name says whether its function writes, and the compiler checks it:
+
+- **No mark** (`total`): read-only. Its tail expression is its value.
+- **`!`** (`inc!`): writes. No tail return: falling off the end returns `self`, and
+  `return v` returns `v`. A final value is an error, and so is mixing `return v` with
+  falling off the end (write `return self`).
+- **`.`** (`reset.`): silent, no reply. Call it with `...`.
+
+```brevity
+n *Integer = 0
+
+@total = -> n
+@inc! = (i Integer) { n <- n + i }
+@take! = {
+  v Integer = n
+  n <- 0
+  return v
+}
+@reset. = { n <- 0 }
+```
+
+Calling a `!` or `.` function is a write, so its caller needs a mark too. Writes that
+don't count: cells local to the call, calls on an actor the function just made (if they
+write only that actor), `emit`, and anything `untracked` (logs, metrics, caches).
+
+Signatures state the effect in the arrow, never the name: `->` reads, `=>` writes,
+`~>` claims to read. `=> self` returns self, `=> .` is silent, and `-> self` is the
+identity. These arrows appear in docs, function types and type fields only; a body's
+arrow is always `->`.
+
+Chains: `c.inc!(1).inc!(2).total()` works because each `!` link returns `c`. When a
+link returns a value, as `take!` does, bind it first.
+
+Details and every example, compiled: [Syntax Crib](./SYNTAX_CRIB.md), sections "Effects"
+through "Chains".
 
 ## Dependencies
 
@@ -85,7 +126,7 @@ Declare dependencies in the file header:
 }
 ```
 
-Silent methods are named with a glued `.` and typed `-> .`; call them with a
+Silent methods are named with a glued `.` and typed `=> .`; call them with a
 trailing `...` (fire-and-forget). Replying methods bind their named reply fields.
 
 ## Remote Actors
@@ -130,21 +171,21 @@ access on the actor would be a message send.
 Use built-in methods through type calls, receiver calls, or bang cell calls:
 
 ```brevity
-upper Text = Text.upper("hello")
-
 name *Text = " ada "
-clean Text = name.trim
-name.trim!
+items *List of Integers = [1, 2, 3]
 
-items *(List of Integer) = [1, 2, 3]
-items.append!(4)
-
-payload Blob = Blob.from_hex("68656c6c6f")
+@go! = {
+  upper Text = Text.upper("hello")
+  clean Text = name.trim()
+  payload Blob = Blob.from_hex("68656c6c6f")
+  name.trim!()
+  items.append!(4)
+}
 ```
 
-Postfix `!` on a method call (`name.trim!`, `items.append!(...)`) is the
-mutate-in-place form for actor cells — distinct from prefix `*`, which is the
-actorize sigil on types and constructors.
+Postfix `!` on a method call (`name.trim!()`, `items.append!(...)`) is the
+mutate-in-place form for actor cells, and a write like any other — distinct from
+prefix `*`, which is the actorize sigil on types and constructors.
 
 Core method references:
 
@@ -166,6 +207,7 @@ For browser examples, start with the tested browser and HTML/XML notes:
 - Prefer the simplest pattern already present in tests.
 - Keep examples small and actor-centered.
 - Do not invent method names; check the relevant method doc first.
-- Name silent operations with a glued `.` (`save.`), type them `-> .`, and call them with `...`. A trailing `.` in a body is an error.
+- Name a function that writes with `!` (`save!`), and a silent one with a glued `.` (`save.`), typed `=> .` and called with `...`. A trailing `.` in a body is an error.
+- In a `!` function, end with the write, or `return` the value; never a bare tail value.
 - Use explicit local variables when reply typing matters.
 - Treat design notes as context. Treat test-backed docs as current behavior.

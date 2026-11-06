@@ -1,8 +1,9 @@
 # `!` means the function writes: mutation, return paths, and service docs — 2026-10-31
 
-Status: **Phases 1-4 IMPLEMENTED, 2026-10-31 to 11-01**
-([session note](session-2026-10-31-mutation-suffix.md)). The open effect rules were
-settled and implemented 2026-11-03 (below). Supersedes
+Status: **IMPLEMENTED and committed, on every target.** Phases 1-4 landed 2026-10-31 to
+11-01 ([session note](session-2026-10-31-mutation-suffix.md)). The open effect rules were
+settled and landed 2026-11-03 (`dd9b31e`, `bcdc63a`;
+[session note](session-2026-11-03-effect-rules.md)). Supersedes
 [bang-returns-self](bang-returns-self-2026-10-27.md). Builds on
 [bang-name-suffix-enforcement](bang-name-suffix-enforcement-2026-10-27.md) (name
 match at the call site, kept) and
@@ -23,19 +24,21 @@ A function's name says whether it writes. Its return paths say what it yields.
 ```brevity
 C = *{
   acc *Integer = 0
-  items *List of Integer = []
 
   @total = -> acc                                // read-only
   @inc! = (i Integer) { acc <- acc + i }         // returns self
-  @pop! = {
-    v = items.last
-    items <- items.rest
+  @take! = {                                     // returns v
+    v Integer = acc
+    acc <- 0
     return v
   }
 }
 
-C().inc!(5).inc!(2).total
+@go = { return C().inc!(5).inc!(2).total() }
 ```
+
+`@go` needs no `!`: its writes all land on an actor it just made
+(see "What counts as a write").
 
 Why the sigil is on every write: `top = a.sort().first` must never silently
 reorder `a`. Whether a call writes matters far more to a reader than which
@@ -72,7 +75,7 @@ are described by their service doc, and their names are never interpreted.
 | `self` | Error |
 | `return self` | Returns self |
 | `return v` | Returns `v` |
-| `return acc <- x` | Returns a reference to `acc` |
+| `return acc <- x` | Returns `acc`'s new value |
 | `if c { acc <- 1 }` | Valid |
 | `if c { acc <- 1 } else { 0 }` | Error: the second branch ends in a tail value |
 
@@ -90,14 +93,16 @@ cell `acc`, which now holds the new value, so used as a value it gives that valu
 Being a valid final statement is separate from being a return value:
 
 ```brevity
+acc *Integer = 0
 @inc! = (i Integer) { acc <- acc + i }            // returns self
-@inc! = (i Integer) { return acc <- acc + i }     // returns acc's new value
+@add! = (i Integer) { return acc <- acc + i }     // returns acc's new value
 ```
 
 - `return acc <- x` is exactly `acc <- x; return acc`. `<|` and `>>` likewise give
   the cell's new contents.
 - No cell leaves the function, so no capability is handed over.
-- **Not implemented yet:** a value use is still a compile error.
+- Cells only: `el.field <- v` has no value.
+- A write on the right of `??` is an error, since that part may not run.
 
 **Grammar.** `<-` is usable wherever an expression is, with no parens required:
 
@@ -164,18 +169,21 @@ function, and a function is a closure that captures `self`. So these rules apply
 to all of them:
 
 ```brevity
-bump! = (i) -> acc <- acc + i      // returns the captured self
+acc *Integer = 0
+bump! = (i Integer) -> acc <- acc + i      // a final write is a statement: returns self
 ```
 
 Inline anonymous functions have no name to carry a suffix:
 
-- A write in one makes it a mutating function, so it has no tail return. It falls
-  through to the captured `self`, unless the slot it fills is silent. Settled
-  2026-11-03: the slot's arrow decides, by the same rules as a named function.
-- v1: its writes are attributed to the function that defines it, which must then
-  be `!`. This is conservative: a function that only creates and returns a writing
+- **The slot's arrow decides** (settled 2026-11-03), by the rules for a named
+  function. In a `=>` slot it has no tail return and falls through to the captured
+  `self`; `=> (T)` needs `return` with a value, and in `=> .` it yields nothing. In a
+  `->` slot it must be read-only, with an implicit tail return.
+- **Its writes are attributed to the function that defines it,** which must then be
+  `!`. This is conservative: a function that only creates and returns a writing
   closure also gets a bang.
-- Later: the slot can declare the contract through its name (a parameter `f!`).
+- **A param's type states the contract,** as `f (Integer) => ()`, so no slot needs a
+  `!` in its name.
 
 ## Constructors
 
@@ -184,9 +192,27 @@ it `self` is that actor. A constructor that writes to something else therefore
 writes and returns self, so it takes `!`:
 
 ```brevity
-w = Widget(1)
-x = RegisteredWidget!(2)
-y = RegisteredWidget!(2).add!(z)     // chains on the new actor
+*
+  "Svc": Svc {
+    register. (Integer) => .
+  }
+*
+
+Widget = (n Integer) *{
+  @get = -> n
+}
+
+RegisteredWidget! = (n Integer) *{
+  Svc.register.(n)...                       // writes past the new actor
+  @add! = (i Integer) { Svc.register.(i)... }
+}
+
+@go! = {
+  w = Widget(1)
+  x = RegisteredWidget!(2)
+  y = RegisteredWidget!(2).add!(3)          // chains on the new actor
+  return 1
+}
 ```
 
 - **The actor's own setup doesn't count:** initializing its refs, calling its own
@@ -200,31 +226,40 @@ y = RegisteredWidget!(2).add!(z)     // chains on the new actor
 
 ## What counts as a write
 
-The compiler infers this. There is no effect analysis in `src/validate.js` today.
+The compiler infers this, in `src/effects.js`, at the end of validation.
 
 **Writes:**
 - `<-`, `<|` and `>>` on state that outlives the call.
 - `*x.method!()` on built-ins.
 - Calling any `!` function, or any silent function.
-- Calling a remote function whose doc doesn't declare it read-only.
+- Calling a dependency's function that its doc marks `=>`. A `~>` counts as a read
+  (see "`~>` spreads" below).
 
 **Not writes:**
 - An `emit`, and `.subscribe`: what a subscriber does is its own
   ([emit-not-a-write](emit-not-a-write-2026-11-03.md)).
 - Local cells that don't escape the function.
-- Writes to an actor created in this function that hasn't escaped yet. Without
-  this exemption every factory would need a suffix:
+- Writes to an actor created in this function that hasn't escaped yet, if the
+  function called writes nothing past that actor. Without this exemption every
+  factory would need a suffix:
 
   ```brevity
+  Widget = *{
+    n *Integer = 0
+    @add! = (i Integer) { n <- n + i }
+  }
+
   make_widget = {
-    w = *Widget()
-    w.add!(x).add!(y)
+    w = Widget()
+    w.add!(1).add!(2)
     return w
   }
   ```
 
   Passing or storing `w` before the write counts as escaping. Creating an actor
-  isn't a write either: if a transaction aborts, the runtime discards it.
+  isn't a write either: if a transaction aborts, the runtime discards it. A fresh
+  actor of a dependency's class (`Svc.Thing()`, `Svc()`) always counts, since a doc
+  can't say where its writes land.
 - `untracked` cells, functions and nested actors (below).
 
 **Contagion:** the effect is transitive, so every caller of a writer must be `!`
@@ -246,25 +281,46 @@ Writes that don't count: logs, metrics, caches. It applies to cells, functions a
 nested actors, and it crosses actor borders through the doc.
 
 ```brevity
-*{
-  untracked hits *Integer = 0
-  untracked @log *Text = ""
-  untracked @write. = (m Text) { @log <- @log + m }
-  untracked audit = Logger()
+Logger = *{
+  n *Integer = 0
+  @note! = (m Text) { n <- n + 1 }
+}
+
+untracked hits *Integer = 0
+untracked @log *Text = ""
+untracked @write. = (m Text) { @log <- @log + m }
+untracked audit = Logger()
+
+@get = {
+  hits <- hits + 1
+  @write.("x")...
+  audit.note!("y")
+  return 1
 }
 ```
+
+Its generated doc:
+
 ```
 {
   untracked log *Text
   untracked write. (Text) => .
+  get () -> (Integer)
 }
 ```
 
 - **Callers don't count it.** The arrow still says what the function does.
 - **Bodies are checked.** An `untracked` Brevity function may only write `untracked`
   state or call `untracked` functions, so `untracked @debit.` can't hide a real write.
-- **Importers can state it for foreign services:**
-  `"logger.js": Log -> *{ untracked write. (Text) => . }`.
+- **Importers can state it for foreign services**, in the inline doc:
+
+  ```brevity
+  *
+    "logger.js": Log {
+      untracked write. (Text) => .
+    }
+  *
+  ```
 - **Transactions don't roll it back.**
 - **It's a reserved word for locals only.** `@untracked`, `#untracked`, a member
   `x.untracked` and a key `untracked:` are all fine, and a doc entry `untracked (…)` is
@@ -279,8 +335,15 @@ nested actors, and it crosses actor borders through the doc.
 | `!` function never writes | Error (interface exception above) |
 | Tail value in a `!` function | Error: did you mean `return`? |
 | Bare tail `self` in a `!` function | Error: delete it, or write `return self` |
-| Bare statement discards a read-only call: `a.sorted()` | Error; suggests `sorted!` if it exists |
-| `a.sort()` when only `sort!` exists | Unknown member (exists today) |
+| Value on one path, falling off the end on another | Error: write `return self` |
+| Bare statement discards a read-only call: `a.sorted()` | Error |
+| `a.sort()` when only `sort!` exists | Unknown member |
+| Writing function passed to a `->` slot | Error: the param type would need `=>` |
+| Anonymous function in a `=>` slot yields what the slot doesn't say | Error |
+| Type field's name doesn't match its arrow | Error: `=> self` and `=> (T)` need `run!`, `=> .` needs `run.` |
+| `untracked` function writes tracked state | Error |
+| Class writes while constructing, has no `!` | Error, also for a subclass of a writing class |
+| Chain on a `!` call that returns a value, or on a doc's `(T) \| self` | Error: bind it first |
 | `!` returns its receiver's class but isn't the receiver | Warning at the declaration (not built: the compiler has no warning channel) |
 
 The last row covers the one case where a misread chain still type-checks:
@@ -328,13 +391,19 @@ log (Text) => .              // foreign silent function
 - **Function types use the same arrows.** A param typed `f: (Integer) -> (Integer)`
   requires a read-only callback, which replaces the `f!` slot-name idea.
 - **`~>` spreads.** It doesn't force `!`, but a Brevity function that reads a `~>` gets
-  `~>` in its own generated doc. A claim can't become a guarantee on the way up.
+  `~>` in its own generated doc, and so does every function in the file that reaches it
+  through calls, to a fixed point (`purportedFunctions` in `src/effects.js`). A claim
+  can't become a guarantee on the way up. A `!` or `.` function keeps `=>`, and a `~>`
+  call is reason enough for a `!`.
+- **`=>` and `~>` are for signatures only:** docs, function types and type fields. A
+  body's arrow is `->`, so `(i Integer) => i` is an error.
 - **`->` in a hand-written doc is its author's word.** The compiler can't check it. Use
   `~>` unless you own the implementation; the DOM manifest's queries stay `->`.
 - **`->` in source is unchanged.** Body arrows aren't effect notation; this applies in
   type positions and docs.
-- **A dependency with no doc at all counts as may write.** Every documented entry states
-  its effect, so this is the only undeclared case left.
+- **Every dependency has a doc,** inline in the header or supplied through
+  `options.remotes`; without one, compiling fails. Every entry states its effect, so no
+  call's effect is undeclared.
 - **The compiler generates docs for Brevity services** from what it already knows,
   so nothing is written twice.
 - **Importers can state a foreign contract** without an adapter, since an inline
@@ -386,7 +455,7 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
 | Declared `pop! returns Item` | Costs return-type inference. With tail return off, `return` alone marks the exception |
 | `<-` has no value | Was to stop a tail `<-` leaking the cell; rule 1 already closes that |
 | `<-` expression in parens only | Unneeded: its right side already takes a whole expression, so `return acc <- x` has one reading |
-| Right-associative `a <- b <- c` | `b <- c` evaluates to a reference to `b`, not its value, so `a` would receive a reference rather than `c` |
+| Right-associative `a <- b <- c` | Writes two cells with no parens to show it. Left-associative keeps one target, and `a <- (b <- c)` gives the double write when it's wanted |
 | Byproduct channels (the 10-27 note) | Unneeded now that `!` may return a value |
 
 ## Superseded in [bang-returns-self](bang-returns-self-2026-10-27.md)
@@ -449,62 +518,30 @@ transactions a natural grouping. Fire-and-forget stays a caller's choice with
   and `!` on the local alias shows it at the call site. They must agree. One that
   doesn't write is `Widget (a: Integer) -> *{ … }`.
 
-## Implementation plan
+## Implementation
 
-Scope test runs to changed files, on all targets. No target skips.
+All four phases are done, on every target:
 
-### Phase 1: declaring and returning from `!` functions
-
-No open decisions block this.
-
-- **Lexer/parser:** accept `!` on class, private and local function names and on
-  function-typed fields, and reject it on value fields. Today the lexer has no name
-  suffix for `!`, the parser only handles it on members
-  (`src/parser.js:2168`) and interfaces, and no test declares one. Share the suffix
-  handling with `silentSuffixAt` where possible.
-- **Body rules:** tail return off, fall through to self, rules 3-6. The promotion
-  to `ImplicitReturn` is at `src/codegen/javascript/classes.js:80-89`, with
-  counterparts in rust and erlang.
-- **Tail-value error, partial:** catch what's syntactically pure (names, literals,
-  operators, structures). Tail calls wait for phase 4, which knows their effects.
-- **Backends:** sanitize `!` in derived identifiers the way `.` is handled (JS
-  `$`, Rust/Erlang `fire__s`). Return self on all three.
-- **Built-ins:** `assertBangValidRef` (`src/parser.js:12`) stays. Those methods
-  already require a same-type return.
-- **Docs:** generated service docs emit `sort! (by) -> self`.
-- **`-> self`:** `parseFunctionType` (`src/parser.js:486`) rejects both `-> self` and
-  `-> (self)` today, so it needs to accept the former. Inline interfaces are kept as
-  raw text and already get through the parser with either. Move the 67
-  `-> (self)` lines in `src/codegen/browser/runtime.js` to `-> self`.
-- **Tests:** new `__tests__/functions/bang.test.js`. Revisit
-  `__tests__/types/bang_name_enforcement.test.js` where it assumes declarations
-  can't carry a bang.
-
-### Phase 2: `<-` as an expression
-
-Done, except for yielding a value (open decision 2). Chains spread into one statement
-per link, and a final write in arrow form is a statement in a `!` function.
-
-### Phase 3: service doc contracts
-
-- Add `=>` and `~>` to docs and function types, and read effects from the arrow, never
-  from the name. Report the error forms in the table above.
-- Mark the DOM and document manifests.
-- Generate the arrows for Brevity services.
-- Parse `untracked` on doc entries, for phase 4.
-- Fix `log! (Text) -> .` in the
-  [service doc note](session-2026-10-29-service-doc-notation.md), and the exemption
-  for bang entries from 10-30.
-
-Goes before phase 4 so enforcement doesn't force `!` onto every caller of a function
-that could have been documented as a read.
-
-### Phase 4: effect inference and enforcement
-
-Done, in `src/effects.js`. The check is local rather than a fixpoint: a callee's effect
-comes from its name or its doc's arrow, and the callee's own body answers for that name.
+1. **Declaring and returning from `!` functions:** names, body rules, self-return on the
+   wire, `-> self` in signatures. [Session note](session-2026-10-31-mutation-suffix.md).
+2. **`<-` as an expression:** chains spread into one statement per link, a final write in
+   arrow form is a statement, and a value use yields the cell's new value
+   (`settleWrites`, 2026-11-03).
+3. **Effect arrows in docs and function types:** `=>` and `~>`, the DOM and document
+   manifests, generated arrows, `untracked` on doc entries.
+4. **Effect inference and enforcement,** in `src/effects.js`. Two facts are computed to a
+   fixed point across the file before any check runs: which functions' writes reach past
+   their own actor, and which rest on a `~>`. A callee's effect then comes from its name,
+   or its doc's arrow if it's foreign. Writer-body rules for named and anonymous
+   functions are shared in `src/writer_body.js`.
 
 ### Follow-ups
 
 - Chain pipelining, using the self-return guarantee.
 - Handing effect data to the transaction work.
+- A warning channel, for `add_child!` returning a child and for a `!` resting only on a
+  `~>`.
+- The wire-name alias (open decision 1).
+- A class's generated doc drops `untracked`: `@Stats = *{ untracked @log *Text = "" }`
+  documents `log () -> (Text)`, where the same cell at file level documents
+  `untracked log *Text`.

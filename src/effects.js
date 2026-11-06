@@ -1,7 +1,8 @@
 // Whether a function writes, and whether its name says so. A function that writes
-// must be `!` or `.`, so a missing suffix is a guarantee. The check is local: a
-// callee's effect comes from its name, or from its doc's arrow if it's foreign, and
-// the callee's own body answers for that name.
+// must be `!` or `.`, so a missing suffix is a guarantee. A callee's effect comes
+// from its name, or from its doc's arrow if it's foreign, and the callee's own body
+// answers for that name. Whether a function's writes reach past its actor, and
+// whether it rests on a `~>`, are computed to a fixed point across the file first.
 // Design: notes/mutation-suffix-2026-10-31.md.
 
 import { parseInterface } from './codegen/javascript/types.js';

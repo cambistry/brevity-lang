@@ -51,9 +51,11 @@ count <- count + 1
 ## By-Ref Parameter
 
 ```brevity
-@bump = {
-  inc = (target *Integer) { target <- target + 1 }
-  inc(*count)
+count *Integer = 0
+
+@bump! = {
+  inc! = (target *Integer) { target <- target + 1 }   // writes the caller's cell
+  inc!(*count)
   return value: count
 }
 ```
@@ -166,19 +168,21 @@ Bind it before use. A class named with `!` keeps the `!` at the call, and its ty
 ## Core Methods
 
 ```brevity
-Text.upper("hello")
-List.size([1, 2, 3])
-Blob.to_hex("hello")
-
 name *Text = " ada "
-name.trim!
+
+@go! = {
+  u Text = Text.upper("hello")
+  n Integer = List.size([1, 2, 3])
+  h Text = Blob.to_hex("hello")
+  name.trim!()                    // a built-in `!` method writes the cell
+}
 ```
 
 ## Reply Forms
 
 ```brevity
-return result: 42
-return :value
+@a = { return result: 42 }
+@b = (value: Integer) { return :value }
 ```
 
 ## Return Paths
@@ -215,35 +219,175 @@ c as Integer                               // an actor is asked, through its `se
 f() as Object                              // the whole reply
 ```
 
-## Silent Functions
+## Effects: `!`, `.` and No Mark
 
-```brevity
-fire. = { count <- count + 1 }   // the glued `.` names it silent
-@poke. = { fire... }             // `...` fire-and-forget; absorbs the dot
-@log. = (n Integer) {
-  if n < 0 {
-    return                       // bare `return` exits early
-  }
-  Log.write.(n)...
-}
-```
-
-## `!` Functions
+A function's name says whether it writes. A function that writes must be named `!` or
+`.`, and one named `!` must write. No mark means read-only, and the compiler holds it to
+that.
 
 ```brevity
 n *Integer = 0
-@inc! = (i Integer) { n <- n + i }   // falls off the end: returns self
-@total = { return n }
 
-run! = (f (Integer) => ()) { f(1) }  // `=>` slot takes a function that writes
+@total = -> n                            // no mark: read-only, tail return
+@inc! = (i Integer) { n <- n + i }       // `!` writes; falling off the end returns self
+@take! = {                               // `return v` returns v
+  v Integer = n
+  n <- 0
+  return v
+}
+@put! = (i Integer) { return n <- i }    // `<-` as a value: the cell's new value
+@reset. = { n <- 0 }                     // `.` is silent: no reply
+@clear! = { @reset.()... }               // `...` launches it without waiting
+```
+
+- **A `!` body has no tail return.** A final value (`n`, `n + 1`, a bare `self`) is an
+  error: write `return n`, or delete it. A final write or `!` call is fine.
+- **Every path agrees.** `return v` on one path and falling off the end on another is an
+  error: write `return self` on the second.
+- **A read-only body's tail is its value**, as before.
+- **Writes are:** `<-`, `<|`, `>>` on a cell that outlives the call; a call to a `!` or
+  `.` function; a dependency call its doc marks `=>`; a built-in `!` method on a cell.
+- **Not writes:** cells local to the call, an `emit`, `untracked` state, and calls on an
+  actor this function just made, if they write only that actor.
+- **A class that writes while constructing is named `!`**, and so is the call:
+  `w W = W!()`. Its actors are typed `W`.
+- **A discarded read is an error:** `@total()` alone as a statement.
+
+## Effect Arrows
+
+`->`, `=>` and `~>` state an effect in signatures only: doc entries, function types, type
+fields. A body's arrow is always `->`, so `(i Integer) => i` is an error. The compiler
+never reads an effect from a name in a doc.
+
+```brevity
+*
+  "Store": Store {
+    get (key: Text) -> (value: Text)                    // reads
+    peek (key: Text) ~> (value: Text)                   // claims to read, unchecked
+    me () -> self                                       // identity
+    put! (key: Text, value: Text) => (count: Integer)   // writes, returns a value
+    add! (value: Text) => self                          // writes, returns self
+    take! (Boolean) => (Text) | self                    // either; can't be chained on
+    log. (Text) => .                                    // writes, silent
+  }
+*
+
+@glance = (key: Text) {
+  :value Text = Store.peek(:key)         // its own doc says `~>` too
+  return :value
+}
+
+@save! = (key: Text, value: Text) {
+  Store.add!(value).add!(key)
+  :count Integer = Store.put!(:key, :value)
+  Store.log.("saved")...
+  return :count
+}
+```
+
+- **Errors:** `-> .`, `~> .` (nothing to read: write `=> .`), `~> self` (write
+  `=> self`, or `-> self` for the identity), `-> (self)` (no parens), `self | (T)` (self
+  goes last).
+- **`~>` spreads:** any function in the file that reaches a `~>` gets `~>` in its own doc.
+  Use `~>` in a hand-written doc unless you own the implementation.
+- **A function-typed param states its contract.** `(f (Integer) -> ())` takes only a
+  read-only function, `(f (Integer) => ())` takes one that writes.
+- **A type field's name matches its arrow:** `run! (Integer) => self`,
+  `go. () => .`, `q () -> (Integer)`.
+- **Generated docs** carry the arrows: `inc! (Integer) => self`, `take! () => (Integer)`,
+  `reset. () => .`.
+
+```brevity
+n *Integer = 0
+
+run! = (f (Integer) => ()) { f(1) }       // `=>` slot takes a function that writes
+@inc! = (i Integer) { n <- n + i }
+
 @go! = {
-  run!(&inc!)                        // by reference: `&name!`, never a bare name
-  @inc!(1)                           // self-call
-  @inc!(1).inc!(2)                   // a chain, as the whole statement or value
-  v Integer = @inc!(1).total()
+  run!(&inc!)                            // by reference: `&name!`, never a bare name
+  run!((i Integer) { n <- n + i })       // inline, in a `=>` slot: falls off the end
+}
+```
+
+## `untracked`
+
+Writes that don't count as effects: logs, metrics, caches. It marks cells, functions and
+nested actors, and crosses into docs. An `untracked` function may only write `untracked`
+state.
+
+```brevity
+*
+  "logger.js": Log {
+    untracked write. (Text) => .         // stated by the importer
+  }
+*
+
+Cache = *{
+  hits *Integer = 0
+  @hit! = { hits <- hits + 1 }
+}
+
+untracked calls *Integer = 0             // a cell
+untracked @note. = (m Text) {            // a function
+  calls <- calls + 1
+}
+untracked cache = Cache()                // a nested actor
+
+@get = (key: Text) {                     // still read-only
+  calls <- calls + 1
+  @note.(key)...
+  cache.hit!()
+  Log.write.(key)...
+  return 1
+}
+```
+
+Its doc lists `untracked note. (Text) => .`. `untracked` is reserved only as a local
+name: `@untracked`, a member `x.untracked` and a key `untracked:` are fine.
+
+## Chains
+
+A `!` call that falls off the end returns its receiver, so the next link is a call on
+the same actor. Bind first when a link returns a value.
+
+```brevity
+Counter = *{
+  n *Integer = 0
+  @inc! = (i Integer) { n <- n + i }
+  @take! = {
+    v Integer = n
+    n <- 0
+    return v
+  }
+  @total = -> n
+}
+
+@go = {                                  // writes only an actor it made: read-only
+  c = Counter()
+  t Integer = c.inc!(1).inc!(2).total()
+  v Integer = c.take!()                  // returns a value: bind it, don't chain on it
+  return t + v
+}
+```
+
+```brevity
+n *Integer = 0
+@inc! = (i Integer) { n <- n + i }
+@total = -> n
+
+@go! = {
+  @inc!(1).inc!(2)                       // on this actor: the whole statement
+  v Integer = @inc!(1).total()           // or the whole value
   return v
 }
 ```
+
+- **Chaining on a value is an error:** `c.take!().total()`, and any call on a doc's
+  `(T) | self`. Bind the result first.
+- **A chain on this actor must be a statement's whole value.** `@inc!(1).total() + 1`
+  is an error: bind `@inc!(1).total()` first.
+- **Passing or storing a fresh actor before writing it** ends the exemption: the
+  function then needs `!`.
 
 ## Imports for Details
 

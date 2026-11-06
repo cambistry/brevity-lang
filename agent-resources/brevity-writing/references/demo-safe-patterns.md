@@ -60,17 +60,19 @@ Use this when you want to show application logic layered over a dependency call.
   }
 *
 
-view = WebView!(path: "/my_view")
+view = *WebView(path: "/my_view")
 
 @open. = { view.open... }
 
-@workflow
-  =
-  view.open()
-  title: Text = view.getTitle()
-  view.close()
+@workflow! = {
+  view.open...
+  :title Text = view.getTitle()
+  view.close...
   return :title
+}
 ```
+
+`@workflow!` calls silent functions, which write, so it takes `!`.
 
 Use this when the actor owns a long-lived remote surface such as a WebView.
 
@@ -83,7 +85,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
   }
 *
 
-content Text! = "initial"
+content *Text = "initial"
 
 @bump. = (v: Text) { content <- v }
 @create = -> <div>{ content }</div>
@@ -102,13 +104,34 @@ Use this for smoke tests and wiring checks.
 ## 7. Prefer Explicit Multi-Step Flow
 
 ```brevity
-@saveAndReport
+*
+  "services/db": DB {
+    put! (key: Text, value: Text) => self
+  }
+*
+
+@saveAndReport!
   =
   key: Text
   value: Text
   =
-  DB.put(:key, :value)
+  DB.put!(:key, :value)
   return ok: "saved"
 ```
 
-Use obvious sequencing. Avoid packing too much into one expression.
+Use obvious sequencing. Avoid packing too much into one expression. `DB.put!` writes,
+so the handler is named `!`, and it ends with `return` because a `!` function has no
+tail return.
+
+## 8. Counter With Read, Write and Silent Handlers
+
+```brevity
+count *Integer = 0
+
+@total = -> count
+@inc! = (by: Integer) { count <- count + by }
+@reset. = { count <- 0 }
+```
+
+No mark reads, `!` writes and returns self, `.` writes without replying. Callers fire
+`.` handlers with `...`.

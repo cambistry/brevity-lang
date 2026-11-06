@@ -1,8 +1,8 @@
 # Session 2026-10-31: `!` functions and `<-` chains
 
-Implements phases 1-2 of [mutation-suffix](mutation-suffix-2026-10-31.md). Uncommitted
-for review. Enforcement that a writer carries `!` is phase 4, so existing code is
-unaffected.
+Implements phases 1-4 of [mutation-suffix](mutation-suffix-2026-10-31.md), committed
+2026-11-01. The open effect rules followed on 2026-11-03
+([session note](session-2026-11-03-effect-rules.md)).
 
 ## Language
 
@@ -19,8 +19,8 @@ unaffected.
 - **Signatures:** `-> self`, in function types, interfaces and generated docs.
   `-> (self)` is an error, and the DOM manifest moved over.
 - **`<-`:** `a <- b <- c` spreads into `a <- b` then `a <- c`, also with `<|`. A write
-  used as a value parses and reports a compile error, because `return *acc` doesn't
-  exist (open decision 2).
+  used as a value was a compile error here; since 2026-11-03 it yields the cell's new
+  value.
 
 ## Wire
 
@@ -80,7 +80,7 @@ backend uses that one early-return form.
 
 ## Known gaps
 
-- **`<-` as a value:** see open decision 2.
+- **`<-` as a value:** done 2026-11-03, yields the cell's new value.
 - **Chain on a value:** a `!` call on a class in this file that returns a value can't be
   chained on, which is a compile error: bind it first. The check sees constructions and
   locals bound to one. Elsewhere JS reports a runtime error, and Rust and Erlang fail to
@@ -152,13 +152,9 @@ Nothing reads `effect` yet; phase 4 does.
 
 - **`~>` warnings aren't built:** a `!` or `.` function resting only on a `~>` compiles
   silently, for want of a warning channel.
-- **A non-public class's members leak into the file's doc.** `C = *{ @g = … }` lists `g` at
-  the top level, with no entry for `C`, though the file has no such op. Existing behaviour,
-  also on `92e6eda`.
-
 - **The add_child warning isn't built:** there's no warning channel.
-- **Remote constructions count as fresh:** `t = Thing()` inside a function exempts writes
-  to `t` until it escapes, including for a dependency the note doesn't address.
+- ~~**Remote constructions count as fresh.**~~ Fixed 2026-11-03: a fresh actor of a
+  dependency's class always counts as written to.
 - **`->` slots on imported types aren't checked,** and neither are slots on a class reached
   through a chain, or on an overloaded function.
 - **Discarded reads inside a nested function aren't checked.**
