@@ -919,11 +919,11 @@ describe('untracked', () => {
 
   it('a write to an untracked published cell doesn\'t count, from its own actor', () => {
     expect(() => compileSource('untracked @log *Text = ""\n@get = {\n  @log <- @log + "x"\n  return 1\n}\n')).not.toThrow();
-    expect(() => compileSource('untracked @log *Text = ""\nuntracked @write. = (m Text) { @log <- @log + m }\n@get = {\n  @write.("x")...\n  return 1\n}\n')).not.toThrow();
+    expect(() => compileSource('untracked @log *Text = ""\nuntracked @write. = (m Text) { @log <- @log + m }\n@get = {\n  @write("x")...\n  return 1\n}\n')).not.toThrow();
   });
 
   it('a call to an untracked function doesn\'t count', () => {
-    expect(() => compileSource('untracked log *Integer = 0\nuntracked write. = (m Integer) { log <- m }\n@go = { write.(1)...\n return 1 }\n')).not.toThrow();
+    expect(() => compileSource('untracked log *Integer = 0\nuntracked write. = (m Integer) { log <- m }\n@go = { write(1)...\n return 1 }\n')).not.toThrow();
   });
 
   it('a call to an untracked nested actor doesn\'t count', () => {
@@ -942,7 +942,7 @@ describe('untracked', () => {
   });
 
   it('an untracked member in a foreign doc doesn\'t count', () => {
-    expect(() => compileSource('*\n  "Svc": Svc\n*\n@go = { Svc.write.(1)...\n return 1 }\n',
+    expect(() => compileSource('*\n  "Svc": Svc\n*\n@go = { Svc.write(1)...\n return 1 }\n',
       { remotes: [{ path: 'Svc', service: '{ untracked write. (Integer) => . }' }] })).not.toThrow();
   });
 
@@ -986,7 +986,7 @@ describe('an untracked published cell, logged from a read-only function', () => 
     untracked @log *Text = ""
     untracked @write. = (m Text) { @log <- @log + m }
     @get = {
-      @write.("x")...
+      @write("x")...
       return 1
     }
     @read = { return @log }
@@ -1548,7 +1548,7 @@ describe('chained calls', () => {
 
     W! = *{
       a *Integer = 0
-      Svc.note.()...
+      Svc.note...
       @add! = (i Integer) { a <- a + i }
       @get = { return a }
     }
@@ -1596,7 +1596,7 @@ describe('chained calls', () => {
     }
 
     Base! = *{
-      Svc.note.()...
+      Svc.note...
       @one = { return 1 }
     }
 
@@ -1775,7 +1775,7 @@ describe('a public class named with `!`', () => {
       *
 
       @Pub! = *{
-        Svc.note.()...
+        Svc.note...
         @one = { return 5 }
       }
 

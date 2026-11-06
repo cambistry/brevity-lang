@@ -177,37 +177,37 @@ const withDep = (body) => `
 describe('lambda param inference — C3 service method callback param', () => {
   it('infers the param and resolves a silent ref field (direct dep call)', () => {
     expect(() => compileSource(withDep(`
-      @go. = { Widget.watch.(on: (s) { s.dismiss... })... }
+      @go. = { Widget.watch(on: (s) { s.dismiss... })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 
   it('resolves a value field on the implicitly-imported type', () => {
     expect(() => compileSource(withDep(`
-      @go. = { Widget.watch.(on: (s) { use: Integer = s.code . })... }
+      @go. = { Widget.watch(on: (s) { use: Integer = s.code . })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 
   it('rejects a field the service type does not declare', () => {
     expect(() => compileSource(withDep(`
-      @go. = { Widget.watch.(on: (s) { s.bogus! })... }
+      @go. = { Widget.watch(on: (s) { s.bogus! })... }
     `), { remotes: remotesM })).toThrow(/has no field 'bogus'/);
   });
 
   it('infers through an instance-typed receiver (w: Widget)', () => {
     expect(() => compileSource(withDep(`
-      @go. = (w: Widget) { w.watch.(on: (s) { s.bogus! })... }
+      @go. = (w: Widget) { w.watch(on: (s) { s.bogus! })... }
     `), { remotes: remotesM })).toThrow(/has no field 'bogus'/);
   });
 
   it('rejects an explicit bare type name that is not imported', () => {
     expect(() => compileSource(withDep(`
-      @go. = { Widget.watch.(on: (s: Signal) { s.dismiss... })... }
+      @go. = { Widget.watch(on: (s: Signal) { s.dismiss... })... }
     `), { remotes: remotesM })).toThrow(/not declared or imported/);
   });
 
   it('accepts the qualified Alias::Name annotation', () => {
     expect(() => compileSource(withDep(`
-      @go. = { Widget.watch.(on: (s: Widget::Signal) { s.dismiss... })... }
+      @go. = { Widget.watch(on: (s: Widget::Signal) { s.dismiss... })... }
     `), { remotes: remotesM })).not.toThrow();
   });
 });

@@ -55,12 +55,12 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
     // Generic lambda: param type inferred as Widget::Signal from the field.
     @generic. = (sig: Widget::Signal) {
       p = Panel(onpress.: (s) { s.dismiss... }, label: "a")
-      p.onpress.(sig)...
+      p.onpress(sig)...
     }
     // Typed lambda: param explicitly qualified, matching the slot.
     @typed. = (sig: Widget::Signal) {
       p = Panel(onpress.: (s Widget::Signal) { s.dismiss... }, label: "b")
-      p.onpress.(sig)...
+      p.onpress(sig)...
     }
   `;
   const remotes = [{ path: 'Widget', service: WIDGET_FIELD }];
@@ -93,7 +93,7 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     *
       "Widget": Widget
     *
-    @go. = { Widget.watch.(on: (s) { s.dismiss... })... }
+    @go. = { Widget.watch(on: (s) { s.dismiss... })... }
   `;
   const remotes = [{ path: 'Widget', service: WIDGET_METHOD }];
 

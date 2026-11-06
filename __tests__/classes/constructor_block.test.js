@@ -127,7 +127,7 @@ describe('a class calling its file\'s dependency', () => {
       }
     *
     W! = *{
-      Svc.note.()...
+      Svc.note...
       @get = { return 1 }
     }
 

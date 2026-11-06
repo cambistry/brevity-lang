@@ -55,7 +55,7 @@ describe('bang enforcement — interface methods (bidirectional)', () => {
   const dep = (body) => `*\n  "Widget": Widget\n*\n${body}`;
 
   it('accepts a no-bang method called without a bang', () => {
-    expect(() => compileSource(dep(`@go. = { Widget.watch.(on: (s) { s.dismiss... })... }`), { remotes })).not.toThrow();
+    expect(() => compileSource(dep(`@go. = { Widget.watch(on: (s) { s.dismiss... })... }`), { remotes })).not.toThrow();
   });
 
   it('rejects a spurious bang on a no-bang method', () => {

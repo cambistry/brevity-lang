@@ -51,7 +51,7 @@ describe('explicit form — compilation', () => {
 
       t = Thing()
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).not.toThrow();
   });
 
@@ -94,7 +94,7 @@ describe('explicit form — actor routing', () => {
     t = Thing(a: 5)
 
     @go = { :value Integer = t.get(); return :value }
-    @notify. = { t.ping.()... }
+    @notify. = { t.ping... }
   `;
 
   it('non-silent method call routes to actor address', async () => {
@@ -258,7 +258,7 @@ describe('explicit form — class arg validation', () => {
 
       t = Thing(a: "not-an-int")
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).toThrow(/expected Integer, got Text/);
   });
 
@@ -270,7 +270,7 @@ describe('explicit form — class arg validation', () => {
 
       t = Thing(a: 5, b: 99)
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).toThrow(/don't match|unexpected/i);
   });
 
@@ -282,7 +282,7 @@ describe('explicit form — class arg validation', () => {
 
       t = Thing(a: 5)
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).toThrow(/don't match|missing/i);
   });
 
@@ -294,7 +294,7 @@ describe('explicit form — class arg validation', () => {
 
       t = Thing()
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).toThrow(/no constructor signature/);
     // (error message preserved verbatim from compiler output)
   });
@@ -321,7 +321,7 @@ describe('explicit form — method call validation', () => {
 
       t = Thing(a: 5)
 
-      @go. = { n Integer = 42; t.call.(msg: n)... }
+      @go. = { n Integer = 42; t.call(msg: n)... }
     `)).toThrow(/expected Text, got Integer/);
   });
 
@@ -359,7 +359,7 @@ describe('# form — requires manifest', () => {
 
       t = Thing(a: 5)
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `)).toThrow(/has no type/);
   });
 });
@@ -375,7 +375,7 @@ describe('# form — manifest from options.remotes', () => {
 
       t = Thing(a: 5)
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).not.toThrow();
   });
 
@@ -387,7 +387,7 @@ describe('# form — manifest from options.remotes', () => {
 
       t = Thing(a: "not-an-int")
 
-      @go. = { t.ping.()... }
+      @go. = { t.ping... }
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/expected Integer, got Text/);
   });
 

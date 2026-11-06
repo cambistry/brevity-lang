@@ -242,7 +242,7 @@ describe('silent function — compile errors', () => {
         return answer: "done"
 
       fire. = {}
-    `)).toThrow(/'fire\.' is silent — call it 'fire\.\(…\)\.\.\.'/);
+    `)).toThrow(/'fire\.' is silent — call it 'fire\(…\)\.\.\.'/);
   });
 
   it('assigning result of silent private function → compile error', () => {

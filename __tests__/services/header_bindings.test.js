@@ -64,7 +64,7 @@ describe('header bindings — forms', () => {
   });
 
   it('an untyped keyed entry takes its type from the remote document', () => {
-    const src = '*\n  Store: S\n*\n@go. = { S.ping.()... }\n';
+    const src = '*\n  Store: S\n*\n@go. = { S.ping... }\n';
     expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () => .\n}' }] }))
       .not.toThrow();
   });
@@ -93,17 +93,17 @@ describe('inline definition wins over the remote document', () => {
   });
 
   it('an undeclared method is an error even when the remote has it', () => {
-    expect(() => compileWith('@go. = { DB.put.(key: "a", value: "b")... }\n')).toThrow(/'DB' has no function 'put\.'/);
+    expect(() => compileWith('@go. = { DB.put(key: "a", value: "b")... }\n')).toThrow(/'DB' has no function 'put\.'/);
   });
 
   it('an inline constructor profile wins too', () => {
-    const src = '*\n  "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\n*\nl = Lib(a: 1)\n@go. = { l.ping.()... }\n';
+    const src = '*\n  "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\n*\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
     const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () => .\n}' }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });
 
   it('with no inline definition, the remote document is used', () => {
-    const src = '*\n  "/db": DB\n*\n@go. = { DB.put.(key: "a", value: "b")... }\n';
+    const src = '*\n  "/db": DB\n*\n@go. = { DB.put(key: "a", value: "b")... }\n';
     expect(() => compile(extract(src).ast, { remotes })).not.toThrow();
   });
 });

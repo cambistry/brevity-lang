@@ -20,7 +20,7 @@ const SVC = `
   }
 
   @W! = *{
-    Log.note.()...
+    Log.note...
     @one = { return 1 }
   }
 

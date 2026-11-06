@@ -16,6 +16,7 @@ import { BUILTIN_TYPE_NAMES } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
+import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
 
 // `Self` in value position: any Identifier with name 'Self' that isn't the
 // callee of a function call. Construction calls `Self(args)` don't trip this
@@ -43,6 +44,7 @@ export function validate(ast, options = {}) {
     throw new Error('Self in value position requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
   }
 
+  lowerBareCalls(ast);
   spreadObjectReturns(ast);
   lowerFunctionAs(ast);
 
@@ -776,6 +778,8 @@ export function validate(ast, options = {}) {
   }
 
   checkPublishedParams(ast);
+  settleElidedDots(ast, remotesParsed);
+  lowerBareMemberCalls(ast, remotesParsed);
 
   inferCallBinds(ast, {
     actorInfo, dependencyNames, remotesParsed, factoryDecls,
@@ -854,6 +858,52 @@ export function validate(ast, options = {}) {
   lowerBranchOrder(ast);
 }
 
+// A `...` call never writes the silent dot, so the parser supplies it
+// (`elidedDot`). Two callees are silent under a plain name, and get it back:
+// a foreign function its doc marks silent (`write (Text) => .`, called
+// `Log.write(m)...`), and a local or param holding a silent function value.
+function settleElidedDots(ast, remotesParsed) {
+  const strip = (call) => {
+    if (call.type === 'DotCallExpr') call.method = call.method.slice(0, -1);
+    else call.callee = { ...call.callee, name: call.callee.name.slice(0, -1) };
+    delete call.elidedDot;
+  };
+  for (const actor of ast.actors || []) {
+    const fnNames = new Set((actor.functions || []).map(f => f.name).filter(Boolean));
+    const visit = (node, locals) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visit(n, locals)); return; }
+      if (node.elidedDot) {
+        if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
+          const doc = remotesParsed[node.object.name];
+          const plain = node.method.slice(0, -1);
+          if (doc && !doc[node.method] && doc[plain]) strip(node);
+        } else if (node.type === 'FunctionCallExpr') {
+          const name = node.callee.name;
+          if (!fnNames.has(name) && locals.has(name.slice(0, -1))) strip(node);
+        }
+      }
+      if (node.type === 'Function' || node.type === 'FunctionDecl') {
+        const inner = new Set(locals);
+        for (const p of node.params || []) if (p?.name) inner.add(p.name);
+        collectLocals(node.body, inner);
+        for (const [k, v] of Object.entries(node)) if (k !== 'params' && v && typeof v === 'object') visit(v, inner);
+        return;
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, locals);
+    };
+    const collectLocals = (body, into) => {
+      for (const s of Array.isArray(body) ? body : []) {
+        if ((s?.type === 'Assign' || s?.type === 'TypedAssign' || s?.type === 'RefDecl') && s.name) into.add(s.name);
+      }
+    };
+    const top = new Set((actor.initParams || []).map(p => p.name).filter(Boolean));
+    visit(actor.functions, top);
+    visit(actor.initBody, top);
+    visit(actor.constructorBody, top);
+  }
+}
+
 // Silence is in the name, so the call form is checked by name alone: a call
 // to a silent name (`x.ping.()`) is fire-and-forget (`...` or `spawn`), and a
 // `...` call names a silent (or bang) member.
@@ -879,12 +929,12 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
       return;
     }
     if (node.type === 'DotCallExpr' && node.method?.endsWith('.') && !launched) {
-      throw new Error(`'${shown(node)}' is silent — call it '${shown(node)}(…)...' (fire-and-forget)`);
+      throw new Error(`'${shown(node)}' is silent — call it '${shown(node).replace(/\.$/, '')}(…)...' (fire-and-forget)`);
     }
     // A doc can make a foreign function silent without the dot: `log (Text) => .`.
     // Nothing would answer a wait for it either.
     if (node.type === 'DotCallExpr' && !launched && remotesParsed[node.object?.name]?.[node.method]?.some?.(sig => sig.silent)) {
-      throw new Error(`'${shown(node)}' is silent — call it '${shown(node)}(…)...' (fire-and-forget)`);
+      throw new Error(`'${shown(node)}' is silent — call it '${shown(node).replace(/\.$/, '')}(…)...' (fire-and-forget)`);
     }
     for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, false);
   };
@@ -2251,7 +2301,7 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
     if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
       const name = node.callee.name;
       if (!fnNames.has(name) && fnNames.has(name + '.') && !localNames.has(name)) {
-        throw new Error(`'${name}' is not defined — the silent '${name}.' is called '${name}.(…)...'`);
+        throw new Error(`'${name}' is not defined — the silent '${name}.' is called '${name}(…)...'`);
       }
     }
     for (const v of Object.values(node)) if (v && typeof v === 'object') checkEllipsis(v);
@@ -2264,7 +2314,7 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
   }
   if (silentFns.size === 0) return;
 
-  const requiresFaf = (name) => new Error(`'${name}' is silent — call it '${name}(…)...' (fire-and-forget)`);
+  const requiresFaf = (name) => new Error(`'${name}' is silent — call it '${name.replace(/\.$/, '')}(…)...' (fire-and-forget)`);
   for (const fn of actor.functions) {
     for (const s of fn.body) {
       if ((s.type === 'Assign' || s.type === 'TypedAssign') &&

@@ -141,7 +141,7 @@ describe('a class reaches its file actor while the file actor is idle', () => {
 
     W = *{
       @read. = { log = Svc.Log(total) }
-      @call. = { Svc.note.(total)... }
+      @call. = { Svc.note(total)... }
     }
 
     Reader = (:P *Integer) *{
@@ -149,18 +149,18 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     }
 
     Caller = (:P *Integer) *{
-      P.subscribe (v Integer) { Svc.note.(v + total)... }
+      P.subscribe (v Integer) { Svc.note(v + total)... }
     }
 
     @read = {
       w = W()
-      w.read.()...
+      w.read...
       return 1
     }
 
     @call! = {
       w = W()
-      w.call.()...
+      w.call...
       return 1
     }
 

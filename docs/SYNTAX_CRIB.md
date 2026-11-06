@@ -95,7 +95,7 @@ Box = (seed Integer) *{
 *
 
 @record. = (message: Text) {
-  Log.write.(:message)...
+  Log.write(:message)...
 }
 ```
 
@@ -237,7 +237,7 @@ n *Integer = 0
 }
 @put! = (i Integer) { return n <- i }    // `<-` as a value: the cell's new value
 @reset. = { n <- 0 }                     // `.` is silent: no reply
-@clear! = { @reset.()... }               // `...` launches it without waiting
+@clear! = { @reset... }               // `...` launches it without waiting
 ```
 
 - **A `!` body has no tail return.** A final value (`n`, `n + 1`, a bare `self`) is an
@@ -245,6 +245,9 @@ n *Integer = 0
 - **Every path agrees.** `return v` on one path and falling off the end on another is an
   error: write `return self` on the second.
 - **A read-only body's tail is its value**, as before.
+- **Parens are optional on a call with no args:** `c.total`, `@total`, `c.inc!.total`,
+  `c.inc!...`. A silent call never writes its dot: `@reset...`, `c.put(1)...`. The
+  function itself is `&total`, never a bare name or `total as Function`.
 - **Writes are:** `<-`, `<|`, `>>` on a cell that outlives the call; a call to a `!` or
   `.` function; a dependency call its doc marks `=>`; a built-in `!` method on a cell.
 - **Not writes:** cells local to the call, an `emit`, `untracked` state, and calls on an
@@ -280,7 +283,7 @@ never reads an effect from a name in a doc.
 @save! = (key: Text, value: Text) {
   Store.add!(value).add!(key)
   :count Integer = Store.put!(:key, :value)
-  Store.log.("saved")...
+  Store.log("saved")...
   return :count
 }
 ```
@@ -335,9 +338,9 @@ untracked cache = Cache()                // a nested actor
 
 @get = (key: Text) {                     // still read-only
   calls <- calls + 1
-  @note.(key)...
+  @note(key)...
   cache.hit!()
-  Log.write.(key)...
+  Log.write(key)...
   return 1
 }
 ```

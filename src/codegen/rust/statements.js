@@ -1617,6 +1617,9 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           if (rt === 'Function' || (typeof rt === 'string' && /[-=~]>/.test(rt))) return true;
           const implRet = (tracked.node.body || []).find(bs => bs.type === 'ImplicitReturn');
           const tn = implRet?.typeName;
+          // `&inner`, naming a function literal of the body.
+          if (implRet?.expr?.type === 'FnRef' && (tracked.node.body || []).some(bs =>
+            (bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.name === implRet.expr.name && bs.value?.type === 'Function')) return true;
           return tn === 'Function' || (typeof tn === 'string' && /[-=~]>/.test(tn));
         })();
         if (trackedReturnsFn) {
@@ -1653,7 +1656,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
 
           // Find returned function from ImplicitReturn
           const implRet = funcBody.find(bs => bs.type === 'ImplicitReturn');
-          if (implRet && implRet.expr?.type === 'Identifier') {
+          if (implRet && (implRet.expr?.type === 'Identifier' || implRet.expr?.type === 'FnRef')) {
             const retFunction = localFnDefs.get(implRet.expr.name);
             if (retFunction) {
               fnDefs.set(s.name, { node: retFunction.node, defIdx: i });

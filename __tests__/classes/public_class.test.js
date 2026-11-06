@@ -235,7 +235,7 @@ describe('a self-return from an actor made by #new', () => {
 
     @Pub! = *{
       n *Integer = 0
-      Svc.note.()...
+      Svc.note...
 
       @go! = { n <- 1 }
     }
@@ -513,7 +513,7 @@ describe('W and @W! are different classes', () => {
     *
 
     @W! = *{
-      Svc.note.()...
+      Svc.note...
       @who = { return "public" }
     }
 

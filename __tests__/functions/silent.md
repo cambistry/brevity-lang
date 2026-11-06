@@ -45,7 +45,7 @@ bump. = (n Integer) {
 
 A silent call ends in `...` (fire-and-forget). Right after the name the
 ellipsis absorbs the dot: `fire...`, never `fire....`. Elsewhere the dot is
-written: `bump.(7)...`, `Log.write.(:message)...`. `spawn fire.()` also works.
+written: `bump(7)...`, `Log.write(:message)...`. `spawn fire.()` also works.
 
 ```brevity
 @go

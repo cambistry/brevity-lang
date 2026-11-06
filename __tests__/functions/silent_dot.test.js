@@ -76,14 +76,14 @@ describe('silent name — invocation', () => {
 
     @withArgs!
       =
-      bump.(7)...
+      bump(7)...
       repeat while (x == 0) __tick__()
       return x
 
     @early!
       =
-      bump.(500)...
-      bump.(3)...
+      bump(500)...
+      bump(3)...
       repeat while (x == 0) __tick__()
       return x
   `;
@@ -95,7 +95,7 @@ describe('silent name — invocation', () => {
     );
   });
 
-  it('`bump.(7)...` passes args', async () => {
+  it('`bump(7)...` passes args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@withArgs!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
@@ -111,12 +111,12 @@ describe('silent name — invocation', () => {
 
   it('a silent call without `...` is an error', () => {
     expect(() => compileSource('fire. = { x Integer = 1 }\n@go = { fire.(); return 1 }\n'))
-      .toThrow(/'fire\.' is silent — call it 'fire\.\(…\)\.\.\.'/);
+      .toThrow(/'fire\.' is silent — call it 'fire\(…\)\.\.\.'/);
   });
 
   it('calling `fire()` when only the silent `fire.` exists names the silent call', () => {
     expect(() => compileSource('fire. = { x Integer = 1 }\n@go = { fire(); return 1 }\n'))
-      .toThrow(/'fire' is not defined — the silent 'fire\.' is called 'fire\.\(…\)\.\.\.'/);
+      .toThrow(/'fire' is not defined — the silent 'fire\.' is called 'fire\(…\)\.\.\.'/);
   });
 
   it('`...` on a value-returning function is an error', () => {
@@ -136,6 +136,16 @@ describe('silent name — invocation', () => {
   it('a `...` call has no value', () => {
     expect(() => compileSource('fire. = { x Integer = 1 }\n@go = { n Integer = fire...; return 1 }\n'))
       .toThrow(/fire-and-forget call \('\.\.\.'\) has no value/);
+  });
+
+  it('a call never writes the silent dot: `bump.(7)...` names `bump(7)...`', () => {
+    expect(() => compileSource('bump. = (n Integer) { x Integer = n }\n@go = { bump.(7)...; return 1 }\n'))
+      .toThrow(/never writes the silent dot — write 'bump\(…\)\.\.\.'/);
+  });
+
+  it('`fire.()...` names `fire...`', () => {
+    expect(() => compileSource('fire. = { x Integer = 1 }\n@go = { fire.()...; return 1 }\n'))
+      .toThrow(/never writes the silent dot — write 'fire\.\.\.'/);
   });
 
   it('four dots is an error naming the elided form', () => {

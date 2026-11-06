@@ -45,7 +45,7 @@ Use `spawn` when calling a silent remote operation from a replying handler:
   =
   :msg Text
   =
-  Store.notify.(:msg)...
+  Store.notify(:msg)...
   return ack: "ok"
 ```
 

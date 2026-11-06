@@ -60,7 +60,7 @@ describe('file-level DI — basic compilation', () => {
       }
 
       @store. = (key: Text, value: Text) {
-        DB.put.(:key, :value)...
+        DB.put(:key, :value)...
       }
     `)).not.toThrow();
   });
@@ -72,7 +72,7 @@ describe('file-level DI — basic compilation', () => {
         "/cache": Cache { ping. () => . }
       *
 
-      @test. = { DB.ping.()... }
+      @test. = { DB.ping... }
     `)).not.toThrow();
   });
 
@@ -82,7 +82,7 @@ describe('file-level DI — basic compilation', () => {
       *
         "/services/remote": Remote
       *
-      @go. = { Remote.ping.()... }
+      @go. = { Remote.ping... }
     `);
     expect(() => compile(ast)).toThrow(/has no type/);
   });
@@ -99,7 +99,7 @@ describe('file-level DI — outgoing CAM messages', () => {
       }
     *
 
-    @ping. = { Remote.ping.()... }
+    @ping. = { Remote.ping... }
 
     @greet
       =
@@ -288,7 +288,7 @@ describe('file-level DI — inline constraint checks', () => {
       }
 
       @write. = (key: Text, value: Text) {
-        Store.save.(:key, :value)...
+        Store.save(:key, :value)...
       }
     `)).not.toThrow();
   });

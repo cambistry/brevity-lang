@@ -361,7 +361,7 @@ describe('class interface — a class named with `!`', () => {
   const SVC = '*\n  "svc.bv": Svc {\n    note. () => .\n  }\n*\n';
 
   it('the annotation is the class name without `!`', () => {
-    const body = (type) => `${SVC}W! = *{\n  Svc.note.()...\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
+    const body = (type) => `${SVC}W! = *{\n  Svc.note...\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
     expect(() => compileSource(body('W'))).not.toThrow();
     expect(() => compileSource(body('W!'))).toThrow(/a type name takes no '!'/);
   });
@@ -392,7 +392,7 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('passes its effect to a subclass', () => {
-    const W = `${SVC}W! = *{\n  Svc.note.()...\n}\n`;
+    const W = `${SVC}W! = *{\n  Svc.note...\n}\n`;
     expect(() => compileSource(`${W}S = (W! |) *{}\n@go = { return 1 }\n`)).toThrow(/Class 'S' inherits from 'W!'.*must be named 'S!'/);
     expect(() => compileSource(`${W}S! = (W! |) *{}\n@go! = {\n  S!()\n}\n`)).not.toThrow();
   });

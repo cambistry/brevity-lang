@@ -113,8 +113,8 @@ choices for the same underlying callable model.
 Replying functions yield a value with `return`, or implicitly from a one-liner
 `->` arrow body (as `@double` above). An effect-only (silent) function is named
 with a glued `.` and sends no reply; its type is `(…) => .`. A silent call ends
-in `...` (fire-and-forget); right after a name the ellipsis absorbs the dot
-(`fire...`):
+in `...` (fire-and-forget), and the ellipsis stands for the dot, so a call never
+writes it (`fire...`, `Log.write(:message)...`):
 
 ```brevity
 *
@@ -124,12 +124,16 @@ in `...` (fire-and-forget); right after a name the ellipsis absorbs the dot
 *
 
 @notify. = (message: Text) {
-  Log.write.(:message)...
+  Log.write(:message)...
 }
 ```
 
 A bare `return` exits a silent function early; `return value` is an error.
 `spawn` also starts a silent operation without waiting for a reply.
+
+Parens are optional on any call with no args: `c.total`, `@total`, `bump!`,
+`c.inc!.total`, `c.inc!...`. A bare name of a function is therefore a call; the
+function itself is `&total`.
 
 A function that writes is named with a glued `!`, which is part of its name:
 `c.inc!(5)` and `c.inc(5)` are different members. A `!` function has no tail

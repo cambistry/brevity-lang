@@ -2363,19 +2363,42 @@ export function parse(tokensIn) {
       } else if (peek().type === 'LPAREN') {
         const args = parseSendArgs();
         result = AST.dotCallExpr(result, method, args);
+      } else if (method.endsWith('!') || (result.type === 'DotCallExpr' && result.method?.endsWith('!'))) {
+        // Parens are optional on a call with no args. A `!` member is always a
+        // call, and a member of a `!` call's reply is a member of an actor.
+        result = AST.dotCallExpr(result, method, []);
       } else {
         result = AST.dotAccessExpr(result, method);
       }
     }
-    // `call...` — fire-and-forget. Right after a name the ellipsis absorbs a
-    // silent name's dot: `sfn...` is `sfn.()...`, `x.sfn...` is `x.sfn.()...`.
+    // `call...` — fire-and-forget. A call site never writes a silent name's dot:
+    // the ellipsis stands for it. `sfn...` and `sfn(a)...` call `sfn.`,
+    // `x.sfn...` and `x.sfn(a)...` call `x.sfn.`. A bang name keeps its `!`
+    // (`x.m!...`). `elidedDot` lets validation drop the dot again for a
+    // foreign function its doc makes silent under a plain name.
     if (peek().type === 'ELLIPSIS') {
       consume();
+      const silent = (name) => name.endsWith('!') ? name : name + '.';
       if (result.type === 'Identifier' || result.type === 'RefRead') {
-        result = AST.functionCallExpr(AST.identifier(result.name + '.'), []);
+        result = AST.functionCallExpr(AST.identifier(silent(result.name)), []);
+        if (!result.callee.name.endsWith('!')) result.elidedDot = true;
       } else if (result.type === 'DotAccessExpr') {
-        result = AST.dotCallExpr(result.object, result.property + '.', []);
-      } else if (result.type !== 'FunctionCallExpr' && result.type !== 'DotCallExpr') {
+        result = AST.dotCallExpr(result.object, silent(result.property), []);
+        if (!result.method.endsWith('!')) result.elidedDot = true;
+      } else if (result.type === 'FunctionCallExpr' || result.type === 'DotCallExpr') {
+        const name = result.type === 'DotCallExpr' ? result.method : result.callee?.type === 'Identifier' ? result.callee.name : null;
+        if (name?.endsWith('.')) {
+          const plain = name.slice(0, -1);
+          throw new Error(result.args?.length
+            ? `A call never writes the silent dot — write '${plain}(…)...'`
+            : `A call never writes the silent dot — write '${plain}...'`);
+        }
+        if (name && !name.endsWith('!')) {
+          if (result.type === 'DotCallExpr') result.method = name + '.';
+          else result.callee = AST.identifier(name + '.');
+          result.elidedDot = true;
+        }
+      } else {
         throw new Error(`'...' (fire-and-forget) follows a call or a silent name`);
       }
       result.faf = true;
@@ -2518,7 +2541,7 @@ export function parse(tokensIn) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
-      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || atBareBuiltinCall()) {
+      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall()) {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -2586,6 +2609,8 @@ export function parse(tokensIn) {
               } else if (peek().type === 'LPAREN') {
                 const args = parseSendArgs();
                 exprNode = AST.dotCallExpr(exprNode, method, args);
+              } else if (method.endsWith('!') || (exprNode.type === 'DotCallExpr' && exprNode.method?.endsWith('!'))) {
+                exprNode = AST.dotCallExpr(exprNode, method, []);
               } else {
                 exprNode = AST.dotAccessExpr(exprNode, method);
               }
@@ -4859,8 +4884,11 @@ export function parse(tokensIn) {
         localScopes.pop();
         functions.push(AST.functionDecl(op, params, body));
 
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' && tokens[pos + 2]?.type === 'IDENT' && (tokens[pos + 3]?.type === 'BANG' || tokens[pos + 3]?.type === 'LPAREN')) {
-        // Standalone dot-call expression statement: obj.method!(args) or obj.method(args)
+      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' && tokens[pos + 2]?.type === 'IDENT' &&
+                 (tokens[pos + 3]?.type === 'BANG' || tokens[pos + 3]?.type === 'LPAREN' || tokens[pos + 3]?.type === 'ELLIPSIS' ||
+                  (tokens[pos + 2].value.endsWith('!') && ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE', 'SEMICOLON', 'DOT'].includes(tokens[pos + 3]?.type)))) {
+        // Standalone dot-call expression statement: obj.method!(args), obj.method(args),
+        // obj.method..., or a bare obj.method! (zero-arity: parens optional).
         const expr = parseExpr();
         pushExprOrBang(constructorBody, expr);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&

@@ -144,7 +144,7 @@ describe('Object type call', () => {
       =
       x Integer = 10
       f = { x }
-      s Object = Object(fn: f)
+      s Object = Object(fn: &f)
       :fn = s
       result Integer = fn()
       return result

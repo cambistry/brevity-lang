@@ -25,7 +25,7 @@ describe('higher-order functions', () => {
       n Integer
       =
       fn = { n }
-      return (fn as Function)
+      return &fn
 
     --- public functions ---
 
@@ -76,7 +76,7 @@ describe('higher-order functions', () => {
       =
       factory = (n Integer) {
         inner = { n as Integer }
-        inner as Function
+        &inner
       }
       getConst = factory(42)
       result Integer = getConst()
@@ -172,6 +172,38 @@ describe('higher-order functions — & enforcement', () => {
         return :result
     `)).toThrow(/use &double/);
   });
+
+  // Parens are optional on a zero-arity call, so a bare name is a call and the
+  // function itself is always `&f` (notes/zero-arity-calls-2026-11-06.md).
+  it('`f as Function` is an error naming `&f`', () => {
+    expect(() => compileSource(`
+      @go = {
+        f = (x Integer) -> x + 1
+        g = f as Function
+        return r: g(1)
+      }
+    `)).toThrow(/'f as Function' — the function itself is '&f'/);
+  });
+
+  it("the file's function `as Function` is an error naming `&top`", () => {
+    expect(() => compileSource(`
+      top = (x Integer) -> x + 1
+      @go = {
+        g = top as Function
+        return r: g(1)
+      }
+    `)).toThrow(/'top as Function' — the function itself is '&top'/);
+  });
+
+  it('a bare name of a function with params is an error, not an alias', () => {
+    expect(() => compileSource(`
+      @go = {
+        f = (x Integer) -> x + 1
+        g = f
+        return r: g(1)
+      }
+    `)).toThrow(/'f' takes arguments — call it 'f\(…\)', or use &f/);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -194,18 +226,6 @@ describe('calling a function value', () => {
       return r: f(1)
     }
 
-    @asFunction = {
-      f = (x Integer) -> x + 1
-      g = f as Function
-      return r: g(1)
-    }
-
-    @alias = {
-      f = (x Integer) -> x + 1
-      g = f
-      return r: g(1)
-    }
-
     @reference = {
       f = (x Integer) -> x + 1
       g = &f
@@ -219,11 +239,6 @@ describe('calling a function value', () => {
 
     @fileFunction = {
       return r: top(1)
-    }
-
-    @fileFunctionAs = {
-      g = top as Function
-      return r: g(1)
     }
 
     @fileFunctionReference = {
@@ -242,12 +257,6 @@ describe('calling a function value', () => {
       return r: f(1)
     }
 
-    @blockBodyAs = {
-      f = (x Integer) { x + 1 }
-      g = f as Function
-      return r: g(1)
-    }
-
     @bindingBody = {
       f = (x Integer) { y = x + 1 }
       return r: f(1)
@@ -255,7 +264,7 @@ describe('calling a function value', () => {
 
     @noArgs = {
       f = { 7 }
-      g = f as Function
+      g = &f
       return r: g()
     }
 
@@ -265,52 +274,45 @@ describe('calling a function value', () => {
       return r: f(1)
     }
 
-    @capturesAs = {
-      n Integer = 5
-      f = (x Integer) -> x + n
-      g = f as Function
-      return r: g(1)
-    }
-
     @text = {
       f = (x Integer) -> "n"
-      g = f as Function
+      g = &f
       return r: g(1)
     }
 
     @positional = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return g(1)
     }
 
     @positionalAndNamed = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return g(1), r: g(2)
     }
 
     @twoNamed = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return a: g(1), b: g(2)
     }
 
     @tail = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       g(1)
     }
 
     @nested = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return r: g(g(1))
     }
 
     @inList = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return r: [g(1), g(2)]
     }
 
@@ -321,20 +323,20 @@ describe('calling a function value', () => {
 
     @interpolated = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       return r: "v#{g(1)}"
     }
 
     @inArithmetic = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       v Integer = g(1) + 10
       return r: v
     }
 
     @inCondition = {
       f = (x Integer) -> x + 1
-      g = f as Function
+      g = &f
       v Integer = if g(1) > 1 { 5 } else { 6 }
       return r: v
     }
@@ -350,13 +352,13 @@ describe('calling a function value', () => {
 
     @twoValues = {
       f = (x Integer) { return x, x }
-      g = f as Function
+      g = &f
       return r: g(1)
     }
 
     @namedValue = {
       f = (x Integer) { return v: x }
-      g = f as Function
+      g = &f
       return r: g(1)
     }
   `;
@@ -365,20 +367,6 @@ describe('calling a function value', () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@direct', from: 'c' } },
       { output: { id: '1', re: { r: 2 }, to: 'c' } },
-    );
-  });
-
-  it('through `as Function`', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: '@asFunction', from: 'c' } },
-      { output: { id: '2', re: { r: 2 }, to: 'c' } },
-    );
-  });
-
-  it('through another name', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: '@alias', from: 'c' } },
-      { output: { id: '3', re: { r: 2 }, to: 'c' } },
     );
   });
 
@@ -403,13 +391,6 @@ describe('calling a function value', () => {
     );
   });
 
-  it("the file's function, through `as Function`", async () => {
-    await expectBehavior(script,
-      { input: { id: '7', op: '@fileFunctionAs', from: 'c' } },
-      { output: { id: '7', re: { r: 2 }, to: 'c' } },
-    );
-  });
-
   it("the file's function, through a reference", async () => {
     await expectBehavior(script,
       { input: { id: '8', op: '@fileFunctionReference', from: 'c' } },
@@ -431,13 +412,6 @@ describe('calling a function value', () => {
     );
   });
 
-  it('with a block body, through `as Function`', async () => {
-    await expectBehavior(script,
-      { input: { id: '11', op: '@blockBodyAs', from: 'c' } },
-      { output: { id: '11', re: { r: 2 }, to: 'c' } },
-    );
-  });
-
   it('with a body ending in a binding', async () => {
     await expectBehavior(script,
       { input: { id: '12', op: '@bindingBody', from: 'c' } },
@@ -456,13 +430,6 @@ describe('calling a function value', () => {
     await expectBehavior(script,
       { input: { id: '14', op: '@captures', from: 'c' } },
       { output: { id: '14', re: { r: 6 }, to: 'c' } },
-    );
-  });
-
-  it('capturing a local, through `as Function`', async () => {
-    await expectBehavior(script,
-      { input: { id: '15', op: '@capturesAs', from: 'c' } },
-      { output: { id: '15', re: { r: 6 }, to: 'c' } },
     );
   });
 

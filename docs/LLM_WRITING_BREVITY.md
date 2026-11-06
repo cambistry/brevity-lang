@@ -122,7 +122,7 @@ Declare dependencies in the file header:
 }
 
 @save. = (key: Text, value: Text) {
-  Store.put.(:key, :value)...
+  Store.put(:key, :value)...
 }
 ```
 

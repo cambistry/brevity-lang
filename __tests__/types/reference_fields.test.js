@@ -20,7 +20,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //
 // Surface: a silent reference field is named with the silent `.`
 // (`push.: () => .`) and invoked fire-and-forget: `v.push...` (no args) or
-// `v.push.(args)...`. A reply-awaiting callback is a plain call `v.field(args)`.
+// `v.push(args)...`. A reply-awaiting callback is a plain call `v.field(args)`.
 // See notes/silent-dot-suffix-2026-10-30.md.
 //
 // These tests are deliberately abstract — generic type and field names, plain
