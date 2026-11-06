@@ -549,7 +549,7 @@ describe('as — values in this file', () => {
     it('an untyped bind takes a sole positional', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: '@soleValue', from: 'c' } },
-        { output: { id: '1', re: { r: 1 }, to: 'c' } },
+        { output: { id: '1', re: { r: 1 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
     });
     it('an untyped bind of a named reply fails', async () => {

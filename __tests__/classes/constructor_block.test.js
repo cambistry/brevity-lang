@@ -38,7 +38,7 @@ describe('a self-call in a constructor block', () => {
     @reg!(3)
     #mark!()
     bump!()
-    e Integer = @seed()
+    e = @seed()
     early! = { f <- 8 }
 
     C = *{
@@ -53,7 +53,7 @@ describe('a self-call in a constructor block', () => {
 
     @child = {
       c = C()
-      v Integer = c.get()
+      v = c.get()
       return v
     }
   `;

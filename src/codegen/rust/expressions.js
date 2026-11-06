@@ -1496,6 +1496,10 @@ function genRustBranchBind(s, typeEnv, indent) {
   let val = genRustExpr(s.value, typeEnv);
   bindLocalType(typeEnv, s);
   if (s.type !== 'TypedAssign') return `${indent}let ${mintRustSsa(s.name)} = ${val};`;
+  // A call to the actor's own function gives a Value, which takes the bind's type.
+  if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
+    return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(val, s.typeName)};`;
+  }
   if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
   return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`;
 }

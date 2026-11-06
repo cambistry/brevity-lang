@@ -777,6 +777,11 @@ export function validate(ast, options = {}) {
 
   checkPublishedParams(ast);
 
+  inferCallBinds(ast, {
+    actorInfo, dependencyNames, remotesParsed, factoryDecls,
+    rest: [actorMethods, actorMethodSigs, actorRefRequirements, new Map(), actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat],
+  });
+
   for (const actor of ast.actors) {
     validateActor(actor, actorInfo, dependencyNames, remotesParsed, factoryDecls, actorMethods, actorMethodSigs, actorRefRequirements, constructorNames, actorByName, destructuredMembers, actorMethodsFlat, actorConstructorSigs, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
@@ -1975,25 +1980,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   checkAsClauses(actor);
 
   // ── Per-actor augmented dep sets ────────────────────────────────────────
-  // Constructor coercions (`Coerced = Thing as <ctor> -> { iface }`) introduce
-  // synthetic local deps. They are construction-capable and have a service
-  // interface, so add them to the per-actor copies of dependencyNames /
-  // remotesParsed / factoryDecls used for the rest of validation.
-  const localDepNames = new Set(dependencyNames);
-  const localRemotes = { ...remotesParsed };
-  const localFactoryDecls = { ...factoryDecls };
-  for (const s of (actor.constructorBody || [])) {
-    if (s.type === 'ServiceCoercion' && s.constructorParams) {
-      localDepNames.add(s.name);
-      localFactoryDecls[s.name] = s.constructorParams;
-      // parseServiceConstraint produces { method: { params, returns } }, but
-      // remotesParsed is { method: [{ params, returns }, ...] } (array of
-      // overloads). Wrap each entry in an array.
-      const wrapped = {};
-      for (const [m, sig] of Object.entries(s.constraint)) wrapped[m] = [sig];
-      localRemotes[s.name] = wrapped;
-    }
-  }
+  const { localDepNames, localRemotes, localFactoryDecls } = actorDeps(actor, dependencyNames, remotesParsed, factoryDecls);
 
   // Validate constructor calls in constructorBody (top-level init)
   const initTypeEnv = buildTypeEnv([], actor.constructorBody || []);
@@ -2017,25 +2004,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     }
   }
 
-  // Build state var type env from constructorBody for use in function validation
-  const stateTypeEnv = new Map();
-  for (const s of (actor.constructorBody || [])) {
-    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
-      stateTypeEnv.set(s.name, s.typeName);
-    }
-    // Infer actor type from class calls against declared dependencies
-    // (or against class coercions, which are in localDepNames):
-    //   t = Thing(args)    →  t : Thing
-    //   t = Coerced(args)  →  t : Coerced
-    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && !s.typeName &&
-        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-        localDepNames.has(s.value.callee.name)) {
-      stateTypeEnv.set(s.name, s.value.callee.name);
-    }
-  }
-  for (const d of (actor.stateVarDecls || [])) {
-    if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
-  }
+  // State var types from constructorBody, for use in function validation
+  const stateTypeEnv = actorStateTypes(actor, localDepNames);
 
   // Collect service coercion constraints: alias → { constraint, refName }
   const coercionConstraints = new Map();
@@ -2060,6 +2030,88 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
     validateBody(fn.body, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
+  }
+}
+
+// The deps an actor's validation sees. Constructor coercions
+// (`Coerced = Thing as <ctor> -> { iface }`) introduce synthetic local deps. They are
+// construction-capable and have a service interface, so they join per-actor copies
+// of dependencyNames / remotesParsed / factoryDecls.
+function actorDeps(actor, dependencyNames, remotesParsed, factoryDecls) {
+  const localDepNames = new Set(dependencyNames);
+  const localRemotes = { ...remotesParsed };
+  const localFactoryDecls = { ...factoryDecls };
+  for (const s of (actor.constructorBody || [])) {
+    if (s.type === 'ServiceCoercion' && s.constructorParams) {
+      localDepNames.add(s.name);
+      localFactoryDecls[s.name] = s.constructorParams;
+      // parseServiceConstraint produces { method: { params, returns } }, but
+      // remotesParsed is { method: [{ params, returns }, ...] } (array of
+      // overloads). Wrap each entry in an array.
+      const wrapped = {};
+      for (const [m, sig] of Object.entries(s.constraint)) wrapped[m] = [sig];
+      localRemotes[s.name] = wrapped;
+    }
+  }
+  return { localDepNames, localRemotes, localFactoryDecls };
+}
+
+function actorStateTypes(actor, localDepNames) {
+  const stateTypeEnv = new Map();
+  for (const s of (actor.constructorBody || [])) {
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
+      stateTypeEnv.set(s.name, s.typeName);
+    }
+    // Infer actor type from class calls against declared dependencies
+    // (or against class coercions, which are in localDepNames):
+    //   t = Thing(args)    →  t : Thing
+    //   t = Coerced(args)  →  t : Coerced
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && !s.typeName &&
+        s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
+        localDepNames.has(s.value.callee.name)) {
+      stateTypeEnv.set(s.name, s.value.callee.name);
+    }
+  }
+  for (const d of (actor.stateVarDecls || [])) {
+    if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
+  }
+  return stateTypeEnv;
+}
+
+// Gives each unannotated bind of a call the callee's return type, when it has one:
+// `x = f()` in a function body, `e = f()` in a constructor block. Before the checks,
+// so they and every backend see `x T = f()`. A bind's type can make another callee's
+// return known, so this goes until nothing changes.
+function inferCallBinds(ast, args) {
+  const { actorInfo, dependencyNames, remotesParsed, factoryDecls, rest } = args;
+  const scopes = ast.actors.map(actor => ({ actor, ...actorDeps(actor, dependencyNames, remotesParsed, factoryDecls) }));
+  // Each round binds at least one more name, so it ends.
+  for (let inferred = 1; inferred > 0;) {
+    inferred = 0;
+    for (const { actor, localDepNames, localRemotes, localFactoryDecls } of scopes) {
+      const infer = (body, typeEnv) => validateBody(body, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, ...rest, true);
+      // A constructor block's unannotated `e = f()` is a decl the parser left as Anything.
+      const decls = new Map((actor.stateVarDecls || []).map(d => [d.name, d]));
+      const binds = (actor.constructorBody || [])
+        .filter(s => s.type === 'TypedAssign' && !s.typeName && !s.rhsType && decls.get(s.name)?.typeName === 'Anything'
+          && (s.value?.type === 'FunctionCallExpr' || s.value?.type === 'DotCallExpr'))
+        .map(stmt => ({ type: 'Assign', name: stmt.name, value: stmt.value, stmt }));
+      if (binds.length) {
+        inferred += infer(binds, actorStateTypes(actor, localDepNames));
+        for (const b of binds) {
+          if (b.type !== 'TypedAssign') continue;
+          b.stmt.typeName = b.typeName;
+          decls.get(b.name).typeName = b.typeName;
+        }
+      }
+      const stateTypeEnv = actorStateTypes(actor, localDepNames);
+      for (const fn of actor.functions || []) {
+        if (!fn.body) continue;
+        const typeEnv = buildTypeEnv(fn.params || [], fn.body, null, localDepNames);
+        for (const [k, v] of stateTypeEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
+        inferred += infer(fn.body, typeEnv);
+      }
+    }
   }
 }
 
@@ -2534,8 +2586,8 @@ function inferArgType(expr, typeEnv) {
 
 // ── Body-level checks ───────────────────────────────────────────────────────
 
-function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map()) {
-  checkTypeConsistency(body);
+function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map(), inferOnly = false) {
+  if (!inferOnly) checkTypeConsistency(body);
 
   // Build a local map of variable → actor class from assignments like: a = A().
   // Both locally-defined actors (in `actorMethods`) and manifest-declared classes
@@ -2621,7 +2673,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       }
     }
   };
-  for (const s of body) walkForMethodChecks(s);
+  if (!inferOnly) for (const s of body) walkForMethodChecks(s);
 
   // Constructor call validation: at every `T(...)` where T names a local actor
   // constructor, verify the call matches at least one clause's arity and required
@@ -2792,7 +2844,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       }
     }
   };
-  for (const s of body) walkForCallChecks(s);
+  if (!inferOnly) for (const s of body) walkForCallChecks(s);
 
   // A call to something in this file: its label, the shape of its returns for
   // the named-field checks, and the definitions it can reach (`fns`).
@@ -2947,6 +2999,33 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const type = inferExprTypeFull(expr, typeEnv);
     return type ? { type, narrowable: mentionsName(expr), literal: mentionsLiteral(expr) } : null;
   };
+
+  // An unannotated bind of a call takes the callee's return type when the callee has
+  // just one: every return is a single positional value, of one type that isn't a
+  // union, an Object, a function or an actor. `x = f()` is then `x T = f()`.
+  const singleReturnType = (call) => {
+    if (call.attestedAs) return null;
+    const shapes = callReturns(call)?.shapes;
+    if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
+    if (shapes.alternatives.some(alt => alt.length !== 1 || alt[0].name !== null)) return null;
+    const type = shapes.alternatives.map(alt => alt[0].type).reduce(mergeTypes);
+    if (!type || type.includes('Anything') || type.includes(' | ') || type === 'Object' || type === 'null') return null;
+    if (/[-=~]>/.test(type) || actorByName.has(type) || actorNameSet.has(type) || dependencyNames.has(type)) return null;
+    return type;
+  };
+  if (inferOnly) {
+    let inferred = 0;
+    for (const s of body) {
+      if (s.type !== 'Assign' || !isCall(s.value)) continue;
+      const type = singleReturnType(s.value);
+      if (!type) continue;
+      s.type = 'TypedAssign';
+      s.typeName = type;
+      typeEnv.set(s.name, type);
+      inferred++;
+    }
+    return inferred;
+  }
 
   const isRemoteSend = (expr) =>
     expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && dependencyNames.has(expr.object.name);

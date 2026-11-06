@@ -1,4 +1,4 @@
-import { compileSource, expectBehavior, createActor, expectActorBehavior } from '../helpers.js';
+import { compileSource, compileActor, expectBehavior, createActor, expectActorBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
 
@@ -341,5 +341,84 @@ describe('a reply\'s tag', () => {
       { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
       { output: { id: '3', re: [9], 'ty': ['Integer'], to: 'c', from: '@Box/1' } },
     );
+  });
+});
+
+// A bind with no annotation takes its callee's return type when the callee has just
+// one, as if annotated with it, so a reply carrying the name is tagged with it.
+describe('an unannotated bind of a call', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        count () => (Integer)
+      }
+    *
+    @seed = { return 9 }
+    e = @seed()
+
+    C = *{
+      k = @four()
+      @four = { return 4 }
+      @get = { return k }
+      @double = (i Integer) { return i * 2 }
+    }
+
+    @later = {
+      y = @local()
+      return y
+    }
+    @local = {
+      x = @seed()
+      return x
+    }
+    @block = { return e }
+    @method = {
+      c = C()
+      v = c.get()
+      w = c.double(3)
+      return v, w
+    }
+    @remote! = {
+      n = Svc.count()
+      return n
+    }
+  `;
+
+  it('takes an own function\'s, in a handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@local', from: 'c' } },
+      { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('takes one a bind gave its callee', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@later', from: 'c' } },
+      { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('takes an own function\'s, in a constructor block', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@block', from: 'c' } },
+      { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('takes a class method\'s, and one from the class\'s constructor block', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@method', from: 'c' } },
+      { output: { id: '1', re: [4, 6], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  // The call goes out under an id that varies by target, so the reply takes the id
+  // the call went out with.
+  it('takes a doc entry\'s', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@remote!', from: 'c' });
+    const call = actor.posts.find(p => p.op === '@count');
+    await actor.sendAsync({ id: call.id, re: [5], 'ty': ['Integer'], from: 'Svc' });
+    expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [5], 'ty': ['Integer'], to: 'c' }]);
   });
 });
