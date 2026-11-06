@@ -840,6 +840,15 @@ use num_traits::{Zero, One, ToPrimitive, Signed};
 use num_integer::Integer;
 use std::str::FromStr;
 
+// With BREVITY_READY set, the actor says when it goes back to reading input, so
+// a test harness can keep one process alive and know when a message is done with.
+fn bv_ready(binding: &mpsc::Sender<Value>) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("BREVITY_READY").is_some()) {
+        let _ = binding.send(json!({"ev": "ready"}));
+    }
+}
+
 // Trait to convert any Brevity value to serde_json::Value
 trait IntoValue {
     fn into_value(self) -> Value;
@@ -1778,6 +1787,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();
+            bv_ready(&self.binding);
             match self.reader.read_line(&mut buf) {
                 Ok(0) => return Value::Null,
                 Ok(_) => {
@@ -1814,6 +1824,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
         // angle-delimited \`re\` field (falls back to \`from\`).
         loop {
             let mut buf = String::new();
+            bv_ready(&self.binding);
             match self.reader.read_line(&mut buf) {
                 Ok(0) => return Value::Null,
                 Ok(_) => {
@@ -1858,6 +1869,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
 ` : ''}${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCallAwait ? `    let mut buf = String::new();
     loop {
         buf.clear();
+        bv_ready(&actor.binding);
         match actor.reader.read_line(&mut buf) {
             Ok(0) => break,
             Ok(_) => {
@@ -1872,6 +1884,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
     let mut buf = String::new();
     loop {
         buf.clear();
+        bv_ready(&actor.binding);
         match stdin.lock().read_line(&mut buf) {
             Ok(0) => break,
             Ok(_) => {

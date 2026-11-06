@@ -167,12 +167,13 @@ describe('a class calling its file\'s dependency', () => {
   });
 
   // The call goes out under an id that varies by target, so the reply takes the id
-  // the call went out with.
+  // the call went out with. The caller's reply waits for Svc's.
   it('gets its reply back through its file actor, from a method', async () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: '@called!', from: 'c' });
     const call = actor.posts.find(p => p.op === '@ping!');
     expect(call).toEqual(expect.objectContaining({ to: 'Svc' }));
+    expect(actor.posts.filter(p => p.to === 'c')).toEqual([]);
     await actor.sendAsync({ id: call.id, re: '#<Svc>', from: 'Svc' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });

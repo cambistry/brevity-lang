@@ -1,7 +1,8 @@
 export { codegenRust } from './program.js';
 import { codegenRust } from './program.js';
 import { mkdirSync, copyFileSync } from 'fs';
-import { spawnSync } from 'child_process';
+import { spawnSync, spawn as spawnChild } from 'child_process';
+import { createInterface } from 'readline';
 import { join } from 'path';
 import { bigintJsonStringify, bigintJsonParse } from '../bigint_json.js';
 
@@ -18,6 +19,66 @@ function argsForSpawn(args) {
   return args.length > 0 ? [JSON.stringify(args)] : [];
 }
 
+// One process per actor, kept alive as the Erlang harness keeps its VM. With
+// BREVITY_READY set, the binary posts {"ev":"ready"} each time it goes back to
+// reading input: when it's done with a message, or waiting on a reply. So a call
+// waiting on a reply the test hasn't sent yet stays waiting, and its own reply
+// can't come out until the test sends that one.
+async function startLive(ctx, bin, args) {
+  const child = spawnChild(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, BREVITY_READY: '1' } });
+  ctx.children.add(child);
+  const posts = [];
+  let stderr = '';
+  let exit = null;
+  // Every line the binary reads follows one ready, so once there have been as many
+  // readies as lines written, plus the one before the first, it's idle.
+  let written = 0;
+  let readies = 0;
+  let waiter = null;
+  const settle = (err) => {
+    if (!waiter || (!err && readies <= written)) return;
+    const w = waiter;
+    waiter = null;
+    clearTimeout(w.timer);
+    if (err) w.reject(err); else w.resolve();
+  };
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.stdin.on('error', () => { /* the close handler reports it */ });
+  createInterface({ input: child.stdout }).on('line', (line) => {
+    if (!line.trim()) return;
+    const msg = bigintJsonParse(line);
+    if (msg && msg.ev === 'ready' && Object.keys(msg).length === 1) { readies++; settle(); }
+    else posts.push(msg);
+  });
+  child.on('close', (code, signal) => {
+    ctx.children.delete(child);
+    exit = `Rust binary failed (exit ${code ?? signal}): ${stderr}`;
+    settle(new Error(exit));
+  });
+  const idle = () => new Promise((resolve, reject) => {
+    if (exit) { reject(new Error(exit)); return; }
+    if (readies > written) { resolve(); return; }
+    const timer = setTimeout(() => {
+      waiter = null;
+      reject(new Error(`Rust binary timed out waiting to read input. stderr: ${stderr}`));
+    }, ctx.spawnTimeoutMs);
+    waiter = { resolve, reject, timer };
+  });
+  const write = (msg) => {
+    written++;
+    child.stdin.write(bigintJsonStringify(msg) + '\n');
+  };
+  await idle();
+  return {
+    send(msg) { write(msg); },
+    async sendAsync(msg) {
+      write(msg);
+      await idle();
+    },
+    posts,
+  };
+}
+
 export default {
   name: 'rust',
   codegen: codegenRust,
@@ -31,7 +92,11 @@ export default {
       copyFileSync(join(rustBase, 'Cargo.toml'), join(rustDir, 'Cargo.toml'));
       const binaryPath = join(rustDir, 'target', 'debug', 'brevity-actor');
       cacheModule.sweepRustCache();
-      return { extract, compile, rustDir, rustSrc, binaryPath, spawnTimeoutMs, buildOrCached: cacheModule.buildOrCached };
+      const children = new Set();
+      return {
+        extract, compile, rustDir, rustSrc, binaryPath, spawnTimeoutMs, buildOrCached: cacheModule.buildOrCached, children,
+        teardown() { for (const child of children) child.kill('SIGKILL'); },
+      };
     },
 
     async runActor(ctx, { source, compileOptions = {}, receive }) {
@@ -46,33 +111,14 @@ export default {
       return result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
     },
 
-    createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
+    async createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const { ast } = ctx.extract(source);
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
       });
       const args = argsForSpawn(resolveConstructorArgs(ctx, source, constructorArgs));
-      const allMessages = [];
-      const posts = [];
-      // Initial run to capture startup messages (e.g., `new` for constructors)
-      const initResult = spawnSync(bin, args, { input: '\n', encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
-      if (initResult.status === 0 && initResult.stdout.trim()) {
-        posts.push(...initResult.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse));
-      }
-      return {
-        send(msg) { allMessages.push(msg); },
-        async sendAsync(msg) {
-          allMessages.push(msg);
-          const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-          const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
-          if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-          const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
-          posts.length = 0;
-          posts.push(...allOutputs);
-        },
-        posts,
-      };
+      return startLive(ctx, bin, args);
     },
 
     compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -83,23 +129,7 @@ export default {
       });
       const args = argsForSpawn(resolveConstructorArgs(ctx, source, constructorArgs));
       return {
-        spawn() {
-          const allMessages = [];
-          const posts = [];
-          return {
-            send(msg) { allMessages.push(msg); },
-            async sendAsync(msg) {
-              allMessages.push(msg);
-              const stdinData = allMessages.map(m => bigintJsonStringify(m)).join('\n') + '\n';
-              const result = spawnSync(bin, args, { input: stdinData, encoding: 'utf-8', timeout: ctx.spawnTimeoutMs });
-              if (result.status !== 0) throw new Error(`Rust binary failed (exit ${result.status}): ${result.stderr}`);
-              const allOutputs = result.stdout.trim().split('\n').filter(Boolean).map(bigintJsonParse);
-              posts.length = 0;
-              posts.push(...allOutputs);
-            },
-            posts,
-          };
-        },
+        spawn() { return startLive(ctx, bin, args); },
       };
     },
   },
