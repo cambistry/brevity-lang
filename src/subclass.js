@@ -51,16 +51,23 @@ export function resolveSuperclassChain(actorByName, actor) {
       if (!inheritedParams.some(ip => ip.name === p.name)) inheritedParams.push(p);
     }
 
-    for (const f of parentChain.inheritedFunctions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f;
-      else inheritedFunctions.push(f);
-    }
-    for (const f of superActor.functions) {
-      const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
-      if (idx >= 0) inheritedFunctions[idx] = f;
-      else inheritedFunctions.push(f);
-    }
+    // A layer's clauses for a name replace the earlier ones for it, together: an
+    // overloaded function keeps all its clauses.
+    const addLayer = (fns) => {
+      const names = new Set(fns.map(f => f.name).filter(Boolean));
+      for (let i = inheritedFunctions.length - 1; i >= 0; i--) {
+        if (names.has(inheritedFunctions[i].name)) inheritedFunctions.splice(i, 1);
+      }
+      for (const f of fns) {
+        if (!f.name) {
+          const idx = inheritedFunctions.findIndex(ef => ef.name === f.name);
+          if (idx >= 0) { inheritedFunctions[idx] = f; continue; }
+        }
+        inheritedFunctions.push(f);
+      }
+    };
+    addLayer(parentChain.inheritedFunctions);
+    addLayer(superActor.functions);
 
     if (st.wrappedAs) {
       wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
