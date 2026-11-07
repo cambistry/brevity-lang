@@ -61,7 +61,7 @@ async function startLive(ctx, bin, args) {
     const timer = setTimeout(() => {
       waiter = null;
       reject(new Error(`Rust binary timed out waiting to read input. stderr: ${stderr}`));
-    }, ctx.spawnTimeoutMs);
+    }, ctx.idleTimeoutMs);
     waiter = { resolve, reject, timer };
   });
   const write = (msg) => {
@@ -93,8 +93,12 @@ export default {
       const binaryPath = join(rustDir, 'target', 'debug', 'brevity-actor');
       cacheModule.sweepRustCache();
       const children = new Set();
+      // A live actor has no startup to pay for, so its wait for each message is
+      // short. It starts at the write, so a cargo build never counts against it.
+      // BREVITY_SPAWN_TIMEOUT_MS, set for a slow box, lengthens this one too.
+      const idleTimeoutMs = process.env.BREVITY_SPAWN_TIMEOUT_MS ? spawnTimeoutMs : 5000;
       return {
-        extract, compile, rustDir, rustSrc, binaryPath, spawnTimeoutMs, buildOrCached: cacheModule.buildOrCached, children,
+        extract, compile, rustDir, rustSrc, binaryPath, spawnTimeoutMs, idleTimeoutMs, buildOrCached: cacheModule.buildOrCached, children,
         teardown() { for (const child of children) child.kill('SIGKILL'); },
       };
     },
