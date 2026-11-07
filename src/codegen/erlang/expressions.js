@@ -7,7 +7,7 @@ import {
   inferLiteralType,
   erlLambdaUsesOuterRefs,
   erlGenLambdaArgLabel,
-  erlTypeTag,
+  erlSlotTag,
   erlTypeWireWrap,
 } from './types.js';
 import { inferExprType } from '../../inference.js';
@@ -48,7 +48,9 @@ function erlArgHelpers(ctx, typeEnv, sCtx) {
     const raw = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
     return erlTypeWireWrap(ctx, raw, argType(a)) || raw;
   };
-  const argTag = a => { const tag = erlTypeTag(ctx, argType(a)); return tag ? erlString(tag) : 'null'; };
+  // A union or `Anything` arg is tagged from its value, read again only when it is a name.
+  const argTag = a => erlSlotTag(ctx, argType(a), (a.expr ? a.expr.type === 'Identifier' : true)
+    ? (a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name)) : null);
   return { argVal, argTag };
 }
 
@@ -159,7 +161,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
   const value = `get(${erlStateKey(ctx, '@' + cell)})`;
-  const tyPart = cellType ? `, <<"ty">> => [${erlString(cellType)}]` : '';
+  const tyPart = cellType ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
   return [
     `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
     `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,

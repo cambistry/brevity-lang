@@ -5,8 +5,9 @@ import { parseInterface } from '../javascript/types.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
-  buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances, rustTypeTag,
+  buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances, rustTypeTag, rustTyOf, rustSlotTag, rustTypeWireWrap,
 } from './types.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { intToValue, valueArray } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
@@ -1798,7 +1799,9 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
       lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
       if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
-        const argTag = a => { const tag = rustTypeTag(a.typeName || null); return tag ? `"${tag}"` : 'null'; };
+        // A union or `Anything` arg is tagged from its value, read again only when it is a name.
+        const argTag = a => rustSlotTag(a.typeName || null, (a.expr ? a.expr.type === 'Identifier' : true)
+          ? `bv_val(${rustSsaResolve(a.expr?.name ?? a.name)}.clone())` : null);
         let tyJson;
         if (positional.length > 0 && named.length > 0) {
           const posTy = positional.map(argTag).join(', ');
@@ -2358,8 +2361,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
         const valAsValue = toJsonValue(val, typeHint || 'Anything');
-        const tyPart = typeHint
-          ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${JSON.stringify(typeHint)}]]));`
+        // A union or `Anything` is tagged from the value (named, so it is read once).
+        const hintTag = !typeHint ? null
+          : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
+          : s.value?.type === 'Identifier' ? rustTyOf(typeHint, `bv_val((${val}).clone())`) : null;
+        const tyPart = hintTag
+          ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${hintTag}]]));`
           : '';
         const toFieldStr = '#<' + s.objectName + ' ' + toSelector + '>';
         lines.push(`${I}{`);
@@ -3188,15 +3195,9 @@ function genRustReBody(fields, typeEnv, refNames) {
   }
 
   // Slice 12: type-valued reply slot — wrap its value with `bv_to_wire`
-  // (positional list when all-required, named map when any optional). The
-  // codegen passes the field set per call so no runtime registry is needed.
-  function typeWireWrap(rawExpr, t) {
-    if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return null;
-    const decl = G.ctx.typeDecls.get(t);
-    const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
-    const allRequired = (decl.fields || []).every(f => !f.optional);
-    return `bv_to_wire(&${rawExpr}, &[${fieldList}], ${allRequired})`;
-  }
+  // (positional list when all-required, named map when any optional). A union
+  // slot picks the type from the value's `__type` (see rustTypeWireWrap).
+  const typeWireWrap = (rawExpr, t) => rustTypeWireWrap(rawExpr, t);
 
   function reFieldVal(f) {
     const slotType = f.type
@@ -3276,38 +3277,35 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const spread = fields.find(f => f.spread);
   if (spread) return null; // ty handled separately for spread
 
-  const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  // Type-valued slots emit the type's authority address (see rustTypeTag);
-  // List-of-any slots emit a runtime element-type probe.
-  const tagFor = t => rustTypeTag(t);
-
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
+  // A name's value as a Value, read again for its tag (a read has no effects).
+  const readValue = (name) => G.ctx.stateVarNames.has(name)
+    ? `self.state.get("${stateKey(name)}").cloned().unwrap_or(Value::Null)`
+    : refNames.has(name) ? `self.refs.get("${name}").cloned().unwrap_or(Value::Null)`
+      : `bv_val(${rustSsaResolve(name)}.clone())`;
+  // A slot declared as a union or `Anything` is tagged from its value at runtime, so
+  // it needs a name to read; an expression with no name leaves the reply untagged.
+  const slotTag = (t, varName) => {
+    if (!isDynamicTy(t)) return JSON.stringify(rustTypeTag(t));
+    return varName ? rustTyOf(t, readValue(varName)) : null;
+  };
 
-  let hasDynamic = false;
-
-  // Collect types for positional fields
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push({ dynamic: false, val: '"@"' }); continue; }
+    if (f.expr?.type === 'SelfValue') { posTypes.push('"@"'); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
-    if (isListOfAny(t)) {
-      hasDynamic = true;
-      const varName = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
-      if (!varName) return null;
-      posTypes.push({ dynamic: true, expr: `list_types_of(&${rustSsaResolve(varName)})` });
-    } else {
-      posTypes.push({ dynamic: false, val: JSON.stringify(tagFor(t)) });
-    }
+    const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
+    if (tag === null) return null;
+    posTypes.push(tag);
   }
 
-  // Collect types for named fields
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push({ dynamic: false, key: f.key, val: '"@"' }); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": "@"`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
@@ -3318,40 +3316,14 @@ function genRustTyBody(fields, typeEnv, refNames) {
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (!key || !t) return null;
-    if (isListOfAny(t)) {
-      hasDynamic = true;
-      if (!varName) return null;
-      const resolved = G.ctx.stateVarNames.has(varName) ? `self.state.get("${stateKey(varName)}").cloned().unwrap_or(Value::Null)` : (refNames.has(varName) ? `self.refs.get("${varName}").cloned().unwrap_or(Value::Null)` : rustSsaResolve(varName));
-      namedTypes.push({ dynamic: true, key, expr: `list_types_of(&${resolved})` });
-    } else {
-      namedTypes.push({ dynamic: false, key, val: `"${tagFor(t)}"` });
-    }
+    const tag = slotTag(t, varName);
+    if (tag === null) return null;
+    namedTypes.push(`"${key}": ${tag}`);
   }
 
-  if (!hasDynamic) {
-    // Static ty — use json! macro
-    if (pos.length > 0 && named.length > 0) {
-      return `json!([${posTypes.map(p => p.val).join(', ')}, {${namedTypes.map(n => `"${n.key}": ${n.val}`).join(', ')}}])`;
-    } else if (pos.length > 0) {
-      return `json!([${posTypes.map(p => p.val).join(', ')}])`;
-    } else if (named.length > 0) {
-      return `json!({${namedTypes.map(n => `"${n.key}": ${n.val}`).join(', ')}})`;
-    }
-    return null;
-  }
-
-  // Dynamic ty — build at runtime with Map
-  if (named.length > 0 && pos.length === 0) {
-    const pairs = namedTypes.map(n => {
-      if (n.dynamic) {
-        return `ty_map.insert("${n.key}".to_string(), ${n.expr});`;
-      } else {
-        return `ty_map.insert("${n.key}".to_string(), json!(${n.val}));`;
-      }
-    });
-    return `{ let mut ty_map = Map::new(); ${pairs.join(' ')} Value::Object(ty_map) }`;
-  }
-  // For now, return null for complex dynamic cases (pos + named with dynamic)
+  if (pos.length > 0 && named.length > 0) return `json!([${posTypes.join(', ')}, {${namedTypes.join(', ')}}])`;
+  if (pos.length > 0) return `json!([${posTypes.join(', ')}])`;
+  if (named.length > 0) return `json!({${namedTypes.join(', ')}})`;
   return null;
 }
 

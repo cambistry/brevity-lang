@@ -167,7 +167,7 @@ describe('List type matching + Anything + BV-A', () => {
   });
 
   it('List param accepts component ty from caller', async () => {
-    await expectBehavior(script, { input: { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'ty': [{ items: ['Integer', 'Text'] }], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Anything' }, re: { first: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'ty': [{ items: ['Integer', 'Text'] }], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Integer' }, re: { first: 42 }, to: 'c' } });
   });
 
   it('[a, b] = [1,2,3] — under-destructured without discard → runtime error', async () => {

@@ -23,8 +23,6 @@ export const LIST_PREAMBLE = `const _List = {
   cons(head, tail) { return { head, tail }; },
   from(arr) { if (arr === null) return null; return arr.reduceRight((tail, head) => ({ head, tail }), null); },
   toArray(list) { if (list === null) return []; const a = []; while (list !== null) { a.push(list.head); list = list.tail; } return a; },
-  _typeOf(v) { if (v instanceof BvDecimal) return 'Decimal'; if (typeof v === 'number' || typeof v === 'bigint') return 'Integer'; if (typeof v === 'string') return 'Text'; if (typeof v === 'boolean') return 'Boolean'; return 'Anything'; },
-  typesOf(list) { const a = []; let l = list; while (l !== null) { a.push(_List._typeOf(l.head)); l = l.tail; } return a; },
   async mapAsync(list, fn) {
     if (list === null) return null;
     const results = [];
@@ -507,6 +505,27 @@ const _bvAsKind = (v) => {
   if (typeof v.__type === 'string') return v.__type;
   if (Array.isArray(v) || ('head' in v && 'tail' in v)) return 'List';
   return 'Object';
+};
+// The tag for a value whose slot is declared as a union or \`Anything\`: the member
+// the value is, else the value's own kind (a list: each element's). \`m\` is
+// [kind, tag] pairs; \`*\` is a member taken when no other matches.
+const _bvTyOf = (v, m) => {
+  const k = _bvAsKind(v);
+  const pick = (kind) => m.find(e => e[0] === kind);
+  const hit = pick(k)
+    || (k === 'Integer' && (pick('Float') || pick('Decimal')))
+    || (k === 'null' && pick('List'))
+    || pick('*');
+  if (hit) return hit[1];
+  if (k === 'List') {
+    const el = m.filter(e => e[0] !== 'List');
+    if (Array.isArray(v)) return v.map(x => _bvTyOf(x, el));
+    const a = [];
+    for (let l = v; l != null; l = l.tail) a.push(_bvTyOf(l.head, el));
+    return a;
+  }
+  if (typeof v?.__type === 'string') return '::' + v.__type.split('::').pop();
+  return k;
 };
 const _bvAsFields = (v, d) => {
   let src = v;

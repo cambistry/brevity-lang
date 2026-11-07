@@ -1,9 +1,10 @@
 import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
+import { isDynamicTy } from '../ty_tags.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
-  genListDestructureAssign, genPackedReturn, genTyBody, typeTag,
+  genListDestructureAssign, genPackedReturn, genTyBody, jsSlotTag, jsTyOf,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
   jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey,
 } from './expressions.js';
@@ -74,8 +75,9 @@ export function genSubscribeCall(ctx, expr) {
     const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
-    const posTy = positional.map(a => JSON.stringify(typeTag(ctx, typeOf(a)))).join(', ');
-    const namedTy = named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, typeOf(a)))}`).join(', ');
+    const readOf = a => (a.expr ? (a.expr.type === 'Identifier' ? genArgVal(a) : null) : genArgVal(a));
+    const posTy = positional.map(a => jsSlotTag(ctx, typeOf(a), readOf(a))).join(', ');
+    const namedTy = named.map(a => `${a.name}: ${jsSlotTag(ctx, typeOf(a), readOf(a))}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
       opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
       tyField = `, 'ty': [${posTy}, {${namedTy}}]`;
@@ -900,7 +902,11 @@ export function genLocals(ctx, body, outerEnv) {
         const inferred = inferLiteralType(s.value);
         const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
         const typeHint = inferred || envType || null;
-        const tyField = typeHint ? `, 'ty': [[${JSON.stringify(typeHint)}]]` : '';
+        // A union or `Anything` is tagged from the value (named, so it is read once).
+        const hintTag = !typeHint ? null
+          : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
+          : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
+        const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
         const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
         return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${tyField} });`;
       }

@@ -2,6 +2,7 @@
 
 import { erlStateKey, erlString } from './preambles.js';
 import { inferExprType } from '../../inference.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
 // Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
 // type, `::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
@@ -15,14 +16,35 @@ function erlTypeTag(ctx, t) {
   return authority ? `${authority} ::${name}` : `::${name}`;
 }
 
+// The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.
+function erlTyOf(ctx, t, valueExpr) {
+  const members = tyMembers(t, u => erlTypeTag(ctx, u), ctx.typeDecls)
+    .map(([k, tag]) => `{${erlString(k)}, ${erlString(tag)}}`).join(', ');
+  return `bv_ty_of(${valueExpr}, [${members}])`;
+}
+
+// A slot's tag: the declared type's when it is one, else the value's at runtime
+// (`valueExpr`, or no tag when there is nothing safe to read).
+function erlSlotTag(ctx, t, valueExpr) {
+  if (!isDynamicTy(t)) { const tag = erlTypeTag(ctx, t ?? null); return tag ? erlString(tag) : 'null'; }
+  return valueExpr ? erlTyOf(ctx, t, valueExpr) : 'null';
+}
+
 // Wrap a value expression with `bv_to_wire` when its type is a type decl;
 // null otherwise so the caller keeps the plain value.
 function erlTypeWireWrap(ctx, valueExpr, t) {
-  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return null;
-  const decl = ctx.typeDecls.get(t);
-  const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
-  const allRequired = (decl.fields || []).every(fl => !fl.optional);
-  return `bv_to_wire(${valueExpr}, [${fieldList}], ${allRequired})`;
+  const types = wireTypes(t, ctx.typeDecls);
+  if (types.length === 0) return null;
+  const wire = (v, name) => {
+    const decl = ctx.typeDecls.get(name);
+    const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
+    const allRequired = (decl.fields || []).every(fl => !fl.optional);
+    return `bv_to_wire(${v}, [${fieldList}], ${allRequired})`;
+  };
+  if (ctx.typeDecls.has(t)) return wire(valueExpr, t);
+  // A union: the value's own `__type` says which type's fields to send.
+  const arms = types.map(n => `#{<<"__type">> := ${erlString(n)}} -> ${wire('W_', n)}`).join('; ');
+  return `(fun(W_) -> case W_ of ${arms}; _ -> W_ end end)(${valueExpr})`;
 }
 
 function inferLiteralType(expr) {
@@ -347,4 +369,6 @@ export {
   erlGenLambdaArgLabel,
   erlTypeTag,
   erlTypeWireWrap,
+  erlTyOf,
+  erlSlotTag,
 };

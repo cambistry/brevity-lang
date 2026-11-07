@@ -1,6 +1,7 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
-import { erlVarName, erlString, isListOfAnythingType, erlStateKey } from './preambles.js';
+import { erlVarName, erlString, erlStateKey } from './preambles.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
 import { bindLocalType } from '../../inference.js';
 import {
@@ -12,6 +13,9 @@ import {
   erlCollectFreeVars,
   erlLambdaUsesOuterRefs,
   erlTypeTag,
+  erlTyOf,
+  erlSlotTag,
+  erlTypeWireWrap,
 } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
@@ -120,7 +124,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
   // Authority-address tag for a subscribe arg; the payload stays a live value
   // because this op is shared with in-process self/child delivery.
-  const tagOf = a => { const tag = erlTypeTag(ctx, typeOf(a)); return tag ? erlString(tag) : 'null'; };
+  const tagOf = a => erlSlotTag(ctx, typeOf(a), (a.expr ? a.expr.type === 'Identifier' : true) ? genArgVal(a) : null);
   const buildOpExpr = (opStr) => {
     if (positional.length === 0 && named.length === 0) return `<<"${opStr}">>`;
     if (named.length > 0 && positional.length === 0) {
@@ -867,8 +871,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const typeHint = s.value?.type === 'Identifier'
           ? (typeEnv.get(s.value.name) || null)
           : (inferLiteralType(s.value) || null);
-        const tyField = typeHint
-          ? `, <<"ty">> => [[<<"${typeHint}">>]]`
+        // A union or `Anything` is tagged from the value (named, so it is read once).
+        const hintTag = !typeHint ? null
+          : !isDynamicTy(typeHint) ? `<<"${typeHint}">>`
+          : s.value?.type === 'Identifier' ? erlTyOf(ctx, typeHint, val) : null;
+        const tyField = hintTag
+          ? `, <<"ty">> => [[${hintTag}]]`
           : '';
         const toBin = `<<"#<${s.objectName} ${toSelector}>">>`;
         lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${tyField}},`);
@@ -1519,11 +1527,7 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
     || (f.expr && inferExprType(f.expr, typeEnv));
   const wireWrap = (raw) => {
     if (slotType === 'Object') return `bv_object_wire(${raw})`;
-    if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
-    const decl = ctx.typeDecls.get(slotType);
-    const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
-    const allRequired = (decl.fields || []).every(fl => !fl.optional);
-    return `bv_to_wire(${raw}, [${fieldList}], ${allRequired})`;
+    return erlTypeWireWrap(ctx, raw, slotType) || raw;
   };
   // A returned local cell carries a read of the cell: its name isn't a variable.
   if (f.name && f.expr?.type !== 'RefRead') {
@@ -1546,11 +1550,7 @@ function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
 function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
   const wireWrap = (raw, slotType) => {
     if (slotType === 'Object') return `bv_object_wire(${raw})`;
-    if (typeof slotType !== 'string' || !ctx.typeDecls?.has(slotType)) return raw;
-    const decl = ctx.typeDecls.get(slotType);
-    const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
-    const allRequired = (decl.fields || []).every(fl => !fl.optional);
-    return `bv_to_wire(${raw}, [${fieldList}], ${allRequired})`;
+    return erlTypeWireWrap(ctx, raw, slotType) || raw;
   };
   const entries = named.map(f => {
     if ('sigil' in f) {
@@ -1585,9 +1585,6 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
 
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional && !f.spread);
-  // Type-valued slots emit the type's authority address (see erlTypeTag);
-  // List-of-any slots emit a runtime element-type probe.
-  const tagFor = t => erlTypeTag(ctx, t);
 
   // Resolve a source-level local name to its current SSA-suffixed name.
   const ssaResolve = (name) => {
@@ -1596,6 +1593,15 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
     }
     return name;
   };
+  const readValue = (name) => ctx.stateVarNames.has(name) ? `get(${erlStateKey(ctx, name)})`
+    : sCtx?.refVars?.has(name) ? `get(ref_${name})`
+      : erlVarName(ssaResolve(name));
+  // A slot declared as a union or `Anything` is tagged from its value at runtime, so
+  // it needs a name to read; an expression with no name leaves the reply untagged.
+  const slotTag = (t, varName) => {
+    if (!isDynamicTy(t)) return erlString(erlTypeTag(ctx, t));
+    return varName ? erlTyOf(ctx, t, readValue(varName)) : null;
+  };
 
   const posTypes = [];
   for (const f of pos) {
@@ -1603,31 +1609,28 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
     if (f.expr?.type === 'SelfValue') { posTypes.push(erlString('@')); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
-    posTypes.push(erlString(tagFor(t)));
+    const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
+    if (tag === null) return null;
+    posTypes.push(tag);
   }
 
   const namedTypes = [];
   for (const f of named) {
-    let key, t, varExpr;
+    let key, t, varName;
     if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString('@')}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);
-      varExpr = ctx.stateVarNames.has(f.sigil) ? `get(${erlStateKey(ctx, f.sigil)})` : erlVarName(ssaResolve(f.sigil));
+      varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      const valName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
-      t = f.type || (valName ? typeEnv.get(valName) : null) || inferExprType(f.value, typeEnv);
-      varExpr = valName ? erlVarName(ssaResolve(valName)) : null;
+      varName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
+      t = f.type || (varName ? typeEnv.get(varName) : null) || inferExprType(f.value, typeEnv);
     }
     if (!key || !t) return null;
-    // A list of unknown elements with no name to probe: no tag, as on the others.
-    if (isListOfAnythingType(t) && !varExpr) return null;
-    if (isListOfAnythingType(t) && varExpr) {
-      namedTypes.push(`${erlString(key)} => list_component_types(${varExpr})`);
-    } else {
-      namedTypes.push(`${erlString(key)} => ${erlString(tagFor(t))}`);
-    }
+    const tag = slotTag(t, varName);
+    if (tag === null) return null;
+    namedTypes.push(`${erlString(key)} => ${tag}`);
   }
 
   if (pos.length > 0 && named.length > 0) {

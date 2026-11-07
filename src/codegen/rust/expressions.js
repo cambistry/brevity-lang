@@ -4,7 +4,7 @@ import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
-  classNeedsSpawnedInstances, rustTypeTag, rustTypeWireWrap, outerRead,
+  classNeedsSpawnedInstances, rustTypeWireWrap, outerRead, rustSlotTag,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
@@ -119,7 +119,7 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
     '        _resp.insert("id".to_string(), json!(_sub_id));',
     '        _resp.insert("re".to_string(), json!([_cur]));',
     '        _resp.insert("to".to_string(), json!(_sub_from));',
-    ...(cellType ? [`        _resp.insert("ty".to_string(), json!([${JSON.stringify(cellType)}]));`] : []),
+    ...(cellType ? [`        _resp.insert("ty".to_string(), json!([${rustSlotTag(cellType, '_cur')}]));`] : []),
     '        let _ = self.binding.send(Value::Object(_resp));',
     '    }',
     '}',
@@ -901,7 +901,9 @@ ${subRegLines.join('\n')}
       const jv = toJsonValue(genArgValRaw(a), t || 'Anything');
       return rustTypeWireWrap(`(${jv})`, t) || jv;
     };
-    const argTag = a => { const tag = rustTypeTag(argType(a)); return tag ? `"${tag}"` : 'null'; };
+    // A union or `Anything` arg is tagged from its value, read again only when it is a name.
+    const argTag = a => rustSlotTag(argType(a), (a.expr ? a.expr.type === 'Identifier' : true)
+      ? `bv_val((${genArgValRaw(a)}).clone())` : null);
     let opExpr, tyExpr;
     if (positional.length > 0 && named.length > 0) {
       const posVals = positional.map(genArgValWrapped).join(', ');

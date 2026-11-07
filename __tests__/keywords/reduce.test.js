@@ -110,28 +110,28 @@ describe('reduce', () => {
   it('reduce(nums, &add) sums without initial', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: '@sumNoInit', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 60 }, to: 'c' } },
     );
   });
 
   it('reduce(nums) trailing block sums without initial', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: '@sumBlockNoInit', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 60 }, to: 'c' } },
     );
   });
 
   it('reduce on single-element list returns the element', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: '@singleElement', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('reduce on empty list returns null', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: '@emptyList', from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Integer | null' }, re: { result: null }, to: 'c' } },
+      { output: { id: '6', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
     );
   });
 
@@ -145,7 +145,7 @@ describe('reduce', () => {
   it('reduce nums, &add — no parens no initial', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: '@noParenNoInit', from: 'c' } },
-      { output: { id: '8', 'ty': { result: 'Integer | null' }, re: { result: 15 }, to: 'c' } },
+      { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
     );
   });
 
@@ -159,7 +159,7 @@ describe('reduce', () => {
   it('reduce(nums) lineal — sum without initial', async () => {
     await expectBehavior(script,
       { input: { id: '10', op: '@spaciousNoInit', from: 'c' } },
-      { output: { id: '10', 'ty': { result: 'Integer | null' }, re: { result: 60 }, to: 'c' } },
+      { output: { id: '10', 'ty': { result: 'Integer' }, re: { result: 60 }, to: 'c' } },
     );
   });
 

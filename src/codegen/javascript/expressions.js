@@ -1,6 +1,7 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
@@ -48,9 +49,10 @@ export function domHostAddr(ctx, tag) {
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
-export function genCellNotify(cell, cellType) {
-  const tyPart = cellType ? `, 'ty': [${JSON.stringify(cellType)}]` : '';
-  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [this.#${stateKey('@' + cell)}]${tyPart}, to: _sub.from }); }`;
+export function genCellNotify(ctx, cell, cellType) {
+  const value = `this.#${stateKey('@' + cell)}`;
+  const tyPart = cellType ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
 }
 
 export function collectFreeVars(ctx, funcNode) {
@@ -327,7 +329,7 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
 }
 
 export function genExpr(ctx, expr) {
-  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(expr.cell, expr.cellType)})()`;
+  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellType)})()`;
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
   }
@@ -1210,7 +1212,7 @@ export function genValue(ctx, expr, name = '_') {
 
 export function genReplyField(ctx, field, typeEnv) {
   const isList = t => typeof t === 'string' && t.startsWith('List');
-  const isType = t => typeof t === 'string' && ctx.typeDecls?.has(t);
+  const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const wrapForReply = (expr, t) => {
     if (isList(t)) return `_List.toArray(${expr})`;
     if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
@@ -1341,7 +1343,16 @@ export function argWireVal(ctx, a) {
   if (a.expr?.type === 'Function') return genLambdaArgLabel(ctx, a.expr, { wire: true });
   const base = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
   const t = argTypeOf(ctx, a);
-  return (typeof t === 'string' && ctx.typeDecls?.has(t)) ? `_bv_to_wire(${base})` : base;
+  return wireTypes(t, ctx.typeDecls).length > 0 ? `_bv_to_wire(${base})` : base;
+}
+
+// A call argument's tag. One declared as a union or `Anything` is tagged from its
+// value, read again only when it is a plain name (an expression isn't run twice).
+function argTag(ctx, a) {
+  const read = a.expr
+    ? (a.expr.type === 'Identifier' ? genExpr(ctx, a.expr) : null)
+    : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+  return jsSlotTag(ctx, argTypeOf(ctx, a), read);
 }
 
 // Build the parallel value + ty slot strings for a posted call's arguments.
@@ -1351,8 +1362,8 @@ export function genArgSlots(ctx, positional, named) {
   return {
     posVals: positional.map(a => argWireVal(ctx, a)).join(', '),
     namedFields: named.map(a => `${a.name}: ${argWireVal(ctx, a)}`).join(', '),
-    posTy: positional.map(a => JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))).join(', '),
-    namedTy: named.map(a => `${a.name}: ${JSON.stringify(typeTag(ctx, argTypeOf(ctx, a)))}`).join(', '),
+    posTy: positional.map(a => argTag(ctx, a)).join(', '),
+    namedTy: named.map(a => `${a.name}: ${argTag(ctx, a)}`).join(', '),
   };
 }
 
@@ -1361,11 +1372,15 @@ export function genTyBody(ctx, fields, typeEnv) {
   if (fields[0]?.selfReturn) return null;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
-  const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
-  // Type-valued slots emit the type's authority address (see typeTag);
-  // List-of-any slots emit a runtime element-type probe.
-  const tagFor = t => typeTag(ctx, t);
+  // A slot declared as a union or `Anything` is tagged from its value at runtime, so
+  // it needs a name to read; an expression with no name leaves the reply untagged.
+  const slotTag = (t, varName) => {
+    if (!isDynamicTy(t)) return JSON.stringify(typeTag(ctx, t));
+    if (!varName) return null;
+    const read = ctx.stateVarNames.has(varName) ? `this.#${stateKey(varName)}` : ssaResolve(ctx, varName);
+    return jsTyOf(ctx, t, read);
+  };
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
@@ -1373,15 +1388,9 @@ export function genTyBody(ctx, fields, typeEnv) {
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
-    if (isListOfAny(t)) {
-      const varName = f.name ||
-        (f.expr?.type === 'Identifier' ? f.expr.name : null);
-      if (!varName) return null;
-      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${stateKey(varName)}` : ssaResolve(ctx, varName);
-      posTypes.push(`_List.typesOf(${resolvedVar})`);
-    } else {
-      posTypes.push(JSON.stringify(tagFor(t)));
-    }
+    const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
+    if (tag === null) return null;
+    posTypes.push(tag);
   }
   const namedTypes = [];
   for (const f of named) {
@@ -1396,13 +1405,9 @@ export function genTyBody(ctx, fields, typeEnv) {
     }
     if (!t) return null;
     if (isFunctionType(t)) return null;
-    if (isListOfAny(t)) {
-      if (!varName) return null;
-      const resolvedVar = ctx.stateVarNames.has(varName) ? `this.#${stateKey(varName)}` : ssaResolve(ctx, varName);
-      namedTypes.push(`${JSON.stringify(key)}: _List.typesOf(${resolvedVar})`);
-    } else {
-      namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(tagFor(t))}`);
-    }
+    const tag = slotTag(t, varName);
+    if (tag === null) return null;
+    namedTypes.push(`${JSON.stringify(key)}: ${tag}`);
   }
   if (pos.length > 0 && named.length > 0) {
     return `[${posTypes.join(', ')}, { ${namedTypes.join(', ')} }]`;
@@ -1411,6 +1416,18 @@ export function genTyBody(ctx, fields, typeEnv) {
   } else {
     return `{ ${namedTypes.join(', ')} }`;
   }
+}
+
+// The runtime tag of `read`, a value whose declared type `t` is a union or `Anything`.
+export function jsTyOf(ctx, t, read) {
+  return `_bvTyOf(${read}, ${JSON.stringify(tyMembers(t, u => typeTag(ctx, u), ctx.typeDecls))})`;
+}
+
+// A slot's tag: the declared type's when it is one, else the value's at runtime
+// (`read`, or no tag when there is nothing safe to read).
+export function jsSlotTag(ctx, t, read) {
+  if (!isDynamicTy(t)) return JSON.stringify(typeTag(ctx, t ?? null));
+  return read ? jsTyOf(ctx, t, read) : 'null';
 }
 
 // What a function body returns: a packed Object, marked when it's a self-return
@@ -1432,7 +1449,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
   const isList = t => typeof t === 'string' && t.startsWith('List');
-  const isType = t => typeof t === 'string' && ctx.typeDecls?.has(t);
+  const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const posVal = f => {
     const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);

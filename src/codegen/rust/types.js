@@ -2,6 +2,7 @@
 import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
     // A type value's wire tag is its authority address carrying ::Name; the
@@ -200,19 +201,25 @@ const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
     }
 }`;
 
-const LIST_TYPES_OF_FN = `fn list_types_of(v: &Value) -> Value {
-    match v.as_array() {
-        Some(arr) => {
-            let types: Vec<Value> = arr.iter().map(|el| {
-                if el.is_i64() || el.is_u64() { json!("Integer") }
-                else if el.is_f64() { json!("Float") }
-                else if el.is_string() { json!("Text") }
-                else if el.is_boolean() { json!("Boolean") }
-                else { json!("Anything") }
-            }).collect();
-            Value::Array(types)
+// The tag for a value whose slot is declared as a union or `Anything`: the member
+// the value is, else the value's own kind (a list: each element's). `m` is
+// (kind, tag) pairs; "*" is a member taken when no other matches.
+const BV_TY_OF_FN = `#[allow(dead_code)]
+fn bv_ty_of(v: &Value, m: &[(&str, &str)]) -> Value {
+    let k = bv_as_kind(v);
+    let pick = |kind: &str| m.iter().find(|e| e.0 == kind);
+    let hit = pick(k.as_str())
+        .or_else(|| if k == "Integer" { pick("Float").or_else(|| pick("Decimal")) } else { None })
+        .or_else(|| if k == "null" { pick("List") } else { None })
+        .or_else(|| pick("*"));
+    if let Some(e) = hit { return json!(e.1); }
+    match v {
+        Value::Array(a) => {
+            let el: Vec<(&str, &str)> = m.iter().filter(|e| e.0 != "List").cloned().collect();
+            Value::Array(a.iter().map(|x| bv_ty_of(x, &el)).collect())
         }
-        None => json!([]),
+        Value::Object(o) if o.contains_key("__type") => json!(format!("::{}", k.rsplit("::").next().unwrap_or(k.as_str()))),
+        _ => json!(k),
     }
 }`;
 
@@ -233,15 +240,37 @@ export function rustTypeTag(t) {
   return authority ? `${authority} ::${name}` : `::${name}`;
 }
 
+// The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or
+// `Anything`. Parenthesized so it sits in a `json!` as one expression.
+export function rustTyOf(t, valueExpr) {
+  const members = tyMembers(t, rustTypeTag, G.ctx.typeDecls)
+    .map(([k, tag]) => `(${JSON.stringify(k)}, ${JSON.stringify(tag)})`).join(', ');
+  return `(bv_ty_of(&${valueExpr}, &[${members}]))`;
+}
+
+// A slot's tag for a `json!`: the declared type's when it is one, else the value's
+// at runtime (`valueExpr`, or no tag when there is nothing safe to read).
+export function rustSlotTag(t, valueExpr) {
+  if (!isDynamicTy(t)) { const tag = rustTypeTag(t ?? null); return tag ? JSON.stringify(tag) : 'null'; }
+  return valueExpr ? rustTyOf(t, valueExpr) : 'null';
+}
+
 // Wrap a Value expression with `bv_to_wire` when its type is a type decl
 // (positional list when all-required, named map when any optional); null
 // otherwise so the caller keeps the plain value.
 export function rustTypeWireWrap(valueExpr, t) {
-  if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return null;
-  const decl = G.ctx.typeDecls.get(t);
-  const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
-  const allRequired = (decl.fields || []).every(f => !f.optional);
-  return `bv_to_wire(&${valueExpr}, &[${fieldList}], ${allRequired})`;
+  const types = wireTypes(t, G.ctx.typeDecls);
+  if (types.length === 0) return null;
+  const wire = (v, name) => {
+    const decl = G.ctx.typeDecls.get(name);
+    const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
+    const allRequired = (decl.fields || []).every(f => !f.optional);
+    return `bv_to_wire(&${v}, &[${fieldList}], ${allRequired})`;
+  };
+  if (G.ctx.typeDecls.has(t)) return wire(valueExpr, t);
+  // A union: the value's own `__type` says which type's fields to send.
+  const arms = types.map(n => `Some(${JSON.stringify(n)}) => ${wire('_w', n)},`).join(' ');
+  return `{ let _w: Value = ${valueExpr}; match _w.get("__type").and_then(|t| t.as_str()) { ${arms} _ => _w.clone() } }`;
 }
 
 function buildTypeEnv(params, body) {
@@ -806,6 +835,6 @@ function classRefersToSelf(actor) {
 }
 
 export {
-  TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN, RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, BV_TY_OF_FN,
   RUST_KEYWORDS, outerRead, buildTypeEnv, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue, resolveVarExpr, isFunctionArg, isFunctionOnlyConstructor, createRustContext, rsStore, stateKey, findRsAsClauseMatch, findFreeVarsSimple, substituteCaptures, analyzeFunctions, findMutableVars, needsJsonWrap, convertBranchExpr, isBoolExpr, forceJsonWrap, needsObject, fnReturnsFunction, needsDotCallAwait, classNeedsSpawnedInstances, classRefersToSelf,
 };

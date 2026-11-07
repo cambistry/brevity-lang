@@ -2,6 +2,7 @@ import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
@@ -9,7 +10,7 @@ export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genTyBody,
   genTypeCondition, genDefaultValue, stateKey, childBinding,
-  genPackedReturn, genCellNotify,
+  genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
@@ -217,7 +218,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const cellName = name.slice('set@'.length);
     const cellType = params[0]?.type;
     notifyBlock = `
-        ${genCellNotify(cellName, cellType)}`;
+        ${genCellNotify(ctx, cellName, cellType)}`;
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
@@ -708,16 +709,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const typeCond = clause.negated
       ? `_rawPayload !== ${JSON.stringify(clause.targetType)}`
       : `_rawPayload === ${JSON.stringify(clause.targetType)}`;
+    // A union target is tagged from the value; the request names the union.
+    const tag = isDynamicTy(clause.targetType) && !clause.negated ? jsTyOf(ctx, clause.targetType, 're[0]') : '_rawPayload';
     return {
       condition: `opName === "as" && typeof _rawPayload === "string" && ${typeCond}`,
-      block: `\n        re = [${val}];\n        _ty_re = [_rawPayload];\n        _handled = true;`,
+      block: `\n        re = [${val}];\n        _ty_re = [${tag}];\n        _handled = true;`,
     };
   });
   if (hasReturnAs) {
     const returnAsType = actor.declarationReturn.typeName;
     asClauseParts.push({
       condition: `opName === "as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
-      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [_rawPayload];\n        _handled = true;`,
+      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [${isDynamicTy(returnAsType) ? jsTyOf(ctx, returnAsType, 're[0]') : '_rawPayload'}];\n        _handled = true;`,
     });
   }
 
@@ -1076,6 +1079,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     if ('get' in t) {
       const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
       const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(v.name)}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(p.name)}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
+      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeName]), ...constructorParams.map(p => [p.name, p.type || 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(n)}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
       let _v = _vals[t.get];
       if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;
@@ -1083,7 +1087,8 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
         _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
       }
       const _post = { id: message.id, re: _v, to: message.from };
-      if (_types[t.get]) _post['ty'] = _types[t.get];
+      const _tag = _tyOf[t.get]?.();
+      if (_tag != null) _post['ty'] = _tag;
       this.#binding.post(_post);
     } else if ('set' in t) {
       const _sv = t.set;

@@ -1060,18 +1060,21 @@ list_to_json(null) -> [];
 list_to_json([]) -> [];
 list_to_json(L) when is_list(L) -> L.
 
-%% Compute component types for List of Anything ty
-list_component_types(null) -> [];
-list_component_types(L) when is_list(L) ->
-    [brevity_typeof(E) || E <- L].
-
-brevity_typeof({bv_decimal, _, _}) -> <<"Decimal">>;
-brevity_typeof(V) when is_integer(V) -> <<"Integer">>;
-brevity_typeof(V) when is_float(V) -> <<"Float">>;
-brevity_typeof(V) when is_binary(V) -> <<"Text">>;
-brevity_typeof(true) -> <<"Boolean">>;
-brevity_typeof(false) -> <<"Boolean">>;
-brevity_typeof(_) -> <<"Anything">>.
+%% The tag for a value whose slot is declared as a union or 'Anything': the member
+%% the value is, else the value's own kind (a list: each element's). M is
+%% [{Kind, Tag}]; <<"*">> is a member taken when no other matches.
+bv_ty_of(V, M) ->
+    K = bv_as_kind(V),
+    Alt = case K of <<"Integer">> -> [<<"Float">>, <<"Decimal">>]; <<"null">> -> [<<"List">>]; _ -> [] end,
+    case bv_ty_pick_([K | Alt] ++ [<<"*">>], M) of
+        {ok, T} -> T;
+        none when is_list(V) -> El = [E || {Ek, _} = E <- M, Ek =/= <<"List">>], [bv_ty_of(X, El) || X <- V];
+        none when is_map(V), is_map_key(<<"__type">>, V) -> <<"::", (lists:last(binary:split(K, <<"::">>, [global])))/binary>>;
+        none -> K
+    end.
+bv_ty_pick_([], _) -> none;
+bv_ty_pick_([K | Ks], M) ->
+    case lists:keyfind(K, 1, M) of {_, T} -> {ok, T}; false -> bv_ty_pick_(Ks, M) end.
 
 brevity_scalar_size(Bin) when is_binary(Bin) ->
     length(unicode:characters_to_list(Bin)).
@@ -1460,10 +1463,6 @@ function erlString(s) {
   return `<<"${escaped}"/utf8>>`;
 }
 
-function isListOfAnythingType(t) {
-  return t === 'List' || t === 'List of Anything';
-}
-
 function erlStateKey(ctx, name) {
   // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
   // Codegen-internal names use the __ prefix and bypass this function.
@@ -1480,4 +1479,4 @@ function erlStateKey(ctx, name) {
   return `state_${ctx.childStatePrefix}_${prefix}${bare}`;
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, isListOfAnythingType, erlStateKey };
+export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey };

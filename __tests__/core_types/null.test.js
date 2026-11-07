@@ -20,14 +20,14 @@ describe('null literal', () => {
   it('null assigned to Integer | null var → result is null', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@nullVar', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer | null' }, re: { result: null }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
     );
   });
 
   it('Integer | null var with non-null value → correct value and ty', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: '@nonNullVar', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer | null' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 

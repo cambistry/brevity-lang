@@ -2,7 +2,7 @@
 import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
-  RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, LIST_TYPES_OF_FN,
+  RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, BV_TY_OF_FN,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
@@ -48,17 +48,10 @@ function genRustProgram(actor, allActors) {
     return typed.length > 0 && !typed.some(p => p.positional);
   });
   const needsMatchTypesPos = childActors.length > 0 || allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
-  const needsListTypesOf = publicFns.some(h => {
-    const isListOfAny = t => t === 'List of Anything' || t === 'List';
-    return h.body.some(s =>
-      (s.type === 'TypedAssign' && isListOfAny(s.typeName)) ||
-      (s.type === 'DestructureAssign' && (s.pattern || []).some(p => isListOfAny(p.type))),
-    );
-  });
   const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n\n' + TAG_MATCHES_FN + '\n' : '';
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
-  const listTypesOfFn = needsListTypesOf ? '\n' + LIST_TYPES_OF_FN + '\n' : '';
+  const tyOfFn = '\n' + BV_TY_OF_FN + '\n';
   // Always include Object — handle_op uses BvObject::pack
   const objectPreamble = '\n' + RUST_OBJECT_PREAMBLE + '\n';
   // Slice 12+13: per-program type registry. `bv_type_fields(name)` returns
@@ -1663,7 +1656,7 @@ fn bv_list_join(v: &Value, sep: &Value) -> String {
     arr.iter().map(|e| e.as_str().unwrap_or("").to_string()).collect::<Vec<_>>().join(sep_s)
 }
 
-${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${listTypesOfFn}${objectPreamble}${wireHelpers}
+${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${tyOfFn}${objectPreamble}${wireHelpers}
 struct Actor {
 ${structFields.join(',\n')},
 }
