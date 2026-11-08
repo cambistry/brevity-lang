@@ -13,22 +13,12 @@
 //     wrapper with async send() and async register().
 
 import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, resolve } from 'path';
+import { resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { serveStatic } from './static_server.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '../../..');
-
-const MIME = {
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.bv': 'text/plain; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-};
 
 const HARNESS_PAGE = `<!doctype html>
 <html>
@@ -62,19 +52,7 @@ async function startServer(testPages) {
       res.writeHead(404); res.end(`Unknown test page: ${id}`); return;
     }
 
-    const filePath = resolve(PROJECT_ROOT, '.' + path);
-    if (!filePath.startsWith(PROJECT_ROOT)) {
-      res.writeHead(403); res.end('Forbidden'); return;
-    }
-    try {
-      const data = await readFile(filePath);
-      const ext = extname(filePath).toLowerCase();
-      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-      res.end(data);
-    } catch {
-      res.writeHead(404);
-      res.end(`Not found: ${path}`);
-    }
+    await serveStatic(res, PROJECT_ROOT, path);
   });
   await new Promise((r, rej) => {
     server.once('error', rej);

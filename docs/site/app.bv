@@ -1,0 +1,14 @@
+*
+  :document
+  HTML: (:main, :h1, :p, :button)
+*
+count *Integer = 0
+
+page = <main>
+  <h1>Hello from Brevity</h1>
+  <p>This page is a Brevity actor.</p>
+  <button onclick={ count <- count + 1 }>clicked { count } times</button>
+</main>
+
+body = document.body()
+body.append!(page)
