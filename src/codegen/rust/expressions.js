@@ -1388,7 +1388,11 @@ ${subRegLines.join('\n')}
       }
       return null;
     })();
-    if (objStaticType && G.ctx.typeDecls?.has(objStaticType)) {
+    // Nothing says what an untyped local holds (a reply, say): read the field off
+    // whatever value it is, as JS does.
+    const untyped = !objStaticType || objStaticType === 'Anything' || objStaticType === 'Object';
+    if ((objStaticType && G.ctx.typeDecls?.has(objStaticType))
+        || (untyped && (expr.object?.type === 'Identifier' || expr.object?.type === 'DotAccessExpr'))) {
       const inner = genRustExpr(expr.object, typeEnv, eCtx);
       return `(${inner}).get(${JSON.stringify(expr.property)}).cloned().unwrap_or(Value::Null)`;
     }

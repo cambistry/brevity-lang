@@ -1,5 +1,6 @@
 // statements.js — Statement generation for Rust codegen
 import { returnsOnlySelf } from '../../chains.js';
+import { asDescriptor } from '../../as_check.js';
 import { inferExprType } from '../../inference.js';
 import { parseInterface } from '../javascript/types.js';
 import {
@@ -113,9 +114,23 @@ function handleTypedAssign_RemoteInstanceVar(s, I, lines) {
   return true;
 }
 
-// Branch 6: Local actor var assign
+// Branch 6: Local actor var assign. Nothing says what an untyped local holds: an
+// address is asked for the type, and a value (a slot of a reply) is checked here.
 function handleTypedAssign_LocalInstanceVar(s, I, lines) {
-  genRustAsSend(mintRustSsa(s.name), s.typeName, `${rustSsaResolve(s.value.name)}.as_str().unwrap_or("")`, I, lines);
+  const src = rustSsaResolve(s.value.name);
+  const desc = asDescriptor(s.typeName, G.ctx.typeDecls || new Map());
+  if (desc === null) {
+    genRustAsSend(mintRustSsa(s.name), s.typeName, `${src}.as_str().unwrap_or("")`, I, lines);
+  } else {
+    const sent = [];
+    genRustAsSend('_as_sent', s.typeName, `${src}.as_str().unwrap_or("")`, '', sent);
+    lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = if ${src}.is_string() {`);
+    for (const l of sent) lines.push(`${I}    ${l}`);
+    lines.push(`${I}    _as_sent`);
+    lines.push(`${I}} else {`);
+    lines.push(`${I}    ${convertFromValue(`bv_as(&${src}, &json!(${JSON.stringify(desc)}), ${JSON.stringify(s.typeName)})`, s.typeName)}`);
+    lines.push(`${I}};`);
+  }
   G.ctx.needsAwaitNew = true;
   return true;
 }

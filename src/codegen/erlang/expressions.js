@@ -873,6 +873,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const inner = genExpr(ctx, expr.object, typeEnv, sCtx);
       return `maps:get(${erlString(expr.property)}, ${inner}, null)`;
     }
+    // Nothing says what an untyped local holds (a reply, say): read the field off
+    // whatever value it is, as JS does.
+    const untyped = !objStaticType || objStaticType === 'Anything' || objStaticType === 'Object';
+    if (untyped && (expr.object?.type === 'Identifier' || expr.object?.type === 'DotAccessExpr')) {
+      return `bv_dot_(${erlString(expr.property)}, ${genExpr(ctx, expr.object, typeEnv, sCtx)})`;
+    }
     throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
   }
 

@@ -48,8 +48,9 @@ after:   { re: '#<@Box/1>', ty: '@Box' }         { ty: { coords: '::Point' } }
    `HTML @<tag>` (`HTML @body`), like created nodes, instead of `#<Element>`. Their legacy
    addresses (`document body`) don't end in `/N`, so they don't pass the one-actor check; nothing
    in Rust or Erlang talks to the DOM, so this doesn't matter yet.
-5. **Local types sent by an instance** still get the instance's address (`@C/1 ::Point`). Left for
-   later; type matching ignores authority.
+5. ~~**Local types sent by an instance** still get the instance's address (`@C/1 ::Point`).~~
+   **Done 2026-11-07** (`notes/session-2026-11-07-instance-type-authority.md`): JS leaves `::Point`
+   relative to the file, as Rust and Erlang do.
 
 ## `self` as one slot of several
 

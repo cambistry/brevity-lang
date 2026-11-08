@@ -668,6 +668,7 @@ describe('end to end: type values cross to and from a class in another file', ()
 
     @W = *{
       @get = { return Point(1, 2) }
+      @pair = { return (p: Point(1, 2), n: 1) }
     }
 
     @Holder = (p Point) *{
@@ -684,6 +685,25 @@ describe('end to end: type values cross to and from a class in another file', ()
       w = Svc.W()
       p Svc::Point = w.get()
       return p.x
+    }
+
+    @paired = {
+      w = Svc.W()
+      (p: q, n: k) = w.pair()
+      p Svc::Point = q
+      return p.y
+    }
+
+    @field = {
+      w = Svc.W()
+      r = w.get()
+      return r.y
+    }
+
+    @nestedField = {
+      w = Svc.W()
+      (p: q, n: k) = w.pair()
+      return q.y
     }
 
     @passed = {
@@ -711,31 +731,35 @@ describe('end to end: type values cross to and from a class in another file', ()
     for (let i = 0; i < 200 && actor.posts.length <= count; i++) await new Promise(resolve => setTimeout(resolve, 5));
   };
 
-  // What the caller sent on the way, what Svc replied to each, and the caller's reply.
+  // What the caller sent on the way, what Svc replied to each, what the caller got
+  // back from the relay, and the caller's reply.
   async function call(op) {
     const svc = await (await compileActor(POINT_SVC)).spawn();
     const caller = await (await compileActor(CALLER, { compileOptions: { remotes: pointRemotes } })).spawn();
     await caller.sendAsync({ id: 'x', op, from: 'c' });
     const sent = [];
     const svcReplies = [];
+    const received = [];
     let answered = 0;
     let served = 0;
     for (let step = 0; step < 20; step++) {
       await settle(caller, answered);
       const msg = caller.posts[answered++];
-      if (msg.to === 'c') return { sent, served: svcReplies, reply: msg };
+      if (msg.to === 'c') return { sent, served: svcReplies, received, reply: msg };
       sent.push(msg);
       const to = msg.to.slice('Svc'.length).trim();
       await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
       await settle(svc, served);
       svcReplies.push(svc.posts[served]);
       const { ty, ...reply } = svc.posts[served++];
-      await caller.sendAsync({
+      const relayed = {
         ...promote(reply, 'Svc'),
         ...(ty !== undefined && { ty: promoteTy(ty, 'Svc') }),
         to: undefined,
         from: reply.from ? `Svc ${reply.from}` : 'Svc',
-      });
+      };
+      received.push(relayed);
+      await caller.sendAsync(relayed);
     }
     throw new Error('the caller never replied');
   }
@@ -745,12 +769,41 @@ describe('end to end: type values cross to and from a class in another file', ()
     expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [1], to: 'c' }));
   }, 120000);
 
-  // The authority differs by target (`@W/1 ::Point` on JS, `::Point` on Rust and Erlang), and type
-  // matching ignores it.
+  // A type's authority is the file that declares it, never the instance that uses it: the
+  // instance leaves `::Point` as it is, and the caller gets it as `Svc ::Point`.
   it('the class replies with the value in wire form, and its ty', async () => {
     const { sent, served } = await call('@got');
     const get = sent.findIndex(m => m.op === '@get');
-    expect(served[get]).toEqual(expect.objectContaining({ re: [[1, 2]], ty: [expect.stringMatching(/^(\S+ )?::Point$/)] }));
+    expect(served[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['::Point'], to: 'Caller', from: '@W/1' });
+  }, 120000);
+
+  it('the caller receives the ty with the file as its authority', async () => {
+    const { sent, received } = await call('@got');
+    const get = sent.findIndex(m => m.op === '@get');
+    expect(received[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['Svc ::Point'], to: undefined, from: 'Svc @W/1' });
+  }, 120000);
+
+  it('a type nested in a reply decodes in the caller', async () => {
+    const { reply } = await call('@paired');
+    expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [2], to: 'c' }));
+  }, 120000);
+
+  // Nothing types `r` or `q`, so a field is read off whatever value came back.
+  it('a field of an untyped local bound to a reply is read off the value', async () => {
+    const { reply } = await call('@field');
+    expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [2], to: 'c' }));
+  }, 120000);
+
+  it('a field of an untyped local destructured from a reply is read off the value', async () => {
+    const { reply } = await call('@nestedField');
+    expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [2], to: 'c' }));
+  }, 120000);
+
+  it('a type nested in a reply is tagged the same way', async () => {
+    const { sent, served, received } = await call('@paired');
+    const pair = sent.findIndex(m => m.op === '@pair');
+    expect(served[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: '::Point', n: 'Integer' }, to: 'Caller', from: '@W/1' });
+    expect(received[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: 'Svc ::Point', n: 'Integer' }, to: undefined, from: 'Svc @W/1' });
   }, 120000);
 
   it('a type value passed to a constructor decodes in the class', async () => {

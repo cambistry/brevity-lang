@@ -1147,9 +1147,11 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       return v;
     };
     // \`ty\` has no brackets. A bare \`@\` is the sender's own class, which we know.
+    // A type is declared at the top of a file, so \`::Point\` already names the
+    // file actor, which is where the instance found it: it stays as it is.
     const localTy = (v) => {
       if (v === '@') return '@' + cls;
-      if (typeof v === 'string') return v === '' || /^\\w/.test(v) ? v : addr + ' ' + v;
+      if (typeof v === 'string') return v === '' || /^\\w/.test(v) || v.startsWith('::') ? v : addr + ' ' + v;
       if (Array.isArray(v)) return v.map(localTy);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
       return v;

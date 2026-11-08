@@ -627,6 +627,12 @@ bv_object_pack(L) when is_list(L) ->
 bv_object_pack(M) when is_map(M) -> {[], M};
 bv_object_pack(_) -> {[], #{}}.
 
+%% A field read on a value nothing types (a reply, say), as JS reads one: a
+%% field of a map or of an Object's named slot, and null for anything else.
+bv_dot_(K, M) when is_map(M) -> maps:get(K, M, null);
+bv_dot_(K, {Pos_, Named_}) when is_list(Pos_), is_map(Named_) -> maps:get(K, Named_, null);
+bv_dot_(_, _) -> null.
+
 bv_object_one({[V], _}) -> V;
 bv_object_one({Pos, _}) when is_list(Pos) -> error({arity, length(Pos)});
 bv_object_one(V) -> V.
