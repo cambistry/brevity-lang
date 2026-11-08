@@ -14,6 +14,7 @@ import {
   genRustFnReturn, genRustFnCallExpr, genRecursiveFnDef,
   genRustCondition, isRustGuardIf, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind,
   refFieldInvocationRust, refAddrExpr,
+  rustNewOpInserts,
 } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {
@@ -1458,24 +1459,6 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   const calleeName = s.value.callee.name;
   const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsJson;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsJson = 'json!([])';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields).map(([k, v]) =>
-      `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
-    if (positionalArgs.length > 0) {
-      const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
-      argsJson = `json!([${vals}, {${fields}}])`;
-    } else {
-      argsJson = `json!({${fields}})`;
-    }
-  } else {
-    const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
-    argsJson = `json!([${vals}])`;
-  }
   G.ctx.needsAwaitNew = true;
   G.ctx.needsAwaitNew = true;
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
@@ -1484,7 +1467,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let new_id = seq.to_string();`);
   lines.push(`${I}    let mut new_msg = Map::new();`);
   lines.push(`${I}    new_msg.insert("id".to_string(), json!(new_id.clone()));`);
-  lines.push(`${I}    new_msg.insert("op".to_string(), json!([${argsJson}, "#new"]));`);
+  lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv, undefined, 'new_msg')}`);
   lines.push(`${I}    new_msg.insert("to".to_string(), json!("${targetName}"));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(new_msg));`);
   lines.push(`${I}    let addr = self.await_new_response(&new_id);`);
@@ -1505,24 +1488,6 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
 function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   const calleeName = s.value.callee.name;
   const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsJson;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsJson = 'json!([])';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields).map(([k, v]) =>
-      `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
-    if (positionalArgs.length > 0) {
-      const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
-      argsJson = `json!([${vals}, {${fields}}])`;
-    } else {
-      argsJson = `json!({${fields}})`;
-    }
-  } else {
-    const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)))).join(', ');
-    argsJson = `json!([${vals}])`;
-  }
   G.ctx.localInstanceVars.add(s.name);
   G.ctx.needsAwaitNew = true;
   lines.push(`${I}let ${mintRustSsa(s.name)}: Value = {`);
@@ -1531,7 +1496,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let new_id = seq.to_string();`);
   lines.push(`${I}    let mut send_msg = Map::new();`);
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
-  lines.push(`${I}    send_msg.insert("op".to_string(), json!([${argsJson}, "#new"]));`);
+  lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv)}`);
   const toJson = s.value.viaInstance
     ? `json!(format!("{} ${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
     : `json!("${targetName}")`;

@@ -11,6 +11,7 @@ import {
   CALL_LIKE, genExpr, genDestructure, genReBody, genTyBody,
   genTypeCondition, genDefaultValue, stateKey, childBinding,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
+  genSendNew,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
@@ -169,8 +170,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
   ctx.currentTypeEnv = savedTypeEnv;
-  // `#new` carries no tags: the caller checked its args against the doc.
-  const typeCondition = name.startsWith('new@') ? null : genTypeCondition(ctx, params);
+  const typeCondition = genTypeCondition(ctx, params);
   // For overloaded functions (multiple clauses with same name), add arity check
   const hasOverloads = ctx._allDispatchFns && ctx._allDispatchFns.filter(f => f.name === name).length > 1;
   let condition;
@@ -530,22 +530,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const calleeName = s.value.callee.name;
       const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
       ctx.remoteInstanceVars.add(s.name);
-      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-      const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-      let argsExpr;
-      if (positionalArgs.length === 0 && !namedBag) {
-        argsExpr = '[]';
-      } else if (namedBag) {
-        const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
-        if (positionalArgs.length > 0) {
-          argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
-        } else {
-          argsExpr = `{${fields}}`;
-        }
-      } else {
-        argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
-      }
-      return `    this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)}).then(addr => { this.#${stateKey(s.name)} = addr; });`;
+      return `    ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))}.then(addr => { this.#${stateKey(s.name)} = addr; });`;
     }
     if (s.type === 'ExprStatement') {
       if (s.expr?.type === 'SubscribeCall') {
@@ -997,11 +982,12 @@ ${fieldSection ? fieldSection + '\n' : ''}
     });
   }
 
-  async #sendNew(args, to) {
+  async #sendNew(args, to, ty) {
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
       const _msg = { id, op: [args, '#new'], to };
+      if (ty !== undefined) _msg['ty'] = ty;
       this.#out(_msg);
     });
   }${(!mergedActor.name && ctx.actorNames.size > 0) || ctx.wrappedChildParams.size > 0 || ctx.usesChildSend ? `
@@ -1272,7 +1258,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== 'as' && !opName.startsWith('new@') && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== 'as' && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }

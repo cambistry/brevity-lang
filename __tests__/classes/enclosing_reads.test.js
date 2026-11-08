@@ -63,7 +63,7 @@ const script = `
 `;
 
 const made = (id, n) => [
-  { input: { id, op: [[n], '#new'], to: '@Outer', from: 'c' } },
+  { input: { id, op: [[n], '#new'], ty: [['Integer']], to: '@Outer', from: 'c' } },
   { output: expect.objectContaining({ id, re: expect.stringMatching(/^#<@Outer\/\d+>$/) }) },
 ];
 const reply = (id, value) => expect.objectContaining({ id, re: [value], to: 'c' });

@@ -73,6 +73,43 @@ function coerceOperand(code, isValue, srcType, target) {
 // it to `#<selfAddr @N>` as the carrying message leaves the actor, so a holder
 // on another actor can invoke it back through CAM. Mirrors the JS/erlang
 // targets. The internal `_lambda_N` name is kept for capture-field keys.
+// A #new's args as the wire carries them, and the ty that tells the receiver how to
+// read them, as for any other op: a type value goes in wire form with its tag. No
+// args, no ty.
+export function rustNewArgs(args, typeEnv, eCtx) {
+  const positional = args.filter(a => a.type !== 'NamedArgsBag');
+  const bag = args.find(a => a.type === 'NamedArgsBag');
+  const named = bag ? Object.entries(bag.fields) : [];
+  if (positional.length === 0 && named.length === 0) return { payload: 'json!([])', ty: null };
+  const typeOf = (e) => inferLiteralType(e) || inferExprType(e, typeEnv) || null;
+  const raw = (e) => genRustExpr(e, typeEnv, eCtx);
+  const val = (e) => {
+    if (e.type === 'Function') return rustLambdaWireRef(e);
+    const t = typeOf(e);
+    const jv = forceJsonWrap(toJsonValue(raw(e), t || 'Anything'));
+    return rustTypeWireWrap(`(${jv})`, t) || jv;
+  };
+  const tag = (e) => rustSlotTag(typeOf(e), e.type === 'Identifier' ? `bv_val((${raw(e)}).clone())` : null);
+  const namedInserts = named.map(([k, e]) => `_nm.insert(${JSON.stringify(k)}.to_string(), ${val(e)});`).join(' ');
+  const namedTy = named.map(([k, e]) => `${JSON.stringify(k)}: ${tag(e)}`).join(', ');
+  const posVals = positional.map(val).join(', ');
+  const posTy = positional.map(tag).join(', ');
+  if (positional.length > 0 && named.length > 0) {
+    return {
+      payload: `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`,
+      ty: `json!([[${posTy}, {${namedTy}}]])`,
+    };
+  }
+  if (named.length > 0) return { payload: `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`, ty: `json!([{${namedTy}}])` };
+  return { payload: `Value::Array(vec![${posVals}])`, ty: `json!([[${posTy}]])` };
+}
+
+// The statements that put a #new's op and ty on a message map named `msg`.
+export function rustNewOpInserts(args, typeEnv, eCtx, msg = 'send_msg') {
+  const { payload, ty } = rustNewArgs(args, typeEnv, eCtx);
+  return `${msg}.insert("op".to_string(), Value::Array(vec![${payload}, json!("#new")]));${ty ? ` ${msg}.insert("ty".to_string(), ${ty});` : ''}`;
+}
+
 function rustLambdaWireRef(fnNode) {
   const n = G.ctx.lambdaCounter++;
   const lambdaName = `_lambda_${n}`;
@@ -568,16 +605,11 @@ ${subRegLines.join('\n')}
   // Destructured member call → route to source service
   // A class in another file, constructed in place.
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
-    const wrap = (a) => forceJsonWrap(toJsonValue(genRustExpr(a, typeEnv), inferLiteralType(a)));
-    const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(wrap);
-    const bag = expr.args.find(a => a.type === 'NamedArgsBag');
-    const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `"${k}": ${wrap(v)}`).join(', ')}}` : null;
-    const payload = positional.length ? `json!([${[...positional, ...(fields ? [fields] : [])].join(', ')}])` : (fields ? `json!(${fields})` : 'json!([])');
     G.ctx.needsAwaitNew = true;
     const newTo = expr.viaInstance
       ? `json!(format!("{} ${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
       : `json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})`;
-    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); send_msg.insert("op".to_string(), json!([${payload}, "#new"])); send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
+    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);

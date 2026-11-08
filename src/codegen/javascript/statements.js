@@ -6,7 +6,7 @@ import {
   CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
   genListDestructureAssign, genPackedReturn, genTyBody, jsSlotTag, jsTyOf,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
-  jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey,
+  jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey, genSendNew,
 } from './expressions.js';
 
 // Escape a string for use inside a #<...> wire address.
@@ -607,48 +607,18 @@ function isDepConstructorCall(ctx, s) {
 function genDepConstructorAssign(ctx, s, emitBinding) {
   const calleeName = s.value.callee.name;
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsExpr;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '[]';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
-    if (positionalArgs.length > 0) {
-      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
-    } else {
-      argsExpr = `{${fields}}`;
-    }
-  } else {
-    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
-  }
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
     ? `${genExpr(ctx, AST.identifier(s.value.viaInstance))} + ${JSON.stringify(' ' + s.value.viaSelector)}`
     : JSON.stringify(targetName);
-  return emitBinding(s.name, `await this.#sendNew(${argsExpr}, ${toExpr})`);
+  return emitBinding(s.name, `await ${genSendNew(ctx, s.value.args, toExpr)}`);
 }
 
 function genDepConstructorAsAssign(ctx, s, emitBinding) {
   const calleeName = s.value.callee.name;
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsExpr;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '[]';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
-    if (positionalArgs.length > 0) {
-      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}, {${fields}}]`;
-    } else {
-      argsExpr = `{${fields}}`;
-    }
-  } else {
-    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a)).join(', ')}]`;
-  }
   const tmpRef = `_ref_${s.name}`;
-  const newLine = `const ${tmpRef} = await this.#sendNew(${argsExpr}, ${JSON.stringify(targetName)});`;
+  const newLine = `const ${tmpRef} = await ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))};`;
   const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${tmpRef}))[0]`);
   return `\n        ${newLine}${asLine}`;
 }

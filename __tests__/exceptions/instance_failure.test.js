@@ -563,11 +563,11 @@ describe('a failed as in a constructor block', () => {
   });
 
   describe('constructing through #new', () => {
-    const newGood = (id, arg) => ({ input: { id, op: [[arg], '#new'], to: '@Good', from: 'c' } });
+    const newGood = (id, arg) => ({ input: { id, op: [[arg], '#new'], ty: [[typeof arg === 'string' ? 'Text' : 'Integer']], to: '@Good', from: 'c' } });
 
     it('fails the call', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [[1], '#new'], to: '@Box', from: 'c' } },
+        { input: { id: '1', op: [[1], '#new'], ty: [['Integer']], to: '@Box', from: 'c' } },
         { output: { id: '1', ex: { 'new@Box': 'error' }, to: 'c' } },
       );
     });

@@ -78,15 +78,13 @@ time, because Rust replays its whole input on each send and a caller blocks on e
 - **`Svc.W()` must be bound first.** `Svc.W().get()` and `return Svc.W()` are compile errors. A
   header-bound `W()` can be used in place, on every target.
 - **`s.W()` at file level is a compile error,** since `s` has no address yet during init.
-- **Replies on Rust and Erlang have no `bv-a`.** A class's arms don't pass one to their parent in
-  process. Scalars arrive fine; a Type value returned from a class across files arrives untagged, so
-  the caller can't decode it. JS is unaffected.
-- **Type values as constructor args.** `#new` carries no tags, so `Svc.W(Point(1, 2))` has nothing
-  to decode by on the receiving side.
+- **Replies on Rust and Erlang have no `bv-a`.** Fixed, before 2026-11-07: a class's reply now
+  carries `ty` (`::Point`) on every target. See `session-2026-11-07-new-carries-ty.md`.
+- **Type values as constructor args.** Fixed: `#new` carries its args in wire form with `ty`, and
+  is refused without it, like any other op. See `session-2026-11-07-new-carries-ty.md`.
 - **`w Svc::W` as a local annotation doesn't parse,** for any type. Only `x W` works, and that needs
   `W` to resolve, which it does through the doc.
 - **Local instances aren't member-checked with an inline dep.** `t = Thing(); t.nope()` inside a
   function compiles. Existing behaviour; a class reached by these spellings is checked.
-- **A class can't read its file's cells.** `total *Integer = 4` with `@get = { return total }` in a
-  class fails at runtime on js. Existing behaviour, and it means nothing distinguishes `Svc.W()`
-  from `s.W()` yet except which actor holds the new one.
+- **A class can't read its file's cells.** Fixed: a class reads the actor that made it, so
+  `Svc.W()` and `s.W()` differ. See `session-2026-11-03-class-reads-file-cells.md`.

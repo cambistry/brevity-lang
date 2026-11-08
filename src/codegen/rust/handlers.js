@@ -324,8 +324,6 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
 
-  // `#new` carries no tags: the caller checked its args against the doc.
-  if (name?.startsWith('new@')) guard = '';
   // Outside, only `@name` is exposed.
   const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@)/.test(name);
   if (isPrivate) guard = guard ? ` if !bv_from_wire_caller(from) && (${guard.replace(/^ if /, '')})` : ' if !bv_from_wire_caller(from)';
@@ -606,8 +604,7 @@ function untaggedOk(params, message) {
 
 // A call from outside an instance has its tags checked, as a file handler's are.
 // In-process callers pass values, not tags. Overloads fall through to the next arm.
-function childTagGuard({ name, params }) {
-  if (name.startsWith('new@')) return '';
+function childTagGuard({ params }) {
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const typed = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
   const pos = typed.filter(p => p.positional);

@@ -30,7 +30,7 @@ describe('payload shape — named only is {k: v}', () => {
   it('a construction', async () => {
     await createActor(source, {
       expects: [
-        { output: { id: '1', op: [{ a: 5 }, '#new'], to: 'Thing' } },
+        { output: { id: '1', op: [{ a: 5 }, '#new'], ty: [{ a: 'Integer' }], to: 'Thing' } },
       ],
     });
   });

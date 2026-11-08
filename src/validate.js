@@ -2773,9 +2773,10 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   const substituteSelf = (type, selfName) =>
     (type && selfName) ? type.replace(/\bSelf\b/g, selfName) : type;
   // A class from another file is `Svc.Counter` as a construction and `Counter` as a
-  // type, the same way `w Counter = Svc.Counter(…)` names it.
+  // type, the same way `w Counter = Svc.Counter(…)` names it. A type of that file is
+  // `Svc::Point` here and `Point` in its doc.
   const acceptsArg = (argType, expected) => isAssignable(argType, expected, actorByName)
-    || isAssignable(argType.replace(/^\w+\.(\w+)!?$/, '$1'), expected, actorByName);
+    || isAssignable(argType.replace(/^\w+(?:\.|::)(\w+)!?$/, '$1'), expected, actorByName);
   // Check arg-to-param type compatibility for a call that already matched
   // `clause`. Runs isAssignable on each arg whose type can be inferred.
   // Throws with a locating message on first mismatch.
@@ -3815,10 +3816,12 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
       callNamedKeys.add(a.name);
     }
   }
+  // The doc names its own types bare: `Svc::Point` here is `Point` there.
+  const inDocFrame = (t) => (typeof t === 'string' && t.startsWith(`${actorName}::`) ? t.slice(actorName.length + 2) : t);
   const argType = (a) => {
-    if (a.typeName) return a.typeName;
+    if (a.typeName) return inDocFrame(a.typeName);
     if (a.expr?.type === 'Identifier' && typeEnv) {
-      return typeEnv.get(a.expr.name) || null;
+      return inDocFrame(typeEnv.get(a.expr.name)) || null;
     }
     if (a.expr) return inferLiteralType(a.expr);
     return null;

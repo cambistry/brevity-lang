@@ -1,4 +1,5 @@
 import { compileActor, compileSource, createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
+import { extract } from '../../index.js';
 
 // A public class constructed from another file. `#new` with the class as selector;
 // the reply's address names a sub-actor of whichever actor constructed it.
@@ -44,7 +45,7 @@ describe('caller side', () => {
       const actor = await createActor(source, { compileOptions: { remotes } });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@go', from: 'c' } },
-        { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: target[label] } },
+        { output: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: target[label] } },
         { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
         { output: expect.objectContaining({ op: '@get', to: 'Svc @Counter/1' }) },
       );
@@ -92,7 +93,7 @@ describe('checks', () => {
     const actor = await createActor('*\n  "svc.bv": (:Counter)\n*\n@go = {\n  return Counter(1, step: 1)\n}\n', { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go', from: 'c' } },
-      { output: { id: '1', op: [[1, { step: 1 }], '#new'], to: 'svc.bv @Counter' } },
+      { output: { id: '1', op: [[1, { step: 1 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv @Counter' } },
     );
   });
 
@@ -127,7 +128,7 @@ describe('a new actor used in place', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@chain', from: 'c' } },
-      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc @Counter' } },
       { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
     );
@@ -137,7 +138,7 @@ describe('a new actor used in place', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@give', from: 'c' } },
-      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc @Counter' } },
       { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: ['Svc @Counter/1'], to: 'c' }) },
     );
@@ -147,7 +148,7 @@ describe('a new actor used in place', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@pass', from: 'c' } },
-      { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'Svc @Counter' } },
+      { output: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc @Counter' } },
       { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
       { output: expect.objectContaining({ op: '@get', to: 'Svc @Counter/1' }) },
     );
@@ -182,7 +183,7 @@ describe('a new actor used in place', () => {
         { input: { id: 'x', op: '@chain', from: 'c' } },
         { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
-        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 @Counter' } },
         { input: { id: '2', re: '#<Svc/7 @Counter/1>', 'ty': 'Svc/7 @Counter', from: 'Svc/7' } },
         { output: expect.objectContaining({ id: '3', op: '@get', to: 'Svc/7 @Counter/1' }) },
       );
@@ -194,7 +195,7 @@ describe('a new actor used in place', () => {
         { input: { id: 'x', op: '@give', from: 'c' } },
         { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
-        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 @Counter' } },
       );
     });
 
@@ -204,7 +205,7 @@ describe('a new actor used in place', () => {
         { input: { id: 'x', op: '@pass', from: 'c' } },
         { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
-        { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
+        { output: { id: '2', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 @Counter' } },
       );
     });
 
@@ -232,7 +233,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@chain', from: 'c' } },
-        { output: { id: '1', op: [[5, { step: 2 }], '#new'], to: 'svc.bv @Counter' } },
+        { output: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv @Counter' } },
         { input: { id: '1', re: '#<Svc @Counter/1>', 'ty': 'Svc @Counter', from: 'Svc' } },
         { output: expect.objectContaining({ id: '2', op: '@get', to: 'Svc @Counter/1' }) },
       );
@@ -399,7 +400,7 @@ describe('qualified annotations', () => {
 describe('receiver side', () => {
   it('constructs, replies with an address, and routes to the new actor', async () => {
     await expectBehavior(SVC,
-      { input: { id: '1', op: [[5, { step: 2 }], '#new'], to: '@Counter', from: 'c' } },
+      { input: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: '@Counter', from: 'c' } },
       { output: { id: '1', re: '#<@Counter/1>', 'ty': '@Counter', to: 'c' } },
       { input: { id: '2', op: '@get', to: '@Counter/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [5], to: 'c', from: '@Counter/1' }) },
@@ -408,9 +409,9 @@ describe('receiver side', () => {
 
   it('each construction is its own actor', async () => {
     await expectBehavior(SVC,
-      { input: { id: '1', op: [[5, { step: 2 }], '#new'], to: '@Counter', from: 'c' } },
+      { input: { id: '1', op: [[5, { step: 2 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: '@Counter', from: 'c' } },
       { output: expect.objectContaining({ re: '#<@Counter/1>' }) },
-      { input: { id: '2', op: [[10, { step: 1 }], '#new'], to: '@Counter', from: 'c' } },
+      { input: { id: '2', op: [[10, { step: 1 }], '#new'], ty: [['Integer', { step: 'Integer' }]], to: '@Counter', from: 'c' } },
       { output: expect.objectContaining({ re: '#<@Counter/2>' }) },
       { input: { id: '3', op: '@inc!', to: '@Counter/1', from: 'c' } },
       { output: { id: '3', re: '#<@Counter/1>', 'ty': '@Counter', to: 'c', from: '@Counter/1' } },
@@ -428,6 +429,21 @@ describe('receiver side', () => {
       { output: { id: '1', re: '#<@W!/1>', 'ty': '@W!', to: 'c' } },
       { input: { id: '2', op: '@one', to: '@W!/1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [1] }) },
+    );
+  });
+
+  // #new is an op like any other: args with no ty are refused, and the ty is checked.
+  it('refuses args without a ty', async () => {
+    await expectBehavior(SVC,
+      { input: { id: '1', op: [[5, { step: 2 }], '#new'], to: '@Counter', from: 'c' } },
+      { output: { id: '1', ex: { 'new@Counter': 'schema_required' }, to: 'c' } },
+    );
+  });
+
+  it('refuses args of the wrong type', async () => {
+    await expectBehavior(SVC,
+      { input: { id: '1', op: [['five', { step: 2 }], '#new'], ty: [['Text', { step: 'Integer' }]], to: '@Counter', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', ex: { 'new@Counter': 'unhandled' }, to: 'c' }) },
     );
   });
 
@@ -640,5 +656,100 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
 
   it('s.Reader() reads s', async () => {
     expect(await read(own)).toEqual([4]);
+  }, 120000);
+});
+
+// A type value crosses to and from a class in another file. Two compiled files, joined
+// by a relay that plays the parent: it puts the sender's name in front of each local
+// address and each local ty tag.
+describe('end to end: type values cross to and from a class in another file', () => {
+  const POINT_SVC = `
+    ::Point (x Integer, y Integer)
+
+    @W = *{
+      @get = { return Point(1, 2) }
+    }
+
+    @Holder = (p Point) *{
+      @y = { return p.y }
+    }
+  `;
+  const pointRemotes = [{ path: 'svc.bv', service: extract(POINT_SVC).interface.service }];
+  const CALLER = `
+    *
+      "svc.bv": Svc
+    *
+
+    @got = {
+      w = Svc.W()
+      p Svc::Point = w.get()
+      return p.x
+    }
+
+    @passed = {
+      w = Svc.W()
+      p Svc::Point = w.get()
+      h = Svc.Holder(p)
+      y Integer = h.y()
+      return y
+    }
+  `;
+
+  const promote = (v, name) => {
+    if (typeof v === 'string') return v.replace(/#<([@#:][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
+    if (Array.isArray(v)) return v.map(x => promote(x, name));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x, name)]));
+    return v;
+  };
+  const promoteTy = (v, name) => {
+    if (typeof v === 'string') return /^\w/.test(v) ? v : `${name} ${v}`;
+    if (Array.isArray(v)) return v.map(x => promoteTy(x, name));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promoteTy(x, name)]));
+    return v;
+  };
+  const settle = async (actor, count) => {
+    for (let i = 0; i < 200 && actor.posts.length <= count; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  };
+
+  // What the caller sent on the way, and its reply.
+  async function call(op) {
+    const svc = await (await compileActor(POINT_SVC)).spawn();
+    const caller = await (await compileActor(CALLER, { compileOptions: { remotes: pointRemotes } })).spawn();
+    await caller.sendAsync({ id: 'x', op, from: 'c' });
+    const sent = [];
+    let answered = 0;
+    let served = 0;
+    for (let step = 0; step < 20; step++) {
+      await settle(caller, answered);
+      const msg = caller.posts[answered++];
+      if (msg.to === 'c') return { sent, reply: msg };
+      sent.push(msg);
+      const to = msg.to.slice('Svc'.length).trim();
+      await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
+      await settle(svc, served);
+      const { ty, ...reply } = svc.posts[served++];
+      await caller.sendAsync({
+        ...promote(reply, 'Svc'),
+        ...(ty !== undefined && { ty: promoteTy(ty, 'Svc') }),
+        to: undefined,
+        from: reply.from ? `Svc ${reply.from}` : 'Svc',
+      });
+    }
+    throw new Error('the caller never replied');
+  }
+
+  it('a type value returned from a constructed class decodes in the caller', async () => {
+    const { reply } = await call('@got');
+    expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [1], to: 'c' }));
+  }, 120000);
+
+  it('a type value passed to a constructor decodes in the class', async () => {
+    const { reply } = await call('@passed');
+    expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [2], to: 'c' }));
+  }, 120000);
+
+  it('the #new carries the value in wire form, and its ty', async () => {
+    const { sent } = await call('@passed');
+    expect(sent.find(m => m.to === 'Svc @Holder')).toEqual({ id: expect.any(String), op: [[[1, 2]], '#new'], ty: [['svc.bv ::Point']], to: 'Svc @Holder' });
   }, 120000);
 });

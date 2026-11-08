@@ -6,7 +6,7 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
-import { erlCellNotifyLines } from './expressions.js';
+import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../inference.js';
 import {
   buildTypeEnv,
@@ -522,8 +522,6 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     }
   }
 
-  // `#new` carries no tags: the caller checked its args against the doc.
-  if (fn.name?.startsWith('new@')) typeCheck = '';
   // Build arity check for overloads — always applied (not bypassed by From)
   let arityCheck = '';
   if (hasOverloads && params.length > 0) {
@@ -1638,24 +1636,9 @@ function genProgram(ctx, actor, allActors, options = {}) {
           const calleeName = initStmt.value.callee.name;
           // Constructor coercions resolve to the underlying dep name for `new`
           const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
-          const positionalArgs = initStmt.value.args.filter(a => a.type !== 'NamedArgsBag');
-          const namedBag = initStmt.value.args.find(a => a.type === 'NamedArgsBag');
-          let argsExpr;
-          if (positionalArgs.length === 0 && !namedBag) {
-            argsExpr = '[]';
-          } else if (namedBag) {
-            const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, new Map(), {})}`).join(', ');
-            if (positionalArgs.length > 0) {
-              argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}, #{${fields}}]`;
-            } else {
-              argsExpr = `#{${fields}}`;
-            }
-          } else {
-            argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, new Map(), {})).join(', ')}]`;
-          }
           stateInitLines.push(`    New_seq_${v.name} = bv_next_seq_()`);
           stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
-          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(callee)}}`);
+          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, ${erlNewOpEntries(ctx, initStmt.value.args, new Map(), {})}, <<"to">> => ${erlString(callee)}}`);
           stateInitLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
           stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
           stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
@@ -1888,8 +1871,7 @@ ${testTypeClauses || '                _ -> null'};
         Lst when is_list(Lst), length(Lst) > 0 -> true;
         _ -> false
     end,
-    IsNew = case OpName of <<"new@", _/binary>> -> true; _ -> false end,
-    case HasPayload andalso not IsNew andalso not maps:is_key(<<"ty">>, Message) of
+    case HasPayload andalso not maps:is_key(<<"ty">>, Message) of
         true ->
             Ex = #{OpName => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},

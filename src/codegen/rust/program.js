@@ -10,6 +10,7 @@ import {
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod, genRustFnCallExpr,
+  rustNewOpInserts,
 } from './expressions.js';
 import {
   genRustDispatch,
@@ -352,26 +353,16 @@ ${bvTypeFieldsArms}
         const calleeName = s.value.callee.name;
         // Constructor coercions resolve to the underlying dep name for `new`
         const callee = G.ctx.constructorCoercions.get(calleeName) || calleeName;
-        const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-        const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-        let argsJson;
-        if (positionalArgs.length === 0 && !namedBag) {
-          argsJson = 'json!([])';
-        } else if (namedBag) {
-          const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, initTypeEnv), inferLiteralType(v)))}`).join(', ');
-          argsJson = `json!({${fields}})`;
-        } else {
-          const vals = positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ');
-          argsJson = `json!([${vals}])`;
-        }
         stateInitLines.push(`    {`);
         stateInitLines.push(`        let seq = actor.send_seq.get();`);
         stateInitLines.push(`        actor.send_seq.set(seq + 1);`);
         stateInitLines.push(`        let new_id = seq.to_string();`);
         stateInitLines.push(`        actor.state.insert("_pending_new_${s.name}".to_string(), json!(new_id.clone()));`);
-        stateInitLines.push(`        let new_op = json!([${argsJson}, "#new"]);`);
-        stateInitLines.push(`        let new_msg = json!({"id": new_id, "op": new_op, "to": "${callee}"});`);
-        stateInitLines.push(`        let _ = actor.binding.send(new_msg);`);
+        stateInitLines.push(`        let mut new_msg = Map::new();`);
+        stateInitLines.push(`        new_msg.insert("id".to_string(), json!(new_id));`);
+        stateInitLines.push(`        ${rustNewOpInserts(s.value.args, initTypeEnv, undefined, 'new_msg').replace(/\bself\./g, 'actor.')}`);
+        stateInitLines.push(`        new_msg.insert("to".to_string(), json!(${JSON.stringify(callee)}));`);
+        stateInitLines.push(`        let _ = actor.binding.send(Value::Object(new_msg));`);
         stateInitLines.push(`    }`);
         continue;
       }
@@ -1761,7 +1752,7 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address.
         let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
             to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
         });
-` : ''}        if has_payload && !op_name.starts_with("new@") && message.get("ty").is_none() {
+` : ''}        if has_payload && message.get("ty").is_none() {
             let mut ex = Map::new();
             ex.insert(op_name.clone(), json!("schema_required"));
             let mut resp = Map::new();

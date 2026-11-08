@@ -20,6 +20,7 @@ import {
 import { inferExprType } from '../../inference.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import {
+  erlNewOpEntries,
   erlOuterCtx,
   erlSendVars,
   erlSetTarget,
@@ -193,22 +194,6 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
 function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
   const calleeName = s.value.callee.name;
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsExpr;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '[]';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields)
-      .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
-    if (positionalArgs.length > 0) {
-      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}, #{${fields}}]`;
-    } else {
-      argsExpr = `#{${fields}}`;
-    }
-  } else {
-    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
-  }
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
     ? `<<(${genExpr(ctx, { type: 'Identifier', name: s.value.viaInstance }, typeEnv, stmtCtx)})/binary, " ${s.value.viaSelector}"/utf8>>`
@@ -218,7 +203,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${toExpr}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, s.value.args, typeEnv, stmtCtx)}, <<"to">> => ${toExpr}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
@@ -235,26 +220,10 @@ function genErlAsSend(ctx, varName, typeName, target, I, lines) {
 function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
   const calleeName = s.value.callee.name;
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
-  const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-  const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
-  let argsExpr;
-  if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '[]';
-  } else if (namedBag) {
-    const fields = Object.entries(namedBag.fields)
-      .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
-    if (positionalArgs.length > 0) {
-      argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}, #{${fields}}]`;
-    } else {
-      argsExpr = `#{${fields}}`;
-    }
-  } else {
-    argsExpr = `[${positionalArgs.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ')}]`;
-  }
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, <<"op">> => [${argsExpr}, <<"#new">>], <<"to">> => ${erlString(targetName)}},`);
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, s.value.args, typeEnv, stmtCtx)}, <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}New_addr_${seq} = await_new_response_(New_id_${seq}),`);
   genErlAsSend(ctx, varName, s.typeName, `New_addr_${seq}`, I, lines);

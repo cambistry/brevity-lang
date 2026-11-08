@@ -859,14 +859,10 @@ export function genExpr(ctx, expr) {
       }
       // A class in another file, constructed in place.
       if (ctx.constructorCoercions?.has(name) && ctx.depWireTargets?.some(([n]) => n === name)) {
-        const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a));
-        const bag = expr.args.find(a => a.type === 'NamedArgsBag');
-        const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(ctx, v)}`).join(', ')}}` : null;
-        const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '[]');
         const to = expr.viaInstance
           ? `${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance })} + ${JSON.stringify(' ' + expr.viaSelector)}`
           : JSON.stringify(ctx.constructorCoercions.get(name));
-        return `BvObject.pack([await this.#sendNew(${payload}, ${to})])`;
+        return `BvObject.pack([await ${genSendNew(ctx, expr.args, to)}])`;
       }
       // Destructured member call → route to source service. A lambda argument
       // crosses to another actor, so it travels as a routable self-address.
@@ -1380,6 +1376,25 @@ export function genArgSlots(ctx, positional, named) {
     posTy: positional.map(a => argTag(ctx, a)).join(', '),
     namedTy: named.map(a => `${a.name}: ${argTag(ctx, a)}`).join(', '),
   };
+}
+
+// A #new's args as the wire carries them, and the ty that tells the receiver how to
+// read them, as for any other op: `[[t…]]`, `[{k: t}]` or `[[t…, {k: t}]]`. No args, no ty.
+export function genNewArgs(ctx, args) {
+  const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
+  const bag = args.find(a => a.type === 'NamedArgsBag');
+  const named = bag ? Object.entries(bag.fields).map(([name, expr]) => ({ name, expr })) : [];
+  if (positional.length === 0 && named.length === 0) return { payload: '[]', ty: null };
+  const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
+  if (positional.length > 0 && named.length > 0) return { payload: `[${posVals}, {${namedFields}}]`, ty: `[[${posTy}, {${namedTy}}]]` };
+  if (named.length > 0) return { payload: `{${namedFields}}`, ty: `[{${namedTy}}]` };
+  return { payload: `[${posVals}]`, ty: `[[${posTy}]]` };
+}
+
+// The call that sends a #new and waits for the new actor's address.
+export function genSendNew(ctx, args, to) {
+  const { payload, ty } = genNewArgs(ctx, args);
+  return `this.#sendNew(${payload}, ${to}${ty ? `, ${ty}` : ''})`;
 }
 
 export function genTyBody(ctx, fields, typeEnv) {

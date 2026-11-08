@@ -54,6 +54,17 @@ function erlArgHelpers(ctx, typeEnv, sCtx) {
   return { argVal, argTag };
 }
 
+// A #new's op and ty entries, as for any other op: a type value goes in wire form
+// with its tag. No args, no ty.
+export function erlNewOpEntries(ctx, args, typeEnv, sCtx) {
+  const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
+  const bag = args.find(a => a.type === 'NamedArgsBag');
+  const named = bag ? Object.entries(bag.fields).map(([name, expr]) => ({ name, expr })) : [];
+  if (positional.length === 0 && named.length === 0) return '<<"op">> => [[], <<"#new">>]';
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, '<<"#new">>', erlArgHelpers(ctx, typeEnv, sCtx));
+  return `<<"op">> => ${opExpr}, <<"ty">> => ${tyExpr}`;
+}
+
 function erlArgSlots(positional, named, method, { argVal, argTag }) {
   if (positional.length > 0 && named.length > 0) {
     const posVals = positional.map(argVal).join(', ');
@@ -439,10 +450,6 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   // Destructured member call → route to source service
   // A class in another file, constructed in place.
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
-    const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a, typeEnv, sCtx));
-    const bag = expr.args.find(a => a.type === 'NamedArgsBag');
-    const fields = bag ? `#{${Object.entries(bag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ')}}` : null;
-    const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '[]');
     const seq = ctx.sendCounter++;
     const newTo = expr.viaInstance
       ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, " ${expr.viaSelector}"/utf8>>`
@@ -450,7 +457,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return `begin
         New_seq_${seq} = bv_next_seq_(),
         New_id_${seq} = integer_to_binary(New_seq_${seq}),
-        io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, <<"op">> => [${payload}, <<"#new">>], <<"to">> => ${newTo}}), $\n]),
+        io:put_chars([json_encode(#{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, expr.args, typeEnv, sCtx)}, <<"to">> => ${newTo}}), $\n]),
         await_new_response_(New_id_${seq})
     end`;
   }
