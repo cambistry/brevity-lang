@@ -849,7 +849,7 @@ export function genExpr(ctx, expr) {
         const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a));
         const bag = expr.args.find(a => a.type === 'NamedArgsBag');
         const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `${JSON.stringify(k)}: ${genExpr(ctx, v)}`).join(', ')}}` : null;
-        const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '{}');
+        const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '[]');
         const to = expr.viaInstance
           ? `${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance })} + ${JSON.stringify(' ' + expr.viaSelector)}`
           : JSON.stringify(ctx.constructorCoercions.get(name));
@@ -967,7 +967,7 @@ export function genExpr(ctx, expr) {
       const posVals = positional.map(genArgVal).join(', ');
       const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
       let op = method;
-      if (positional.length > 0 && named.length > 0) op = `[${posVals}, {${namedFields}}, ${method}]`;
+      if (positional.length > 0 && named.length > 0) op = `[[${posVals}, {${namedFields}}], ${method}]`;
       else if (named.length > 0) op = `[{${namedFields}}, ${method}]`;
       else if (positional.length > 0) op = `[[${posVals}], ${method}]`;
       return `this.#childSendChain(${genExpr(ctx, expr.object)}, ${op})`;
@@ -1025,7 +1025,7 @@ export function genExpr(ctx, expr) {
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
-          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(method)}]`;
+          op = `[[${posVals}, {${namedFields}}], ${JSON.stringify(method)}]`;
         } else if (named.length > 0) {
           op = `[{${namedFields}}, ${JSON.stringify(method)}]`;
         } else {
@@ -1054,7 +1054,7 @@ export function genExpr(ctx, expr) {
         const posVals = positional.map(genArgVal).join(', ');
         const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
         if (positional.length > 0 && named.length > 0) {
-          op = `[${posVals}, {${namedFields}}, ${JSON.stringify(wireMethod)}]`;
+          op = `[[${posVals}, {${namedFields}}], ${JSON.stringify(wireMethod)}]`;
         } else if (named.length > 0) {
           op = `[{${namedFields}}, ${JSON.stringify(wireMethod)}]`;
         } else {
@@ -1075,7 +1075,7 @@ export function genExpr(ctx, expr) {
     if (positional.length === 0 && named.length === 0) return send(method);
     const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
     if (positional.length > 0 && named.length > 0) {
-      return send(`[${posVals}, {${namedFields}}, ${method}]`, `[${posTy}, {${namedTy}}]`);
+      return send(`[[${posVals}, {${namedFields}}], ${method}]`, `[[${posTy}, {${namedTy}}]]`);
     } else if (named.length > 0) {
       return send(`[{${namedFields}}, ${method}]`, `[{${namedTy}}]`);
     }

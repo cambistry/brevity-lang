@@ -615,7 +615,8 @@ bv_object_pack(L) when is_list(L) ->
             %% A tagged type value (carries __type) is a positional value, not a
             %% named-args container — mirrors the JS packer, which excludes
             %% __type / actor-ref / cons-cell maps from the named-args slot.
-            case is_map(Last) andalso map_size(Last) > 0 andalso not maps:is_key(<<"__type">>, Last) of
+            %% A trailing #{} is an empty named slot: [#{}] reads as [].
+            case is_map(Last) andalso not maps:is_key(<<"__type">>, Last) of
                 true ->
                     Pos = lists:sublist(L, length(L) - 1),
                     {Pos, Last};
@@ -931,7 +932,9 @@ structure_splat({Pos, Named}) ->
     if
         HasPos andalso HasNamed -> Pos ++ [Named];
         HasPos -> Pos;
-        true -> Named
+        HasNamed -> Named;
+        %% An empty Object's wire form is []; #{} and [#{}] are read as the same.
+        true -> []
     end.
 
 structure_splat_ty(TyFirst) when is_list(TyFirst) ->
@@ -1479,4 +1482,13 @@ function erlStateKey(ctx, name) {
   return `state_${ctx.childStatePrefix}_${prefix}${bare}`;
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey };
+// An op carrying a payload, in canonical wire shape: no args is the bare
+// selector, named only \`[#{k => v}, Sel]\`, otherwise \`[[p…], Sel]\` with
+// any named slots in a trailing map: \`[[p…, #{k => v}], Sel]\`.
+function erlOpExpr(vals, fields, method) {
+  if (vals.length === 0 && !fields) return method;
+  if (vals.length === 0) return `[#{${fields}}, ${method}]`;
+  return `[[${[...vals, ...(fields ? [`#{${fields}}`] : [])].join(', ')}], ${method}]`;
+}
+
+export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr };

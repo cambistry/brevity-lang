@@ -1462,7 +1462,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsJson;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsJson = 'json!({})';
+    argsJson = 'json!([])';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields).map(([k, v]) =>
       `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
@@ -1509,7 +1509,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsJson;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsJson = 'json!({})';
+    argsJson = 'json!([])';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields).map(([k, v]) =>
       `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, typeEnv), inferLiteralType(v)))}`).join(', ');
@@ -1765,7 +1765,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       } else if (positional.length > 0 && named.length > 0) {
         const posVals = positional.map(genArgValW);
         const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
-        opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
+        opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(vec![Value::Array(_arr), json!(${method})]) }`;
       } else if (named.length > 0) {
         const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
         opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
@@ -1779,7 +1779,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       const childNames = [...(G.ctx.actorInfo?.keys() ?? [])].map(n => n.toLowerCase());
       if (isLocalInst && childNames.length > 0) {
         let payloadJson;
-        if (positional.length === 0 && named.length === 0) payloadJson = 'json!({})';
+        if (positional.length === 0 && named.length === 0) payloadJson = 'json!([])';
         else if (named.length > 0) {
           const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
           payloadJson = positional.length > 0

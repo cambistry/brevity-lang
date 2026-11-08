@@ -1,6 +1,6 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
-import { erlVarName, erlString, erlStateKey } from './preambles.js';
+import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
 import {
   resolveSSAName,
   exprType,
@@ -60,7 +60,7 @@ function erlArgSlots(positional, named, method, { argVal, argTag }) {
     const namedFields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
     const posTy = positional.map(argTag).join(', ');
     const namedTy = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
-    return { opExpr: `[${posVals}, #{${namedFields}}, ${method}]`, tyExpr: `[${posTy}, #{${namedTy}}]` };
+    return { opExpr: `[[${posVals}, #{${namedFields}}], ${method}]`, tyExpr: `[[${posTy}, #{${namedTy}}]]` };
   } else if (named.length > 0) {
     const namedFields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
     const namedTy = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
@@ -440,7 +440,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => genExpr(ctx, a, typeEnv, sCtx));
     const bag = expr.args.find(a => a.type === 'NamedArgsBag');
     const fields = bag ? `#{${Object.entries(bag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ')}}` : null;
-    const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '#{}');
+    const payload = positional.length ? `[${[...positional, ...(fields ? [fields] : [])].join(', ')}]` : (fields ?? '[]');
     const seq = ctx.sendCounter++;
     const newTo = expr.viaInstance
       ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, " ${expr.viaSelector}"/utf8>>`
@@ -458,16 +458,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const method = erlString('@' + remote);
     const callArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
-    let opExpr;
-    if (callArgs.length === 0 && !namedBag) {
-      opExpr = method;
-    } else if (namedBag) {
-      const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ');
-      opExpr = `[#{${fields}}, ${method}]`;
-    } else {
-      const vals = callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ');
-      opExpr = `[[${vals}], ${method}]`;
-    }
+    const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';
+    const opExpr = erlOpExpr(callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)), fields, method);
     const v = erlSendVars(ctx);
     return `begin
         ${v.seq} = bv_next_seq_(),
@@ -762,22 +754,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const method = erlString('@' + expr.method);
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
-      let payload;
-      if (positional.length === 0 && named.length === 0) {
-        payload = '#{}';
-      } else if (named.length > 0) {
-        const fields = named.map(a => {
-          const val = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-          return `${erlString(a.name)} => ${val}`;
-        }).join(', ');
-        payload = `#{${fields}}`;
-      } else {
-        const vals = positional.map(a => {
-          const val = a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-          return val;
-        }).join(', ');
-        payload = `[${vals}]`;
-      }
+      const argVal = a => (a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name));
+      const vals = positional.map(argVal);
+      const fields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
+      // Empty is `[]`, named only `#{k => v}`, mixed `[p…, #{k => v}]`.
+      const payload = named.length === 0 ? `[${vals.join(', ')}]`
+        : vals.length === 0 ? `#{${fields}}` : `[${vals.join(', ')}, #{${fields}}]`;
       return `begin
         {ok, _Wr_re, _} = child_dispatch(${childRef}, ${method}, #{}, ${payload}, <<"0">>, <<"__parent">>),
         bv_object_pack(_Wr_re)
@@ -791,18 +773,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const method = erlString('@' + expr.method);
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
-      let opExpr;
-      if (positional.length === 0 && named.length === 0) {
-        opExpr = method;
-      } else if (named.length > 0) {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-        const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-        opExpr = `[#{${fields}}, ${method}]`;
-      } else {
-        const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-        const vals = positional.map(genArgVal).join(', ');
-        opExpr = `[[${vals}], ${method}]`;
-      }
+      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
+      const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+      const opExpr = erlOpExpr(positional.map(genArgVal), fields, method);
       const v = erlSendVars(ctx);
       return `begin
         ${v.seq} = bv_next_seq_(),
@@ -948,18 +921,9 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     const method = erlString('@' + expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
-    let opExpr;
-    if (positional.length === 0 && named.length === 0) {
-      opExpr = method;
-    } else if (named.length > 0) {
-      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-      const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-      opExpr = `[#{${fields}}, ${method}]`;
-    } else {
-      const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
-      const vals = positional.map(genArgVal).join(', ');
-      opExpr = `[[${vals}], ${method}]`;
-    }
+    const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
+    const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
+    const opExpr = erlOpExpr(positional.map(genArgVal), fields, method);
     const v = erlSendVars(ctx);
     return `begin
         ${v.seq} = bv_next_seq_(),

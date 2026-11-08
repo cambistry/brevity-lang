@@ -352,7 +352,7 @@ ${bvTypeFieldsArms}
         const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
         let argsJson;
         if (positionalArgs.length === 0 && !namedBag) {
-          argsJson = 'json!({})';
+          argsJson = 'json!([])';
         } else if (namedBag) {
           const fields = Object.entries(namedBag.fields).map(([k, v]) => `"${k}": ${forceJsonWrap(toJsonValue(genRustExpr(v, initTypeEnv), inferLiteralType(v)))}`).join(', ');
           argsJson = `json!({${fields}})`;

@@ -572,7 +572,7 @@ ${subRegLines.join('\n')}
     const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(wrap);
     const bag = expr.args.find(a => a.type === 'NamedArgsBag');
     const fields = bag ? `{${Object.entries(bag.fields).map(([k, v]) => `"${k}": ${wrap(v)}`).join(', ')}}` : null;
-    const payload = positional.length ? `json!([${[...positional, ...(fields ? [fields] : [])].join(', ')}])` : `json!(${fields ?? '{}'})`;
+    const payload = positional.length ? `json!([${[...positional, ...(fields ? [fields] : [])].join(', ')}])` : (fields ? `json!(${fields})` : 'json!([])');
     G.ctx.needsAwaitNew = true;
     const newTo = expr.viaInstance
       ? `json!(format!("{} ${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
@@ -825,17 +825,19 @@ ${subRegLines.join('\n')}
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;
-      } else if (named.length > 0) {
-        const namedInserts = named.map(a => {
-          const val = genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
-          const t = typeEnv.get(a.name) || inferLiteralType(a.expr);
-          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
-        }).join(' ');
-        opExpr = `{ let mut _nm = Map::new(); ${namedInserts} let mut _arr = vec![Value::Object(_nm), json!(${method})]; Value::Array(_arr) }`;
       } else {
         const genArgVal = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
         const posVals = positional.map(genArgVal);
-        opExpr = `json!([[${posVals.join(', ')}], ${method}])`;
+        if (named.length === 0) {
+          opExpr = `json!([[${posVals.join(', ')}], ${method}])`;
+        } else {
+          // Named-only is canonically `{k: v}`; mixed is `[p…, {k: v}]`.
+          const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgVal(a)});`).join(' ');
+          const payload = posVals.length
+            ? `{ let mut _p: Vec<Value> = vec![${posVals.join(', ')}]; _p.push(Value::Object(_nm)); Value::Array(_p) }`
+            : 'Value::Object(_nm)';
+          opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![${payload}, json!(${method})]) }`;
+        }
       }
       return `{
         let seq = self.send_seq.get();
@@ -908,10 +910,10 @@ ${subRegLines.join('\n')}
     if (positional.length > 0 && named.length > 0) {
       const posVals = positional.map(genArgValWrapped).join(', ');
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
-      opExpr = `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); _arr.push(json!(${method})); Value::Array(_arr) }`;
+      opExpr = `{ let mut _arr: Vec<Value> = vec![${posVals}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(vec![Value::Array(_arr), json!(${method})]) }`;
       const posTy = positional.map(argTag).join(', ');
       const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-      tyExpr = `json!([${posTy}, {${namedTy}}])`;
+      tyExpr = `json!([[${posTy}, {${namedTy}}]])`;
     } else if (named.length > 0) {
       const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValWrapped(a)});`).join(' ');
       opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;

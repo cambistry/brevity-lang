@@ -1,6 +1,6 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
-import { erlVarName, erlString, erlStateKey } from './preambles.js';
+import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
 import { bindLocalType } from '../../inference.js';
@@ -125,20 +125,8 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // Authority-address tag for a subscribe arg; the payload stays a live value
   // because this op is shared with in-process self/child delivery.
   const tagOf = a => erlSlotTag(ctx, typeOf(a), (a.expr ? a.expr.type === 'Identifier' : true) ? genArgVal(a) : null);
-  const buildOpExpr = (opStr) => {
-    if (positional.length === 0 && named.length === 0) return `<<"${opStr}">>`;
-    if (named.length > 0 && positional.length === 0) {
-      const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-      return `[#{${fields}}, <<"${opStr}">>]`;
-    }
-    if (positional.length > 0 && named.length === 0) {
-      const vals = positional.map(genArgVal).join(', ');
-      return `[[${vals}], <<"${opStr}">>]`;
-    }
-    const vals = positional.map(genArgVal).join(', ');
-    const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
-    return `[${vals}, #{${fields}}, <<"${opStr}">>]`;
-  };
+  const buildOpExpr = (opStr) => erlOpExpr(positional.map(genArgVal),
+    named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', '), `<<"${opStr}">>`);
   const wireOpExpr = buildOpExpr(wireOp);
   const internalOpExpr = buildOpExpr(internalSelector);
   let payloadExpr = 'null';
@@ -159,7 +147,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     const tyVals = positional.map(a => tagOf(a)).join(', ');
     const tyFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `[${vals}, #{${fields}}]`;
-    tyExpr = `[${tyVals}, #{${tyFields}}]`;
+    tyExpr = `[[${tyVals}, #{${tyFields}}]]`;
   }
 
   const isRemoteDep = !isSelfTarget &&
@@ -208,7 +196,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsExpr;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '#{}';
+    argsExpr = '[]';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields)
       .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
@@ -250,7 +238,7 @@ function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, line
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsExpr;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '#{}';
+    argsExpr = '[]';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields)
       .map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, stmtCtx)}`).join(', ');
@@ -1277,16 +1265,8 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
     const method = erlString('@' + remote);
     const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = s.source.args.find(a => a.type === 'NamedArgsBag');
-    let opExpr;
-    if (callArgs.length === 0 && !namedBag) {
-      opExpr = method;
-    } else if (namedBag) {
-      const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ');
-      opExpr = `[#{${fields}}, ${method}]`;
-    } else {
-      const vals = callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)).join(', ');
-      opExpr = `[[${vals}], ${method}]`;
-    }
+    const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';
+    const opExpr = erlOpExpr(callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)), fields, method);
     const v = erlSendVars(ctx);
     lines.push(`${I}${v.seq} = bv_next_seq_(),`);
     lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);

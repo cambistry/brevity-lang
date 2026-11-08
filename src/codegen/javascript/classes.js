@@ -533,7 +533,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
       let argsExpr;
       if (positionalArgs.length === 0 && !namedBag) {
-        argsExpr = '{}';
+        argsExpr = '[]';
       } else if (namedBag) {
         const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
         if (positionalArgs.length > 0) {

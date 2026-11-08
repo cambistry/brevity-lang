@@ -55,9 +55,9 @@ describe('caller side', () => {
     const actor = await createActor(`*\n  "svc.bv": Svc #\n*\n@go! = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: '@go!', from: 'c' } },
-      { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+      { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
       { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
-      { output: { id: '2', op: [{}, '#new'], to: 'Svc/7 @W!' } },
+      { output: { id: '2', op: [[], '#new'], to: 'Svc/7 @W!' } },
     );
   });
 });
@@ -180,7 +180,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@chain', from: 'c' } },
-        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
         { input: { id: '2', re: '#<Svc/7 @Counter/1>', 'ty': 'Svc/7 @Counter', from: 'Svc/7' } },
@@ -192,7 +192,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@give', from: 'c' } },
-        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
       );
@@ -202,7 +202,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@pass', from: 'c' } },
-        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '#new'], to: 'Svc/7 @Counter' } },
       );
@@ -212,7 +212,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: '@own', from: 'c' } },
-        { output: { id: '1', op: [{}, '#new'], to: 'Svc' } },
+        { output: { id: '1', op: [[], '#new'], to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: expect.objectContaining({ id: '2', op: '@plain', to: 'Svc/7' }) },
       );

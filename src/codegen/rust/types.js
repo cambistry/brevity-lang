@@ -119,7 +119,8 @@ impl BvObject {
             if let Some(obj) = last.as_object() {
                 // A tagged type value (carries __type) is a positional value,
                 // not a named-args container — mirrors the JS/erlang packers.
-                if !obj.is_empty() && !obj.contains_key("__type") {
+                // A trailing \`{}\` is an empty named slot: \`[{}]\` reads as \`[]\`.
+                if !obj.contains_key("__type") {
                     let positional = arr[..arr.len() - 1].to_vec();
                     let named = obj.clone();
                     return BvObject { positional, named };
@@ -141,8 +142,11 @@ impl BvObject {
             Value::Array(arr)
         } else if has_pos {
             Value::Array(self.positional.clone())
-        } else {
+        } else if has_named {
             Value::Object(self.named.clone())
+        } else {
+            // An empty Object's wire form is \`[]\`; \`{}\` and \`[{}]\` are read as the same.
+            Value::Array(vec![])
         }
     }
     // A function value may be a writer that returned self, which has no value.

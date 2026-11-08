@@ -79,8 +79,8 @@ export function genSubscribeCall(ctx, expr) {
     const posTy = positional.map(a => jsSlotTag(ctx, typeOf(a), readOf(a))).join(', ');
     const namedTy = named.map(a => `${a.name}: ${jsSlotTag(ctx, typeOf(a), readOf(a))}`).join(', ');
     if (positional.length > 0 && named.length > 0) {
-      opExpr = `[${posVals}, {${namedFields}}, ${JSON.stringify(selector)}]`;
-      tyField = `, 'ty': [${posTy}, {${namedTy}}]`;
+      opExpr = `[[${posVals}, {${namedFields}}], ${JSON.stringify(selector)}]`;
+      tyField = `, 'ty': [[${posTy}, {${namedTy}}]]`;
     } else if (named.length > 0) {
       opExpr = `[{${namedFields}}, ${JSON.stringify(selector)}]`;
       tyField = `, 'ty': [{${namedTy}}]`;
@@ -611,7 +611,7 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsExpr;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '{}';
+    argsExpr = '[]';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
     if (positionalArgs.length > 0) {
@@ -636,7 +636,7 @@ function genDepConstructorAsAssign(ctx, s, emitBinding) {
   const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
   let argsExpr;
   if (positionalArgs.length === 0 && !namedBag) {
-    argsExpr = '{}';
+    argsExpr = '[]';
   } else if (namedBag) {
     const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${genExpr(ctx, v)}`).join(', ');
     if (positionalArgs.length > 0) {

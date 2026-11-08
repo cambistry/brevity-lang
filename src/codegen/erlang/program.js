@@ -1642,7 +1642,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
           const namedBag = initStmt.value.args.find(a => a.type === 'NamedArgsBag');
           let argsExpr;
           if (positionalArgs.length === 0 && !namedBag) {
-            argsExpr = '#{}';
+            argsExpr = '[]';
           } else if (namedBag) {
             const fields = Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, new Map(), {})}`).join(', ');
             if (positionalArgs.length > 0) {

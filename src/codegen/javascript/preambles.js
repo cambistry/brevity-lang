@@ -652,7 +652,8 @@ export const OBJECT_PREAMBLE = `const BvObject = {
     const hasNamed = Object.keys(named).length > 0;
     if (hasPos && hasNamed) return [...positional, named];
     if (hasPos) return positional;
-    return named;
+    // An empty Object's wire form is \`[]\`; \`{}\` and \`[{}]\` are read as the same.
+    return hasNamed ? named : [];
   },
 };
 function _matchTypes(types, named, positional, requiredPos) {
