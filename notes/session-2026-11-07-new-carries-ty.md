@@ -62,6 +62,11 @@ construction (`__parent`) passes values, not tags, and isn't checked, as before.
     through a relay that plays the parent (prefixing local addresses and local `ty` tags): a Point
     returned from `Svc.W()` decodes in the caller; one passed to `Svc.Holder(p)` decodes in the
     class; and the `#new` carries `[[[1, 2]], '#new']` with `ty: [['svc.bv ::Point']]`.
+  - "the class replies with the value in wire form, and its ty": Svc's reply to `@get` is
+    `re: [[1, 2]]` with a `ty` of `::Point`, whatever its authority. Added later the same day: the
+    decode test alone doesn't cover part 1, because the caller decodes a reply by its own
+    annotation (`p Svc::Point`) and still gets `1` with the reply's `ty` stripped. Nothing in the
+    caller checks a reply's tags; whether it should is open.
   - "receiver side": "refuses args without a ty" and "refuses args of the wrong type".
 - **Inputs and expected outputs given `ty`:** `public_class_across_files`, `instance_failure`,
   `enclosing_reads`, `payload_shape`.

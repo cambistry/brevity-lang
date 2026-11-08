@@ -711,22 +711,24 @@ describe('end to end: type values cross to and from a class in another file', ()
     for (let i = 0; i < 200 && actor.posts.length <= count; i++) await new Promise(resolve => setTimeout(resolve, 5));
   };
 
-  // What the caller sent on the way, and its reply.
+  // What the caller sent on the way, what Svc replied to each, and the caller's reply.
   async function call(op) {
     const svc = await (await compileActor(POINT_SVC)).spawn();
     const caller = await (await compileActor(CALLER, { compileOptions: { remotes: pointRemotes } })).spawn();
     await caller.sendAsync({ id: 'x', op, from: 'c' });
     const sent = [];
+    const svcReplies = [];
     let answered = 0;
     let served = 0;
     for (let step = 0; step < 20; step++) {
       await settle(caller, answered);
       const msg = caller.posts[answered++];
-      if (msg.to === 'c') return { sent, reply: msg };
+      if (msg.to === 'c') return { sent, served: svcReplies, reply: msg };
       sent.push(msg);
       const to = msg.to.slice('Svc'.length).trim();
       await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
       await settle(svc, served);
+      svcReplies.push(svc.posts[served]);
       const { ty, ...reply } = svc.posts[served++];
       await caller.sendAsync({
         ...promote(reply, 'Svc'),
@@ -741,6 +743,14 @@ describe('end to end: type values cross to and from a class in another file', ()
   it('a type value returned from a constructed class decodes in the caller', async () => {
     const { reply } = await call('@got');
     expect(reply).toEqual(expect.objectContaining({ id: 'x', re: [1], to: 'c' }));
+  }, 120000);
+
+  // The authority differs by target (`@W/1 ::Point` on JS, `::Point` on Rust and Erlang), and type
+  // matching ignores it.
+  it('the class replies with the value in wire form, and its ty', async () => {
+    const { sent, served } = await call('@got');
+    const get = sent.findIndex(m => m.op === '@get');
+    expect(served[get]).toEqual(expect.objectContaining({ re: [[1, 2]], ty: [expect.stringMatching(/^(\S+ )?::Point$/)] }));
   }, 120000);
 
   it('a type value passed to a constructor decodes in the class', async () => {
