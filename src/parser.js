@@ -67,6 +67,13 @@ export function parse(tokensIn) {
   const functionParamSlots = new Map();
   const refParamSlots = new Map();
   const labelStack = [];
+  // Classes declared inside a class. Each goes on the program's flat list, with
+  // `enclosing` naming the class it's declared in (src/outer_reads.js).
+  const hoistedClasses = [];
+  const hoistNested = (nested, op) => {
+    for (const a of nested.nestedActors || []) { a.enclosing = op; hoistedClasses.push(a); }
+    nested.nestedActors = [];
+  };
   // Suppressed when parsing an expression whose trailing `->` belongs to an
   // outer construct (if-cond, while if-cond, handler-if cond), so that
   // `if x -> body` doesn't get eaten as a bare-form function literal.
@@ -4440,6 +4447,7 @@ export function parse(tokensIn) {
     } else {
       throw new Error(`class '${op}' requires a body — use '{ ... }', a lineal header, or '-> expr'`);
     }
+    hoistNested(nested, op);
     return nested;
   }
 
@@ -5112,6 +5120,7 @@ export function parse(tokensIn) {
               consume(); // 'end'
               if (peek().type === 'HASH_IDENT') consume(); // #Name
             }
+            hoistNested(nested, op);
             const actorNode3 = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
               functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode3 }));
@@ -5723,6 +5732,7 @@ export function parse(tokensIn) {
     }
   }
 
+  actors.push(...hoistedClasses);
   const result = AST.program(actors, dependencies, types);
   resolveLoneNames(result);
   settleSilentDecls(result);

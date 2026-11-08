@@ -669,16 +669,26 @@ bv_outer_() -> case get(bv_outer_) of undefined -> self(); O_ -> O_ end.
 %% its classes share one counter, made on first use and passed down at spawn.
 bv_seq_ref_() -> case get(bv_seq_ref_) of undefined -> R_ = atomics:new(1, []), put(bv_seq_ref_, R_), R_; R_ -> R_ end.
 bv_next_seq_() -> atomics:add_get(bv_seq_ref_(), 1, 1).
-bv_outer_ctx_() -> {bv_outer_(), bv_seq_ref_()}.
-bv_adopt_outer_({Pid, Ref}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref).
-%% A class reading one of its file actor's cells. The file actor answers in every
-%% wait, its idle one included.
-bv_outer_get_(Key) ->
-    case bv_outer_() of
+%% The actors a class is declared in, innermost first, each {Class, Pid}. The file
+%% actor is the last, and its class is <<>>.
+bv_chain_() -> case get(bv_chain_) of undefined -> []; C_ -> C_ end.
+bv_my_class_() -> case get(bv_self_class_) of undefined -> <<>>; C_ -> C_ end.
+%% What a class constructed here starts with. Its chain is this actor and the ones it's
+%% declared in, from the one of class Enclosing out.
+bv_outer_ctx_(Enclosing) -> {bv_outer_(), bv_seq_ref_(), bv_chain_from_(Enclosing, [{bv_my_class_(), self()} | bv_chain_()])}.
+bv_chain_from_(_, [Last_]) -> [Last_];
+bv_chain_from_(E_, [{E_, _} | _] = C_) -> C_;
+bv_chain_from_(E_, [_ | T_]) -> bv_chain_from_(E_, T_).
+bv_adopt_outer_({Pid, Ref, Chain}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref), put(bv_chain_, Chain).
+%% A class reading a cell of an actor it's declared in, Level actors up the chain.
+%% Each of them answers in every wait, its idle one included.
+bv_outer_get_(Level, Key) ->
+    Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
+    case Owner_ of
         Self_ when Self_ =:= self() -> get(Key);
-        Outer_ ->
+        _ ->
             Ref_ = make_ref(),
-            Outer_ ! {bv_outer_get, self(), Key, Ref_},
+            Owner_ ! {bv_outer_get, self(), Key, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
 %% A class calling one of its file's dependencies: the dependency is the file
@@ -767,7 +777,14 @@ bv_await_line_(Id) ->
             end;
         Outer_ ->
             Outer_ ! {bv_await_line, self(), Id},
-            receive {bv_line, Id, eof} -> eof; {bv_line, Id, M_} -> bv_reply_kind_(M_) end
+            bv_await_line_from_(Id)
+    end.
+%% A class waiting on its file actor for a reply still answers the classes declared in it.
+bv_await_line_from_(Id) ->
+    receive
+        {bv_line, Id, eof} -> eof;
+        {bv_line, Id, M_} -> bv_reply_kind_(M_);
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_line_from_(Id)
     end.
 bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
 bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.

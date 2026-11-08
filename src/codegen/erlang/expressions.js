@@ -283,7 +283,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'NullLiteral') return 'null';
 
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
-    return `bv_outer_get_(${erlStateKey({}, expr.name)})`;
+    // The owner's key: a file's or a class param's has no class prefix.
+    const keyCtx = expr.outerClass && !expr.outerParam ? { childStatePrefix: expr.outerClass.toLowerCase() } : {};
+    return `bv_outer_get_(${expr.outerLevel ?? 1}, ${erlStateKey(keyCtx, expr.name)})`;
   }
   if (expr.type === 'Identifier') {
     const name = expr.name;
@@ -535,8 +537,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
             }
           }
           const iifeBody = subRegLines.length > 0
-            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_ctx_()])), ${subRegLines.join(', ')}, NewPid_`
-            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, bv_outer_ctx_()])), NewPid_`;
+            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), NewPid_`;
           return `(fun() -> ${iifeBody} end)()`;
         }
       }
@@ -742,6 +744,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // via direct {bv_dispatch,...} Erlang message, reading the PID from state.
     if (dotObjName && expr.object.type === 'RefRead' && refCellTypeIsSelfBearing(ctx, dotObjName)) {
       return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
+    }
+    // A cell typed with a class of this file holds one of its actors' pids: its own
+    // cell, or one of an actor it's declared in (src/outer_reads.js).
+    if (dotObjName && !sCtx?.selfSpawnedRefs?.has(dotObjName) && !ctx.localInstanceVars?.has(dotObjName)) {
+      const t = expr.object.outer ? expr.object.outerType
+        : (ctx.stateVarNames?.has(dotObjName) ? ctx.stateVarTypeEnv?.get(dotObjName) : null);
+      if (typeof t === 'string' && ctx.actorInfo?.has(t)) return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
     }
     const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
       (expr.object.type === 'RefRead' && sCtx?.childActorRefs?.has(expr.object.name)) ||
@@ -1014,6 +1023,13 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
 
 // True when a ref cell's declared type union contains Self — meaning the
 // cell holds a spawned-instance PID rather than a flat actor address.
+// What a class spawned here starts with: the file actor, the message counter, and the
+// actors it's declared in, taken from ours (src/outer_reads.js).
+export function erlOuterCtx(ctx, cls) {
+  const enclosing = ctx.actorInfo?.get(cls)?.actor?.enclosing ?? ctx.program?.actors?.find(a => a.name === cls)?.enclosing ?? '';
+  return `bv_outer_ctx_(${erlString(enclosing.toLowerCase())})`;
+}
+
 function refCellTypeIsSelfBearing(ctx, cellName) {
   const t = ctx.stateVarTypeEnv?.get(cellName);
   if (typeof t !== 'string') return false;
@@ -1024,8 +1040,7 @@ function refCellTypeIsSelfBearing(ctx, cellName) {
 // dispatch via {bv_dispatch,...}, await reply.
 function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
   const cellName = expr.object.name; // e.g. "@peer"
-  const stateKeyRef = erlStateKey(ctx, cellName);
-  const pidExpr = `get(${stateKeyRef})`;
+  const pidExpr = expr.object.outer ? genExpr(ctx, expr.object, typeEnv, sCtx) : `get(${erlStateKey(ctx, cellName)})`;
   const method = erlString('@' + expr.method);
   const positional = expr.args.filter(a => a.positional);
   const named = expr.args.filter(a => !a.positional);

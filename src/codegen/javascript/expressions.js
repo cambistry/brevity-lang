@@ -1,5 +1,6 @@
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
+import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
@@ -15,11 +16,23 @@ export function jsIdent(rawName) {
 // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
 // Codegen-internal names use the __ prefix and are emitted directly — they
 // must not flow through this function.
-// The binding a class constructed here gets: its parent, and the file actor it reads
-// cells from (src/outer_reads.js).
-export function childBinding(ctx) {
+// The binding a class constructed here gets: its parent, the file actor it sends
+// through, and the actors it's declared in, innermost first, which it reads names from
+// (src/outer_reads.js). `cls` is the class being constructed. This actor is in that
+// chain, or one of the actors it's declared in is, so the new chain is a slice of ours.
+export function childBinding(ctx, cls) {
   if (!ctx.readsOuter) return '{post: (msg) => this.receive(msg)}';
-  return `{post: (msg) => this.receive(msg), outer: ${ctx.inClass ? 'this.#outer' : 'this'}}`;
+  const outer = ctx.inClass ? 'this.#outer' : 'this';
+  const here = ctx.currentActor?.name ?? null;
+  const enclosing = (cls && ctx.actorNodes?.get(cls)?.enclosing) ?? null;
+  let chain;
+  if (!ctx.inClass) chain = '[this]';
+  else if (enclosing === here) chain = '[this, ...this.#chain]';
+  else {
+    const at = enclosingChain(ctx.program, ctx.currentActor).indexOf(enclosing);
+    chain = at <= 0 ? 'this.#chain' : `this.#chain.slice(${at})`;
+  }
+  return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}}`;
 }
 
 export function stateKey(name) {
@@ -405,7 +418,7 @@ export function genExpr(ctx, expr) {
     if (attrsJs) topFields.push(attrsJs);
     return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
-  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(expr.name)}))`;
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(expr.name)}, ${expr.outerLevel ?? 1}))`;
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;
   if (expr.type === 'RefArg')        return expr.name;
@@ -707,7 +720,7 @@ export function genExpr(ctx, expr) {
       // so a subclass that calls Self() builds a subclass instance.
       if (name === 'Self') {
         ctx.usesChildSend = true;
-        const binding = childBinding(ctx);
+        const binding = childBinding(ctx, ctx.currentActor?.name);
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         const vals = expr.args.length > 0 ? expr.args.map(genArg).join(', ') : '';
         return vals ? `await this.constructor.create(${binding}, ${vals})` : `await this.constructor.create(${binding})`;
@@ -748,7 +761,7 @@ export function genExpr(ctx, expr) {
           const paramList = initParams.map(p => jsIdent(p.name)).join(', ');
           return `(await (async (${paramList}) => ${tailJs})(${orderedArgs.join(', ')}))`;
         }
-        const binding = childBinding(ctx);
+        const binding = childBinding(ctx, name);
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         // Overloaded constructor: dispatch based on arity + types
         if (ctx.constructorOverloads?.has(name)) {
@@ -978,7 +991,8 @@ export function genExpr(ctx, expr) {
       (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorNames.has(expr.object.callee.name)) ||
       (expr.object.type === 'Identifier' && (ctx.childActorVars.has(expr.object.name) || ctx.wrappedChildParams.has(expr.object.name))));
     if (isChild) {
-      const target = expr.object.type === 'RefRead'
+      // An enclosing actor's cell holding an actor is read from that actor first.
+      const target = expr.object.type === 'RefRead' && !expr.object.outer
         ? (ctx.stateVarNames.has(expr.object.name) ? `this.#${stateKey(expr.object.name)}` : `${jsIdent(expr.object.name)}.value`)
         : genExpr(ctx, expr.object);
       const positional = expr.args.filter(a => a.positional);
@@ -1042,7 +1056,8 @@ export function genExpr(ctx, expr) {
     if (isLocalActorRef) {
       // A constructor-block child lives in a field, not a local (state names
       // take precedence, as for any identifier).
-      const resolved = ctx.stateVarNames.has(objName)
+      const resolved = expr.object.outer ? genExpr(ctx, expr.object)
+        : ctx.stateVarNames.has(objName)
         ? `this.#${stateKey(objName)}`
         : (ctx.ssaScope?.get(objName) || jsIdent(objName));
       const wireMethod = '@' + expr.method;

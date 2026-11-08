@@ -1,4 +1,5 @@
 // handlers.js — Handler and child actor generation for Rust codegen
+import { outerNamesFor } from '../../outer_reads.js';
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
@@ -16,6 +17,11 @@ import {
 import {
   genRustLocals, genRustReBody, genRustTyBody,
 } from './statements.js';
+
+// The names a class reads from the actors it's declared in, with their types.
+function outerTypesOf(actor) {
+  return G.ctx.outerProgram && actor?.name ? outerNamesFor(G.ctx.outerProgram, actor) : (G.ctx.outerTypes || new Map());
+}
 
 // A param typed as a class of this file holds one of its actors.
 // A constructor-block statement calling the actor's own function: `@reg!(1)`.
@@ -788,8 +794,8 @@ function genRustChildDispatch(actor) {
   const classTypes = new Map();
   for (const p of (actor.initParams || [])) if (p.type) classTypes.set(p.name, p.type);
   for (const d of (actor.stateVarDecls || [])) if (d.typeName) classTypes.set(d.name, d.typeName);
-  // The file actor's names this class reads, typed as the file declares them.
-  for (const [n, t] of G.ctx.outerTypes || []) if (t && !classTypes.has(n)) classTypes.set(n, t);
+  // The names this class reads from the actors it's declared in, typed as they declare them.
+  for (const [n, t] of outerTypesOf(actor)) if (t && !classTypes.has(n)) classTypes.set(n, t);
   const arms = [
     ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true)),
     ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
@@ -939,7 +945,7 @@ function genRustChildInit(actor) {
   for (const p of constructorParams) {
     initTypeEnv.set(p.name, p.type);
   }
-  for (const [n, t] of G.ctx.outerTypes || []) if (t && !initTypeEnv.has(n)) initTypeEnv.set(n, t);
+  for (const [n, t] of outerTypesOf(actor)) if (t && !initTypeEnv.has(n)) initTypeEnv.set(n, t);
 
   let ownIngestInfo = null;
   const preIngestBody = [];
@@ -1248,14 +1254,18 @@ function genRustChildMethods(allActors) {
       const lc = mergedActor.name.toLowerCase();
       parts.push(`
     fn child_${lc}_init_at(&mut self, instance_id: u32, args: &Value) {
-        ${G.ctx.readsOuter ? 'self.outer_states.push(std::mem::take(&mut self.state));' : 'let saved_state = std::mem::take(&mut self.state);'}
+        ${G.ctx.readsOuter ? `// The actors it's declared in, taken from whoever is constructing it.
+        let outers = self.outers_for(${JSON.stringify((mergedActor.enclosing ?? '').toLowerCase())});
+        let mut incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
+        incoming.insert("__outers".to_string(), outers);
+        self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
+        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}
         let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.inst_depth += 1;
-        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         let outcome = catch_unwind(AssertUnwindSafe(|| { ${init ? `self.child_${lc}_init(args);` : 'let _ = args;'} }));
-        let new_state = std::mem::take(&mut self.state);
+        ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
+        self.state = saved_state;`}
         if outcome.is_ok() { self.${lc}_instances.insert(instance_id, new_state); }
-        ${G.ctx.readsOuter ? 'self.state = self.outer_states.pop().unwrap_or_default();' : 'self.state = saved_state;'}
         self.current_${lc}_instance = saved_current;
         self.inst_depth -= 1;
         self.flush_pending_subs();
@@ -1268,14 +1278,15 @@ function genRustChildMethods(allActors) {
     }
 
     fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {
-        ${G.ctx.readsOuter ? 'self.outer_states.push(std::mem::take(&mut self.state));' : 'let saved_state = std::mem::take(&mut self.state);'}
+        ${G.ctx.readsOuter ? `let incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
+        self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
+        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}
         let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.inst_depth += 1;
-        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         let outcome = catch_unwind(AssertUnwindSafe(|| self.child_${lc}_dispatch(op, payload, id, from)));
-        let new_state = std::mem::take(&mut self.state);
+        ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
+        self.state = saved_state;`}
         self.${lc}_instances.insert(instance_id, new_state);
-        ${G.ctx.readsOuter ? 'self.state = self.outer_states.pop().unwrap_or_default();' : 'self.state = saved_state;'}
         self.current_${lc}_instance = saved_current;
         self.inst_depth -= 1;
         self.flush_pending_subs();

@@ -1,4 +1,4 @@
-import { compileActor, compileSource, expectBehavior } from '../helpers.js';
+import { compileActor, compileSource, createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
 
 // A class closes over the file actor it's declared in. It's its own actor, so each read
 // of a file's cell is a message to that actor, and sees the cell as it is then.
@@ -256,5 +256,94 @@ describe('a class can\'t call its file\'s functions yet', () => {
         @get = { x Integer = @f(); return x }
       }
     `)).not.toThrow();
+  });
+});
+
+// A file actor that Self() constructs is a file actor of its own, so a class it
+// constructs reads its cells, not the first file actor's.
+describe('a class constructed by a Self() actor reads that actor', () => {
+  const script = `
+    *
+      n Integer
+    *
+    total *Integer = n
+
+    W = *{
+      k *Integer = 0
+      @get = { return n + total + k }
+    }
+
+    @read = {
+      w = W()
+      x Integer = w.get()
+      return x
+    }
+
+    @spawn = {
+      child Self = Self(20)
+      x Integer = child.read()
+      return x
+    }
+  `;
+
+  it('reads the Self() actor\'s param and cell', async () => {
+    const actor = await createActor(script, { constructorArgs: [4] });
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: '@read', from: 'c' } },
+      { output: reply('1', 8) },
+      { input: { id: '2', op: '@spawn', from: 'c' } },
+      { output: reply('2', 40) },
+    );
+  });
+});
+
+// A file cell holding a class actor. The file and its classes call the same actor.
+describe('a file cell holding an actor', () => {
+  const script = `
+    Counter = *{
+      c *Integer = 5
+      @get = { return c }
+      @bump! = { c <- c + 1 }
+    }
+
+    counter *Counter = Counter()
+
+    W = *{
+      @get = {
+        x Integer = counter.get()
+        return x
+      }
+    }
+
+    @bump! = { counter.bump!() }
+
+    @direct = {
+      x Integer = counter.get()
+      return x
+    }
+
+    @read = {
+      w = W()
+      x Integer = w.get()
+      return x
+    }
+  `;
+
+  it('is called by the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@direct', from: 'c' } },
+      { output: reply('1', 5) },
+    );
+  });
+
+  it('is called by a class, and sees a call the file made', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@read', from: 'c' } },
+      { output: reply('1', 5) },
+      { input: { id: '2', op: '@bump!', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
+      { input: { id: '3', op: '@read', from: 'c' } },
+      { output: reply('3', 6) },
+    );
   });
 });

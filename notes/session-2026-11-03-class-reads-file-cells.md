@@ -71,10 +71,11 @@ k = 5
 ## Known gaps (from reading the code, not tested)
 
 - **Erlang, when the file actor is idle.** Fixed: see `session-2026-11-03-stdin-one-reader.md`.
-- **Rust, `Self()` file instances.** `handle_op_at` swaps state without the stack, so a class
-  that a `Self()`-spawned file instance constructs reads the primary file actor's cells.
-- **A class declared inside a class** still closes over the file, not the enclosing class.
-- **A file cell holding an actor,** read from a class, is untested on every target.
+- **Rust, `Self()` file instances.** Fixed: see `session-2026-11-07-enclosing-actor-chain.md`.
+- **A class declared inside a class.** Fixed: it closes over the chain of actors it's declared
+  in. See `session-2026-11-07-enclosing-actor-chain.md`.
+- **A file cell holding an actor.** Fixed on Rust and Erlang, and tested on every target. See
+  `session-2026-11-07-enclosing-actor-chain.md`.
 - **Calling file functions from a class** is the natural next step: a call to the file actor in
   place of a read. JS's `get@` route takes a function call with little change. Rust needs the
   file's state swapped back in for `handle_op`, and Erlang a `bv_dispatch` serve clause.

@@ -3,7 +3,7 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
 import { isDynamicTy } from '../ty_tags.js';
-import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
+import { fileOuterNames, hasOuterReads, outerNamesFor, enclosesClasses } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -305,6 +305,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
   ctx.inClass = !!actor.name;
+  ctx.currentActor = actor;
   ctx.lambdaCounter = 0;
   ctx.lambdaHandlers = [];
   ctx.lambdaVarNames = new Set();
@@ -474,7 +475,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.emitNames = emitDecls;
   const stateVarEnv = new Map([
     // The file's names a class reads (src/outer_reads.js); its own come after, and win.
-    ...(actor.name && ctx.readsOuter ? [...ctx.outerTypes].filter(([, t]) => t) : []),
+    ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor)].filter(([, t]) => t) : []),
     ...stateVarDecls.map(v => [v.name, v.typeName]),
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
@@ -856,7 +857,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       if (superIngests.length > 0 && actor.declarationReturn) {
         ingestArg = `, ${genExpr(ctx, actor.declarationReturn.expr)}`;
       }
-      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx)}${args}${ingestArg});`);
+      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx, wb.supertype)}${args}${ingestArg});`);
     }
   }
   // Regenerate initMethodBody with on-handler lines
@@ -887,8 +888,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const publishesClasses = (actor.functions || []).some(f => f.name?.startsWith('new@'));
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
   const readsOuter = !!actor.name && ctx.readsOuter;
-  const outerCells = !actor.name && ctx.readsOuter
-    ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
+  // The cells this actor answers reads of: a file actor's, or a class's that has
+  // classes declared inside it.
+  const outerCells = !ctx.readsOuter ? ''
+    : !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
+    : enclosesClasses(ctx.program, actor) ? [...allFieldNames].filter(n => n !== '__returnAs').map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
     : '';
   const classAddressField = classUsesSelfAsValue
     ? `\n  static classAddress = ${JSON.stringify('#<' + ctx.fileName + '>')}`
@@ -900,9 +904,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()' : ''}
-  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
+  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null;' : ''} }
+  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
 
   _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; return old; }${hasEmits ? `
 
@@ -1103,12 +1107,13 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
     }
   }
 
-${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, so it asks.
-  async #outerRead(name) {
+${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`level\` actors up the
+  // chain. A class is its own actor, so it asks.
+  async #outerRead(name, level) {
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
-      this.#outer.receive({ id, op: 'get@' + name, from: '__child', _route: (msg) => this.receive(msg) });
+      this.#chain[level - 1].receive({ id, op: 'get@' + name, from: '__child', _route: (msg) => this.receive(msg) });
     });
   }
 
@@ -1121,7 +1126,7 @@ ${readsOuter ? `  // A read of the file actor's cell. A class is its own actor, 
     this.#binding.post({ ...call, id });
   }
 
-` : ''}${outerCells ? `  // A class of this file reading one of our cells.
+` : ''}${outerCells ? `  // A class declared in us reading one of our cells.
   #_outerGet(message) {
     const cells = { ${outerCells} };
     const name = message.op.slice(4);
@@ -1463,6 +1468,7 @@ export function codegen(ast, options = {}) {
   // outside itself through it too, so every class gets it.
   ctx.readsOuter = hasOuterReads(ast) || ast.actors.some(a => a.name);
   ctx.outerTypes = fileOuterNames(ast);
+  ctx.program = ast;
   // Build actorNames with merged initParams for subclasses (so constructor calls know full param list)
   ctx.actorNames = new Map(active.filter(a => a.name).map(a => {
     const { inheritedParams } = resolveSuperclassChain(ctx.actorNodes, a);

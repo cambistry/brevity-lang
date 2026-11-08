@@ -775,6 +775,35 @@ ${subRegLines.join('\n')}
         return `{ let (re, ty, _) = self.handle_op_at(${idExpr}, ${method}, &json!({}), &${payloadX}, "__parent", ""); let re = re.unwrap_or(Value::Null); ty.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
     }
+    // A cell typed with a class of this file holds a ref to one of its actors: its
+    // own cell, or one of an actor it's declared in (src/outer_reads.js). The call
+    // goes to that actor's per-instance handler.
+    if (dotObjName && !eCtx?.selfSpawnedRefs?.has(dotObjName)) {
+      const t = expr.object.outer ? expr.object.outerType
+        : (G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName : null);
+      if (typeof t === 'string' && G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor)) {
+        const cell = expr.object.outer
+          ? outerRead({ ...expr.object, type: 'RefRead' })
+          : `self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null)`;
+        const namedC = expr.args.filter(a => !a.positional);
+        const positionalC = expr.args.filter(a => a.positional);
+        const wrapArgC = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const tt = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, tt || 'Anything'); };
+        let payloadC;
+        if (positionalC.length === 0 && namedC.length === 0) {
+          payloadC = 'json!({})';
+        } else if (namedC.length > 0 && positionalC.length === 0) {
+          const namedInserts = namedC.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payloadC = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
+        } else if (positionalC.length > 0 && namedC.length === 0) {
+          payloadC = valueArray(positionalC.map(a => wrapArgC(a.expr)));
+        } else {
+          const posVals = positionalC.map(a => wrapArgC(a.expr));
+          const namedInserts = namedC.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
+          payloadC = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
+        }
+        return `{ let _inst = bv_inst_id(&${cell}); self.child_${t.toLowerCase()}_dispatch_at(_inst, ${JSON.stringify('@' + expr.method)}, &${payloadC}, "", "__parent") }`;
+      }
+    }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
     // through the per-instance handler.
     if (dotObjName && eCtx?.selfSpawnedRefs?.has(dotObjName)) {

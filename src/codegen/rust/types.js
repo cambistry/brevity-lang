@@ -519,15 +519,17 @@ function createRustContext() {
   };
 }
 
-// A read of the file actor's state from one of its classes (src/outer_reads.js): the
-// file's key, with no class prefix, as a typed value (a ref read stays a Value).
+// A read of a cell of an actor a class is declared in (src/outer_reads.js), as a typed
+// value (a ref read stays a Value). The key is the owner's: a file's or a class
+// param's has no class prefix, and a class's cell has its class's.
 function outerRead(expr) {
   const bare = expr.name.replace(/^[@#]/, '');
   const prefix = expr.name.startsWith('@') ? 'a_' : expr.name.startsWith('#') ? 'h_' : 'b_';
-  const read = `self.outer_read("${prefix}${bare}")`;
+  const owner = expr.outerClass && !expr.outerParam ? `${expr.outerClass.toLowerCase()}_` : '';
+  const read = `self.outer_read(${expr.outerLevel ?? 1}, "${owner}${prefix}${bare}")`;
   // A ref read is a Value here, as a class's own cell is.
   if (expr.type === 'RefRead') return read;
-  return `(${convertFromValue(read, G.ctx.outerTypes?.get(expr.name))})`;
+  return `(${convertFromValue(read, expr.outerType ?? G.ctx.outerTypes?.get(expr.name))})`;
 }
 
 function stateKey(name) {

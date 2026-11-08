@@ -272,8 +272,12 @@ ${bvTypeFieldsArms}
     newArgs.push('pending_subs: Vec::new()');
   }
   if (G.ctx.readsOuter) {
-    structFields.push('    outer_states: Vec<std::collections::HashMap<String, Value>>');
+    // The states set aside while an instance runs, each with the actor it belongs
+    // to, and the actor whose state is in self.state ("" is the file actor).
+    structFields.push('    outer_states: Vec<(String, std::collections::HashMap<String, Value>)>');
     newArgs.push('outer_states: Vec::new()');
+    structFields.push('    state_owner: String');
+    newArgs.push('state_owner: String::new()');
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
@@ -399,9 +403,10 @@ ${bvTypeFieldsArms}
         } else {
           // There's no `self` in main: a self-call here goes through `actor`, so
           // the value is bound before `actor.state` is borrowed.
-          const val = genRustExpr(s.value, initTypeEnv).replace(/\bself\./g, 'actor.');
+          // Renamed after it's wrapped, since the wrapping knows a `self.state` read is a Value.
+          const val = genRustExpr(s.value, initTypeEnv);
           const t = initTypeEnv.get(s.name);
-          stateInitLines.push(`    { let _v = ${forceJsonWrap(toJsonValue(val, t))}; actor.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
+          stateInitLines.push(`    { let _v = ${forceJsonWrap(toJsonValue(val, t)).replace(/\bself\./g, 'actor.')}; actor.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
         }
       }
     }
@@ -750,30 +755,69 @@ ${matchArms}
     // child_<class>_dispatch_at: swap the sibling's state into self.state,
     // run the file-class handle_op, swap back.
     fn handle_op_at(&mut self, instance_id: u32, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
-        let saved_state = std::mem::take(&mut self.state);
-        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();
+        ${G.ctx.readsOuter ? 'let incoming = self.self_instances.remove(&instance_id).unwrap_or_default(); self.enter_state(format!("self/{}", instance_id), incoming);' : `let saved_state = std::mem::take(&mut self.state);
+        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();`}
         let result = self.handle_op(op_name, message, payload, from, id);
-        let new_state = std::mem::take(&mut self.state);
+        ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
+        self.state = saved_state;`}
         self.self_instances.insert(instance_id, new_state);
-        self.state = saved_state;
         result
     }
 
     fn self_init_at(&mut self, instance_id: u32, args: &Value) {
-        let saved_state = std::mem::take(&mut self.state);
-        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();
+        ${G.ctx.readsOuter ? 'let incoming = self.self_instances.remove(&instance_id).unwrap_or_default(); self.enter_state(format!("self/{}", instance_id), incoming);' : `let saved_state = std::mem::take(&mut self.state);
+        self.state = self.self_instances.remove(&instance_id).unwrap_or_default();`}
         // Run the same primary-init logic against the swapped state. Args
         // shape mirrors what main()/start() expect: positional Value array.
 ${actor.initParams && actor.initParams.length > 0 ? actor.initParams.map((p, i) => `        if let Some(v) = args.as_array().and_then(|a| a.get(${i})) { self.state.insert("${stateKey(p.name)}".to_string(), v.clone()); }`).join('\n') : '        let _ = args;'}
-        let new_state = std::mem::take(&mut self.state);
+        // Then its constructor block, as main runs it for the first file actor.
+${stateInitLines.join('\n').replace(/\bactor\./g, 'self.')}
+        ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
+        self.state = saved_state;`}
         self.self_instances.insert(instance_id, new_state);
-        self.state = saved_state;
     }` : ''}
 
-${G.ctx.readsOuter ? `    // A class reading the file actor's state. A class's own state is swapped in while
-    // it runs, and the file's is the first one set aside (src/outer_reads.js).
-    fn outer_read(&self, key: &str) -> Value {
-        self.outer_states.first().unwrap_or(&self.state).get(key).cloned().unwrap_or(Value::Null)
+${G.ctx.readsOuter ? `    // An instance's state is swapped into self.state while it runs. The state it
+    // replaces is set aside with the actor it belongs to.
+    fn enter_state(&mut self, owner: String, state: std::collections::HashMap<String, Value>) {
+        let prev_owner = std::mem::replace(&mut self.state_owner, owner);
+        let prev = std::mem::replace(&mut self.state, state);
+        self.outer_states.push((prev_owner, prev));
+    }
+
+    fn leave_state(&mut self) -> std::collections::HashMap<String, Value> {
+        let (owner, prev) = self.outer_states.pop().unwrap_or_default();
+        self.state_owner = owner;
+        std::mem::replace(&mut self.state, prev)
+    }
+
+    // The actors a class constructed here is declared in, innermost first: this actor
+    // and the ones it's declared in, from the one that is the enclosing class ("" is the file).
+    fn outers_for(&self, enclosing: &str) -> Value {
+        let mut chain = vec![Value::String(self.state_owner.clone())];
+        if let Some(Value::Array(a)) = self.state.get("__outers") { chain.extend(a.iter().cloned()); }
+        let class_of = |o: &str| -> String { match o.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } };
+        let at = chain.iter().position(|o| class_of(o.as_str().unwrap_or("")) == enclosing).unwrap_or(chain.len() - 1);
+        Value::Array(chain.split_off(at))
+    }
+
+    // A class reading a cell of an actor it's declared in, level actors up the chain
+    // (src/outer_reads.js). That actor's state is in self.state, set aside while one of
+    // its classes runs, or in its pool.
+    fn outer_read(&self, level: usize, key: &str) -> Value {
+        let owner = self.state.get("__outers").and_then(|v| v.as_array()).and_then(|a| a.get(level - 1)).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        self.state_of(&owner).and_then(|s| s.get(key)).cloned().unwrap_or(Value::Null)
+    }
+
+    fn state_of(&self, owner: &str) -> Option<&std::collections::HashMap<String, Value>> {
+        if owner == self.state_owner { return Some(&self.state); }
+        if let Some((_, s)) = self.outer_states.iter().rev().find(|(o, _)| o == owner) { return Some(s); }
+        let (class, id) = owner.split_once('/')?;
+        let id: u32 = id.parse().ok()?;
+        match class {
+${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(&id),'] : []), ...(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a => `            ${JSON.stringify(a.name.toLowerCase())} => self.${a.name.toLowerCase()}_instances.get(&id),`)].join('\n')}
+            _ => None,
+        }
     }
 
 ` : ''}    fn call_fn(&mut self, fn_val: &Value, payload: &Value) -> Value {
@@ -1908,6 +1952,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.actorInfo = new Map();
   G.ctx.readsOuter = hasOuterReads(ast);
   G.ctx.outerTypes = fileOuterNames(ast);
+  G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();
   G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   // Authority (defining path) per type key: '' for local (#<::Name>, filled by
