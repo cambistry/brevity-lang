@@ -1,0 +1,16 @@
+*
+  :document
+  HTML: (:div, :p, :style)
+*
+@color *Text = "rgb(0, 0, 0)"
+
+el = <div>
+  <p>
+    <style>{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }</style>
+    scoped
+  </p>
+  <p>unscoped</p>
+</div>
+
+body = document.body()
+body.append!(el)
