@@ -1240,7 +1240,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const target = elemSubs.get(eid);
           const val = Array.isArray(eRe) ? eRe[0] : eRe;
           if (target instanceof Node) {
-            target.nodeValue = val == null ? '' : String(val);
+            // A value naming a live element (`#<HTML @tag/N>`, or its local
+            // form) puts that element in the slot; anything else is text.
+            const ref = typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')
+              ? elements.get(val.slice(2, -1)) : null;
+            const next = ref || (target.nodeType === 3 ? target : document.createTextNode(''));
+            if (!ref) next.nodeValue = val == null ? '' : String(val);
+            if (next !== target) {
+              target.replaceWith(next);
+              elemSubs.set(eid, next);
+            }
           } else {
             applyDomAttribute(el, target.attrName, val);
           }

@@ -175,3 +175,74 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A subscribed value that names a live element puts that element in the slot
+//
+// `{ expr }` in children subscribes to a closure. When the closure's value is
+// an element address, the element takes the slot; a later text value puts a
+// text node back.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('HTML element — a subscribed element address fills the slot', () => {
+  it('re naming a live element attaches it in place of the text node', async () => {
+    const page = await loadPage(html);
+    const pubPosts = [];
+    await page.register('pub', msg => pubPosts.push(msg));
+    const span = await page.connectActor('HTML @span');
+    const div = await page.connectActor('HTML @div');
+
+    await span.sendAsync({ id: '1', op: [{ children: ['inner'] }, '#new'], from: 'caller' });
+    await div.sendAsync({ id: '2', op: [{ children: ['[', '#<pub @0>', ']'] }, '#new'], from: 'caller' });
+    await page.send({ id: pubPosts[0].id, re: ['#<HTML @span/1>'], to: 'HTML @div/1', from: 'pub' });
+
+    const el = await page.connectActor('HTML @div/1');
+    await expectBehavior(el,
+      { input: { id: 'q1', op: '@inner_html' } },
+      { output: expect.objectContaining({ re: '[<span>inner</span>]' }) },
+    );
+  });
+
+  it('a later text value replaces the element with text', async () => {
+    const page = await loadPage(html);
+    const pubPosts = [];
+    await page.register('pub', msg => pubPosts.push(msg));
+    const span = await page.connectActor('HTML @span');
+    const div = await page.connectActor('HTML @div');
+
+    await span.sendAsync({ id: '1', op: [{ children: ['inner'] }, '#new'], from: 'caller' });
+    await div.sendAsync({ id: '2', op: [{ children: ['[', '#<pub @0>', ']'] }, '#new'], from: 'caller' });
+    await page.send({ id: pubPosts[0].id, re: ['#<HTML @span/1>'], to: 'HTML @div/1', from: 'pub' });
+    await page.send({ id: pubPosts[0].id, re: ['plain'], to: 'HTML @div/1', from: 'pub' });
+
+    const el = await page.connectActor('HTML @div/1');
+    await expectBehavior(el,
+      { input: { id: 'q1', op: '@inner_html' } },
+      { output: expect.objectContaining({ re: '[plain]' }) },
+    );
+  });
+});
+
+describe('template — a function returning an element, interpolated as a child', () => {
+  const factorySource = `
+    *
+      :document
+      HTML: (:div, :span)
+    *
+    #badge = -> <span>new</span>
+    el = <div>[{ #badge() }]</div>
+    body = document.body()
+    body.append!(el)
+  `;
+
+  const page_html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/factory.bv"></script>
+    </head><body></body></html>`;
+
+  it('renders the returned element, not its address', async () => {
+    const page = await loadPage(page_html, { sources: { '/factory.bv': factorySource } });
+    const inner = await page.evaluate(() => document.querySelector('div').innerHTML);
+    expect(inner).toBe('[<span>new</span>]');
+  });
+});
