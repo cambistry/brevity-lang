@@ -44,6 +44,19 @@ export function stateKey(name) {
 
 export const CALL_LIKE = new Set(['FunctionCallExpr']);
 
+// A value in tail position (a handler's implicit return, an if-branch value):
+// a call's reply is unwrapped to its one value, and a send to an actor waits
+// for its reply first.
+export function genTailValue(ctx, expr) {
+  const raw = genExpr(ctx, expr);
+  if (isSendCode(raw)) return awaitSendValue(raw, '_');
+  return CALL_LIKE.has(expr.type) ? `BvObject.one(${raw}, '_')` : raw;
+}
+
+// Code that sends to an actor and gives back the reply's promise.
+const isSendCode = code => /^this\.#(childSend|send)\(/.test(code);
+const awaitSendValue = (code, name) => `BvObject.one(BvObject.pack(await ${code}), ${JSON.stringify(name)})`;
+
 // Resolve the CAM address an XML `<tag>` constructs against: the element-factory
 // selector of whichever service the tag was imported from (`<Scene: (:node)>` →
 // `Scene @node`). The language privileges no service name — the host is the DI
@@ -1481,8 +1494,10 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   const isList = t => typeof t === 'string' && t.startsWith('List');
   const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const posVal = f => {
-    const raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
+    let raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
+    // A send to an actor (`return b.get()`) replies with what it answers.
+    if (f.expr && isSendCode(raw)) raw = awaitSendValue(raw, name ?? 'value');
     const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;
     if (t === 'Object') return `BvObject.splat(${raw})`;

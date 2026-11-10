@@ -1,5 +1,6 @@
 import { extract } from '../../index.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Interface render for subclass constructors
@@ -188,6 +189,15 @@ describe('subclass interface — ++ forms', () => {
     expect(s).toContain('U (A ++ Box) -> *{');
   });
 
+  it('a param typed with a public class is a param, not a wrapped parent', () => {
+    const s = svc(`
+      @Box = *{ @g = -> v: 1 as Integer }
+      @A = *{ @ga = -> v: 1 as Integer }
+      @U = (@A ++ b @Box) *{}
+    `);
+    expect(s).toContain('U (A ++ Box) -> *{');
+  });
+
   it('reads parents and params back', () => {
     const parsed = parseInterface('{\n  A () -> *{}\n  B () -> *{}\n  C (A ++ B ++ c: Integer) -> *{}\n  D (A ++ B) -> *{}\n  E (A++) -> *{}\n}');
     expect(parsed.__types.C.supertypes).toEqual([{ supertype: 'A' }, { supertype: 'B' }]);
@@ -206,4 +216,100 @@ describe('subclass interface — ++ forms', () => {
   it('the subclass bar is retired', () => {
     expect(() => parseInterface('{\n  Text (Node |) -> *{}\n}')).toThrow(/Interface entry 'Text': the subclass bar '\|' is retired — extend with '\+\+'/);
   });
+});
+
+describe('class params typed with a public class', () => {
+  const script = `
+    @Box = (n Integer) *{
+      @get = { return n }
+    }
+    @U = (b @Box) *{
+      @get = { return b.get() }
+    }
+    @V = (b: @Box) *{
+      @get = { return b.get() }
+    }
+
+    @positional = {
+      u = @U(@Box(3))
+      r Integer = u.get()
+      return r
+    }
+    @named = {
+      v = @V(b: @Box(4))
+      r Integer = v.get()
+      return r
+    }
+  `;
+
+  it('a positional one renders as one param', () => {
+    expect(svc(script)).toContain('U (Box) -> *{');
+  });
+
+  it('a named one renders as one param', () => {
+    expect(svc(script)).toContain('V (b: Box) -> *{');
+  });
+
+  it('the actor reaches a positional one', () => expectBehavior(script,
+    { input: { id: '1', op: '@positional', from: 'c' } },
+    { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
+  ));
+
+  it('the actor reaches a named one', () => expectBehavior(script,
+    { input: { id: '1', op: '@named', from: 'c' } },
+    { output: { id: '1', re: [4], 'ty': ['Integer'], to: 'c' } },
+  ));
+});
+
+describe('params need a separator', () => {
+  it('two class params with no separator are a parse error', () => {
+    expect(() => extract('@U = (a Integer b Integer) *{}')).toThrow(/Expected ',' or a newline between class params, got IDENT 'b'/);
+  });
+
+  it('a published class param after no separator is a parse error', () => {
+    expect(() => extract('@U = (a Integer @b Integer) *{}')).toThrow(/Expected ',' or a newline between class params, got AT/);
+  });
+
+  it('two function params with no separator are a parse error', () => {
+    expect(() => extract('@f = (a Integer b Integer) { return a }')).toThrow(/Expected ',' between params, got IDENT 'b'/);
+  });
+
+  it('a newline separates class params', () => {
+    expect(svc('@U = (\n  a Integer\n  b Integer\n) *{}')).toContain('U (Integer, Integer) -> *{}');
+  });
+});
+
+describe('a class handler replies with what its actor param answers', () => {
+  const script = `
+    Box = (n Integer) *{
+      @get = { return n }
+    }
+    R = (b Box) *{
+      @get = { return b.get() }
+    }
+    T = (b Box) *{
+      @get = { b.get() }
+    }
+
+    @returned = {
+      r = R(Box(5))
+      v Integer = r.get()
+      return v
+    }
+    @tail = {
+      t = T(Box(6))
+      v Integer = t.get()
+      return v
+    }
+  `;
+
+  it('by return', () => expectBehavior(script,
+    { input: { id: '1', op: '@returned', from: 'c' } },
+    { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
+  ));
+
+  it('as its tail', () => expectBehavior(script,
+    { input: { id: '1', op: '@tail', from: 'c' } },
+    { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
+  ));
 });

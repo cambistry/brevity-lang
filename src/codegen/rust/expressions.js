@@ -576,7 +576,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
         let _id = self.${lc}_next_id.get();
         self.${lc}_next_id.set(_id + 1);
         self.${lc}_instances.insert(_id, std::collections::HashMap::new());
-        self.child_${lc}_init_at(_id, &${initArgsExpr});
+        let _init_args = ${initArgsExpr};
+        self.child_${lc}_init_at(_id, &_init_args);
 ${subRegLines.join('\n')}
         bv_inst_ref(${JSON.stringify(lc)}, _id)
     }`;

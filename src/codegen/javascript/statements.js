@@ -3,7 +3,7 @@ import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
 import { isDynamicTy } from '../ty_tags.js';
 import {
-  CALL_LIKE, genExpr, genDestructure, genDestructureAssign,
+  CALL_LIKE, genExpr, genTailValue, genDestructure, genDestructureAssign,
   genListDestructureAssign, genPackedReturn, genTyBody, jsSlotTag, jsTyOf,
   collectFreeVars, wrapWithCapture, lambdaUsesOuterRefs,
   jsIdent, mintSsaName, mintSsaNameIn, ssaResolve, stateKey, genSendNew,
@@ -510,9 +510,7 @@ export function genIfChain(ctx, ifExpr, tmpVar, outerEnv) {
     if (!branch) return `\n        ${tmpVar} = null;`;
     if (branch.type === 'IfExpr') return `\n        ` + genIfChain(ctx, branch, tmpVar, outerEnv);
     if (branch.body)              return genIfBlockBody(ctx, branch.body, tmpVar, outerEnv);
-    const raw = genExpr(ctx, branch.expr);
-    const val = CALL_LIKE.has(branch.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
-    return `\n        ${tmpVar} = ${val};`;
+    return `\n        ${tmpVar} = ${genTailValue(ctx, branch.expr)};`;
   };
 
   let code = `if (${truthy}) {`;

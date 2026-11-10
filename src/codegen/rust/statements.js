@@ -228,7 +228,9 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
     lines.push(`${I}    let _id = self.${lc}_next_id.get();`);
     lines.push(`${I}    self.${lc}_next_id.set(_id + 1);`);
     lines.push(`${I}    self.${lc}_instances.insert(_id, std::collections::HashMap::new());`);
-    lines.push(`${I}    self.child_${lc}_init_at(_id, &${initArgsExpr});`);
+    // Args first: one may construct a class too, which needs `self` itself.
+    lines.push(`${I}    let _init_args = ${initArgsExpr};`);
+    lines.push(`${I}    self.child_${lc}_init_at(_id, &_init_args);`);
     if (subRegLines.length > 0) lines.push(...subRegLines);
     lines.push(`${I}    bv_inst_ref(${JSON.stringify(lc)}, _id)`);
     lines.push(`${I}};`);

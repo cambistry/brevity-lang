@@ -1021,11 +1021,14 @@ export function parse(tokensIn) {
     expect('LPAREN');
     skipNewlines();
     const ctorParams = [];
+    let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (!separated) throw new Error(`Expected ',' or a newline between params ${where}, got ${peek().type} '${peek().value || ''}'`);
       const p = parseOneParam();
       if (p === null) break;
       ctorParams.push(p);
+      separated = false;
     }
     expect('RPAREN');
     skipNewlines();
@@ -1083,8 +1086,13 @@ export function parse(tokensIn) {
       if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
       return peek().type === 'IDENT' || (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT');
     };
+    let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (!separated) {
+        throw new Error(`Expected ',' between params, got ${peek().type} '${peek().value || ''}'`);
+      }
+      separated = false;
       if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
         throw new Error(`Cannot publish param '${tokens[pos + 1].value}' of a function — '@' marks class and file params only`);
       }
@@ -3342,6 +3350,7 @@ export function parse(tokensIn) {
     };
     const peekIsParamType = () => {
       if (peek().type === 'LPAREN') return true; // function type: (Type) -> (Type)
+      if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') return true; // public class: @Name
       return peek().type === 'IDENT' && !isOneParamDelim();
     };
     // ── Default value helpers ─────────────────────────────────────────────
@@ -3471,14 +3480,17 @@ export function parse(tokensIn) {
     if (peek().type === 'LPAREN') {
       consume(); // opening paren
       const params = [];
+      let separated = true;
       while (true) {
-        skipNewlines();
-        if (peek().type === 'COMMA') { consume(); continue; }
+        if (peek().type === 'NEWLINE') { skipNewlines(); separated = true; }
+        if (peek().type === 'COMMA') { consume(); separated = true; continue; }
         if (peek().type === 'RPAREN') break;
         if (!isParamStart()) break;
+        if (!separated) throw new Error(`Expected ',' or a newline between params, got ${peek().type} '${peek().value || ''}'`);
         const p = parseOneParam();
         if (p === null) break;
         params.push(p);
+        separated = false;
       }
       expect('RPAREN');
       return params;
@@ -4342,8 +4354,13 @@ export function parse(tokensIn) {
     if (looksLikeRetiredSupertypePrefix()) throw new Error(retiredSupertypeMessage(op));
     const supertypes = parseExtendsParents(op, true);
     skipNewlines();
+    let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (!separated) {
+        throw new Error(`Expected ',' or a newline between class params, got ${peek().type} '${peek().value || ''}'`);
+      }
+      separated = false;
       // Positional ref: name *Type or name * (wildcard)
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
         const next2 = tokens[pos + 2]?.type;

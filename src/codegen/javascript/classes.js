@@ -8,7 +8,7 @@ import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMB
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
-  CALL_LIKE, genExpr, genDestructure, genReBody, genTyBody,
+  CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
   genTypeCondition, genDefaultValue, stateKey, childBinding,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
   genSendNew,
@@ -144,9 +144,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       // value; assign `re = []` so the handler still posts a reply.
       reLine = '';
     } else {
-      const raw = genExpr(ctx, implicitReturn.expr);
-      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
-      reLine = `\n        re = [${val}];`;
+      reLine = `\n        re = [${genTailValue(ctx, implicitReturn.expr)}];`;
     }
   } else if (hasSilent) {
     reLine = '';
@@ -283,9 +281,7 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
       reLine = '';  // return comes from block branches, already handled by genLocals
     } else {
-      const raw = genExpr(ctx, implicitReturn.expr);
-      const val = CALL_LIKE.has(implicitReturn.expr.type) ? `BvObject.one(${raw}, '_')` : raw;
-      reLine = `\n        re = [${val}];`;
+      reLine = `\n        re = [${genTailValue(ctx, implicitReturn.expr)}];`;
     }
   } else {
     reLine = '\n        re = [];';
