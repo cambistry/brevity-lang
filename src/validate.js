@@ -34,6 +34,38 @@ export function astUsesSelfAsValue(node, inCalleePos = false) {
   return false;
 }
 
+// Only a class subscribes to its param: it does so once, when it's made, and
+// the subscription lives as long as it does. A function's call ends, so
+// nothing would own the subscription; until that's designed, it's refused.
+function checkParamSubscribes(ast) {
+  const visit = (node, fn, name) => {
+    if (Array.isArray(node)) { node.forEach(n => visit(n, fn)); return; }
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'FunctionDecl' || node.type === 'Function') {
+      fn = { name: node.name ?? name, params: new Set((node.params || []).map(p => p?.name).filter(Boolean)) };
+    }
+    // A lambda's name is the one it's bound to.
+    if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.value?.type === 'Function') {
+      visit(node.value, fn, node.name);
+      return;
+    }
+    if (node.type === 'SubscribeCall' && fn && node.target?.type === 'Identifier' && fn.params.has(node.target.name)) {
+      const where = fn.name ? `'${fn.name}'` : 'a function';
+      throw new Error(`'${node.target.name}' is a param of ${where}, and a function can't subscribe to its param — take it as a class param and subscribe in the class`);
+    }
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'loc') continue;
+      if (v && typeof v === 'object') visit(v, fn);
+    }
+  };
+  for (const actor of ast.actors || []) {
+    for (const f of actor.functions || []) visit(f, null);
+    // A class's own block subscribes to its params; only functions in it are checked.
+    visit(actor.initBody, null);
+    visit(actor.constructorBody, null);
+  }
+}
+
 export function validate(ast, options = {}) {
   // Self-as-value provisioning: any source that references `Self` in a value
   // position (not callee, not type) needs a wire address baked in. We require
@@ -47,6 +79,7 @@ export function validate(ast, options = {}) {
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
   lowerFunctionAs(ast);
+  checkParamSubscribes(ast);
 
   // Build actor info map for cross-actor as-clause checking
   const actorInfo = new Map();

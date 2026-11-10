@@ -107,6 +107,48 @@ describe('readonly param — &Type is live', () => {
   ));
 });
 
+// Only a class subscribes to its param: it lives on after it's made, so the
+// subscription has an owner. A function's call ends, so it's refused.
+describe('readonly param — a function can\'t subscribe to its param', () => {
+  it('a private function', () => {
+    expect(() => compileSource(`
+      @n *Integer = 0
+      watch = (n &Integer) {
+        n.subscribe (v Integer) { v }
+        return 1
+      }
+      @go = {
+        k Integer = watch(@n)
+        return k
+      }
+    `)).toThrow(/'n' is a param of 'watch', and a function can't subscribe to its param — take it as a class param and subscribe in the class/);
+  });
+
+  it('a public function', () => {
+    expect(() => compileSource(`
+      @n *Integer = 0
+      @watch = (n &Integer) {
+        n.subscribe (v Integer) { v }
+        return 1
+      }
+    `)).toThrow(/'n' is a param of '@watch', and a function can't subscribe to its param/);
+  });
+
+  it('a lambda', () => {
+    expect(() => compileSource(`
+      @n *Integer = 0
+      @go = {
+        watch = (n &Integer) {
+          n.subscribe (v Integer) { v }
+          return 1
+        }
+        k Integer = watch(@n)
+        return k
+      }
+    `)).toThrow(/'n' is a param of 'watch', and a function can't subscribe to its param/);
+  });
+});
+
 // ── Writes are rejected ──────────────────────────────────────────────────────
 
 describe('readonly param — &Type rejects mutation', () => {
