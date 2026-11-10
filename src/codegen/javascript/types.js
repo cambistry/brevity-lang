@@ -47,13 +47,13 @@ export function checkReplyFieldTypes(ctx, fields, declaredReturnType = null) {
       posIdx += 1;
       if (hasInferred) continue;
       if (inferExprType(f.expr, typeEnv)) continue;
-      throw new Error(`Reply/return expression requires a type annotation — use 'expr : Type'`);
+      throw new Error(`Reply/return expression requires a type annotation — use 'expr as Type'`);
     }
     if (f.key !== undefined && f.value && NEEDS_TYPE.has(f.value.type) && f.type === null) {
       const hasInferred = structured && structured.named.has(f.key);
       if (hasInferred) continue;
       if (inferExprType(f.value, typeEnv)) continue;
-      throw new Error(`Reply/return field '${f.key}: ...' requires a type annotation — use '${f.key}: expr : Type'`);
+      throw new Error(`Reply/return field '${f.key}: ...' requires a type annotation — use '${f.key}: expr as Type'`);
     }
     if (f.positional) posIdx += 1;
   }
@@ -96,7 +96,8 @@ export function parseFieldList(str) {
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
 //   Counter (start: Integer) -> *{ … }    constructor; body always written
-//   Text (Node |) -> *{}                  constructor with a supertype
+//   Text (Node++) -> *{}                  constructor with a supertype
+//   C (A ++ B ++ c: Integer) -> *{ … }    two supertypes, then params
 //   set name (Type)                       settable field
 //   cell *Type                            ref cell (readable and settable)
 //   name Type                             read-only field
@@ -137,11 +138,36 @@ function splitTopLevel(str, sep) {
   return out;
 }
 
-// Disambiguates `(T | own)` (supertype divider) from `(id: Text | null)`
-// (nullable union inside a single param). The supertype form requires that
-// the LHS of `|` is an identifier-list (optionally with `*alias` markers).
-const SUPERTYPE_LHS_RE = /^[A-Za-z_][A-Za-z0-9_]*!?(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?(\s*,\s*[A-Za-z_][A-Za-z0-9_]*!?(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*)?)*$/;
-function trySplitSupertypePipe(inner) {
+// Splits a constructor's `(...)` inner at its top-level `++` parent list
+// (notes/class-extends-plusplus-2026-11-10.md): every segment before a `++` is
+// a parent (`B` or wrapped `sup B`); the last segment is a parent too when it is a
+// bare name, else it is the param list. Null when there is no `++`.
+const PARENT_SEG_RE = /^(?:([A-Za-z_][A-Za-z0-9_]*)\s+)?(@?[A-Za-z_][A-Za-z0-9_]*!?)$/;
+const BARE_PARENT_RE = /^@?[A-Za-z_][A-Za-z0-9_]*!?$/;
+function trySplitSupertypes(name, inner) {
+  const segs = [];
+  let depth = 0, last = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if ('-=~'.includes(ch) && inner[i + 1] === '>') { i++; continue; }
+    if (isOpenBracket(ch)) depth++;
+    else if (isCloseBracket(ch)) depth--;
+    else if (ch === '+' && inner[i + 1] === '+' && depth === 0) { segs.push(inner.slice(last, i)); last = i + 2; i++; }
+  }
+  if (segs.length === 0) { rejectRetiredBar(name, inner); return null; }
+  const supertypes = segs.map(seg => {
+    const m = seg.trim().match(PARENT_SEG_RE);
+    if (!m) throw new Error(`Interface entry '${name}': '${seg.trim()}' is not a parent — write 'Parent ++' or 'sup Parent ++'`);
+    return { supertype: m[2], ...(m[1] && { wrappedAs: m[1] }) };
+  });
+  const rest = inner.slice(last).trim();
+  if (BARE_PARENT_RE.test(rest)) return { supertypes: [...supertypes, { supertype: rest }], paramStr: '' };
+  return { supertypes, paramStr: rest };
+}
+
+// The retired subclass bar: `(T |)`, `(T, U | …)`, `(T *sup | …)`. A bar after
+// a single name with something on its right is a union param (`(Integer | Text)`).
+function rejectRetiredBar(name, inner) {
   let depth = 0;
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i];
@@ -150,13 +176,13 @@ function trySplitSupertypePipe(inner) {
     else if (isCloseBracket(ch)) depth--;
     else if (ch === '|' && depth === 0) {
       const lhs = inner.slice(0, i).trim();
-      if (lhs === '' || SUPERTYPE_LHS_RE.test(lhs)) {
-        return { supertypeStr: lhs, paramStr: inner.slice(i + 1).trim() };
+      const rhs = inner.slice(i + 1).trim();
+      if (/^[A-Za-z_][\w!]*(\s*\*\s*\w*)?(\s*,\s*[A-Za-z_][\w!]*(\s*\*\s*\w*)?)*$/.test(lhs) && (rhs === '' || /[,*]/.test(lhs))) {
+        throw new Error(`Interface entry '${name}': the subclass bar '|' is retired — extend with '++': '(Parent++)', '(A ++ B ++ params)'`);
       }
-      return null;
+      return;
     }
   }
-  return null;
 }
 
 // Parses the inner of a `(...)` typedecl into AST-shape TypeField nodes.
@@ -291,21 +317,13 @@ function parseSignature(name, text) {
   throw new Error(`Interface entry '${name}': return must be parenthesized — write '-> (${rest})'`);
 }
 
-// `([Sup, … |] params)` + constructor-body members → actor-shaped record:
+// `([A ++ B ++] params)` + constructor-body members → actor-shaped record:
 //   { supertypes, initParams, functions, setters }
 // `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
 function parseConstructor(name, paramsInner, bodyInner) {
-  const split = trySplitSupertypePipe(paramsInner);
-  const supertypeStr = split ? split.supertypeStr : '';
+  const split = trySplitSupertypes(name, paramsInner);
+  const supertypes = split ? split.supertypes : [];
   const paramStr = split ? split.paramStr : paramsInner;
-  const supertypes = supertypeStr ? supertypeStr.split(',').map(s => {
-    const trimmed = s.trim();
-    const starIdx = trimmed.indexOf('*');
-    if (starIdx !== -1) {
-      return { supertype: trimmed.slice(0, starIdx).trim(), wrappedAs: trimmed.slice(starIdx + 1).trim() };
-    }
-    return { supertype: trimmed };
-  }) : [];
   const initParams = paramStr ? parseFieldList(paramStr) : [];
   const functions = [];
   const setters = [];

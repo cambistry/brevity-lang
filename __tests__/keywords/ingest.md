@@ -1,6 +1,6 @@
 # `ingest`
 
-LLM orientation: `ingest` lets a superclass receive the direct subclass service
+LLM orientation: `ingest` lets a superclass receive the direct subclass constructor
 block's returned value during construction.
 
 ## Canonical Form
@@ -11,7 +11,7 @@ Base = * {
   @label = -> :label
 }
 
-Greeting = *(Base |) -> "hello"
+Greeting = (Base++) *{ "hello" }
 ```
 
 With a default:
@@ -26,7 +26,7 @@ Panel = * {
 ## Tested Behavior
 
 - A superclass can bind `x Type = ingest`.
-- A subclass `<Base |>` can return a value consumed by the superclass.
+- A subclass `(Base++)` can return a value consumed by the superclass.
 - Different subclasses can provide different ingested values.
 - A default allows direct construction of the superclass.
 - Constructor params and ingest coexist.

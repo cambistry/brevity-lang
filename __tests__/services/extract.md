@@ -97,5 +97,5 @@ compile(ast, { remotes: [{ path: 'Remote', service: remoteIface.service }] })
 
 - Use `extract()` when the task is interface discovery.
 - Use `compile()` when the task is validation or target output.
-- Do not expect aliases like `(DB)` to appear in `interface.params`.
+- Do not expect aliases like `DB` to appear in `interface.params`.
 - Mention that `extract()` is intentionally lighter than full validation.

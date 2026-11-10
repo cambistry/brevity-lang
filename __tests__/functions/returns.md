@@ -14,9 +14,12 @@ fn = (a) { a + 1 }
 With intermediate work:
 
 ```brevity
-fn = (a) {
-  x = a * 2
-  x + 1
+@go = {
+  fn = (a) {
+    x = a * 2
+    x + 1
+  }
+  return result: fn(4)
 }
 ```
 
@@ -25,38 +28,41 @@ fn = (a) {
 Single positional:
 
 ```brevity
-return a as Integer
+fn = (a) { return a as Integer }
 ```
 
 Multiple positional:
 
 ```brevity
-return a, b
+fn = (a, b) { return a, b }
 ```
 
 Named return:
 
 ```brevity
-return :value
-return result: value
+f = (a) { return :a }
+g = (a) { return result: a }
 ```
 
 Paren forms are also tested:
 
 ```brevity
-return (a as Integer)
-return (:a, :b)
-return (result: (a + 1) as Integer)
+f = (a) { return (a as Integer) }
+g = (a, b) { return (:a, :b) }
+h = (a) { return (result: (a + 1) as Integer) }
 ```
 
 ## Early Return
 
-Statements after `->` in the same block are not evaluated:
+Statements after `return` in the same block are not evaluated:
 
 ```brevity
-fn = (a) {
-  return a as Integer
-  a + 999
+@go = {
+  fn = (a) {
+    return a as Integer
+    a + 999
+  }
+  return result: fn(5)
 }
 ```
 
@@ -66,12 +72,16 @@ Assigning a multi-positional return into a single plain binding is a runtime
 error in the tested case. Destructure multi-value returns:
 
 ```brevity
-x, y = fn(3, 4)
+@go = {
+  fn = (a, b) { return a, b }
+  x, y = fn(3, 4)
+  return :x, :y
+}
 ```
 
 ## LLM Rules
 
-- Prefer `-> :name` or `-> field: expr`.
+- Prefer `return :name` or `return field: expr`.
 - Use destructuring for multi-value returns.
 - Use `as Type` when the result type should be stable.
-- Name silent functions with a glued `.` (type `-> .`); see [Silent Functions](silent.md).
+- Name silent functions with a glued `.` (type `() => .`); see [Silent Functions](silent.md).

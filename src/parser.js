@@ -309,8 +309,8 @@ export function parse(tokensIn) {
     }
   };
 
-  // Detect superclass prefix: T |, T* |, T *name |, T, U |
-  const looksLikeSupertypePrefix = (startPos = pos) => {
+  // Detect the retired superclass prefix: T |, T* |, T *name |, T, U |
+  const looksLikeRetiredSupertypePrefix = (startPos = pos) => {
     let look = startPos;
     while (tokens[look]?.type === 'NEWLINE') look++;
     while (true) {
@@ -327,6 +327,76 @@ export function parse(tokensIn) {
       return false;
     }
   };
+
+  // The `++` rewrite of a retired `(T *sup, U | params)` prefix, for the error.
+  const retiredSupertypeMessage = (op) => {
+    const parents = [];
+    let look = pos;
+    while (tokens[look]?.type !== 'PIPE') {
+      const t = tokens[look];
+      if (t.type === 'AT') parents.push({ name: '@' });
+      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'STAR') parents[parents.length - 1].wrap = t.value;
+      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'AT') parents[parents.length - 1].name += t.value;
+      else if (t.type === 'IDENT') parents.push({ name: t.value });
+      else if (t.type === 'STAR') parents[parents.length - 1].wrap ??= 'name';
+      look++;
+    }
+    const hasParams = tokens[look + 1] && tokens[look + 1].type !== 'RPAREN';
+    const shown = parents.map(p => (p.wrap ? `${p.wrap} ` : '') + p.name).join(' ++ ');
+    const tail = hasParams ? ' ++ params' : parents.at(-1).wrap ? ' ++' : parents.length === 1 ? '++' : '';
+    return `In '${op}', the subclass bar '|' is retired — extend with '++': write '(${shown}${tail})'`;
+  };
+
+  // An extends parent at token `i`: `[@]B`, or `sup [@]B` (the parent wrapped as a
+  // local). A wrapped parent has the shape of a positional param (`b Box`); the caller
+  // decides between them by what follows.
+  const parentSegmentAt = (i) => {
+    const nameLen = (j) => tokens[j]?.type === 'AT' ? (tokens[j + 1]?.type === 'IDENT' ? 2 : 0) : (tokens[j]?.type === 'IDENT' ? 1 : 0);
+    const n = nameLen(i);
+    if (!n) return null;
+    if (n === 1) { const m = nameLen(i + 1); if (m) return { len: 1 + m, wrapped: true }; }
+    return { len: n, wrapped: false };
+  };
+
+  // Token types that end a bare `D = A ++ B` definition.
+  const isDefinitionEnd = (i) => ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE', 'DIVIDER'].includes(tokens[i]?.type);
+
+  // A bare extends definition at `i`: `A ++ …` (no parens), as in `D = C++`,
+  // `D = A ++ B`, `D = C ++ *{ … }`.
+  const isBareExtendStart = (i = pos) => {
+    const seg = parentSegmentAt(i);
+    return !!seg && tokens[i + seg.len]?.type === 'PLUSPLUS';
+  };
+
+  // Parse the `++`-joined parents of a class (notes/class-extends-plusplus-2026-11-10.md).
+  // Left to right, a segment is a parent while it is `B` / `sup B` followed by
+  // `++`, or a bare `B` that ends the list (before `)` in parens, before the end
+  // of the definition otherwise). The first segment that isn't starts the params.
+  function parseExtendsParents(op, inParens) {
+    const supertypes = [];
+    const skipNl = (i) => { while (inParens && tokens[i]?.type === 'NEWLINE') i++; return i; };
+    while (true) {
+      const i = skipNl(pos);
+      const seg = parentSegmentAt(i);
+      if (!seg) break;
+      const after = skipNl(i + seg.len);
+      const joined = tokens[after]?.type === 'PLUSPLUS';
+      const last = !seg.wrapped && supertypes.length > 0 && (inParens ? tokens[after]?.type === 'RPAREN' : isDefinitionEnd(after));
+      if (!joined && !last) break;
+      pos = i;
+      const wrap = seg.wrapped ? consume().value : undefined;
+      const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+      const name = sigil + expect('IDENT').value;
+      if (wrap && wrap === name.replace(/^@/, '')) {
+        throw new Error(`In '${op}', wrapped '${name}' needs a local name of its own — write '(sup ${name} ++ …)'`);
+      }
+      supertypes.push({ supertype: name, ...(wrap && { wrappedAs: wrap }) });
+      pos = after;
+      if (!joined) break;
+      consume(); // ++
+    }
+    return supertypes;
+  }
 
   const makeNumLiteral = (tok) => {
     if (tok.numKind === 'Decimal') return AST.decimalLiteral(tok.value);
@@ -3979,7 +4049,7 @@ export function parse(tokensIn) {
         // has been opened here, so it cannot be the RHS of `=`.
         throw new Error(`'return' cannot be the right-hand side of '=' — no function body has been opened. Use '@${op} = -> expr' or '@${op} = { return expr }'.`);
       }
-      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN') {
+      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN' && !isBareExtendStart()) {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
       }
       // Allow `= \n *...` — body-opener `=` may sit on its own line
@@ -4013,9 +4083,10 @@ export function parse(tokensIn) {
     // At this point we've consumed the operator (=, <<, >>).
     // Next could be: PIPE (delimited fn), LT (constructor), NEWLINE (lineal), ->, {, .
 
-    if (isDelimitedClassStart()) {
+    if (isDelimitedClassStart() || isBareExtendStart()) {
       // Public constructor: @Name = (params) [->] *{ body } | @Name = [->] *{ body }
-      const { params: cParams, supertypes, nested } = parseDelimitedClass('@' + op);
+      //                     @Name = A ++ B | @Name = C++ | @Name = C ++ *{ body }
+      const { params: cParams, supertypes, nested } = isBareExtendStart() ? parseBareExtendClass('@' + op) : parseDelimitedClass('@' + op);
       const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
       if (overloadMode !== 'create') {
         return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
@@ -4264,30 +4335,13 @@ export function parse(tokensIn) {
 
   // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
   // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
-  // Handles subclass prefix (`T |`, `T *name |`, `T*|`) and ref-param shortcuts.
-  function parseConstructorParenParams() {
+  // Handles the `++` parent list (`T ++`, `sup T ++`, `A ++ B`) and ref-param shortcuts.
+  function parseConstructorParenParams(op) {
     const cParams = [];
-    const supertypes = [];
     skipNewlines();
-    if (looksLikeSupertypePrefix()) {
-      while (peek().type === 'IDENT' || peek().type === 'AT') {
-        const sigil = peek().type === 'AT' ? (consume(), '@') : '';
-        const stName = sigil + expect('IDENT').value;
-        const st = { supertype: stName };
-        if (peek().type === 'STAR') {
-          consume();
-          if (peek().type === 'IDENT') st.wrappedAs = consume().value;
-          else if (sigil) throw new Error(`Name the wrapped superclass: '${stName} *name |'`);
-          else st.wrappedAs = stName;
-        }
-        supertypes.push(st);
-        skipNewlines();
-        if (peek().type === 'COMMA') { consume(); skipNewlines(); continue; }
-        break;
-      }
-      skipNewlines();
-      expect('PIPE');
-    }
+    if (looksLikeRetiredSupertypePrefix()) throw new Error(retiredSupertypeMessage(op));
+    const supertypes = parseExtendsParents(op, true);
+    skipNewlines();
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
       // Positional ref: name *Type or name * (wildcard)
@@ -4483,12 +4537,31 @@ export function parse(tokensIn) {
     let supertypes = [];
     if (peek().type === 'LPAREN') {
       consume();
-      ({ params, supertypes } = parseConstructorParenParams());
+      ({ params, supertypes } = parseConstructorParenParams(op));
     }
     if (peek().type === '->') consume();
     expect('STAR');
     const nested = parseConstructorBody(op, false);
     return { params, supertypes, nested };
+  }
+
+  // Parse a bare extends definition (see isBareExtendStart):
+  //   A ++ B            parents only — a new class, no changes
+  //   C++               one parent
+  //   C ++ *{ body }    parents and a body, no params
+  function parseBareExtendClass(op) {
+    const supertypes = parseExtendsParents(op, false);
+    let nested = null;
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE') {
+      consume(); // *
+      nested = parseConstructorBody(op, false);
+    } else if (!isDefinitionEnd(pos)) {
+      const seg = parentSegmentAt(pos);
+      if (seg?.wrapped) throw new Error(`In '${op}', a wrapped parent ('${peek().value} ${tokens[pos + 1].value}') needs a body to use it — write '${op} = ${peek().value} ${tokens[pos + 1].value} ++ *{ … }'`);
+      throw new Error(`In '${op}', expected a parent class, '*{ … }' or the end of the definition after '++' — params go in parens: '(Parent ++ params) *{ … }'`);
+    }
+    nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
+    return { params: [], supertypes, nested };
   }
 
   const RETIRED_STAR_PAREN_MSG = (op) =>
@@ -4979,11 +5052,15 @@ export function parse(tokensIn) {
           }
           // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }
           //              name =\n*\n params\n*\n body (lineal)
-          // Subclass:    name = (T | params) *{ ... } | name = (T *name | params) *{ ... }
+          // Subclass:    name = (T ++ params) *{ ... } | name = (sup T ++ params) *{ ... }
+          //              name = A ++ B | name = C++ | name = C ++ *{ ... }
           const _isDelimitedClass = isDelimitedClassStart();
-          if (_isDelimitedClass || peek().type === 'STAR') {
+          const _isBareExtend = !_isDelimitedClass && isBareExtendStart();
+          if (_isDelimitedClass || _isBareExtend || peek().type === 'STAR') {
             let cParams, supertypes, nested;
-            if (_isDelimitedClass) {
+            if (_isBareExtend) {
+              ({ params: cParams, supertypes, nested } = parseBareExtendClass(op));
+            } else if (_isDelimitedClass) {
               ({ params: cParams, supertypes, nested } = parseDelimitedClass(op));
             } else {
               consume(); // *

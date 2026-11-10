@@ -6,7 +6,8 @@ construction, callback flow, and outgoing wire messages.
 
 ## Current Tested Model
 
-- Dependencies are declared in the file-level `*( ... )` header.
+- Dependencies are declared in the file header: lineal `*` … `*`, or
+  `( ... ) *{ ... }`.
 - A dependency entry binds a path or name to a local alias: `"Remote": Remote`.
 - Inline service constraints are the safest examples:
   `"Remote": Remote { get (url: Text) -> (response: Text) }`.

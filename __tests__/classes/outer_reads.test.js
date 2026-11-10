@@ -24,7 +24,7 @@ const script = `
     }
   }
 
-  Sub = (@W |) *{}
+  Sub = (@W++) *{}
 
   @bump! = { total <- total + 10 }
 

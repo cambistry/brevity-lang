@@ -14,7 +14,7 @@ describe('subclass runtime — inherited method on subclass value', () => {
     T = (x Integer) *{
       @a = -> result: x as Integer
     }
-    U = (T | y Integer) *{
+    U = (T ++ y Integer) *{
       @b = -> result: y as Integer
     }
 
@@ -59,7 +59,7 @@ describe('subclass runtime — override fires on the subclass actor', () => {
     T = * {
       @a = -> result: 1
     }
-    U = (T |) *{
+    U = (T++) *{
       @a = -> result: 2
     }
 
@@ -100,7 +100,7 @@ describe('subclass runtime — inherited method that writes the superclass\'s st
         @get = { return a }
       }
 
-      Sub = (Counter |) *{
+      Sub = (Counter++) *{
         @more = { return 10 }
       }
 
@@ -128,7 +128,7 @@ describe('subclass runtime — inherited state', () => {
 
   it('each subclass actor has its own copy', async () => {
     await expectBehavior(`${COUNTER}
-      Sub = (Counter |) *{}
+      Sub = (Counter++) *{}
 
       @go = {
         s = Sub()
@@ -147,8 +147,8 @@ describe('subclass runtime — inherited state', () => {
 
   it('reaches through a grandparent', async () => {
     await expectBehavior(`${COUNTER}
-      Mid = (Counter |) *{}
-      Leaf = (Mid |) *{}
+      Mid = (Counter++) *{}
+      Leaf = (Mid++) *{}
 
       @go = {
         s = Leaf()
@@ -164,7 +164,7 @@ describe('subclass runtime — inherited state', () => {
 
   it('starts from the value the subclass declares', async () => {
     await expectBehavior(`${COUNTER}
-      Sub = (Counter |) *{
+      Sub = (Counter++) *{
         a *Integer = 100
       }
 
@@ -182,10 +182,10 @@ describe('subclass runtime — inherited state', () => {
 
   it('the nearest class\'s value wins through a chain', async () => {
     await expectBehavior(`${COUNTER}
-      Mid = (Counter |) *{
+      Mid = (Counter++) *{
         a *Integer = 50
       }
-      Leaf = (Mid |) *{}
+      Leaf = (Mid++) *{}
 
       @go = {
         s = Leaf()
@@ -204,7 +204,7 @@ describe('subclass runtime — inherited state', () => {
       Counter = *{
         a *Integer = 2
       }
-      Sub = (Counter |) *{
+      Sub = (Counter++) *{
         b *Integer = a * 10
         @get = { return b }
       }
@@ -227,7 +227,7 @@ describe('subclass runtime — inherited state', () => {
         n *Integer = 3
         @sum = { return label + n }
       }
-      Sub = (Base |) *{ 40 }
+      Sub = (Base++) *{ 40 }
 
       @go = {
         s = Sub()
@@ -242,7 +242,7 @@ describe('subclass runtime — inherited state', () => {
 
   it('a subclass method reads the inherited state', async () => {
     await expectBehavior(`${COUNTER}
-      Sub = (Counter |) *{
+      Sub = (Counter++) *{
         @twice = { return a * 2 }
       }
 
@@ -263,7 +263,7 @@ describe('subclass runtime — inherited state', () => {
       Counter = *{
         @a *Integer = 3
       }
-      Sub = (Counter |) *{}
+      Sub = (Counter++) *{}
 
       @go = {
         s = Sub()
@@ -284,7 +284,7 @@ describe('subclass runtime — inherited state', () => {
         a *Integer = n
         @get = { return a }
       }
-      Sub = (Counter |) *{}
+      Sub = (Counter++) *{}
 
       @go = {
         s = Sub(7)

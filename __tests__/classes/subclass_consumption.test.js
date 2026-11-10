@@ -17,7 +17,7 @@ describe('subclass consumption — happy path', () => {
   it('sub-for-super: subclass passed where superclass param expected (positional)', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       use = (t T) -> result: t.a() as Integer
       @test
         =
@@ -30,7 +30,7 @@ describe('subclass consumption — happy path', () => {
   it('sub-for-super: subclass passed where superclass param expected (named)', () => {
     expect(() => compileSource(`
       T = (x: Integer) *{ @a = -> v: x as Integer }
-      U = (T | y: Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y: Integer) *{ @b = -> v: y as Integer }
       use = (t: T) -> result: t.a() as Integer
       @test
         =
@@ -43,7 +43,7 @@ describe('subclass consumption — happy path', () => {
   it('call inherited method on subclass-typed value', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       @test
         =
         u U = U(1, 2)
@@ -55,7 +55,7 @@ describe('subclass consumption — happy path', () => {
   it('call own method on subclass-typed value', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       @test
         =
         u U = U(1, 2)
@@ -67,7 +67,7 @@ describe('subclass consumption — happy path', () => {
   it('call inherited method on superclass-typed value', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       @test
         =
         u T = U(1, 2)
@@ -106,7 +106,7 @@ describe('subclass consumption — method existence (sad path)', () => {
   it('P3: subclass-only method on superclass-typed value is rejected', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       @test
         =
         u T = U(1, 2)
@@ -144,7 +144,7 @@ describe('subclass consumption — assignability (sad path)', () => {
   it('P4: superclass passed where subclass expected is rejected', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       use = (u U) -> result: u.b() as Integer
       @test
         =
@@ -196,7 +196,7 @@ describe('subclass consumption — constructor shape (sad path)', () => {
   it('P10: missing required inherited param is rejected', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      U = (T | y Integer) *{ @b = -> v: y as Integer }
+      U = (T ++ y Integer) *{ @b = -> v: y as Integer }
       @test
         =
         u = U(y: 2)

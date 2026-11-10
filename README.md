@@ -62,7 +62,7 @@ serialization can become normal language concerns rather than framework glue.
 ```brevity
 count *Integer = 0
 
-@inc = {
+@inc! = {
   count <- count + 1
   return value: count
 }
@@ -70,7 +70,7 @@ count *Integer = 0
 @get = -> value: count
 ```
 
-The file hosts one actor. `@inc` and `@get` are public messages. `count` is
+The file hosts one actor. `@inc!` and `@get` are public messages. `count` is
 an actor cell — the `*` prefix marks it as a mutable, actor-shaped binding
 rather than a plain Integer value.
 

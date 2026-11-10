@@ -37,7 +37,7 @@ Constants:
 Some math functions work as dot methods on numeric refs:
 
 ```brevity
-x Float! = 4.0
+x *Float = 4.0
 result Float = x.sqrt()
 ```
 

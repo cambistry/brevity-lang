@@ -41,7 +41,7 @@ definition: no entry colon, no `=` on types.
   Counter (start: Integer) -> *{          constructor; body always written
     get () -> (value: Integer)
   }
-  Text (Node |) -> *{}                    supertype, no members of its own
+  Text (Node++) -> *{}                    supertype, no members of its own
   set label (Text)                        settable field
   count *Integer                          ref cell (readable and settable)
   total Integer                           read-only field

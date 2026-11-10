@@ -343,13 +343,13 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('a public subclass names its public `!` superclass', () => {
-    const doc = docOf('@W! = *{\n  @get = { return 1 }\n}\n@S! = (@W! |) *{\n  @h = { return 2 }\n}\n');
-    expect(doc).toBe('{\n  W! () => *{\n    get () -> (Integer)\n  }\n  S! (W! |) => *{\n    ...W!\n    h () -> (Integer)\n  }\n}');
+    const doc = docOf('@W! = *{\n  @get = { return 1 }\n}\n@S! = (@W!++) *{\n  @h = { return 2 }\n}\n');
+    expect(doc).toBe('{\n  W! () => *{\n    get () -> (Integer)\n  }\n  S! (W!++) => *{\n    ...W!\n    h () -> (Integer)\n  }\n}');
     expect(parseInterface(doc).__types['S!'].supertypes).toEqual([{ supertype: 'W!' }]);
   });
 
   it('a private `!` superclass is stated in place', () => {
-    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@S! = (W! |) *{\n  @h = { return 2 }\n}\n'))
+    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@S! = (W!++) *{\n  @h = { return 2 }\n}\n'))
       .toBe('{\n  S! () => *{\n    get () -> (Integer)\n    h () -> (Integer)\n  }\n}');
   });
 
@@ -388,13 +388,13 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('is inherited from with its `!`', () => {
-    expect(() => compileSource('W! = *{}\nS! = (W |) *{}\n@go = { return 1 }\n')).toThrow(/'W' is named 'W!'/);
+    expect(() => compileSource('W! = *{}\nS! = (W++) *{}\n@go = { return 1 }\n')).toThrow(/'W' is named 'W!'/);
   });
 
   it('passes its effect to a subclass', () => {
     const W = `${SVC}W! = *{\n  Svc.note...\n}\n`;
-    expect(() => compileSource(`${W}S = (W! |) *{}\n@go = { return 1 }\n`)).toThrow(/Class 'S' inherits from 'W!'.*must be named 'S!'/);
-    expect(() => compileSource(`${W}S! = (W! |) *{}\n@go! = {\n  S!()\n}\n`)).not.toThrow();
+    expect(() => compileSource(`${W}S = (W!++) *{}\n@go = { return 1 }\n`)).toThrow(/Class 'S' inherits from 'W!'.*must be named 'S!'/);
+    expect(() => compileSource(`${W}S! = (W!++) *{}\n@go! = {\n  S!()\n}\n`)).not.toThrow();
   });
 
   it('must write while constructing', () => {
@@ -408,14 +408,14 @@ describe('class interface — a class named with `!`', () => {
   it('a subclass may be purer than a foreign parent\'s `!` member', () => {
     const header = '*\n  "Svc": Svc\n*\n';
     const docs = { remotes: [{ path: 'Svc', service: '{ Base () -> *{ g! () => self } }' }] };
-    expect(() => compileSource(`${header}C = (Base |) *{\n  @g! = { return self }\n}\n@go = { return 1 }\n`, docs)).not.toThrow();
+    expect(() => compileSource(`${header}C = (Base++) *{\n  @g! = { return self }\n}\n@go = { return 1 }\n`, docs)).not.toThrow();
   });
 
   it('a doc\'s writing constructor passes its effect too', () => {
     const header = '*\n  "Svc": Svc\n*\n';
     const docs = (entry) => ({ remotes: [{ path: 'Svc', service: `{ ${entry} }` }] });
-    expect(() => compileSource(`${header}S = (Base |) *{}\n@go = { return 1 }\n`, docs('Base () => *{}'))).toThrow(/Class 'S' inherits from 'Base'/);
-    expect(() => compileSource(`${header}S = (Base |) *{}\n@go = { return 1 }\n`, docs('Base () -> *{}'))).not.toThrow();
+    expect(() => compileSource(`${header}S = (Base++) *{}\n@go = { return 1 }\n`, docs('Base () => *{}'))).toThrow(/Class 'S' inherits from 'Base'/);
+    expect(() => compileSource(`${header}S = (Base++) *{}\n@go = { return 1 }\n`, docs('Base () -> *{}'))).not.toThrow();
   });
 });
 

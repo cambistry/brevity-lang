@@ -51,7 +51,7 @@ Lineal public handler:
 - Forward references to `#` functions compile.
 - Bare helper functions are internal and excluded from service documents.
 - Params support positional, named, key-mapped, mixed, and optional forms.
-- Return forms include implicit tail expressions, `-> value`, `-> :name`, named
+- Return forms include implicit tail expressions, `return value`, `return :name`, named
   replies, positional replies, and silent `name.` functions (`=> .` in docs).
 - A function that writes is named `!` or `.`; no mark means read-only. A `!` function
   has no tail return: falling off the end returns `self`, `return v` returns `v`

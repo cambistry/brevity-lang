@@ -1016,7 +1016,7 @@ export function genLocals(ctx, body, outerEnv) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'ObjectConstructor') {
-      throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
+      throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} Type = ...'`);
     }
     if (s.value.type === 'Function') {
       const overloadMode = s.value.overloadMode;
@@ -1069,7 +1069,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'Identifier' && ctx.lambdaVarNames.has(s.value.name)) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
-    throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} : Type = ...'`);
+    throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} Type = ...'`);
   }).join('');
   return result;
 }

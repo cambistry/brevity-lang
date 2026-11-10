@@ -70,6 +70,17 @@ Box = (seed Integer) *{
 }
 ```
 
+## Extends (`++`)
+
+```brevity
+Tagged = (Box ++ tag: Text) *{ @tag = -> tag: tag }  // parent, then params
+Both = (A ++ B ++ n Integer) *{}                   // several parents; later wins
+Plain = Box++                                      // new class, no changes
+Mixed = A ++ B                                     // two parents, no changes
+Extra = Box ++ *{ @more = -> 1 }                   // body, no params
+Wrap = (sup Box ++) *{ @get = -> sup.get() }       // wrapped: a local for the parent
+```
+
 ## Dependency Header
 
 ```brevity
@@ -122,7 +133,7 @@ exposed: it's `@a` on the wire, and `.a` in the Brevity that calls it.
 ```brevity
 @Box = *{ @who = -> "public" }
 Box = *{ @who = -> "private" }
-@Sub = (@Box |) *{}              // superclasses and types use the same name
+@Sub = (@Box++) *{}              // superclasses and types use the same name
 
 @go = {
   a = @Box()                     // the public class

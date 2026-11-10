@@ -98,7 +98,7 @@ describe('checks', () => {
   });
 
   it('a class takes its parent\'s params', () => {
-    const service = '{ Base (a: Integer) -> *{}\nSub (Base | b: Integer) -> *{} }';
+    const service = '{ Base (a: Integer) -> *{}\nSub (Base ++ b: Integer) -> *{} }';
     const check = (args) => compileSource(`*\n  "svc.bv": (:Sub)\n*\n@go = {\n  s = Sub(${args})\n  return 1\n}\n`, { remotes: [{ path: 'svc.bv', service }] });
     expect(() => check('a: 1, b: 2')).not.toThrow();
     expect(() => check('b: 2')).toThrow(/doesn't match any constructor clause/);

@@ -9,7 +9,7 @@ generating current examples.
 - Fast generation path: [Writing Brevity Quickly](../docs/LLM_WRITING_BREVITY.md)
   and [Syntax Crib](../docs/SYNTAX_CRIB.md).
 - [CAM / Interop](cam/index.md)
-- [Classes](constructors/index.md)
+- [Classes](classes/index.md)
 - [Destructuring](destructure/index.md)
 - [Functions](functions/index.md)
 - [Keywords](keywords/index.md)
@@ -35,7 +35,7 @@ generating current examples.
 
 - Treat tests as stronger evidence than notes.
 - Use current syntax from tests: `*Type` cells, `*Name(...)` actor
-  construction, `#name`, `#new`, `::Point`, `*( ... ) =` dependency headers.
+  construction, `#name`, `#new`, `::Point`, lineal `*` … `*` dependency headers.
 - When unsure, use the simplest current pattern from the relevant directory.
 - When unsure, cite the relevant `.test.js` file and keep claims narrow.
 

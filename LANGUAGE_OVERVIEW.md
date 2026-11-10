@@ -140,14 +140,18 @@ A function that writes is named with a glued `!`, which is part of its name:
 return. Falling off the end returns `self`, and `return v` returns `v`:
 
 ```brevity
-@inc! = (i Integer) { acc <- acc + i }     // returns self
-@take! = {
-  v Integer = acc
-  acc <- 0
-  return v
+C = *{
+  acc *Integer = 0
+  @inc! = (i Integer) { acc <- acc + i }     // returns self
+  @take! = {
+    v Integer = acc
+    acc <- 0
+    return v
+  }
+  @total = -> acc
 }
 
-C().inc!(5).inc!(2).total
+@go = -> C().inc!(5).inc!(2).total
 ```
 
 A final value in a `!` function is an error, because it would be discarded. So is a
@@ -226,7 +230,7 @@ Mutable actor state is explicit. A `*Type` binding declares a cell:
 ```brevity
 count *Integer = 0
 
-@inc = {
+@inc! = {
   count <- count + 1
   return value: count
 }
@@ -239,9 +243,11 @@ Pass the cell itself with `*name` at the call site (the `*` grants write
 capability on the receiving side):
 
 ```brevity
-@bump = {
-  inc = (target *Integer) { target <- target + 1 }
-  inc(*count)
+count *Integer = 0
+
+@bump! = {
+  inc! = (target *Integer) { target <- target + 1 }
+  inc!(*count)
   return value: count
 }
 ```

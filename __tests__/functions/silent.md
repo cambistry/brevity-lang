@@ -26,6 +26,8 @@ Lineal silent handler (an empty body ends at the blank line):
 Silent private/helper function:
 
 ```brevity
+count *Integer = 0
+
 fire. = { count <- count + 1 }
 ```
 
@@ -33,6 +35,8 @@ A body never ends in `.` — that is an error naming the fix. A bare `return`
 exits early; `return value` is an error:
 
 ```brevity
+x *Integer = 0
+
 bump. = (n Integer) {
   if n > 100 {
     return
@@ -48,7 +52,7 @@ ellipsis absorbs the dot: `fire...`, never `fire....`. Elsewhere the dot is
 written: `bump(7)...`, `Log.write(:message)...`. `spawn fire.()` also works.
 
 ```brevity
-@go
+@go!
   =
   fire...
   return answer: "ok"

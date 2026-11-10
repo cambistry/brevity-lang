@@ -60,7 +60,7 @@ describe('service document — entry forms', () => {
   });
 
   it('constructor with no members of its own: -> *{}', () => {
-    const p = parseInterface('{ Text (Node |) -> *{} }');
+    const p = parseInterface('{ Text (Node++) -> *{} }');
     expect(p.__types.Text).toEqual({ effect: 'read', supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
   });
 
@@ -112,7 +112,7 @@ describe('service document — entry forms', () => {
   });
 
   it('...Parent spread markers are ignored', () => {
-    const p = parseInterface('{ U (T |) -> *{\n  ...T\n  b () -> (Integer)\n} }');
+    const p = parseInterface('{ U (T++) -> *{\n  ...T\n  b () -> (Integer)\n} }');
     expect(p.__types.U.functions.map(f => f.name)).toEqual(['b']);
   });
 
@@ -145,7 +145,7 @@ describe('service document — retired forms are rejected', () => {
   });
 
   it('constructor without a body', () => {
-    expect(() => parseInterface('{ Text (Node |) }')).toThrow(/missing return.*'-> \*\{\}'/);
+    expect(() => parseInterface('{ Text (Node++) }')).toThrow(/missing return.*'-> \*\{\}'/);
   });
 
   it('duplicate constructor', () => {

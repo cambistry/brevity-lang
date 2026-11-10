@@ -7,16 +7,15 @@ lowering to explicit CAM message traffic.
 ## Canonical Dependency Form
 
 ```brevity
-*(
+*
   "Remote": Remote {
     get (url: Text) -> (response: Text)
   }
-)
-=
+*
 
 @call_remote
   =
-  :url Text
+  url: Text
   =
   :response Text = Remote.get(:url)
   return :response
@@ -31,25 +30,25 @@ Expected behavior:
 
 ## Silent Calls
 
-Use `spawn` when calling a silent remote operation from a replying handler:
+Use `spawn` when calling a silent remote operation from a replying handler.
+Calling a silent operation counts as a write, so the handler is named with `!`:
 
 ```brevity
-*(
+*
   "Store": Store {
     notify. (msg: Text) => .
   }
-)
-=
+*
 
-@send_notify
+@send_notify!
   =
-  :msg Text
+  msg: Text
   =
-  Store.notify(:msg)...
+  spawn Store.notify.(:msg)
   return ack: "ok"
 ```
 
-The outgoing message is still sent to `Store`, but the handler does not wait for
+The outgoing `@notify.` message is still sent to `Store`, but the handler does not wait for
 a value from `notify`.
 
 ## Tested Patterns
@@ -63,7 +62,7 @@ a value from `notify`.
 
 ## LLM Rules
 
-- Use `:name Type` for named parameters in current examples.
+- Use `name: Type` for named parameters in current examples.
 - Use `-> :name` or `-> field: expr` for replies.
 - Include `ty` when describing raw wire input/output expectations.
 - Treat `Remote.get(...)` as syntax for a typed actor message, not a local method

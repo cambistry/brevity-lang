@@ -6,9 +6,8 @@ with public handlers.
 ## Canonical Form
 
 ```brevity
-One
-  <>
-  =
+One =
+  *
   self as Integer = -> 1
   self as Text = -> "one"
   @ping = -> pong: "ok" as Text

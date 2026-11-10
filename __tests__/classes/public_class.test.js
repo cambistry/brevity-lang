@@ -44,7 +44,7 @@ describe('public class in its own file', () => {
         @one = { return 1 }
       }
 
-      @Sub = (@Base |) *{
+      @Sub = (@Base++) *{
         @two = { return 2 }
       }
 
@@ -79,13 +79,13 @@ describe('public class in its own file', () => {
   });
 
   it('a bare name doesn\'t reach it as a superclass or a type', () => {
-    expect(() => compileSource('@Pub = *{}\n@Sub = (Pub |) *{}\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub = *{}\n@Sub = (Pub++) *{}\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
     expect(() => compileSource('@Pub = *{}\n@go = {\n  p Pub = @Pub()\n  return 1\n}\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
     expect(() => compileSource('@Pub = *{}\n@go = (p Pub) { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
   });
 
   it('a wrapped superclass has to be named', () => {
-    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{}\n@go = { return 1 }\n')).toThrow(/Name the wrapped superclass: '@Pub \*name \|'/);
+    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow(/write '\(name @Pub \+\+\)'/);
   });
 
   it('errors name it as it\'s written', () => {
@@ -107,15 +107,15 @@ describe('Box and @Box are different classes', () => {
       @get = { return n }
     }
 
-    @PubSub = (@Box |) *{
+    @PubSub = (@Box++) *{
       @own = { return "pubsub" }
     }
 
-    PrivSub = (Box |) *{
+    PrivSub = (Box++) *{
       @own = { return "privsub" }
     }
 
-    @Wrapper = (@Box *inner |) *{
+    @Wrapper = (inner @Box ++) *{
       @viaInner = {
         t Text = inner.who()
         return t
@@ -204,7 +204,7 @@ describe('Box and @Box are different classes', () => {
   it('the doc names only the public class, without its @', () => {
     const { interface: doc } = compileSource(script);
     expect(doc.service).toContain('Box () -> *{\n    who () -> (Text)\n  }');
-    expect(doc.service).toContain('PubSub (Box |) -> *{');
+    expect(doc.service).toContain('PubSub (Box++) -> *{');
     expect(doc.service).not.toContain('@Box');
     expect(doc.service).not.toContain('PrivSub');
   });

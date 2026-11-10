@@ -34,7 +34,7 @@ describe('a failed as on a class instance', () => {
       }
     }
 
-    @SubBox = (@Box |) *{
+    @SubBox = (@Box++) *{
       @own = (i Integer) { return i }
     }
 
@@ -345,7 +345,7 @@ describe('a failed as in a constructor block', () => {
       @get = { return 1 }
     }
 
-    @Sub = (@Good |) *{
+    @Sub = (@Good++) *{
       @more = { return 2 }
     }
 
@@ -359,7 +359,7 @@ describe('a failed as in a constructor block', () => {
       @get = { return n }
     }
 
-    @SubNoParams = (@NoParams |) *{
+    @SubNoParams = (@NoParams++) *{
       @more = { return 2 }
     }
 
@@ -369,7 +369,7 @@ describe('a failed as in a constructor block', () => {
       @baseValue = { return v }
     }
 
-    @SubOfBase = (@Base |) *{
+    @SubOfBase = (@Base++) *{
       @more = { return 2 }
     }
 

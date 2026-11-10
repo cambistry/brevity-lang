@@ -22,17 +22,17 @@ Base = * {
   @label = -> :label
 }
 
-Greeting = *(Base |) -> "hello"
+Greeting = (Base++) *{ "hello" }
 ```
 
 ```brevity
-Labeled = *(id: Integer) {
+Labeled = (id: Integer) *{
   label Text = ingest
   @id = -> :id
   @label = -> :label
 }
 
-Widget = *(Labeled |) -> "widget"
+Widget = (Labeled++) *{ "widget" }
 ```
 
 ## Tested Behavior
@@ -45,7 +45,7 @@ Widget = *(Labeled |) -> "widget"
 
 ## LLM Rules
 
-- Use `*(Base |)` for subclassing examples.
+- Use `(Base++) *{ … }` for subclassing examples.
 - Use `ingest(default)` only when direct superclass construction should work.
 - Do not claim multi-level relay behavior unless citing a specific test.
 - Do not overstate compile-time rejection for typed mismatch; those tests are

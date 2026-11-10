@@ -7,13 +7,12 @@ routing of the returned address.
 ## Canonical Form
 
 ```brevity
-*(
+*
   "WebView": WebView (path: Text) -> *{
     open. () => .
     getTitle () -> (title: Text)
   }
-)
-=
+*
 
 view = *WebView(path: "/my_view")
 
@@ -31,13 +30,13 @@ Construction sends a `#new` message:
 The reply supplies the actor address:
 
 ```json
-{ "re": "#<WebView/1>", "ty": "#<WebView>", "from": "WebView" }
+{ "re": "#<WebView/1>", "ty": "WebView", "from": "WebView" }
 ```
 
-After that, `view.open()` routes to the returned address:
+After that, `view.open...` routes to the returned address:
 
 ```json
-{ "op": "@open", "to": "WebView/1" }
+{ "op": "@open.", "to": "WebView/1" }
 ```
 
 ## Tested Cases

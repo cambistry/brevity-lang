@@ -11,7 +11,7 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 //
 //   1. is reachable as a typed class (`tag()` compiles with no args
 //      because every Element field is declared `?` optional and tags inherit
-//      via `*(Element |)`),
+//      via `(Element++) *{}`),
 //   2. accepts its own tag-specific attributes (where present),
 //   3. rejects an unknown attribute,
 //   4. routes union'd own-attrs (e.g. `a :download`, `input :value`,

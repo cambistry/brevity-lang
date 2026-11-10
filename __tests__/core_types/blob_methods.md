@@ -9,12 +9,12 @@ LLM orientation: this document summarizes methods tested in
 @slice = -> result: Blob.slice("hello", 1, 3)
 
 @sliceRef = {
-  b Blob! = "abcde"
+  b *Blob = "abcde"
   return result: b.slice(0, 2)
 }
 
 @reverseBang = {
-  b Blob! = "hello"
+  b *Blob = "hello"
   b.reverse!
   return result: b
 }
@@ -57,7 +57,7 @@ byte-level.
 - `Blob.replace(blob, pattern, replacement)` -> `Blob`
 - `Blob.replace_first(blob, pattern, replacement)` -> `Blob`
 - `Blob.concat(a, b)` -> `Blob`
-- `b.append!(suffix)` mutates a `Blob!` ref
+- `b.append!(suffix)` mutates a `*Blob` ref
 
 Bang forms are tested for reverse, slice, replace, trim, and append.
 
@@ -78,6 +78,6 @@ Bang forms are tested for reverse, slice, replace, trim, and append.
 Blob size is byte count. Text size is scalar count.
 
 ```brevity
-Blob.size("\u{1F600}")  -- 4
-Text.size("\u{1F600}")  -- 1
+Blob.size("\u{1F600}")  // 4
+Text.size("\u{1F600}")  // 1
 ```

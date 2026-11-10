@@ -16,7 +16,7 @@ crosses the wire as-is — fall out of which side of this line a thing sits on.
 | Mailbox | none | yes |
 | Mutability | immutable | mutable (via cells) |
 | On the wire | as-is (object or scalar form) | as address |
-| Examples | `5`, `"hello"`, `Point(1, 2)`, `[1, 2, 3]` | `Counter("start")`, `*Point(1, 2)`, `*Integer(0)` |
+| Examples | `5`, `"hello"`, `Point(1, 2)`, `[1, 2, 3]` | `Counter(0)`, `*Point(1, 2)`, `*Integer(0)` |
 
 A value *is* its content. Two values with the same content are
 indistinguishable. An actor *has* identity. Two actors with the same starting
@@ -43,7 +43,7 @@ A **class** constructs actors:
 Counter = (start Integer) *{
   count *Integer = start
 
-  @inc = {
+  @inc! = {
     count <- count + 1
     return value: count
   }
@@ -96,7 +96,7 @@ a = *Point(1, 2)       // actor with Point-shape
 **On a parameter position**, declaring write capability for a passed cell:
 
 ```brevity
-inc = (target *Integer) { target <- target + 1 }
+inc! = (target *Integer) { target <- target + 1 }
 ```
 
 The receiving function expects an actor cell, not a plain Integer value.

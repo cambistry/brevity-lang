@@ -6,16 +6,15 @@ dependencies. Prefer explicit inline constraints in examples.
 ## Canonical Form
 
 ```brevity
-*(
+*
   "/services/db": DB {
     lookup (key: Text) -> (value: Text)
   }
-)
-=
+*
 
 @query
   =
-  :key Text
+  key: Text
   =
   :value Text = DB.lookup(:key)
   return :value
@@ -24,7 +23,7 @@ dependencies. Prefer explicit inline constraints in examples.
 Meaning:
 
 - `"/services/db"` is the dependency path.
-- `(DB)` is the local alias used in source.
+- `DB` is the local alias used in source.
 - The block is the required service interface.
 - `DB.lookup(:key)` sends a CAM message to `DB` with op `@lookup`.
 
@@ -44,10 +43,9 @@ Meaning:
 This parses:
 
 ```brevity
-*(
+*
   "Remote": Remote
-)
-=
+*
 ```
 
 But compilation needs a remote interface:
@@ -63,8 +61,9 @@ For generated examples, prefer inline constraints unless the point is testing
 
 ## LLM Rules
 
-- Use `*( ... ) =` at file top for dependencies.
+- Use a lineal `*` … `*` header (or `( ... ) *{ ... }`) at file top for
+  dependencies.
 - Use `(name: Type)` in service signatures for named args.
-- Silent service methods are named with a glued `.` and typed `-> .` (`ping. () => .`); call them with `...`.
+- Silent service methods are named with a glued `.` and typed `=> .` (`ping. () => .`); call them with `...`.
 - Do not claim dependency discovery is automatic inside this repository; the
   host must provide unresolved remote interfaces.

@@ -9,12 +9,12 @@ LLM orientation: this document summarizes methods tested in
 @upper = -> result: Text.upper("hello")
 
 @upperRef = {
-  t Text! = "hello"
+  t *Text = "hello"
   return result: t.upper
 }
 
 @upperBang = {
-  t Text! = "hello"
+  t *Text = "hello"
   t.upper!
   return result: t
 }
@@ -84,8 +84,8 @@ Regex patterns are tested for `contains`, `index_of`, `replace`,
 - `Text.reverse(text)` -> `Text`
 - `Text.repeat(text, count)` -> `Text`
 - `Text.concat(a, b)` -> `Text`
-- `t.append!(suffix)` mutates a `Text!` ref.
-- `t.concat!(suffix)` mutates a `Text!` ref.
+- `t.append!(suffix)` mutates a `*Text` ref.
+- `t.concat!(suffix)` mutates a `*Text` ref.
 
 `reverse` is scalar-level:
 
@@ -97,7 +97,7 @@ returns `b`, then the emoji, then `a`.
 
 ## Mutating Text Refs
 
-The tested bang methods mutate a `Text!` receiver and return through the ref
+The tested bang methods mutate a `*Text` receiver and return through the ref
 when the handler returns that ref:
 
 - `upper!`, `lower!`

@@ -569,7 +569,7 @@ export function validate(ast, options = {}) {
   // Overload clauses (Name << *(..)) — append to the base entry. If no named
   // actor exists (Function() pattern: `Name = Function(); Name << (..) *{}`),
   // start the entry fresh so the name still resolves as a constructor.
-  // An overload clause may itself inherit: `Sub << (Base | ...) *{}`, so its params
+  // An overload clause may itself inherit: `Sub << (Base ++ ...) *{}`, so its params
   // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
@@ -686,6 +686,27 @@ export function validate(ast, options = {}) {
   const actorNameSet = new Set(actorConstructorSigs.keys());
 
   // ── Subclass validation ──────────────────────────────────────────────────
+  // A parent must be a class: local, or a constructor in a dependency's
+  // interface. A type or an unknown name is an error, not a dropped parent.
+  const localTypes = new Set([...(ast.types || []).map(t => t.name), ...Object.keys(ast.importedTypes || {})]);
+  const isRemoteClass = (name) => Object.values(remotesParsed).some(doc => doc?.__types?.[name]);
+  const subclassActors = [...ast.actors, ...(ast.functions || []).map(f => f.actorDef && { ...f.actorDef, name: f.name }).filter(Boolean)];
+  for (const actor of subclassActors) {
+    const shown = (actor.name || '').replace(/^@/, '');
+    for (const st of actor.supertypes || []) {
+      const name = st.sourceName ?? st.supertype;
+      if (actorByName.has(st.supertype) || isRemoteClass(name)) continue;
+      const hint = st.wrappedAs ? ` — after the last '++', separate params with commas: '(Parent ++ ${st.wrappedAs} ${name}, …)'` : '';
+      if (localTypes.has(name) || BUILTIN_TYPE_NAMES.has(name)) throw new Error(`In '${shown}', '${name}' is a type, not a class${hint}`);
+      throw new Error(`In '${shown}', '${name}' is not a class in scope${hint}`);
+    }
+    // A wrapped parent (`sup B ++`) is a local for the body to use; with no body it is an error.
+    const wrapped = (actor.supertypes || []).find(st => st.wrappedAs);
+    const hasBody = actor.functions?.length || actor.constructorBody?.length || actor.stateVarDecls?.length
+      || actor.initBody?.length || actor.asClauses?.length || actor.declarationReturn;
+    if (wrapped && !hasBody) throw new Error(`In '${shown}', '${wrapped.sourceName ?? wrapped.supertype}' is wrapped as '${wrapped.wrappedAs}' with no body to use it — drop '${wrapped.wrappedAs}' or write a body`);
+  }
+
   for (const actor of ast.actors) {
     if (!actor.supertypes || actor.supertypes.length === 0) continue;
     for (const st of actor.supertypes) {

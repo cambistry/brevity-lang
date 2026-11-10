@@ -10,12 +10,12 @@ list shapes where the result is still a list.
 @size = -> result: List.size([1, 2, 3])
 
 @firstRef = {
-  ns List of Integers! = [42]
+  ns *List of Integers = [42]
   return result: ns.first
 }
 
 @reverseBang = {
-  ns List of Integers! = [1, 2, 3]
+  ns *List of Integers = [1, 2, 3]
   ns.reverse!
   return result: ns
 }
@@ -44,7 +44,7 @@ the whole list.
 Bang forms mutate list refs:
 
 ```brevity
-ns List of Integers! = [1, 2, 3, 4, 5]
+ns *List of Integers = [1, 2, 3, 4, 5]
 ns.take!(2)
 ```
 
@@ -101,7 +101,7 @@ Search and replacement use Brevity value equality:
 
 ## Mutating List Refs
 
-The tested bang methods mutate a `List ...!` receiver:
+The tested bang methods mutate a `*List ...` receiver:
 
 - `slice!(start, end)`, `take!(count)`, `from!(start)`
 - `reverse!`, `repeat!(count)`

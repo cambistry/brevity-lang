@@ -22,17 +22,18 @@ text = *Text("abc")
 Update a ref:
 
 ```brevity
+count *Integer = 0
 count <- count + 1
 ```
 
 Pass the ref itself, granting write capability:
 
 ```brevity
-@bump
+@bump!
   =
   value *Integer = 0
-  inc = (target *Integer) { target <- target + 1 }
-  inc(*value)
+  inc! = (target *Integer) { target <- target + 1 }
+  inc!(*value)
   return result: value
 ```
 
@@ -53,5 +54,7 @@ Pass the ref itself, granting write capability:
 - Prefer `*Type` in new docs and examples; postfix `Type!` is rejected.
 - Use `<-` only for updating refs, not for ordinary binding.
 - Use `*name` at the call site when a function expects a `*Type` parameter.
+- A function that writes (`<-`) is named with `!` (returns a value) or `.`
+  (silent): `inc! = (target *Integer) { … }`, called as `inc!(*value)`.
 - Do not describe refs as ordinary reassignable variables; the binding and the
   mutable cell are separate concepts.

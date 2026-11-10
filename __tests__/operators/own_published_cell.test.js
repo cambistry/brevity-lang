@@ -44,7 +44,7 @@ describe('@a <- v', () => {
       Base = *{
         @a *Integer = 3
       }
-      Sub = (Base |) *{
+      Sub = (Base++) *{
         @bump! = { @a <- @a + 1 }
       }
 

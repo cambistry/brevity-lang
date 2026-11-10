@@ -125,7 +125,7 @@ return p;
 JS now matches the Rust pattern: lambda assignments become string labels dispatched through `#selfSend`, with captures stored in private class fields.
 
 ```javascript
-// factory = (n : Integer) { inner = { n } : Integer; inner } : Function
+// factory = (n Integer) { inner = { n as Integer }; &inner }
 // becomes:
 
 // At definition site:
@@ -372,7 +372,7 @@ Brevity variable names like `fn` are valid identifiers but are reserved keywords
 Lambdas that escape their defining scope (returned as values via `->`) are registered as dispatch handlers with state-stored captures. Only escaping lambdas use this path — locally-called lambdas are inlined at call sites by the function pipeline.
 
 ```rust
-// factory = (n : Integer) { inner = { n } : Integer; inner } : Function
+// factory = (n Integer) { inner = { n as Integer }; &inner }
 // becomes handler "_lambda_0" with capture of `n` stored in self.state
 
 // At definition site:
@@ -406,15 +406,15 @@ When a lambda body is inlined at a call site, nested function definitions inside
 
 ```
 // Source:
-x : Integer = 7
+x Integer = 7
 outer = (a) {
     inner = { x + a }        // captures x (grandparent) and a (parent)
-    result : Integer = inner()
+    r Integer = inner()
 }
-result : Integer = outer(3)  // → 10
+result Integer = outer(3)  // → 10
 ```
 
-The inlining code tracks `innerFnDefs` within each inlined body. When `outer(3)` is inlined, the body statement `inner = { x + a }` is recognized as a nested function definition and skipped. When `result = inner()` is encountered, `inner` is found in `innerFnDefs` and its body `x + a` is inlined — with both `x` and `a` in scope from the enclosing inlined context.
+The inlining code tracks `innerFnDefs` within each inlined body. When `outer(3)` is inlined, the body statement `inner = { x + a }` is recognized as a nested function definition and skipped. When `r = inner()` is encountered, `inner` is found in `innerFnDefs` and its body `x + a` is inlined — with both `x` and `a` in scope from the enclosing inlined context.
 
 ---
 
