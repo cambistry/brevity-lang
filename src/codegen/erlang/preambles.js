@@ -1022,7 +1022,8 @@ match_types_positional(Message, PosTypes, NamedTypes) ->
 match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
     case maps:find(<<"ty">>, Message) of
         {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
-            TypesArr = hd(Ty),
+            %% An all-named call's tags are the named map alone: no positionals.
+            TypesArr = case hd(Ty) of M0 when is_map(M0) -> [M0]; T0 -> T0 end,
             case is_list(TypesArr) of
                 true ->
                     PosCount = length([X || X <- TypesArr, not is_map(X)]),

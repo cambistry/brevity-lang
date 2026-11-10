@@ -1,7 +1,9 @@
 // statements.js — Statement generation for Rust codegen
 import { returnsOnlySelf } from '../../chains.js';
+import { argForParam } from '../../call_args.js';
 import { asDescriptor } from '../../as_check.js';
 import { inferExprType } from '../../inference.js';
+import { orderParamsForDefaults } from '../../param_defaults.js';
 import { parseInterface } from '../javascript/types.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
@@ -211,10 +213,9 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
     const idVar = mintRustSsa(s.name);
     const paramSubs = childActor?._paramSubscriptions || [];
     const subRegLines = [];
-    if (paramSubs.length > 0 && namedBag) {
-      const namedFields = namedBag.fields || {};
+    if (paramSubs.length > 0) {
       for (const ps of paramSubs) {
-        const argExpr = namedFields[ps.paramName];
+        const argExpr = argForParam(childActor.initParams, s.value.args, ps.paramName);
         if (!argExpr) continue;
         if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
         const cellName = argExpr.name;
@@ -510,13 +511,16 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
 
       // Bind function params to call-site arguments
       const fnParams = new Map();
-      let posIdx = 0;
-      for (let pi = 0; pi < funcParams.length; pi++) {
-        const param = funcParams[pi];
+      // Each positional takes its arg by source position; params with an
+      // expression default bind after the ones their default names.
+      const argIdx = new Map();
+      let posCount = 0;
+      for (const fp of funcParams) if (fp.positional) argIdx.set(fp, posCount++);
+      for (const param of orderParamsForDefaults(funcParams)) {
         let arg;
         const lookupKey = param.key || param.name;
         if (param.positional) {
-          arg = callArgs[posIdx++];
+          arg = callArgs[argIdx.get(param)];
         } else if (namedArgsBag && namedArgsBag.fields && lookupKey in namedArgsBag.fields) {
           arg = namedArgsBag.fields[lookupKey];
         }
@@ -542,6 +546,8 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
         let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
         if (paramType) {
           if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+          // A cell's read is a Value; a typed param takes its scalar.
+          if (/^self\.(refs|state)\.get\(/.test(argExpr) && rustType(paramType) !== 'Value') argExpr = convertFromValue(argExpr, paramType);
           blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
           typeEnv.set(param.name, paramType);
         } else {
@@ -900,6 +906,9 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
     val = convertFromValue(val, s.typeName);
   } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead' || s.value.type === 'DotAccessExpr') && s.typeName && rustType(s.typeName) !== 'Value') {
     val = convertFromValue(val, s.typeName);
+  } else if (/^self\.(state|refs)\.get\(/.test(val) && s.typeName && rustType(s.typeName) !== 'Value') {
+    // A name read from state (a class's param) is a Value.
+    val = convertFromValue(val, s.typeName);
   } else if (s.value.type === 'DotCallExpr' && val.startsWith('{ let _cn = ') && s.typeName && rustType(s.typeName) !== 'Value') {
     // A call on a wrapped superclass answers with a Value.
     val = convertFromValue(`BvObject::pack(&${val}).one()`, s.typeName);
@@ -1144,13 +1153,14 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 
           const tempName = `_fr${G.ctx.fnTempCounter++}`;
           const blockLines = [];
-          let posIdxD = 0;
-          for (let pi = 0; pi < funcParams.length; pi++) {
-            const param = funcParams[pi];
+          const argIdxD = new Map();
+          let posCountD = 0;
+          for (const fp of funcParams) if (fp.positional) argIdxD.set(fp, posCountD++);
+          for (const param of orderParamsForDefaults(funcParams)) {
             let arg;
             const lookupKey = param.key || param.name;
             if (param.positional) {
-              arg = callArgs[posIdxD++];
+              arg = callArgs[argIdxD.get(param)];
             } else if (namedArgsBagD && namedArgsBagD.fields && lookupKey in namedArgsBagD.fields) {
               arg = namedArgsBagD.fields[lookupKey];
             }
@@ -1158,6 +1168,8 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+              // A cell's read is a Value; a typed param takes its scalar.
+              if (/^self\.(refs|state)\.get\(/.test(argExpr) && rustType(paramType) !== 'Value') argExpr = convertFromValue(argExpr, paramType);
               blockLines.push(`${I}    let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
             } else {
               blockLines.push(`${I}    let ${param.name} = ${argExpr};`);
@@ -2675,13 +2687,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const blockLines = [];
           // Build ref param mapping: param.name → original ref name
           const refParamMap = new Map();
-          let posIdxE = 0;
-          for (let pi = 0; pi < funcParams.length; pi++) {
-            const param = funcParams[pi];
+          const argIdxE = new Map();
+          let posCountE = 0;
+          for (const fp of funcParams) if (fp.positional) argIdxE.set(fp, posCountE++);
+          for (const param of orderParamsForDefaults(funcParams)) {
             let arg;
             const lookupKey = param.key || param.name;
             if (param.positional) {
-              arg = callArgs[posIdxE++];
+              arg = callArgs[argIdxE.get(param)];
             } else if (namedArgsBagE && namedArgsBagE.fields && lookupKey in namedArgsBagE.fields) {
               arg = namedArgsBagE.fields[lookupKey];
             }
@@ -2700,6 +2713,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
+              // A cell's read is a Value; a typed param takes its scalar.
+              if (/^self\.(refs|state)\.get\(/.test(argExpr) && rustType(paramType) !== 'Value') argExpr = convertFromValue(argExpr, paramType);
               blockLines.push(`${I}let ${param.name}: ${rustType(paramType)} = ${argExpr};`);
             } else {
               blockLines.push(`${I}let ${param.name} = ${argExpr};`);

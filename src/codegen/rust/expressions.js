@@ -1,5 +1,7 @@
 // expressions.js — Expression generation for Rust codegen
 import { inferExprType, bindLocalType } from '../../inference.js';
+import { argForParam } from '../../call_args.js';
+import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
@@ -559,10 +561,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
       }
       const paramSubs = childActor._paramSubscriptions || [];
       const subRegLines = [];
-      if (paramSubs.length > 0 && namedBag) {
-        const namedFields = namedBag.fields || {};
+      if (paramSubs.length > 0) {
         for (const ps of paramSubs) {
-          const argExpr = namedFields[ps.paramName];
+          const argExpr = argForParam(childActor.initParams, expr.args, ps.paramName);
           if (!argExpr) continue;
           if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
           const cellName = argExpr.name;
@@ -1673,17 +1674,14 @@ function genRustFnMethod({ name: op, params, body }) {
 
   // Destructure params from _s
   const paramLines = [];
-  let posIdx = 0;
-  for (const p of params) {
+  const posAt = positionalIndexes(params);
+  for (const p of orderParamsForDefaults(params)) {
     if (p.positional) {
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(${dv})`;
+      const accessor = genRustDefaulted(p, `_s.positional.get(${posAt.get(p)}).cloned()`, typeEnv);
       paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
-      posIdx++;
     } else {
       const key = p.key || p.name;
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `_s.named.get("${key}").cloned().unwrap_or(${dv})`;
+      const accessor = genRustDefaulted(p, `_s.named.get("${key}").cloned()`, typeEnv);
       paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
     }
   }
@@ -1825,6 +1823,28 @@ function genRustDefaultValue(node, _brevityType) {
   return 'Value::Null';
 }
 
+// A param's Value from `opt` (an Option<Value>), falling back to its default.
+// An expression default runs only when the arg is missing; its names are the
+// params bound before it (orderParamsForDefaults).
+function genRustDefaulted(p, opt, typeEnv, eCtx) {
+  if (!p.defaultValue) return `${opt}.unwrap_or(Value::Null)`;
+  if (isLiteralDefault(p.defaultValue)) return `${opt}.unwrap_or(${genRustDefaultValue(p.defaultValue, p.type)})`;
+  const strict = G.strictConvert;
+  G.strictConvert = false;
+  try {
+    const value = toJsonValue(genRustExpr(p.defaultValue, typeEnv, eCtx), p.type || 'Anything');
+    return `match ${opt} { Some(_v) => _v, None => ${value} }`;
+  } finally { G.strictConvert = strict; }
+}
+
+// Each positional param's index in the args, in source order.
+function positionalIndexes(params) {
+  const at = new Map();
+  let i = 0;
+  for (const p of params) if (p.positional && !p.rest) at.set(p, i++);
+  return at;
+}
+
 // Params arrive from another actor, so a wrong value fails rather than defaulting.
 function genRustDestructure(params) {
   G.strictConvert = true;
@@ -1839,28 +1859,25 @@ function genRustDestructureParams(params) {
     lines.push(`                let _s = BvObject::pack(&payload);`);
   }
 
-  let posIdx = 0;
-  for (const p of params) {
+  const posAt = positionalIndexes(params);
+  const typeEnv = new Map(params.map(p => [p.name, p.type]));
+  for (const p of orderParamsForDefaults(params)) {
     if (p.rest) {
       lines.push(`                let args = BvObject::pack(&payload);`);
       continue;
     }
     if (p.positional) {
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `_s.positional.get(${posIdx}).cloned().unwrap_or(${dv})`;
+      const accessor = genRustDefaulted(p, `_s.positional.get(${posAt.get(p)}).cloned()`, typeEnv);
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
-      posIdx++;
     } else if (hasPositional) {
       // Named param in a mixed public function — use _s.named
       const key = p.key || p.name;
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `_s.named.get("${key}").cloned().unwrap_or(${dv})`;
+      const accessor = genRustDefaulted(p, `_s.named.get("${key}").cloned()`, typeEnv);
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     } else {
       // Pure named public function — use payload directly (existing behavior)
       const key = p.key || p.name;
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `payload.get("${key}").cloned().unwrap_or(${dv})`;
+      const accessor = genRustDefaulted(p, `payload.get("${key}").cloned()`, typeEnv);
       lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
     }
   }
@@ -1931,4 +1948,4 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 
 // Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
 
-export { genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall };
+export { genRustDefaulted, positionalIndexes, genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall };

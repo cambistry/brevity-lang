@@ -1,6 +1,7 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
+import { argForParam } from '../../call_args.js';
 import {
   resolveSSAName,
   exprType,
@@ -527,10 +528,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
           // Returns the spawned Pid.
           const paramSubs = childActor?._paramSubscriptions || [];
           const subRegLines = [];
-          if (paramSubs.length > 0 && namedBag) {
-            const namedFields = namedBag.fields || {};
+          if (paramSubs.length > 0) {
             for (const ps of paramSubs) {
-              const argExpr = namedFields[ps.paramName];
+              const argExpr = argForParam(childActor.initParams, expr.args, ps.paramName);
               if (!argExpr) continue;
               if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
               const cellName = argExpr.name;

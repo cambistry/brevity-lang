@@ -229,6 +229,8 @@ export function markOuterReads(program) {
       visit(fn, new Set());
     }
     visit(actor.initBody, new Set());
+    // A param default runs in the constructor, so it reaches what the body does.
+    for (const p of actor.initParams || []) if (p.defaultValue) visit(p.defaultValue, new Set());
   }
 }
 

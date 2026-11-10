@@ -5,6 +5,7 @@ import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { outerNamesFor } from '../../outer_reads.js';
+import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../inference.js';
@@ -21,6 +22,7 @@ import {
   genLocals,
   genParamDestructure,
   genErlDefaultValue,
+  genErlExprDefault,
   genReplyBody,
   genReplyFieldVal,
   genTyBody,
@@ -239,20 +241,28 @@ function genFn(ctx, fn) {
 
   // Destructure from Object arg
   const paramLines = [];
-  let posIdx = 0;
-  for (const p of params) {
+  const posAt = new Map();
+  let posCount = 0;
+  for (const p of params) if (p.positional) posAt.set(p, posCount++);
+  const paramTypes = new Map(params.map(p => [p.name, p.type]));
+  // An expression default runs only when the arg is missing.
+  const dvOf = p => isLiteralDefault(p.defaultValue)
+    ? genErlDefaultValue(p.defaultValue)
+    : genErlExprDefault(ctx, p, paramTypes);
+  for (const p of orderParamsForDefaults(params)) {
     if (p.positional) {
+      const posIdx = posAt.get(p);
       if (p.defaultValue) {
-        const dv = genErlDefaultValue(p.defaultValue);
-        paramLines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end,`);
+        paramLines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dvOf(p)} end,`);
       } else {
         paramLines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
       }
-      posIdx++;
     } else {
       const key = p.key || p.name;
-      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
-      paramLines.push(`${I}${erlVarName(p.name)} = maps:get(${erlString(key)}, S_named, ${dv}),`);
+      const v = erlVarName(p.name);
+      paramLines.push(p.defaultValue && !isLiteralDefault(p.defaultValue)
+        ? `${I}${v} = case maps:find(${erlString(key)}, S_named) of {ok, Given_${v}} -> Given_${v}; error -> ${dvOf(p)} end,`
+        : `${I}${v} = maps:get(${erlString(key)}, S_named, ${p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null'}),`);
     }
   }
 
@@ -556,7 +566,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   const classParams = params.filter(p => ctx.actorInfo?.has(p.type)).map(p => p.name);
   const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set([...fileChildRefs(ctx), ...classParams]), ssaEnv: buildSSAEnv(body) };
 
-  const paramLines = genParamDestructure(params, I);
+  const paramLines = genParamDestructure(params, I, { ctx });
   lines.push(...paramLines);
   const savedTypeEnv = ctx.currentTypeEnv;
   // Merge state var types so function-typed state vars are detected
@@ -752,7 +762,7 @@ function genCamInit(ctx, actor) {
     lines.push(`${I}    L when is_list(L), length(L) > 1 -> hd(L);`);
     lines.push(`${I}    _ -> #{}`);
     lines.push(`${I}end,`);
-    const paramLines = genParamDestructure(initParams, I);
+    const paramLines = genParamDestructure(initParams, I, { ctx });
     lines.push(...paramLines);
   }
 
@@ -870,7 +880,7 @@ function genChildHandleOp(ctx, actor) {
     const refVars = new Set();
     const childActorRefs = new Map();
     const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: classChildRefs(ctx, actor), ssaEnv: buildSSAEnv(h.body) };
-    const paramLines = genParamDestructure(h.params, I);
+    const paramLines = genParamDestructure(h.params, I, { ctx });
     hLines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
     hLines.push(...localLines);
@@ -951,14 +961,12 @@ function genChildInit(ctx, actor) {
   const lines = [];
   lines.push(`child_${name}_init(Payload) ->`);
 
-  // Destructure constructor params from Payload
-  const paramLines = genParamDestructure(constructorParams, I);
+  // Destructure constructor params from Payload, storing each as state once
+  // it's bound (a default reads the params before it from there)
+  const paramLines = genParamDestructure(constructorParams, I, {
+    ctx, afterBind: p => [`${I}put(${erlStateKey(ctx, p.name)}, ${erlVarName(p.name)}),`],
+  });
   lines.push(...paramLines);
-
-  // Store constructor params as state
-  for (const p of constructorParams) {
-    lines.push(`${I}put(${erlStateKey(ctx, p.name)}, ${erlVarName(p.name)}),`);
-  }
 
   // Split init body into pre-ingest, ingest, and post-ingest phases
   let ownIngestInfo = null;
@@ -1283,7 +1291,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
   // Destructure params from Object
   if (params.length > 0) {
-    const paramDestructLines = genParamDestructure(params, I);
+    const paramDestructLines = genParamDestructure(params, I, { ctx });
     lines.push(...paramDestructLines);
   }
 
@@ -1575,7 +1583,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const refVars = new Set();
     const childActorRefs = new Map();
     const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(h.body) };
-    const paramLines = genParamDestructure(h.params, I);
+    const paramLines = genParamDestructure(h.params, I, { ctx });
     lines.push(...paramLines);
     const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
     lines.push(...localLines);

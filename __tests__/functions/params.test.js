@@ -286,3 +286,59 @@ describe('function params — optional defaults', () => {
     );
   });
 });
+
+// An expression default runs in the callee once the other params are bound
+// (notes/param-default-expressions-2026-11-10.md).
+describe('function params — expression defaults', () => {
+  const script = `
+    double = (n Integer) { n * 2 }
+
+    @sum = (a Integer, b Integer = 1 + 2) { a + b }
+    @fromEarlier = (a Integer, b Integer = a * 2) { a + b }
+    @fromLater = (a Integer = b + 1, b: Integer = 10) { a + b }
+    @fromFile = (a Integer, b Integer = double(a)) { a + b }
+    @negative = (b: Integer = -1) { b }
+    @literals = (a Integer = 5, b: Integer = 10) { a + b }
+
+    @local
+      =
+      fn = (a Integer, b Integer = a + 100) { a + b }
+      result Integer = fn(3)
+      return :result
+
+    @localLater
+      =
+      fn = (a Integer = b + 1, b: Integer = 10) { a + b }
+      result Integer = fn(b: 4)
+      return :result
+  `;
+  const reads = (input, value) => expectBehavior(script,
+    { input: { id: '1', ...input, from: 'c' } },
+    { output: { id: '1', re: [value], to: 'c' } },
+  );
+
+  it('an omitted arg takes the expression', () => reads({ op: [[1], '@sum'], 'ty': [['Integer']] }, 4));
+  it('a given arg wins', () => reads({ op: [[1, 5], '@sum'], 'ty': [['Integer', 'Integer']] }, 6));
+  it('a default reads an earlier param', () => reads({ op: [[3], '@fromEarlier'], 'ty': [['Integer']] }, 9));
+  it('a default reads a later param', () => reads({ op: '@fromLater' }, 21));
+  it('a default reads a later param given by name', () => reads({ op: [{ b: 4 }, '@fromLater'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('a default calls a file-level function', () => reads({ op: [[3], '@fromFile'], 'ty': [['Integer']] }, 9));
+  it('a negative literal default', () => reads({ op: '@negative' }, -1));
+  it('an omitted positional with a named arg given', () => reads({ op: [{ b: 4 }, '@literals'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('a private function takes one too', () => expectBehavior(script,
+    { input: { id: '1', op: '@local', from: 'c' } },
+    { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 106 }, to: 'c' } },
+  ));
+  it('a private function\'s default reads a later param', () => expectBehavior(script,
+    { input: { id: '1', op: '@localLater', from: 'c' } },
+    { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9 }, to: 'c' } },
+  ));
+
+  it('an untyped param with an expression default is an error', () => {
+    expect(() => compileSource('@f = (a Integer, b = a + 1) { a + b }')).toThrow(/Param 'b': a default that isn't a literal needs a type/);
+  });
+
+  it('defaults that name each other are an error', () => {
+    expect(() => compileSource('@f = (a Integer = b, b Integer = a) { a + b }')).toThrow(/Param defaults form a cycle: a → b → a/);
+  });
+});

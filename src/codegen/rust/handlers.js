@@ -1,5 +1,6 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import { outerNamesFor } from '../../outer_reads.js';
+import { orderParamsForDefaults } from '../../param_defaults.js';
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
@@ -10,7 +11,7 @@ import { isOwnCallStatement as isOwnCall } from '../../ast.js';
 import { inferExprType } from '../../inference.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
-  genRustExpr, genRustDestructure, genRustDefaultValue,
+  genRustExpr, genRustDestructure, genRustDefaulted,
   genRustCondition, isRustGuardIf, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall,
   rustCellNotifyLines, genRustFnCallExpr,
 } from './expressions.js';
@@ -378,10 +379,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     }
 
     // Destructure params from _s
-    for (let i = 0; i < params.length; i++) {
-      const p = params[i];
-      const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-      const accessor = `_s.positional.get(${i}).cloned().unwrap_or(${dv})`;
+    const paramTypes = new Map(params.map(p => [p.name, p.type]));
+    for (const p of orderParamsForDefaults(params)) {
+      const accessor = genRustDefaulted(p, `_s.positional.get(${params.indexOf(p)}).cloned()`, paramTypes);
       if (p.type) {
         lambdaLines.push(`                let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
       } else {
@@ -804,11 +804,8 @@ function genRustChildDispatch(actor) {
     const hLines = [];
     if (h.params.length > 0) {
       hLines.push(`${I}let _s = BvObject::pack(payload);`);
-      for (const p of h.params) {
-        const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
-        const accessor = p.positional
-          ? `_s.positional.get(0).cloned().unwrap_or(${dv})`
-          : `_s.named.get("${p.name}").cloned().unwrap_or(${dv})`;
+      for (const p of orderParamsForDefaults(h.params)) {
+        const accessor = genRustDefaulted(p, p.positional ? `_s.positional.get(0).cloned()` : `_s.named.get("${p.name}").cloned()`, typeEnv);
         if (p.type) {
           hLines.push(`${I}let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
         } else {
@@ -918,18 +915,16 @@ function genRustChildInit(actor) {
   const lines = [];
 
   // Destructure constructor params from args (sequential index — call sites flatten args in param order)
-  for (let i = 0; i < constructorParams.length; i++) {
-    const p = constructorParams[i];
-    const dv = p.defaultValue ? genRustDefaultValue(p.defaultValue, p.type) : 'Value::Null';
+  const paramTypes = new Map(constructorParams.map(p => [p.name, p.type]));
+  for (const p of orderParamsForDefaults(constructorParams)) {
+    const i = constructorParams.indexOf(p);
     // For optional params, treat null as "not provided" → use default
-    const accessor = p.defaultValue
-      ? `args.as_array().and_then(|a| a.get(${i})).and_then(|v| if v.is_null() { None } else { Some(v.clone()) }).unwrap_or(${dv})`
-      : `args.as_array().and_then(|a| a.get(${i})).cloned().unwrap_or(${dv})`;
-    lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
-  }
-
-  // Store constructor params as state (unprefixed — parent code reads these too)
-  for (const p of constructorParams) {
+    const opt = p.defaultValue
+      ? `args.as_array().and_then(|a| a.get(${i})).and_then(|v| if v.is_null() { None } else { Some(v.clone()) })`
+      : `args.as_array().and_then(|a| a.get(${i})).cloned()`;
+    lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(genRustDefaulted(p, opt, paramTypes), p.type)};`);
+    // Store it as state (unprefixed — parent code reads these too) before the
+    // next param: a default reads the params before it from there.
     const storeVal = p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`;
     lines.push(`        self.state.insert("${stateKey(p.name)}".to_string(), ${storeVal});`);
   }

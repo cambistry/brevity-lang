@@ -1,4 +1,4 @@
-import { expectBehavior, compileSource } from '../helpers.js';
+import { expectBehavior, compileSource, compileActor } from '../helpers.js';
 
 // Read-only ref parameters — `&Type` declares a parameter that the callee
 // can read (and subscribe to, in a live-cell sense) but cannot mutate. The
@@ -30,6 +30,81 @@ describe('readonly param — &Type permits reads', () => {
       { output: { id: '1', 'ty': { result: 'List of Integers' }, re: { result: [10, 20, 30] }, to: 'c' } },
     );
   });
+});
+
+// ── A read-only param is live ────────────────────────────────────────────────
+// What `&Type` gives over a bare `Type` (a snapshot): the callee holds the
+// caller's cell and sees its later writes. The caller passes the cell bare.
+// A note and its handler's reply can come in either order, so notes are
+// picked out of the posts.
+describe('readonly param — &Type is live', () => {
+  const script = `
+    *
+      "svc.bv": Svc {
+        note. (Integer) => .
+      }
+    *
+    @n *Integer = 0
+
+    Watcher = (n &Integer) *{
+      n.subscribe (v Integer) { Svc.note(v)... }
+    }
+    NamedWatcher = (n: &Integer) *{
+      n.subscribe (v Integer) { Svc.note(v)... }
+    }
+    Reader = (n &Integer) *{
+      @get = {
+        r Integer = n
+        return r
+      }
+    }
+
+    @watch = {
+      w = Watcher(@n)
+      return 1
+    }
+    @watchNamed = {
+      w = NamedWatcher(n: @n)
+      return 1
+    }
+    @read = {
+      r = Reader(@n)
+      v Integer = r.get()
+      return v
+    }
+
+    @bump! = { @n <- @n + 1 }
+  `;
+  const notes = (actor) => actor.posts.filter(p => Array.isArray(p.op) && p.op[1] === '@note.');
+
+  it('a subscriber sees the cell now and after each write', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@watch', from: 'c' });
+    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
+    await actor.sendAsync({ id: '3', op: '@bump!', from: 'c' });
+    expect(notes(actor)).toEqual([
+      expect.objectContaining({ op: [[0], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[1], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[2], '@note.'], to: 'Svc' }),
+    ]);
+  });
+
+  it('a named one is live too', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: '@watchNamed', from: 'c' });
+    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
+    expect(notes(actor)).toEqual([
+      expect.objectContaining({ op: [[0], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[1], '@note.'], to: 'Svc' }),
+    ]);
+  });
+
+  it('a class that only reads it gets the cell\'s value', () => expectBehavior(script,
+    { input: { id: '1', op: '@bump!', from: 'c' } },
+    { output: expect.objectContaining({ id: '1', re: '#<>', to: 'c' }) },
+    { input: { id: '2', op: '@read', from: 'c' } },
+    { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
+  ));
 });
 
 // ── Writes are rejected ──────────────────────────────────────────────────────

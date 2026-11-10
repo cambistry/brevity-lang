@@ -1,3 +1,4 @@
+import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
 import { enclosingChain } from '../../outer_reads.js';
@@ -819,15 +820,16 @@ export function genExpr(ctx, expr) {
           return vals ? `await ${name}.create(${binding}, ${vals})` : `await ${name}.create(${binding})`;
         }
         if (expr.args.length > 0) {
-          // When a constructor param's declared type ends with `!`, that param
-          // expects an addressable handle to a cell on the host — not a value
-          // snapshot. If the arg is a bare identifier naming a host state var
-          // (e.g., `peers` for `@peers = { peers }`), emit a `{host, cell}`
-          // handle so the receiver can subscribe / read through the host.
+          // A ref param (`*Type`, or read-only `&Type`) that the class
+          // subscribes to expects an addressable handle to a cell on the host —
+          // not a value snapshot. If the arg is a bare identifier naming a host
+          // state var (e.g., `peers` for `@peers = { peers }`), emit a
+          // `{host, cell}` handle so the receiver can subscribe through the host.
+          const subscribed = ctx.actorNames.get(name)?.subscribedParams;
           const cellHandleArg = (p, argExpr) => {
             if (!argExpr || (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead')) return null;
-            // Param's `!` lives on `p.ref`, not in the type string.
-            if (!p?.ref) return null;
+            if (!p?.ref && !p?.readonly) return null;
+            if (!subscribed?.has(p.name)) return null;
             if (!ctx.stateVarNames?.has(argExpr.name)) return null;
             return `{host: this, cell: ${JSON.stringify(argExpr.name)}}`;
           };
@@ -846,7 +848,10 @@ export function genExpr(ctx, expr) {
                 const handle = cellHandleArg(p, namedFields[lookupKey]);
                 orderedArgs.push(handle ?? genArg(namedFields[lookupKey]));
               }
-              else if (p.positional && positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
+              else if (p.positional && positionalArgs.length > 0) {
+                const a = positionalArgs.shift();
+                orderedArgs.push(cellHandleArg(p, a) ?? genArg(a));
+              }
               else if (p.defaultValue) orderedArgs.push('undefined'); // skip — JS default param fills in
               else if (positionalArgs.length > 0) orderedArgs.push(genArg(positionalArgs.shift()));
             }
@@ -854,7 +859,8 @@ export function genExpr(ctx, expr) {
             const vals = orderedArgs.join(', ');
             return `await ${name}.create(${binding}, ${vals})`;
           }
-          const vals = expr.args.map(genArg).join(', ');
+          const posParams = (ctx.actorNames.get(name)?.initParams || []).filter(p => p.positional);
+          const vals = expr.args.map((a, i) => cellHandleArg(posParams[i], a) ?? genArg(a)).join(', ');
           return `await ${name}.create(${binding}, ${vals})`;
         }
         return `await ${name}.create(${binding})`;
@@ -1281,12 +1287,16 @@ export function genDestructure(ctx, params, indent = '        ') {
   };
 
   let code = '';
+  // Params with an expression default bind last, once the others are bound.
+  const late = new Map();
   if (pos.length > 0) {
     if (hasDefaults || hasIntParams || hasDecParams) {
       // Per-element access (required for type-aware wrapping or default fallback)
       for (let i = 0; i < pos.length; i++) {
         const p = pos[i];
-        if (p.defaultValue) {
+        if (p.defaultValue && !isLiteralDefault(p.defaultValue)) {
+          late.set(p, [`_s.positional.length > ${i}`, wrapParam(`_s.positional[${i}]`, p)]);
+        } else if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
           code += `\n${indent}const ${p.name} = _s.positional.length > ${i} ? ${wrapParam(`_s.positional[${i}]`, p)} : ${dv};`;
         } else {
@@ -1304,7 +1314,9 @@ export function genDestructure(ctx, params, indent = '        ') {
       // Per-field access (required for type-aware wrapping or default fallback)
       for (const p of plainNamed) {
         const key = p.key || p.name;
-        if (p.defaultValue) {
+        if (p.defaultValue && !isLiteralDefault(p.defaultValue)) {
+          late.set(p, [`${JSON.stringify(key)} in _s.named`, wrapParam(`_s.named[${JSON.stringify(key)}]`, p)]);
+        } else if (p.defaultValue) {
           const dv = genDefaultValue(p.defaultValue);
           code += `\n${indent}const ${p.name} = ${JSON.stringify(key)} in _s.named ? ${wrapParam(`_s.named[${JSON.stringify(key)}]`, p)} : ${dv};`;
         } else {
@@ -1318,6 +1330,11 @@ export function genDestructure(ctx, params, indent = '        ') {
   for (const p of listNamed) {
     const key = p.key || p.name;
     code += `\n${indent}const ${p.name} = _List.from(_s.named[${JSON.stringify(key)}]);`;
+  }
+  for (const p of orderParamsForDefaults(params)) {
+    if (!late.has(p)) continue;
+    const [given, value] = late.get(p);
+    code += `\n${indent}const ${p.name} = ${given} ? ${value} : ${genTailValue(ctx, p.defaultValue)};`;
   }
   return code;
 }

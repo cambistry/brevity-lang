@@ -1,5 +1,6 @@
 import { settleWriterBody } from './writer_body.js';
 import * as AST from './ast.js';
+import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
@@ -495,14 +496,16 @@ export function parse(tokensIn) {
   // the rest of the type (`of <inner>`, member access, unions). The `&Type`
   // form arrives as a single AMPERSAND_IDENT token from the lexer; we
   // re-inject the captured name as an IDENT so parseType can handle the
-  // remainder uniformly.
+  // remainder uniformly. The swap is undone afterwards: a parse that
+  // backtracks must find the token stream as it was.
   function consumeAmpersandTypeForParam() {
-    const ampTok = consume();
+    const at = pos;
+    const ampTok = peek();
     if (ampTok.type !== 'AMPERSAND_IDENT') {
       throw new Error(`Expected &Type, got ${ampTok.type}`);
     }
-    tokens.splice(pos, 0, { type: 'IDENT', value: ampTok.value });
-    return parseType();
+    tokens[at] = { ...ampTok, type: 'IDENT' };
+    try { return parseType(); } finally { tokens[at] = ampTok; }
   }
 
   function parseType(inOf = false) {
@@ -1144,7 +1147,7 @@ export function parse(tokensIn) {
           // name: Type | name: (no type) | name: literal (shorthand default)
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' ||
+          if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' || (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER') ||
               (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null')))) {
             const dv = parseDefaultLiteral();
             const p = { name, type: inferDefaultType(dv), positional: false, defaultValue: dv };
@@ -1175,9 +1178,9 @@ export function parse(tokensIn) {
       // Check for = default on the last-pushed param
       if (peek().type === 'EQUALS' && params.length > 0) {
         consume(); // =
-        const dv = parseDefaultLiteral();
+        const dv = parseDefaultValue();
         const p = params[params.length - 1];
-        if (!p.type) p.type = inferDefaultType(dv);
+        if (!p.type) p.type = typeOfDefault(p, dv);
         p.defaultValue = dv;
       }
     }
@@ -1185,9 +1188,40 @@ export function parse(tokensIn) {
     return params;
   }
 
+  // A param default: a literal, or any expression (see
+  // notes/param-default-expressions-2026-11-10.md). A literal followed by
+  // more of an expression (`1 + 2`) is an expression.
+  function parseDefaultValue() {
+    const saved = pos;
+    try {
+      const lit = parseDefaultLiteral();
+      if (isDefaultEnd()) return lit;
+    } catch { /* not a literal */ }
+    pos = saved;
+    return parseExpr();
+  }
+  function isDefaultEnd() {
+    const t = peek().type;
+    return t === 'COMMA' || t === 'RPAREN' || t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'EOF' ||
+      t === 'DIVIDER' || t === 'EQUALS' || t === 'GT' || t === 'PIPE';
+  }
+  // An untyped param takes its default's type; only a literal gives one.
+  function typeOfDefault(p, dv) {
+    const t = inferDefaultType(dv);
+    if (!t && !isLiteralDefault(dv)) {
+      throw new Error(`Param '${p.name}': a default that isn't a literal needs a type — write '${p.name} Type = …'`);
+    }
+    return t;
+  }
+
   // Shared default-value helpers for parseFunctionParams
   function parseDefaultLiteral() {
     if (peek().type === 'NUMBER') return makeNumLiteral(consume());
+    if (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER') {
+      consume(); // -
+      const tok = consume();
+      return makeNumLiteral({ ...tok, value: '-' + tok.value });
+    }
     if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
     if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
     if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
@@ -3357,27 +3391,11 @@ export function parse(tokensIn) {
     const tryParseDefault = () => {
       if (peek().type !== 'EQUALS') return null;
       consume(); // =
-      return parseDefaultLiteral();
-    };
-    const parseDefaultLiteral = () => {
-      if (peek().type === 'NUMBER') return makeNumLiteral(consume());
-      if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
-      if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
-      if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
-      if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.objectLiteral([]); }
-      throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
-    };
-    const inferDefaultType = (node) => {
-      if (node.type === 'IntLiteral') return 'Integer';
-      if (node.type === 'DecimalLiteral') return 'Decimal';
-      if (node.type === 'FloatLiteral') return 'Float';
-      if (node.type === 'StringLiteral') return 'Text';
-      if (node.type === 'BoolLiteral') return 'Boolean';
-      return null;
+      return parseDefaultValue();
     };
     const withDefault = (param, defaultValue) => {
       if (!defaultValue) return param;
-      if (!param.type) param.type = inferDefaultType(defaultValue);
+      if (!param.type) param.type = typeOfDefault(param, defaultValue);
       param.defaultValue = defaultValue;
       return param;
     };
@@ -3433,7 +3451,7 @@ export function parse(tokensIn) {
       // name: Type (simple typed) | name: (no type) | name: literal (shorthand default)
       let type = null;
       if (peekIsParamType()) { type = parseType(); }
-      if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' ||
+      if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' || (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER') ||
           (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null')))) {
         const defaultValue = parseDefaultLiteral();
         return withDefault({ name: first, type }, defaultValue);

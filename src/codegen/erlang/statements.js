@@ -1,6 +1,7 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
+import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
 import { bindLocalType } from '../../inference.js';
@@ -18,6 +19,7 @@ import {
   erlTypeWireWrap,
 } from './types.js';
 import { inferExprType } from '../../inference.js';
+import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import {
   erlNewOpEntries,
@@ -510,10 +512,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           // register the subscription with the host's cell_subs and
           // deliver the cell's current value to this fresh instance.
           const paramSubs = childActor?._paramSubscriptions || [];
-          if (paramSubs.length > 0 && namedBag) {
-            const namedFields = namedBag.fields || {};
+          if (paramSubs.length > 0) {
             for (const ps of paramSubs) {
-              const argExpr = namedFields[ps.paramName];
+              const argExpr = argForParam(childActor.initParams, s.value.args, ps.paramName);
               if (!argExpr) continue;
               if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
               const cellName = argExpr.name;
@@ -1383,7 +1384,15 @@ function genErlDefaultValue(node) {
   return 'null';
 }
 
-function genParamDestructure(params, indent) {
+// A param's expression default; a call gives back its reply, so take the value out.
+function genErlExprDefault(ctx, p, typeEnv) {
+  const code = genExpr(ctx, p.defaultValue, typeEnv, { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv([]) });
+  return p.defaultValue.type === 'FunctionCallExpr' ? `bv_object_one(${code})` : code;
+}
+
+// `ctx` lets a default be an expression; `afterBind(p)` gives lines to run
+// once `p` is bound, before the params after it (a default may read it).
+function genParamDestructure(params, indent, { ctx = null, afterBind = null } = {}) {
   const I = indent;
   const lines = [];
   const hasPositional = params.some(p => p.positional && !p.rest);
@@ -1396,31 +1405,37 @@ function genParamDestructure(params, indent) {
   }
 
   const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})` : expr;
+  const typeEnv = new Map(params.map(p => [p.name, p.type]));
+  // An expression default runs only when the arg is missing.
+  const isExprDefault = p => p.defaultValue && !isLiteralDefault(p.defaultValue);
+  const exprDefault = p => {
+    if (!ctx) throw new Error(`Param '${p.name}': an expression default isn't supported here yet`);
+    return genErlExprDefault(ctx, p, typeEnv);
+  };
+  const fromMap = (map, key, p) => isExprDefault(p)
+    ? `case maps:find(${erlString(key)}, ${map}) of {ok, Given_${erlVarName(p.name)}} -> Given_${erlVarName(p.name)}; error -> ${exprDefault(p)} end`
+    : `maps:get(${erlString(key)}, ${map}, ${p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null'})`;
 
-  let posIdx = 0;
-  for (const p of params) {
+  const posAt = new Map();
+  let k = 0;
+  for (const p of params) if (p.positional && !p.rest) posAt.set(p, k++);
+  for (const p of orderParamsForDefaults(params)) {
     if (p.rest) continue;
     if (p.positional) {
+      const posIdx = posAt.get(p);
       if (p.defaultValue) {
-        const dv = genErlDefaultValue(p.defaultValue);
+        const dv = isExprDefault(p) ? exprDefault(p) : genErlDefaultValue(p.defaultValue);
         const raw = `case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end`;
         lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
       } else {
         const raw = `lists:nth(${posIdx + 1}, S_pos)`;
         lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
       }
-      posIdx++;
-    } else if (hasPositional) {
-      const key = p.key || p.name;
-      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
-      const raw = `maps:get(${erlString(key)}, S_named, ${dv})`;
-      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
     } else {
       const key = p.key || p.name;
-      const dv = p.defaultValue ? genErlDefaultValue(p.defaultValue) : 'null';
-      const raw = `maps:get(${erlString(key)}, Payload, ${dv})`;
-      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
+      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(fromMap(hasPositional ? 'S_named' : 'Payload', key, p), p.type)},`);
     }
+    if (afterBind) lines.push(...afterBind(p));
   }
 
   return lines;
@@ -1607,4 +1622,5 @@ export {
   genTyBody,
   erlSetTarget,
   genErlDefaultValue,
+  genErlExprDefault,
 };

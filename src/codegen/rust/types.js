@@ -65,8 +65,11 @@ fn match_types_positional_min(message: &Value, pos_types: &[&str], named_types: 
     if arr.is_empty() {
         return pos_types.is_empty() && named_types.is_empty();
     }
+    // An all-named call's tags are the named map alone: no positionals.
+    let named_only: Vec<Value>;
     let types_arr = match arr[0].as_array() {
         Some(a) => a,
+        None if arr[0].is_object() => { named_only = vec![arr[0].clone()]; &named_only }
         None => return false,
     };
     let has_named_map = !named_types.is_empty() && types_arr.last().map(|v| v.is_object()).unwrap_or(false);

@@ -16,6 +16,8 @@ import {
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
 } from './statements.js';
+import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
+import { subscribedParams } from '../../call_args.js';
 
 // A silent name's trailing `.` (`log.`, `@go.`) becomes `$` and a writing name's
 // trailing `!` becomes `$w` — `$` is a JS identifier character no Brevity name
@@ -517,10 +519,17 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // site but no matching dispatch arm — replies surface as `unhandled`.
   const ctorParamNames = constructorParams.map(p => p.name);
   const ctorParamExprs = constructorParams.map(p => {
-    if (p.defaultValue) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
+    if (p.defaultValue && isLiteralDefault(p.defaultValue)) return `${p.name} = ${genDefaultValue(p.defaultValue)}`;
     return p.name;
   });
   const paramInitLines = ctorParamNames.map(n => `    this.#${stateKey(n)} = ${n};`);
+  // An expression default runs once every param is bound, in the order its
+  // names need (notes/param-default-expressions-2026-11-10.md).
+  for (const p of orderParamsForDefaults(constructorParams)) {
+    if (!p.defaultValue || isLiteralDefault(p.defaultValue)) continue;
+    const field = `this.#${stateKey(p.name)}`;
+    paramInitLines.push(`    if (${field} === undefined) ${field} = ${genTailValue(ctx, p.defaultValue)};`);
+  }
   function genOneInitLine(s) {
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const calleeName = s.value.callee.name;
@@ -1479,7 +1488,7 @@ export function codegen(ast, options = {}) {
     if (a.declarationReturn && a.declarationReturn.typeName) {
       asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
     }
-    return [a.name, { asClauses, initParams: mergedParams, inlineExpandable }];
+    return [a.name, { asClauses, initParams: mergedParams, inlineExpandable, subscribedParams: subscribedParams(a) }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
