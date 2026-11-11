@@ -1060,9 +1060,10 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
   async #_test(message) {
     const t = message.test;
     if ('target' in t) {
-      const parts = t.target.split('.');
+      // A target is a run of wire labels: .o.inner
+      const parts = t.target.match(/[@#.][^@#.]+/g) || [];
       const childName = parts[0];
-      const _refs = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
+      const _refs = {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
       const child = _refs[childName];
       if (!child || typeof child.receive !== 'function') {
         this.#binding.post({ id: message.id, ex: { target: 'not_found' }, to: message.from });
@@ -1071,7 +1072,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       const rest = parts.slice(1);
       const fwd = { ...t };
       delete fwd.target;
-      if (rest.length > 0) fwd.target = rest.join('.');
+      if (rest.length > 0) fwd.target = rest.join('');
       if ('set' in fwd || 'update' in fwd) {
         child.receive({ test: fwd, from: message.from });
       } else {
@@ -1084,10 +1085,10 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       return;
     }
     if ('get' in t) {
-      const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
-      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(v.name)}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(p.name)}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
-      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeName]), ...constructorParams.map(p => [p.name, p.type || 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(n)}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
-      let _v = _vals[t.get];
+      const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
+      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
+      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeName]), ...constructorParams.map(p => [p.name, p.type || 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
+      let _v = t.get in _vals ? _vals[t.get] : null;
       if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;
         const _hasNamed = _v.named && Object.keys(_v.named).length > 0;

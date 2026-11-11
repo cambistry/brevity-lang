@@ -20,7 +20,7 @@ describe('browser external script — src attribute', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'x' }, from: 't', to: 'app.bv' });
+    await page.send({ id: '1', test: { get: '.x' }, from: 't', to: 'app.bv' });
 
     expect(replies).toEqual([
       { id: '1', 'ty': 'Integer', re: 42, from: 'app.bv', to: 't' },
@@ -51,7 +51,7 @@ describe('browser external script — explicit document DI', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'ti' }, from: 't', to: 'app.bv' });
+    await page.send({ id: '1', test: { get: '.ti' }, from: 't', to: 'app.bv' });
 
     expect(replies).toEqual([
       { id: '1', 'ty': 'Text', re: 'Page Title', from: 'app.bv', to: 't' },

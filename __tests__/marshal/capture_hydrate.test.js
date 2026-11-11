@@ -25,7 +25,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
   it('hydrated actor has captured state', async () => {
     const restored = await buildRestoredActor();
     await expectActorBehavior(restored,
-      { input: { id: '2', test: { get: 'count' }, from: 't' } },
+      { input: { id: '2', test: { get: '.count' }, from: 't' } },
       { output: { id: '2', 'ty': 'Integer', re: 3, to: 't' } },
     );
   });
@@ -34,7 +34,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
     const restored = await buildRestoredActor();
     await restored.sendAsync({ id: '2', op: '@inc!', from: 'c' });
     await expectActorBehavior(restored,
-      { input: { id: '3', test: { get: 'count' }, from: 't' } },
+      { input: { id: '3', test: { get: '.count' }, from: 't' } },
       { output: { id: '3', 'ty': 'Integer', re: 4, to: 't' } },
     );
   });
@@ -78,11 +78,11 @@ describe('capture/hydrate round-trip — multiple types', () => {
 
   it('all types survive the round-trip', async () => {
     await expectActorBehavior(restored,
-      { input: { id: '2', test: { get: 'label' }, from: 't' } },
+      { input: { id: '2', test: { get: '.label' }, from: 't' } },
       { output: { id: '2', 'ty': 'Text', re: 'player1', to: 't' } },
-      { input: { id: '3', test: { get: 'score' }, from: 't' } },
+      { input: { id: '3', test: { get: '.score' }, from: 't' } },
       { output: { id: '3', 'ty': 'Integer', re: 42, to: 't' } },
-      { input: { id: '4', test: { get: 'active' }, from: 't' } },
+      { input: { id: '4', test: { get: '.active' }, from: 't' } },
       { output: { id: '4', 'ty': 'Boolean', re: true, to: 't' } },
     );
   });
@@ -117,14 +117,14 @@ describe('capture/hydrate round-trip — clone divergence', () => {
 
   it('clone A diverges from snapshot', async () => {
     await expectActorBehavior(cloneA,
-      { input: { id: '4', test: { get: 'x' }, from: 't' } },
+      { input: { id: '4', test: { get: '.x' }, from: 't' } },
       { output: { id: '4', 'ty': 'Integer', re: 5, to: 't' } },
     );
   });
 
   it('clone B stays at snapshot', async () => {
     await expectActorBehavior(cloneB,
-      { input: { id: '2', test: { get: 'x' }, from: 't' } },
+      { input: { id: '2', test: { get: '.x' }, from: 't' } },
       { output: { id: '2', 'ty': 'Integer', re: 3, to: 't' } },
     );
   });

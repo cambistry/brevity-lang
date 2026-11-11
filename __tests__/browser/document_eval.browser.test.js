@@ -22,7 +22,7 @@ describe('browser inline script — document.eval', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'result' }, from: 't', to: 'script#main' });
+    await page.send({ id: '1', test: { get: '.result' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
       { id: '1', 'ty': 'Text', re: '3', from: 'script#main', to: 't' },
@@ -49,7 +49,7 @@ describe('browser inline script — document.eval reads page state', () => {
     const replies = [];
     await page.register('t', msg => replies.push(msg));
 
-    await page.send({ id: '1', test: { get: 'result' }, from: 't', to: 'script#main' });
+    await page.send({ id: '1', test: { get: '.result' }, from: 't', to: 'script#main' });
 
     expect(replies).toEqual([
       { id: '1', 'ty': 'Text', re: 'Hello Eval', from: 'script#main', to: 't' },

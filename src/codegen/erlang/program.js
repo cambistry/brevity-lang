@@ -1772,10 +1772,10 @@ ${putLines},
     ...constructorParams.map(p => [p.name, p.type || 'Anything']),
   ]);
   const testGetClauses = allStateNames.map(n =>
-    `        ${erlString(n)} -> get(${erlStateKey(ctx, n)})`,
+    `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
-    `        ${erlString(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`,
+    `        ${erlOp(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`,
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
@@ -1790,7 +1790,8 @@ ${putLines},
       const childActor = actors.find(a => a.name === calleeName);
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
-      const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      // A target is a run of wire labels: .o.inner
+      const path = `${pathPrefix}${wireLabel(s.name)}`;
       const refKey = erlStateKey({ ...ctx, childStatePrefix: parentPrefix || '' }, s.name);
       const childChain = [...chain, refKey];
       const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
@@ -1810,9 +1811,9 @@ ${putLines},
       const pid = `TPid${r.chain.length - 1}`;
       const childCtx = { ...ctx, childStatePrefix: r.prefix };
       const getClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> bv_inst_get_(${pid}, ${erlStateKey(childCtx, v.name)});\n`).join('');
+        `                            ${erlOp(v.name)} -> bv_inst_get_(${pid}, ${erlStateKey(childCtx, v.name)});\n`).join('');
       const typeClauses = r.stateVars.map(v =>
-        `                            ${erlString(v.name)} -> ${erlString(v.typeName || 'Anything')};\n`).join('');
+        `                            ${erlOp(v.name)} -> ${erlString(v.typeName || 'Anything')};\n`).join('');
       return `            ${erlString(r.path)} ->
                 ${resolve},
                 case maps:find(<<"get">>, Test) of

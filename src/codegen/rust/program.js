@@ -453,7 +453,8 @@ ${[...G.ctx.stateVarNames].map(n =>
       const childActor = actors.find(a => a.name === calleeName);
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
-      const path = pathPrefix ? `${pathPrefix}.${s.name}` : s.name;
+      // A target is a run of wire labels: .o.inner
+      const path = `${pathPrefix}${wireLabel(s.name)}`;
       const savedCtx = G.ctx; G.ctx = { ...G.ctx, childStatePrefix: parentPrefix };
       const refKey = stateKey(s.name);
       G.ctx = savedCtx;
@@ -477,7 +478,7 @@ ${[...G.ctx.stateVarNames].map(n =>
       const savedCtx = G.ctx; G.ctx = childCtx;
       const sk = stateKey(v.name);
       G.ctx = savedCtx;
-      return `                        "${v.name}" => (_st.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
+      return `                        ${JSON.stringify(wireLabel(v.name))} => (_st.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
     }).join('\n');
     return `                    "${r.path}" => {
                         ${resolve}
@@ -509,7 +510,7 @@ ${targetClauses}
 })()}
         if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
             let _key: Option<&str> = match name {
-${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(n)} => Some("${stateKey(n)}"),`).join('\n')}
+${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(n))} => Some("${stateKey(n)}"),`).join('\n')}
                 _ => None,
             };
             let val = _key.and_then(|k| self.state.get(k)).cloned().unwrap_or(Value::Null);
@@ -517,7 +518,7 @@ ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(n)} => Som
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
   const t = decl?.typeName || 'Anything';
-  return `                ${JSON.stringify(n)} => Some("${t}"),`;
+  return `                ${JSON.stringify(wireLabel(n))} => Some("${t}"),`;
 }).join('\n')}
                 _ => None,
             };

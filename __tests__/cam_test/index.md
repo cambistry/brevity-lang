@@ -11,7 +11,7 @@ Reads actor state:
 { "id": "1", "test": { "get": "count" }, "from": "t" }
 ```
 
-Can target child actors with a dotted target path in tested cases.
+Reads a cell by its wire label (`.x`, `@x`). Targets child actors with a run of labels (`.b`, `.o.inner`) in tested cases.
 
 ## `test.set`
 
