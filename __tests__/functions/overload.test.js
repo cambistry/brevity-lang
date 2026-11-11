@@ -577,3 +577,74 @@ describe('overload — private lineal functions with defaults', () => {
     );
   });
 });
+
+describe('overload — method called on a class actor', () => {
+  const script = `
+    T = (x Integer) *{
+      @put = (n Integer) -> v: n
+      @put << (s Text) -> v: 0
+    }
+
+    @viaInteger = {
+      t = T(1)
+      :v Integer = t.put(5)
+      return :v
+    }
+
+    @viaText = {
+      t = T(1)
+      :v Integer = t.put("a")
+      return :v
+    }
+  `;
+
+  it('the first clause takes its own argument type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@viaInteger', from: 'c' } },
+      { output: { id: '1', 'ty': { v: 'Integer' }, re: { v: 5 }, to: 'c' } },
+    );
+  });
+
+  it('the appended clause takes its own argument type', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@viaText', from: 'c' } },
+      { output: { id: '2', 'ty': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+    );
+  });
+
+  it('an argument no clause takes is rejected', () => {
+    expect(() => compileSource(script.replace('t.put("a")', 't.put(true)')))
+      .toThrow(/'T.put\(\)' positional arg 1: 'Boolean' is not assignable/);
+  });
+});
+
+describe('overload — handler a file calls on itself', () => {
+  const script = `
+    @put = (n Integer) -> v: n
+    @put << (s Text) -> v: 0
+
+    @viaInteger = {
+      :v Integer = @put(5)
+      return :v
+    }
+
+    @viaText = {
+      :v Integer = @put("a")
+      return :v
+    }
+  `;
+
+  it('the first clause takes its own argument type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@viaInteger', from: 'c' } },
+      { output: { id: '1', 'ty': { v: 'Integer' }, re: { v: 5 }, to: 'c' } },
+    );
+  });
+
+  it('the appended clause takes its own argument type', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@viaText', from: 'c' } },
+      { output: { id: '2', 'ty': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+    );
+  });
+});

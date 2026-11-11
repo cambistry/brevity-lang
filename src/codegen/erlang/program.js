@@ -488,6 +488,18 @@ function isSilentGuard(s, silent) {
     JSON.stringify(s.expr).includes('"type":"Return"');
 }
 
+// The value check for an in-process call to one clause of an overloaded
+// function, or null when no param has a scalar type a value could contradict.
+function erlValueFit(params) {
+  if (params.some(p => p.rest)) return null;
+  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
+  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  const pos = params.filter(p => p.positional).map(typeOf);
+  const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
+  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
+  return `bv_values_fit(S_pos, S_named, [${pos.map(erlString).join(', ')}], [${named.map(([k, t]) => `{${erlString(k)}, ${erlString(t)}}`).join(', ')}])`;
+}
+
 function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false, instance = false } = {}) {
   const { params, body: rawBody } = fn;
   const typeEnv = buildTypeEnv(params, rawBody, ctx.typeDecls);
@@ -512,7 +524,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
 
   // An instance checks only a call from outside: in-process callers pass values, not tags.
   const exempt = instance ? '_From =/= <<"__bv_wire">>' : 'From =:= <<"__self">> orelse From =:= <<"__test">>';
-  let typeCheck = '';
+  let matchExpr = '';
   if (!skipTypeCheck) {
     if (positionalTyped.length > 0) {
       const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
@@ -521,16 +533,22 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       if (requiredPosTyped < positionalTyped.length) {
         // With nothing required, a call can leave out every arg, and so every tag.
         const untaggedOk = params.some(p => !p.defaultValue && !p.rest) ? '' : 'not maps:is_key(<<"ty">>, Message) orelse ';
-        typeCheck = `(${exempt} orelse ${untaggedOk}match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped}))`;
+        matchExpr = `${untaggedOk}match_types_positional(Message, [${posTypes}], [${namedTypes}], ${requiredPosTyped})`;
       } else {
-        typeCheck = `(${exempt} orelse match_types_positional(Message, [${posTypes}], [${namedTypes}]))`;
+        matchExpr = `match_types_positional(Message, [${posTypes}], [${namedTypes}])`;
       }
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
       const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
-      typeCheck = `(${exempt} orelse match_types(Message, [${pairs}]))`;
+      matchExpr = `match_types(Message, [${pairs}])`;
     }
   }
+  // An overloaded clause's in-process call carries values, not tags: its values
+  // pick the clause. (S_pos / S_named are bound before an overload's guard.)
+  const valueFit = hasOverloads && matchExpr ? erlValueFit(params) : null;
+  const typeCheck = !matchExpr ? ''
+    : valueFit ? `(case ${exempt} of true -> ${valueFit}; false -> ${matchExpr} end)`
+    : `(${exempt} orelse ${matchExpr})`;
 
   // Build arity check for overloads — always applied (not bypassed by From)
   let arityCheck = '';

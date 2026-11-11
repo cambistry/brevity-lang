@@ -990,6 +990,10 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (ctx.actorNames.has(s.value.callee.name) || s.value.callee.name === 'Self')) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
+    // A template constructs an element actor, like `div()`: the bind holds its address.
+    if (s.value.type === 'DomConstructor') {
+      return emitBinding(s.name, genExpr(ctx, s.value));
+    }
     // Lambda overload << / >> — must be checked before the seen() shortcut.
     // After the first emission of `name`, treat further plain Assigns as
     // value rebindings (no new lambda handler created). Under SSA every

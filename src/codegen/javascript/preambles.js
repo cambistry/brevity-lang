@@ -506,6 +506,24 @@ const _bvAsKind = (v) => {
   if (Array.isArray(v) || ('head' in v && 'tail' in v)) return 'List';
   return 'Object';
 };
+// Whether an in-process arg value (no tag travels with it) can be a param of type
+// \`t\`. Only a scalar member can contradict a value's kind; any other type is
+// not judged here. An absent (optional) arg fits.
+const _bvValueFits = (v, t) => {
+  if (v === undefined) return true;
+  const k = _bvAsKind(v);
+  return String(t).split('|').some(m => {
+    switch (m.trim()) {
+      case 'Integer': case 'Text': case 'Boolean': return k === m.trim();
+      case 'Float': case 'Decimal': return k === 'Integer' || k === 'Float' || k === 'Decimal';
+      case 'null': return k === 'null';
+      default: return true;
+    }
+  });
+};
+// An overload clause's guard for an in-process call: every arg value fits its param.
+const _bvValuesFit = (s, pos, named) =>
+  pos.every((t, i) => _bvValueFits(s.positional[i], t)) && named.every(([k, t]) => _bvValueFits(s.named[k], t));
 // The tag for a value whose slot is declared as a union or \`Anything\`: the member
 // the value is, else the value's own kind (a list: each element's). \`m\` is
 // [kind, tag] pairs; \`*\` is a member taken when no other matches.

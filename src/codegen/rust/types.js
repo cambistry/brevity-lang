@@ -188,6 +188,29 @@ impl IntoValue for BvObject {
 }
 impl IntoValue for &BvObject {
     fn into_value(self) -> Value { self.splat() }
+}
+
+// Whether an in-process arg value (no tag travels with it) can be a param of
+// type \`t\`. Only a scalar member can contradict a value's kind; any other type
+// is not judged here. An absent (optional) arg fits.
+#[allow(dead_code)]
+fn bv_value_fits(v: Option<&Value>, t: &str) -> bool {
+    let v = match v { Some(v) => v, None => return true };
+    t.split('|').any(|m| match m.trim() {
+        "Integer" => v.is_i64() || v.is_u64(),
+        "Text" => v.is_string(),
+        "Boolean" => v.is_boolean(),
+        "Float" | "Decimal" => v.is_number(),
+        "null" => v.is_null(),
+        _ => true,
+    })
+}
+
+// An overload clause's guard for an in-process call: every arg value fits its param.
+#[allow(dead_code)]
+fn bv_values_fit(s: &BvObject, pos_types: &[&str], named_types: &[(&str, &str)]) -> bool {
+    pos_types.iter().enumerate().all(|(i, t)| bv_value_fits(s.positional.get(i), t))
+        && named_types.iter().all(|(k, t)| bv_value_fits(s.named.get(*k), t))
 }`;
 
 // Wire-format helper: extract the trailing @name/#name selector from a

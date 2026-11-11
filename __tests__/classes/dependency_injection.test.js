@@ -340,6 +340,57 @@ describe('explicit form — method call validation', () => {
 
 // ─── Phase 2a: # form (generic actor class) ─────────────────────────────────
 
+describe('constructor block — calls are checked as in a handler body', () => {
+  const GREETER_MANIFEST = `{
+    greet (name: Text) -> (Text)
+  }`;
+  const remotes = [{ path: 'greeter.bv', service: GREETER_MANIFEST }];
+
+  it('a call the manifest declares → compiles', () => {
+    expect(() => compileSource(`
+      *
+        "greeter.bv": Greeter
+      *
+      x = Greeter.greet(name: "a")
+    `, { remotes })).not.toThrow();
+  });
+
+  it('a call the manifest lacks → compile error', () => {
+    expect(() => compileSource(`
+      *
+        "greeter.bv": Greeter
+      *
+      x = Greeter.gret(name: "a")
+    `, { remotes })).toThrow(/'Greeter' has no function 'gret'/);
+  });
+
+  it('a bare call statement the manifest lacks → compile error', () => {
+    expect(() => compileSource(`
+      *
+        "greeter.bv": Greeter
+      *
+      Greeter.gret(name: "a")
+    `, { remotes })).toThrow(/'Greeter' has no function 'gret'/);
+  });
+
+  it('a wrong arg type → compile error', () => {
+    expect(() => compileSource(`
+      *
+        "greeter.bv": Greeter
+      *
+      x = Greeter.greet(name: 5)
+    `, { remotes })).toThrow(/named arg 'name': expected Text, got Integer/);
+  });
+
+  it('a method a local class lacks → compile error', () => {
+    expect(() => compileSource(`
+      T = (x Integer) *{ @a = -> v: x as Integer }
+      t = T(1)
+      y = t.zz()
+    `)).toThrow(/'T' has no method 'zz'/);
+  });
+});
+
 describe('# form — requires manifest', () => {
   it('bare # form throws without options.remotes', () => {
     expect(() => compileSource(`
@@ -524,6 +575,87 @@ describe('coercion to typed class — runtime', () => {
 // Spread semantics are target-agnostic (everything runs through the shared
 // validator and codegen's destructured-member routing), so these tests are
 // target-agnostic too.
+
+describe('destructure entries — must be exported by the manifest', () => {
+  const MATH_MANIFEST = `{
+    double (n: Integer) -> (result: Integer)
+    inc (n: Integer) -> (result: Integer)
+  }`;
+  const remotes = [{ path: 'Math', service: MATH_MANIFEST }];
+
+  it('an op the manifest declares → compiles', () => {
+    expect(() => compileSource(`
+      *
+        Math: (:double)
+      *
+      @go = {
+        :result Integer = double(n: 5)
+        return :result
+      }
+    `, { remotes })).not.toThrow();
+  });
+
+  it('an op the manifest lacks → compile error names it and the dependency', () => {
+    expect(() => compileSource(`
+      *
+        Math: (:dubble)
+      *
+      @go = {
+        :result Integer = dubble(n: 5)
+        return :result
+      }
+    `, { remotes })).toThrow(/'dubble' is not exported by 'Math' \(available: double, inc\)/);
+  });
+
+  it('an unused misspelled entry is still an error', () => {
+    expect(() => compileSource(`
+      *
+        Math: (:double, :dubble)
+      *
+      @go = {
+        :result Integer = double(n: 5)
+        return :result
+      }
+    `, { remotes })).toThrow(/'dubble' is not exported by 'Math'/);
+  });
+
+  it('an aliased entry is checked by its remote name', () => {
+    expect(() => compileSource(`
+      *
+        Math: (dubble: d)
+      *
+      @go = {
+        :result Integer = d(n: 5)
+        return :result
+      }
+    `, { remotes })).toThrow(/'dubble' is not exported by 'Math'/);
+  });
+
+  it('a discarded entry is checked too', () => {
+    expect(() => compileSource(`
+      *
+        Math: (dubble: _, ...)
+      *
+      @go = {
+        :result Integer = double(n: 5)
+        return :result
+      }
+    `, { remotes })).toThrow(/'dubble' is not exported by 'Math'/);
+  });
+
+  it('a body-form entry is checked against an inline interface', () => {
+    expect(() => compileSource(`
+      *
+        "math.bv": Math { double (n: Integer) -> (result: Integer) }
+      *
+      @go = {
+        :inc = Math
+        :result Integer = inc(n: 5)
+        return :result
+      }
+    `)).toThrow(/'inc' is not exported by 'Math'/);
+  });
+});
 
 describe('spread `(...)` — compilation', () => {
   const MATH_MANIFEST = `{

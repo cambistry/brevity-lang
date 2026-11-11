@@ -249,6 +249,24 @@ export function validate(ast, options = {}) {
   // with `local: undefined` entries.
   for (const d of (ast.dependencies || [])) {
     if (!Array.isArray(d.destructures)) continue;
+    // Every name a destructure takes from a dependency with a known manifest
+    // must be one that manifest exports — op, class (tags included) or type.
+    // Without this a typo compiles: a tag routes to an element factory the
+    // service never declared, and a type import that misses `__typeDecls`
+    // falls through to an actor construction.
+    const doc = remotesParsed[d.name];
+    if (doc) {
+      const exported = new Set([
+        ...Object.keys(doc).filter(k => !k.startsWith('__')),
+        ...Object.keys(doc.__types || {}),
+        ...Object.keys(doc.__typeDecls || {}),
+      ]);
+      for (const e of d.destructures) {
+        if (e.spread || !e.remote || exported.has(e.remote)) continue;
+        const available = [...exported].sort().join(', ') || '(none)';
+        throw new Error(`'${e.remote}' is not exported by '${d.name}' (available: ${available})`);
+      }
+    }
     const spreadIdx = d.destructures.findIndex(e => e.spread);
     if (spreadIdx !== -1) {
       const manifest = remotesParsed[d.name];
@@ -617,22 +635,28 @@ export function validate(ast, options = {}) {
   }
 
   // ── Flattened method signatures per actor class ──────────────────────
-  // typeName → @methodName → { params, returns }. Includes own + inherited
-  // via superclass chain + clauses from overload constructors. Last writer
-  // wins — subclass overrides superclass (matches resolveSuperclassChain).
+  // typeName → @methodName → [{ params, returns }], one entry per clause.
+  // Includes own + inherited via superclass chain + clauses from overload
+  // constructors. A layer's clauses for a name replace the earlier layer's,
+  // together — subclass overrides superclass, and an overloaded method keeps
+  // all its clauses (matches resolveSuperclassChain).
   const actorMethodSigsFlat = new Map();
-  const addSig = (sigMap, fn) => {
-    if (!fn.name?.startsWith('@')) return;
-    const reply = fn.body?.find(s => s.type === 'Reply');
-    const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
-    sigMap.set(fn.name, { params: fn.params || [], returns });
+  const addSigLayer = (sigMap, fns) => {
+    const layer = new Map();
+    for (const fn of fns) {
+      if (!fn.name?.startsWith('@')) continue;
+      const reply = fn.body?.find(s => s.type === 'Reply');
+      const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
+      layer.set(fn.name, [...(layer.get(fn.name) || []), { params: fn.params || [], returns }]);
+    }
+    for (const [name, clauses] of layer) sigMap.set(name, clauses);
   };
   for (const actor of ast.actors) {
     if (!actor.name) continue;
     const sigs = new Map();
     const { inheritedFunctions } = resolveSuperclassChain(actorByName, actor);
-    for (const fn of inheritedFunctions) addSig(sigs, fn);
-    for (const fn of (actor.functions || [])) addSig(sigs, fn);
+    addSigLayer(sigs, inheritedFunctions);
+    addSigLayer(sigs, actor.functions || []);
     actorMethodSigsFlat.set(actor.name, sigs);
   }
   // Fold in overload-clause methods — they add to the base type's method set.
@@ -641,7 +665,7 @@ export function validate(ast, options = {}) {
       if (!fn.actorDef || !fn.name) continue;
       const sigs = actorMethodSigsFlat.get(fn.name);
       if (!sigs) continue;
-      for (const mfn of (fn.actorDef.functions || [])) addSig(sigs, mfn);
+      addSigLayer(sigs, fn.actorDef.functions || []);
     }
   }
 
@@ -695,8 +719,8 @@ export function validate(ast, options = {}) {
     actorConstructorSigs.set(synth.name, [{ params: mergeInheritedParams(synth) }]);
 
     const sigs = new Map();
-    for (const fn of inheritedFunctions) addSig(sigs, fn);
-    for (const fn of synth.functions) addSig(sigs, fn);
+    addSigLayer(sigs, inheritedFunctions);
+    addSigLayer(sigs, synth.functions);
     actorMethodSigsFlat.set(synth.name, sigs);
   }
 
@@ -2126,6 +2150,15 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   ].filter(Boolean));
   checkNestedBlocks(actor.constructorBody || [], actorNames);
 
+  // The constructor block gets the same body checks as a function body: its
+  // calls, method names and args are checked against the same declarations.
+  if (actor.constructorBody?.length) {
+    const ctorTypeEnv = buildTypeEnv(actor.initParams || [], actor.constructorBody, null, localDepNames);
+    for (const [k, v] of ctorTypeEnv) if (!v) ctorTypeEnv.delete(k);
+    for (const [k, v] of stateTypeEnv) if (!ctorTypeEnv.has(k)) ctorTypeEnv.set(k, v);
+    validateBody(actor.constructorBody, actorInfo, localDepNames, localRemotes, localFactoryDecls, ctorTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
+  }
+
   for (const fn of actor.functions) {
     checkFunctionBinds(fn, actorNames);
     const typeEnv = buildTypeEnv(fn.params, fn.body, null, localDepNames);
@@ -2698,11 +2731,23 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // (in `actorNameSet`) participate; the latter covers destructured remote tags
   // like `(:div) = HTML` so `d = div()` typechecks `d` as `div`.
   const localActorTypes = new Map();
+  const soleRemoteClass = (call) => soleRemoteClassOf(call, remotesParsed, typeEnv, dependencyNames);
   for (const s of body) {
     if ((s.type === 'Assign' || s.type === 'TypedAssign') &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
         (actorMethods?.has(s.value.callee.name) || actorNameSet?.has(s.value.callee.name))) {
       localActorTypes.set(s.name, s.value.callee.name);
+    }
+    // A constructor block's unannotated bind is a TypedAssign with no typeName.
+    const unannotated = s.type === 'Assign' || (s.type === 'TypedAssign' && !s.typeName && !s.rhsType);
+    if (!unannotated || (typeEnv.get(s.name) && typeEnv.get(s.name) !== 'Anything')) continue;
+    // An unannotated bind whose class is certain types its name, so calls on it
+    // are checked like calls on an annotated one: `el = <div>…</div>` is a
+    // `div`, and `b = document.body()` is whatever class every clause returns.
+    const cls = s.value?.type === 'DomConstructor' ? s.value.tag : soleRemoteClass(s.value);
+    if (cls && actorNameSet?.has(cls)) {
+      localActorTypes.set(s.name, cls);
+      typeEnv.set(s.name, cls);
     }
   }
 
@@ -2921,17 +2966,24 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const sigs = actorMethodSigsFlat.get(typeName);
     if (!sigs) return;
     const methodName = call.method.startsWith('@') ? call.method : '@' + call.method;
-    const sig = sigs.get(methodName);
-    if (!sig) return; // missing-method error raised elsewhere
+    const clauses = sigs.get(methodName);
+    if (!clauses) return; // missing-method error raised elsewhere
     const callArgs = extractCallArgs(call);
-    const clause = { params: sig.params };
-    if (!clauseAccepts(clause, callArgs)) {
+    const accepting = clauses.filter(cl => clauseAccepts(cl, callArgs));
+    if (accepting.length === 0) {
       throw new Error(
-        `'${typeName}.${call.method}()' call doesn't match signature ${formatSig(sig.params)}. ` +
+        `'${typeName}.${call.method}()' call doesn't match any signature: ${clauses.map(cl => formatSig(cl.params)).join(' | ')}. ` +
         `Got ${callArgs.positional.length} positional, named: ${[...callArgs.named.keys()].join(', ') || '(none)'}.`,
       );
     }
-    checkClauseTypes(clause, callArgs, `'${typeName}.${call.method}()'`);
+    // The call is well-typed when its args type-check against any clause that
+    // accepts its shape; when none does, the first one reports the mismatch.
+    const label = `'${typeName}.${call.method}()'`;
+    const errors = [];
+    for (const cl of accepting) {
+      try { checkClauseTypes(cl, callArgs, label); return; } catch (e) { errors.push(e); }
+    }
+    throw errors[0];
   };
   const walkForCallChecks = (node) => {
     if (!node || typeof node !== 'object') return;
@@ -3568,6 +3620,17 @@ function fnOuterTypes(fn) {
 }
 
 // `select` narrows a doc's signatures to those the call could select.
+// The one class a dependency call returns on every clause (`document.body()` →
+// `body`), or null.
+function soleRemoteClassOf(call, remotesParsed, typeEnv, dependencyNames) {
+  if (call?.attestedAs) return null;
+  const shapes = remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, sigs => sigs)?.shapes;
+  if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
+  if (shapes.alternatives.some(alt => alt.length !== 1 || alt[0].name !== null)) return null;
+  const types = new Set(shapes.alternatives.map(alt => alt[0].type));
+  return types.size === 1 ? [...types][0] : null;
+}
+
 function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, select) {
   if (call.type !== 'DotCallExpr' || call.object?.type !== 'Identifier') return null;
   const name = call.object.name;

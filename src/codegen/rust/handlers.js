@@ -65,6 +65,12 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
   let guard = '';
+  // An overloaded clause's in-process call carries values, not tags: its values
+  // pick the clause. An outside call is matched by its tags.
+  const fit = valueFit(params, '&_s');
+  const inProcessOr = (typeCheck) => (fit
+    ? `(if from == "__self" || from == "__test" { ${fit} } else { ${typeCheck} })`
+    : `(from == "__self" || from == "__test" || ${typeCheck})`);
   // Build arity guard for overloaded functions
   if (hasOverloads && params.length > 0) {
     const posParams = params.filter(p => p.positional && !p.rest);
@@ -92,11 +98,11 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       const typeCheck = hasOptionalTyped
         ? `${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
         : `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
-      guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
+      guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
       const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
-      guard = ` if ${checks.join(' && ')} && (from == "__self" || from == "__test" || ${typeCheck})`;
+      guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (checks.length > 0) {
       guard = ` if ${checks.join(' && ')}`;
     }
@@ -604,7 +610,7 @@ function untaggedOk(params, message) {
 
 // A call from outside an instance has its tags checked, as a file handler's are.
 // In-process callers pass values, not tags. Overloads fall through to the next arm.
-function childTagGuard({ params }) {
+function childTagGuard({ params }, overloaded = false) {
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const typed = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
   const pos = typed.filter(p => p.positional);
@@ -620,10 +626,27 @@ function childTagGuard({ params }) {
   } else {
     return '';
   }
+  // An overloaded method's in-process call carries values, not tags: its values
+  // pick the clause.
+  const fit = overloaded ? valueFit(params, '&BvObject::pack(payload)') : null;
+  if (fit) return ` if (if bv_from_wire_caller(from) { ${check} } else { ${fit} })`;
   return ` if !bv_from_wire_caller(from) || ${check}`;
 }
 
-function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false) {
+// The value check for an in-process call to one clause of an overloaded method,
+// or null when no param has a scalar type a value could contradict. \`subject\`
+// is the call's args as a \`&BvObject\`.
+function valueFit(params, subject) {
+  if (params.some(p => p.rest)) return null;
+  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
+  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  const pos = params.filter(p => p.positional).map(typeOf);
+  const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
+  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
+  return `bv_values_fit(${subject}, &[${pos.map(t => JSON.stringify(t)).join(', ')}], &[${named.map(([k, t]) => `(${JSON.stringify(k)}, ${JSON.stringify(t)})`).join(', ')}])`;
+}
+
+function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false, overloaded = false) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -767,7 +790,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   G.ctx.ssaCounts = savedSsaCounts;
 
   // Outside, only `@name` is exposed.
-  return `            "${name}"${isPublic ? childTagGuard(fn) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
+  return `            "${name}"${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
 }
 
 function tagWireReply(tyBody) {
@@ -794,7 +817,7 @@ function genRustChildDispatch(actor) {
   // The names this class reads from the actors it's declared in, typed as they declare them.
   for (const [n, t] of outerTypesOf(actor)) if (t && !classTypes.has(n)) classTypes.set(n, t);
   const arms = [
-    ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true)),
+    ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true, publicFns.filter(o => o.name === h.name).length > 1)),
     ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
   ];
   // Add on-handler arms

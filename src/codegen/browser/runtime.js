@@ -77,7 +77,7 @@ export const documentManifest = `{
   document () -> *{
     title () -> (Text)
     first (selector: Text) -> (Element)
-    body () -> (Element)
+    body () -> (body)
     eval (Text) -> (Text)
     node_name () -> (Text)
     node_type () -> (Integer)
@@ -192,7 +192,7 @@ export const domManifest = `{
   Document (Node++) -> *{
     title () -> (Text)
     first (selector: Text) -> (Element)
-    body () -> (Element)
+    body () -> (body)
     eval (Text) -> (Text)
     query_selector (Text) -> (Element | null)
     query_selector (selector: Text) -> (Element | null)
@@ -498,10 +498,13 @@ export const domManifest = `{
     set inner_html (Text)
     set text_content (Text)
     set inner_text (Text)
+    append! (Text) => self
     append! (List of Texts) => self
     append! (items: List of Texts) => self
+    prepend! (Text) => self
     prepend! (List of Texts) => self
     prepend! (items: List of Texts) => self
+    replace_children! (Text) => self
     replace_children! (List of Texts) => self
     replace_children! (items: List of Texts) => self
     insert_adjacent_text! (position: Text, text: Text) => self
@@ -523,10 +526,16 @@ export const domManifest = `{
     remove_child! (child: Element) => self
     replace_child! (Element, Element) => self
     replace_child! (new_child: Element, old_child: Element) => self
+    append! (Element) => self
+    append! (Text) => self
     append! (List) => self
     append! (items: List) => self
+    prepend! (Element) => self
+    prepend! (Text) => self
     prepend! (List) => self
     prepend! (items: List) => self
+    replace_children! (Element) => self
+    replace_children! (Text) => self
     replace_children! (List) => self
     replace_children! (items: List) => self
     insert_adjacent_element! (position: Text, element: Element) => self
@@ -536,6 +545,7 @@ export const domManifest = `{
 
   html (ParentElement++) -> *{}
   head (ParentElement++) -> *{}
+  style (TextElement ++ ? media: Text) -> *{}
   body (ParentElement++) -> *{}
   header (ParentElement++) -> *{}
   footer (ParentElement++) -> *{}
@@ -1655,11 +1665,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     return item;
   }
 
-  // Items list comes either positional (payload is `[[...]]` from a single
-  // List positional arg) or named (`{items: [...]}`). Return the resolved
-  // array of Nodes-or-strings ready to spread into a DOM method.
+  // Items come as one positional List (`[[...]]`), one positional item
+  // (`[x]`, or a bare `x` payload), or named (`{items: [...]}`). Return the
+  // resolved array of Nodes-or-strings ready to spread into a DOM method.
   function extractItems(payload) {
+    if (typeof payload === 'string') return [resolveWireItem(payload)].filter(v => v !== null);
     if (Array.isArray(payload) && Array.isArray(payload[0])) return payload[0].map(resolveWireItem).filter(v => v !== null);
+    if (Array.isArray(payload) && payload.length === 1) return [resolveWireItem(payload[0])].filter(v => v !== null);
     if (payload && typeof payload === 'object' && Array.isArray(payload.items)) return payload.items.map(resolveWireItem).filter(v => v !== null);
     return [];
   }
@@ -2132,69 +2144,6 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
   }
 
-  function registerElement(selector, el) {
-    const addr = `document ${selector}`;
-    if (!addresses.has(addr)) {
-      elements.set(addr, el);
-      // Register the element under nodeToAddr so any traversal that lands
-      // on this DOM Node (e.g. `div.parent_node()` walking up to <body>)
-      // returns this same legacy address — preserving identity across
-      // both `document.body()` and traversal entrypoints.
-      if (!nodeToAddr.has(el)) nodeToAddr.set(el, addr);
-      addresses.set(addr, msg => {
-        const { id, op, from } = msg;
-        const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
-        try {
-          if (opName === '@append!') {
-            const payload = Array.isArray(op) ? op[0] : {};
-            let val = typeof payload === 'string' ? payload : (Array.isArray(payload) ? payload[0] : '');
-            // Unwrap value-tail wrapper instance to its inner wire token
-            // (see notes/tail-return-wire-2026-04-15.md, Shape 1).
-            while (val && typeof val === 'object' && '_tail' in val) val = val._tail;
-            if (typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')) {
-              const childAddr = val.slice(2, -1);
-              const childEl = elements.get(childAddr);
-              if (childEl) el.appendChild(childEl);
-            } else {
-              el.insertAdjacentHTML('beforeend', val);
-            }
-            Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
-            return;
-          }
-          if (opName === '@inner_html') {
-            Promise.resolve().then(() => route({ id, re: el.innerHTML, from: addr, to: from }));
-            return;
-          }
-          // Fall through to query, traversal, and Node accessors so this
-          // legacy alias supports the same surface as a fresh element actor.
-          if (typeof opName === 'string' && opName.startsWith('@')) {
-            const accessorName = opName.slice(1);
-            const queryVal = readQueryAccessor(el, accessorName, op);
-            if (queryVal !== undefined) {
-              Promise.resolve().then(() => route({ id, re: queryVal, from: addr, to: from }));
-              return;
-            }
-            const traversal = readElementTraversal(el, accessorName);
-            if (traversal !== undefined) {
-              Promise.resolve().then(() => route({ id, re: traversal, from: addr, to: from }));
-              return;
-            }
-            const nodeVal = readNodeAccessor(el, accessorName, op);
-            if (nodeVal !== undefined) {
-              Promise.resolve().then(() => route({ id, re: nodeVal, from: addr, to: from }));
-              return;
-            }
-          }
-        } catch {
-          if (typeof opName === 'string' && opName.length > 0) {
-            Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
-          }
-        }
-      });
-    }
-    return addr;
-  }
-
   // Register document as an addressable actor. The lowercase singleton is
   // typed against HTML.Document (which extends Node), so its surface is:
   //   - existing: @title, @first, @body
@@ -2214,16 +2163,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const selector = payload.selector;
         const el = document.querySelector(selector);
         if (el) {
-          const addr = registerElement(selector, el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
+          const addr = addrForNode(el);
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.localName, from: 'document', to: from }));
         }
         return;
       }
       if (opName === '@body') {
         const el = document.body;
         if (el) {
-          const addr = registerElement('body', el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @' + el.tagName.toLowerCase(), from: 'document', to: from }));
+          const addr = addrForNode(el);
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML @body', from: 'document', to: from }));
         }
         return;
       }

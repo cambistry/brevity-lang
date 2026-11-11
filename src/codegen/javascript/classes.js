@@ -9,7 +9,7 @@ import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
-  genTypeCondition, genDefaultValue, stateKey, childBinding,
+  genTypeCondition, genValueCondition, genDefaultValue, stateKey, childBinding,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
   genSendNew,
 } from './expressions.js';
@@ -196,8 +196,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       checks.push(`Object.keys(_s.named).every(k => [${allNamedKeys.map(k => JSON.stringify(k)).join(',')}].includes(k))`);
     }
     if (typeCondition) {
-      // External callers also need type matching
-      condition = `opName === "${name}" && (${checks.join(' && ')}) && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+      // External callers are matched by their tags. An in-process call carries
+      // values but no tags, so its values pick the clause.
+      const valueCondition = genValueCondition(params) ?? 'true';
+      condition = `opName === "${name}" && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
     } else {
       condition = `opName === "${name}" && (${checks.join(' && ')})`;
     }

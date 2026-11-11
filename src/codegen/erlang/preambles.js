@@ -1000,6 +1000,26 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
     end;
 type_member_of(_, _) -> false.
 
+%% Whether an in-process arg value (no tag travels with it) can be a param of
+%% type T. Only a scalar member can contradict a value's kind; any other type is
+%% not judged here. An absent (optional) arg fits.
+bv_value_fits('__bv_absent', _T) -> true;
+bv_value_fits(V, T) ->
+    lists:any(fun(M) -> bv_value_fits_one(V, string:trim(M)) end, binary:split(T, <<"|">>, [global])).
+bv_value_fits_one(V, <<"Integer">>) -> is_integer(V);
+bv_value_fits_one(V, <<"Text">>) -> is_binary(V);
+bv_value_fits_one(V, <<"Boolean">>) -> is_boolean(V);
+bv_value_fits_one(V, M) when M =:= <<"Float">>; M =:= <<"Decimal">> ->
+    not is_binary(V) andalso not is_boolean(V) andalso V =/= null;
+bv_value_fits_one(V, <<"null">>) -> V =:= null;
+bv_value_fits_one(_, _) -> true.
+
+%% An overload clause's guard for an in-process call: every arg value fits its param.
+bv_values_fit(Pos, Named, PosTypes, NamedTypes) ->
+    Nth = fun(I) -> case I =< length(Pos) of true -> lists:nth(I, Pos); false -> '__bv_absent' end end,
+    lists:all(fun({I, T}) -> bv_value_fits(Nth(I), T) end, lists:zip(lists:seq(1, length(PosTypes)), PosTypes))
+        andalso lists:all(fun({K, T}) -> bv_value_fits(maps:get(K, Named, '__bv_absent'), T) end, NamedTypes).
+
 match_types(Message, Pairs) ->
     case maps:find(<<"ty">>, Message) of
         {ok, Ty} when is_list(Ty), length(Ty) > 0 ->

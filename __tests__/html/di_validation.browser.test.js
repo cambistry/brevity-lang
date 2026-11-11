@@ -94,3 +94,25 @@ describe('HTML DI validation — tag must be in destructure list', () => {
     expect(() => compile(extract(source).ast, {})).not.toThrow();
   });
 });
+
+describe('HTML DI validation — destructured tag must be in the manifest', () => {
+  it('a tag the manifest declares → compiles cleanly', () => {
+    const source = `
+      *
+        HTML: (:div, :style)
+      *
+      @create = -> <div><style>p { color: red; }</style></div>
+    `;
+    expect(() => compileWithHTML(source)).not.toThrow();
+  });
+
+  it('a misspelled tag → compile error, even when the template matches it', () => {
+    const source = `
+      *
+        HTML: (:div, :sytle)
+      *
+      @create = -> <div><sytle>p { color: red; }</sytle></div>
+    `;
+    expect(() => compileWithHTML(source)).toThrow(/'sytle' is not exported by 'HTML'/);
+  });
+});

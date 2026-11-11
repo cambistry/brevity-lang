@@ -1536,6 +1536,18 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   }
 }
 
+// An overload clause's guard for an in-process call, which carries values but no
+// tags: null when no param has a scalar type a value could contradict.
+export function genValueCondition(params) {
+  if (params.find(p => p.rest)) return null;
+  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
+  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  const pos = params.filter(p => p.positional).map(typeOf);
+  const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
+  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
+  return `_bvValuesFit(_s, ${JSON.stringify(pos)}, ${JSON.stringify(named)})`;
+}
+
 export function genTypeCondition(ctx, params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher

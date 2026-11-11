@@ -115,6 +115,17 @@ describe('type imports — destructured type binding', () => {
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/expects 2 arguments, got 1/);
   });
+
+  it('a type the source does not export is a compile error, not an actor construction', () => {
+    const { ast } = extract(`
+      *
+        "geometry.bv": (:Pont)
+      *
+      @make = -> p: Pont(0, 0)
+    `);
+    expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
+      .toThrow(/'Pont' is not exported by 'geometry.bv'/);
+  });
 });
 
 describe('type imports — cross-module type refs (Service::Name)', () => {

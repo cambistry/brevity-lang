@@ -609,6 +609,155 @@ describe('HTML element compile — children mutators on void tags rejected', () 
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Compile-time discipline — unannotated element binds are typed
+//
+// `el = <div>…</div>` is a `div`, and `b = document.body()` is a `body`, so
+// calls on them are checked like calls on an annotated bind. `append!` takes
+// one item or a List, as the DOM's `append` does.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('HTML element compile — unannotated element binds are typed', () => {
+  it('a template bind compiles without an annotation', () => {
+    expect(() => compileWithHTML(`
+      *
+        HTML: (:div)
+      *
+      @test = { d = <div>x</div>; d }
+    `)).not.toThrow();
+  });
+
+  it('a method a template bind lacks is rejected', () => {
+    expect(() => compileWithHTML(`
+      *
+        HTML: (:div)
+      *
+      @test. = {
+        d = <div>x</div>
+        d.apend!("y")
+      }
+    `)).toThrow(/'div' has no method 'apend!'/);
+  });
+
+  it('document.body() appends one element', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+        HTML: (:div)
+      *
+      @test. = {
+        el = <div>x</div>
+        body = document.body()
+        body.append!(el)
+      }
+    `)).not.toThrow();
+  });
+
+  it('document.body() appends Text, a List, and a child', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+        HTML: (:div)
+      *
+      @test. = {
+        el = <div>x</div>
+        body = document.body()
+        body.append!("y")
+        body.append!([el, "z"])
+        body.append_child!(el)
+      }
+    `)).not.toThrow();
+  });
+
+  it('append! with two positional args is rejected', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+        HTML: (:div)
+      *
+      @test. = {
+        el = <div>x</div>
+        body = document.body()
+        body.append!(el, el)
+      }
+    `)).toThrow(/'body.append!\(\)' call doesn't match any signature/);
+  });
+
+  it('append! of an Integer is rejected', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+        HTML: (:div)
+      *
+      @test. = {
+        body = document.body()
+        body.append!(5)
+      }
+    `)).toThrow(/'Integer' is not assignable to 'Element'/);
+  });
+
+  it('in the constructor block, a method the body element lacks is rejected', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+        HTML: (:div)
+      *
+      body = document.body()
+      body.apend!(<div>x</div>)
+    `)).toThrow(/'body' has no method 'apend!'/);
+  });
+
+  it('in the constructor block, a document method that does not exist is rejected', () => {
+    expect(() => compileWithDocAndHTML(`
+      *
+        :document
+      *
+      b = document.bdoy()
+    `)).toThrow(/'document' has no function 'bdoy'/);
+  });
+
+  it('a TextElement rejects an element child', () => {
+    expect(() => compileWithHTML(`
+      *
+        HTML: (:div, :textarea)
+      *
+      @test. = {
+        el = <div>x</div>
+        t = <textarea>a</textarea>
+        t.append!(el)
+      }
+    `)).toThrow(/'textarea.append!\(\)' .*expected Text, got div/);
+  });
+});
+
+describe('HTML element runtime — append! takes one item; body is a full element', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/builder.bv"></script>
+    </head><body></body></html>`;
+
+  const builderSource = `*
+  :document
+  HTML: (:div, :p)
+*
+@build. = {
+  d = <div></div>
+  d.append!(<p>one</p>)
+  d.append!("two")
+  body = document.body()
+  body.append_child!(d)
+}
+`;
+
+  it('one element and one Text land in the div, and the div lands in body', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await actor.sendAsync({ id: '1', op: '@build.' });
+    const bodyHtml = await page.evaluate(() => document.body.innerHTML);
+    expect(bodyHtml).toBe('<div><p>one</p>two</div>');
+  });
+});
+
 describe('HTML element compile — settable-field discipline (`obj.f <- v`)', () => {
   it('div.inner_html <- "..." compiles — declared on ParentElement', () => {
     expect(() => compileWithHTML(`
