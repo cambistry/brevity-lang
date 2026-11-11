@@ -143,7 +143,7 @@ untracked):
 @color *Text = "rgb(0, 0, 0)"
 
 <p>
-  <style>{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }</style>
+  <style>{{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }}</style>
   scoped
 </p>
 ```
@@ -152,8 +152,26 @@ untracked):
 - **After an outside `#set` of `@color`:** only the scoped `<p>` turns red.
 - **Mechanism:** the existing reactive text-node subscription rewrites the `<style>`'s text.
 
-Firefox arrived at `@scope` later than Chrome and Safari; check before relying on it. The
-CSS braces only survive here because they sit inside a string literal (see "Interpolation").
+Firefox arrived at `@scope` later than Chrome and Safari; check before relying on it.
+
+Plain CSS needs no string literal: a lone `{`/`}` in element content is text, and `{{ }}` is the
+reactive hole. So the static form is written as is:
+
+```brevity
+<div>
+  <style>@scope { :scope { border-top: 3px solid; } p { color: gray; } }</style>
+  <p>inside</p>
+</div>
+```
+
+Behaviour (native, no runtime involvement):
+
+- The `<style>` stays at its position in its parent; nothing is hoisted.
+- Rules reach the parent (`:scope`) and its subtree only; sibling elements with the same tags
+  are untouched, and two siblings with their own scoped sheets stay isolated.
+- The scope moves with the element. When one scoped element sits inside another, a rule both
+  sheets match resolves to the nearer root (scope proximity).
+- `<style>` takes text children only; an element child is a compile error.
 
 **Where this form fits, and where it doesn't.** Nesting a `<style>` in every element a maker
 returns is dishonest for the ordinary case, a single maker sharing one style definition:

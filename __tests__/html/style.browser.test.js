@@ -105,3 +105,76 @@ describe('<style> runtime — a sheet appended to body applies', () => {
     expect(sheet.posts[0]).toEqual(expect.objectContaining({ id: '2', re: 'print' }));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// <style> as a child of an element, scoped with native `@scope`
+//
+// An `@scope { … }` with no prelude scopes to the <style>'s parent, and
+// `:scope` is that parent. The <style> stays inline at its position; the
+// browser does the targeting.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('<style> runtime — an inline @scope sheet styles only its parent subtree', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/builder.bv"></script>
+    </head><body></body></html>`;
+
+  const builderSource = `*
+  :document
+  HTML: (:div, :style, :p)
+*
+@build. = {
+  body = document.body()
+  body.append!(<div id="a"><style>@scope { :scope { border-top: 3px solid; } p { color: rgb(1, 2, 3); } }</style><p>a</p></div>)
+  body.append!(<div id="b"><style>@scope { p { color: rgb(4, 5, 6); } }</style><p>b</p></div>)
+  body.append!(<p id="out">outside</p>)
+}
+`;
+
+  const look = (page) => page.evaluate(() => {
+    const css = (sel, prop) => getComputedStyle(document.querySelector(sel))[prop];
+    return {
+      styleParents: [...document.querySelectorAll('style')].map(s => s.parentElement.id),
+      aBorder: css('#a', 'borderTopWidth'),
+      bBorder: css('#b', 'borderTopWidth'),
+      aP: css('#a p', 'color'),
+      bP: css('#b p', 'color'),
+      outP: css('#out', 'color'),
+    };
+  });
+
+  it('each sheet stays in its element and styles only that subtree; :scope is the parent', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await actor.sendAsync({ id: '1', op: '@build.' });
+    expect(await look(page)).toEqual({
+      styleParents: ['a', 'b'],
+      aBorder: '3px',
+      bBorder: '0px',
+      aP: 'rgb(1, 2, 3)',
+      bP: 'rgb(4, 5, 6)',
+      outP: 'rgb(0, 0, 0)',
+    });
+  });
+
+  // #a moves inside #b, so both sheets' `p` rules match #a's <p>: the nearer
+  // scope root wins (scope proximity), so it keeps #a's colour.
+  it('the scope follows the element when it moves', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await actor.sendAsync({ id: '1', op: '@build.' });
+    await page.evaluate(() => {
+      document.querySelector('#b').append(document.querySelector('#a'));
+      document.querySelector('#a').append(document.querySelector('#out'));
+    });
+    expect(await look(page)).toEqual({
+      styleParents: ['b', 'a'],
+      aBorder: '3px',
+      bBorder: '0px',
+      aP: 'rgb(1, 2, 3)',
+      bP: 'rgb(4, 5, 6)',
+      outP: 'rgb(1, 2, 3)',
+    });
+  });
+});
