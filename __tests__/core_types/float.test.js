@@ -1,7 +1,7 @@
 import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Float arithmetic: +, -, *, /, %, **
+// Float arithmetic: +, -, *, /, %, ^
 // Floats are IEEE-754 double-precision. Division is normal floating-point
 // division (no termination check). Exponentiation is supported.
 // Mixed Float+Integer or Float+Decimal promotes to Float per-operation.
@@ -14,7 +14,7 @@ const script = `
     @mul = (a Float, b Float) -> result: a * b
     @div = (a Float, b Float) -> result: a / b
     @rem = (a Float, b Float) -> result: a % b
-    @exp = (a Float, b Float) -> result: a ** b
+    @exp = (a Float, b Float) -> result: a ^ b
 `;
 
 function inpFF(op, a, b) {
@@ -170,39 +170,39 @@ describe('Float remainder', () => {
 // ─── Exponentiation ──────────────────────────────────────────────────────────
 
 describe('Float exponentiation', () => {
-  it('basic power: 2.0 ** 3.0 = 8.0', async () => {
+  it('basic power: 2.0 ^ 3.0 = 8.0', async () => {
     await expectBehavior(script, inpFF('@exp', 2.0e0, 3.0e0), out(8.0));
   });
 
-  it('power of zero: 5.0 ** 0.0 = 1.0', async () => {
+  it('power of zero: 5.0 ^ 0.0 = 1.0', async () => {
     await expectBehavior(script, inpFF('@exp', 5.0e0, 0.0e0), out(1.0));
   });
 
-  it('power of one: 7.0 ** 1.0 = 7.0', async () => {
+  it('power of one: 7.0 ^ 1.0 = 7.0', async () => {
     await expectBehavior(script, inpFF('@exp', 7.0e0, 1.0e0), out(7.0));
   });
 
-  it('fractional exponent: 4.0 ** 0.5 = 2.0 (square root)', async () => {
+  it('fractional exponent: 4.0 ^ 0.5 = 2.0 (square root)', async () => {
     await expectBehavior(script, inpFF('@exp', 4.0e0, 5.0e-1), out(2.0));
   });
 
-  it('negative exponent: 2.0 ** -1.0 = 0.5', async () => {
+  it('negative exponent: 2.0 ^ -1.0 = 0.5', async () => {
     await expectBehavior(script, inpFF('@exp', 2.0e0, -1.0e0), out(0.5));
   });
 
-  it('fractional base and exponent: 2.5 ** 2.0 = 6.25', async () => {
+  it('fractional base and exponent: 2.5 ^ 2.0 = 6.25', async () => {
     await expectBehavior(script, inpFF('@exp', 2.5e0, 2.0e0), out(6.25));
   });
 
-  it('right-associative: 2.0 ** 3.0 ** 2.0 = 512.0', async () => {
+  it('right-associative: 2.0 ^ 3.0 ^ 2.0 = 512.0', async () => {
     const rassocScript = `
-        @rassoc = (a Float, b Float, c Float) -> result: a ** b ** c
+        @rassoc = (a Float, b Float, c Float) -> result: a ^ b ^ c
     `;
     const inp = { input: { id: '1', op: [[2.0e0, 3.0e0, 2.0e0], '@rassoc'], 'ty': [['Float', 'Float', 'Float']], from: 'c' } };
     await expectBehavior(rassocScript, inp, out(512.0));
   });
 
-  it('negative base even exponent: (-3.0) ** 2.0 = 9.0', async () => {
+  it('negative base even exponent: (-3.0) ^ 2.0 = 9.0', async () => {
     await expectBehavior(script, inpFF('@exp', -3.0e0, 2.0e0), out(9.0));
   });
 });
@@ -216,8 +216,8 @@ describe('Mixed Float and Integer arithmetic', () => {
       @mulFI = (a Float, b Integer) -> result: a * b
       @divIF = (a Integer, b Float) -> result: a / b
       @remFI = (a Float, b Integer) -> result: a % b
-      @expFI = (a Float, b Integer) -> result: a ** b
-      @expIF = (a Integer, b Float) -> result: a ** b
+      @expFI = (a Float, b Integer) -> result: a ^ b
+      @expIF = (a Integer, b Float) -> result: a ^ b
   `;
 
   it('Float + Integer = Float', async () => {
@@ -240,11 +240,11 @@ describe('Mixed Float and Integer arithmetic', () => {
     await expectBehavior(mixedFIScript, inpFI('@remFI', 5.5e0, 2), out(1.5));
   });
 
-  it('Float ** Integer = Float', async () => {
+  it('Float ^ Integer = Float', async () => {
     await expectBehavior(mixedFIScript, inpFI('@expFI', 2.5e0, 2), out(6.25));
   });
 
-  it('Integer ** Float = Float', async () => {
+  it('Integer ^ Float = Float', async () => {
     await expectBehavior(mixedFIScript, inpIF('@expIF', 4, 5.0e-1), out(2.0));
   });
 });
@@ -258,7 +258,7 @@ describe('Mixed Float and Decimal arithmetic', () => {
       @mulFD = (a Float, b Decimal) -> result: a * b
       @divDF = (a Decimal, b Float) -> result: a / b
       @remFD = (a Float, b Decimal) -> result: a % b
-      @expFD = (a Float, b Decimal) -> result: a ** b
+      @expFD = (a Float, b Decimal) -> result: a ^ b
   `;
 
   it('Float + Decimal = Float', async () => {
@@ -281,7 +281,7 @@ describe('Mixed Float and Decimal arithmetic', () => {
     await expectBehavior(mixedFDScript, inpFD('@remFD', 5.5e0, 2.0), out(1.5));
   });
 
-  it('Float ** Decimal = Float', async () => {
+  it('Float ^ Decimal = Float', async () => {
     await expectBehavior(mixedFDScript, inpFD('@expFD', 4.0e0, 0.5), out(2.0));
   });
 });
@@ -316,10 +316,10 @@ describe('Float order of operations', () => {
   const precedenceScript = `
       @mulBeforeAdd = (a Float, b Float, c Float) -> result: a + b * c
       @parenAdd = (a Float, b Float, c Float) -> result: (a + b) * c
-      @expBeforeMul = (a Float, b Float, c Float) -> result: a * b ** c
+      @expBeforeMul = (a Float, b Float, c Float) -> result: a * b ^ c
       @leftAssocSub = (a Float, b Float, c Float) -> result: a - b - c
       @leftAssocDiv = (a Float, b Float, c Float) -> result: a / b / c
-      @rightAssocExp = (a Float, b Float, c Float) -> result: a ** b ** c
+      @rightAssocExp = (a Float, b Float, c Float) -> result: a ^ b ^ c
   `;
   function inpF3(op, a, b, c) {
     return { input: { id: '1', op: [[a, b, c], op], 'ty': [['Float', 'Float', 'Float']], from: 'c' } };
@@ -333,7 +333,7 @@ describe('Float order of operations', () => {
     await expectBehavior(precedenceScript, inpF3('@parenAdd', 2.0e0, 3.0e0, 4.0e0), out(20.0));
   });
 
-  it('** binds tighter than *: 2.0 * 3.0 ** 2.0 = 18.0', async () => {
+  it('^ binds tighter than *: 2.0 * 3.0 ^ 2.0 = 18.0', async () => {
     await expectBehavior(precedenceScript, inpF3('@expBeforeMul', 2.0e0, 3.0e0, 2.0e0), out(18.0));
   });
 
@@ -345,7 +345,7 @@ describe('Float order of operations', () => {
     await expectBehavior(precedenceScript, inpF3('@leftAssocDiv', 2.4e1, 4.0e0, 2.0e0), out(3.0));
   });
 
-  it('** is right-associative: 2.0 ** 3.0 ** 2.0 = 512.0', async () => {
+  it('^ is right-associative: 2.0 ^ 3.0 ^ 2.0 = 512.0', async () => {
     await expectBehavior(precedenceScript, inpF3('@rightAssocExp', 2.0e0, 3.0e0, 2.0e0), out(512.0));
   });
 });

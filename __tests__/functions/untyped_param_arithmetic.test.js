@@ -8,7 +8,7 @@ describe('untyped param arithmetic in a file-level function', () => {
   const script = `
     double = (n) { n * 2 }
     big = (n) { n > 10 }
-    cube = (n) { n ** 3 }
+    cube = (n) { n ^ 3 }
 
     @test = {
       result Integer = double(21)

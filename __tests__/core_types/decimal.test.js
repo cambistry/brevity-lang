@@ -3,7 +3,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Decimal arithmetic: +, -, *, /, %
 // Decimals are exact (scaled BigInt). No floating-point imprecision.
-// No ** for Decimal — use Math lib for exponentiation.
+// No ^ for Decimal — use Math lib for exponentiation.
 // Integer mixed with Decimal promotes to Decimal.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -245,42 +245,42 @@ describe('Decimal non-terminating division (compile-time)', () => {
 });
 
 // ─── Exponentiation with Integer exponent ───────────────────────────────────
-// Decimal ** Integer is allowed. Positive exponent = repeated multiply (exact).
-// Negative exponent = 1/(base**(exp) -> ), same termination check as division.
+// Decimal ^ Integer is allowed. Positive exponent = repeated multiply (exact).
+// Negative exponent = 1/(base^(exp) -> ), same termination check as division.
 
 const expScript = `
-    @exp = (base Decimal, power Integer) -> result: base ** power
+    @exp = (base Decimal, power Integer) -> result: base ^ power
 `;
 function inpExp(base, power) {
   return { input: { id: '1', op: [[base, power], '@exp'], 'ty': [['Decimal', 'Integer']], from: 'c' } };
 }
 
 describe('Decimal exponentiation', () => {
-  it('2.5 ** 2 = 6.25', async () => {
+  it('2.5 ^ 2 = 6.25', async () => {
     await expectBehavior(expScript, inpExp(2.5, 2), out(6.25));
   });
 
-  it('2.5 ** 3 = 15.625', async () => {
+  it('2.5 ^ 3 = 15.625', async () => {
     await expectBehavior(expScript, inpExp(2.5, 3), out(15.625));
   });
 
-  it('1.1 ** 0 = 1.0', async () => {
+  it('1.1 ^ 0 = 1.0', async () => {
     await expectBehavior(expScript, inpExp(1.1, 0), out(1.0));
   });
 
-  it('0.5 ** 1 = 0.5', async () => {
+  it('0.5 ^ 1 = 0.5', async () => {
     await expectBehavior(expScript, inpExp(0.5, 1), out(0.5));
   });
 
-  it('2.5 ** -1 = 0.4 (terminates: 1/2.5 = 2/5)', async () => {
+  it('2.5 ^ -1 = 0.4 (terminates: 1/2.5 = 2/5)', async () => {
     await expectBehavior(expScript, inpExp(2.5, -1), out(0.4));
   });
 
-  it('0.5 ** -2 = 4.0 (terminates: 1/0.25)', async () => {
+  it('0.5 ^ -2 = 4.0 (terminates: 1/0.25)', async () => {
     await expectBehavior(expScript, inpExp(0.5, -2), out(4.0));
   });
 
-  it('3.0 ** -1 → runtime error (1/3 non-terminating)', async () => {
+  it('3.0 ^ -1 → runtime error (1/3 non-terminating)', async () => {
     await expectBehavior(expScript,
       inpExp(3.0, -1),
       { output: { id: '1', ex: { '@exp': 'error' }, to: 'c' } });
@@ -290,9 +290,9 @@ describe('Decimal exponentiation', () => {
 // ─── Compile-time exponentiation error ──────────────────────────────────────
 
 describe('Decimal exponentiation (compile-time)', () => {
-  it('literal 2.5 ** 3 → no error (positive exponent always exact)', () => {
+  it('literal 2.5 ^ 3 → no error (positive exponent always exact)', () => {
     expect(() => compileSource(`
-      @test = -> result: 2.5 ** 3
+      @test = -> result: 2.5 ^ 3
     `)).not.toThrow();
   });
 });
@@ -376,9 +376,9 @@ describe('Truly long decimals (500 fractional digits)', () => {
     @divPow2      = -> equal: ${PI_500} * 8 / 8 == ${PI_500}
     @divPow5      = -> equal: ${PI_500} * 25 / 25 == ${PI_500}
     @divMixed     = -> equal: ${PI_500} * 40 / 40 == ${PI_500}
-    @pow2         = -> equal: ${PI_500} ** 2 == ${PI_500} * ${PI_500}
-    @pow3         = -> equal: ${PI_500} ** 3 == ${PI_500} * ${PI_500} * ${PI_500}
-    @pow0         = -> equal: ${PI_500} ** 0 == 1.0
+    @pow2         = -> equal: ${PI_500} ^ 2 == ${PI_500} * ${PI_500}
+    @pow3         = -> equal: ${PI_500} ^ 3 == ${PI_500} * ${PI_500} * ${PI_500}
+    @pow0         = -> equal: ${PI_500} ^ 0 == 1.0
     @remBySelf    = -> equal: ${PI_500} % ${PI_500} == 0.0
     @remBy2Sum    = -> equal: (${PI_500} + ${PI_500} + ${PI_500}) % ${PI_500} == 0.0
     @remPreserved = -> equal: (${PI_500} + 10.0) % ${PI_500} == 10.0 % ${PI_500}
@@ -424,15 +424,15 @@ describe('Truly long decimals (500 fractional digits)', () => {
     await expectBehavior(longScript, call('@divMixed'), outEqual(true));
   });
 
-  it('pi ** 2 == pi * pi (500 digits → 1000-digit result)', async () => {
+  it('pi ^ 2 == pi * pi (500 digits → 1000-digit result)', async () => {
     await expectBehavior(longScript, call('@pow2'), outEqual(true));
   });
 
-  it('pi ** 3 == pi * pi * pi (500 digits → 1500-digit result)', async () => {
+  it('pi ^ 3 == pi * pi * pi (500 digits → 1500-digit result)', async () => {
     await expectBehavior(longScript, call('@pow3'), outEqual(true));
   });
 
-  it('pi ** 0 == 1.0 (500 digits)', async () => {
+  it('pi ^ 0 == 1.0 (500 digits)', async () => {
     await expectBehavior(longScript, call('@pow0'), outEqual(true));
   });
 

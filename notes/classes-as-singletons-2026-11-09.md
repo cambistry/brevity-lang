@@ -106,14 +106,15 @@ body
 
 ## Exponent moves to `^`
 
-`**` is the power operator today (`POWER` token), so `} **{` lexes as an exponent, and a lone
-`**` line would too. `^` is entirely free: no token, no rule, no meaning in the docs or notes.
+`**` was the power operator (`POWER` token), so `} **{` would lex as an exponent, and a lone
+`**` line would too. `^` was entirely free: no token, no rule, no meaning in the docs or notes.
 
 - Precedent: exponent in Lua, R, Haskell, Excel. XOR elsewhere; a future bitwise XOR would take a
   name (`bxor`).
-- Right-associative, like `**` now.
-- Migration: Brevity sources in `__tests__/core_types/` (Integer, Decimal, Float). Codegen maps the
-  operator, so the targets don't change.
+- Right-associative, same precedence as `**` had.
+- `**` lexes as its own token (`STARSTAR`), reserved for define-and-instantiate. In operator
+  position it is a compile error that names `^`, not a silent `a * *b`.
+- Only the source spelling changes: the AST op stays `'**'`, so the targets don't change.
 
 ## Open
 
@@ -131,6 +132,5 @@ body
 ## Implementation touch points
 
 - `KEYWORDS` in `src/lexer.js`: add `new`.
-- `POWER` lexing: `**` → `^`.
 - `hasHeader` in `src/codegen/browser/runtime.js` matches a lone `*` line; it needs to learn `**`.
 - `documentDI` (implicit DI for inline `<head>` scripts) prepends a `*` header; it becomes `**`.

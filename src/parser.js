@@ -2529,8 +2529,13 @@ export function parse(tokensIn) {
     ['EQ','==='],['NEQ','!=='],['GT','>'],['LT','<'],['GTE','>='],['LTE','<='],
   ]);
 
+  function rejectStarStarOperator() {
+    if (peek().type === 'STARSTAR') throw new Error("'**' is not an operator — the exponent is '^' (e.g. 'a ^ b')");
+  }
+
   function parseExpExpr() {
     let base = parsePrimary();
+    rejectStarStarOperator();
     if (peek().type === 'POWER') {
       consume();
       return AST.binaryExpr('**', base, parseExpExpr());
@@ -2739,8 +2744,10 @@ export function parse(tokensIn) {
               exprNode = AST.functionCallExpr(exprNode, args);
             }
           }
+          rejectStarStarOperator();
           while (['PLUS', 'MINUS', 'STAR', 'SLASH', 'PERCENT', 'POWER'].includes(peek().type)) {
-            const op = consume().value;
+            const tok = consume();
+            const op = tok.type === 'POWER' ? '**' : tok.value;
             exprNode = AST.binaryExpr(op, exprNode, parsePrimary());
           }
           let typeName = null;

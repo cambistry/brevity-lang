@@ -1,7 +1,7 @@
-import { expectBehavior, compileActor } from '../helpers.js';
+import { expectBehavior, compileActor, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Integer arithmetic: +, -, *, /, %, **
+// Integer arithmetic: +, -, *, /, %, ^
 // All integers are arbitrary-precision. Division truncates toward zero.
 // Remainder sign follows the dividend.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -12,7 +12,7 @@ const script = `
     @mul = (a Integer, b Integer) -> result: a * b
     @div = (a Integer, b Integer) -> result: a / b
     @rem = (a Integer, b Integer) -> result: a % b
-    @exp = (a Integer, b Integer) -> result: a ** b
+    @exp = (a Integer, b Integer) -> result: a ^ b
 `;
 
 function inp2(op, a, b) {
@@ -206,43 +206,43 @@ describe('Integer remainder', () => {
 // ─── Exponentiation ──────────────────────────────────────────────────────────
 
 describe('Integer exponentiation', () => {
-  it('basic power: 2 ** 3 = 8', async () => {
+  it('basic power: 2 ^ 3 = 8', async () => {
     await expectBehavior(script, inp2('@exp', 2, 3), out(8));
   });
 
-  it('power of zero: 5 ** 0 = 1', async () => {
+  it('power of zero: 5 ^ 0 = 1', async () => {
     await expectBehavior(script, inp2('@exp', 5, 0), out(1));
   });
 
-  it('zero to the zero: 0 ** 0 = 1', async () => {
+  it('zero to the zero: 0 ^ 0 = 1', async () => {
     await expectBehavior(script, inp2('@exp', 0, 0), out(1));
   });
 
-  it('power of one: 7 ** 1 = 7', async () => {
+  it('power of one: 7 ^ 1 = 7', async () => {
     await expectBehavior(script, inp2('@exp', 7, 1), out(7));
   });
 
-  it('zero raised to positive: 0 ** 5 = 0', async () => {
+  it('zero raised to positive: 0 ^ 5 = 0', async () => {
     await expectBehavior(script, inp2('@exp', 0, 5), out(0));
   });
 
-  it('one raised to anything: 1 ** 100 = 1', async () => {
+  it('one raised to anything: 1 ^ 100 = 1', async () => {
     await expectBehavior(script, inp2('@exp', 1, 100), out(1));
   });
 
-  it('negative base even exponent: (-3) ** 4 = 81', async () => {
+  it('negative base even exponent: (-3) ^ 4 = 81', async () => {
     await expectBehavior(script, inp2('@exp', -3, 4), out(81));
   });
 
-  it('negative base odd exponent: (-3) ** 3 = -27', async () => {
+  it('negative base odd exponent: (-3) ^ 3 = -27', async () => {
     await expectBehavior(script, inp2('@exp', -3, 3), out(-27));
   });
 
-  it('large exponent produces arbitrary-precision result: 2 ** 64', async () => {
+  it('large exponent produces arbitrary-precision result: 2 ^ 64', async () => {
     await expectBehavior(script, inp2('@exp', 2n, 64n), out(18446744073709551616n));
   });
 
-  it('large base and exponent: 10 ** 20', async () => {
+  it('large base and exponent: 10 ^ 20', async () => {
     await expectBehavior(script, inp2('@exp', 10n, 20n), out(100000000000000000000n));
   });
 });
@@ -286,7 +286,7 @@ describe('Integer division/remainder identity', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Order of operations and parentheses
-// Standard precedence: ** > * / % > + -
+// Standard precedence: ^ > * / % > + -
 // Parentheses override precedence.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -302,11 +302,11 @@ describe('Integer order of operations', () => {
       @parenRem = (a Integer, b Integer, c Integer) -> result: (a + b) % c
       @nested = (a Integer, b Integer, c Integer, d Integer) -> result: (a + b) * (c - d)
       @deepNest = (a Integer, b Integer, c Integer, d Integer) -> result: ((a + b) * c) / d
-      @expBeforeMul = (a Integer, b Integer, c Integer) -> result: a * b ** c
-      @parenBeforeExp = (a Integer, b Integer, c Integer) -> result: (a * b) ** c
+      @expBeforeMul = (a Integer, b Integer, c Integer) -> result: a * b ^ c
+      @parenBeforeExp = (a Integer, b Integer, c Integer) -> result: (a * b) ^ c
       @leftAssocSub = (a Integer, b Integer, c Integer) -> result: a - b - c
       @leftAssocDiv = (a Integer, b Integer, c Integer) -> result: a / b / c
-      @rightAssocExp = (a Integer, b Integer, c Integer) -> result: a ** b ** c
+      @rightAssocExp = (a Integer, b Integer, c Integer) -> result: a ^ b ^ c
       @mixedChain = (a Integer, b Integer, c Integer, d Integer) -> result: a + b * c - d
   `;
 
@@ -358,11 +358,11 @@ describe('Integer order of operations', () => {
 
   // ─── Exponentiation precedence ─────────────────────────────────────────────
 
-  it('** binds tighter than *: 2 * 3 ** 2 = 18 (not 36)', async () => {
+  it('^ binds tighter than *: 2 * 3 ^ 2 = 18 (not 36)', async () => {
     await expectBehavior(precedenceScript, inp3('@expBeforeMul', 2, 3, 2), out(18));
   });
 
-  it('parens override **: (2 * 3) ** 2 = 36', async () => {
+  it('parens override ^: (2 * 3) ^ 2 = 36', async () => {
     await expectBehavior(precedenceScript, inp3('@parenBeforeExp', 2, 3, 2), out(36));
   });
 
@@ -376,8 +376,8 @@ describe('Integer order of operations', () => {
     await expectBehavior(precedenceScript, inp3('@leftAssocDiv', 24, 4, 2), out(3));
   });
 
-  it('** is right-associative: 2 ** 3 ** 2 = 512 (not 64)', async () => {
-    // 2 ** (3 ** 2) = 2 ** 9 = 512, not (2 ** 3) ** 2 = 8 ** 2 = 64
+  it('^ is right-associative: 2 ^ 3 ^ 2 = 512 (not 64)', async () => {
+    // 2 ^ (3 ^ 2) = 2 ^ 9 = 512, not (2 ^ 3) ^ 2 = 8 ^ 2 = 64
     await expectBehavior(precedenceScript, inp3('@rightAssocExp', 2, 3, 2), out(512));
   });
 
@@ -594,5 +594,16 @@ describe('Integer conversion via ref cell dot method', () => {
 
   it('x.to_decimal on *Integer ref', async () => {
     await expectBehavior(refScript, { input: { id: '1', op: '@toDecimal', from: 'c' } }, outDecimal(10));
+  });
+});
+
+// ─── `**` is not the exponent ─────────────────────────────────────────────────
+// `^` is the exponent; `**` is reserved for define-and-instantiate (`**{ }`).
+
+describe('Exponent operator spelling', () => {
+  it('a ** b is a compile error pointing at ^', () => {
+    expect(() => compileSource(`
+      @exp = (a Integer, b Integer) -> result: a ** b
+    `)).toThrow("'**' is not an operator — the exponent is '^'");
   });
 });
