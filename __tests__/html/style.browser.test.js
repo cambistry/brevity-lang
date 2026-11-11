@@ -178,3 +178,121 @@ describe('<style> runtime — an inline @scope sheet styles only its parent subt
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Reactive @scope sheets — `{{ }}` holes inside the CSS text
+//
+// Each hole is a closure child of the <style>; the runtime subscribes to it
+// and rewrites that run of the sheet's text when the cell changes.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('<style> runtime — {{ }} holes in a scoped sheet restyle the parent', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/sheet.bv"></script>
+    </head><body></body></html>`;
+
+  const sheetSource = `*
+  :document
+  HTML: (:div, :style)
+*
+@color *Text = "rgb(0, 0, 0)"
+@size *Text = "20px"
+
+@paint! = (c Text) { @color <- c }
+
+el = <div id="t"><style>@scope { :scope { color: {{ @color }}; font-size: {{ @size }}; } }</style>scoped</div>
+body = document.body()
+body.append!(el)
+body.append!(<div id="u">unscoped</div>)
+`;
+
+  const look = (page) => page.evaluate(() => {
+    const t = getComputedStyle(document.querySelector('#t'));
+    const u = getComputedStyle(document.querySelector('#u'));
+    return {
+      text: document.querySelector('style').textContent,
+      color: t.color,
+      size: t.fontSize,
+      outside: [u.color, u.fontSize],
+    };
+  });
+
+  it('the first values render into the sheet', async () => {
+    const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
+    expect(await look(page)).toEqual({
+      text: '@scope { :scope { color: rgb(0, 0, 0); font-size: 20px; } }',
+      color: 'rgb(0, 0, 0)',
+      size: '20px',
+      outside: ['rgb(0, 0, 0)', '16px'],
+    });
+  });
+
+  it('a set from inside the actor rewrites its hole and restyles the parent', async () => {
+    const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
+    const actor = await page.connectActor('sheet.bv');
+    await actor.sendAsync({ id: '1', op: [['rgb(1, 2, 3)'], '@paint!'], ty: [['Text']] });
+    expect(await look(page)).toEqual({
+      text: '@scope { :scope { color: rgb(1, 2, 3); font-size: 20px; } }',
+      color: 'rgb(1, 2, 3)',
+      size: '20px',
+      outside: ['rgb(0, 0, 0)', '16px'],
+    });
+  });
+
+  it('an outside #set on each cell updates its own hole', async () => {
+    const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '#set'], to: '#<sheet.bv @color>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '2', op: [['30px'], '#set'], to: '#<sheet.bv @size>', from: 'test', ty: [['Text']] });
+    expect(await look(page)).toEqual({
+      text: '@scope { :scope { color: rgb(4, 5, 6); font-size: 30px; } }',
+      color: 'rgb(4, 5, 6)',
+      size: '30px',
+      outside: ['rgb(0, 0, 0)', '16px'],
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bare declarations directly inside @scope
+//
+// Standard CSS (nested declarations): `@scope { color: … }` applies to the
+// scope root as if written `:where(:scope) { … }` — zero specificity, so any
+// page rule naming the element wins. `:scope { … }` carries pseudo-class
+// specificity: it beats a plain type rule (`div`), not a class + type
+// rule (`div.x`).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('<style> runtime — bare declarations inside @scope', () => {
+  const html = `<html><head>
+    <style>div { color: rgb(9, 9, 9); }</style>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/bare.bv"></script>
+    </head><body></body></html>`;
+
+  const bareSource = `*
+  :document
+  HTML: (:div, :p, :style)
+*
+@color *Text = "rgb(1, 2, 3)"
+
+body = document.body()
+body.append!(<p id="bare"><style>@scope { color: {{ @color }}; }</style>x</p>)
+body.append!(<div id="bare-ranked"><style>@scope { color: rgb(1, 2, 3); }</style>x</div>)
+body.append!(<div id="scope-ranked"><style>@scope { :scope { color: rgb(1, 2, 3); } }</style>x</div>)
+`;
+
+  const colors = (page) => page.evaluate(() =>
+    ['bare', 'bare-ranked', 'scope-ranked'].map(id => getComputedStyle(document.getElementById(id)).color));
+
+  it('apply to the parent, but lose to a page `div` rule that :scope { } beats', async () => {
+    const page = await loadPage(html, { sources: { '/bare.bv': bareSource } });
+    expect(await colors(page)).toEqual(['rgb(1, 2, 3)', 'rgb(9, 9, 9)', 'rgb(1, 2, 3)']);
+  });
+
+  it('a {{ }} hole in a bare declaration updates on an outside #set', async () => {
+    const page = await loadPage(html, { sources: { '/bare.bv': bareSource } });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '#set'], to: '#<bare.bv @color>', from: 'test', ty: [['Text']] });
+    expect(await colors(page)).toEqual(['rgb(4, 5, 6)', 'rgb(9, 9, 9)', 'rgb(1, 2, 3)']);
+  });
+});

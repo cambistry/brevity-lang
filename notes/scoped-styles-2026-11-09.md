@@ -143,7 +143,7 @@ untracked):
 @color *Text = "rgb(0, 0, 0)"
 
 <p>
-  <style>{{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }}</style>
+  <style>@scope { :scope { color: {{ @color }}; font-size: 24pt; } }</style>
   scoped
 </p>
 ```
@@ -267,7 +267,7 @@ throughout the language. So the docs should say which slots accept a subscribabl
 ```
 class: Text | &Text                   // HTML only subscribes, never writes, so read-only
 children: List of (Text | &Text)      // <div>
-children: List of Text                // <style>: no reactive interpolation
+children: List of Text                // <style>: no reactive interpolation (dropped, see Decided)
 ```
 
 (`&` per the capability sigils note: read-only ref. Check against its current version.)
@@ -312,6 +312,10 @@ Costs:
   the snapshot form, in content and in double-quoted strings, so the snapshot spelling question
   is closed: `#{ }` everywhere.
 - Not yet: `{{ }}` inside attribute strings or string literals (live `Text`, `&Text` slots).
+- `<style>` keeps reactive holes: `<style>@scope { :scope { color: {{ @c }}; } }</style>`. Each
+  hole is a closure child and updates its own run of the sheet's text, so the proposed
+  `List of Text` (no reactive CSS) slot for `<style>` is dropped. Each change re-parses the whole
+  sheet; per-instance values in custom properties stay the cheaper route for hot values.
 
 ## The singleton consequence
 
@@ -355,7 +359,11 @@ its class block:
 - `{{ }}` beyond element content: attribute strings, string literals, and the `&Text` slot rule.
 - Whether instance addresses nest under the class singleton on every target.
 - `@scope` in Firefox; `to ([ctor])` not treating the root itself as a limit.
-- Bare declarations directly inside `@scope`: browser support, or always compiler-wrapped.
+- Bare declarations directly inside `@scope` (`@scope { color: … }`): standard CSS, via nested
+  declarations, and they work in Chromium 147, `{{ }}` holes included. They act as
+  `:where(:scope)`, with zero specificity, so a page `div { }` rule beats them, while `:scope { }`
+  wins over it (but not over `div.x`). Open: support in other browsers, and whether to document them
+  as the low-priority default form.
 - Units in value-position lowering (`calc` vs unit-carrying values).
 - Several shared `<style>`s for one maker (naming / ordering).
 - Relocation: a hand-written override for an address stops matching when the app is mounted
