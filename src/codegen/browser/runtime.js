@@ -545,7 +545,9 @@ export const domManifest = `{
 
   html (ParentElement++) -> *{}
   head (ParentElement++) -> *{}
-  style (TextElement ++ ? media: Text) -> *{}
+  style (TextElement ++ ? media: Text) -> *{
+    media () -> (Text | null)
+  }
   body (ParentElement++) -> *{}
   header (ParentElement++) -> *{}
   footer (ParentElement++) -> *{}
@@ -821,6 +823,7 @@ const ELEMENT_ACCESSORS = {
 
 const TAG_ACCESSORS = {
   blockquote: { cite: 'text' },
+  style: { media: 'text' },
   a: { href: 'text', target: 'text', rel: 'text', download: 'text', type: 'text', hreflang: 'text', ping: 'text', referrerpolicy: 'text' },
   ol: { type: 'text', start: 'integer', reversed: 'boolean' },
   li: { value: 'integer' },
@@ -854,7 +857,7 @@ const TAG_ACCESSORS = {
 //   - parent → extends ParentElement; children are mixed; inner_html + text_content
 // Anything not listed in VOID_TAGS or TEXT_TAGS is treated as parent.
 const VOID_TAGS = new Set(['br', 'hr', 'img', 'input']);
-const TEXT_TAGS = new Set(['textarea']);
+const TEXT_TAGS = new Set(['textarea', 'style']);
 
 function tagClassification(tag) {
   if (VOID_TAGS.has(tag)) return 'void';

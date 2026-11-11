@@ -562,6 +562,35 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Text-only templates: an element child is a compile error ──────────────
+  // A tag whose `children` slot is `List of Texts` (a TextElement: <style>,
+  // <textarea>, …) takes text, `{{ }}` and `#{ }` children only. A nested
+  // element there would otherwise be sent and dropped by the runtime.
+  {
+    const childrenType = (tag) => {
+      const cls = actorByName.get(tag);
+      if (!cls) return null;
+      const own = (cls.initParams || []).find(p => p.name === 'children');
+      if (own) return own.type ?? own.typeName ?? null;
+      const { inheritedParams } = resolveSuperclassChain(actorByName, cls);
+      const p = inheritedParams.find(q => q.name === 'children');
+      return p ? (p.type ?? p.typeName ?? null) : null;
+    };
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'DomConstructor' && childrenType(node.tag) === 'List of Texts') {
+        const el = (node.children || []).find(c => c?.type === 'DomConstructor');
+        if (el) throw new Error(`<${node.tag}> takes text only — <${el.tag}> can't be its child`);
+      }
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    for (const actor of (ast.actors || [])) walk(actor);
+  }
+
   // ── Flattened method sets per actor: own + inherited, including auto-accessors ──
   // Names include the '@' prefix, matching entries in actorMethods.
   // Accessors are synthesised from `@`-published initParams (`@name Type`): each
