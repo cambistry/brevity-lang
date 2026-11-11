@@ -986,6 +986,32 @@ export function genExpr(ctx, expr) {
           : `this.#send(${op}, ${addr})`;
       }
     }
+    // A message to an address the front end worked out (src/opre.js): a dependency,
+    // a member path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local
+    // bound to one. A silent one (`note.`) has no reply to wait for. In a class, the
+    // file actor makes it (`#out`).
+    // A path through an actor of a dependency's class (`b.tally.get()`) goes to its
+    // runtime address with the member tokens after it.
+    if (expr.opre?.address.kind === 'static' || expr.opre?.address.path?.length) {
+      const { address, op: wireOp } = expr.opre;
+      const positional = expr.args.filter(a => a.positional);
+      const named = expr.args.filter(a => !a.positional);
+      const to = address.kind === 'static' ? JSON.stringify(address.wire)
+        : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(' ' + address.path.join(' '))})`;
+      const method = JSON.stringify(wireOp);
+      const send = (op, ty) => {
+        if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
+        return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
+      };
+      if (positional.length === 0 && named.length === 0) return send(method);
+      const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
+      if (positional.length > 0 && named.length > 0) {
+        return send(`[[${posVals}, {${namedFields}}], ${method}]`, `[[${posTy}, {${namedTy}}]]`);
+      } else if (named.length > 0) {
+        return send(`[{${namedFields}}, ${method}]`, `[{${namedTy}}]`);
+      }
+      return send(`[[${posVals}], ${method}]`, `[[${posTy}]]`);
+    }
     if (isChainReceiver(ctx, expr.object)) {
       ctx.usesChildSend = true;
       const positional = expr.args.filter(a => a.positional);
@@ -1063,15 +1089,12 @@ export function genExpr(ctx, expr) {
       }
       return expr.method.endsWith('.') || expr.launched ? `this.#fire(${op}, ${to})` : `this.#send(${op}, ${to})`;
     }
-    // If the object isn't a registered service alias, it's a local variable
-    // (e.g., a lambda parameter from `over(peers) |p|`) holding an actor ref.
-    // Dispatch via #childSend on the JS-resolved local rather than treating
-    // the identifier as a string-keyed routing target.
-    const isLocalActorRef = objName && !ctx.dependencyNames?.has(objName);
-    if (isLocalActorRef) {
+    // Any other receiver is a value holding an actor or its address (a local, a
+    // lambda param from `over(peers) |p|`, a cell): send to whatever it holds.
+    {
       // A constructor-block child lives in a field, not a local (state names
       // take precedence, as for any identifier).
-      const resolved = expr.object.outer ? genExpr(ctx, expr.object)
+      const resolved = !objName || expr.object.outer ? genExpr(ctx, expr.object)
         : ctx.stateVarNames.has(objName)
         ? `this.#${stateKey(objName)}`
         : (ctx.ssaScope?.get(objName) || jsIdent(objName));
@@ -1094,25 +1117,11 @@ export function genExpr(ctx, expr) {
       if (expr.method.endsWith('.') || expr.launched) return `this.#childFire(${resolved}, ${op})`;
       return `this.#childSend(${resolved}, ${op})`;
     }
-    // A call on a dependency. A silent one (`note.`) has no reply to wait for. In a
-    // class, the file actor makes it (`#out`).
-    const to = JSON.stringify(expr.object.name);
-    const method = JSON.stringify('@' + expr.method);
-    const send = (op, ty) => {
-      if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
-      return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
-    };
-    if (positional.length === 0 && named.length === 0) return send(method);
-    const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
-    if (positional.length > 0 && named.length > 0) {
-      return send(`[[${posVals}, {${namedFields}}], ${method}]`, `[[${posTy}, {${namedTy}}]]`);
-    } else if (named.length > 0) {
-      return send(`[{${namedFields}}, ${method}]`, `[{${namedTy}}]`);
-    }
-    return send(`[[${posVals}], ${method}]`, `[[${posTy}]]`);
   }
   if (expr.type === 'SelfValue') return '"#<>"';
   if (expr.type === 'DotAccessExpr') {
+    // A sub-service (`Svc.s`) is its address (src/opre.js).
+    if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);
     // A member read on the result of a `!` call: a call on the handle it yielded.
     if (isChainReceiver(ctx, expr.object)) {
       ctx.usesChildSend = true;
@@ -1569,4 +1578,11 @@ export function genTypeCondition(ctx, params) {
     return params.some(p => !p.defaultValue) ? match : `(_types === null || ${match})`;
   }
   return `_matchTypes(_types, [${named.join(',')}], [${pos.join(',')}])`;
+}
+
+// The receiver a lowered call's address path starts from: `b` for `b.tally.get()`.
+function opreRoot(call) {
+  let node = call.object;
+  for (let i = 0; i < (call.opre?.address.path?.length || 0); i++) node = node.object;
+  return node;
 }

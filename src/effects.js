@@ -5,6 +5,7 @@
 // whether it rests on a `~>`, are computed to a fixed point across the file first.
 // Design: notes/mutation-suffix-2026-10-31.md.
 
+import { receiverDoc, receiverLabel } from './opre.js';
 import { parseInterface } from './codegen/javascript/types.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { settleWriterBody, eachReturn } from './writer_body.js';
@@ -360,7 +361,15 @@ export function checkEffects(ast, remotesParsed = {}) {
         }
         if (!remotesParsed[alias]) { scope.write(`${rootName}.${name}(…)`); return; }
       }
-      if (isSuffixed(name)) scope.write(`${rootName ? rootName + '.' : ''}${name}(…)`);
+      // Through a sub-service (`Svc.s.get()`): its own document says.
+      const label = receiverLabel(node);
+      const subSigs = node.object !== root ? receiverDoc(node, remotesParsed)?.[name] : null;
+      if (Array.isArray(subSigs)) {
+        if (subSigs.some(s => s.effect === 'purported')) scope.mightWrite();
+        if (subSigs.some(s => s.effect === 'write')) scope.write(`${label}.${name}(…)`);
+        return;
+      }
+      if (isSuffixed(name)) scope.write(`${label ? label + '.' : ''}${name}(…)`);
     };
 
     // A named local function answers for its own name. Calling it counts as a write

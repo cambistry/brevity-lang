@@ -187,8 +187,10 @@ export function markOuterReads(program) {
         if (locals.length) bound = new Set([...bound, ...locals]);
       }
       if (node.type === 'FunctionCallExpr') checkCall(node, bound);
-      if (actor.name && node.type === 'DotCallExpr' && node.object?.type === 'Identifier' && dependencies.has(node.object.name)
-          && !own.has(node.object.name) && !bound.has(node.object.name) && !chain.some(l => l.owner !== null && l.names.has(node.object.name))) {
+      // Its address is global (src/opre.js): a dependency, or a path through one.
+      const dep = node.type === 'DotCallExpr' && node.opre?.address.kind === 'static' ? node.opre.address.dep : null;
+      if (actor.name && dep && dependencies.has(dep)
+          && !own.has(dep) && !bound.has(dep) && !chain.some(l => l.owner !== null && l.names.has(dep))) {
         node.outerCall = true;
       }
       if (actor.name && (node.type === 'Identifier' || node.type === 'RefRead')) {

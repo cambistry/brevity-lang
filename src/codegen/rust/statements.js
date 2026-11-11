@@ -18,6 +18,7 @@ import {
   genRustCondition, isRustGuardIf, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind,
   refFieldInvocationRust, refAddrExpr,
   rustNewOpInserts,
+  isOpreAddressed, rustOpreTo,
 } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {
@@ -419,7 +420,7 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
 // Branch 10: Object type assign
 function handleTypedAssign_ObjectType(s, typeEnv, sCtx, I, lines) {
   const dotName = s.value.type === 'DotCallExpr' && (s.value.object.type === 'RefRead' || s.value.object.type === 'Identifier') ? s.value.object.name : null;
-  if (dotName && (G.ctx.remoteInstanceVars.has(dotName) || G.ctx.localInstanceVars?.has(dotName) || G.ctx.dependencyNames?.has(dotName))) {
+  if (isOpreAddressed(s.value) || (dotName && (G.ctx.remoteInstanceVars.has(dotName) || G.ctx.localInstanceVars?.has(dotName)))) {
     const reply = genRustRemoteDotCallAwait(s.value, typeEnv, I, lines);
     lines.push(`${I}let ${mintRustSsa(s.name)}: Value = ${reply};`);
     return;
@@ -1031,7 +1032,7 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        return dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn) || G.ctx.dependencyNames?.has(dn));
+        return isOpreAddressed(s.value) || (dn && (G.ctx.remoteInstanceVars.has(dn) || G.ctx.localInstanceVars?.has(dn)));
       })()) {
         handleTypedAssign_DotCallExpr(s, typeEnv, I, lines);
       } else if (s.value.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier' && sCtx?.selfSpawnedRefs?.has(s.value.object.name)) {
@@ -1752,11 +1753,14 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
       const isLocalInst = dotObjName && G.ctx.localInstanceVars?.has(dotObjName);
       const named = expr.args.filter(a => !a.positional);
-      const to = isLocalInst
+      // The address the front end worked out (src/opre.js), or a value holding one.
+      const to = isOpreAddressed(expr)
+        ? rustOpreTo(expr, (root) => genRustExpr(root, typeEnv))
+        : isLocalInst
         ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
         : isRemoteInst
           ? `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string().to_string()`
-          : `${JSON.stringify(expr.object.name)}.to_string()`;
+          : rustOpreTo(expr, (root) => genRustExpr(root, typeEnv));
       const method = JSON.stringify('@' + expr.method);
       const positional = expr.args.filter(a => a.positional);
       const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
@@ -1801,13 +1805,14 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
       lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
       if (!isRemoteInst && (positional.length > 0 || named.length > 0)) {
         // A union or `Anything` arg is tagged from its value, read again only when it is a name.
-        const argTag = a => rustSlotTag(a.typeName || null, (a.expr ? a.expr.type === 'Identifier' : true)
+        const argType = a => a.type || a.typeName || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)) || null;
+        const argTag = a => rustSlotTag(argType(a), (a.expr ? a.expr.type === 'Identifier' : true)
           ? `bv_val(${rustSsaResolve(a.expr?.name ?? a.name)}.clone())` : null);
         let tyJson;
         if (positional.length > 0 && named.length > 0) {
           const posTy = positional.map(argTag).join(', ');
           const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-          tyJson = `json!([${posTy}, {${namedTy}}])`;
+          tyJson = `json!([[${posTy}, {${namedTy}}]])`;
         } else if (named.length > 0) {
           const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
           tyJson = `json!([{${namedTy}}])`;

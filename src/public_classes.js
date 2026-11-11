@@ -18,6 +18,8 @@ function docOfClass(type) {
   const doc = {};
   for (const f of type.functions || []) (doc[f.name] ||= []).push(f);
   if (type.setters?.length) doc.__setters = Object.fromEntries(type.setters.map(s => [s.name, s]));
+  // A public singleton in the class: `b.tally.get()` for a `b = Svc.Box(1)`.
+  if (type.services) doc.__services = type.services;
   return doc;
 }
 

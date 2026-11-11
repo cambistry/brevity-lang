@@ -941,8 +941,11 @@ ${subRegLines.join('\n')}
       }
       return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}, "", "__parent") }`;
     }
-    const to = JSON.stringify(expr.object.name);
-    const method = JSON.stringify('@' + expr.method);
+    // The address the front end worked out (src/opre.js): a dependency, a member
+    // path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local bound to one.
+    // Any other receiver is a value holding an address.
+    const to = rustOpreTo(expr, (root) => genRustExpr(root, typeEnv, eCtx));
+    const method = JSON.stringify(expr.opre?.op ?? '@' + expr.method);
     if (positional.length === 0 && named.length === 0) {
       return `{
         let seq = self.send_seq.get();
@@ -1340,6 +1343,10 @@ ${subRegLines.join('\n')}
       }
     }
     return 'Value::Null';
+  }
+  if (expr.type === 'DotAccessExpr' && expr.opreAddress) {
+    // A sub-service (`Svc.s`) is its address (src/opre.js).
+    return `Value::String(${JSON.stringify(expr.opreAddress.wire)}.to_string())`;
   }
   if (expr.type === 'DotAccessExpr') {
     // Silent reference-field invocation with no args: `v.endpoint!` (bang rode
@@ -1951,3 +1958,17 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
 // Handles TypedAssign statements. Returns true if the caller should `continue` (skip to next iteration).
 
 export { genRustDefaulted, positionalIndexes, genRustExpr, genRustIfBranch, genRustIfExpr, genRustFnMethod, genRustFnReturn, genRustFnCallExpr, genRustDestructure, genRecursiveFnDef, genRustCondition, genRustDefaultValue, isRustGuardIf, buildRustGuardBlock, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind, precomputeGuardedFnCall };
+
+// Where a lowered call goes (src/opre.js), as a Rust String expression: the
+// static address, or a value holding one with the member path after it
+// (`b.tally.get()` is `<b> @tally`). `gen` renders the receiver it starts from.
+export function rustOpreTo(expr, gen) {
+  const address = expr.opre?.address;
+  if (address?.kind === 'static') return `${JSON.stringify(address.wire)}.to_string()`;
+  let root = expr.object;
+  for (let i = 0; i < (address?.path?.length || 0); i++) root = root.object;
+  const held = `bv_val((${gen(root)}).clone()).as_str().unwrap_or("").to_string()`;
+  return address?.path?.length ? `format!("{} {}", ${held}, ${JSON.stringify(address.path.join(' '))})` : held;
+}
+
+export const isOpreAddressed = (expr) => expr?.opre?.address.kind === 'static' || !!expr?.opre?.address.path?.length;

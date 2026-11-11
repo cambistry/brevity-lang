@@ -35,6 +35,7 @@ import {
   genFunctionLiteral,
   refFieldInvocationErl,
   genExprScalar,
+  isOpreAddressed,
 } from './expressions.js';
 
 // Subscribe call-site codegen. `c.field.subscribe |v| { body }` emits:
@@ -624,7 +625,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
         const dotObjName = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
-        const needsAwait = (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName) || ctx.dependencyNames?.has(dotObjName)))
+        const needsAwait = isOpreAddressed(s.value)
+          || (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName)))
           || refFieldInvocationErl(ctx, dotObj, s.value.method, typeEnv)?.discipline === 'callback';
         if (needsAwait && s.type === 'TypedAssign' && s.typeName === 'Object') {
           lines.push(`${I}${varName} = ${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)},`);

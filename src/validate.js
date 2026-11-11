@@ -17,6 +17,7 @@ import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
+import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel } from './opre.js';
 
 // `Self` in value position: any Identifier with name 'Self' that isn't the
 // callee of a function call. Construction calls `Self(args)` don't trip this
@@ -887,6 +888,8 @@ export function validate(ast, options = {}) {
   checkPublishedParams(ast);
   settleElidedDots(ast, remotesParsed);
   lowerBareMemberCalls(ast, remotesParsed);
+  // Every remote call's address, worked out once for every target.
+  lowerRemoteCalls(ast, remotesParsed);
 
   inferCallBinds(ast, {
     actorInfo, dependencyNames, remotesParsed, factoryDecls,
@@ -981,8 +984,8 @@ function settleElidedDots(ast, remotesParsed) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(n => visit(n, locals)); return; }
       if (node.elidedDot) {
-        if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
-          const doc = remotesParsed[node.object.name];
+        if (node.type === 'DotCallExpr') {
+          const doc = receiverDoc(node, remotesParsed);
           const plain = node.method.slice(0, -1);
           if (doc && !doc[node.method] && doc[plain]) strip(node);
         } else if (node.type === 'FunctionCallExpr') {
@@ -1018,7 +1021,7 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
   const calleeName = (call) => call.type === 'DotCallExpr' ? call.method
     : call.callee?.type === 'Identifier' ? call.callee.name : null;
   const shown = (call) => call.type === 'DotCallExpr'
-    ? `${call.object?.name ? call.object.name + '.' : ''}${call.method}` : calleeName(call);
+    ? `${receiverLabel(call) ? receiverLabel(call) + '.' : ''}${call.method}` : calleeName(call);
   const visit = (node, launched) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => visit(n, false)); return; }
@@ -1026,7 +1029,7 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
       const call = node.type === 'SpawnStatement' ? node.call : node.expr;
       const name = calleeName(call);
       // A foreign function's name is literal, so its doc can say it's silent instead.
-      const docSilent = call.type === 'DotCallExpr' && remotesParsed[call.object?.name]?.[call.method]?.some?.(sig => sig.silent);
+      const docSilent = call.type === 'DotCallExpr' && receiverDoc(call, remotesParsed)?.[call.method]?.some?.(sig => sig.silent);
       if (node.ellipsis && name && !call.silentField && !docSilent && !name.endsWith('.') && !name.endsWith('!')) {
         throw new Error(`'${shown(call)}' returns a value; '...' needs a silent '${name}.'`);
       }
@@ -1040,7 +1043,7 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
     }
     // A doc can make a foreign function silent without the dot: `log (Text) => .`.
     // Nothing would answer a wait for it either.
-    if (node.type === 'DotCallExpr' && !launched && remotesParsed[node.object?.name]?.[node.method]?.some?.(sig => sig.silent)) {
+    if (node.type === 'DotCallExpr' && !launched && receiverDoc(node, remotesParsed)?.[node.method]?.some?.(sig => sig.silent)) {
       throw new Error(`'${shown(node)}' is silent — call it '${shown(node).replace(/\.$/, '')}(…)...' (fire-and-forget)`);
     }
     for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, false);
@@ -3427,6 +3430,9 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       // Direct dependency call: Remote.call()
       if (isRemoteSend(dotCall)) {
         validateRemoteCall(dotCall, remotesParsed, typeEnv, actorByName);
+      } else if (dotCall.opre?.address.kind === 'static' || dotCall.opre?.address.path?.length) {
+        // Through a sub-service, or a local bound to one.
+        validateLoweredCall(dotCall, typeEnv, actorByName);
       }
       // Actor call: view.open() where view is typed as a dependency name
       if (objName && !dependencyNames.has(objName)) {
@@ -3661,7 +3667,15 @@ function soleRemoteClassOf(call, remotesParsed, typeEnv, dependencyNames) {
 }
 
 function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, select) {
-  if (call.type !== 'DotCallExpr' || call.object?.type !== 'Identifier') return null;
+  if (call.type !== 'DotCallExpr') return null;
+  // Through a sub-service: its own document says what it returns.
+  const lowered = call.object?.type === 'Identifier' && dependencyNames?.has(call.object.name) ? null : resolveLoweredCall(call);
+  if (lowered?.sigs?.length) {
+    const chosen = select(lowered.sigs);
+    if (chosen.length === 0) return null;
+    return { label: `${lowered.label}.${call.method}`, shapes: mergeShapes(chosen.map(docReturnShapes)) };
+  }
+  if (call.object?.type !== 'Identifier') return null;
   const name = call.object.name;
   const dep = dependencyNames?.has(name) ? name : typeEnv?.get(name);
   const doc = remotesParsed[dep];
@@ -3952,6 +3966,29 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
     const available = [...opNames, ...typeMethods, ...classes].join(', ') || 'none';
     throw new Error(`'${actorName}' has no function '${methodName}'. Available: ${available}`);
   }
+  matchRemoteSigs(expr, sigs, actorName, actorName, typeEnv, actorByName);
+}
+
+// A call through a sub-service (`Svc.s.get()`), checked against the document its
+// lowered address leads to (src/opre.js).
+function validateLoweredCall(expr, typeEnv, actorByName) {
+  const resolved = resolveLoweredCall(expr);
+  if (!resolved) return;
+  if (resolved.error) throw new Error(resolved.error);
+  const { doc, label, sigs } = resolved;
+  if (!sigs) {
+    const opNames = Object.keys(doc).filter(k => !k.startsWith('__'));
+    const subs = Object.keys(doc.__services || {});
+    throw new Error(`'${label}' has no function '${expr.method}'. Available: ${[...opNames, ...subs].join(', ') || 'none'}`);
+  }
+  matchRemoteSigs(expr, sigs, label, expr.opre.address.dep ?? null, typeEnv, actorByName);
+}
+
+// Whether a call's args fit one of a document's signatures. `label` names the
+// receiver in messages; `dep` is the alias whose doc names its types bare.
+function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
+  const actorName = dep;
+  const methodName = expr.method;
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
   const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
   const callNamedKeys = new Set();
@@ -4021,7 +4058,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
     const parts = s.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type);
     return `(${parts.join(', ')})`;
   });
-  throw new Error(`'${actorName}.${methodName}()' arguments don't match any signature: ${sigStrs.join(' | ')}. ${errors[0]}`);
+  throw new Error(`'${label}.${methodName}()' arguments don't match any signature: ${sigStrs.join(' | ')}. ${errors[0]}`);
 }
 
 function checkRemoteSendAssignable(expr, remotesParsed) {

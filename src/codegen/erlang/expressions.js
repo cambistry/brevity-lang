@@ -740,6 +740,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       const ref = refFieldInvocationErl(ctx, expr.object, expr.method, typeEnv);
       if (ref && ref.discipline !== 'value') return genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, false);
     }
+    if (isOpreAddressed(expr)) return genErlStaticSend(ctx, expr, typeEnv, sCtx, false, erlArgHelpers(ctx, typeEnv, sCtx));
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     // A local holding a remote actor's address: a call in order, awaiting its reply.
@@ -803,14 +804,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${awaitUnlessSilent(v.seq)}
     end`;
     }
+    // Any other receiver is a value holding an address: send to what it holds.
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     const to = ctx.localInstanceVars?.has(dotObjName)
       ? erlVarName(resolveSSAName(dotObjName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
-      : erlString(expr.object.name);
+      : genExpr(ctx, expr.object, typeEnv, sCtx);
     const method = erlString('@' + expr.method);
-    // In a class, the file actor makes a call on its dependency.
-    if (expr.outerCall) return erlOuterCall(ctx, expr, positional, named, method, to, erlArgHelpers(ctx, typeEnv, sCtx));
     const v2 = erlSendVars(ctx);
     if (positional.length === 0 && named.length === 0) {
       return `begin
@@ -833,6 +833,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'DotAccessExpr') {
+    // A sub-service (`Svc.s`) is its address (src/opre.js).
+    if (expr.opreAddress) return erlString(expr.opreAddress.wire);
     // Silent reference-field invocation with no args: `v.endpoint!` (bang rode
     // into the property name). Fire-and-forget to the held address.
     if (expr.property.endsWith('!')) {
@@ -889,6 +891,58 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
+// A message to an address the front end worked out (src/opre.js): a dependency, a
+// member path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local bound
+// to one. `awaited` packs the reply for a bind; otherwise a silent (`note.`) or
+// launched call doesn't wait. In a class, the file actor makes it.
+//
+// A path through an actor of a dependency's class (`b.tally.get()`) goes to its
+// runtime address with the member tokens after it.
+export function isOpreAddressed(expr) {
+  return expr?.opre?.address.kind === 'static' || !!expr?.opre?.address.path?.length;
+}
+
+function genErlStaticSend(ctx, expr, typeEnv, sCtx, awaited, argHelpers) {
+  const { address, op } = expr.opre;
+  const positional = expr.args.filter(a => a.positional);
+  const named = expr.args.filter(a => !a.positional);
+  let root = expr.object;
+  for (let i = 0; i < (address.path?.length || 0); i++) root = root.object;
+  const rootName = address.kind === 'value' && (root.type === 'Identifier' || root.type === 'RefRead') ? root.name : null;
+  const rootVal = !rootName ? null
+    : ctx.localInstanceVars?.has(rootName) ? erlVarName(resolveSSAName(rootName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
+    : genExpr(ctx, root, typeEnv, sCtx);
+  const to = address.kind === 'static' ? erlString(address.wire)
+    : `iolist_to_binary([${rootVal}, ${erlString(' ' + address.path.join(' '))}])`;
+  const method = erlString(op);
+  if (expr.outerCall) {
+    const call = erlOuterCall(ctx, expr, positional, named, method, to, argHelpers);
+    return awaited ? `bv_object_pack(${call})` : call;
+  }
+  const silent = expr.method.endsWith('.') || expr.launched;
+  const v = erlSendVars(ctx);
+  const wait = awaited ? `bv_object_pack(await_response_(${v.id}))` : silent ? 'null' : `await_response_(${v.id})`;
+  if (positional.length === 0 && named.length === 0) {
+    return `begin
+        ${v.seq} = bv_next_seq_(),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},
+        io:put_chars([json_encode(${v.msg}), $\n]),
+        ${wait}
+    end`;
+  }
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
+  return `begin
+        ${v.seq} = bv_next_seq_(),
+        ${v.id} = integer_to_binary(${v.seq}),
+        ${v.op} = ${opExpr},
+        ${v.ty} = ${tyExpr},
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${v.op}, <<"to">> => ${to}, <<"ty">> => ${v.ty}},
+        io:put_chars([json_encode(${v.msg}), $\n]),
+        ${wait}
+    end`;
+}
+
 function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   // Reference-field callback bound to a typed local: send to the held address,
   // await the reply. (Silent refs never reach here — they cannot be bound.)
@@ -896,6 +950,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     const ref = refFieldInvocationErl(ctx, expr.object, expr.method, typeEnv);
     if (ref && ref.discipline === 'callback') return genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, true);
   }
+  if (isOpreAddressed(expr)) return genErlStaticSend(ctx, expr, typeEnv, sCtx, true, erlArgHelpers(ctx, null, null));
   const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
   // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
   if (objName && sCtx?.selfSpawnedRefs?.has(objName)) {
@@ -958,11 +1013,11 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         bv_object_pack(await_response_(${v.id}))
     end`;
   }
+  // Any other receiver is a value holding an address: send to what it holds.
   const named = expr.args.filter(a => !a.positional);
   const positional = expr.args.filter(a => a.positional);
-  const to = erlString(expr.object.name);
+  const to = genExpr(ctx, expr.object, typeEnv, sCtx);
   const method = erlString('@' + expr.method);
-  if (expr.outerCall) return `bv_object_pack(${erlOuterCall(ctx, expr, positional, named, method, to, erlArgHelpers(ctx, null, null))})`;
   const v2 = erlSendVars(ctx);
   if (positional.length === 0 && named.length === 0) {
     // No args — op is just the method string, no ty

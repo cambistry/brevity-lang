@@ -106,8 +106,8 @@ constructor).
 
 ### Open
 
-- **Calling through a sub-service** from another file (`Svc.s.get()` → `@get` to `Svc @s`) isn't
-  compiled yet on any target.
+- ~~**Calling through a sub-service** from another file~~: `Svc.s.get()` is `@get` to `Svc @s`,
+  lowered once for every target. See `opre-message-lowering-2026-11-11.md`.
 - **Returning an actor** is `-> (Anything)` in the document, for a singleton (`who`) as for a public
   class's actor. The document has no way yet to name the actor a function returns.
 

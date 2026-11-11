@@ -1020,6 +1020,8 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.value.type === 'ObjectConstructor') {
       throw new Error(`Variable '${s.name}' requires a type annotation — use '${s.name} Type = ...'`);
     }
+    // A sub-service's address (`x = Svc.s`).
+    if (s.value.opreAddress) return emitBinding(s.name, genExpr(ctx, s.value));
     if (s.value.type === 'Function') {
       const overloadMode = s.value.overloadMode;
       if (!overloadMode && lambdaUsesOuterRefs(ctx, s.value)) return genClosureBind(ctx, s, emitBinding, outerEnv);
@@ -1106,12 +1108,6 @@ function genLiftedLambdaBind(ctx, s, emitBinding) {
   }
   if (!existing) ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
   return captureCode + emitBinding(s.name, `"${lambdaName}"`);
-}
-
-export function isRemoteSend(ctx, expr) {
-  if (expr?.type === 'DotCallExpr' && expr.object?.type === 'Identifier' && ctx.dependencyNames.has(expr.object.name)) return true;
-  if (expr?.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) return true;
-  return false;
 }
 
 // ── catch / label-invoke ──────────────────────────────────────────────────────
