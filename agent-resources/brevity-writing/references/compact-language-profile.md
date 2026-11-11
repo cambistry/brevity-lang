@@ -129,7 +129,7 @@ A factory-style actor can return DOM-like structures from a public handler.
 content *Text = "initial"
 
 @bump. = (v: Text) { content <- v }
-@create = -> <div>{ content }</div>
+@create = -> <div>{{ content }}</div>
 ```
 
 ## Conservative Style

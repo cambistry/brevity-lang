@@ -7,22 +7,22 @@
 #source = (path Text) -> document.eval("(() => { const r = new XMLHttpRequest(); r.open('GET', '" + path + "', false); r.send(); return r.responseText })()")
 
 // HOLE: a template closure can't see a function's locals, so a
-// `#panel = (path Text) -> <details>…{ path }…</details>` helper renders
+// `#panel = (path Text) -> <details>…{{ path }}…</details>` helper renders
 // empty. One panel per file, by hand.
 // HOLE: no list → children; no query string, so the example is fixed.
 viewer = <div class="viewer">
   <section class="sources">
     <details open={ true }>
       <summary>app.bv</summary>
-      <pre>{ #source("hello/app.bv") }</pre>
+      <pre>{{ #source("hello/app.bv") }}</pre>
     </details>
     <details>
       <summary>index.html</summary>
-      <pre>{ #source("hello/index.html") }</pre>
+      <pre>{{ #source("hello/index.html") }}</pre>
     </details>
     <details>
       <summary>style.css</summary>
-      <pre>{ #source("hello/style.css") }</pre>
+      <pre>{{ #source("hello/style.css") }}</pre>
     </details>
   </section>
   <iframe class="page" src="hello/"></iframe>

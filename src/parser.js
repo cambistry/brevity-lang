@@ -2183,7 +2183,7 @@ export function parse(tokensIn) {
       return AST.htmlLiteral(consume().value);
     }
 
-    // ── HTML constructor: <tag>text{expr}more</tag> → DomConstructor ───
+    // ── HTML constructor: <tag>text{{expr}}more</tag> → DomConstructor ───
     if (peek().type === 'HTML_CONSTRUCTOR') {
       const tok = consume();
       if (tok.bvBlock !== undefined) {

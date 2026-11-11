@@ -281,6 +281,20 @@ Costs:
 - **The snapshot form** needs a matching spelling (`#{{ }}`?). String literals have no brace
   problem and could keep `#{ }`, at the cost of two spellings for one idea.
 
+**Decided (2026-11-10), element content only:**
+
+- In element content, `{{ expr }}` is the reactive hole (a closure child, as `{ expr }` was).
+  A whole-body hole doubles too: `<pre>{{ x }}</pre>`. A single brace was considered for that
+  case and rejected, since it reads as a literal `{`.
+- A lone `{` or `}` in content is literal text. `\{` still escapes; `\{{` writes a literal
+  `{{`. An unterminated `{{` is a compile error.
+- `{{ }}` closes at the first `}}` outside the expression's own braces. Braces inside a string
+  literal in the expression count too (as they did for `{ }`).
+- Unchanged: whole-field attributes (`class={ @kls }`) stay single-brace, and will. `#{ }` stays
+  the snapshot form, in content and in double-quoted strings, so the snapshot spelling question
+  is closed: `#{ }` everywhere.
+- Not yet: `{{ }}` inside attribute strings or string literals (live `Text`, `&Text` slots).
+
 ## The singleton consequence
 
 With classes as singletons (`classes-as-singletons-2026-11-09.md`), a class's style can live in
@@ -320,8 +334,7 @@ its class block:
 
 ## Open
 
-- `{{ }}` migration, and the snapshot spelling (`#{{ }}`, and whether strings follow).
-- Raw-text lexing of `<style>` content until `{{ }}` lands; today CSS braces break compilation.
+- `{{ }}` beyond element content: attribute strings, string literals, and the `&Text` slot rule.
 - Whether instance addresses nest under the class singleton on every target.
 - `@scope` in Firefox; `to ([ctor])` not treating the root itself as a limit.
 - Bare declarations directly inside `@scope`: browser support, or always compiler-wrapped.
@@ -329,6 +342,3 @@ its class block:
 - Several shared `<style>`s for one maker (naming / ordering).
 - Relocation: a hand-written override for an address stops matching when the app is mounted
   elsewhere.
-- **`style` is not declared in the HTML manifest,** yet `HTML: (:style)` was accepted. Either
-  undeclared tags fall through the validator, or something else matched. Check whether a typo
-  (`:sytle`) compiles silently.

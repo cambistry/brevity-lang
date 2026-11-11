@@ -29,7 +29,7 @@ attributes map to named params.
 
 `#{expr}` creates a string interpolation child.
 
-`{expr}` remains a separate reactive child unless it can be collapsed based on
+`{{expr}}` remains a separate reactive child unless it can be collapsed based on
 the tested AST/type rules.
 
 Escapes are limited. Tested valid escapes include literal backslash, literal
@@ -40,5 +40,5 @@ backslash are rejected.
 
 - Use XML tags only for class-like elements with named attributes.
 - Use `#{expr}` for text interpolation.
-- Use `{expr}` for reactive child positions.
+- Use `{{expr}}` for reactive child positions.
 - Keep examples close to existing XML tests.

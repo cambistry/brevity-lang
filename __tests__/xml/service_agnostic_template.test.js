@@ -16,7 +16,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // import. If the language still privileged `HTML`, one of these would throw (the
 // validate gate) or mis-route (`HTML @node`).
 //
-// A reactive hole `{expr}` in the template becomes a local-form lambda
+// A reactive hole `{{expr}}` in the template becomes a local-form lambda
 // reference `#<@N>` carried in the payload — a lambda passed BY REFERENCE to the
 // host service. The service invokes it back through CAM (the same mechanism as
 // lambda_ref_invocation.test.js, here via the template carrier), and the actor

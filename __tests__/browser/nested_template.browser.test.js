@@ -13,7 +13,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //
 //   Template = <> {
 //     content *Text = "initial"
-//     -> <div><h1>Title</h1><p>{ content }</p></div>
+//     -> <div><h1>Title</h1><p>{{ content }}</p></div>
 //   }
 //
 // On Template(), HTML.div receives
@@ -42,7 +42,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
     *
     content *Text = "initial"
     @bump. = (v: Text) { content <- v }
-    @create = -> <div><h1>Title</h1><p>{ content }</p></div>
+    @create = -> <div><h1>Title</h1><p>{{ content }}</p></div>
   `;
 
   const html = `<html><head>

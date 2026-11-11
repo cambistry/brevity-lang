@@ -79,7 +79,7 @@ describe('Q1: onclick wire encoding', () => {
         HTML: (:div)
       *
       count *Integer = 0
-      @create = -> <div onclick={ count <- count + 1 }>{ count }</div>
+      @create = -> <div onclick={ count <- count + 1 }>{{ count }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -133,7 +133,7 @@ describe('Q2: click in real DOM', () => {
       HTML: (:div)
     *
     count *Integer = 0
-    el = <div onclick={ count <- count + 1 }>{ count }</div>
+    el = <div onclick={ count <- count + 1 }>{{ count }}</div>
     body = document.body()
     body.append!(el)
   `;
@@ -187,7 +187,7 @@ describe('Q3: external set on host ref cell', () => {
       HTML: (:div)
     *
     @count *Integer = 0
-    el = <div>{ @count }</div>
+    el = <div>{{ @count }}</div>
     body = document.body()
     body.append!(el)
   `;

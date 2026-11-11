@@ -6,7 +6,7 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 // Composes all prior phases:
 //
 //   Phase 1: `{ content }` compiles to a closure at @0 on Factory.
-//   Phase 2: `<div>{ content }</div>` emits `new` with `<<@0>>` child.
+//   Phase 2: `<div>{{ content }}</div>` emits `new` with `<<@0>>` child.
 //   Phase 3: runtime parent translation prepends Factory's address:
 //            `<<@0>>` → `<<factory.bv @0>>` on the wire to HTML.
 //   Phase 4: HTML walks children, decomposes `<<factory.bv @0>>` →
@@ -43,7 +43,7 @@ describe('factory end-to-end', () => {
     *
     content *Text = "initial"
     @bump. = (v: Text) { content <- v }
-    @create = -> <div>{ content }</div>
+    @create = -> <div>{{ content }}</div>
   `;
 
   const html = `<html><head>

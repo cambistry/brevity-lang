@@ -207,7 +207,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // An XML element lowers to a `#new` CAM message: a structured Object payload
     // `{children: [...], ...attrs}` sent to the tag's host service address. Pure
     // CAM — no DOM. Text/`#{}` runs merge into one string child; a reactive hole
-    // `{expr}` (closure_ref) and a nested element each break a run. A closure_ref
+    // `{{expr}}` (closure_ref) and a nested element each break a run. A closure_ref
     // travels as its local-form self-address `#<@N>` (a lambda ref the host can
     // invoke back through CAM). Fire-and-forget like every rust send: each #new
     // posts and yields Null (nested children post their own #new).

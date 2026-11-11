@@ -37,7 +37,7 @@ async function expectEmission(script, ...steps) {
 // `[children]` property. Entries are:
 //
 //   - bare text strings — literal text runs
-//   - `#<actor @N>` address strings — closure subscribers (from `{ expr }`
+//   - `#<actor @N>` address strings — closure subscribers (from `{{ expr }}`
 //     interpolations; synthesizeTemplateClosures allocates @N per actor)
 //   - `#<HTML @tag/N>` address strings — already-live nested element actors
 //     (pre-dispatched by the codegen's await chain before the parent)
@@ -77,13 +77,13 @@ describe('template emission — structured children wire shape', () => {
 
   // ── Core: single dynamic interpolation → single closure address entry ───
   describe('single dynamic interpolation', () => {
-    it('<div>{ content }</div> emits children: ["#<main @0>"]', async () => {
+    it('<div>{{ content }}</div> emits children: ["#<main @0>"]', async () => {
       const script = `
         *
           HTML: (:div)
         *
         content *Text = "initial"
-        @create = -> <div>{ content }</div>
+        @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -97,13 +97,13 @@ describe('template emission — structured children wire shape', () => {
 
   // ── Mixed: literal text interleaved with a dynamic closure address ──────
   describe('mixed static and dynamic inner', () => {
-    it('<div>pre { content } post</div> emits interleaved children', async () => {
+    it('<div>pre {{ content }} post</div> emits interleaved children', async () => {
       const script = `
         *
           HTML: (:div)
         *
         content *Text = "middle"
-        @create = -> <div>pre { content } post</div>
+        @create = -> <div>pre {{ content }} post</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -124,7 +124,7 @@ describe('template emission — structured children wire shape', () => {
         *
         a *Text = "x"
         b *Text = "y"
-        @create = -> <div>{ a }{ b }</div>
+        @create = -> <div>{{ a }}{{ b }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -142,7 +142,7 @@ describe('template emission — structured children wire shape', () => {
         *
         first *Text = "A"
         last *Text = "Z"
-        @create = -> <div>{ first } middle { last }</div>
+        @create = -> <div>{{ first }} middle {{ last }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -163,13 +163,13 @@ describe('template emission — structured children wire shape', () => {
   // (source-first nested element). End-to-end nesting (all posts flowing,
   // addresses threading through) is covered by nested_template.browser.test.js.
   describe('nested tags pre-dispatch in source order', () => {
-    it('<div><h1>Title</h1><p>{ content }</p></div> posts <h1> first', async () => {
+    it('<div><h1>Title</h1><p>{{ content }}</p></div> posts <h1> first', async () => {
       const script = `
         *
           HTML: (:div, :h1, :p)
         *
         content *Text = "body"
-        @create = -> <div><h1>Title</h1><p>{ content }</p></div>
+        @create = -> <div><h1>Title</h1><p>{{ content }}</p></div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -195,7 +195,7 @@ describe('template emission — structured children wire shape', () => {
           HTML: (:div)
         *
         content *Text = "x"
-        @create = -> <div>{ content }</div>
+        @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -227,7 +227,7 @@ describe('template emission — structured children wire shape', () => {
           HTML: (:div)
         *
         content *Text = "hello"
-        @create = -> <div>{ content }</div>
+        @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },

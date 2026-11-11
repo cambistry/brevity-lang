@@ -179,7 +179,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // A subscribed value that names a live element puts that element in the slot
 //
-// `{ expr }` in children subscribes to a closure. When the closure's value is
+// `{{ expr }}` in children subscribes to a closure. When the closure's value is
 // an element address, the element takes the slot; a later text value puts a
 // text node back.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -230,7 +230,7 @@ describe('template — a function returning an element, interpolated as a child'
       HTML: (:div, :span)
     *
     #badge = -> <span>new</span>
-    el = <div>[{ #badge() }]</div>
+    el = <div>[{{ #badge() }}]</div>
     body = document.body()
     body.append!(el)
   `;

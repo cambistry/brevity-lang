@@ -188,7 +188,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
       *
       label *Text = "hello"
       cls *Text = "active"
-      @create = -> <div class={ cls }>{ label }</div>
+      @create = -> <div class={ cls }>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },

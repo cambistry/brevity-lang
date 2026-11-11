@@ -10,7 +10,7 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 // lexer does not synthesize a closure for it; the JS codegen emits the
 // stringified value directly into the structured-children wire array.
 //
-// Contrast with `{expr}` (the prior form): that lifts `expr` into a
+// Contrast with `{{expr}}` (the prior form): that lifts `expr` into a
 // synthesized `@N` closure on the enclosing actor and sends the closure
 // address `#<main @N>` on the wire; the HTML runtime subscribes and lives
 // re-renders. Reactivity comes from the closure; `#{}` is a snapshot splice.
@@ -132,14 +132,14 @@ describe('XML text interpolation `#{expr}`', () => {
       );
     });
 
-    it('`{x}` and `#{x}` coexist — `{}` breaks a run; adjacent text + `#{}` merges', async () => {
+    it('`{{x}}` and `#{x}` coexist — `{{}}` breaks a run; adjacent text + `#{}` merges', async () => {
       const script = `
         *
           HTML: (:div)
         *
         a *Text = "dynamic"
         b *Text = "static"
-        @create = -> <div>{ a } / #{ b }</div>
+        @create = -> <div>{{ a }} / #{ b }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -191,7 +191,7 @@ describe('XML text interpolation `#{expr}`', () => {
       );
     });
 
-    it('a reactive `{}` DOES break a run; text either side is merged with any adjacent `#{}`', async () => {
+    it('a reactive `{{}}` DOES break a run; text either side is merged with any adjacent `#{}`', async () => {
       const script = `
         *
           HTML: (:div)
@@ -199,7 +199,7 @@ describe('XML text interpolation `#{expr}`', () => {
         pre_val *Text = "p"
         reactive *Text = "r"
         post_val *Text = "q"
-        @create = -> <div>A #{ pre_val } B { reactive } C #{ post_val } D</div>
+        @create = -> <div>A #{ pre_val } B {{ reactive }} C #{ post_val } D</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: '@create', from: 'c' } },
@@ -334,10 +334,10 @@ describe('XML text interpolation `#{expr}`', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Non-reactive `{expr}` collapse — runtime wire output
+// Non-reactive `{{expr}}` collapse — runtime wire output
 //
-// `{ expr }` where expr has no RefRead nodes collapses to an inline text splice
-// (same wire shape as `#{expr}`). Reactive `{ expr }` (reads a * ref) continues
+// `{{ expr }}` where expr has no RefRead nodes collapses to an inline text splice
+// (same wire shape as `#{expr}`). Reactive `{{ expr }}` (reads a * ref) continues
 // to emit a `#<actor @N>` subscription address.
 //
 // Pure-thunk case: `{ para }` where `para = -> <p>…</p>` inlines the element —
@@ -352,7 +352,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
         HTML: (:div)
       *
       label Text = "hello"
-      @create = -> <div>{ label }</div>
+      @create = -> <div>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -369,7 +369,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
         HTML: (:div)
       *
       name Text = "world"
-      @create = -> <div>hello { name }!</div>
+      @create = -> <div>hello {{ name }}!</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -386,7 +386,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
         HTML: (:div)
       *
       label *Text = "hello"
-      @create = -> <div>{ label }</div>
+      @create = -> <div>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -404,7 +404,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       *
       reactive *Text = "r"
       constant Text = "c"
-      @create = -> <div>{ reactive } / { constant }</div>
+      @create = -> <div>{{ reactive }} / {{ constant }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: '@create', from: 'c' } },
@@ -416,7 +416,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
   });
 });
 
-describe('non-reactive { expr } — pure thunk inlining', () => {
+describe('non-reactive {{ expr }} — pure thunk inlining', () => {
   it('{ para } pre-dispatches <p> then delivers its address to <div>', async () => {
     // para = -> <p>Inner</p> is a pure thunk; { para } inside <div> inlines the
     // DomConstructor. The <p> is pre-dispatched first; once we stub its reply
@@ -426,7 +426,7 @@ describe('non-reactive { expr } — pure thunk inlining', () => {
         HTML: (:div, :p)
       *
       para = -> <p>Inner</p>
-      @create = -> <div>{ para }</div>
+      @create = -> <div>{{ para }}</div>
     `;
     const compiled = await compileActor(script, {
       compileOptions: {

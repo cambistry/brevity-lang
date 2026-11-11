@@ -29,7 +29,7 @@ function thunkDomBody(fn) {
 }
 
 export function synthesizeTemplateClosures(ast) {
-  // `{ expr }` interpolations inside templates become one of three things:
+  // `{{ expr }}` interpolations inside templates become one of three things:
   //   - `closure_ref @N` — reactive: expr reads at least one * ref, OR the
   //     expr doesn't resolve to a known Text binding or pure HTML thunk (so the
   //     existing reactive machinery handles it; validation catches type errors)

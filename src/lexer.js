@@ -77,9 +77,13 @@ function parseDomElement(source, startIdx) {
 //
 // Children shapes:
 //   { type: 'text', value }        — literal text run (whitespace-significant)
-//   { type: 'interp', source }     — `{ expr }` — reactive closure ref
+//   { type: 'interp', source }     — `{{ expr }}` — reactive closure ref
 //   { type: 'strinterp', source }  — `#{ expr }` — snapshot string splice
 //   { type: 'dom', tag, children } — nested lowercase element (recursive)
+//
+// A lone `{` or `}` is literal text, so CSS and prose braces need no escape.
+// `{{ expr }}` closes at the first `}}` with the expression's own braces
+// balanced: `{{ f({a: 1}) }}`.
 //
 // Escapes in raw XML text: `\\` → `\`, `\{` → `{`, `\#{` → `#{`. Any other
 // backslash escape is a compile error.
@@ -128,20 +132,19 @@ function parseDomChildren(source, startIdx, parentTag) {
         continue;
       }
     }
-    if (source[i] === '{') {
-      let depth = 1;
-      let j = i + 1;
-      while (j < source.length && depth > 0) {
+    if (source[i] === '{' && source[i + 1] === '{') {
+      let depth = 0;
+      let j = i + 2;
+      while (j < source.length && !(depth === 0 && source[j] === '}' && source[j + 1] === '}')) {
         if (source[j] === '{') depth++;
         else if (source[j] === '}') depth--;
-        if (depth > 0) j++;
+        j++;
       }
-      if (depth === 0) {
-        flushText();
-        children.push({ type: 'interp', source: source.slice(i + 1, j).trim() });
-        i = j + 1;
-        continue;
-      }
+      if (j >= source.length) throw new Error(`Unterminated '{{' in <${parentTag}> content (write '\\{{' for a literal '{{')`);
+      flushText();
+      children.push({ type: 'interp', source: source.slice(i + 2, j).trim() });
+      i = j + 2;
+      continue;
     }
     textBuf += source[i];
     i++;

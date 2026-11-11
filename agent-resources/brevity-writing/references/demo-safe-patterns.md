@@ -88,7 +88,7 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 content *Text = "initial"
 
 @bump. = (v: Text) { content <- v }
-@create = -> <div>{ content }</div>
+@create = -> <div>{{ content }}</div>
 ```
 
 Use this when you need a small reactive demo surface.

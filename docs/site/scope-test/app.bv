@@ -6,7 +6,7 @@
 
 el = <div>
   <p>
-    <style>{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }</style>
+    <style>{{ "@scope { :scope { color: " + @color + "; font-size: 24pt; } }" }}</style>
     scoped
   </p>
   <p>unscoped</p>

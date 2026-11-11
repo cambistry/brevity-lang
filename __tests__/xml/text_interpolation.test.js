@@ -8,14 +8,16 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 // the expression evaluates once when the parent element is constructed and
 // is spliced inline as a text run (no closure synthesis, no reactivity).
 //
-// Contrast with `{expr}` (reactive closure) which the browser synthesis pass
+// Contrast with `{{expr}}` (reactive closure) which the browser synthesis pass
 // lifts into a `@N` handler; `#{}` passes through as a plain `strinterp`
 // child and any backend that implements XML element emission stringifies
 // the expression inline.
 //
+// A lone `{` or `}` is literal text (CSS, prose); only `{{ … }}` opens a closure.
+//
 // Escapes in raw XML text are narrow:
 //   \\   → literal backslash
-//   \{   → literal `{` (would otherwise open a closure)
+//   \{   → literal `{` (`\{{` writes a literal `{{`)
 //   \#{  → literal `#{` (would otherwise open an interpolation)
 //   anything else after a backslash → compile error
 //
@@ -81,20 +83,20 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       expect(dom.children[0].expr).toBeDefined();
     });
 
-    it('`{expr}` remains a separate child — not collapsed (reactive → closure_ref)', () => {
+    it('`{{expr}}` remains a separate child — not collapsed (reactive → closure_ref)', () => {
       const ast = parse(`
         name *Text = "x"
-        e = <div>{ name }</div>
+        e = <div>{{ name }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children[0].type).toBe('closure_ref');
     });
 
-    it('mixed static + #{} + {} yields a heterogeneous children array', () => {
+    it('mixed static + #{} + {{}} yields a heterogeneous children array', () => {
       const ast = parse(`
         a *Text = "a"
         b *Text = "b"
-        e = <div>pre #{ a } mid { b } end</div>
+        e = <div>pre #{ a } mid {{ b }} end</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children.map(c => c.type)).toEqual([
@@ -175,6 +177,49 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
     });
   });
 
+  // ── `{{ }}` opens a closure; a lone brace is text ───────────────────────
+
+  describe('a lone brace is literal; `{{ }}` is the reactive hole', () => {
+    it('CSS braces in <style> are text', () => {
+      const ast = parse(`
+        e = <style>h2 { margin: 0; }</style>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children).toEqual([{ type: 'text', value: 'h2 { margin: 0; }' }]);
+    });
+
+    it('a lone `{ x }` is text, not a closure', () => {
+      const ast = parse(`
+        x *Text = "a"
+        e = <div>{ x }</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children).toEqual([{ type: 'text', value: '{ x }' }]);
+    });
+
+    it('`{{ }}` closes at the first `}}` outside the expression\'s own braces', () => {
+      const ast = parse(`
+        e = <div>{{ "a { b }" }}</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children.map(c => c.type)).toEqual(['closure_ref']);
+    });
+
+    it('`\\{{` writes a literal `{{`', () => {
+      const ast = parse(`
+        e = <div>\\{{ not a closure }}</div>
+      `);
+      const dom = findDomConstructor(ast);
+      expect(dom.children).toEqual([{ type: 'text', value: '{{ not a closure }}' }]);
+    });
+
+    it('an unterminated `{{` is a compile error', () => {
+      expect(() => extract(`
+        e = <div>{{ x</div>
+      `)).toThrow(/Unterminated '\{\{' in <div> content/);
+    });
+  });
+
   // ── Invalid escapes are a compile error ─────────────────────────────────
 
   describe('invalid escapes are rejected at lex time', () => {
@@ -209,14 +254,14 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       `)).not.toThrow();
     });
 
-    it('mixed static text, `#{}` and `{}` compiles', () => {
+    it('mixed static text, `#{}` and `{{}}` compiles', () => {
       expect(() => compileWithHTML(`
         *
           HTML: (:div)
         *
         a *Text = "a"
         b *Text = "b"
-        @create = -> <div>pre #{ a } mid { b } end</div>
+        @create = -> <div>pre #{ a } mid {{ b }} end</div>
       `)).not.toThrow();
     });
 
@@ -241,9 +286,9 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Non-reactive `{expr}` collapse — post-extract AST shape
+// Non-reactive `{{expr}}` collapse — post-extract AST shape
 //
-// After extract(), `{ expr }` interpolations whose expression tree contains no
+// After extract(), `{{ expr }}` interpolations whose expression tree contains no
 // RefRead nodes (i.e. no * ref accesses) are collapsed to `strinterp` children
 // rather than synthesized as `@N` closures. Reactive interpolations (those that
 // read at least one * ref) continue to produce `closure_ref` children.
@@ -267,7 +312,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ name }` where name is a non-reactive Text binding becomes strinterp', () => {
       const ast = extractAst(`
         name Text = "Chris"
-        @create = -> <div>{ name }</div>
+        @create = -> <div>{{ name }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children).toHaveLength(1);
@@ -277,7 +322,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ count }` where count is a non-reactive Integer stays closure_ref — not Text, type conflict for validation', () => {
       const ast = extractAst(`
         count Integer = 42
-        @create = -> <div>{ count }</div>
+        @create = -> <div>{{ count }}</div>
       `);
       const dom = findDomConstructor(ast);
       // Integer is not a valid HTML text child. The synthesis preserves closure_ref
@@ -288,7 +333,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ name }` where name is a reactive Text ref stays as closure_ref', () => {
       const ast = extractAst(`
         name *Text = "Chris"
-        @create = -> <div>{ name }</div>
+        @create = -> <div>{{ name }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children[0].type).toBe('closure_ref');
@@ -299,7 +344,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ para }` where para = -> <p>…</p> inlines the DomConstructor', () => {
       const ast = extractAst(`
         para = -> <p>Inner</p>
-        @create = -> <div>{ para }</div>
+        @create = -> <div>{{ para }}</div>
       `);
       // Find the <div> specifically — findDomConstructor may find <p> first
       // since para's own function body is traversed before @create's body.
@@ -316,7 +361,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
       const ast = extractAst(`
         reactive *Text = "r"
         constant Text = "c"
-        @create = -> <div>{ reactive }{ constant }</div>
+        @create = -> <div>{{ reactive }}{{ constant }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children[0].type).toBe('closure_ref');
