@@ -11,7 +11,7 @@ describe('hydrate — integer state', () => {
       @get = -> :x
     `;
     await expectBehavior(script,
-      { input: { id: '1', cam: [{ x: 42 }, 'hydrate'], from: 'parent' } },
+      { input: { id: '1', cam: [{ '.x': 42 }, 'hydrate'], from: 'parent' } },
       { output: { id: '1', re: 'hydrate', to: 'parent' } },
       { input: { id: '2', op: '@get', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { x: 42 }, to: 'c' }) },
@@ -33,7 +33,7 @@ describe('hydrate — multiple types', () => {
       @getFlag  = -> :flag
     `);
     await expectActorBehavior(actor,
-      { input: { id: '1', cam: [{ count: 99, name: 'restored', flag: true }, 'hydrate'], from: 'p' } },
+      { input: { id: '1', cam: [{ '.count': 99, '.name': 'restored', '.flag': true }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
     );
   });
@@ -62,7 +62,7 @@ describe('hydrate — decimal and float', () => {
       @getRatio = -> :ratio
     `);
     await expectActorBehavior(actor,
-      { input: { id: '1', cam: [{ price: 9.99, ratio: 3.14 }, 'hydrate'], from: 'p' } },
+      { input: { id: '1', cam: [{ '.price': 9.99, '.ratio': 3.14 }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
     );
   });
@@ -84,7 +84,7 @@ describe('hydrate — overwrites init values', () => {
       @get = -> :x, :y
     `;
     await expectBehavior(script,
-      { input: { id: '1', cam: [{ x: 1, y: 'hydrated' }, 'hydrate'], from: 'p' } },
+      { input: { id: '1', cam: [{ '.x': 1, '.y': 'hydrated' }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
       { input: { id: '2', op: '@get', from: 'c' } },
       { output: expect.objectContaining({ re: { x: 1, y: 'hydrated' } }) },
@@ -100,7 +100,7 @@ describe('hydrate — mutate after hydrate', () => {
       @get = -> :x
     `;
   await expectBehavior(script,
-      { input: { id: '1', cam: [{ x: 10 }, 'hydrate'], from: 'p' } },
+      { input: { id: '1', cam: [{ '.x': 10 }, 'hydrate'], from: 'p' } },
       { output: { id: '1', re: 'hydrate', to: 'p' } },
       { input: { id: '2', op: '@inc!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { x: 11 } }) },
@@ -108,6 +108,22 @@ describe('hydrate — mutate after hydrate', () => {
       { output: expect.objectContaining({ id: '3', re: { x: 12 } }) },
       { input: { id: '4', op: '@get', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: { x: 12 } }) },
+    );
+  });
+});
+
+describe('hydrate — keys are wire labels', () => {
+  const script = `
+    x *Integer = 0
+    @get = -> :x
+  `;
+
+  it('a bare key is not the cell\'s label', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', cam: [{ x: 42 }, 'hydrate'], from: 'p' } },
+      { output: { id: '1', re: 'hydrate', to: 'p' } },
+      { input: { id: '2', op: '@get', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: { x: 0 } }) },
     );
   });
 });

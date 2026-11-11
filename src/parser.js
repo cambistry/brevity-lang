@@ -3,6 +3,9 @@ import * as AST from './ast.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
+
+// The cells a setter is synthesized for: values, and references to Self.
+const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
@@ -5398,6 +5401,18 @@ export function parse(tokensIn) {
         });
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef }));
       }
+    }
+    // A protected cell is set by `{op: [[v], "#set"], to: ".val"}`, from inside
+    // only: `set.val`, as a public one's is `set@val`. Same cells as get one
+    // (notes/protected-names-dot-prefix-2026-11-11.md).
+    for (const stmt of constructorBody) {
+      if (stmt.type !== 'RefDecl' || /^[@#]/.test(stmt.name) || typeof stmt.typeName !== 'string') continue;
+      if (!PROTECTED_SETTER_TYPES.has(stmt.typeName) && !stmt.typeName.split('|').some(m => m.trim() === 'Self')) continue;
+      if (functions.some(f => f.name === 'set.' + stmt.name)) continue;
+      functions.push(AST.functionDecl('set.' + stmt.name,
+        [{ name: '_v', type: stmt.typeName, positional: true }],
+        [AST.setStatement(stmt.name, AST.identifier('_v')), AST.silentTerminator()],
+      ));
     }
     refVarScopes.pop(); // end actor-level ref scope
     declCtx = outerDecl;

@@ -24,6 +24,8 @@ construction, callback flow, and outgoing wire messages.
   CAM message, then resumes on reply.
 - `interop.test.js`: request/reply, silent cross-actor calls, three-actor chains,
   and callbacks.
+- `protected_labels.test.js`: a protected label on the wire takes a leading
+  `.` (`.val`, `.double`); `#set` to `.val` is answered from inside only.
 - `remote_instance.test.js`: `*Name(...)` sends `#new`; the returned
   `#<Type/id>` address is used for later method calls on the actor.
 

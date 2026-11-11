@@ -213,7 +213,7 @@ export function liftReactiveElements(ast) {
         for (const fn of (ab.functions || [])) {
           if (!fn.name) continue;
           if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
-          if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+          if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@') || fn.name.startsWith('set.')) continue;
           if (fn.params && fn.params.length > 0) continue;
           // Placeholder name updated to @N by synthesizeReactiveElementBodies
           attrs.push({ name: fn.name, value: { type: 'closure_ref', name: fn.name } });
@@ -298,7 +298,7 @@ export function assignClosureAddresses(ast) {
     for (const fn of (actor.functions || [])) {
       if (!fn.name) continue;
       if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
-      if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@')) continue;
+      if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@') || fn.name.startsWith('set.')) continue;
       if (fn.name.endsWith('!')) continue; // a function that writes has nothing to subscribe to
       if (fn.params && fn.params.length > 0) continue;
       if (!hasRefRead(fn.body)) continue;

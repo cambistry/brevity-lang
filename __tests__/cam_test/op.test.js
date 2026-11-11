@@ -42,7 +42,7 @@ describe('test.op — private function', () => {
 
   it('dispatches private function directly', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [[5], 'double'] }, from: 't' } },
+      { input: { id: '1', test: { op: [[5], '.double'] }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: [10] }) },
     );
   });

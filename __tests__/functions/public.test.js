@@ -129,6 +129,28 @@ describe('f, @f and #f are different functions', () => {
     );
   });
 
+  it('outside, .f doesn\'t answer', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '.f', from: 'c' } },
+      { output: { id: '1', ex: { '.f': 'unhandled' }, to: 'c' } },
+    );
+  });
+
+  // On the wire, a protected label takes a leading `.`: f is op `.f`.
+  it('inside, f is op .f', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { op: '.f' }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: ['private'] }) },
+    );
+  });
+
+  it('inside, op f is nothing', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { op: 'f' }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', ex: { f: 'unhandled' } }) },
+    );
+  });
+
   it('outside, #f doesn\'t answer', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '#f', from: 'c' } },

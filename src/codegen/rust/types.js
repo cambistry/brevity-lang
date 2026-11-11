@@ -224,7 +224,7 @@ const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
         to
     };
     let last = inner.rsplit(' ').next().unwrap_or("");
-    if last.starts_with('@') || last.starts_with('#') {
+    if last.starts_with('@') || last.starts_with('#') || last.starts_with('.') {
         Some(last.to_string())
     } else {
         None
@@ -392,6 +392,8 @@ function rustIdent(name) {
   if (name.endsWith('!')) name = `${name.slice(0, -1)}__w`;
   // Private function names (#name) → pv_name (# is not valid in Rust identifiers)
   if (name.startsWith('#')) return `pv_${name.slice(1)}`;
+  // `set.val` (a protected cell's setter) has a `.` inside, too.
+  name = name.replace(/\./g, '_d_');
   if (RUST_KEYWORDS.has(name)) return `r#${name}`;
   return name;
 }

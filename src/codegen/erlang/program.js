@@ -1,12 +1,13 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import * as AST from '../../ast.js';
+import { wireLabel } from '../wire_labels.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
-import { PREAMBLE, erlVarName, erlString, erlStateKey } from './preambles.js';
+import { PREAMBLE, erlVarName, erlString, erlStateKey, erlOp } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../inference.js';
 import {
@@ -216,7 +217,7 @@ const isPrivateOp = op => !/^(@|set$|update$|set@|subscribe@|new@)/.test(op);
 function genPublicFn(ctx, fn) {
   // Simple public function — no type check needed, used when single function per op with no typed params
   const inner = genPublicFnInner(ctx, fn);
-  return `handle_op(${erlString(fn.name)}, Message, Payload, _Id, _From) ->\n${inner}`;
+  return `handle_op(${erlOp(fn.name)}, Message, Payload, _Id, _From) ->\n${inner}`;
 }
 
 // ── Function codegen ────────────────────────────────────────────────────────
@@ -371,7 +372,8 @@ function genFn(ctx, fn) {
     allLines.push(`${I}${retExpr}`);
   }
 
-  const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s').replace(/!$/, '__w');
+  // `set.val` (a protected cell's setter) has a `.` inside, too.
+  const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s').replace(/!$/, '__w').replace(/\./g, '_d_');
   return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
@@ -379,7 +381,7 @@ function genFn(ctx, fn) {
 
 // Generic subscribe prologue: two handle_op clauses that intercept
 // subscribe@<target> / subscribe#<target>, stash {Id, From, Args} in the
-// cell_subs list, and recurse with the rewritten op so the normal @/# arm
+// cell_subs list (keyed by the whole label, `@a`), and recurse with the rewritten op so the normal @/# arm
 // runs. Args come from the incoming op-array payload (null for no-arg
 // subscribe). Route (the JS _route callback) has no Erlang analogue — the
 // in-process path uses {pending_subscribe, Id} as before.
@@ -393,15 +395,15 @@ function genSubscribePrologue(fnName) {
     SubArgs_ = ${extractArgs},
     SubTy_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
-    CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
+    CellSubs_ = case get({cell_subs, <<"@", Target_/binary>>}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, <<"@", Target_/binary>>}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
     ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
     `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubTy_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
-    CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
+    CellSubs_ = case get({cell_subs, <<"#", Target_/binary>>}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, <<"#", Target_/binary>>}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
     ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
   ];
 }
@@ -421,7 +423,7 @@ function genDispatch(ctx, publicFns) {
   const clauses = [...genSubscribePrologue('handle_op')];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
-    if (isPrivateOp(op)) clauses.push(`handle_op(${erlString(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlString(op)}}`);
+    if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlOp(op)}}`);
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
@@ -431,7 +433,7 @@ function genDispatch(ctx, publicFns) {
       const isWireOp = op === 'set' || op === 'update';
       const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
       // A silent name's trailing `.` → `__s` (`.` ends an Erlang form).
-      const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s').replace(/!$/, '__w');
+      const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s').replace(/!$/, '__w').replace(/\./g, '_d_');
       const tryFns = [];
       for (let i = 0; i < variants.length; i++) {
         const h = variants[i];
@@ -441,13 +443,13 @@ function genDispatch(ctx, publicFns) {
       }
 
       // Chain: try first, if nomatch try next, etc.
-      let chainExpr = '    {error, ' + erlString(op) + '}';
+      let chainExpr = '    {error, ' + erlOp(op) + '}';
       for (let i = tryFns.length - 1; i >= 0; i--) {
         const fn = tryFns[i];
         chainExpr = `    case ${fn.fnName}(Message, Payload, _From) of\n        nomatch ->\n    ${chainExpr};\n        Result -> Result\n    end`;
       }
 
-      clauses.push(`handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${chainExpr}`);
+      clauses.push(`handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${chainExpr}`);
 
       // Add the try functions as separate top-level functions
       for (let i = 0; i < variants.length; i++) {
@@ -867,7 +869,7 @@ function genChildHandleOp(ctx, actor) {
   for (const [op, variants] of publicByName) {
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       const inner = genPublicFnInner(ctx, variants[0], { skipTypeCheck: true });
-      clauses.push(`${prefix}_handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${inner}`);
+      clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${inner}`);
       continue;
     }
     const hasOverloads = variants.length > 1;
@@ -875,14 +877,14 @@ function genChildHandleOp(ctx, actor) {
     variants.forEach((h, i) => {
       typedHelpers.push(`${names[i]}(Message, Payload, _Id, _From) ->\n${genPublicFnInner(ctx, h, { hasOverloads, instance: true })}.`);
     });
-    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlString(op)}}`);
-    clauses.push(`${prefix}_handle_op(${erlString(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
+    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlOp(op)}}`);
+    clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
   }
   // Add private function dispatch clauses for child actor
   for (const h of childPrivateFns) {
-    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlString(h.name)}}`);
+    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlOp(h.name)}}`);
     const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
-    clauses.push(`${prefix}_handle_op(${erlString(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+    clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
 
   ctx.selfSendPrefix = savedSelfSendPrefix;
@@ -938,7 +940,7 @@ function genChildHandleOp(ctx, actor) {
     // Forward to the wrapped superclass's child dispatch
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
-      clauses.push(`${prefix}_handle_op(${erlString(f.name)}, Message, Payload, Id, From) ->\n    child_dispatch(${erlString(wb.supertype.toLowerCase())}, ${erlString(f.name)}, Message, Payload, Id, From)`);
+      clauses.push(`${prefix}_handle_op(${erlOp(f.name)}, Message, Payload, Id, From) ->\n    child_dispatch(${erlString(wb.supertype.toLowerCase())}, ${erlOp(f.name)}, Message, Payload, Id, From)`);
     }
   }
 
@@ -1315,7 +1317,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
   // Self-reference constant for recursive lambdas
   if (lVarName) {
-    lines.push(`${I}${erlVarName(lVarName)} = <<"${lName}">>,`);
+    lines.push(`${I}${erlVarName(lVarName)} = ${erlOp(lName)},`);
   }
 
   // Load captures from process dictionary
@@ -1550,7 +1552,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     // A wire lambda is dispatched by its `@N` selector (locally via ref-field
     // self-dispatch, or on the wire after perspective translation); a local
     // lambda by its bare `_lambda_N` name.
-    lambdaEntries.push({ name: lh.selector || lh.name, inner, params: lh.fn.params || [] });
+    lambdaEntries.push({ name: lh.selector || wireLabel(lh.name), inner, params: lh.fn.params || [] });
   }
   // Phase 2: group by dispatch key for arity-based dispatch
   const lambdasByName = new Map();
@@ -1566,7 +1568,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     } else {
       // Multiple handlers with same label — arity-based dispatch
       const tryFns = handlers.map((h, i) => {
-        const fnName = `lambda_${lName.replace(/^_lambda_/, '')}_ov${i}`;
+        const fnName = `lambda_${lName.replace(/^\.?_lambda_/, '')}_ov${i}`;
         const posParams = h.params.filter(p => p.positional !== false);
         const posCount = posParams.length;
         const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
@@ -1751,14 +1753,14 @@ ${putLines},
     stateInitLines.push(`    put(${erlStateKey(ctx, '__returnAs')}, ${val})`);
   }
 
-  // Capture function — serializes actor state
-  const captureFields = allStateNames.map(n => `${erlString(n)} => get(${erlStateKey(ctx, n)})`).join(', ');
+  // Capture function — serializes actor state, each cell by its wire label (`.val`, `@pub`)
+  const captureFields = allStateNames.map(n => `${erlOp(n)} => get(${erlStateKey(ctx, n)})`).join(', ');
   const captureFn = `capture() ->
     #{${captureFields}}.`;
 
   // Hydrate function — restores actor state from captured data
   const hydrateLines = allStateNames.map(n =>
-    `    case maps:find(${erlString(n)}, State) of {ok, V_${erlVarName(n)}} -> put(${erlStateKey(ctx, n)}, V_${erlVarName(n)}); error -> ok end`,
+    `    case maps:find(${erlOp(n)}, State) of {ok, V_${erlVarName(n)}} -> put(${erlStateKey(ctx, n)}, V_${erlVarName(n)}); error -> ok end`,
   );
   const hydrateFn = allStateNames.length > 0
     ? `hydrate(State) ->\n${hydrateLines.join(',\n')}.`
@@ -1880,9 +1882,15 @@ ${testTypeClauses || '                _ -> null'};
         error ->
     case maps:find(<<"op">>, Test) of
         {ok, Op} ->
-            {OpName, Payload} = case Op of
+            {OpName0, Payload} = case Op of
                 S when is_binary(S) -> {S, #{}};
                 L when is_list(L) -> {lists:last(L), if length(L) > 1 -> hd(L); true -> #{} end}
+            end,
+            %% A #set with a to sets the cell it names, as on the wire.
+            OpName = case {OpName0, maps:get(<<"to">>, Test, null)} of
+                {<<"#set">>, SetTo_} when SetTo_ =/= null ->
+                    case extract_to_selector_(SetTo_) of nomatch -> <<"set">>; SetSel_ -> <<"set", SetSel_/binary>> end;
+                _ -> OpName0
             end,
             Result3 = handle_op(OpName, #{}, Payload, Id, <<"__test">>),
             handle_result(Result3, Id, From, OpName);

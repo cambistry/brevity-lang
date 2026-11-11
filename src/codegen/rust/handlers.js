@@ -1,4 +1,5 @@
 // handlers.js — Handler and child actor generation for Rust codegen
+import { wireLabel } from '../wire_labels.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -230,7 +231,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             } else if (fnReply) {
               // Private function with explicit reply — dispatch through self_send
               const tmpVar = `_pvfn_${precomputeIdx++}`;
-              const callExpr = `self.self_send("${calleeName}", &Value::Object(Map::new()))`;
+              const callExpr = `self.self_send("${wireLabel(calleeName)}", &Value::Object(Map::new()))`;
               lines.push(`                let ${tmpVar} = BvObject::pack(&${callExpr}).one();`);
               expr._precomputed = tmpVar;
             }
@@ -335,7 +336,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   // Outside, only `@name` is exposed.
   const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@)/.test(name);
   if (isPrivate) guard = guard ? ` if !bv_from_wire_caller(from) && (${guard.replace(/^ if /, '')})` : ' if !bv_from_wire_caller(from)';
-  return `            "${name}"${guard} => {\n${lines.join('\n')}\n            }`;
+  return `            "${wireLabel(name)}"${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
 function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
@@ -512,7 +513,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     // A wire lambda is dispatched by its `@N` selector (locally via ref-field
     // self-dispatch, or on the wire after perspective translation); a local
     // lambda by its bare `_lambda_N` name.
-    lambdaEntries.push({ name: lh.selector || name, inner: lambdaLines.join('\n'), params });
+    lambdaEntries.push({ name: lh.selector || wireLabel(name), inner: lambdaLines.join('\n'), params });
   }
 
   // Group lambda entries by name for arity-based dispatch
@@ -791,7 +792,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   G.ctx.ssaCounts = savedSsaCounts;
 
   // Outside, only `@name` is exposed.
-  return `            "${name}"${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
+  return `            "${wireLabel(name)}"${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
 }
 
 function tagWireReply(tyBody) {
@@ -868,7 +869,7 @@ function genRustChildDispatch(actor) {
   for (const f of delegatedFunctions) {
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     if (wb) {
-      arms.push(`            "${f.name}"${childTagGuard(f)} => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${f.name}", payload, "", "__parent"));\n            }`);
+      arms.push(`            "${wireLabel(f.name)}"${childTagGuard(f)} => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${wireLabel(f.name)}", payload, "", "__parent"));\n            }`);
     }
   }
 
@@ -894,14 +895,14 @@ function genRustChildDispatch(actor) {
   return `
     fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {
         // Generic subscribe prologue for this child: intercept
-        // subscribe@<T> / subscribe#<T>, stash the sub in _cell_subs_<T>
+        // subscribe@<T> / subscribe#<T>, stash the sub in _cell_subs_@<T>
         // (prefixed by child name), and recurse with the rewritten op.
         if op.starts_with("subscribe@") || op.starts_with("subscribe#") {
             let sigil = op.chars().nth("subscribe".len()).unwrap_or('@');
             let target = &op["subscribe".len() + 1..];
             let sub_args = payload.clone();
             let sub_ty = Value::Null;
-            let subs_key = format!("${name}_cell_subs_{}", target);
+            let subs_key = format!("${name}_cell_subs_{}{}", sigil, target);
             let mut subs = self
                 .state
                 .get(&subs_key)

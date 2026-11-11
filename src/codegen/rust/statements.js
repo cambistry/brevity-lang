@@ -1,4 +1,5 @@
 // statements.js — Statement generation for Rust codegen
+import { wireLabel } from '../wire_labels.js';
 import { returnsOnlySelf } from '../../chains.js';
 import { argForParam } from '../../call_args.js';
 import { asDescriptor } from '../../as_check.js';
@@ -221,7 +222,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
         if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
         const cellName = argExpr.name;
         if (!G.ctx.stateVarNames?.has(cellName)) continue;
-        subRegLines.push(`${I}    self.inproc_cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(actorName.toLowerCase())}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
+        subRegLines.push(`${I}    self.inproc_cell_subs.entry(${JSON.stringify(wireLabel(cellName))}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(actorName.toLowerCase())}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
         subRegLines.push(`${I}    let _initial_val = self.state.get(${JSON.stringify(stateKey(cellName))}).cloned().unwrap_or(Value::Null);`);
         subRegLines.push(`${I}    self.child_${lc}_dispatch_at(_id, ${JSON.stringify(ps.callbackName)}, &Value::Array(vec![_initial_val]), "", "__parent");`);
       }
@@ -1909,7 +1910,7 @@ function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
   }
   if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
   G.ctx.lambdaVarNames.add(s.name);
-  lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${lambdaName}".to_string());`);
+  lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${wireLabel(lambdaName)}".to_string());`);
 }
 
 // `enclosing` is the walk this is a branch of: its locals stay in scope, and the
@@ -1987,7 +1988,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
         G.ctx.lambdaVarNames.add(s.name);
         G.ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
-        lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${lambdaName}".to_string());`);
+        lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${wireLabel(lambdaName)}".to_string());`);
         continue;
       }
       // Check if this original function assignment is followed by overload operators
@@ -2002,7 +2003,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
         G.ctx.lambdaVarNames.add(s.name);
         G.ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
-        lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${lambdaName}".to_string());`);
+        lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${wireLabel(lambdaName)}".to_string());`);
         continue;
       }
     }
@@ -2174,7 +2175,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
         G.ctx.lambdaHandlers.push({ name: lambdaName, fn: s.value });
         const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-        lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), json!("${lambdaName}"));`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), json!("${wireLabel(lambdaName)}"));`);
       } else {
         // If the RHS is a list literal containing spawn-needing actor
         // constructions, hoist each spawn into a `let` binding before the
@@ -2207,7 +2208,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // its own state slot).
         if (G.ctx.stateVarNames.has(s.name) && !G.ctx.childStatePrefix) {
           lines.push(`${I}{`);
-          lines.push(`${I}    let _subs = self.inproc_cell_subs.get(${JSON.stringify(s.name)}).cloned().unwrap_or_default();`);
+          lines.push(`${I}    let _subs = self.inproc_cell_subs.get(${JSON.stringify(wireLabel(s.name))}).cloned().unwrap_or_default();`);
           lines.push(`${I}    let _new_val = self.state.get(${JSON.stringify(stateKey(s.name))}).cloned().unwrap_or(Value::Null);`);
           lines.push(`${I}    for (_cls, _id, _cb) in _subs {`);
           // Dispatch via the right child class's dispatch_at. Build a
@@ -2235,11 +2236,10 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             ? `self.child_${childPrefix}_dispatch(_fn_op, &_fn_payload, &_fn_sub_id, "__parent")`
             : `{ let (r, _, _) = self.handle_op(_fn_op, &_fn_msg, &_fn_payload, "__parent", &_fn_sub_id); r.unwrap_or(Value::Null) }`;
           const subsKeyFor = (fnFull) => inChild
-            ? `format!("${childPrefix}_cell_subs_{}", "${fnFull.slice(1)}")`
+            ? `format!("${childPrefix}_cell_subs_{}", "${fnFull}")`
             : null;
           for (const fnFullName of derivedFns) {
             const selector = fnFullName;
-            const bare = fnFullName.slice(1);
             if (inChild) {
               // Child subs are stored as JSON array of {id, from, args, ty}.
               lines.push(`${I}{`);
@@ -2268,7 +2268,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             } else {
               // Main actor subs are stored in cell_subs as (id, from, args, ty).
               lines.push(`${I}{`);
-              lines.push(`${I}    let _fn_subs = self.cell_subs.get(${JSON.stringify(bare)}).cloned().unwrap_or_default();`);
+              lines.push(`${I}    let _fn_subs = self.cell_subs.get(${JSON.stringify(fnFullName)}).cloned().unwrap_or_default();`);
               lines.push(`${I}    for (_fn_sub_id, _fn_sub_from, _fn_sub_args, _fn_sub_ty) in _fn_subs {`);
               lines.push(`${I}        let _fn_op = "${selector}";`);
               lines.push(`${I}        let _fn_payload = _fn_sub_args.clone();`);

@@ -1,4 +1,5 @@
 // program.js — Program assembly and entry for Rust codegen
+import { wireLabel } from '../wire_labels.js';
 import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
@@ -377,7 +378,7 @@ ${bvTypeFieldsArms}
         // Check if this was pre-registered as a lambda
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
         if (preInit) {
-          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!("${preInit.lambdaName}"));`);
+          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!("${wireLabel(preInit.lambdaName)}"));`);
         } else if (s.value?.type === 'ObjectConstructor' || s.value?.type === 'ObjectLiteral') {
           // Store Object as wire-format JSON (Object type is not serializable)
           const positional = s.value.args.filter(a => a.positional);
@@ -421,9 +422,9 @@ ${bvTypeFieldsArms}
   }
   const initMethod = '';
 
-  // Capture — serialize actor state
+  // Capture — serialize actor state, each cell by its wire label (`.val`, `@pub`)
   const captureFields = [...G.ctx.stateVarNames].map(n =>
-    `m.insert(${JSON.stringify(n)}.to_string(), self.state.get("${stateKey(n)}").cloned().unwrap_or(Value::Null));`,
+    `m.insert(${JSON.stringify(wireLabel(n))}.to_string(), self.state.get("${stateKey(n)}").cloned().unwrap_or(Value::Null));`,
   ).join(' ');
   const captureMethod = `    fn capture(&self) -> Value {
         let mut m = Map::new();
@@ -433,7 +434,7 @@ ${bvTypeFieldsArms}
 
     fn hydrate(&mut self, state: &Value) {
 ${[...G.ctx.stateVarNames].map(n =>
-  `        if let Some(v) = state.get(${JSON.stringify(n)}) { self.state.insert("${stateKey(n)}".to_string(), v.clone()); }`,
+  `        if let Some(v) = state.get(${JSON.stringify(wireLabel(n))}) { self.state.insert("${stateKey(n)}".to_string(), v.clone()); }`,
 ).join('\n')}
     }
 
@@ -540,6 +541,12 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
                 (name, p)
             } else { return; };
+            // A #set with a to sets the cell it names, as on the wire.
+            let op_name = match (op_name.as_str(), test.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector)) {
+                ("#set", Some(sel)) => format!("set{}", sel),
+                ("#set", None) => "set".to_string(),
+                _ => op_name,
+            };
             let (re, ty_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test", id);
             if !handled {
                 let mut ex = Map::new(); ex.insert(op_name, json!("unhandled"));
@@ -678,7 +685,7 @@ ${bodyLines}
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
         // Generic subscribe prologue: intercept subscribe@<T> / subscribe#<T>,
-        // stash the sub in cell_subs, and recurse with the rewritten op_name
+        // stash the sub in cell_subs (keyed by the whole label, @a), and recurse with the rewritten op_name
         // so the normal getter arm produces the initial re. Subscribe is an
         // implicit affordance on every public getter; no per-name handler is
         // declared.
@@ -691,7 +698,7 @@ ${bodyLines}
             };
             let sub_ty = message.get("ty").cloned().unwrap_or(Value::Null);
             self.cell_subs
-                .entry(target.to_string())
+                .entry(format!("{}{}", sigil, target))
                 .or_insert_with(Vec::new)
                 .push((id.to_string(), from.to_string(), sub_args, sub_ty));
             let rewritten = format!("{}{}", sigil, target);

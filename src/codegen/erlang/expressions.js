@@ -1,6 +1,6 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
-import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
+import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { argForParam } from '../../call_args.js';
 import {
   resolveSSAName,
@@ -175,7 +175,7 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
   const value = `get(${erlStateKey(ctx, '@' + cell)})`;
   const tyPart = cellType ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
   return [
-    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
+    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString('@' + cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
     `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,
     `${I}    case SubFrom${sfx}_ of`,
     `${I}        <<"__parent">> ->`,
@@ -535,7 +535,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
               if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
               const cellName = argExpr.name;
               if (!ctx.stateVarNames?.has(cellName)) continue;
-              const subsKey = `{cell_subs, ${erlString(cellName)}}`;
+              const subsKey = `{cell_subs, ${erlOp(cellName)}}`;
               const stateRef = `get(${erlStateKey(ctx, cellName)})`;
               const sn = ctx.ephCounter++;
               subRegLines.push(`InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end`);
@@ -697,7 +697,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'FnRef') {
     // As a value, a function reference is its op name, as a lambda's label is.
-    if (ctx.actorFnNames.has(expr.name)) return erlString(expr.name);
+    if (ctx.actorFnNames.has(expr.name)) return erlOp(expr.name);
     // A local holding a lambda is its label already, whatever its arity.
     if (ctx.lambdaVarNames.has(expr.name)) return genExpr(ctx, { type: 'Identifier', name: expr.name }, typeEnv, sCtx);
     return erlVarName(expr.name);
@@ -1234,7 +1234,7 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   // Self-send: call through dispatch, return Object
   if (expr.args.length === 0) {
-    return `${selfSendFn}(${erlString(name)}, #{})`;
+    return `${selfSendFn}(${erlOp(name)}, #{})`;
   }
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
     if (a.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, a)) return erlGenLambdaArgLabel(ctx, a, typeEnv, sCtx);
@@ -1246,12 +1246,12 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
       `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`,
     );
     if (posArgs.length > 0) {
-      return `${selfSendFn}(${erlString(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
+      return `${selfSendFn}(${erlOp(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;
     }
     // Named-only: pass as map, not wrapped in list
-    return `${selfSendFn}(${erlString(name)}, #{${namedEntries.join(', ')}})`;
+    return `${selfSendFn}(${erlOp(name)}, #{${namedEntries.join(', ')}})`;
   }
-  return `${selfSendFn}(${erlString(name)}, [${posArgs.join(', ')}])`;
+  return `${selfSendFn}(${erlOp(name)}, [${posArgs.join(', ')}])`;
 }
 
 
@@ -1350,7 +1350,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
     if (e.type === 'Function') return genFunctionLiteral(ctx, e, typeEnv, ctx, undefined, innerRenames);
     if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && ctx.actorFnNames.has(e.callee.name)) {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
-      return `self_send(${erlString(e.callee.name)}, [${args.join(', ')}])`;
+      return `self_send(${erlOp(e.callee.name)}, [${args.join(', ')}])`;
     }
     // Fallback to outer genExpr for complex expressions
     return genExpr(ctx, e, typeEnv, sCtx);
@@ -1399,7 +1399,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
           innerRenames.set(s.name, renamed);
           if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
             const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${renamed} = bv_object_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
+            lines.push(`${renamed} = bv_object_one(self_send(${erlOp(s.value.callee.name)}, [${args}]))`);
           } else {
             lines.push(`${renamed} = ${genInnerExpr(s.value)}`);
           }
@@ -1409,7 +1409,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
           const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.source.callee.name);
           if (isActorFnCall) {
             const args = s.source.args.map(a => genInnerExpr(a)).join(', ');
-            lines.push(`${tmpName} = self_send(${erlString(s.source.callee.name)}, [${args}])`);
+            lines.push(`${tmpName} = self_send(${erlOp(s.source.callee.name)}, [${args}])`);
           } else {
             lines.push(`${tmpName} = ${genInnerExpr(s.source)}`);
           }
@@ -1596,7 +1596,7 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
   }
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_) -> bv_object_one(self_send(${erlString(expr.fn.name)}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(self_send(${erlOp(expr.fn.name)}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
     fn = `fun(Item_) -> bv_object_one(self_send(${varRef}, [Item_])) end`;
@@ -1615,7 +1615,7 @@ function genReduceExpr(ctx, expr, typeEnv, sCtx) {
   const list = genExpr(ctx, expr.collection, typeEnv, sCtx);
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${erlString(expr.fn.name)}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${erlOp(expr.fn.name)}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
     fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${varRef}, [Acc_, Item_])) end`;
@@ -1704,7 +1704,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
     }
     if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && ctx.actorFnNames.has(e.callee.name)) {
       const args = e.args.map(a => genInner(a)).join(', ');
-      return `self_send(${erlString(e.callee.name)}, [${args}])`;
+      return `self_send(${erlOp(e.callee.name)}, [${args}])`;
     }
     // Fall back to outer genExpr for complex expressions
     return genExpr(ctx, e, typeEnv, sCtx);
@@ -1725,7 +1725,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       innerRenames.set(s.name, renamed);
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
         const args = s.value.args.map(a => genInner(a)).join(', ');
-        lines.push(`${renamed} = bv_object_one(self_send(${erlString(s.value.callee.name)}, [${args}]))`);
+        lines.push(`${renamed} = bv_object_one(self_send(${erlOp(s.value.callee.name)}, [${args}]))`);
       } else {
         lines.push(`${renamed} = ${genInner(s.value)}`);
       }
@@ -1736,7 +1736,7 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       const tmpName = `${prefix}Dtmp_${si}`;
       if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.source.callee.name)) {
         const args = s.source.args.map(a => genInner(a)).join(', ');
-        lines.push(`${tmpName} = self_send(${erlString(s.source.callee.name)}, [${args}])`);
+        lines.push(`${tmpName} = self_send(${erlOp(s.source.callee.name)}, [${args}])`);
       } else {
         lines.push(`${tmpName} = ${genInner(s.source)}`);
       }

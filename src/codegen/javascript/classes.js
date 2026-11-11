@@ -3,6 +3,7 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
 import { isDynamicTy } from '../ty_tags.js';
+import { wireLabel } from '../wire_labels.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor, enclosesClasses } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
@@ -199,14 +200,14 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       // External callers are matched by their tags. An in-process call carries
       // values but no tags, so its values pick the clause.
       const valueCondition = genValueCondition(params) ?? 'true';
-      condition = `opName === "${name}" && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
+      condition = `opName === "${wireLabel(name)}" && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
     } else {
-      condition = `opName === "${name}" && (${checks.join(' && ')})`;
+      condition = `opName === "${wireLabel(name)}" && (${checks.join(' && ')})`;
     }
   } else if (typeCondition) {
-    condition = `opName === "${name}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+    condition = `opName === "${wireLabel(name)}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
   } else {
-    condition = `opName === "${name}"`;
+    condition = `opName === "${wireLabel(name)}"`;
   }
   // Outside, only `@name` is exposed.
   if (isPrivate) condition += ` && (from === '__parent' || from === '__self' || from === '__test' || from === '__emit')`;
@@ -595,7 +596,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
       const jsVarName = lVarName.startsWith('#') ? `_pv_${lVarName.slice(1)}` : lVarName.replace(/!$/, '$w');
-      block += `\n        const ${jsVarName} = "${lName}";`;
+      block += `\n        const ${jsVarName} = "${wireLabel(lName)}";`;
     }
     // Load captures from private fields
     if (captures && captures.length > 0) {
@@ -627,7 +628,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // The opName a dispatched message carries for this lambda: a wire lambda is
     // reached by its `@N` selector (locally via #fire self-dispatch, or on the
     // wire after perspective translation); a local lambda by its bare name.
-    const dispatchKey = lh.selector || lName;
+    const dispatchKey = lh.selector || wireLabel(lName);
     // For overloaded lambdas (multiple handlers with same label), add arity condition
     const hasOverloads = ctx.lambdaHandlers.filter(h => h.name === lName).length > 1;
     let condition;
@@ -692,8 +693,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // Find the wrapped binding to delegate through
     const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
     return {
-      condition: `opName === "${f.name}"`,
-      block: `\n        re = await this.#childSend(this.#${stateKey(wb.name)}, "${f.name}");\n        _handled = true;`,
+      condition: `opName === "${wireLabel(f.name)}"`,
+      block: `\n        re = await this.#childSend(this.#${stateKey(wb.name)}, "${wireLabel(f.name)}");\n        _handled = true;`,
     };
   });
 
@@ -874,7 +875,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     : initCall;
 
   const hasEmits = emitDecls.size > 0;
-  // #_cellSubs holds subscription lists keyed by target name. Populated by
+  // #_cellSubs holds subscription lists keyed by target label (`@a`). Populated by
   // the generic subscribe@X prologue in #dispatch; walked by set@X's
   // notifyBlock to replay new values to registered subscribers. Always
   // emitted since the dispatcher prologue references it unconditionally.
@@ -1048,11 +1049,12 @@ ${fieldSection ? fieldSection + '\n' : ''}
   }` : ''}${fnSection}
 
   #capture() {
-    return {${[...allFieldNames].map(n => ` ${JSON.stringify(n)}: this.#${stateKey(n)}`).join(',')} };
+    // Each cell by its wire label: .val, @pub.
+    return {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
   }
 
   #hydrate(state) {
-${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${stateKey(n)} = state[${JSON.stringify(n)}];`).join('\n')}
+${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state) this.#${stateKey(n)} = state[${JSON.stringify(wireLabel(n))}];`).join('\n')}
   }
 
   async #_test(message) {
@@ -1104,7 +1106,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(n)} in state) this.#${st
       const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
       this.#dispatch({ op: [payload, 'update'], from: '__self' });
     } else if ('op' in t) {
-      await this.#dispatch({ id: message.id, op: t.op, from: '__test', _replyTo: message.from });
+      await this.#dispatch({ id: message.id, op: t.op, ...('to' in t ? { to: t.to } : {}), from: '__test', _replyTo: message.from });
     }
   }
 
@@ -1137,7 +1139,7 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 ` : ''}  async #selfSend(op) {
     const _opName = Array.isArray(op) ? op[op.length - 1] : op;
     const id = String(++this.#nextId);${silentFnNames.size > 0 ? `
-    if (${JSON.stringify([...silentFnNames])}.includes(_opName)) {
+    if (${JSON.stringify([...silentFnNames].map(wireLabel))}.includes(_opName)) {
       this.#dispatch({ id, op, from: '__self' });
       return;
     }` : ''}
@@ -1278,15 +1280,16 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }
     if ((opName === '@subscribe' || opName === 'set') && typeof message.to === 'string') {
       if (opName === '@subscribe') opName = 'subscribe';
-      const _toSelMatch = /(@|#)([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());
+      const _toSelMatch = /([@#.])([0-9]+|[A-Za-z_][A-Za-z0-9_]*)>?$/.exec(message.to.trim());
       if (_toSelMatch) opName = opName + _toSelMatch[1] + _toSelMatch[2];
     }
     if (typeof opName === 'string' && (opName.startsWith('subscribe@') || opName.startsWith('subscribe#'))) {
       const _sigil = opName[('subscribe').length];
       const _subTarget = opName.slice('subscribe'.length + 1);
       const _subArgs = Array.isArray(message.op) ? message.op[0] : null;
-      let _subs = this.#_cellSubs?.get(_subTarget);
-      if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_subTarget, _subs); }
+      // Keyed by the whole label: \`a\`, \`@a\` and \`#a\` are different cells.
+      let _subs = this.#_cellSubs?.get(_sigil + _subTarget);
+      if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_sigil + _subTarget, _subs); }
       if (_subs) _subs.push({ id, from: _replyTo, args: _subArgs, route: message._route || null });
       opName = _sigil + _subTarget;
     }

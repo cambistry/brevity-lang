@@ -31,6 +31,10 @@ Exercises an actor's `update` path through the test harness.
 Dispatches public or private ops directly for tests. It bypasses normal schema
 validation in tested cases, so no `ty` is required.
 
+A protected op is spelled with a leading `.` (`.double`), as on the wire. A `to`
+is forwarded, so a protected cell is set from inside by
+`{ "test": { "op": [[5], "#set"], "to": ".val" } }`.
+
 ## LLM Rules
 
 - Treat these as test harness messages, not ordinary application protocol.

@@ -1,3 +1,4 @@
+import { wireLabel } from '../wire_labels.js';
 // ── Preamble constants and pure utilities for Erlang codegen ─────────────────
 
 // What a file actor does for its classes in every wait: answer a read of one of its
@@ -1402,6 +1403,7 @@ extract_to_selector_(Bin) when is_binary(Bin) ->
     case Last of
         <<"@", _/binary>> -> Last;
         <<"#", _/binary>> -> Last;
+        <<".", _/binary>> -> Last;
         _ -> nomatch
     end;
 extract_to_selector_(_) -> nomatch.
@@ -1577,4 +1579,9 @@ function erlOpExpr(vals, fields, method) {
   return `[[${[...vals, ...(fields ? [`#{${fields}}`] : [])].join(', ')}], ${method}]`;
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr };
+// An actor's own label as an op: a protected one takes a leading `.`.
+function erlOp(name) {
+  return erlString(wireLabel(name));
+}
+
+export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp };

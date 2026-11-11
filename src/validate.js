@@ -717,7 +717,7 @@ export function validate(ast, options = {}) {
     for (const fn of (actor.functions || [])) {
       if (fn.actorDef || fn.emptyOverload) continue;
       if (!fn.name) continue;
-      if (fn.name.startsWith('@') || fn.name.startsWith('set@') || fn.name.startsWith('#')) continue;
+      if (fn.name.startsWith('@') || fn.name.startsWith('set@') || fn.name.startsWith('set.') || fn.name.startsWith('#')) continue;
       if (actorConstructorSigs.has(fn.name)) continue; // constructor, not a plain fn
       // Lineal form stashes params inside body (BareTypeDecl etc.), leaving
       // fn.params empty. Skip: we'd false-positive on the sig check.

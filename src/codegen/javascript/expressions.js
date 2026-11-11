@@ -4,6 +4,7 @@ import { inferExprType } from '../../inference.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
+import { wireLabel } from '../wire_labels.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
@@ -79,7 +80,7 @@ export function domHostAddr(ctx, tag) {
 export function genCellNotify(ctx, cell, cellType) {
   const value = `this.#${stateKey('@' + cell)}`;
   const tyPart = cellType ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
-  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify('@' + cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
 }
 
 export function collectFreeVars(ctx, funcNode) {
@@ -282,7 +283,7 @@ export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
   ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
   // The value the label expression evaluates to: the wire self-address for a
   // routed lambda, else the bare local dispatch key.
-  const labelValue = wire ? `#<${selector}>` : lambdaName;
+  const labelValue = wire ? `#<${selector}>` : wireLabel(lambdaName);
   // If there are captures, emit an IIFE that stores them and returns the label.
   // The free var names are resolved through ctx.ssaScope (the OUTER scope at
   // the moment of lambda creation).
@@ -445,7 +446,7 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
-    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), "${expr.name}"])))`;
+    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), "${wireLabel(expr.name)}"])))`;
     if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${ssaResolve(ctx, expr.name)}])))`;
 
     return ssaResolve(ctx, expr.name);
@@ -872,8 +873,8 @@ export function genExpr(ctx, expr) {
           return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
         };
         const op = expr.args.length === 0
-          ? `"${name}"`
-          : `[[${expr.args.map(genArg).join(', ')}], "${name}"]`;
+          ? `"${wireLabel(name)}"`
+          : `[[${expr.args.map(genArg).join(', ')}], "${wireLabel(name)}"]`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // A class in another file, constructed in place.

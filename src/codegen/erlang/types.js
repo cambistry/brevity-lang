@@ -1,6 +1,7 @@
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
 import { erlStateKey, erlString } from './preambles.js';
+import { wireLabel } from '../wire_labels.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
@@ -347,7 +348,7 @@ function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx, { wire = false } = {
     ctx.lambdaCaptureKeys.push(`_cap_${lambdaName}_${v}`);
   }
   ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
-  const labelValue = wire ? `#<${selector}>` : lambdaName;
+  const labelValue = wire ? `#<${selector}>` : wireLabel(lambdaName);
   // If there are captures, emit put() calls as side effects before returning the label
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {

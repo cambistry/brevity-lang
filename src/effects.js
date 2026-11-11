@@ -20,7 +20,7 @@ function functionsOf(actor) {
 // Handlers with no caller-facing name to mark, including inline ones like
 // `onclick={ … }`, which become functions named `@0`, `@1`.
 const isUnnamedHandler = (name) =>
-  /^@\d+$/.test(name) || name === 'set' || name === 'update' || name === 'as' || name.startsWith('set@') || name.startsWith('update@') || name.startsWith('subscribe');
+  /^@\d+$/.test(name) || name === 'set' || name === 'update' || name === 'as' || name.startsWith('set@') || name.startsWith('set.') || name.startsWith('update@') || name.startsWith('subscribe');
 
 // Calls name a class bare, while a public class is declared with its `@`.
 const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));

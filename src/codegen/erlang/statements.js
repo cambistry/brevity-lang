@@ -1,6 +1,6 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
-import { erlVarName, erlString, erlStateKey, erlOpExpr } from './preambles.js';
+import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
@@ -297,7 +297,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         ctx.lambdaVarNames.add(s.name);
         ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: [] });
         const varName = erlVarName(s.name);
-        lines.push(`${I}${varName} = <<"${lambdaName}">>,`);
+        lines.push(`${I}${varName} = ${erlOp(lambdaName)},`);
         continue;
       }
 
@@ -520,7 +520,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
               if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
               const cellName = argExpr.name;
               if (!ctx.stateVarNames.has(cellName)) continue;
-              const subsKey = `{cell_subs, ${erlString(cellName)}}`;
+              const subsKey = `{cell_subs, ${erlOp(cellName)}}`;
               const stateRef = `get(${erlStateKey(ctx, cellName)})`;
               const sn = ctx.ephCounter++;
               lines.push(`${I}InpSubs_${sn}_ = case get(${subsKey}) of undefined -> []; L_${sn}_ -> L_${sn}_ end,`);
@@ -602,7 +602,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}put('${capKey}', ${src}),`);
           }
           ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-          lines.push(`${I}${varName} = <<"${lambdaName}">>,`);
+          lines.push(`${I}${varName} = ${erlOp(lambdaName)},`);
         }
       } else if (s.value?.type === 'DotCallExpr' && (
         (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.object.callee.name)) ||
@@ -724,7 +724,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // class body subscribed to this cell via a constructor-param ref.
         // Dispatch the new value to each.
         if (ctx.stateVarNames?.has(s.name)) {
-          const subsKeyL = `{cell_subs, ${erlString(s.name)}}`;
+          const subsKeyL = `{cell_subs, ${erlOp(s.name)}}`;
           const sn = ctx.ephCounter++;
           lines.push(`${I}InprocSubs_${sn}_ = case get(${subsKeyL}) of undefined -> []; LL_${sn}_ -> LL_${sn}_ end,`);
           lines.push(`${I}lists:foreach(fun`);
@@ -746,7 +746,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           const nth = ctx._fnReplayCounter;
           for (const fnFullName of derivedFns) {
             const sfx = fnFullName.replace(/[^a-zA-Z0-9]/g, '') + nth;
-            const fnKey = `{cell_subs, ${erlString(fnFullName.slice(1))}}`;
+            const fnKey = `{cell_subs, ${erlString(fnFullName)}}`;
             const selectorBin = `<<"${fnFullName}">>`;
             lines.push(`${I}FnSubs${sfx}_ = case get(${fnKey}) of undefined -> []; FL${sfx}_ -> FL${sfx}_ end,`);
             // Skip inproc-tagged subs so they aren't accidentally treated

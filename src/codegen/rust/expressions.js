@@ -1,4 +1,5 @@
 // expressions.js — Expression generation for Rust codegen
+import { wireLabel } from '../wire_labels.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
@@ -137,11 +138,11 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
   const cellKey = stateKey('@' + cell);
   const lines = childPrefix === null
     ? [
-      `let _subs = self.cell_subs.get(${JSON.stringify(cell)}).cloned().unwrap_or_default();`,
+      `let _subs = self.cell_subs.get(${JSON.stringify('@' + cell)}).cloned().unwrap_or_default();`,
       'for (_sub_id, _sub_from, _, _) in _subs {',
     ]
     : [
-      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_${cell}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
+      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_@${cell}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
       'for _sub in &_subs_snapshot {',
       '    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();',
       '    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();',
@@ -569,7 +570,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
           if (argExpr.type !== 'Identifier' && argExpr.type !== 'RefRead') continue;
           const cellName = argExpr.name;
           if (!G.ctx.stateVarNames?.has(cellName)) continue;
-          subRegLines.push(`            self.inproc_cell_subs.entry(${JSON.stringify(cellName)}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(lc)}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
+          subRegLines.push(`            self.inproc_cell_subs.entry(${JSON.stringify(wireLabel(cellName))}.to_string()).or_insert_with(Vec::new).push((${JSON.stringify(lc)}.to_string(), _id, ${JSON.stringify(ps.callbackName)}.to_string()));`);
           subRegLines.push(`            let _initial_val = self.state.get(${JSON.stringify(stateKey(cellName))}).cloned().unwrap_or(Value::Null);`);
           subRegLines.push(`            self.child_${lc}_dispatch_at(_id, ${JSON.stringify(ps.callbackName)}, &Value::Array(vec![_initial_val]), "", "__parent");`);
         }
@@ -1007,7 +1008,7 @@ ${subRegLines.join('\n')}
     }`;
   }
   if (expr.type === 'FnRef' && G.ctx.actorFnNames.has(expr.name)) {
-    return `Value::String("${expr.name}".to_string())`;
+    return `Value::String("${wireLabel(expr.name)}".to_string())`;
   }
   if (expr.type === 'FnRef') {
     return rustSsaResolve(expr.name);
@@ -1781,8 +1782,8 @@ function genRustFnCallExpr(expr, typeEnv) {
   // Self-send: call through handle_op dispatch, return re value
   // Use child dispatch when inside child actor context
   const selfSendCall = (payload) => (G.ctx.childSelfSendPrefix
-    ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${calleeName}", ${payload}, "", "__parent"))`
-    : `bv_call_self(|| self.self_send("${calleeName}", ${payload}))`);
+    ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${wireLabel(calleeName)}", ${payload}, "", "__parent"))`
+    : `bv_call_self(|| self.self_send("${wireLabel(calleeName)}", ${payload}))`);
   if (expr.args.length === 0) {
     return `{ let _re = ${selfSendCall('&Value::Object(Map::new())')}; BvObject::pack(&_re) }`;
   }
@@ -1793,7 +1794,7 @@ function genRustFnCallExpr(expr, typeEnv) {
     if (a.type === 'Function') {
       const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
       G.ctx.lambdaHandlers.push({ name: lambdaName, fn: a });
-      return `Value::String("${lambdaName}".to_string())`;
+      return `Value::String("${wireLabel(lambdaName)}".to_string())`;
     }
     // A local holding an actor can be used again after the call.
     const heldActor = a.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(a.name);

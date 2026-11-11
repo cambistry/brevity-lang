@@ -2,6 +2,7 @@ import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
 import { isDynamicTy } from '../ty_tags.js';
+import { wireLabel } from '../wire_labels.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genDestructureAssign,
   genListDestructureAssign, genPackedReturn, genTyBody, jsSlotTag, jsTyOf,
@@ -307,7 +308,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
             code += `\n  this.#${fieldName} = ${src};`;
           }
           ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-          code += emitBinding(s.name, `"${lambdaName}"`);
+          code += emitBinding(s.name, `"${wireLabel(lambdaName)}"`);
         }
       } else {
         code += emitBinding(s.name, genExpr(ctx, s.value));
@@ -725,9 +726,9 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
       // Empty Function() initializer: body is empty, no binding needed (will be populated by << / >>)
       if (s.value.params.length === 0 && (!s.value.body || s.value.body.length === 0) && !s.value.expr) {
-        return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+        return captureCode + emitBinding(s.name, `"${wireLabel(lambdaName)}"`);
       }
-      return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+      return captureCode + emitBinding(s.name, `"${wireLabel(lambdaName)}"`);
     }
   }
   if (s.value.type === 'DotCallExpr') {
@@ -839,10 +840,9 @@ export function genLocals(ctx, body, outerEnv) {
         const derivedFns = ctx._refCapturedBy?.get(s.name);
         if (derivedFns && derivedFns.size > 0) {
           for (const fnFullName of derivedFns) {
-            const fnKey = JSON.stringify(fnFullName.slice(1));
             const fnOpAt = JSON.stringify(fnFullName);
             replay += `
-        { const _fnSubs = this.#_cellSubs?.get(${fnKey}); if (_fnSubs) for (const _sub of _fnSubs) {
+        { const _fnSubs = this.#_cellSubs?.get(${fnOpAt}); if (_fnSubs) for (const _sub of _fnSubs) {
           const _op = _sub.args != null ? [_sub.args, ${fnOpAt}] : ${fnOpAt};
           this.#dispatch({ id: _sub.id, op: _op, from: '__parent', _replyTo: _sub.from, _route: _sub.route || ((m) => this.#binding.post(m)) });
         } }`;
@@ -947,8 +947,8 @@ export function genLocals(ctx, body, outerEnv) {
       }
       const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const op = call.args.length === 0
-        ? `"${call.callee.name}"`
-        : `[[${call.args.map(genArg).join(', ')}], "${call.callee.name}"]`;
+        ? `"${wireLabel(call.callee.name)}"`
+        : `[[${call.args.map(genArg).join(', ')}], "${wireLabel(call.callee.name)}"]`;
       return `\n        this.#selfSend(${op});`;
     }
     if (s.type === 'WhileStatement') {
@@ -1107,7 +1107,7 @@ function genLiftedLambdaBind(ctx, s, emitBinding) {
     captureCode += `\n        this.#${fieldName} = ${src};`;
   }
   if (!existing) ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-  return captureCode + emitBinding(s.name, `"${lambdaName}"`);
+  return captureCode + emitBinding(s.name, `"${wireLabel(lambdaName)}"`);
 }
 
 // ── catch / label-invoke ──────────────────────────────────────────────────────
