@@ -1954,7 +1954,7 @@ ${dispatchInner}
     end.
 
 handle_result({ok, Re, TyRe}, Id, From, _OpName) when Re =/= null ->
-    Resp0 = #{<<"id">> => Id, <<"re">> => Re, <<"to">> => From},
+    Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Re), <<"to">> => From},
     Resp = case TyRe of
         null -> Resp0;
         _ -> Resp0#{<<"ty">> => TyRe}

@@ -855,7 +855,14 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
 function isStateChildCall(expr) {
   if (expr?.type !== 'DotCallExpr') return false;
   const o = expr.object;
-  return (o.type === 'Identifier' || o.type === 'RefRead') && G.ctx.childVarToActor?.has(o.name);
+  if (o.type !== 'Identifier' && o.type !== 'RefRead') return false;
+  if (G.ctx.childVarToActor?.has(o.name)) return true;
+  // A cell typed with a class of this file, its own or one of an actor it's
+  // declared in: genRustExpr dispatches to that actor's per-instance handler
+  // and yields the reply Value.
+  const t = o.outer ? o.outerType
+    : (G.ctx.stateVarNames?.has(o.name) ? G.ctx.stateVarDecls?.find(d => d.name === o.name)?.typeName : null);
+  return typeof t === 'string' && G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor);
 }
 
 // Branch 13: DotCallExpr on remote

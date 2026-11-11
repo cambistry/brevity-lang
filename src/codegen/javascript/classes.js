@@ -852,6 +852,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx, wb.supertype)}${args}${ingestArg});`);
     }
   }
+  const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@'));
+  // Public singletons declared directly in this actor (`@s = **{ … }`). Each is
+  // published at its label, `@s`, as an actor made by `#new` is at `@C/N`.
+  const publicSingletons = (ctx.program?.actors || [])
+    .filter(a => a.singletonOf?.startsWith('@') && (a.enclosing ?? null) === (actor.name ?? null));
+  const publishesClasses = publishesNew || publicSingletons.length > 0;
+  for (const sg of publicSingletons) {
+    allInitLines.push(`    this.#_publishAt(${JSON.stringify(sg.singletonOf)}, ${JSON.stringify(sg.singletonOf)}, this.#${stateKey(sg.singletonOf)});`);
+  }
   // Regenerate initMethodBody with on-handler lines
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
@@ -877,7 +886,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // its own address). Classes that never use Self as a value omit the
   // field entirely.
   const classUsesSelfAsValue = astUsesSelfAsValue(actor);
-  const publishesClasses = (actor.functions || []).some(f => f.name?.startsWith('new@'));
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
   const readsOuter = !!actor.name && ctx.readsOuter;
   // The cells this actor answers reads of: a file actor's, or a class's that has
@@ -895,7 +903,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #pending = new Map()
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
-  #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()' : ''}
+  #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
@@ -1143,8 +1151,14 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
   #_publishInstance(cls, inst) {
     const n = (this.#_instanceSeq.get(cls) || 0) + 1;
     this.#_instanceSeq.set(cls, n);
-    const addr = '@' + cls + '/' + n;
+    return this.#_publishAt('@' + cls + '/' + n, '@' + cls, inst);
+  }
+
+  // Publish an actor of ours at \`addr\`, its class tagged \`tag\`: \`@C/N\` / \`@C\`
+  // for one made by \`#new\`, its label for a singleton (\`@s\` / \`@s\`).
+  #_publishAt(addr, tag, inst) {
     this.#_instances.set(addr, inst);
+    this.#_addrOf.set(inst, addr);
     // A local address or tag starts with a delimiter; a global starts with a
     // word character and is left alone.
     const local = (v) => {
@@ -1157,7 +1171,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     // A type is declared at the top of a file, so \`::Point\` already names the
     // file actor, which is where the instance found it: it stays as it is.
     const localTy = (v) => {
-      if (v === '@') return '@' + cls;
+      if (v === '@') return tag;
       if (typeof v === 'string') return v === '' || /^\\w/.test(v) || v.startsWith('::') ? v : addr + ' ' + v;
       if (Array.isArray(v)) return v.map(localTy);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
@@ -1168,10 +1182,19 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       const { ty, ...rest } = msg;
       const out = { ...local(rest), to: msg.to, from: msg.from ? addr + ' ' + msg.from : addr };
       if ('ty' in msg) out['ty'] = localTy(ty);
-      else if (msg.re === '#<>') out['ty'] = '@' + cls;
+      else if (msg.re === '#<>') out['ty'] = tag;
       this.#binding.post(out);
     } });
     return addr;
+  }
+
+  // A reply leaving for the wire names an actor we published by its address.
+  #_wireOwn(v) {
+    const addr = v && typeof v === 'object' ? this.#_addrOf.get(v) : undefined;
+    if (addr) return '#<' + addr + '>';
+    if (Array.isArray(v)) return v.map(x => this.#_wireOwn(x));
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, this.#_wireOwn(x)]));
+    return v;
   }
 
 ` : ''}  receive(message) {${publishesClasses ? `
@@ -1179,6 +1202,9 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       const _instTo = /(?:^|[\\s<])(@[A-Za-z_][A-Za-z0-9_]*!?\\/[0-9]+)(?:\\s+([^>]*))?>?$/.exec(message.to);
       const _inst = _instTo && this.#_instances.get(_instTo[1]);
       if (_inst) { _inst.receive({ ...message, to: _instTo[2] || undefined }); return; }
+      const _sgTo = /^(@[A-Za-z_][A-Za-z0-9_]*!?)(?:\\s+(.*))?$/.exec(message.to);
+      const _sg = _sgTo && this.#_instances.get(_sgTo[1]);
+      if (_sg) { _sg.receive({ ...message, to: _sgTo[2] || undefined }); return; }
     }` : ''}
     if (this.#_testFwd.has(message.id)) {
       const cb = this.#_testFwd.get(message.id);
@@ -1286,7 +1312,7 @@ ${ifChain}
     if (!_handled) {
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
-      const _post = { id, re, to: _replyTo };
+      const _post = { id, re${publishesClasses ? `: (message._route || from === '__self') ? re : this.#_wireOwn(re)` : ''}, to: _replyTo };
       if (_ty_re !== undefined) _post['ty'] = _ty_re;
       _route(_post);
     }

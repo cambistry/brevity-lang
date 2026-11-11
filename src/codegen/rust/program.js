@@ -286,10 +286,17 @@ ${bvTypeFieldsArms}
   // in, and what the instance's handler adds to the reply. Handlers return only a value.
   structFields.push('    wire_msg: Value', '    wire_tag: Option<Value>', '    wire_unhandled: bool');
   newArgs.push('wire_msg: Value::Null', 'wire_tag: None', 'wire_unhandled: false');
-  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@'));
+  const hasPublicSingletons = G.ctx.publicSingletons;
+  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@')) || hasPublicSingletons;
   if (publishesClasses) {
     structFields.push('    published_instances: std::collections::HashSet<String>');
     newArgs.push('published_instances: std::collections::HashSet::new()');
+  }
+  if (hasPublicSingletons) {
+    // Public singletons: each one's address and pool ref, both ways, and the ones
+    // an actor built before it was published (by its ref).
+    structFields.push('    singleton_at: std::collections::HashMap<String, String>', '    addr_of: std::collections::HashMap<String, String>', '    singletons_of: std::collections::HashMap<String, Vec<(String, String)>>');
+    newArgs.push('singleton_at: std::collections::HashMap::new()', 'addr_of: std::collections::HashMap::new()', 'singletons_of: std::collections::HashMap::new()');
   }
 
   // Per-class instance pools for spawn-needing classes. Each pool keys an
@@ -390,7 +397,8 @@ ${bvTypeFieldsArms}
           const argsJson = positionalArgs.length > 0
             ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
             : 'json!([])';
-          stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id)); }`);
+          const singletonLabel = G.ctx.actorNodes?.get(s.value.callee.name)?.singletonOf;
+          stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id));${singletonLabel?.startsWith('@') ? ` actor.bv_singleton_made(${JSON.stringify(singletonLabel)}, bv_inst_ref(${JSON.stringify(childName)}, _id).as_str().unwrap_or("").to_string());` : ''} }`);
         } else {
           // There's no `self` in main: a self-call here goes through `actor`, so
           // the value is bound before `actor.state` is borrowed.
@@ -768,7 +776,38 @@ ${stateInitLines.join('\n').replace(/\bactor\./g, 'self.')}
         self.self_instances.insert(instance_id, new_state);
     }` : ''}
 
-${G.ctx.readsOuter ? `    // An instance's state is swapped into self.state while it runs. The state it
+${G.ctx.publicSingletons ? `    // A public singleton was just built by the actor whose state is current. The
+    // file actor publishes it at its label at once; any other actor keeps it to
+    // publish under its own address, when it is published.
+    fn bv_singleton_made(&mut self, label: &str, child: String) {
+        if self.state_owner.is_empty() { self.bv_publish_at(label.to_string(), child); }
+        else { self.singletons_of.entry(self.state_owner.clone()).or_default().push((label.to_string(), child)); }
+    }
+
+    // Publish an actor at addr, and the public singletons it built under it.
+    fn bv_publish_at(&mut self, addr: String, child: String) {
+        self.singleton_at.insert(addr.clone(), child.clone());
+        self.bv_publish_under(&addr, &child);
+    }
+
+    fn bv_publish_under(&mut self, addr: &str, child: &str) {
+        self.addr_of.insert(child.to_string(), addr.to_string());
+        for (label, c) in self.singletons_of.get(child).cloned().unwrap_or_default() {
+            self.bv_publish_at(format!("{} {}", addr, label), c);
+        }
+    }
+
+    // A reply leaving for the wire names an actor we published by its address.
+    fn bv_wire_own(&self, v: &Value) -> Value {
+        match v {
+            Value::String(s) => match self.addr_of.get(s) { Some(a) => json!(format!("#<{}>", a)), None => v.clone() },
+            Value::Array(a) => Value::Array(a.iter().map(|x| self.bv_wire_own(x)).collect()),
+            Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), self.bv_wire_own(x))).collect()),
+            _ => v.clone(),
+        }
+    }
+
+` : ''}${G.ctx.readsOuter ? `    // An instance's state is swapped into self.state while it runs. The state it
     // replaces is set aside with the actor it belongs to.
     fn enter_state(&mut self, owner: String, state: std::collections::HashMap<String, Value>) {
         let prev_owner = std::mem::replace(&mut self.state_owner, owner);
@@ -839,7 +878,7 @@ ${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(
                 } else if let Some(re_val) = re {
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
-                    resp.insert("re".to_string(), re_val);
+                    resp.insert("re".to_string(), ${G.ctx.publicSingletons ? 'self.bv_wire_own(&re_val)' : 're_val'});
                     resp.insert("to".to_string(), json!(from));
                     if let Some(ty) = ty_re {
                         resp.insert("ty".to_string(), ty);
@@ -926,6 +965,28 @@ fn bv_swap_self(v: &Value, me: &Value, with: &Value) -> Value {
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_swap_self(x, me, with)).collect()),
         Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_swap_self(x, me, with))).collect()),
         _ => v.clone(),
+    }
+}
+// An actor's class tag from its address: @C/N is of @C; a singleton (@s,
+// @C/N @s) is its own class.
+#[allow(dead_code)]
+fn bv_addr_class(addr: &str) -> String {
+    match addr.rsplit_once('/') {
+        Some((c, n)) if !n.is_empty() && n.chars().all(|ch| ch.is_ascii_digit()) => c.to_string(),
+        _ => addr.to_string(),
+    }
+}
+// A local tag from an actor we published, relative to it: a bare @ is its class;
+// any other local tag goes under its address. ::Types name the file.
+#[allow(dead_code)]
+fn bv_local_tag(t: &Value, addr: &str) -> Value {
+    match t {
+        Value::String(s) if s == "@" => json!(bv_addr_class(addr)),
+        Value::String(s) if s.starts_with("::") => t.clone(),
+        Value::String(s) if s.starts_with('@') || s.starts_with('#') => json!(format!("{} {}", addr, s)),
+        Value::Array(a) => Value::Array(a.iter().map(|x| bv_local_tag(x, addr)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_local_tag(x, addr))).collect()),
+        _ => t.clone(),
     }
 }
 #[allow(dead_code)]
@@ -1748,9 +1809,12 @@ ${handleOpMethod}
             Some(Value::Array(a)) => !a.is_empty(),
             _ => false,
         };
-${publishesClasses ? `        // An actor made by \`#new\` has its own address.
+${publishesClasses ? `        // An actor made by \`#new\` has its own address, and a public singleton its
+        // label: the longest published address in \`to\`, from the first segment
+        // that starts one.
         let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
-            to.trim_start_matches("#<").trim_end_matches('>').split(' ').find(|t| self.published_instances.contains(*t)).map(|t| t.to_string())
+            let segs: Vec<&str> = to.trim_start_matches("#<").trim_end_matches('>').split(' ').collect();
+            (0..segs.len()).find_map(|i| (i + 1..=segs.len()).rev().map(|j| segs[i..j].join(" ")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || self.singleton_at.contains_key(a)' : ''}))
         });
 ` : ''}        if has_payload && message.get("ty").is_none() {
             let mut ex = Map::new();
@@ -1768,7 +1832,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
             let (class, inst) = addr[1..].split_once('/').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             // Only a public class is published, and its identifier has this suffix.
-            let child = format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst);
+            let child = ${hasPublicSingletons ? `match self.singleton_at.get(&addr) { Some(c) => c.clone(), None => format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst) }` : `format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst)`};
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("to".to_string(), json!(from));
@@ -1790,15 +1854,13 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 Ok(Value::Null) => return,
                 // A self-return: we made this actor, so we name it and its class, as for #new.
                 Ok(v) if v == json!(child) => {
-                    let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
-                    resp.insert("ty".to_string(), json!(class));
+                    resp.insert("ty".to_string(), json!(bv_addr_class(&addr)));
                     resp.insert("re".to_string(), json!(format!("#<{}>", addr)));
                 }
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
-                    let class = addr.rsplit_once('/').map_or(addr.as_str(), |(c, _)| c);
-                    resp.insert("re".to_string(), bv_swap_self(&v, &json!(child), &json!(format!("#<{}>", addr))));
-                    if let Some(t) = tag { resp.insert("ty".to_string(), bv_swap_self_tag(&t, class)); }
+                    resp.insert("re".to_string(), ${hasPublicSingletons ? 'self.bv_wire_own(&' : '('}bv_swap_self(&v, &json!(child), &json!(format!("#<{}>", addr)))));
+                    if let Some(t) = tag { resp.insert("ty".to_string(), bv_local_tag(&t, &addr)); }
                 }
                 Err(e) => {
                     let mut ex = Map::new();
@@ -1941,7 +2003,10 @@ function codegenRust(ast, options = {}) {
   const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
-  G.ctx.readsOuter = hasOuterReads(ast);
+  // A public singleton is published under the actor that builds it, which needs
+  // to know whose state is current (state_owner).
+  G.ctx.publicSingletons = ast.actors.some(a => a.singletonOf?.startsWith('@'));
+  G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons;
   G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();

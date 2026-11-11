@@ -853,14 +853,58 @@ bv_publish_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
     put({bv_inst_seq, Class}, N_),
     Addr_ = <<"@", Class/binary, "/", (integer_to_binary(N_))/binary>>,
-    put({bv_instance, Addr_}, Pid),
+    bv_publish_at_(Addr_, Pid),
     <<"#<", Addr_/binary, ">">>.
+%% Publish an actor of ours at Addr: @C/N for one made by #new, its label for a
+%% singleton. The public singletons it published itself go under it (@C/N @s),
+%% so a wire message reaches them from here.
+bv_publish_at_(Addr, Pid) ->
+    put({bv_instance, Addr}, Pid),
+    put({bv_addr_of, Pid}, Addr),
+    put(bv_published_, [{Addr, Pid} | bv_published_()]),
+    Ref_ = make_ref(),
+    Pid ! {bv_get, self(), bv_published_, Ref_},
+    Under_ = receive {bv_reply, Ref_, U_} -> U_ end,
+    [begin
+        put({bv_instance, <<Addr/binary, " ", A_/binary>>}, P_),
+        put({bv_addr_of, P_}, <<Addr/binary, " ", A_/binary>>)
+     end || {A_, P_} <- case Under_ of undefined -> []; _ -> Under_ end],
+    ok.
+bv_published_() -> case get(bv_published_) of undefined -> []; L_ -> L_ end.
+%% The actor a wire address names: the longest published address in it, from
+%% its first segment that starts one.
 bv_instance_at_(To) when is_binary(To) ->
     Sz_ = byte_size(To),
     Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
-    Found_ = [{T_, get({bv_instance, T_})} || T_ <- binary:split(Inner_, <<" ">>, [global]), get({bv_instance, T_}) =/= undefined],
-    case Found_ of [F_ | _] -> F_; [] -> none end;
+    Segs_ = binary:split(Inner_, <<" ">>, [global]),
+    bv_instance_from_(Segs_);
 bv_instance_at_(_) -> none.
+bv_instance_from_([]) -> none;
+bv_instance_from_([_ | Rest_] = Segs) ->
+    Found_ = [{A_, get({bv_instance, A_})} || N_ <- lists:seq(length(Segs), 1, -1),
+              A_ <- [iolist_to_binary(lists:join(<<" ">>, lists:sublist(Segs, N_)))],
+              get({bv_instance, A_}) =/= undefined],
+    case Found_ of [F_ | _] -> F_; [] -> bv_instance_from_(Rest_) end.
+%% An actor's class tag from its address: @C/N is of @C; a singleton (@s,
+%% @C/N @s) is its own class.
+bv_addr_class_(Addr) ->
+    case re:run(Addr, <<"/[0-9]+$">>) of
+        {match, [{P_, _}]} -> binary:part(Addr, 0, P_);
+        nomatch -> Addr
+    end.
+%% A reply leaving for the wire names an actor we published by its address.
+bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A_ -> <<"#<", A_/binary, ">">> end;
+bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
+bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
+bv_wire_own_(V) -> V.
+%% A local tag from an actor we published, relative to it: a bare @ is its
+%% class; any other local tag goes under its address. ::Types name the file.
+bv_local_tag_(<<"@">>, Addr) -> bv_addr_class_(Addr);
+bv_local_tag_(<<"::", _/binary>> = T, _) -> T;
+bv_local_tag_(<<C_, _/binary>> = T, Addr) when C_ =:= $@; C_ =:= $# -> <<Addr/binary, " ", T/binary>>;
+bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
+bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
+bv_local_tag_(T, _) -> T.
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
@@ -874,13 +918,11 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 {ok, null, _} -> ok;
                 %% A self-return: we made this actor, so we name it and its class, as for #new.
                 {ok, <<"#<>"/utf8>>, _} ->
-                    [Class_ | _] = binary:split(Addr, <<"/">>),
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => Class_}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
                 %% "Me" as one slot of several: the same naming, slot by slot.
-                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_swap_self_(V_, <<"#<", Addr/binary, ">">>)}), $\n]);
+                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_swap_self_(V_, <<"#<", Addr/binary, ">">>))}), $\n]);
                 {ok, V_, Tag_} ->
-                    [SlotClass_ | _] = binary:split(Addr, <<"/">>),
-                    io:put_chars([json_encode(Base_#{<<"re">> => bv_swap_self_(V_, <<"#<", Addr/binary, ">">>), <<"ty">> => bv_swap_tag_(Tag_, SlotClass_)}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_swap_self_(V_, <<"#<", Addr/binary, ">">>)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
             end
     end.

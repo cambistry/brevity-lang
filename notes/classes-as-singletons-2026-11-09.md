@@ -55,6 +55,61 @@ against `*{ … }`, which is run once per new actor.
 - **General, not class-only:** `cache = **{ … }` declares an inline singleton anywhere.
 - **No params on an inline singleton:** `s = (params) **{ … }` would be told to build now with
   nobody to pass it anything. It closes over its enclosing actors instead.
+- **What it reduces to:** `name = **{ body }` is a private class `name_singleton` declared where
+  the singleton is, plus `name = name_singleton()` in the enclosing actor's constructor block, in
+  declaration order. So it inherits the nested-class rules: it reads its enclosing chain, a write
+  or call to an enclosing actor is refused, and inside a class each actor of that class gets its
+  own. `s << **{ … }` (an overload clause) is an error.
+
+## Addressing a singleton (2026-11-10)
+
+A singleton is addressed by its label in the actor that declares it, not as actor N of a class.
+
+- `@s = **{ … }` in `main` is `main @s`; its function is `main @s @get`. This is the endpoint shape
+  already on the wire (`#<caller @cb>`, `#<Thing/1 @n>`): each segment is a member label, and
+  whatever owns the prefix resolves the next one. Locally, `to: '@s'`, ref `#<@s>`.
+- **Its class is itself**, so its `ty` tag is its label (`@s`), the same tag a class gets. The
+  hidden class (`s_singleton`) never reaches the wire.
+- **In a class**, each actor has its own: `@tally` in `@Box` is `@Box/1 @tally`, tagged
+  `@Box/1 @tally` (a local tag from `@Box/1`, translated like any other).
+- **The published cell is the actor.** Reading `@s` (op `@s`) replies `#<@s>`, `ty: '@s'`, not a
+  wrapper around a ref.
+- **Private singletons (`s = **{ … }`) have no wire address.** Not supported. A protected label
+  can't lead a relative address (a word-character start means global), and the question is
+  left for another day.
+
+### In the service document
+
+A public singleton is a member that is an actor: a **sub-service**, `name { members }`. Its members
+render as the file's do (cells as `n *Integer`, nested singletons as blocks), one level in. Inside a
+class's `*{ … }` it renders the same way. A private singleton isn't in the document.
+
+```
+{
+  s {
+    n *Integer
+    get () -> (Integer)
+    inner {
+      ping () -> (Integer)
+    }
+  }
+  Box (Integer) -> *{
+    tally {
+      get () -> (Integer)
+    }
+  }
+}
+```
+
+`parseInterface` reads it back as a document of its own (`__services.s`; `services` on a
+constructor).
+
+### Open
+
+- **Calling through a sub-service** from another file (`Svc.s.get()` → `@get` to `Svc @s`) isn't
+  compiled yet on any target.
+- **Returning an actor** is `-> (Anything)` in the document, for a singleton (`who`) as for a public
+  class's actor. The document has no way yet to name the actor a function returns.
 
 ## Core form: a class is a singleton that answers `new`
 

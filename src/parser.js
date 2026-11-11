@@ -3959,6 +3959,29 @@ export function parse(tokensIn) {
     }
     declCtx = declFor('@' + op);
 
+    // ── Public singleton: @name = **{ body } ────────────────────────────
+    // The private-singleton desugar (a hidden class, constructed once into the
+    // cell) plus the published cell's getter. The actor is addressed by its
+    // label: `@name` in its enclosing actor (`main @name`), not `@C/N`.
+    if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isParamSingletonStart(pos + 1))) {
+      consume(); // =
+      if (!isSingletonStart()) {
+        throw new Error(`Singleton '@${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '@${op} = **{ … }'`);
+      }
+      consume(); // **
+      const cls = `${op}_singleton`;
+      const nested = parseConstructorBody(cls, false);
+      const classNode = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
+      classNode.singletonOf = '@' + op;
+      declareLocal('@' + op);
+      addRef('@' + op, cls);
+      if (constructorBody) constructorBody.push(AST.refDecl('@' + op, cls, AST.functionCallExpr(AST.identifier(cls), [])));
+      const getter = AST.functionDecl('@' + op, [], [
+        AST.reply([{ type: cls, positional: true, expr: AST.identifier('@' + op) }]),
+      ]);
+      return [classNode, getter];
+    }
+
     // ── Public ref cell: @name *Type = expr ─────────────────────────────
     // Desugars to a private refDecl (state slot) plus a synthesized getter
     // (and setter, for base types). Caller receives an array of FunctionDecls.
@@ -4553,6 +4576,23 @@ export function parse(tokensIn) {
     if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') consume();
   }
 
+  // `**{` at token index `i`: an inline singleton (define and instantiate).
+  function isSingletonStart(i = pos) { return tokens[i]?.type === 'STARSTAR' && tokens[i + 1]?.type === 'LBRACE'; }
+
+  // `(params) **{` at token index `i`: a singleton given params, which nobody
+  // could pass, since it is built when its enclosing actor is.
+  function isParamSingletonStart(i = pos) {
+    if (tokens[i]?.type !== 'LPAREN') return false;
+    let depth = 0;
+    for (let j = i; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN' && --depth === 0) return isSingletonStart(j + 1);
+      else if (t === 'EOF') return false;
+    }
+    return false;
+  }
+
   // `(params) [->] *{` or `[->] *{` at token index `i` — a delimited class
   // header. Spaces are allowed around `*`; `*` directly before `{` after a
   // param list is never multiplication.
@@ -4899,7 +4939,7 @@ export function parse(tokensIn) {
       } else if (peek().type === 'AT') {
         const node = parsePublicFunction(constructorBody);
         if (Array.isArray(node)) {
-          for (const fn of node) functions.push(fn);
+          for (const fn of node) (fn.type === 'Actor' ? nestedActors : functions).push(fn);
         } else if (node.type === 'Actor') {
           nestedActors.push(node);
         } else {
@@ -5090,6 +5130,23 @@ export function parse(tokensIn) {
             consume(); consume(); consume(); // Function ( )
             functionNames.add(op);
             functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
+            continue;
+          }
+          // Inline singleton: name = **{ body }. Defines a hidden class nested
+          // here and constructs it once, when this actor is constructed; `name`
+          // holds the actor. It takes no params and reaches what it needs
+          // through the actors it's declared in.
+          if (isParamSingletonStart()) {
+            throw new Error(`Singleton '${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '${op} = **{ … }'`);
+          }
+          if (isSingletonStart()) {
+            if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = **{ … }'`);
+            consume(); // **
+            const cls = `${op.replace(/^[@#]/, '')}_singleton`;
+            const nested = parseConstructorBody(cls, false);
+            nestedActors.push(AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' }));
+            nestedActors[nestedActors.length - 1].singletonOf = op;
+            constructorBody.push(AST.typedAssign(op, null, AST.functionCallExpr(AST.identifier(cls), [])));
             continue;
           }
           // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }

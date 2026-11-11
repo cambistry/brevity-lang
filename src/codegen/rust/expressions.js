@@ -535,6 +535,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const childActor = G.ctx.actorInfo.get(cName)?.actor;
     if (childActor && classNeedsSpawnedInstances(childActor)) {
       const lc = cName.toLowerCase();
+      const singletonLabel = G.ctx.actorNodes?.get(cName)?.singletonOf?.startsWith('@') ? G.ctx.actorNodes.get(cName).singletonOf : null;
       const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
       const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
       let initArgsExpr;
@@ -578,7 +579,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
         self.${lc}_next_id.set(_id + 1);
         self.${lc}_instances.insert(_id, std::collections::HashMap::new());
         let _init_args = ${initArgsExpr};
-        self.child_${lc}_init_at(_id, &_init_args);
+        self.child_${lc}_init_at(_id, &_init_args);${singletonLabel ? `
+        self.bv_singleton_made(${JSON.stringify(singletonLabel)}, bv_inst_ref(${JSON.stringify(lc)}, _id).as_str().unwrap_or("").to_string());` : ''}
 ${subRegLines.join('\n')}
         bv_inst_ref(${JSON.stringify(lc)}, _id)
     }`;

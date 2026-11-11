@@ -316,6 +316,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     const selector = name.slice('new@'.length);
     lines.push(`                let _addr = format!("@${selector}/{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);
+    if (G.ctx.publicSingletons) lines.push(`                self.bv_publish_under(&_addr, ${rustSsaResolve('_inst')}.as_str().unwrap_or(""));`);
     lines.push(`                re = Some(Value::String(format!("#<{}>", _addr)));`);
     lines.push(`                ty_re = Some(json!(${JSON.stringify(`@${selector}`)}));`);
   }
@@ -986,7 +987,12 @@ function genRustChildInit(actor) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
-      if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
+      if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)
+          && classNeedsSpawnedInstances(G.ctx.actorInfo.get(s.value.callee.name)?.actor)) {
+        // A cell holding a new actor of a class that has instances: allocate
+        // one (genRustExpr) and keep its ref in the cell.
+        lines.push(`        { let _v = ${genRustExpr(s.value, initTypeEnv)}; self.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
+      } else if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
         const childName = s.value.callee.name.toLowerCase();
         const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
         const argsJson = positionalArgs.length > 0

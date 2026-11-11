@@ -543,6 +543,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
               subRegLines.push(`bv_launch_(NewPid_, ${erlString(ps.callbackName)}, [${stateRef}])`);
             }
           }
+          // A public singleton is published at its label in the actor that builds it.
+          const singleton = ctx.program?.actors?.find(a => a.name === cName)?.singletonOf;
+          if (singleton?.startsWith('@')) subRegLines.push(`bv_publish_at_(${erlString(singleton)}, NewPid_)`);
           const iifeBody = subRegLines.length > 0
             ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), ${subRegLines.join(', ')}, NewPid_`
             : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), NewPid_`;

@@ -264,6 +264,9 @@ export function setCtx(newCtx) { G.ctx = newCtx; }
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
+  // A singleton's class is itself: it's tagged with its label (`@s`).
+  const singleton = typeof t === 'string' && G.ctx.actorNodes?.get(t)?.singletonOf;
+  if (singleton) return singleton;
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
   const name = G.ctx.typeDecls.get(t).name || t;
   const authority = G.ctx.typeAuthority?.get(t) || '';

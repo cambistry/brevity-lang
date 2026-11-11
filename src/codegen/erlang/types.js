@@ -10,6 +10,9 @@ import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
 function erlTypeTag(ctx, t) {
+  // A singleton's class is itself: it's tagged with its label (`@s`).
+  const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
+  if (singleton) return singleton;
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
