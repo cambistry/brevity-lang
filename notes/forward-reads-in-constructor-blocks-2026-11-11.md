@@ -13,17 +13,22 @@ that change.
 2. **A cell's address exists from the actor's start; its value arrives at its line.**
    Referring to a cell before its line (passing it as a reference, subscribing to it,
    capturing it in a function that isn't called yet) is fine.
-3. **Reads wait for the value.**
-   - **The actor itself** reading a cell before its initializer is a **compile error**
-     wherever the compiler can see it: a direct read, or a call to one of the actor's own
-     functions that reads it, followed transitively. The actor would be waiting on a line
-     it hasn't reached.
-   - **Anyone else** (a child, a subscriber) reading it just waits until the value arrives.
+3. **Before its line, the actor can only hand out a cell's address.**
+   - **The actor itself** reading or writing a cell before its initializer is a **compile
+     error** wherever the compiler can see it: a direct use, or a call to one of the actor's
+     own functions that uses it, followed transitively. A read would wait on a line the
+     actor hasn't reached. A write has no meaning: applied before the initializer it's lost;
+     queued behind it, it lands after the line it precedes, against text order.
+   - **Anyone else** (a child, a subscriber, an actor handed the reference) reading it just
+     waits until the value arrives.
 4. **Construction and `<-` don't block the sender.** `Child(*total)` hands back the address
    right away, and the block goes on. Only a read waits.
 5. **Waiting cycles are detected at runtime** for the cases the compiler can't see (calls
    through function values, reads from other actors). A pending cell records who waits on
-   it, and a loop in that record is an error, not a hang.
+   it, and a loop in that record is an error, not a hang. The plain case: the cell's owner
+   is blocked awaiting a reply from actor X, and a read waiting on the cell came from X.
+   X can't reply until it's answered, and the cell can't be answered until the owner gets
+   past the call.
 
 ## Cases
 
@@ -46,6 +51,20 @@ kid = Child(*total)      // fine: the address exists; a read by Child waits
 total *Integer = 0       // Child's read is answered once this line runs
 ```
 
+```
+(:Svc) *{
+  z <- 2                 // error: the actor writes z before its declaration
+  Svc.init(&z)           // fine, unless Svc reads z while handling init: then a cycle (rule 5)
+  Svc.fn(z as Integer)   // error: the actor reads z before its declaration
+  z *Integer = 1
+}
+```
+
+`Svc.init(&z)` awaits a reply. If `Svc` only stores the reference, or reads `z` after
+replying, its read waits and is answered at `z`'s line. If it reads `z` while handling
+`init`, `Svc` waits on `z`, `z` waits on its line, and the line waits on `Svc`. The compiler
+can't see which: `Svc` is another actor. A fire-and-forget `Svc.init(&z)...` never cycles.
+
 ## Rejected
 
 - **Definitions first:** run every `=` in dependency order, then the statements. This
@@ -63,12 +82,17 @@ total *Integer = 0       // Child's read is answered once this line runs
 
 ## Staging
 
-- **Rule 3, the actor's own reads,** is a static check and needs no bus. Without it a
+- **Rule 3, the actor's own reads and writes,** is a static check and needs no bus. (Its
+  writes were already refused by the parser, which doesn't know the name yet.) Without it a
   forward read gives whatever the target holds before initialization; the three targets
   disagree on it today.
 - **Rules 2, 4 and 5** need a cell that can be pending, with reads queued behind it. That
   arrives with cells-as-actors. Until then, a child constructed during construction can't
   wait, so handing it a cell before that cell's line stays an error.
+- **The one cross-actor read that exists today** is a nested class reading a cell of the
+  class around it (`get@late` to the enclosing actor). It could queue on a pending cell
+  before cells become actors, but only if constructing the nested class stops blocking the
+  parent; otherwise the queue turns a wrong value into a deadlock.
 
 ## Open
 

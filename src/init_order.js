@@ -1,8 +1,11 @@
 // A constructor block runs in text order, so an actor can't read one of its own cells
 // above the line that declares it: it would be waiting on a line it hasn't reached.
-// `b Integer = a` then `a *Integer = 1` is an error, and so is `x = y` / `y = x`.
+// `b Integer = a` then `a *Integer = 1` is an error, and so is `x = y` / `y = x`. Nor
+// can it write one there: the write would be lost to the initializer, or land after it.
+// A `<-` in the block itself is refused by the parser; this catches one in a function
+// the block calls.
 //
-// A read is anything that runs at that point in the block:
+// A read (or write) is anything that runs at that point in the block:
 //   - the cell itself, in the statement;
 //   - a read in one of the actor's own functions the statement calls, followed through
 //     the functions that one calls;
@@ -44,7 +47,8 @@ const CALLS_FN_ARG = new Set(['OverExpr', 'ReduceExpr', 'ListMethodExpr', 'TextM
 
 // Reads one actor makes while running `node`. `own` maps each name it reads that might
 // be its own to the function or class it's read through (null when read directly);
-// `outer` holds the reads it makes of enclosing actors, as [name, level, via].
+// `writes` does the same for the names it writes (`<-`, `<|`); `outer` holds the reads
+// it makes of enclosing actors, as [name, level, via].
 function makeReader(actor, ctx) {
   const fnByName = new Map((actor.functions || []).map(f => [f.name, f]));
   const fnReads = new Map();
@@ -74,6 +78,9 @@ function makeReader(actor, ctx) {
           else if (f.name && !f.selfReturn && !shadow.has(f.name)) addOwn(acc, f.name, null);
         }
         return;
+      case 'SetStatement':
+        if (node.name && !shadow.has(node.name)) addOwn(acc, node.name, null, 'writes');
+        break;
       case 'FunctionCallExpr': {
         const callee = node.callee?.type === 'Identifier' ? node.callee.name : null;
         if (callee && !shadow.has(callee)) {
@@ -91,22 +98,23 @@ function makeReader(actor, ctx) {
 
   const readsOfFn = (name) => {
     if (fnReads.has(name)) return fnReads.get(name);
-    const acc = { own: new Map(), outer: [] };
+    const acc = { own: new Map(), writes: new Map(), outer: [] };
     fnReads.set(name, acc); // a recursive call sees what's gathered so far
     const f = fnByName.get(name);
     const shadow = new Set((f.params || []).map(p => p?.name).filter(Boolean));
-    for (const s of f.body || []) for (const n of declaredNames(s)) shadow.add(n);
+    for (const s of f.body || []) if (s.type !== 'StateAssign') for (const n of declaredNames(s)) shadow.add(n);
     walk(f.body, acc, shadow, f.type);
     return acc;
   };
 
-  const readsOf = (node) => { const acc = { own: new Map(), outer: [] }; walk(node, acc, new Set(), null); return acc; };
+  const readsOf = (node) => { const acc = { own: new Map(), writes: new Map(), outer: [] }; walk(node, acc, new Set(), null); return acc; };
   return { readsOf };
 }
 
-// A direct read wins over one through a call, so the error names the nearest cause.
-function addOwn(acc, name, via) {
-  if (!acc.own.has(name) || (acc.own.get(name) !== null && via === null)) acc.own.set(name, via);
+// A direct use wins over one through a call, so the error names the nearest cause.
+function addOwn(acc, name, via, key = 'own') {
+  const m = acc[key];
+  if (!m.has(name) || (m.get(name) !== null && via === null)) m.set(name, via);
 }
 
 // `via` is the chain of calls from the statement to the read: `h' → 'g`.
@@ -114,6 +122,7 @@ const chain = (callee, via) => via ? `${callee}' → '${via}` : callee;
 
 function mergeInto(acc, more, callee) {
   for (const [n, via] of more.own) addOwn(acc, n, chain(callee, via));
+  for (const [n, via] of more.writes || []) addOwn(acc, n, chain(callee, via), 'writes');
   for (const [n, level, via] of more.outer) acc.outer.push([n, level, chain(callee, via)]);
 }
 
@@ -131,7 +140,7 @@ export function checkInitOrder(ast) {
     // The reads a class's construction makes of the actors around it, one level up
     // from where it stands: its own block's reads at level 1 belong to the constructor.
     constructionReads(cls) {
-      const out = { own: new Map(), outer: [] };
+      const out = { own: new Map(), writes: new Map(), outer: [] };
       if (building.has(cls)) return out;
       building.add(cls);
       const r = reader(cls).readsOf(cls.constructorBody || []);
@@ -151,12 +160,12 @@ export function checkInitOrder(ast) {
     const params = new Set((actor.params || []).map(p => p?.name).filter(Boolean));
     body.forEach((s, i) => {
       const r = reader(actor).readsOf(s);
-      for (const [name, via] of r.own) {
-        const at = declaredAt.get(name);
-        if (at === undefined || at < i || params.has(name)) continue;
+      const early = (name) => { const at = declaredAt.get(name); return at !== undefined && at >= i && !params.has(name); };
+      for (const [verb, uses] of [['read', r.own], ['written', r.writes]]) for (const [name, via] of uses) {
+        if (!early(name)) continue;
         const by = statementLabel(s);
         const through = via ? `, through '${via}'` : '';
-        throw new Error(`'${name}' is read before its declaration (by ${by}${through}) — declare '${name}' above it`);
+        throw new Error(`'${name}' is ${verb} before its declaration (by ${by}${through}) — declare '${name}' above it`);
       }
     });
   }

@@ -1,9 +1,9 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// A constructor block runs in text order. An actor can't read one of its own cells
-// above the line that declares it, directly or through anything that runs there: a
-// call to its own function, a class it constructs, a function handed to `over`.
+// A constructor block runs in text order. An actor can't read or write one of its own
+// cells above the line that declares it, directly or through anything that runs there:
+// a call to its own function, a class it constructs, a function handed to `over`.
 // A function that only refers to a later cell, and isn't called yet, is fine.
 // See notes/forward-reads-in-constructor-blocks-2026-11-11.md.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -22,6 +22,11 @@ describe('a read before its declaration — validation', () => {
   it('a read in a function the block calls', () => {
     expect(() => compileSource('a *Integer = 0\nmark! = { a <- r }\nmark!()\nr Integer = 5\n@v = -> a\n'))
       .toThrow(/'r' is read before its declaration \(by 'mark!\(…\)', through 'mark!'\)/);
+  });
+
+  it('a write in a function the block calls', () => {
+    expect(() => compileSource('mark! = { late <- 1 }\nmark!()\nlate *Integer = 0\n@v = -> late\n'))
+      .toThrow(/'late' is written before its declaration \(by 'mark!\(…\)', through 'mark!'\)/);
   });
 
   it('a read through a chain of calls', () => {
