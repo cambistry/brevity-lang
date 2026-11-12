@@ -26,8 +26,8 @@ Inside Brevity nothing changes: `.` and `#` still prefix local protected and pri
 - **`@` only touches the head of an address.** Later segments are local to child contexts, not to
   the immediate one. Each child spells its own public names with `@` internally; the address that
   reaches it doesn't. So `@singleton method`, not `@singleton @method`.
-- **Opre knows only space delimitation.** `@`, `.`, `#` mean nothing to it; they're Brevity's
-  internal convention.
+- **Opre knows only space delimitation,** plus the self token `@` (below). As prefixes, `@`, `.`
+  and `#` mean nothing to it; they're Brevity's internal convention.
 
 ## Quoted names
 
@@ -61,13 +61,38 @@ On the public wire the quotes drop: the token is just `@foreign` / `.hidden.file
 So quoting is required exactly when a token contains a space, starts with `'`, or (locally)
 starts with `@`, `.` or `#`.
 
+## `@` is self: the relative-address marker
+
+An Opre-level convention. The token `@`, exactly, is a specific actor: self. An address whose head
+token is `@` is relative to the sender:
+
+```
+@ opname                 // child-relative
+file/path Svc 1          // global
+'@' abc                  // quoted: a global whose head token is literally `@`
+```
+
+- **The test is mechanical:** head token `@` means relative; anything else is global. A host needs
+  no knowledge of Brevity's sigils.
+- **Only the exact token is reserved.** `@something` is an ordinary token and may refer to
+  anything (it may name libraries or system resources in the Opre ecology).
+- **Translation per hop:** a parent receiving `@ x` from child `c` rewrites it to `@ c x`. That is
+  still relative, now to the parent. The node at the global boundary replaces `@` with its own
+  address.
+- **Payload addresses still need `#<…>`.** `@` marks locality; the brackets mark that a string is
+  an address: `#<@ Box 1>`. `to`, `from`, `re` and `ty` are known address fields.
+- **What follows the head is the sender's business.** How an actor or subactor formats the rest of
+  its address isn't Opre's concern.
+- **`ty` tags follow the same rule.** A local type tag is `@ ::Point`, not `::Point`. It is no
+  longer local by virtue of its leading delimiter.
+
 ## Supersedes the leading-character local/global rule
 
-These rules replace the broad "a leading delimiter means local; a leading word character means
-global" rule (`address-delimiter-change-plan-2026-04-23.md`, and its use in
-`protected-names-dot-prefix-2026-11-11.md`). On the public wire a token may start with any
-character: `.hidden.file` and `@foreign` are ordinary external names. Locality is a Brevity
-source-level matter, expressed by the sigils and quoting above.
+This replaces the broad "a leading delimiter means local; a leading word character means global"
+rule (`address-delimiter-change-plan-2026-04-23.md`, and its use in
+`protected-names-dot-prefix-2026-11-11.md`). Apart from the reserved head token `@`, a wire token
+may start with any character: `.hidden.file` and `@foreign` are ordinary names. Within Brevity
+source, locality is expressed by the sigils and quoting above.
 
 ## Not affected
 
@@ -78,5 +103,7 @@ source-level matter, expressed by the sigils and quoting above.
 
 ## Open
 
-- **`ty` "my class"** stays a bare `@` for now. A dot (`.`) is a contender to replace it.
+- **`ty` "my class"** stays a bare `@` for now. A dot (`.`) is a contender to replace it. Under the
+  self convention it reads as "the sender's own frame", which may let `ty` translation share the
+  address rule.
 - Migration: every target's routing, tagging, subscriber keys, and every test's addresses.
