@@ -111,9 +111,9 @@ Outer = *{
 }
 ```
 
-- **Only a direct construction.** `i = Inner(…)` or `Inner()` as the statement. Made
-  inside a function the block calls, the construction is waited for, so its read stays an
-  error.
+- **Only a direct construction:** `i = Inner(…)` as the statement. (A bare `Inner()` in
+  a constructor block declares `Inner`; it isn't a call.) Made inside a function the block
+  calls, the construction is waited for, so its read stays an error.
 - **Its arguments are read on the spot** and follow rule 3.
 - **The parent doesn't wait.** It has the child's address at once and goes on. The
   child's reads of the waited-on cells are held and answered at their lines. The end of

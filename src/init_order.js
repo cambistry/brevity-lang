@@ -173,7 +173,7 @@ export function checkInitOrder(ast) {
     body.forEach((s, i) => {
       const early = (name) => { const at = declaredAt.get(name); return at !== undefined && at >= i && !params.has(name); };
       let r = null;
-      // `i = Inner(…)` or `Inner()`, a class declared in us whose construction reads
+      // `i = Inner(…)`, a class declared in us whose construction reads
       // cells of ours declared below: we don't wait for it. It's spawned here, its
       // reads wait for those cells' lines, and we join it at the end of the block.
       const call = constructionCall(s);
@@ -212,10 +212,10 @@ export function checkInitOrder(ast) {
   }
 }
 
-// The class construction a statement is, if it's nothing else: `i = Inner(…)`, `Inner()`.
+// The class construction a statement is, if it's nothing else: `i = Inner(…)`. (A bare
+// `Inner()` in a constructor block is read as a declaration of `Inner`, not a call.)
 function constructionCall(s) {
-  const e = s.type === 'ExprStatement' ? s.expr
-    : (s.type === 'TypedAssign' || s.type === 'Assign') ? s.value : null;
+  const e = (s.type === 'TypedAssign' || s.type === 'Assign') ? s.value : null;
   return e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' ? e : null;
 }
 

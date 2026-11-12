@@ -550,11 +550,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     return line + ready;
   }
   function genOneInitLineCore(s) {
-    const deferredCall = s.type === 'ExprStatement' ? (s.expr?.deferredConstruct && s.expr) : (s.value?.deferredConstruct && s.value);
-    if (deferredCall) {
-      const code = spawned(genExpr(ctx, deferredCall));
-      return s.type === 'ExprStatement' ? `    ${code};` : `    this.#${stateKey(s.name)} = ${code};`;
-    }
+    if (s.value?.deferredConstruct) return `    this.#${stateKey(s.name)} = ${spawned(genExpr(ctx, s.value))};`;
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const calleeName = s.value.callee.name;
       const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
