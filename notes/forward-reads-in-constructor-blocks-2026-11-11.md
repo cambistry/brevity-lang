@@ -125,6 +125,11 @@ Outer = *{
 - **The held read is answered when the owner gets to it.** That's at the cell's line, or
   later if the read arrives later. So a child can see a later write than the initializer.
   Any value from the line on is a value the cell had.
+- **Not a singleton.** `s = **{ … }` (and `@s = **{ … }`) is declared and constructed
+  where it's written, so its block runs there, in program order between its enclosing
+  actor's lines. It sees the cells above it as they are at that line; a read in it of a
+  cell below is an error, as in the enclosing block itself. Its functions, called later,
+  read cells when they run.
 - **On a single-threaded target** (every actor in one process), the child's address is
   made at its line and its construction runs right after the last of the cells it waits
   on. Nothing may use the child before then, so this is a schedule its concurrency allows.

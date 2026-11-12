@@ -222,6 +222,111 @@ describe('a public singleton in the service document', () => {
   });
 });
 
+// A singleton is constructed where it's written: its block runs there, between its
+// enclosing actor's lines, in program order. It sees the cells declared above it, as
+// they are at that line, and can't read one declared below.
+// See notes/forward-reads-in-constructor-blocks-2026-11-11.md.
+const ordered = `
+  base *Integer = 100
+
+  counter = **{
+    seen Integer = base
+    @seen = { return seen }
+    @now = { return base }
+  }
+
+  base <- 200
+
+  @pub = **{
+    seen Integer = base
+    @seen = { return seen }
+  }
+
+  base <- 300
+
+  @seen = {
+    x Integer = counter.seen()
+    return x
+  }
+
+  @now = {
+    x Integer = counter.now()
+    return x
+  }
+
+  @Box = (seed Integer) *{
+    start *Integer = seed * 2
+    tally = **{
+      t Integer = start + seed
+      @get = { return t }
+    }
+    start <- 0
+
+    @get = {
+      x Integer = tally.get()
+      return x
+    }
+  }
+`;
+
+describe('a singleton runs its block in program order', () => {
+  it('reads a cell as it is at the singleton\'s line', async () => {
+    await expectBehavior(ordered,
+      { input: { id: '1', op: '@seen', from: 'c' } },
+      { output: { id: '1', re: [100], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a public singleton too', async () => {
+    await expectBehavior(ordered,
+      { input: { id: '1', op: '@seen', to: '@pub', from: 'c' } },
+      { output: { id: '1', re: [200], ty: ['Integer'], to: 'c', from: '@pub' } },
+    );
+  });
+
+  it('its functions read the cell when they run', async () => {
+    await expectBehavior(ordered,
+      { input: { id: '1', op: '@now', from: 'c' } },
+      { output: { id: '1', re: [300], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('in a class, between the class\'s lines', async () => {
+    await expectBehavior(ordered,
+      { input: { id: '1', op: [[10], '#new'], ty: [['Integer']], to: '@Box', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<@Box\/\d+>$/) }) },
+      { input: { id: '2', op: '@get', to: '@Box/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [30], to: 'c' }) },
+    );
+  });
+});
+
+describe('a singleton reading a cell declared below it — validation', () => {
+  it('is an error', () => {
+    expect(() => compileSource('counter = **{\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
+      .toThrow(/'base' is read before its declaration \(by 'counter'\) — declare 'base' above it/);
+  });
+
+  it('for a public singleton too', () => {
+    expect(() => compileSource('@counter = **{\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
+      .toThrow(/'base' is read before its declaration \(by '@counter'\)/);
+  });
+
+  it('in a class', () => {
+    expect(() => compileSource('Box = (seed Integer) *{\n  tally = **{\n    t Integer = late + seed\n    @get = { return t }\n  }\n  late *Integer = 1\n  @get = { return 1 }\n}\n@go = { return 1 }\n'))
+      .toThrow(/'late' is read before its declaration \(by 'tally'\)/);
+  });
+
+  it('a singleton calling one declared below it', () => {
+    expect(() => compileSource('b = **{\n  w Integer = a.v()\n  @w = { return w }\n}\na = **{\n  @v = { return 1 }\n}\n@go = { return 1 }\n'))
+      .toThrow(/'a' is read before its declaration \(by 'b'\)/);
+  });
+
+  it('its functions may refer to a cell below it', () => {
+    expect(() => compileSource('counter = **{\n  @get = { return base }\n}\nbase *Integer = 100\n@go = { return 1 }\n')).not.toThrow();
+  });
+});
+
 describe('inline singleton compile errors', () => {
   it('a singleton takes no params', () => {
     expect(() => compileSource(`

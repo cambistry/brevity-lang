@@ -16,6 +16,9 @@
 //
 // Passing a cell to a child counts as a read: the child is constructed on the spot.
 //
+// An inline singleton (`s = **{ … }`) runs its block where it's written, in program
+// order: a read in it of a cell declared below is an error, as one in our own block.
+//
 // One exception: a class declared in this actor whose construction reads cells of
 // ours declared below. Its reads are messages to us, so they can wait. The call that
 // constructs it is marked `deferredConstruct` (the class `spawnable`, the cells
@@ -93,7 +96,7 @@ function makeReader(actor, ctx) {
         const callee = node.callee?.type === 'Identifier' ? node.callee.name : null;
         if (callee && !shadow.has(callee)) {
           if (fnByName.has(callee)) mergeInto(acc, readsOfFn(callee), callee);
-          else { const cls = ctx.nestedClass(actor, callee); if (cls) mergeInto(acc, ctx.constructionReads(cls), callee); }
+          else { const cls = ctx.nestedClass(actor, callee); if (cls) mergeInto(acc, ctx.constructionReads(cls), cls.singletonOf ? null : callee); }
         }
         break;
       }
@@ -126,7 +129,9 @@ function addOwn(acc, name, via, key = 'own') {
 }
 
 // `via` is the chain of calls from the statement to the read: `h' → 'g`.
-const chain = (callee, via) => via ? `${callee}' → '${via}` : callee;
+// A singleton's block is written where it runs, so a read in it is the statement's
+// own: no call to name (`callee` null).
+const chain = (callee, via) => (callee === null ? (via ?? null) : via ? `${callee}' → '${via}` : callee);
 
 function mergeInto(acc, more, callee) {
   for (const [n, via] of more.own) addOwn(acc, n, chain(callee, via));
@@ -178,7 +183,9 @@ export function checkInitOrder(ast) {
       // reads wait for those cells' lines, and we join it at the end of the block.
       const call = constructionCall(s);
       const cls = call && ctx.nestedClass(actor, call.callee.name);
-      if (cls) {
+      // A singleton (`s = **{ … }`) is constructed where it's written: its block runs
+      // in program order, between our lines, so it's waited for like any statement.
+      if (cls && !cls.singletonOf) {
         const waitsOn = [...ctx.constructionReads(cls).own.keys()].filter(early);
         if (waitsOn.length) {
           // The last of those lines, for a target that runs the construction there.

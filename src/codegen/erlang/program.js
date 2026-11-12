@@ -1665,47 +1665,54 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const stateInitLines = [];
   // A cell set from a call to the file's own function holds the reply's one value.
   const soleValueOf = (s, val) => (s.soleValue && s.value.type !== 'AsExpr' ? `bv_object_one(${val})` : val);
-  for (const v of stateVarDecls) {
-    if (v.isRef && actor.initBody) {
-      const initStmt = actor.initBody.find(s => s.name === v.name);
-      if (initStmt) {
-        if (ctx.remoteInstanceVars.has(v.name)) {
-          // Remote construction: send `new`, read reply, extract from
-          const calleeName = initStmt.value.callee.name;
-          // Constructor coercions resolve to the underlying dep name for `new`
-          const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
-          stateInitLines.push(`    New_seq_${v.name} = bv_next_seq_()`);
-          stateInitLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
-          stateInitLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, ${erlNewOpEntries(ctx, initStmt.value.args, new Map(), {})}, <<"to">> => ${erlString(callee)}}`);
-          stateInitLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
-          stateInitLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
-          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
-        } else if (initStmt.value?.type === 'FunctionCallExpr' && ctx.actorInfo.has(initStmt.value.callee?.name)) {
-          // Local child actor construction — a fresh instance; the cell holds its pid
-          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, initStmt.value, new Map(), {})})`);
-        } else {
-          const val = soleValueOf(initStmt, genExpr(ctx, initStmt.value, new Map(), {}));
-          stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${val})`);
-        }
-      }
-    }
-  }
-  // Non-ref state vars (e.g. public constants, module-level child actors).
-  for (const v of stateVarDecls) {
-    if (v.isRef || !actor.initBody) continue;
-    const initStmt = actor.initBody.find(s => s.name === v.name);
-    if (!initStmt || !initStmt.value) continue;
-    // Child actor construction at module scope: c = C() — a fresh instance
-    // process; the cell holds its pid.
-    const val = initStmt.value;
-    if (val.type === 'FunctionCallExpr' && val.callee?.type === 'Identifier' && ctx.actorInfo?.has(val.callee.name)) {
-      stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, val, new Map(), {})})`);
+  // The constructor block runs in source order, once every param is set
+  // (notes/forward-reads-in-constructor-blocks-2026-11-11.md). Cells a class
+  // constructed here waits on are held until their lines (src/init_order.js).
+  const blockLines = [];
+  const pendingCells = actor.pendingCells || [];
+  if (pendingCells.length) blockLines.push(`    bv_pending_cells_([${pendingCells.map(n => erlStateKey(ctx, n)).join(', ')}])`);
+  const ownFnNames = new Set((actor.functions || []).map(f => f.name));
+  const ownCallEnv = new Map([
+    ...stateVarDecls.map(v => [v.name, v.typeName]),
+    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+  ]);
+  const declOf = new Map(stateVarDecls.map(v => [v.name, v]));
+  for (const s of withCellReady(actor.initBody || [], pendingCells)) {
+    if (s.type === 'ExprStatement' && s.expr?.type === 'CellReady') {
+      blockLines.push(`    ${genExpr(ctx, s.expr, new Map(), {})}`);
       continue;
     }
-    const valExpr = soleValueOf(initStmt, genExpr(ctx, val, new Map(), {}));
-    stateInitLines.push(`    put(${erlStateKey(ctx, v.name)}, ${valExpr})`);
+    if (isOwnCallStatement(s, ownFnNames)) { blockLines.push(`    _ = ${genExpr(ctx, s.expr, ownCallEnv, {})}`); continue; }
+    if (s.type === 'SetStatement') {
+      const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv([s]) };
+      blockLines.push(genLocals(ctx, [s], ownCallEnv, sCtx, '    ').join('\n').replace(/,\s*$/, ''));
+      continue;
+    }
+    if (s.type !== 'StateAssign') continue;
+    const v = declOf.get(s.name);
+    if (!v) continue;
+    if (v.isRef && ctx.remoteInstanceVars.has(v.name)) {
+      // Remote construction: send `new`, read reply, extract from
+      const calleeName = s.value.callee.name;
+      // Constructor coercions resolve to the underlying dep name for `new`
+      const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
+      blockLines.push(`    New_seq_${v.name} = bv_next_seq_()`);
+      blockLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
+      blockLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, ${erlNewOpEntries(ctx, s.value.args, new Map(), {})}, <<"to">> => ${erlString(callee)}}`);
+      blockLines.push(`    io:put_chars([json_encode(New_msg_${v.name}), $\\n])`);
+      blockLines.push(`    put(pending_new_${v.name}, New_id_${v.name})`);
+      blockLines.push(`    put(${erlStateKey(ctx, v.name)}, null)`);
+      continue;
+    }
+    if (!v.isRef && !s.value) continue;
+    // Child actor construction (`c = C()`): a fresh instance process; the cell holds its pid.
+    if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo?.has(s.value.callee.name)) {
+      blockLines.push(`    put(${erlStateKey(ctx, v.name)}, ${genExpr(ctx, s.value, new Map(), {})})`);
+      continue;
+    }
+    blockLines.push(`    put(${erlStateKey(ctx, v.name)}, ${soleValueOf(s, genExpr(ctx, s.value, new Map(), {}))})`);
   }
-  const cellInitEnd = stateInitLines.length;
+  if (pendingCells.length) blockLines.push('    bv_join_all_()');
   for (const p of constructorParams) {
     stateInitLines.push(`    put(${erlStateKey(ctx, p.name)}, null)`);
   }
@@ -1734,24 +1741,7 @@ ${putLines},
     end`);
   }
   // The params come first, so a cell can be set from one.
-  const cellLines = stateInitLines.splice(0, cellInitEnd);
-  stateInitLines.push(...cellLines);
-
-  // Calls to the file's own functions and writes, run while constructing in
-  // source order, once every cell and param is set.
-  const ownFnNames = new Set((actor.functions || []).map(f => f.name));
-  const ownCallEnv = new Map([
-    ...stateVarDecls.map(v => [v.name, v.typeName]),
-    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
-  ]);
-  for (const s of actor.initBody || []) {
-    if (isOwnCallStatement(s, ownFnNames)) stateInitLines.push(`    _ = ${genExpr(ctx, s.expr, ownCallEnv, {})}`);
-    if (s.type === 'SetStatement') {
-      const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv([s]) };
-      const body = genLocals(ctx, [s], ownCallEnv, sCtx, '    ').join('\n').replace(/,\s*$/, '');
-      stateInitLines.push(body);
-    }
-  }
+  stateInitLines.push(...blockLines);
 
   // Memoized return-as value for main actor
   if (actor.declarationReturn && actor.declarationReturn.typeName) {
