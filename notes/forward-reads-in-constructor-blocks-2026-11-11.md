@@ -94,6 +94,41 @@ can't see which: `Svc` is another actor. A fire-and-forget `Svc.init(&z)...` nev
   before cells become actors, but only if constructing the nested class stops blocking the
   parent; otherwise the queue turns a wrong value into a deadlock.
 
+## Nested classes before cells are actors
+
+A class declared in an actor, whose construction reads cells of that actor declared below
+the line that makes it:
+
+```
+Outer = *{
+  Inner = *{
+    seen Integer = late + 1
+    @seen = -> seen
+  }
+  i = Inner()            // fine: not waited for
+  late *Integer = 7      // Inner's read of late is answered here
+  @x = -> i.seen()
+}
+```
+
+- **Only a direct construction.** `i = Inner(…)` or `Inner()` as the statement. Made
+  inside a function the block calls, the construction is waited for, so its read stays an
+  error.
+- **Its arguments are read on the spot** and follow rule 3.
+- **The parent doesn't wait.** It has the child's address at once and goes on. The
+  child's reads of the waited-on cells are held and answered at their lines. The end of
+  the block waits for the child, so a failed construction still fails the parent's.
+- **Using the child before those lines is an error.** Anything sent to it waits behind its
+  construction, which waits on the parent. That's the cycle of rule 5, caught statically
+  for the case the compiler can see: `'i' is used before 'late' is declared, and its
+  construction reads 'late'`.
+- **The held read is answered when the owner gets to it.** That's at the cell's line, or
+  later if the read arrives later. So a child can see a later write than the initializer.
+  Any value from the line on is a value the cell had.
+- **On a single-threaded target** (every actor in one process), the child's address is
+  made at its line and its construction runs right after the last of the cells it waits
+  on. Nothing may use the child before then, so this is a schedule its concurrency allows.
+
 ## Open
 
 - **`if` and other control flow in a constructor block.** It doesn't parse today, so the

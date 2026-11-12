@@ -17,10 +17,12 @@ import {
   genRustDispatch,
   genRustChildMethods,
   isOwnCallStatement,
+  genRunDeferred,
 } from './handlers.js';
 import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
 import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
+import { withDeferredRuns } from '../../init_order.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
@@ -342,8 +344,12 @@ ${bvTypeFieldsArms}
     for (const d of (actor.stateVarDecls || [])) {
       initTypeEnv.set(d.name, d.typeName);
     }
-    const initBody = actor.initBody || [];
+    const initBody = withDeferredRuns(actor.initBody || [], actor);
     for (const s of initBody) {
+      if (s.type === 'ExprStatement' && s.expr?.type === 'RunDeferred') {
+        stateInitLines.push(genRunDeferred(s.expr, 'actor'));
+        continue;
+      }
       if (isOwnCallStatement(s)) {
         // A call to the file's own function, run while constructing. Setup runs
         // in main, where the actor is `actor`.
@@ -399,6 +405,13 @@ ${bvTypeFieldsArms}
             ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
             : 'json!([])';
           const singletonLabel = G.ctx.actorNodes?.get(s.value.callee.name)?.singletonOf;
+          const deferred = s.value.deferredConstruct;
+          if (deferred) {
+            // Its construction waits on cells below: its address is made here, and it
+            // runs after the last of their lines (src/init_order.js).
+            stateInitLines.push(`    { let _id = actor.${childName}_next_id.get(); actor.${childName}_next_id.set(_id + 1); actor.${childName}_instances.insert(_id, std::collections::HashMap::new()); actor.state.insert(${JSON.stringify(`__deferred_${deferred.site}`)}.to_string(), Value::Array(vec![json!(_id), ${argsJson}])); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id)); }`);
+            continue;
+          }
           stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id));${singletonLabel?.startsWith('@') ? ` actor.bv_singleton_made(${JSON.stringify(singletonLabel)}, bv_inst_ref(${JSON.stringify(childName)}, _id).as_str().unwrap_or("").to_string());` : ''} }`);
         } else {
           // There's no `self` in main: a self-call here goes through `actor`, so

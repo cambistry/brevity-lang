@@ -15,6 +15,14 @@
 // handed to `over`, `reduce` or a list method runs there, so its body counts.
 //
 // Passing a cell to a child counts as a read: the child is constructed on the spot.
+//
+// One exception: a class declared in this actor whose construction reads cells of
+// ours declared below. Its reads are messages to us, so they can wait. The call that
+// constructs it is marked `deferredConstruct` (the class `spawnable`, the cells
+// it waits on in the actor's `pendingCells`), and the targets spawn it without
+// waiting, answer its reads at those cells' lines, and join it at the end of the
+// block. Using the child before those lines is an error: what we send it waits behind
+// its construction.
 // See notes/forward-reads-in-constructor-blocks-2026-11-11.md.
 
 // The names a constructor-block statement declares.
@@ -153,22 +161,62 @@ export function checkInitOrder(ast) {
     },
   };
 
+  let nextSite = 0;
   for (const actor of actors) {
     const body = actor.constructorBody || [];
     const declaredAt = new Map();
     body.forEach((s, i) => { for (const n of declaredNames(s)) if (!declaredAt.has(n)) declaredAt.set(n, i); });
     const params = new Set((actor.params || []).map(p => p?.name).filter(Boolean));
+    // A child whose construction waits on our later cells, by the name holding it:
+    // the cells it waits on.
+    const deferred = new Map();
     body.forEach((s, i) => {
-      const r = reader(actor).readsOf(s);
       const early = (name) => { const at = declaredAt.get(name); return at !== undefined && at >= i && !params.has(name); };
+      let r = null;
+      // `i = Inner(…)` or `Inner()`, a class declared in us whose construction reads
+      // cells of ours declared below: we don't wait for it. It's spawned here, its
+      // reads wait for those cells' lines, and we join it at the end of the block.
+      const call = constructionCall(s);
+      const cls = call && ctx.nestedClass(actor, call.callee.name);
+      if (cls) {
+        const waitsOn = [...ctx.constructionReads(cls).own.keys()].filter(early);
+        if (waitsOn.length) {
+          // The last of those lines, for a target that runs the construction there.
+          const readyAfter = waitsOn.reduce((x, y) => (declaredAt.get(y) > declaredAt.get(x) ? y : x));
+          const site = nextSite++;
+          call.deferredConstruct = { waitsOn, site, readyAfter };
+          actor.deferredRuns = [...(actor.deferredRuns || []), { site, after: readyAfter, cls: cls.name }];
+          cls.spawnable = true;
+          actor.pendingCells = [...new Set([...(actor.pendingCells || []), ...waitsOn])];
+          for (const n of declaredNames(s)) deferred.set(n, waitsOn);
+          r = reader(actor).readsOf(call.args || []);
+        }
+      }
+      r ??= reader(actor).readsOf(s);
       for (const [verb, uses] of [['read', r.own], ['written', r.writes]]) for (const [name, via] of uses) {
         if (!early(name)) continue;
         const by = statementLabel(s);
         const through = via ? `, through '${via}'` : '';
         throw new Error(`'${name}' is ${verb} before its declaration (by ${by}${through}) — declare '${name}' above it`);
       }
+      // Anything sent to such a child waits behind its construction, which waits on
+      // us: using it before those cells are declared would never finish.
+      for (const [name, via] of r.own) {
+        const waitsOn = deferred.get(name)?.filter(early);
+        if (!waitsOn?.length) continue;
+        const by = statementLabel(s);
+        const through = via ? `, through '${via}'` : '';
+        throw new Error(`'${name}' is used before '${waitsOn[0]}' is declared, and its construction reads '${waitsOn[0]}' (by ${by}${through}) — use '${name}' below '${waitsOn[0]}'`);
+      }
     });
   }
+}
+
+// The class construction a statement is, if it's nothing else: `i = Inner(…)`, `Inner()`.
+function constructionCall(s) {
+  const e = s.type === 'ExprStatement' ? s.expr
+    : (s.type === 'TypedAssign' || s.type === 'Assign') ? s.value : null;
+  return e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' ? e : null;
 }
 
 function statementLabel(s) {
@@ -178,4 +226,31 @@ function statementLabel(s) {
   if (callee) return `'${callee}(…)'`;
   if (s.type === 'SetStatement') return `'${s.name} <-'`;
   return 'a statement';
+}
+
+// A constructor block with a `CellReady` statement after each line that declares a
+// cell a class constructed here waits on: its held reads are answered there. For
+// targets that generate the block as one run of statements.
+export function withCellReady(body, pendingCells) {
+  if (!pendingCells?.length) return body;
+  return body.flatMap(s => {
+    const name = s.type === 'ExprStatement' ? null : s.name;
+    return name && pendingCells.includes(name)
+      ? [s, { type: 'ExprStatement', expr: { type: 'CellReady', name } }]
+      : [s];
+  });
+}
+
+// A constructor block with a `RunDeferred` statement after the line declaring the last
+// cell a deferred construction waits on. For a target that runs every actor on one
+// thread: it makes the child's address at its line and runs its construction here,
+// a schedule the child's own concurrency allows.
+export function withDeferredRuns(body, actor) {
+  const runs = actor.deferredRuns || [];
+  if (!runs.length) return body;
+  return body.flatMap(s => {
+    const name = s.type === 'ExprStatement' ? null : s.name;
+    const here = runs.filter(r => r.after === name);
+    return [s, ...here.map(r => ({ type: 'ExprStatement', expr: { type: 'RunDeferred', site: r.site, cls: r.cls } }))];
+  });
 }

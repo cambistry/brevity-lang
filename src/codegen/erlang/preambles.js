@@ -4,7 +4,7 @@ import { wireLabel } from '../wire_labels.js';
 // What a file actor does for its classes in every wait: answer a read of one of its
 // cells, make a call to one of its dependencies, and take note of a class waiting on
 // a reply from the wire. `loop` is the wait to go back to.
-const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, ${loop};
+const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), ${loop};
         {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, ${loop};
         {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
 
@@ -698,6 +698,27 @@ bv_outer_get_(Level, Key) ->
             Owner_ ! {bv_outer_get, self(), Key, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
+%% A read of one of our cells by a class declared in us. A cell that a class's
+%% construction waits on isn't declared yet: the read is held until its line runs
+%% (src/init_order.js).
+bv_answer_outer_(From, Key, Ref) ->
+    case get({bv_pending_, Key}) of
+        undefined -> From ! {bv_reply, Ref, get(Key)};
+        Waiting_ -> put({bv_pending_, Key}, [{From, Ref} | Waiting_])
+    end.
+bv_pending_cells_(Keys) -> [put({bv_pending_, K_}, []) || K_ <- Keys], ok.
+bv_cell_ready_(Key) ->
+    Waiting_ = case erase({bv_pending_, Key}) of undefined -> []; W_ -> W_ end,
+    [From_ ! {bv_reply, Ref_, get(Key)} || {From_, Ref_} <- lists:reverse(Waiting_)],
+    ok.
+%% A class constructed without waiting for it; the end of the block waits.
+bv_join_(Pid) ->
+    put(bv_joins_, [Pid | case get(bv_joins_) of undefined -> []; J_ -> J_ end]),
+    Pid.
+bv_join_all_() ->
+    Joins_ = case erase(bv_joins_) of undefined -> []; J_ -> J_ end,
+    [bv_spawn_sync_(P_) || P_ <- lists:reverse(Joins_)],
+    ok.
 %% A class calling one of its file's dependencies: the dependency is the file
 %% actor's, so the file actor makes the call, under an id of its own, and passes the
 %% reply back. It answers in every wait, as for a read.
@@ -791,7 +812,7 @@ bv_await_line_from_(Id) ->
     receive
         {bv_line, Id, eof} -> eof;
         {bv_line, Id, M_} -> bv_reply_kind_(M_);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> OFrom_ ! {bv_reply, ORef_, get(OKey_)}, bv_await_line_from_(Id)
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id)
     end.
 bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
 bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.

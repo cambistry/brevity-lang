@@ -533,7 +533,28 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const field = `this.#${stateKey(p.name)}`;
     paramInitLines.push(`    if (${field} === undefined) ${field} = ${genTailValue(ctx, p.defaultValue)};`);
   }
+  // Cells a class constructed here waits on (src/init_order.js): its reads of them
+  // are held until their lines run.
+  const pendingCells = actor.pendingCells || mergedActor.pendingCells || [];
+  const hasDeferred = pendingCells.length > 0;
+  // A construction we don't wait for: spawn it, and join it at the end of the block.
+  const spawned = (code) => {
+    const m = /^await ([A-Za-z_$][\w$]*)\.create\(/.exec(code);
+    if (!m) throw new Error(`internal: deferred construction didn't compile to a create call: ${code}`);
+    return `this.#_join(${m[1]}.spawn(${code.slice(m[0].length)})`;
+  };
   function genOneInitLine(s) {
+    const line = genOneInitLineCore(s);
+    const names = s.type === 'ExprStatement' ? [] : [s.name].filter(Boolean);
+    const ready = names.filter(n => pendingCells.includes(n)).map(n => `\n    this.#_cellReady(${JSON.stringify(n)});`).join('');
+    return line + ready;
+  }
+  function genOneInitLineCore(s) {
+    const deferredCall = s.type === 'ExprStatement' ? (s.expr?.deferredConstruct && s.expr) : (s.value?.deferredConstruct && s.value);
+    if (deferredCall) {
+      const code = spawned(genExpr(ctx, deferredCall));
+      return s.type === 'ExprStatement' ? `    ${code};` : `    this.#${stateKey(s.name)} = ${code};`;
+    }
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const calleeName = s.value.callee.name;
       const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
@@ -788,7 +809,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // lambdas register before the dispatch-arm loop runs. Re-use the computed
   // ctorParamExprs / preIngestBodyLines / postIngestBodyLines / coercionInitLines
   // here.
-  const allInitLines = [...paramInitLines, ...preIngestBodyLines];
+  const allInitLines = [
+    ...(hasDeferred ? [`    this.#_pendingCells = new Map(${JSON.stringify(pendingCells)}.map(n => [n, []]));`] : []),
+    ...paramInitLines, ...preIngestBodyLines,
+  ];
 
   // Handle ingest: inject the ingest value between pre and post phases
   if (ownIngestInfo) {
@@ -862,6 +886,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   for (const sg of publicSingletons) {
     allInitLines.push(`    this.#_publishAt(${JSON.stringify(sg.singletonOf)}, ${JSON.stringify(sg.singletonOf)}, this.#${stateKey(sg.singletonOf)});`);
   }
+  if (hasDeferred) allInitLines.push(`    await Promise.all(this.#_joins);`);
   // Regenerate initMethodBody with on-handler lines
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
@@ -905,7 +930,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
-  #_remoteRoutes = null${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
+  #_remoteRoutes = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
 
@@ -944,7 +969,22 @@ ${fieldSection ? fieldSection + '\n' : ''}
     ${initCallLine}
     return instance;
   }
-
+${actor.spawnable ? `
+  // Construction its parent doesn't wait for: its block reads cells of the parent
+  // declared below the line that makes it. It has its handle at once; what's sent to
+  // it waits until it's constructed, and \`_ready\` settles then.
+  static spawn(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
+    const instance = new this(binding);
+    if (binding.created) binding.created(instance);
+    const ready = instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')})
+      .catch((err) => { delete err.bvEx; throw err; })
+      .finally(() => { instance.#_starting = null; });
+    ready.catch(() => {});
+    instance.#_starting = ready;
+    instance._ready = ready;
+    return instance;
+  }
+` : ''}
   async #send(op, to, ty) {
     const id = String(++this.#nextId);
     // Locally-held lambda in a reply-awaiting callback field: a local-form
@@ -1133,8 +1173,24 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 ` : ''}${outerCells ? `  // A class declared in us reading one of our cells.
   #_outerGet(message) {
     const cells = { ${outerCells} };
-    const name = message.op.slice(4);
+    const name = message.op.slice(4);${hasDeferred ? `
+    // Not declared yet: answered when its line runs.
+    const waiting = this.#_pendingCells.get(name);
+    if (waiting) { waiting.push(message); return; }` : ''}
     message._route(name in cells ? { id: message.id, re: [cells[name]()] } : { id: message.id, ex: { [message.op]: 'unhandled' } });
+  }
+
+` : ''}${hasDeferred ? `  // A cell a child's construction waits on has its value: answer the reads held for it.
+  #_cellReady(name) {
+    const waiting = this.#_pendingCells.get(name) || [];
+    this.#_pendingCells.delete(name);
+    for (const message of waiting) this.#_outerGet(message);
+  }
+
+  // A child constructed without waiting; the block's end waits for it.
+  #_join(child) {
+    this.#_joins.push(child._ready);
+    return child;
   }
 
 ` : ''}  async #selfSend(op) {
@@ -1200,7 +1256,13 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     return v;
   }
 
-` : ''}  receive(message) {${publishesClasses ? `
+` : ''}  receive(message) {${actor.spawnable ? `
+    // Still being constructed: a request waits; a reply is what construction waits on.
+    if (this.#_starting && ('op' in message || message.test || message.cam)) {
+      const later = () => this.receive(message);
+      this.#_starting.then(later, later);
+      return;
+    }` : ''}${publishesClasses ? `
     if (typeof message.to === 'string') {
       const _instTo = /(?:^|[\\s<])(@[A-Za-z_][A-Za-z0-9_]*!?\\/[0-9]+)(?:\\s+([^>]*))?>?$/.exec(message.to);
       const _inst = _instTo && this.#_instances.get(_instTo[1]);

@@ -49,31 +49,6 @@ describe('a read before its declaration — validation', () => {
       .toThrow(/'total' is read before its declaration \(by 'kid'\)/);
   });
 
-  it("a read in the constructor block of a class it constructs", () => {
-    expect(() => compileSource('W = *{\n  s Integer = total\n  @s = -> s\n}\nkid = W()\ntotal *Integer = 4\n@v = -> 1\n'))
-      .toThrow(/'total' is read before its declaration \(by 'kid', through 'W'\)/);
-  });
-
-  it('a read two classes down', () => {
-    expect(() => compileSource([
-      'Outer = *{',
-      '  Inner = *{',
-      '    Deep = *{',
-      '      d Integer = late',
-      '      @d = -> d',
-      '    }',
-      '    dd = Deep()',
-      '    @s = -> 1',
-      '  }',
-      '  i = Inner()',
-      '  late *Integer = 7',
-      '  @x = -> 1',
-      '}',
-      '@v = -> 1',
-      '',
-    ].join('\n'))).toThrow(/'late' is read before its declaration \(by 'i', through 'Inner' → 'Deep'\)/);
-  });
-
   it('in a class body', () => {
     expect(() => compileSource('C = *{\n  b Integer = a\n  a *Integer = 1\n  @b = -> b\n}\n@v = -> 1\n'))
       .toThrow(/'a' is read before its declaration \(by 'b'\)/);
@@ -85,6 +60,122 @@ describe('a read before its declaration — validation', () => {
 
   it("a class's functions that read a later cell are fine", () => {
     expect(() => compileSource('W = *{\n  @s = -> total\n}\nkid = W()\ntotal *Integer = 4\n@v = -> 1\n')).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A class whose construction reads cells of the actor around it declared below the
+// line that makes it isn't waited for. Its reads are messages to that actor, so they
+// wait for those cells' lines; the block goes on, and its end waits for the class.
+// What's sent to the child waits behind its construction, so using it above those
+// lines is an error.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('a class constructed before a cell its construction reads — validation', () => {
+  it('using the child above that cell', () => {
+    expect(() => compileSource([
+      'Outer = *{',
+      '  Inner = *{',
+      '    seen Integer = late',
+      '    @seen = -> seen',
+      '  }',
+      '  i = Inner()',
+      '  v Integer = i.seen()',
+      '  late *Integer = 7',
+      '  @x = -> v',
+      '}',
+      '@v = -> 1',
+      '',
+    ].join('\n'))).toThrow(/'i' is used before 'late' is declared, and its construction reads 'late' \(by 'v'\) — use 'i' below 'late'/);
+  });
+
+  it('using it through a function the block calls', () => {
+    expect(() => compileSource('W = *{\n  s Integer = total\n  @s = -> s\n}\nkid = W()\nask = { return kid.s() }\nn Integer = ask()\ntotal *Integer = 4\n@v = -> n\n'))
+      .toThrow(/'kid' is used before 'total' is declared, and its construction reads 'total' \(by 'n', through 'ask'\)/);
+  });
+
+  it('constructed through a function, it is waited for, so the read is an error', () => {
+    expect(() => compileSource('W = *{\n  s Integer = total\n  @s = -> s\n}\nmk = { return W() }\nkid = mk()\ntotal *Integer = 4\n@v = -> 1\n'))
+      .toThrow(/'total' is read before its declaration \(by 'kid', through 'mk' → 'W'\)/);
+  });
+
+  it("its arguments are read on the spot", () => {
+    expect(() => compileSource('W = (n Integer) *{\n  s Integer = total + n\n  @s = -> s\n}\nkid = W(late)\ntotal *Integer = 4\nlate *Integer = 1\n@v = -> 1\n'))
+      .toThrow(/'late' is read before its declaration \(by 'kid'\)/);
+  });
+});
+
+describe('a class constructed before a cell its construction reads', () => {
+  const script = `
+    Outer = *{
+      Inner = *{
+        seen Integer = late + 1
+        @seen = -> seen
+      }
+      i = Inner()
+      late *Integer = 7
+      after Integer = late * 10
+      @x = -> i.seen()
+      @after = -> after
+    }
+    W = *{
+      s Integer = total * 2
+      @s = -> s
+    }
+    kid = W()
+    total *Integer = 4
+    o = Outer()
+    @kid = -> kid.s()
+    @inner = -> o.x()
+    @after = -> o.after()
+  `;
+
+  it("reads the cell's value from its line", async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@inner', from: 'c' } },
+      { output: { id: '1', re: [8], to: 'c' } },
+    );
+  });
+
+  it('the block goes on past it', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: '@after', from: 'c' } },
+      { output: { id: '2', re: [70], to: 'c' } },
+    );
+  });
+
+  it("a class of the file reading the file actor's cell", async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: '@kid', from: 'c' } },
+      { output: { id: '3', re: [8], to: 'c' } },
+    );
+  });
+});
+
+describe('a class two levels down reading a later cell', () => {
+  const script = `
+    Outer = *{
+      Inner = *{
+        Deep = *{
+          d Integer = late
+          @d = -> d
+        }
+        dd = Deep()
+        @d = -> dd.d()
+      }
+      i = Inner()
+      late *Integer = 7
+      @x = -> i.d()
+    }
+    o = Outer()
+    @x = -> o.x()
+  `;
+
+  it('waits for the cell two actors up', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '@x', from: 'c' } },
+      { output: { id: '1', re: [7], to: 'c' } },
+    );
   });
 });
 

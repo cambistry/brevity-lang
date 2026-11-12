@@ -48,6 +48,7 @@ projections live.
 - Protected/private function access across subclasses.
 - Wrapped superclass actors.
 - Constructor blocks run in text order: reading or writing a cell above its declaration, directly or through a call or a constructed class, is a compile error.
+- A nested class whose construction reads a later cell of the class around it isn't waited for: its read is answered at that cell's line, and using the child above that line is a compile error.
 - Class interface rendering for `extract()`.
 
 ## LLM Rules

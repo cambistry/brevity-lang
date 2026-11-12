@@ -294,6 +294,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'BoolLiteral') return expr.value ? 'true' : 'false';
   if (expr.type === 'NullLiteral') return 'null';
 
+  // A cell a class's construction waits on has its value (src/init_order.js).
+  if (expr.type === 'CellReady') return `bv_cell_ready_(${erlStateKey(ctx, expr.name)})`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
     // The owner's key: a file's or a class param's has no class prefix.
     const keyCtx = expr.outerClass && !expr.outerParam ? { childStatePrefix: expr.outerClass.toLowerCase() } : {};
@@ -546,9 +548,12 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
           // A public singleton is published at its label in the actor that builds it.
           const singleton = ctx.program?.actors?.find(a => a.name === cName)?.singletonOf;
           if (singleton?.startsWith('@')) subRegLines.push(`bv_publish_at_(${erlString(singleton)}, NewPid_)`);
+          // A class whose construction waits on our later cells isn't waited for here;
+          // the end of the block joins it (src/init_order.js).
+          const sync = expr.deferredConstruct ? 'bv_join_' : 'bv_spawn_sync_';
           const iifeBody = subRegLines.length > 0
-            ? `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), ${subRegLines.join(', ')}, NewPid_`
-            : `NewPid_ = bv_spawn_sync_(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), NewPid_`;
+            ? `NewPid_ = ${sync}(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), ${subRegLines.join(', ')}, NewPid_`
+            : `NewPid_ = ${sync}(spawn(?MODULE, start_internal_${lc}, [${initArgsExpr}, ${erlOuterCtx(ctx, cName)}])), NewPid_`;
           return `(fun() -> ${iifeBody} end)()`;
         }
       }

@@ -1,6 +1,7 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import { wireLabel } from '../wire_labels.js';
 import { outerNamesFor } from '../../outer_reads.js';
+import { withDeferredRuns } from '../../init_order.js';
 import { orderParamsForDefaults } from '../../param_defaults.js';
 import {
   G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
@@ -928,9 +929,16 @@ ${arms.join('\n')}
     }`;
 }
 
+// The construction of a class that waited on cells declared above (src/init_order.js).
+function genRunDeferred(e, recv) {
+  const lc = e.cls.toLowerCase();
+  const key = JSON.stringify(`__deferred_${e.site}`);
+  return `    if let Some(_d) = ${recv}.state.remove(${key}) { let _id = _d[0].as_u64().unwrap_or(0) as u32; ${recv}.child_${lc}_init_at(_id, &_d[1]); }`;
+}
+
 function genRustChildInit(actor) {
   const constructorParams = actor.initParams || [];
-  const initBody = actor.initBody || [];
+  const initBody = withDeferredRuns(actor.initBody || [], actor);
   const supertypeBindings = actor._supertypeBindings || [];
   const inheritedIngests = actor._inheritedIngests || [];
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
@@ -981,7 +989,9 @@ function genRustChildInit(actor) {
 
   // Pre-ingest body statements
   for (const s of preIngestBody) {
-    if (isOwnCallStatement(s)) {
+    if (s.type === 'ExprStatement' && s.expr?.type === 'RunDeferred') {
+      lines.push(`    ${genRunDeferred(s.expr, 'self')}`);
+    } else if (isOwnCallStatement(s)) {
       // A call to the class's own function, run while constructing.
       lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
     } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
@@ -1400,4 +1410,4 @@ ${arms}
   return parts.join('\n');
 }
 
-export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods, isOwnCallStatement };
+export { genRustPublicFn, genRustDispatch, genRustChildPublicFn, genRustChildDispatch, genRustChildInit, genRustChildMethods, isOwnCallStatement, genRunDeferred };

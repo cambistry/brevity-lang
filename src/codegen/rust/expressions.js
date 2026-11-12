@@ -580,7 +580,11 @@ function genRustExpr(expr, typeEnv, eCtx) {
         self.${lc}_next_id.set(_id + 1);
         self.${lc}_instances.insert(_id, std::collections::HashMap::new());
         let _init_args = ${initArgsExpr};
-        self.child_${lc}_init_at(_id, &_init_args);${singletonLabel ? `
+        ${expr.deferredConstruct
+    // Its construction waits on our later cells: it runs after the last of their
+    // lines (src/init_order.js, withDeferredRuns). Its address is made here.
+    ? `self.state.insert(${JSON.stringify(`__deferred_${expr.deferredConstruct.site}`)}.to_string(), Value::Array(vec![json!(_id), _init_args]));`
+    : `self.child_${lc}_init_at(_id, &_init_args);`}${singletonLabel ? `
         self.bv_singleton_made(${JSON.stringify(singletonLabel)}, bv_inst_ref(${JSON.stringify(lc)}, _id).as_str().unwrap_or("").to_string());` : ''}
 ${subRegLines.join('\n')}
         bv_inst_ref(${JSON.stringify(lc)}, _id)
