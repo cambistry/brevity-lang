@@ -47,6 +47,7 @@ projections live.
 - Subclass arg inheritance and method override.
 - Protected/private function access across subclasses.
 - Wrapped superclass actors.
+- Constructor blocks run in text order: reading a cell above its declaration, directly or through a call or a constructed class, is a compile error.
 - Class interface rendering for `extract()`.
 
 ## LLM Rules
