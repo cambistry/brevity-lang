@@ -89,6 +89,11 @@ can't see which: `Svc` is another actor. A fire-and-forget `Svc.init(&z)...` nev
 - **Rules 2, 4 and 5** need a cell that can be pending, with reads queued behind it. That
   arrives with cells-as-actors. Until then, a child constructed during construction can't
   wait, so handing it a cell before that cell's line stays an error.
+- **Deferred:** rules 2, 4 and 5 for any reader (a reference handed out before a cell's
+  line, reads that wait on it, runtime cycle detection). They rest on the turn rule in
+  `cells-as-actors-ordering-2026-11-11.md`, whose token is to be decided with Opre's
+  transactions. Until then, handing out a reference before a cell's line is a compile
+  error; move the declaration up.
 - **The one cross-actor read that exists today** is a nested class reading a cell of the
   class around it (`get@late` to the enclosing actor). It could queue on a pending cell
   before cells become actors, but only if constructing the nested class stops blocking the
