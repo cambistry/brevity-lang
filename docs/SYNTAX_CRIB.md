@@ -174,6 +174,21 @@ Bind it before use. A class named with `!` keeps the `!` at the call, and its ty
 type Point (x Integer, y Integer)
 
 @x = -> result: Point(1, 2).x as Integer
+
+W = *{
+  type X (n Integer)              // W's type: bare inside W
+  @make = -> X(1)
+}
+
+@y = {
+  w = W()
+  a = W::X(2)                     // reached through the class
+  b = w::X(3)                     // or an actor of it
+  p W::X = w.make()
+  return result: p.n as Integer
+}
+
+@z = -> result: Svc::Point(1, 2)  // a service's type, without importing it
 ```
 
 ## Core Methods
