@@ -13,7 +13,7 @@ import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '
 //      involved. Drives via compileSource.
 //
 //   2. Service-side runtime — sending raw CAM `new` messages directly to
-//      `HTML @div` and asserting the runtime mints addresses, increments
+//      `HTML div` and asserting the runtime mints addresses, increments
 //      per-tag counters, and surfaces innerHTML.
 //
 //   3. Actor-side runtime — a Brevity actor file using `<div>...</div>`
@@ -1302,10 +1302,10 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 2. Service-side runtime — raw CAM `new` to `HTML @tag`
+// 2. Service-side runtime — raw CAM `new` to `HTML tag`
 //
 // connectActor establishes a com channel to an existing address (like
-// "HTML @div") so we can send messages and assert replies.
+// "HTML div") so we can send messages and assert replies.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('HTML element runtime — service side', () => {
@@ -1313,26 +1313,26 @@ describe('HTML element runtime — service side', () => {
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     </head><body></body></html>`;
 
-  it('HTML @div new creates a <div> and responds with element address', async () => {
+  it('HTML div new creates a <div> and responds with element address', async () => {
     const page = await loadPage(html);
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ children: ['Hello'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div', from: 'HTML' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<HTML div 1>', 'ty': 'HTML div', from: 'HTML' }) },
     );
   });
 
   it('created element is addressable and has correct content', async () => {
     const page = await loadPage(html);
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
 
     await expectBehavior(dom,
       { input: { id: '1', op: [{ children: ['Hello'] }, '#new'] } },
-      { output: expect.objectContaining({ re: '#<HTML @div/1>' }) },
+      { output: expect.objectContaining({ re: '#<HTML div 1>' }) },
     );
 
-    const el = await page.connectActor('HTML @div/1');
+    const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
       { input: { id: '2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'Hello' }) },
@@ -1341,22 +1341,22 @@ describe('HTML element runtime — service side', () => {
 
   it('counter increments sequentially within a single tag', async () => {
     const page = await loadPage(html);
-    const domDiv = await page.connectActor('HTML @div');
+    const domDiv = await page.connectActor('HTML div');
 
     await expectBehavior(domDiv,
       { input: { id: '1', op: [{ children: ['First'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<HTML div 1>', 'ty': 'HTML div' }) },
       { input: { id: '2', op: [{ children: ['Second'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '2', re: '#<HTML @div/2>', 'ty': 'HTML @div' }) },
+      { output: expect.objectContaining({ id: '2', re: '#<HTML div 2>', 'ty': 'HTML div' }) },
       { input: { id: '3', op: [{ children: ['Third'] }, '#new'] } },
-      { output: expect.objectContaining({ id: '3', re: '#<HTML @div/3>', 'ty': 'HTML @div' }) },
+      { output: expect.objectContaining({ id: '3', re: '#<HTML div 3>', 'ty': 'HTML div' }) },
     );
   });
 
   it('counters are per-tag — div and p number independently', async () => {
     const page = await loadPage(html);
-    const domDiv = await page.connectActor('HTML @div');
-    const domP = await page.connectActor('HTML @p');
+    const domDiv = await page.connectActor('HTML div');
+    const domP = await page.connectActor('HTML p');
 
     // Interleave div/p/div/p so a unified counter would produce
     // /1, /2, /3, /4 — per-tag counters instead produce /1, /1, /2, /2.
@@ -1366,12 +1366,12 @@ describe('HTML element runtime — service side', () => {
     await domP.sendAsync({ id: '4', op: [{ children: ['p2'] }, '#new'] });
 
     expect(domDiv.posts).toEqual([
-      expect.objectContaining({ id: '1', re: '#<HTML @div/1>', 'ty': 'HTML @div' }),
-      expect.objectContaining({ id: '3', re: '#<HTML @div/2>', 'ty': 'HTML @div' }),
+      expect.objectContaining({ id: '1', re: '#<HTML div 1>', 'ty': 'HTML div' }),
+      expect.objectContaining({ id: '3', re: '#<HTML div 2>', 'ty': 'HTML div' }),
     ]);
     expect(domP.posts).toEqual([
-      expect.objectContaining({ id: '2', re: '#<HTML @p/1>', 'ty': 'HTML @p' }),
-      expect.objectContaining({ id: '4', re: '#<HTML @p/2>', 'ty': 'HTML @p' }),
+      expect.objectContaining({ id: '2', re: '#<HTML p 1>', 'ty': 'HTML p' }),
+      expect.objectContaining({ id: '4', re: '#<HTML p 2>', 'ty': 'HTML p' }),
     ]);
   });
 
@@ -1379,7 +1379,7 @@ describe('HTML element runtime — service side', () => {
   // address (bracketed) and a connected actor handle. Most content/setter
   // tests need DOM-side verification, so they always read after attaching.
   async function makeAttached(page, tag, payload = {}) {
-    const dom = await page.connectActor(`HTML @${tag}`);
+    const dom = await page.connectActor(`HTML ${tag}`);
     await dom.sendAsync({ id: 'n', op: [payload, '#new'] });
     const elementAddr = dom.posts[0].re;
     const docActor = await page.connectActor('document');
@@ -1448,7 +1448,7 @@ describe('HTML element runtime — service side', () => {
     const { el } = await makeAttached(page, 'div');
     await expectBehavior(el,
       { input: { id: 's', op: [['data-x', 'one'], '@set_attribute!'] } },
-      { output: expect.objectContaining({ re: expect.stringMatching(/^#<HTML @div\/[0-9]+>$/), 'ty': 'HTML @div' }) },
+      { output: expect.objectContaining({ re: expect.stringMatching(/^#<HTML div [0-9]+>$/), 'ty': 'HTML div' }) },
     );
     const value = await page.evaluate(() => document.querySelector('div').getAttribute('data-x'));
     expect(value).toBe('one');
@@ -1458,7 +1458,7 @@ describe('HTML element runtime — service side', () => {
     const page = await loadPage(html);
     const { el } = await makeAttached(page, 'div', { id: 'wrap' });
     await el.sendAsync({ id: 'r', op: [['id'], '@remove_attribute!'] });
-    expect(el.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+    expect(el.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
     const has = await page.evaluate(() => document.querySelector('div').hasAttribute('id'));
     expect(has).toBe(false);
   });
@@ -1482,14 +1482,14 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_inner', m => inbox.push(m));
     await page.send({
       id: 's', op: [['<b>hi</b>'], '#set'],
-      to: `#<${inner} @inner_html>`, from: '__t_set_inner',
+      to: `#<${inner} inner_html>`, from: '__t_set_inner',
     });
     // Two ticks for round-trip + dispatch.
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('<b>hi</b>');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
   });
 
   it('set text_content via `<-` writes textContent (escapes HTML)', async () => {
@@ -1500,13 +1500,13 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_tc', m => inbox.push(m));
     await page.send({
       id: 's', op: [['<b>raw</b>'], '#set'],
-      to: `#<${inner} @text_content>`, from: '__t_set_tc',
+      to: `#<${inner} text_content>`, from: '__t_set_tc',
     });
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('&lt;b&gt;raw&lt;/b&gt;');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
   });
 
   it('set on a void tag\'s content field is silently ignored (no DOM write, no reply)', async () => {
@@ -1517,7 +1517,7 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_void', m => inbox.push(m));
     await page.send({
       id: 's', op: [['ignored'], '#set'],
-      to: `#<${inner} @inner_html>`, from: '__t_set_void',
+      to: `#<${inner} inner_html>`, from: '__t_set_void',
     });
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1537,7 +1537,7 @@ describe('HTML element runtime — service side', () => {
 
     it('parent_element returns null when detached', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: '1', op: [{}, '#new'] });
       const inner = dom.posts[0].re.slice(2, -1);
       const el = await page.connectActor(inner);
@@ -1549,7 +1549,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       // div with two element children and a text node interleaved.
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const span1Addr = sp.posts[0].re;
@@ -1567,13 +1567,13 @@ describe('HTML element runtime — service side', () => {
       const list = el.posts[0].re;
       expect(Array.isArray(list)).toBe(true);
       expect(list).toHaveLength(1);
-      expect(list[0]).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(list[0]).toMatch(/^#<HTML text \d+>$/);
     });
 
     it('first_element_child / last_element_child / sibling pointers preserve identity', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const span1Addr = sp.posts[0].re;
@@ -1595,7 +1595,7 @@ describe('HTML element runtime — service side', () => {
     it('child_element_count returns Integer (BigInt → Number boundary)', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const span1Addr = sp.posts[0].re;
@@ -1611,7 +1611,7 @@ describe('HTML element runtime — service side', () => {
       await el.sendAsync({ id: 'c', op: '@is_connected' });
       expect(el.posts[0]).toEqual(expect.objectContaining({ re: true }));
 
-      const dom = await page.connectActor('HTML @p');
+      const dom = await page.connectActor('HTML p');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const detachedAddr = dom.posts[0].re.slice(2, -1);
       const detached = await page.connectActor(detachedAddr);
@@ -1629,7 +1629,7 @@ describe('HTML element runtime — service side', () => {
     it('contains(other) returns true for descendants, false otherwise', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const spanAddr = sp.posts[0].re;
@@ -1644,7 +1644,7 @@ describe('HTML element runtime — service side', () => {
     it('identity preservation: parent_element of two siblings returns the same parent address', async () => {
       const page = await loadPage(html);
       const { inner: divAddr, el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const span1Addr = sp.posts[0].re;
@@ -1668,7 +1668,7 @@ describe('HTML element runtime — service side', () => {
       await el.sendAsync({ id: 'fec', op: '@first_element_child' });
       const reply = el.posts[el.posts.length - 1].re;
       expect(typeof reply).toBe('string');
-      expect(reply).toMatch(/^#<HTML @em\/\d+>$/);
+      expect(reply).toMatch(/^#<HTML em \d+>$/);
     });
 
     it('text-node actor exposes Node accessors (node_type=3, node_value reads text)', async () => {
@@ -1676,7 +1676,7 @@ describe('HTML element runtime — service side', () => {
       const { el } = await makeAttached(page, 'div', { children: ['hello world'] });
       await el.sendAsync({ id: 'fc', op: '@first_child' });
       const textAddr = el.posts[0].re;
-      expect(textAddr).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(textAddr).toMatch(/^#<HTML text \d+>$/);
       const textActor = await page.connectActor(textAddr.slice(2, -1));
       await textActor.sendAsync({ id: 'nt', op: '@node_type' });
       expect(textActor.posts[0]).toEqual(expect.objectContaining({ re: 3 }));
@@ -1703,7 +1703,7 @@ describe('HTML element runtime — service side', () => {
       const body = await page.connectActor(bodyAddr);
       await body.sendAsync({ id: 'pn', op: '@parent_node' });
       const bodyParent = body.posts[0].re;
-      expect(bodyParent).toMatch(/^#<HTML @html\/\d+>$/);
+      expect(bodyParent).toMatch(/^#<HTML html \d+>$/);
 
       // <html>.parent_node === document (Node form) but parent_element === null.
       const htmlActor = await page.connectActor(bodyParent.slice(2, -1));
@@ -1721,13 +1721,13 @@ describe('HTML element runtime — service side', () => {
     it('last_child returns the last child Node (text or element)', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       const spanAddr = sp.posts[0].re;
       // Children: [<span>, ' tail']. last_child is the trailing text node.
       await el.sendAsync({ id: 'app', op: [[[spanAddr, ' tail']], '@append!'] });
       await el.sendAsync({ id: 'lc', op: '@last_child' });
-      expect(el.posts[el.posts.length - 1].re).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(el.posts[el.posts.length - 1].re).toMatch(/^#<HTML text \d+>$/);
 
       // Now flip: text first, span last.
       const { el: el2 } = await makeAttached(page, 'div');
@@ -1741,7 +1741,7 @@ describe('HTML element runtime — service side', () => {
     it('next_sibling / previous_sibling cross text↔element boundaries', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       const spanAddr = sp.posts[0].re;
       // Layout: ['head ', <span>, ' tail']
@@ -1750,10 +1750,10 @@ describe('HTML element runtime — service side', () => {
       const span = await page.connectActor(spanAddr.slice(2, -1));
       await span.sendAsync({ id: 'ps', op: '@previous_sibling' });
       const prev = span.posts[0].re;
-      expect(prev).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(prev).toMatch(/^#<HTML text \d+>$/);
       await span.sendAsync({ id: 'ns', op: '@next_sibling' });
       const next = span.posts[1].re;
-      expect(next).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(next).toMatch(/^#<HTML text \d+>$/);
       expect(prev).not.toBe(next);
 
       // The text node before the span has next_sibling === span.
@@ -1770,10 +1770,10 @@ describe('HTML element runtime — service side', () => {
 
       // Detached subtree: build outer > inner, never attach to body. Root
       // should be the outer div (not document).
-      const outerDom = await page.connectActor('HTML @section');
+      const outerDom = await page.connectActor('HTML section');
       await outerDom.sendAsync({ id: 'o', op: [{}, '#new'] });
       const outerAddr = outerDom.posts[0].re;
-      const innerDom = await page.connectActor('HTML @article');
+      const innerDom = await page.connectActor('HTML article');
       await innerDom.sendAsync({ id: 'i', op: [{}, '#new'] });
       const innerAddr = innerDom.posts[0].re;
       const outer = await page.connectActor(outerAddr.slice(2, -1));
@@ -1787,7 +1787,7 @@ describe('HTML element runtime — service side', () => {
     it('compare_document_position reports FOLLOWING / PRECEDING / CONTAINS / CONTAINED_BY', async () => {
       const page = await loadPage(html);
       const { el } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       await sp.sendAsync({ id: 'b', op: [{}, '#new'] });
       const span1Addr = sp.posts[0].re;
@@ -1829,7 +1829,7 @@ describe('HTML element runtime — service side', () => {
       await el.sendAsync({ id: 'fc1', op: '@first_child' });
       await el.sendAsync({ id: 'fc2', op: '@first_child' });
       expect(el.posts[0].re).toBe(el.posts[1].re);
-      expect(el.posts[0].re).toMatch(/^#<HTML @text\/\d+>$/);
+      expect(el.posts[0].re).toMatch(/^#<HTML text \d+>$/);
     });
 
     it('comment-node round-trip: insert via insertAdjacentHTML, surface via child_nodes', async () => {
@@ -1842,7 +1842,7 @@ describe('HTML element runtime — service side', () => {
       await el.sendAsync({ id: 'cn', op: '@child_nodes' });
       const list = el.posts[0].re;
       expect(list).toHaveLength(1);
-      expect(list[0]).toMatch(/^#<HTML @comment\/\d+>$/);
+      expect(list[0]).toMatch(/^#<HTML comment \d+>$/);
 
       const commentActor = await page.connectActor(list[0].slice(2, -1));
       await commentActor.sendAsync({ id: 'nt', op: '@node_type' });
@@ -1855,7 +1855,7 @@ describe('HTML element runtime — service side', () => {
       const divAddr = await el.sendAsync({ id: 'noop', op: '@is_connected' }).then(() => null);
       expect(divAddr).toBeNull();  // pacify lint; the meaningful check is below
       await commentActor.sendAsync({ id: 'pe', op: '@parent_element' });
-      expect(commentActor.posts[3].re).toMatch(/^#<HTML @div\/\d+>$/);
+      expect(commentActor.posts[3].re).toMatch(/^#<HTML div \d+>$/);
     });
 
     it('contains is reflexive (a node contains itself)', async () => {
@@ -1868,7 +1868,7 @@ describe('HTML element runtime — service side', () => {
     it('text-node Node accessors: parent_element + previous_sibling', async () => {
       const page = await loadPage(html);
       const { el, elementAddr } = await makeAttached(page, 'div');
-      const sp = await page.connectActor('HTML @span');
+      const sp = await page.connectActor('HTML span');
       await sp.sendAsync({ id: 'a', op: [{}, '#new'] });
       const spanAddr = sp.posts[0].re;
       // Children: [<span>, ' tail'] — text node sits AFTER the span.
@@ -1890,14 +1890,14 @@ describe('HTML element runtime — service side', () => {
     // selector in `to`. route() unwraps the hash-angle and delivers with
     // `to: undefined`; the dispatcher recognizes that as the object-level
     // form and writes nodeValue. Distinct from element field-set, which
-    // carries `to: '@<field>'`.
+    // carries `to: '. <field>'`.
 
     it('text node accepts bare set; nodeValue updates and reply self', async () => {
       const page = await loadPage(html);
       // Mint a div with a text child via insertAdjacentHTML so the text
       // node enters the tree without a CAM addr — addrForNode mints one
       // on first traversal lookup.
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -1920,7 +1920,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
 
       // Verify the DOM took the write.
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
@@ -1934,7 +1934,7 @@ describe('HTML element runtime — service side', () => {
 
     it('comment node accepts bare set the same way', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -1959,7 +1959,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
 
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('after');
@@ -1967,7 +1967,7 @@ describe('HTML element runtime — service side', () => {
 
     it('null payload coerces to empty string (matches inner_html setter convention)', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -1988,7 +1988,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('');
     });
@@ -1998,7 +1998,7 @@ describe('HTML element runtime — service side', () => {
       // selector via ELEMENT_SETTERS; a bare set targeting the element
       // itself has no declared semantic and falls through with no reply.
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       const inbox = [];
@@ -2019,7 +2019,7 @@ describe('HTML element runtime — service side', () => {
     // the wire addresses of every element so identity assertions can refer
     // back to known wrappers.
     async function makeQueryFixture(page) {
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       // Use insertAdjacentHTML to plant the whole subtree at once — none of
       // these nodes have CAM addresses yet, exercising on-demand minting.
       await dom.sendAsync({ id: 'n', op: [{ children: ['x'] }, '#new'] });
@@ -2040,7 +2040,7 @@ describe('HTML element runtime — service side', () => {
       const { parent } = await makeQueryFixture(page);
       await parent.sendAsync({ id: 'q', op: [['p'], '@query_selector'] });
       // Mints HTML @p/N for the matched element on first lookup.
-      expect(parent.posts[parent.posts.length - 1].re).toMatch(/^#<HTML @p\/\d+>$/);
+      expect(parent.posts[parent.posts.length - 1].re).toMatch(/^#<HTML p \d+>$/);
     });
 
     it('query_selector returns null when nothing matches', async () => {
@@ -2056,8 +2056,8 @@ describe('HTML element runtime — service side', () => {
       await parent.sendAsync({ id: 'qa', op: [['p'], '@query_selector_all'] });
       const re = parent.posts[parent.posts.length - 1].re;
       expect(re).toEqual([
-        expect.stringMatching(/^#<HTML @p\/\d+>$/),
-        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+        expect.stringMatching(/^#<HTML p \d+>$/),
+        expect.stringMatching(/^#<HTML p \d+>$/),
       ]);
       expect(re[0]).not.toBe(re[1]); // distinct elements
     });
@@ -2111,8 +2111,8 @@ describe('HTML element runtime — service side', () => {
       const { parent } = await makeQueryFixture(page);
       await parent.sendAsync({ id: 't', op: [['p'], '@get_elements_by_tag_name'] });
       expect(parent.posts[parent.posts.length - 1].re).toEqual([
-        expect.stringMatching(/^#<HTML @p\/\d+>$/),
-        expect.stringMatching(/^#<HTML @p\/\d+>$/),
+        expect.stringMatching(/^#<HTML p \d+>$/),
+        expect.stringMatching(/^#<HTML p \d+>$/),
       ]);
     });
 
@@ -2122,8 +2122,8 @@ describe('HTML element runtime — service side', () => {
       await parent.sendAsync({ id: 'c', op: [['hit'], '@get_elements_by_class_name'] });
       const re = parent.posts[parent.posts.length - 1].re;
       expect(re).toHaveLength(2);
-      expect(re[0]).toMatch(/^#<HTML @(p|span)\/\d+>$/);
-      expect(re[1]).toMatch(/^#<HTML @(p|span)\/\d+>$/);
+      expect(re[0]).toMatch(/^#<HTML (p|span) \d+>$/);
+      expect(re[1]).toMatch(/^#<HTML (p|span) \d+>$/);
     });
 
     it('invalid CSS selector replies with ex (not re) — runtime-error convention', async () => {
@@ -2170,7 +2170,7 @@ describe('HTML element runtime — service side', () => {
     // appended to <body> before any reads. Inline CSS keeps the test
     // self-contained without plumbing a stylesheet.
     async function makeMeasured(page) {
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{
         style: 'width: 100px; height: 80px; overflow: auto; padding: 10px; border: 2px solid black; box-sizing: content-box;',
       }, '#new'] });
@@ -2273,20 +2273,20 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_scroll', m => inbox.push(m));
       await page.send({
         id: 's', op: [[100], '#set'],
-        to: `#<${inner} @scroll_top>`, from: '__t_scroll',
+        to: `#<${inner} scroll_top>`, from: '__t_scroll',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       const t = await page.evaluate(() => document.querySelector('div').scrollTop);
       expect(t).toBe(100);
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
     });
 
     it('scroll_to! moves scroll position; scroll_top reads it back', async () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'sto', op: [{ top: 80, left: 50 }, '@scroll_to!'] });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       await el.sendAsync({ id: 'st', op: '@scroll_top' });
       await el.sendAsync({ id: 'sl', op: '@scroll_left' });
       expect(el.posts[el.posts.length - 2].re).toBe(80);
@@ -2316,12 +2316,12 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'siv', op: '@scroll_into_view!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
     });
 
     it('focus! focuses a tabbable element; activeElement matches', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @input');
+      const dom = await page.connectActor('HTML input');
       await dom.sendAsync({ id: 'n', op: [{ type: 'text' }, '#new'] });
       const inputAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -2331,14 +2331,14 @@ describe('HTML element runtime — service side', () => {
       await body.sendAsync({ id: 'a', op: [inputAddr, '@append!'] });
       const input = await page.connectActor(inputAddr.slice(2, -1));
       await input.sendAsync({ id: 'f', op: '@focus!' });
-      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const isFocused = await page.evaluate(() => document.activeElement === document.querySelector('input'));
       expect(isFocused).toBe(true);
     });
 
     it('blur! drops focus', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @input');
+      const dom = await page.connectActor('HTML input');
       await dom.sendAsync({ id: 'n', op: [{ type: 'text' }, '#new'] });
       const inputAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -2371,7 +2371,7 @@ describe('HTML element runtime — service side', () => {
       const { el, elementAddr } = await makeMeasured(page);
       await el.sendAsync({ id: 'cl', op: [[true], '@clone_node'] });
       const cloneAddr = el.posts[el.posts.length - 1].re;
-      expect(cloneAddr).toMatch(/^#<HTML @div\/\d+>$/);
+      expect(cloneAddr).toMatch(/^#<HTML div \d+>$/);
       expect(cloneAddr).not.toBe(elementAddr); // distinct DOM nodes → distinct actors
     });
 
@@ -2379,7 +2379,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { el, elementAddr } = await makeMeasured(page);
       // Mint a sibling div for the cross-comparison.
-      const dom2 = await page.connectActor('HTML @div');
+      const dom2 = await page.connectActor('HTML div');
       await dom2.sendAsync({ id: 'n', op: [{}, '#new'] });
       const otherAddr = dom2.posts[0].re;
       await el.sendAsync({ id: 's1', op: [{ other: elementAddr }, '@is_same_node'] });
@@ -2405,7 +2405,7 @@ describe('HTML element runtime — service side', () => {
 
     it('normalize! merges adjacent text nodes; replies self', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -2424,7 +2424,7 @@ describe('HTML element runtime — service side', () => {
       const before = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(before).toBe(2);
       await el.sendAsync({ id: 'norm', op: '@normalize!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const after = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(after).toBe(1);
     });
@@ -2434,18 +2434,18 @@ describe('HTML element runtime — service side', () => {
       // reject scroll_top on void tags. The IDL property is harmless
       // there; we want the runtime to accept and reply self.
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @br');
+      const dom = await page.connectActor('HTML br');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const inner = dom.posts[0].re.slice(2, -1);
       const inbox = [];
       await page.register('__t_void_scroll', m => inbox.push(m));
       await page.send({
         id: 's', op: [[10], '#set'],
-        to: `#<${inner} @scroll_top>`, from: '__t_void_scroll',
+        to: `#<${inner} scroll_top>`, from: '__t_void_scroll',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
     });
   });
 
@@ -2454,7 +2454,7 @@ describe('HTML element runtime — service side', () => {
     // Returns both the parent element actor handle and a connected handle
     // to the ClassList sub-rep, ready for direct CAM messaging.
     async function makeWithClassList(page, payload = {}) {
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [payload, '#new'] });
       const elementAddr = dom.posts[0].re;
       const docActor = await page.connectActor('document');
@@ -2472,7 +2472,7 @@ describe('HTML element runtime — service side', () => {
     it('class_list() returns a ClassList sub-rep with the expected address shape', async () => {
       const page = await loadPage(html);
       const { clAddr } = await makeWithClassList(page);
-      expect(clAddr).toMatch(/^#<HTML @classlist\/\d+>$/);
+      expect(clAddr).toMatch(/^#<HTML classlist \d+>$/);
     });
 
     it('class_list() identity — repeated calls return the same address', async () => {
@@ -2487,7 +2487,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { cl } = await makeWithClassList(page);
       await cl.sendAsync({ id: 'a', op: [['foo'], '@add!'] });
-      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const cls = await page.evaluate(() => document.querySelector('div').className);
       expect(cls).toBe('foo');
       await cl.sendAsync({ id: 'c', op: [['foo'], '@contains'] });
@@ -2554,11 +2554,11 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_cl_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [['foo bar'], '#set'],
-        to: `#<${inner} @value>`, from: '__t_cl_set',
+        to: `#<${inner} value>`, from: '__t_cl_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       await cl.sendAsync({ id: 'v', op: '@value' });
       expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 'foo bar' }));
     });
@@ -2575,7 +2575,7 @@ describe('HTML element runtime — service side', () => {
     it('dataset() returns a Dataset sub-rep; identity preserved across calls', async () => {
       const page = await loadPage(html);
       const { el, dsAddr } = await makeWithDataset(page);
-      expect(dsAddr).toMatch(/^#<HTML @dataset\/\d+>$/);
+      expect(dsAddr).toMatch(/^#<HTML dataset \d+>$/);
       await el.sendAsync({ id: 'ds2', op: '@dataset' });
       expect(el.posts[el.posts.length - 1].re).toBe(dsAddr);
     });
@@ -2584,7 +2584,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { ds } = await makeWithDataset(page);
       await ds.sendAsync({ id: 'p', op: [['fooBar', 'one'], '@put!'] });
-      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       // camelCase ↔ kebab-case translation is the DOM proxy's job.
       const attr = await page.evaluate(() => document.querySelector('div').getAttribute('data-foo-bar'));
       expect(attr).toBe('one');
@@ -2629,7 +2629,7 @@ describe('HTML element runtime — service side', () => {
     // ── Aria sub-rep dedup retrofit ─────────────────────────────────────
     it('aria() identity — repeated calls return the same sub-rep address', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{ aria: { label: 'X' } }, '#new'] });
       const elementAddr = dom.posts[0].re;
       const el = await page.connectActor(elementAddr.slice(2, -1));
@@ -2643,17 +2643,17 @@ describe('HTML element runtime — service side', () => {
 
   it('each tag-specific element is independently addressable', async () => {
     const page = await loadPage(html);
-    const domDiv = await page.connectActor('HTML @div');
-    const domP = await page.connectActor('HTML @p');
+    const domDiv = await page.connectActor('HTML div');
+    const domP = await page.connectActor('HTML p');
 
     await domDiv.sendAsync({ id: '1', op: [{ children: ['div-one'] }, '#new'] });
     await domP.sendAsync({ id: '2', op: [{ children: ['p-one'] }, '#new'] });
     await domDiv.sendAsync({ id: '3', op: [{ children: ['div-two'] }, '#new'] });
 
     // HTML @div/1 and HTML @p/1 are distinct elements despite sharing the "/1" suffix.
-    const div1 = await page.connectActor('HTML @div/1');
-    const p1 = await page.connectActor('HTML @p/1');
-    const div2 = await page.connectActor('HTML @div/2');
+    const div1 = await page.connectActor('HTML div 1');
+    const p1 = await page.connectActor('HTML p 1');
+    const div2 = await page.connectActor('HTML div 2');
 
     await expectBehavior(div1,
       { input: { id: 'q1', op: '@inner_html' } },
@@ -2690,13 +2690,13 @@ describe('HTML element runtime — actor side', () => {
 @createDiv = -> <div>Hello</div>
 `;
 
-  it('actor sends CAM new to HTML @div and returns element address', async () => {
+  it('actor sends CAM new to HTML div and returns element address', async () => {
     const page = await loadPage(html, { sources: { '/tester.bv': testerSource } });
     const actor = await page.connectActor('tester.bv');
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ id: '1', re: ['#<HTML @div/1>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML div 1>'] }) },
     );
   });
 
@@ -2706,10 +2706,10 @@ describe('HTML element runtime — actor side', () => {
 
     await expectBehavior(actor,
       { input: { id: '1', op: '@createDiv' } },
-      { output: expect.objectContaining({ re: ['#<HTML @div/1>'] }) },
+      { output: expect.objectContaining({ re: ['#<HTML div 1>'] }) },
     );
 
-    const el = await page.connectActor('HTML @div/1');
+    const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
       { input: { id: '2', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'Hello' }) },
@@ -2720,7 +2720,7 @@ describe('HTML element runtime — actor side', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 4. DOM render — element actually lands on the page with the right attrs
 //
-// Sends a raw CAM `new` to `HTML @div` with the attribute payload, then sends
+// Sends a raw CAM `new` to `HTML div` with the attribute payload, then sends
 // `@append!` to `document body` so the constructed element joins the live
 // document tree. Asserts the resulting DOM via Playwright's page.evaluate
 // (Jest sees a plain object back). Each test starts with a fresh page so the
@@ -2736,9 +2736,9 @@ describe('HTML.div DOM render — every Element attribute lands on the element',
   // op), append the result to <body>, then run `queryFn` inside the page and
   // return its value. queryFn receives no args and runs in browser context.
   async function renderAndQuery(page, tag, payload, queryFn) {
-    const dom = await page.connectActor('HTML @' + tag);
+    const dom = await page.connectActor('HTML ' + tag);
     await dom.sendAsync({ id: 'n', op: [payload, '#new'] });
-    const elementAddr = dom.posts[0].re; // '#<HTML @<tag>/1>'
+    const elementAddr = dom.posts[0].re; // '#<HTML <tag> 1>'
 
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: '@body' });
@@ -2887,7 +2887,7 @@ describe('HTML.div DOM render — :hidden Boolean | Text', () => {
     </head><body></body></html>`;
 
   async function renderHiddenDiv(page, value) {
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
     await dom.sendAsync({ id: 'n', op: [{ hidden: value }, '#new'] });
     const elementAddr = dom.posts[0].re;
     const docActor = await page.connectActor('document');
@@ -2923,7 +2923,7 @@ describe('HTML.div DOM render — :class Text | List of Texts', () => {
     </head><body></body></html>`;
 
   async function renderClassDiv(page, value) {
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
     await dom.sendAsync({ id: 'n', op: [{ class: value }, '#new'] });
     const elementAddr = dom.posts[0].re;
     const docActor = await page.connectActor('document');
@@ -2958,7 +2958,7 @@ describe('HTML.div DOM render — :contenteditable Boolean | Text', () => {
     </head><body></body></html>`;
 
   async function renderCeDiv(page, value) {
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
     await dom.sendAsync({ id: 'n', op: [{ contenteditable: value }, '#new'] });
     const elementAddr = dom.posts[0].re;
     const docActor = await page.connectActor('document');
@@ -2986,7 +2986,7 @@ describe('HTML.div DOM render — :popover Boolean | Text', () => {
     </head><body></body></html>`;
 
   async function renderPopoverDiv(page, value) {
-    const dom = await page.connectActor('HTML @div');
+    const dom = await page.connectActor('HTML div');
     await dom.sendAsync({ id: 'n', op: [{ popover: value }, '#new'] });
     const elementAddr = dom.posts[0].re;
     const docActor = await page.connectActor('document');
@@ -3044,7 +3044,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
   // setAttribute (not through Brevity construction) so the accessor must
   // read live DOM state to return the right value.
   async function setupElement(page, tag, attrName, attrValue) {
-    const dom = await page.connectActor('HTML @' + tag);
+    const dom = await page.connectActor('HTML ' + tag);
     await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
     const elementAddr = dom.posts[0].re.slice(2, -1);
 
@@ -3234,7 +3234,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
   describe('content accessors split across the void / text / parent classes', () => {
     // Small helper specialised to nested children (ParentElement only).
     async function setupParentDivWithText(page, text) {
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'n', op: [{ children: [text] }, '#new'] });
       const elementAddr = dom.posts[0].re.slice(2, -1);
       const docActor = await page.connectActor('document');
@@ -3261,7 +3261,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
 
     it('textarea.text_content() reads textContent for TextElement', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @textarea');
+      const dom = await page.connectActor('HTML textarea');
       await dom.sendAsync({ id: 'n', op: [{ children: ['default text'] }, '#new'] });
       const elementAddr = dom.posts[0].re.slice(2, -1);
       const docActor = await page.connectActor('document');
@@ -3280,9 +3280,9 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     // proves the runtime classification gate is in place.
     it('br.inner_html() drops on the floor — void tag has no content accessor', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @br');
+      const dom = await page.connectActor('HTML br');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
-      const el = await page.connectActor('HTML @br/1');
+      const el = await page.connectActor('HTML br 1');
       await el.sendAsync({ id: 'q', op: '@inner_html' });
       expect(el.posts).toEqual([]);
     });
@@ -3294,7 +3294,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     // is initially detached. Many mutator tests start from this shape:
     // a target attached to body and a candidate child to thread in.
     async function setupParentAndChild(page) {
-      const dom = await page.connectActor('HTML @div');
+      const dom = await page.connectActor('HTML div');
       await dom.sendAsync({ id: 'p', op: [{}, '#new'] });
       const parentAddr = dom.posts[0].re.slice(2, -1);
       await dom.sendAsync({ id: 'c', op: [{}, '#new'] });
@@ -3314,7 +3314,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent, childAddrWrapped } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'm', op: [{ child: childAddrWrapped }, '@append_child!'] });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const childCount = await page.evaluate(() => document.querySelector('div').childElementCount);
       expect(childCount).toBe(1);
     });
@@ -3322,7 +3322,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     it('append! takes a List positional and lands every child in order', async () => {
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
-      const dom = await page.connectActor('HTML @span');
+      const dom = await page.connectActor('HTML span');
       await dom.sendAsync({ id: 's1', op: [{}, '#new'] });
       await dom.sendAsync({ id: 's2', op: [{}, '#new'] });
       const spanA = dom.posts[0].re;
@@ -3340,7 +3340,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     it('replace_child! swaps an existing child for a new one (named args)', async () => {
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
-      const dom = await page.connectActor('HTML @span');
+      const dom = await page.connectActor('HTML span');
       await dom.sendAsync({ id: 'a', op: [{}, '#new'] });
       await dom.sendAsync({ id: 'b', op: [{}, '#new'] });
       const oldEl = dom.posts[0].re;
@@ -3356,7 +3356,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     it('replace_child! also accepts positional args (DOM order: new, old)', async () => {
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
-      const dom = await page.connectActor('HTML @span');
+      const dom = await page.connectActor('HTML span');
       await dom.sendAsync({ id: 'a', op: [{}, '#new'] });
       await dom.sendAsync({ id: 'b', op: [{}, '#new'] });
       const oldEl = dom.posts[0].re;
@@ -3371,7 +3371,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'r', op: '@remove!' });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML @|document).*>$/) }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML |document).*>$/) }));
       const stillThere = await page.evaluate(() => document.body.querySelector('div'));
       expect(stillThere).toBeNull();
     });
@@ -3379,7 +3379,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     it('replace_with! swaps self for a sibling list', async () => {
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
-      const dom = await page.connectActor('HTML @span');
+      const dom = await page.connectActor('HTML span');
       await dom.sendAsync({ id: 's', op: [{}, '#new'] });
       const spanAddr = dom.posts[0].re;
       await parent.sendAsync({ id: 'rw', op: [[[spanAddr, ' tail']], '@replace_with!'] });
@@ -3413,7 +3413,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
 
     it('insert_adjacent_html! at "beforebegin" works on void elements (sibling position)', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @br');
+      const dom = await page.connectActor('HTML br');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
       const brAddr = dom.posts[0].re.slice(2, -1);
 
@@ -3436,9 +3436,9 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
 
     it('insert_adjacent_html! at "afterbegin" silently rejected on void elements', async () => {
       const page = await loadPage(html);
-      const dom = await page.connectActor('HTML @br');
+      const dom = await page.connectActor('HTML br');
       await dom.sendAsync({ id: 'n', op: [{}, '#new'] });
-      const br = await page.connectActor('HTML @br/1');
+      const br = await page.connectActor('HTML br 1');
       await br.sendAsync({
         id: 'h', op: [{ position: 'afterbegin', html: '<span/>' }, '@insert_adjacent_html!'],
       });

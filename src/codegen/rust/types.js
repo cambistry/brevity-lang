@@ -3,6 +3,8 @@ import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
+import { selfAddress } from '../wire_labels.js';
+import { _opre_quote as quoteToken } from '../opre_tokens.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
     // A type value's wire tag is its authority address carrying ::Name; the
@@ -213,22 +215,109 @@ fn bv_values_fit(s: &BvObject, pos_types: &[&str], named_types: &[(&str, &str)])
         && named_types.iter().all(|(k, t)| bv_value_fits(s.named.get(*k), t))
 }`;
 
-// Wire-format helper: extract the trailing @name/#name selector from a
-// to-field string. Handles both bare selectors ("@name") and the
-// hash-angle delimited alias+selector form ("#<alias selector>").
-// Returns the selector with its leading sigil, or None.
-const RUST_WIRE_HELPERS = `fn extract_to_selector(to: &str) -> Option<String> {
-    let inner = if to.starts_with("#<") && to.ends_with('>') {
-        &to[2..to.len() - 1]
-    } else {
-        to
-    };
-    let last = inner.rsplit(' ').next().unwrap_or("");
-    if last.starts_with('@') || last.starts_with('#') || last.starts_with('.') {
-        Some(last.to_string())
-    } else {
-        None
+// Opre addresses as tokens (src/codegen/opre_tokens.js; see
+// notes/at-sigil-internal-and-quoted-names-2026-11-12.md). Space-delimited, a
+// token quoted with '…' only when it must be ('' is one '); the whole token `.`
+// at the head is self, making the address relative to its sender. In a token
+// list, self is None.
+//
+// extract_to_selector: the label a received `to` names on us, from its last
+// token: a public member travels bare (`get` is `@get`); a token with a sigil
+// (`#x`, protected `.x`, a closure's `@N`) is the label as it is.
+const RUST_WIRE_HELPERS = `#[allow(dead_code)]
+fn bv_opre_split(address: &str) -> Vec<Option<String>> {
+    let mut out = Vec::new();
+    let chars: Vec<char> = address.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\\'' {
+            let mut tok = String::new();
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == '\\'' {
+                    if i + 1 < chars.len() && chars[i + 1] == '\\'' { tok.push('\\''); i += 2; continue; }
+                    i += 1;
+                    break;
+                }
+                tok.push(chars[i]);
+                i += 1;
+            }
+            out.push(Some(tok));
+        } else {
+            let start = i;
+            while i < chars.len() && chars[i] != ' ' { i += 1; }
+            let tok: String = chars[start..i].iter().collect();
+            if tok == "." && out.is_empty() { out.push(None); } else if !tok.is_empty() { out.push(Some(tok)); }
+        }
+        i += 1;
     }
+    out
+}
+
+#[allow(dead_code)]
+fn bv_opre_quote(token: &str) -> String {
+    if token.is_empty() || token == "." || token.contains(' ') || token.starts_with('\\'') {
+        format!("'{}'", token.replace('\\'', "''"))
+    } else {
+        token.to_string()
+    }
+}
+
+#[allow(dead_code)]
+fn bv_opre_is_relative(address: &str) -> bool { address == "." || address.starts_with(". ") }
+
+// A relative address as its sender's parent sees it, from child "name":
+// ". x" → ". name x". Any other address is unchanged.
+#[allow(dead_code)]
+fn bv_opre_under(address: &str, name: &str) -> String {
+    if bv_opre_is_relative(address) { format!(". {}{}", name, &address[1..]) } else { address.to_string() }
+}
+
+// Every relative #<…> in a value, as the sender's parent sees it.
+#[allow(dead_code)]
+fn bv_under_payload(v: &Value, name: &str) -> Value {
+    match v {
+        Value::String(s) if s.contains("#<") => {
+            let mut out = String::new();
+            let mut rest = s.as_str();
+            while let Some(i) = rest.find("#<") {
+                out.push_str(&rest[..i]);
+                match rest[i + 2..].find('>') {
+                    Some(j) => { out.push_str("#<"); out.push_str(&bv_opre_under(&rest[i + 2..i + 2 + j], name)); out.push('>'); rest = &rest[i + 2 + j + 1..]; }
+                    None => { out.push_str(&rest[i..]); rest = ""; }
+                }
+            }
+            out.push_str(rest);
+            Value::String(out)
+        }
+        Value::Array(a) => Value::Array(a.iter().map(|x| bv_under_payload(x, name)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_under_payload(x, name))).collect()),
+        _ => v.clone(),
+    }
+}
+
+// The tokens of a received "to" that name something inside us: what reaches
+// us is relative to us (". Box 1" or "Box 1", bracketed or not).
+#[allow(dead_code)]
+fn bv_local_tokens(to: &str) -> Vec<String> {
+    let inner = if to.starts_with("#<") && to.ends_with('>') { &to[2..to.len() - 1] } else { to };
+    bv_opre_split(inner).into_iter().flatten().collect()
+}
+
+#[allow(dead_code)]
+fn bv_label_of(token: &str) -> String {
+    if token.starts_with('#') || token.starts_with('.') || token.starts_with('@') { token.to_string() } else { format!("@{}", token) }
+}
+
+// The address a value holds, for a to: without the brackets that mark it as
+// an address in a payload (a self-return's reply).
+#[allow(dead_code)]
+fn bv_addr_to(v: &str) -> String {
+    v.strip_prefix("#<").and_then(|t| t.strip_suffix('>')).unwrap_or(v).to_string()
+}
+
+fn extract_to_selector(to: &str) -> Option<String> {
+    bv_local_tokens(to).last().map(|t| bv_label_of(t))
 }`;
 
 // The tag for a value whose slot is declared as a union or `Anything`: the member
@@ -248,7 +337,7 @@ fn bv_ty_of(v: &Value, m: &[(&str, &str)]) -> Value {
             let el: Vec<(&str, &str)> = m.iter().filter(|e| e.0 != "List").cloned().collect();
             Value::Array(a.iter().map(|x| bv_ty_of(x, &el)).collect())
         }
-        Value::Object(o) if o.contains_key("__type") => json!(format!("::{}", k.rsplit("::").next().unwrap_or(k.as_str()))),
+        Value::Object(o) if o.contains_key("__type") => json!(format!(". ::{}", k.rsplit("::").next().unwrap_or(k.as_str()))),
         _ => json!(k),
     }
 }`;
@@ -260,17 +349,17 @@ export const G = { ctx: null };
 export function setCtx(newCtx) { G.ctx = newCtx; }
 
 // Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
-// type, `::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
+// type, `. ::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
-  // A singleton's class is itself: it's tagged with its label (`@s`).
+  // A singleton's class is itself: it's tagged with its address (`. s`).
   const singleton = typeof t === 'string' && G.ctx.actorNodes?.get(t)?.singletonOf;
-  if (singleton) return singleton;
+  if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
   const name = G.ctx.typeDecls.get(t).name || t;
   const authority = G.ctx.typeAuthority?.get(t) || '';
-  return authority ? `${authority} ::${name}` : `::${name}`;
+  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
 }
 
 // The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or

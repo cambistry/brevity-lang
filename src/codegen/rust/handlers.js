@@ -1,5 +1,6 @@
 // handlers.js — Handler and child actor generation for Rust codegen
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, selfAddress } from '../wire_labels.js';
+import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
 import { orderParamsForDefaults } from '../../param_defaults.js';
@@ -313,14 +314,15 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     // (value-less) reply, distinct from silent (which suppresses the reply).
     lines.push('                re = Some(Value::Array(vec![]));');
   }
-  // new@<class>: the reply is the new actor's address, in local form.
+  // new@<class>: the reply is the new actor's address, relative to us.
   if (name && name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
-    lines.push(`                let _addr = format!("@${selector}/{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
+    lines.push(`                let _addr = format!("${quoteToken(selector)} {}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);
+    lines.push(`                self.lift_of.insert(${rustSsaResolve('_inst')}.as_str().unwrap_or("").to_string(), _addr.clone());`);
     if (G.ctx.publicSingletons) lines.push(`                self.bv_publish_under(&_addr, ${rustSsaResolve('_inst')}.as_str().unwrap_or(""));`);
-    lines.push(`                re = Some(Value::String(format!("#<{}>", _addr)));`);
-    lines.push(`                ty_re = Some(json!(${JSON.stringify(`@${selector}`)}));`);
+    lines.push(`                re = Some(Value::String(format!("#<. {}>", _addr)));`);
+    lines.push(`                ty_re = Some(json!(${JSON.stringify(selfAddress('@' + selector))}));`);
   }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
@@ -1331,8 +1333,8 @@ function genRustChildMethods(allActors) {
         };
         // A self-return replies with the bare local self address.
         // We're the parent, so its address, in our frame, is this handle.
-        if result.as_str() == Some("#<>") { return bv_inst_ref("${lc}", instance_id); }
-        bv_swap_self(&result, &json!("#<>"), &bv_inst_ref("${lc}", instance_id))
+        if result.as_str() == Some("#<.>") { return bv_inst_ref("${lc}", instance_id); }
+        bv_swap_self(&result, &json!("#<.>"), &bv_inst_ref("${lc}", instance_id))
     }
 
     // Allocate a fresh instance, run init, register any subscribe-on-param

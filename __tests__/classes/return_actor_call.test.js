@@ -257,10 +257,10 @@ describe('a call on an instance inside a branch', () => {
   });
   it('in a class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@Outer', from: 'c' } },
-      { output: { id: '1', re: '#<@Outer/1>', 'ty': '@Outer', to: 'c' } },
-      { input: { id: '2', op: [[true], '@viaBranch'], 'ty': [['Boolean']], to: '@Outer/1', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [1], to: 'c', from: '@Outer/1' }) },
+      { input: { id: '1', op: [{}, '#new'], to: '. Outer', from: 'c' } },
+      { output: { id: '1', re: '#<. Outer 1>', 'ty': '. Outer', to: 'c' } },
+      { input: { id: '2', op: [[true], '@viaBranch'], 'ty': [['Boolean']], to: '. Outer 1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [1], to: 'c', from: '. Outer 1' }) },
     );
   });
   it('a failure in the call', async () => {

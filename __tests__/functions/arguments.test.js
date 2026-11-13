@@ -359,11 +359,11 @@ describe('a call that leaves out every arg', () => {
     @Box = *{${bodies}}
   `;
   const newBox = [
-    { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
+    { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+    { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
   ];
-  const atBox = { to: '@Box/1', from: 'c' };
-  const fromBox = { to: 'c', from: '@Box/1' };
+  const atBox = { to: '. Box 1', from: 'c' };
+  const fromBox = { to: 'c', from: '. Box 1' };
 
   describe.each([
     ['@one', [1], ['Integer']],

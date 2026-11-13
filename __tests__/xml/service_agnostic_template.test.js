@@ -12,12 +12,12 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 //
 // These tests prove that by using fully fictional host services (`Scene`,
 // `Canvas`) and asserting the behaviour is parametric in the service name: the
-// SAME template body routes to `Scene @node` or `Canvas @node` purely by its
+// SAME template body routes to `Scene node` or `Canvas node` purely by its
 // import. If the language still privileged `HTML`, one of these would throw (the
-// validate gate) or mis-route (`HTML @node`).
+// validate gate) or mis-route (`HTML node`).
 //
 // A reactive hole `{{expr}}` in the template becomes a local-form lambda
-// reference `#<@N>` carried in the payload — a lambda passed BY REFERENCE to the
+// reference `#<. @N>` carried in the payload — a lambda passed BY REFERENCE to the
 // host service. The service invokes it back through CAM (the same mechanism as
 // lambda_ref_invocation.test.js, here via the template carrier), and the actor
 // replies with the live value.
@@ -33,7 +33,7 @@ const HOST = `{
 // ── The de-coupling proof: addressing tracks the imported service name ────────
 
 describe('service-agnostic templating — `#new` routes to the imported service', () => {
-  it('routes to `Scene @node` when the tag is imported from Scene', async () => {
+  it('routes to `Scene node` when the tag is imported from Scene', async () => {
     const src = `
       *
         "Scene": (:node)
@@ -43,11 +43,11 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: '@build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Scene @node' } },
+      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Scene node' } },
     );
   });
 
-  it('routes the SAME template body to `Canvas @node` when imported from Canvas', async () => {
+  it('routes the SAME template body to `Canvas node` when imported from Canvas', async () => {
     const src = `
       *
         "Canvas": (:node)
@@ -57,7 +57,7 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Canvas', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: '@build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Canvas @node' } },
+      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Canvas node' } },
     );
   });
 
@@ -73,11 +73,11 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       leaf (Anything) -> (Anything)
     }` }] } })).spawn();
     await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
-    // The inner <leaf> is pre-dispatched as its own #new to `Scene @leaf`; the
+    // The inner <leaf> is pre-dispatched as its own #new to `Scene leaf`; the
     // outer <node> #new awaits that child's address before it can fire, so with
     // no service answering, only the child send is observable here. That it
     // routes to the imported host (not a privileged `HTML`) is the point.
-    const leafSend = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new' && p.to === 'Scene @leaf');
+    const leafSend = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new' && p.to === 'Scene leaf');
     expect(leafSend).toBeTruthy();
     expect(leafSend.op[0]).toEqual({ children: ['deep'] });
   });
@@ -99,20 +99,21 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
-    expect(post.to).toBe('Scene @node');
-    expect(post.op[0].label).toMatch(/^#<@\d+>$/);
+    expect(post.to).toBe('Scene node');
+    expect(post.op[0].label).toMatch(/^#<\. @\d+>$/);
   });
 
   it('runs the reactive lambda when the host invokes the reference through CAM', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
-    const selector = post.op[0].label.slice(2, -1); // '#<@0>' → '@0'
+    const name = post.op[0].label.slice('#<. '.length, -1); // '#<. @0>' → '@0'
 
     const before = actor.posts.length;
-    // Host promoted our #<@N> to a full address and now invokes the callback
-    // through CAM (no args — a reactive read). The actor replies with the value.
-    await actor.sendAsync({ id: '9', op: [[], selector], to: `#<here ${selector}>`, from: 'Scene' });
+    // Host promoted our #<. @N> to a full address and now invokes the callback
+    // through CAM (no args — a reactive read), delivered to us relative to us.
+    // The actor replies with the value.
+    await actor.sendAsync({ id: '9', op: [[], name], to: `. ${name}`, from: 'Scene' });
     const fired = actor.posts.slice(before);
     expect(fired).toContainEqual(
       expect.objectContaining({ re: ['ready'], to: 'Scene' }),

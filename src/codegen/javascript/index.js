@@ -1,5 +1,6 @@
 export { codegen, parseInterface } from './classes.js';
 import { codegen } from './classes.js';
+import { _opre_split as split, _opre_join as join, _opre_quote as quote, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -128,52 +129,46 @@ export default {
       for (const [name, { source, exportName, compileOptions }] of Object.entries(actors)) {
         instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
       }
-      // Parse the `to` wire field into { alias, selector }. Forms:
-      //   "#<alias selector>" → { alias, selector }        (hash-angle delimited)
-      //   "#<alias>"          → { alias, selector: null }
-      //   "@sel" / "#sel"     → { alias: null, selector }
-      //   "alias"             → { alias, selector: null }   (bare, non-delimited)
+      // Parse the `to` wire field into { alias, selector }: the head token
+      // names a peer, the rest is relative to it. A relative address (`. x`)
+      // names no peer. Forms: "#<alias rest>", "alias rest", "alias".
       const unescAddr = (s) => s.replace(/\\(\\|>)/g, (_, c) => c);
       const parseTo = (toStr) => {
         if (typeof toStr !== 'string') return { alias: null, selector: null };
-        if (toStr.startsWith('#<') && toStr.endsWith('>')) {
-          const inner = toStr.slice(2, -1);
-          const sp = inner.indexOf(' ');
-          if (sp === -1) return { alias: unescAddr(inner), selector: null };
-          return { alias: unescAddr(inner.slice(0, sp)), selector: unescAddr(inner.slice(sp + 1)) };
-        }
-        if (toStr.startsWith('@') || toStr.startsWith('#')) return { alias: null, selector: toStr };
-        const sp = toStr.indexOf(' ');
-        if (sp !== -1) return { alias: toStr.slice(0, sp), selector: toStr.slice(sp + 1) };
-        return { alias: toStr, selector: null };
+        const bracketed = toStr.startsWith('#<') && toStr.endsWith('>');
+        const tokens = split(bracketed ? unescAddr(toStr.slice(2, -1)) : toStr);
+        if (tokens.length === 0 || tokens[0] === null) return { alias: null, selector: toStr };
+        return { alias: tokens[0], selector: tokens.length > 1 ? join([null, ...tokens.slice(1)]) : null };
       };
       for (const [name, inst] of Object.entries(instances)) {
+        // Each peer sits at the global boundary: what it sends relative to
+        // itself (`. x`) is `name x` on the way out. Anything else is global
+        // and passes through.
+        const self = quote(name);
+        const globalize = (v) => {
+          if (typeof v === 'string') return mapBracketed(v, (a) => resolve(a, self));
+          if (Array.isArray(v)) return v.map(globalize);
+          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalize(x)]));
+          return v;
+        };
+        // `ty` has no brackets: a relative tag (`.`, `. Box`, `. ::Point`) is
+        // resolved whole.
+        const globalizeTy = (v) => {
+          if (typeof v === 'string') return resolve(v, self);
+          if (Array.isArray(v)) return v.map(globalizeTy);
+          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalizeTy(x)]));
+          return v;
+        };
         inst.binding = {
           post(msg) {
             const { alias, selector } = parseTo(msg.to);
             const target = alias;
             if (target && instances[target]) {
-              // A parent translates what its child sends: a local address gains
-              // the sender's name, and so does a sub-actor's `from`. Local starts
-              // with a delimiter; global starts with a word character.
-              const promote = (v) => {
-                if (typeof v === 'string') return v.replace(/#<([^\w>][^>]*)?>/g, (_, c) => (c ? `#<${name} ${c}>` : `#<${name}>`));
-                if (Array.isArray(v)) return v.map(promote);
-                if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promote(x)]));
-                return v;
-              };
-              // `ty` has no brackets: a local tag gains the sender's name.
-              const promoteTy = (v) => {
-                if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : `${name} ${v}`;
-                if (Array.isArray(v)) return v.map(promoteTy);
-                if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, promoteTy(x)]));
-                return v;
-              };
-              const from = msg.from ? `${name} ${msg.from}` : name;
+              const from = msg.from ? resolve(msg.from, self) : self;
               const { ty, ...rest } = msg;
-              // Deliver with `to` rewritten to bare selector (alias resolves
-              // to the receiver = self, so the addr portion collapses).
-              const forwarded = { ...promote(rest), ...('ty' in msg ? { ty: promoteTy(ty) } : {}), to: selector || undefined, from };
+              // Deliver with `to` rewritten relative to the receiver (the alias
+              // resolves to the receiver = self, so the head collapses).
+              const forwarded = { ...globalize(rest), ...('ty' in msg ? { ty: globalizeTy(ty) } : {}), to: selector || undefined, from };
               instances[target].instance.receive(forwarded);
             } else {
               external.push(normalizeBigInts(msg));

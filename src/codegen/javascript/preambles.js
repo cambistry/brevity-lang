@@ -1,5 +1,6 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel } from './runtime/wire.js';
+import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens, _bv_label_of } from './runtime/wire.js';
+import { OPRE_TOKENS_PREAMBLE } from '../opre_tokens.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
 // JS module is unit-testable; the preamble emission below is just the same
@@ -16,6 +17,9 @@ export const WIRE_PREAMBLE = [
   _bv_unwire_packed.toString().replace(', _bv_types)', ')'),
   _bv_unwire_reply.toString().replace(', _bv_types)', ')'),
   _bv_sel.toString(),
+  _bv_local_tokens.toString(),
+  _bv_label_of.toString(),
+  OPRE_TOKENS_PREAMBLE,
 ].join('\n');
 
 export const LIST_PREAMBLE = `const _List = {
@@ -542,7 +546,7 @@ const _bvTyOf = (v, m) => {
     for (let l = v; l != null; l = l.tail) a.push(_bvTyOf(l.head, el));
     return a;
   }
-  if (typeof v?.__type === 'string') return '::' + v.__type.split('::').pop();
+  if (typeof v?.__type === 'string') return '. ::' + v.__type.split('::').pop();
   return k;
 };
 const _bvAsFields = (v, d) => {
@@ -657,14 +661,14 @@ export const OBJECT_PREAMBLE = `const BvObject = {
   one(s, name) {
     // A class constructed in place: the actor itself.
     if (typeof s?.receive === 'function') return s;
-    if (s.selfReturn) return '#<>';
+    if (s.selfReturn) return '#<.>';
     if (s.positional.length !== 1)
       throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);
     return s.positional[0];
   },
   splat(s) {
     // A self-return's reply is the bare local self address.
-    if (s.selfReturn) return '#<>';
+    if (s.selfReturn) return '#<.>';
     const { positional, named } = s;
     const hasPos = positional.length > 0;
     const hasNamed = Object.keys(named).length > 0;

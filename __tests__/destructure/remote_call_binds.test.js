@@ -148,8 +148,8 @@ describe('reference-field callback — typed bind', () => {
     @go = (c: Call) { out Integer = c.fn(c.arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,
-    { input: { id: '50', op: [{ c: [200, '#<caller @cb>'] }, '@go'], 'ty': [{ c: '::Call' }], from: 'caller' } },
-    { output: expect.objectContaining({ id: '1', op: [[200], '@cb'], to: '#<caller @cb>' }) },
+    { input: { id: '50', op: [{ c: [200, '#<caller cb>'] }, '@go'], 'ty': [{ c: '. ::Call' }], from: 'caller' } },
+    { output: expect.objectContaining({ id: '1', op: [[200], '@cb'], to: '#<caller cb>' }) },
     { input: { id: '1', ...reply } },
     { output: expect.objectContaining({ id: '50', ...expected, to: 'caller' }) },
   );

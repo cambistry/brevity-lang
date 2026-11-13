@@ -5,7 +5,7 @@ import { wireLabel } from '../wire_labels.js';
 // cells, make a call to one of its dependencies, and take note of a class waiting on
 // a reply from the wire. `loop` is the wait to go back to.
 const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), ${loop};
-        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(CMsg_, CSilent_)}, ${loop};
+        {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(bv_lift_(CFrom_, CMsg_), CSilent_)}, ${loop};
         {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
 
 // A wait on something other than the wire. A line that comes meanwhile goes to the
@@ -70,21 +70,85 @@ bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
 bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 
 %% ── Reference-field invocation: op selector for a held address ──────────────
-%% An address <<"#<alias selector>">> resolves to its trailing selector; a bare
-%% address passes through. Mirrors the JS/Rust bv_sel helper.
+%% An address <<"#<alias member>">> resolves to the label of its last token
+%% (#<x p> → @p, #<. @0> → @0); a bare address passes through. Mirrors the
+%% JS/Rust bv_sel helper.
 bv_sel_(Addr) when is_binary(Addr) ->
     L = byte_size(Addr),
     case Addr of
         <<"#<", _/binary>> when L >= 3 ->
             case binary:at(Addr, L - 1) of
                 $> ->
-                    Inner = binary:part(Addr, 2, L - 3),
-                    lists:last(binary:split(Inner, <<" ">>, [global]));
+                    case catch lists:last(bv_opre_split_(binary:part(Addr, 2, L - 3))) of
+                        B_ when is_binary(B_) -> bv_label_of_(B_);
+                        _ -> Addr
+                    end;
                 _ -> Addr
             end;
         _ -> Addr
     end;
 bv_sel_(Addr) -> Addr.
+%% An address value used as a to: the address without the #<…> that marks it.
+bv_to_addr_(<<"#<", _/binary>> = A) when byte_size(A) >= 3 ->
+    case binary:at(A, byte_size(A) - 1) of $> -> binary:part(A, 2, byte_size(A) - 3); _ -> A end;
+bv_to_addr_(A) -> A.
+%% The label an address token names on us: a public member travels bare (get
+%% is @get); a token with a sigil is the label (#x, .x, a closure's @N).
+bv_label_of_(<<C_, _/binary>> = T) when C_ =:= $#; C_ =:= $.; C_ =:= $@ -> T;
+bv_label_of_(T) -> <<"@", T/binary>>.
+
+%% ── Opre address tokens (mirrors src/codegen/opre_tokens.js) ───────────────
+%% Tokens separated by single spaces; '…' quotes a token with a space or a
+%% leading ', '' is one ' inside quotes. The head token . is self (the atom
+%% self). See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+bv_opre_split_(<<>>) -> [];
+bv_opre_split_(A) -> bv_opre_split_(A, true, []).
+bv_opre_split_(<<$', R/binary>>, _Head, Acc) ->
+    {T, R2} = bv_opre_unquote_(R, <<>>),
+    bv_opre_split_next_(R2, [T | Acc]);
+bv_opre_split_(A, Head, Acc) ->
+    {T, R2} = case binary:match(A, <<" ">>) of
+        nomatch -> {A, <<>>};
+        {P, _} -> {binary:part(A, 0, P), binary:part(A, P, byte_size(A) - P)}
+    end,
+    T2 = case {T, Head} of {<<".">>, true} -> self; _ -> T end,
+    bv_opre_split_next_(R2, [T2 | Acc]).
+bv_opre_split_next_(<<>>, Acc) -> lists:reverse(Acc);
+bv_opre_split_next_(<<" ", R/binary>>, Acc) when R =/= <<>> -> bv_opre_split_(R, false, Acc).
+bv_opre_unquote_(<<$', $', R/binary>>, Acc) -> bv_opre_unquote_(R, <<Acc/binary, $'>>);
+bv_opre_unquote_(<<$', R/binary>>, Acc) -> {Acc, R};
+bv_opre_unquote_(<<C, R/binary>>, Acc) -> bv_opre_unquote_(R, <<Acc/binary, C>>).
+bv_opre_quote_(self) -> <<".">>;
+bv_opre_quote_(T) ->
+    case T =:= <<>> orelse T =:= <<".">> orelse binary:match(T, <<" ">>) =/= nomatch orelse binary:first(T) =:= $' of
+        true -> <<$', (binary:replace(T, <<"'">>, <<"''">>, [global]))/binary, $'>>;
+        false -> T
+    end.
+bv_opre_join_(Ts) -> iolist_to_binary(lists:join(<<" ">>, [bv_opre_quote_(T) || T <- Ts])).
+%% A relative address one hop up, under the child Name: . x → . Name x.
+bv_opre_under_(<<".">>, Name) -> <<". ", Name/binary>>;
+bv_opre_under_(<<". ", R/binary>>, Name) -> <<". ", Name/binary, " ", R/binary>>;
+bv_opre_under_(A, _) -> A.
+%% Every #<…> in a value, its relative addresses under the child Name.
+bv_under_payload_(B, Name) when is_binary(B) -> bv_under_bracketed_(B, Name, <<>>);
+bv_under_payload_(L, Name) when is_list(L) -> [bv_under_payload_(X, Name) || X <- L];
+bv_under_payload_(M, Name) when is_map(M) -> maps:map(fun(_, X) -> bv_under_payload_(X, Name) end, M);
+bv_under_payload_(V, _) -> V.
+bv_under_bracketed_(B, Name, Acc) ->
+    case binary:match(B, <<"#<">>) of
+        nomatch -> <<Acc/binary, B/binary>>;
+        {P_, _} ->
+            Pre_ = binary:part(B, 0, P_),
+            Rest_ = binary:part(B, P_ + 2, byte_size(B) - P_ - 2),
+            case bv_bracket_close_(Rest_, <<>>) of
+                {Inner_, After_} -> bv_under_bracketed_(After_, Name, <<Acc/binary, Pre_/binary, "#<", (bv_opre_under_(Inner_, Name))/binary, ">">>);
+                none -> <<Acc/binary, B/binary>>
+            end
+    end.
+bv_bracket_close_(<<$\\\\, C, R/binary>>, Acc) -> bv_bracket_close_(R, <<Acc/binary, $\\\\, C>>);
+bv_bracket_close_(<<$>, R/binary>>, Acc) -> {Acc, R};
+bv_bracket_close_(<<C, R/binary>>, Acc) -> bv_bracket_close_(R, <<Acc/binary, C>>);
+bv_bracket_close_(<<>>, _) -> none.
 
 %% ── Integer exponentiation ──────────────────────────────────────────────────
 bv_pow(_, 0) -> 1;
@@ -730,6 +794,14 @@ bv_outer_call_(Msg, Silent) ->
             Outer_ ! {bv_outer_call, self(), Msg, Silent, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
+%% A class's call goes out as ours, so its relative addresses and tags are
+%% translated as we translate what it replies: under its address, when we
+%% published it.
+bv_lift_(Pid, Msg) ->
+    case get({bv_addr_of, Pid}) of
+        undefined -> Msg;
+        A_ -> maps:map(fun(<<"to">>, V_) -> V_; (<<"ty">>, V_) -> bv_local_tag_(V_, A_); (_, V_) -> bv_under_payload_(V_, A_) end, Msg)
+    end.
 bv_outer_send_(Msg, Silent) ->
     Seq_ = bv_next_seq_(),
     Id_ = integer_to_binary(Seq_),
@@ -871,15 +943,16 @@ bv_launched_() -> case get(bv_launched_) of undefined -> []; L_ -> L_ end.
 bv_landed_(Id) -> put(bv_launched_, lists:delete(Id, bv_launched_())).
 
 %% An actor made by \`#new\` has its own address, kept here so it can be reached.
+%% Its address relative to us is #<. C N>.
 bv_publish_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
     put({bv_inst_seq, Class}, N_),
-    Addr_ = <<"@", Class/binary, "/", (integer_to_binary(N_))/binary>>,
+    Addr_ = <<Class/binary, " ", (integer_to_binary(N_))/binary>>,
     bv_publish_at_(Addr_, Pid),
-    <<"#<", Addr_/binary, ">">>.
-%% Publish an actor of ours at Addr: @C/N for one made by #new, its label for a
-%% singleton. The public singletons it published itself go under it (@C/N @s),
-%% so a wire message reaches them from here.
+    <<"#<. ", Addr_/binary, ">">>.
+%% Publish an actor of ours under the tokens Addr: C N for one made by #new, s
+%% for a singleton. The public singletons it published itself go under it
+%% (C N s), so a wire message reaches them from here.
 bv_publish_at_(Addr, Pid) ->
     put({bv_instance, Addr}, Pid),
     put({bv_addr_of, Pid}, Addr),
@@ -893,43 +966,43 @@ bv_publish_at_(Addr, Pid) ->
      end || {A_, P_} <- case Under_ of undefined -> []; _ -> Under_ end],
     ok.
 bv_published_() -> case get(bv_published_) of undefined -> []; L_ -> L_ end.
-%% The actor a wire address names: the longest published address in it, from
-%% its first segment that starts one.
+%% The actor a received to names: what reaches us is relative to us (. Box 1 x,
+%% Box 1 x, bracketed or not), so the longest published address its tokens
+%% start with.
 bv_instance_at_(To) when is_binary(To) ->
     Sz_ = byte_size(To),
     Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
-    Segs_ = binary:split(Inner_, <<" ">>, [global]),
-    bv_instance_from_(Segs_);
-bv_instance_at_(_) -> none.
-bv_instance_from_([]) -> none;
-bv_instance_from_([_ | Rest_] = Segs) ->
-    Found_ = [{A_, get({bv_instance, A_})} || N_ <- lists:seq(length(Segs), 1, -1),
-              A_ <- [iolist_to_binary(lists:join(<<" ">>, lists:sublist(Segs, N_)))],
+    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    Found_ = [{A_, get({bv_instance, A_})} || N_ <- lists:seq(length(Toks_), 1, -1),
+              A_ <- [bv_opre_join_(lists:sublist(Toks_, N_))],
               get({bv_instance, A_}) =/= undefined],
-    case Found_ of [F_ | _] -> F_; [] -> bv_instance_from_(Rest_) end.
-%% An actor's class tag from its address: @C/N is of @C; a singleton (@s,
-%% @C/N @s) is its own class.
+    case Found_ of [F_ | _] -> F_; [] -> none end;
+bv_instance_at_(_) -> none.
+%% An actor's class tag from its address: C N is of . C; a singleton (s, C N s)
+%% is its own class.
 bv_addr_class_(Addr) ->
-    case re:run(Addr, <<"/[0-9]+$">>) of
+    Base_ = case re:run(Addr, <<" [0-9]+$">>) of
         {match, [{P_, _}]} -> binary:part(Addr, 0, P_);
         nomatch -> Addr
-    end.
+    end,
+    <<". ", Base_/binary>>.
 %% A reply leaving for the wire names an actor we published by its address.
-bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A_ -> <<"#<", A_/binary, ">">> end;
+bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A_ -> <<"#<. ", A_/binary, ">">> end;
 bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
 bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
 bv_wire_own_(V) -> V.
-%% A local tag from an actor we published, relative to it: a bare @ is its
-%% class; any other local tag goes under its address. ::Types name the file.
-bv_local_tag_(<<"@">>, Addr) -> bv_addr_class_(Addr);
-bv_local_tag_(<<"::", _/binary>> = T, _) -> T;
-bv_local_tag_(<<C_, _/binary>> = T, Addr) when C_ =:= $@; C_ =:= $# -> <<Addr/binary, " ", T/binary>>;
+%% A tag from an actor we published, relative to it: a bare . is its class;
+%% any other relative tag goes under its address. A type is declared at the
+%% top of a file, so . ::Point already names us. A global tag passes.
+bv_local_tag_(<<".">>, Addr) -> bv_addr_class_(Addr);
+bv_local_tag_(<<". ::", _/binary>> = T, _) -> T;
+bv_local_tag_(<<". ", _/binary>> = T, Addr) -> bv_opre_under_(T, Addr);
 bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
 bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
 bv_local_tag_(T, _) -> T.
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
-    Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => Addr},
+    Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<". ", Addr/binary>>},
     case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
         true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"schema_required">>}}), $\n]);
         false ->
@@ -939,22 +1012,22 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
             case R_ of
                 {ok, null, _} -> ok;
                 %% A self-return: we made this actor, so we name it and its class, as for #new.
-                {ok, <<"#<>"/utf8>>, _} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
-                %% "Me" as one slot of several: the same naming, slot by slot.
-                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_swap_self_(V_, <<"#<", Addr/binary, ">">>))}), $\n]);
+                {ok, <<"#<.>"/utf8>>, _} ->
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<. ", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
+                %% Its relative addresses, "me" among them, go under it.
+                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
                 {ok, V_, Tag_} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_swap_self_(V_, <<"#<", Addr/binary, ">">>)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
             end
     end.
-%% A child's "me" (#<>) as one slot of several: its parent swaps in what it knows
-%% the child as, at any depth. The matching ty slot holds a bare @, "my class".
-bv_swap_self_(<<"#<>">>, With) -> With;
+%% A child's "me" (#<.>) as one slot of several: its parent swaps in what it knows
+%% the child as, at any depth. The matching ty slot holds a bare ., "my class".
+bv_swap_self_(<<"#<.>">>, With) -> With;
 bv_swap_self_(L, With) when is_list(L) -> [bv_swap_self_(X, With) || X <- L];
 bv_swap_self_(M, With) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_self_(X, With) end, M);
 bv_swap_self_(V, _) -> V.
-bv_swap_tag_(<<"@">>, Class) -> Class;
+bv_swap_tag_(<<".">>, Class) -> Class;
 bv_swap_tag_(L, Class) when is_list(L) -> [bv_swap_tag_(X, Class) || X <- L];
 bv_swap_tag_(M, Class) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_tag_(X, Class) end, M);
 bv_swap_tag_(T, _) -> T.
@@ -1374,12 +1447,13 @@ brevity_re_after(Bin, Re) ->
     end.
 
 %% A reply whose whole value is one actor: its address is in re, and ty, if
-%% any, is that address without its /N, its class.
+%% any, is that address without its trailing number (C N, or an opaque C/N),
+%% its class.
 bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary_part(Re, byte_size(Re), -1) =:= <<">">> ->
     Addr_ = binary:part(Re, 2, byte_size(Re) - 3),
-    Class_ = case binary:matches(Addr_, <<"/">>) of
-        [] -> Addr_;
-        Ms_ -> {P_, _} = lists:last(Ms_), binary:part(Addr_, 0, P_)
+    Class_ = case re:run(Addr_, <<"[ /][0-9]+$">>) of
+        {match, [{P_, _}]} -> binary:part(Addr_, 0, P_);
+        nomatch -> Addr_
     end,
     case maps:find(<<"ty">>, Message) of
         error -> [Re];
@@ -1409,22 +1483,21 @@ await_new_response_(Id) ->
     end.
 
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
-%% Given a to-field binary, extract the trailing @name/#name selector if
-%% present. Handles both bare selectors ("@name") and the hash-angle delimited
-%% alias+selector form ("#<alias selector>").
-%% Returns the selector binary (with leading sigil) or nomatch.
+%% Given a to-field binary, the label its last token names on us: a public
+%% member travels bare (val is @val); #x, .x and @N are the label. The to is
+%% relative to us (. x, x, or #<alias x>). Returns the label or nomatch.
 extract_to_selector_(Bin) when is_binary(Bin) ->
     Sz = byte_size(Bin),
     Inner = case Bin of
         <<"#<", Rest:(Sz - 3)/binary, ">">> -> Rest;
         _ -> Bin
     end,
-    Parts = binary:split(Inner, <<" ">>, [global]),
-    Last = lists:last(Parts),
-    case Last of
-        <<"@", _/binary>> -> Last;
-        <<"#", _/binary>> -> Last;
-        <<".", _/binary>> -> Last;
+    case catch bv_opre_split_(Inner) of
+        Toks when is_list(Toks), Toks =/= [] ->
+            case lists:last(Toks) of
+                self -> nomatch;
+                Last when is_binary(Last) -> bv_label_of_(Last)
+            end;
         _ -> nomatch
     end;
 extract_to_selector_(_) -> nomatch.

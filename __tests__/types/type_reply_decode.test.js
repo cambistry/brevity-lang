@@ -109,7 +109,7 @@ describe('a typed reply from a class in the same file', () => {
   it('re-encodes when returned onward', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '@onward', from: 'c' } },
-      { output: { id: '1', re: [['x']], 'ty': ['::Item'], to: 'c' } },
+      { output: { id: '1', re: [['x']], 'ty': ['. ::Item'], to: 'c' } },
     );
   });
 

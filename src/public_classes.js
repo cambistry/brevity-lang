@@ -1,9 +1,9 @@
 // Public classes across files. A doc's constructor entry (`W () -> *{ … }`) is
 // reached three ways, all sending `#new` with the class as its selector:
 //
-//   "svc.bv": (:W)    W()        to: `svc.bv @W`
-//   "svc.bv": Svc     Svc.W()    to: `Svc @W`
-//   s = Svc()         s.W()      to: `<s's address> @W`
+//   "svc.bv": (:W)    W()        to: `svc.bv W`
+//   "svc.bv": Svc     Svc.W()    to: `Svc W`
+//   s = Svc()         s.W()      to: `<s's address> W`
 //
 // The caller's side lowers each to a dependency of its own, which every backend
 // already knows how to construct. The receiver's side gains a `new@W` function per
@@ -12,6 +12,7 @@
 import * as AST from './ast.js';
 import { lowerConstructionChains } from './chains.js';
 import { resolveSuperclassChain } from './subclass.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 
 // A constructor entry as the document of what it constructs.
 function docOfClass(type) {
@@ -53,12 +54,16 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     const own = type.initParams || [];
     return [...inherited.filter(p => !own.some(o => o.name === p.name)), ...own];
   };
-  const addDependency = (name, target, type) => {
+  // A class of a dependency is reached at the dependency's address and the
+  // class's token: `Svc Counter`.
+  const addDependency = (name, dep, cls, type) => {
     if (synthetic.has(name)) return;
     synthetic.add(name);
+    const target = joinAddress([dep, cls]);
     ast.dependencies.push({
       ...AST.dependency(name, { path: target, constructorArrow: type.effect === 'write' ? '=>' : '->', constructorParams: paramsOf(type) }),
       wireTarget: target,
+      wireClass: cls,
     });
     remotesParsed[name] = { ...docOfClass(type), __types: { [name]: type } };
     factoryDecls[name] = paramsOf(type);
@@ -73,7 +78,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       if (!type || entry.discard || entry.spread) continue;
       // It stays in the list: a template's `<W>` is checked against it.
       entry.isClass = true;
-      addDependency(entry.local, `${d.name} @${entry.remote}`, type);
+      addDependency(entry.local, d.name, entry.remote, type);
     }
   }
 
@@ -87,10 +92,10 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
 
   const lower = (value, { dep, type, viaInstance }) => {
     const name = `${dep}.${value.method}`;
-    addDependency(name, `${dep} @${value.method}`, type);
+    addDependency(name, dep, value.method, type);
     return {
       ...AST.functionCallExpr(AST.identifier(name), constructionArgs(value.args || [])),
-      ...(viaInstance ? { viaInstance: value.object.name, viaSelector: `@${value.method}` } : {}),
+      ...(viaInstance ? { viaInstance: value.object.name, viaSelector: quoteToken(value.method) } : {}),
     };
   };
 
@@ -153,7 +158,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       }
       if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.type === 'Identifier') {
         const dep = ast.dependencies.find(d => d.name === node.value.callee.name);
-        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeName, dep.wireTarget.split(' @')[1], dep.name)) {
+        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeName, dep.wireClass, dep.name)) {
           node.type = 'Assign';
           delete node.typeName;
         } else if (typesOf(dep?.name) && !dep.wireTarget) {

@@ -4,7 +4,8 @@ import { inferExprType } from '../../inference.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, selfAddress } from '../wire_labels.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
@@ -61,7 +62,7 @@ const awaitSendValue = (code, name) => `BvObject.one(BvObject.pack(await ${code}
 
 // Resolve the CAM address an XML `<tag>` constructs against: the element-factory
 // selector of whichever service the tag was imported from (`<Scene: (:node)>` →
-// `Scene @node`). The language privileges no service name — the host is the DI
+// `Scene node`). The language privileges no service name — the host is the DI
 // import. Explicit destructures win; a whole-namespace spread `(...)` is the
 // fallback host. Mirrored by validate.js's template-tag gate.
 // The ambient host for an un-imported tag in the browser live-page flow, where
@@ -73,7 +74,7 @@ const AMBIENT_TEMPLATE_HOST = 'HTML';
 
 export function domHostAddr(ctx, tag) {
   const alias = ctx.templateTagHost?.get(tag) || ctx.templateSpreadHost || AMBIENT_TEMPLATE_HOST;
-  return `${alias} @${tag}`;
+  return joinAddress([alias, tag]);
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
@@ -260,7 +261,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
 //     `_lambda_N`, and the handler arm matches that name.
 //   - `wire: true` -- the lambda is a VALUE that flows into a type field or a
 //     remote-call argument and may be routed through CAM. It is encoded as a
-//     local-form self-address `#<@N>` (matching the DOM closure-prop
+//     relative self-address `#<. @N>` (matching the DOM closure-prop
 //     convention): the relayer's perspective translation promotes it to
 //     `#<selfAddr @N>` as the carrying message leaves the actor, so a remote
 //     holds a fully-qualified reference back to this lambda and can invoke it
@@ -283,7 +284,7 @@ export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
   ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
   // The value the label expression evaluates to: the wire self-address for a
   // routed lambda, else the bare local dispatch key.
-  const labelValue = wire ? `#<${selector}>` : wireLabel(lambdaName);
+  const labelValue = wire ? `#<${selfAddress(selector)}>` : wireLabel(lambdaName);
   // If there are captures, emit an IIFE that stores them and returns the label.
   // The free var names are resolved through ctx.ssaScope (the OUTER scope at
   // the moment of lambda creation).
@@ -378,9 +379,9 @@ export function genExpr(ctx, expr) {
     // — an ordered array matching XML Infoset's [children] property. Text
     // children are bare strings; closure children (`{ expr }` interpolations
     // that synthesizeTemplateClosures replaced with `closure_ref`) are bare
-    // `#<@N>` address strings; nested `DomConstructor` children are
+    // `#<. @N>` address strings; nested `DomConstructor` children are
     // pre-dispatched by `await this.#send(...)`, whose return value is an
-    // already-wrapped `#<HTML @tag/N>` address string (see classes.js:941 —
+    // already-wrapped `#<HTML tag N>` address string (see classes.js:941 —
     // #send resolves to message.re which handleDomNew sends wrapped).
     //
     // `#{ expr }` interpolations (strinterp) are pure textual splices — they
@@ -394,7 +395,7 @@ export function genExpr(ctx, expr) {
         const v = a.value;
         if (v.type === 'text') return `${key}: ${JSON.stringify(v.value)}`;
         if (v.type === 'strinterp') return `${key}: _bv_str(await (${genExpr(ctx, v.expr)}))`;
-        if (v.type === 'closure_ref') return `${key}: ${JSON.stringify('#<' + v.name + '>')}`;
+        if (v.type === 'closure_ref') return `${key}: ${JSON.stringify('#<' + selfAddress(v.name) + '>')}`;
         throw new Error('Unexpected attr value type: ' + v.type);
       });
       return pairs.join(', ');
@@ -411,7 +412,7 @@ export function genExpr(ctx, expr) {
         if (c.type === 'text') { pushText(JSON.stringify(c.value)); continue; }
         if (c.type === 'strinterp') { pushText(`_bv_str(await (${genExpr(ctx, c.expr)}))`); continue; }
         breakRun();
-        if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + c.name + '>') }); continue; }
+        if (c.type === 'closure_ref') { entries.push({ str: JSON.stringify('#<' + selfAddress(c.name) + '>') }); continue; }
         if (c.type === 'DomConstructor') {
           const childrenInner = renderChildren(c.children);
           const attrsInner = renderAttrs(c.attrs);
@@ -832,7 +833,8 @@ export function genExpr(ctx, expr) {
             if (!p?.ref && !p?.readonly) return null;
             if (!subscribed?.has(p.name)) return null;
             if (!ctx.stateVarNames?.has(argExpr.name)) return null;
-            return `{host: this, cell: ${JSON.stringify(argExpr.name)}}`;
+            // The handle names the public member: `peers` and `@peers` are both `. peers`.
+            return `{host: this, cell: ${JSON.stringify(quoteToken(argExpr.name.replace(/^@/, '')))}}`;
           };
           // If the call uses named args, reorder to match constructor param order
           const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
@@ -988,7 +990,7 @@ export function genExpr(ctx, expr) {
       }
     }
     // A message to an address the front end worked out (src/opre.js): a dependency,
-    // a member path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local
+    // a member path through it (`Svc.s.get()` is `@get` to `Svc s`), or a local
     // bound to one. A silent one (`note.`) has no reply to wait for. In a class, the
     // file actor makes it (`#out`).
     // A path through an actor of a dependency's class (`b.tally.get()`) goes to its
@@ -998,7 +1000,7 @@ export function genExpr(ctx, expr) {
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       const to = address.kind === 'static' ? JSON.stringify(address.wire)
-        : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(' ' + address.path.join(' '))})`;
+        : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(' ' + joinAddress(address.path))})`;
       const method = JSON.stringify(wireOp);
       const send = (op, ty) => {
         if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
@@ -1119,7 +1121,7 @@ export function genExpr(ctx, expr) {
       return `this.#childSend(${resolved}, ${op})`;
     }
   }
-  if (expr.type === 'SelfValue') return '"#<>"';
+  if (expr.type === 'SelfValue') return '"#<.>"';
   if (expr.type === 'DotAccessExpr') {
     // A sub-service (`Svc.s`) is its address (src/opre.js).
     if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);
@@ -1364,18 +1366,18 @@ export function genDefaultValue(node) {
 }
 
 // The wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
-// type, `::Name` for a local one (authority filled by perspective translation as
+// type, `. ::Name` for a local one (authority filled by perspective translation as
 // the value rises; `ty` is a translated field, so it needs no `#<…>`). Non-type tags (primitives
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its label (`@s`).
+  // A singleton's class is itself: it's tagged with its address (`. s`).
   const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
-  if (singleton) return singleton;
+  if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `${authority} ::${name}` : `::${name}`;
+  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
 }
 
 // Resolve a call argument's declared/inferred type for wire tagging. Covers
@@ -1456,8 +1458,8 @@ export function genTyBody(ctx, fields, typeEnv) {
   };
   const posTypes = [];
   for (const f of pos) {
-    // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push('"@"'); continue; }
+    // A `self` slot is tagged with a bare `.`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push('"."'); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
@@ -1468,7 +1470,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: "@"`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: "."`); continue; }
     if ('sigil' in f) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
@@ -1515,7 +1517,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   // Self-return: the bare local self address. The parent promotes it.
-  if (fields[0].selfReturn) return '"#<>"';
+  if (fields[0].selfReturn) return '"#<.>"';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;

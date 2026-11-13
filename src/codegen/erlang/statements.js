@@ -1,6 +1,8 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
+import { addressToken } from '../wire_labels.js';
+import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
@@ -74,13 +76,13 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   }
   const objectName = isSelfTarget ? null : target.object.name;
   // Internal selector (for direct handle_op calls): compound subscribe@<name>.
-  // Wire selector (for outbound posts): "@subscribe" — the @<field> goes
-  // into the to-field space-delimited after the (angle-delimited) alias.
+  // Wire selector (for outbound posts): "@subscribe" — the field goes into
+  // the to-field as the last token after the (angle-delimited) alias.
   const internalSelector = isSelfTarget
     ? 'subscribe' + target.name[0] + target.name.slice(1)
     : 'subscribe@' + target.property;
   const wireOp = '@subscribe';
-  const toSelector = isSelfTarget ? target.name : ('@' + target.property);
+  const toSelector = isSelfTarget ? addressToken(target.name) : target.property;
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
   const params = expr.params || [];
@@ -173,7 +175,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   } else if (isRemoteDep) {
     // Remote wire: bare verb in op, full address as "#<alias selector>".
     const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
-    const toBin = `<<"#<${objectName} ${toSelector}>">>`;
+    const toBin = erlString('#<' + joinAddress([objectName, toSelector]) + '>');
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${tyField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType || _sCtx?.selfSpawnedRefs?.has(objectName)) {
@@ -807,9 +809,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
 
     if (s.type === 'ActorFieldSet') {
       // Internal selector for direct child_handle_op calls: set@<field>.
-      // Wire shape for remote posts: op:"set" bare, to:"`alias` @field".
+      // Wire shape for remote posts: op:"#set", to:"#<alias field>".
       const internalSetSelector = 'set@' + s.fieldName;
-      const toSelector = '@' + s.fieldName;
+      const toSelector = s.fieldName;
       const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
       // Synthetic in-process id/from: set is silent (no reply awaited) so
       // Id is unused; From=<<"__parent">> marks in-process routing, which
@@ -839,7 +841,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const tyField = hintTag
           ? `, <<"ty">> => [[${hintTag}]]`
           : '';
-        const toBin = `<<"#<${s.objectName} ${toSelector}>">>`;
+        const toBin = erlString('#<' + joinAddress([s.objectName, toSelector]) + '>');
         lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${tyField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
@@ -1459,7 +1461,7 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
 
 function genReplyBody(ctx, fields, typeEnv, sCtx) {
   // Self-return: the bare local self address. The parent promotes it.
-  if (fields[0]?.selfReturn) return '<<"#<>"/utf8>>';
+  if (fields[0]?.selfReturn) return '<<"#<.>"/utf8>>';
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   const spread = fields.find(f => f.spread);
@@ -1572,8 +1574,8 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
 
   const posTypes = [];
   for (const f of pos) {
-    // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString('@')); continue; }
+    // A `self` slot is tagged with a bare `.`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString('.')); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -1584,7 +1586,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString('@')}`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString('.')}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

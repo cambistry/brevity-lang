@@ -1,5 +1,6 @@
 // expressions.js — Expression generation for Rust codegen
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, addressToken, selfAddress } from '../wire_labels.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
@@ -72,7 +73,7 @@ function coerceOperand(code, isValue, srcType, target) {
 
 // A lambda in a routed position (a type-field value or a cross-actor call
 // argument) is lowered to a synthesized `@N` dispatch handler and encoded as a
-// local-form self-address `#<@N>`. The host's perspective translation promotes
+// relative self-address `#<. @N>`. The host's perspective translation promotes
 // it to `#<selfAddr @N>` as the carrying message leaves the actor, so a holder
 // on another actor can invoke it back through CAM. Mirrors the JS/erlang
 // targets. The internal `_lambda_N` name is kept for capture-field keys.
@@ -118,18 +119,18 @@ function rustLambdaWireRef(fnNode) {
   const lambdaName = `_lambda_${n}`;
   const selector = `@${n}`;
   G.ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: fnNode });
-  return `Value::String("#<${selector}>".to_string())`;
+  return `Value::String(${JSON.stringify('#<' + selfAddress(selector) + '>')}.to_string())`;
 }
 
 // The CAM address an XML `<tag>` constructs against: the element-factory selector
 // of whichever service the tag was imported from (`<Scene: (:node)>` →
-// `Scene @node`). No service name is privileged. Mirrors the JS target.
+// `Scene node`). No service name is privileged. Mirrors the JS target.
 function rustDomHostAddr(tag) {
   const alias = G.ctx.templateTagHost?.get(tag) || G.ctx.templateSpreadHost;
   if (!alias) {
     throw new Error(`<${tag}> template has no host service — destructure it from a service, e.g. '<Service: (:${tag})>'`);
   }
-  return `${alias} @${tag}`;
+  return joinAddress([alias, tag]);
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape. A file's
@@ -209,7 +210,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // `{children: [...], ...attrs}` sent to the tag's host service address. Pure
     // CAM — no DOM. Text/`#{}` runs merge into one string child; a reactive hole
     // `{{expr}}` (closure_ref) and a nested element each break a run. A closure_ref
-    // travels as its local-form self-address `#<@N>` (a lambda ref the host can
+    // travels as its relative self-address `#<. @N>` (a lambda ref the host can
     // invoke back through CAM). Fire-and-forget like every rust send: each #new
     // posts and yields Null (nested children post their own #new).
     const strCoerce = (e) => `(&(${genRustExpr(e, typeEnv, eCtx)})).bv_str()`;
@@ -218,7 +219,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
       let valExpr;
       if (v.type === 'text') valExpr = `json!(${JSON.stringify(v.value)})`;
       else if (v.type === 'strinterp') valExpr = `json!(${strCoerce(v.expr)})`;
-      else if (v.type === 'closure_ref') valExpr = `json!(${JSON.stringify('#<' + v.name + '>')})`;
+      else if (v.type === 'closure_ref') valExpr = `json!(${JSON.stringify('#<' + selfAddress(v.name) + '>')})`;
       else throw new Error('Unexpected DomConstructor attr value type: ' + v.type);
       return `_payload.insert(${JSON.stringify(a.name)}.to_string(), ${valExpr});`;
     }).join(' ');
@@ -236,7 +237,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         if (c.type === 'text') { (run ??= { fmt: [], args: [] }).fmt.push(c.value.replace(/\{/g, '{{').replace(/\}/g, '}}')); continue; }
         if (c.type === 'strinterp') { (run ??= { fmt: [], args: [] }).fmt.push('{}'); run.args.push(strCoerce(c.expr)); continue; }
         flush();
-        if (c.type === 'closure_ref') { entries.push(`json!(${JSON.stringify('#<' + c.name + '>')})`); continue; }
+        if (c.type === 'closure_ref') { entries.push(`json!(${JSON.stringify('#<' + selfAddress(c.name) + '>')})`); continue; }
         if (c.type === 'DomConstructor') { entries.push(domSend(c)); continue; }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
       }
@@ -257,7 +258,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), Value::Array(vec![Value::Object(_payload), json!("#new")]));
         send_msg.insert("to".to_string(), json!(${JSON.stringify(rustDomHostAddr(dc.tag))}));
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         Value::Null
     }`;
     }
@@ -278,7 +279,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     // `Self` in expression position resolves to the class wire address.
     // fileName is enforced by validate() whenever the AST uses Self as a value.
-    if (expr.name === 'Self') return `Value::String(${JSON.stringify('#<' + G.ctx.fileName + '>')}.to_string())`;
+    if (expr.name === 'Self') return `Value::String(${JSON.stringify('#<' + quoteToken(G.ctx.fileName) + '>')}.to_string())`;
     return rustSsaResolve(expr.name);
   }
   if (expr.type === 'BinaryExpr') {
@@ -454,7 +455,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const inserts = [];
     inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
     // A lambda stored in a type field is a callback reference that travels with
-    // the value: lower it to a routable self-address (#<@N>).
+    // the value: lower it to a routable self-address (#<. @N>).
     const fieldValue = (e) => {
       if (e?.type === 'Function') return rustLambdaWireRef(e);
       const raw = genRustExpr(e, typeEnv, eCtx);
@@ -585,7 +586,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // lines (src/init_order.js, withDeferredRuns). Its address is made here.
     ? `self.state.insert(${JSON.stringify(`__deferred_${expr.deferredConstruct.site}`)}.to_string(), Value::Array(vec![json!(_id), _init_args]));`
     : `self.child_${lc}_init_at(_id, &_init_args);`}${singletonLabel ? `
-        self.bv_singleton_made(${JSON.stringify(singletonLabel)}, bv_inst_ref(${JSON.stringify(lc)}, _id).as_str().unwrap_or("").to_string());` : ''}
+        self.bv_singleton_made(${JSON.stringify(quoteToken(addressToken(singletonLabel)))}, bv_inst_ref(${JSON.stringify(lc)}, _id).as_str().unwrap_or("").to_string());` : ''}
 ${subRegLines.join('\n')}
         bv_inst_ref(${JSON.stringify(lc)}, _id)
     }`;
@@ -618,7 +619,7 @@ ${subRegLines.join('\n')}
     const newTo = expr.viaInstance
       ? `json!(format!("{} ${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
       : `json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})`;
-    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
+    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(self.bv_lift(Value::Object(send_msg))); self.await_new_response(&new_id) }`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
@@ -647,7 +648,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         Value::Null
     }`;
   }
@@ -743,14 +744,14 @@ ${subRegLines.join('\n')}
         const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv, eCtx), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
         const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
         const opExpr = positional.length === 0 ? `json!(bv_sel(&_addr))` : `json!([[${posVals}], bv_sel(&_addr)])`;
-        // A locally-constructed lambda held in the field is a local-form
-        // self-address (#<@N>, no path prefix): until the carrying value leaves
-        // this actor (where perspective translation promotes it to
-        // #<selfAddr @N>), it names a handler on us, so invoking it loops back
-        // to our own dispatch instead of posting outward.
+        // A locally-constructed lambda held in the field is a relative
+        // self-address (#<. @N>): until the carrying value leaves this actor
+        // (where perspective translation promotes it to #<selfAddr @N>), it
+        // names a handler on us, so invoking it loops back to our own dispatch
+        // instead of posting outward.
         return `{
         let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv, eCtx)};
-        if _addr.starts_with("#<@") || _addr.starts_with("#<:") || _addr.starts_with("#<#") {
+        if _addr == "#<.>" || _addr.starts_with("#<. ") {
             let _ = self.self_send(&bv_sel(&_addr), &json!([${posVals}]));
             Value::Null
         } else {
@@ -759,7 +760,7 @@ ${subRegLines.join('\n')}
             send_msg.insert("id".to_string(), json!(seq.to_string()));
             send_msg.insert("op".to_string(), ${opExpr});
             send_msg.insert("to".to_string(), json!(_addr));
-            let _ = self.binding.send(Value::Object(send_msg));
+            let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
             Value::Null
         }
     }`;
@@ -889,8 +890,8 @@ ${subRegLines.join('\n')}
     const positional = expr.args.filter(a => a.positional);
     if (isRemoteInst || isLocalInst) {
       const to = isLocalInst
-        ? `${rustSsaResolve(dotObjName)}.as_str().unwrap_or("").to_string()`
-        : `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
+        ? `bv_addr_to(${rustSsaResolve(dotObjName)}.as_str().unwrap_or(""))`
+        : `bv_addr_to(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or(""))`;
       const method = JSON.stringify('@' + expr.method);
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
@@ -916,7 +917,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
@@ -959,7 +960,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), json!(${method}));
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
@@ -970,7 +971,7 @@ ${subRegLines.join('\n')}
     // bare tag. See notes/type-authority-address-tags-2026-10-26 (arg slots).
     const genArgValWrapped = a => {
       // A lambda argument to a cross-actor call travels as a routable
-      // self-address (#<@N>) so the callee can invoke it back through CAM.
+      // self-address (#<. @N>) so the callee can invoke it back through CAM.
       if (a.expr?.type === 'Function') return rustLambdaWireRef(a.expr);
       const t = argType(a);
       const jv = toJsonValue(genArgValRaw(a), t || 'Anything');
@@ -1007,7 +1008,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
         send_msg.insert("ty".to_string(), ${tyExpr});
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         ${awaitUnlessSilent('send_id')}
     }`;
   }
@@ -1366,7 +1367,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), json!(bv_sel(&_addr)));
         send_msg.insert("to".to_string(), json!(_addr));
-        let _ = self.binding.send(Value::Object(send_msg));
+        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         Value::Null
     }`;
       }
@@ -1414,7 +1415,7 @@ ${subRegLines.join('\n')}
     }
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
-  if (expr.type === 'SelfValue') return 'json!("#<>")';
+  if (expr.type === 'SelfValue') return 'json!("#<.>")';
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 
@@ -1966,14 +1967,16 @@ export { genRustDefaulted, positionalIndexes, genRustExpr, genRustIfBranch, genR
 
 // Where a lowered call goes (src/opre.js), as a Rust String expression: the
 // static address, or a value holding one with the member path after it
-// (`b.tally.get()` is `<b> @tally`). `gen` renders the receiver it starts from.
+// (`b.tally.get()` is `<b> tally`). `gen` renders the receiver it starts from.
 export function rustOpreTo(expr, gen) {
   const address = expr.opre?.address;
   if (address?.kind === 'static') return `${JSON.stringify(address.wire)}.to_string()`;
   let root = expr.object;
   for (let i = 0; i < (address?.path?.length || 0); i++) root = root.object;
-  const held = `bv_val((${gen(root)}).clone()).as_str().unwrap_or("").to_string()`;
-  return address?.path?.length ? `format!("{} {}", ${held}, ${JSON.stringify(address.path.join(' '))})` : held;
+  // A value holding an address (a self-return's reply, say) may carry the
+  // brackets that mark it as one; `to` is the address itself.
+  const held = `bv_addr_to(bv_val((${gen(root)}).clone()).as_str().unwrap_or(""))`;
+  return address?.path?.length ? `format!("{} {}", ${held}, ${JSON.stringify(joinAddress(address.path))})` : held;
 }
 
 export const isOpreAddressed = (expr) => expr?.opre?.address.kind === 'static' || !!expr?.opre?.address.path?.length;

@@ -4,7 +4,7 @@
 // works the address out once, for every target, and leaves it on the call as
 // `call.opre`:
 //
-//   address  { kind: 'static', wire: 'Svc @s @inner', tokens: [...], dep: 'Svc' }
+//   address  { kind: 'static', wire: 'Svc s inner', tokens: [...], dep: 'Svc' }
 //              the whole address is known here: a dependency, a member path
 //              through it, or a local bound once to one of those
 //            { kind: 'value', name?, path }
@@ -19,18 +19,21 @@
 //   doc      the service document the call resolves against, when there is one
 //   label    how the receiver reads in source, for messages ('Svc.s')
 //
-// A member path is space-delimited tokens: `Svc.s.inner.ping()` is `@ping` to
-// `Svc @s @inner`, a public member `.x` being wire `@x`.
+// A member path is space-delimited tokens (src/codegen/opre_tokens.js):
+// `Svc.s.inner.ping()` is `@ping` to `Svc s inner`, a public member `.x`
+// travelling bare. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 //
 // A sub-service read in value position (`x = Svc.s`) is that address, too, when
 // the document says `s` is one: `expr.opreAddress`. A local bound once to an
-// address like that stands for it, so `x.get()` is `@get` to `Svc @s`.
+// address like that stands for it, so `x.get()` is `@get` to `Svc s`.
 //
 // How a message is delivered (in process or on the wire, a call or a send) is
 // still each target's choice. Where it goes comes from here.
 
 // A document hangs off the message without being part of the tree: AST walkers
 // (`Object.values`) mustn't wander into it.
+import { _opre_join as joinAddress } from './codegen/opre_tokens.js';
+
 const withDoc = (obj, doc) => Object.defineProperty(obj, 'doc', { value: doc, enumerable: false });
 
 const isBinding = (n) => (n?.type === 'Assign' || n?.type === 'TypedAssign') && typeof n.name === 'string';
@@ -141,7 +144,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
     const { doc, failedAt } = walkServices(base.doc, members);
     if (failedAt >= 0) return null;
     return {
-      tokens: [...base.tokens, ...members.map(m => '@' + m)],
+      tokens: [...base.tokens, ...members],
       doc,
       label: [base.label, ...members].join('.'),
       dep: base.dep,
@@ -153,7 +156,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
     const base = staticRoot(root);
     const op = '@' + call.method;
     if (base) {
-      const tokens = [...base.tokens, ...members.map(m => '@' + m)];
+      const tokens = [...base.tokens, ...members];
       let doc = null;
       let missing = null;
       if (base.doc) {
@@ -162,7 +165,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
         doc = walked.doc;
       }
       call.opre = withDoc({
-        address: { kind: 'static', wire: tokens.join(' '), tokens, dep: base.dep },
+        address: { kind: 'static', wire: joinAddress(tokens), tokens, dep: base.dep },
         op,
         label: [base.label, ...members].join('.'),
         ...(missing ? { missing } : {}),
@@ -170,12 +173,12 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
       return;
     }
     // A path through an actor of a dependency's class: its runtime address, then
-    // the member tokens (`b.tally.get()` is `@get` to `<b> @tally`).
+    // the member tokens (`b.tally.get()` is `@get` to `<b> tally`).
     const inst = members.length ? instanceDoc(root) : null;
     if (inst) {
       const walked = walkServices(inst, members);
       call.opre = withDoc({
-        address: { kind: 'value', name: root.name, path: members.map(m => '@' + m) },
+        address: { kind: 'value', name: root.name, path: members },
         op,
         label: [root.name, ...members].join('.'),
         ...(walked.failedAt >= 0 ? { missing: { label: [root.name, ...members.slice(0, walked.failedAt)].join('.'), member: members[walked.failedAt] } } : {}),
@@ -196,7 +199,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
     if (node.type === 'DotCallExpr' && !(onlyNew && node.opre)) lowerCall(node);
     if (node.type === 'DotAccessExpr' && !node.opreAddress) {
       const addr = addressValue(node);
-      if (addr) node.opreAddress = withDoc({ wire: addr.tokens.join(' '), tokens: addr.tokens, label: addr.label, dep: addr.dep }, addr.doc);
+      if (addr) node.opreAddress = withDoc({ wire: joinAddress(addr.tokens), tokens: addr.tokens, label: addr.label, dep: addr.dep }, addr.doc);
     }
     if (isBinding(node) && foldable(node.name)) {
       const addr = node.value?.opreAddress ?? (node.value?.type === 'Identifier' ? statics.get(node.value.name) : null);

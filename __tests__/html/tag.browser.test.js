@@ -456,7 +456,7 @@ const PAGE_HTML = `<html><head>
 // Construct `HTML @<tag>` with `payload`, append the result to <body>, then
 // run `queryFn` (browser-context) and return its value to the test.
 async function renderAndQuery(page, tag, payload, queryFn) {
-  const dom = await page.connectActor('HTML @' + tag);
+  const dom = await page.connectActor('HTML ' + tag);
   await dom.sendAsync({ id: 'n', op: [payload, '#new'] });
   const elementAddr = dom.posts[0].re;
 
@@ -484,7 +484,7 @@ describe('HTML tag DOM render — every tag lands with the right tagName', () =>
     const body = await page.connectActor(bodyAddr);
 
     for (const tag of ALL_TAGS) {
-      const dom = await page.connectActor('HTML @' + tag);
+      const dom = await page.connectActor('HTML ' + tag);
       await dom.sendAsync({ id: 'n_' + tag, op: [{}, '#new'] });
       const elementAddr = dom.posts[0].re;
       await body.sendAsync({ id: 'a_' + tag, op: [elementAddr, '@append!'] });

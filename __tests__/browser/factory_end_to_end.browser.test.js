@@ -62,11 +62,11 @@ describe('factory end-to-end', () => {
     // Factory's reply (the element address) reaches the caller.
     await expectBehavior(factory,
       { input: { id: '1', op: '@create', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: ['#<HTML @div/1>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML div 1>'] }) },
     );
 
     // Query the element's innerHTML — should be the initial @content value.
-    const el = await page.connectActor('HTML @div/1');
+    const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
       { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
@@ -89,7 +89,7 @@ describe('factory end-to-end', () => {
     });
 
     // Element text should now reflect the new value.
-    const el = await page.connectActor('HTML @div/1');
+    const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
       { input: { id: 'q1', op: '@inner_html' } },
       { output: expect.objectContaining({ re: 'updated' }) },
@@ -102,7 +102,7 @@ describe('factory end-to-end', () => {
 
     await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
 
-    const el = await page.connectActor('HTML @div/1');
+    const el = await page.connectActor('HTML div 1');
 
     for (const [seq, value] of [['a', 'first'], ['b', 'second'], ['c', 'third']]) {
       await factory.sendAsync({

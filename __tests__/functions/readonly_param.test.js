@@ -101,7 +101,7 @@ describe('readonly param — &Type is live', () => {
 
   it('a class that only reads it gets the cell\'s value', () => expectBehavior(script,
     { input: { id: '1', op: '@bump!', from: 'c' } },
-    { output: expect.objectContaining({ id: '1', re: '#<>', to: 'c' }) },
+    { output: expect.objectContaining({ id: '1', re: '#<.>', to: 'c' }) },
     { input: { id: '2', op: '@read', from: 'c' } },
     { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
   ));

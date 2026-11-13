@@ -52,7 +52,7 @@ describe('scalar actorization — *Integer state cell', () => {
   it('subscribe@get re-emits when n changes', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
+        { input: { id: 'sub-1', op: '@subscribe', to: '. get', from: 'c' } },
         { output: { id: 'sub-1', 'ty': { n: 'Integer' }, re: { n: 0 }, to: 'c' } },
         { input: { id: '2', op: [[3], '@inc!'], 'ty': [['Integer']], from: 'c' } },
         // Cell-mutation re-emit fires before the handler's own reply.
@@ -98,7 +98,7 @@ describe('scalar actorization — *Text state cell', () => {
   it('subscribe@get re-emits when label changes', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
+        { input: { id: 'sub-1', op: '@subscribe', to: '. get', from: 'c' } },
         { output: { id: 'sub-1', 'ty': { label: 'Text' }, re: { label: 'ready' }, to: 'c' } },
         { input: { id: '2', op: [['done'], '@set_label!'], 'ty': [['Text']], from: 'c' } },
         { output: { id: 'sub-1', 'ty': { label: 'Text' }, re: { label: 'done' }, to: 'c' } },
@@ -132,7 +132,7 @@ describe('scalar actorization — *Boolean state cell', () => {
   it('subscribe@get re-emits when flag flips', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: 'sub-1', op: '@subscribe', to: '@get', from: 'c' } },
+        { input: { id: 'sub-1', op: '@subscribe', to: '. get', from: 'c' } },
         { output: { id: 'sub-1', 'ty': { flag: 'Boolean' }, re: { flag: false }, to: 'c' } },
         { input: { id: '2', op: [[true], '@set_flag!'], 'ty': [['Boolean']], from: 'c' } },
         { output: { id: 'sub-1', 'ty': { flag: 'Boolean' }, re: { flag: true }, to: 'c' } },

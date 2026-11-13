@@ -45,6 +45,9 @@ stays part of the local name of a public member:
 - **The wire name is the name.** A public function is *named* `get`; `@get` is how Brevity
   source spells it. A bare source `fn` is named `~fn`, and `#x` is named `#x`. The three source
   labels stay distinct because their names differ. (Admittedly confusing; may be rethought.)
+- **A synthesized name keeps its `@`.** A closure's `@0` or an event endpoint's `@__evt_…` is the
+  whole name, not a public member `0`: `#<main @0>`, relative `#<. @0>`. A token may start with
+  any character, so this costs the token rules nothing.
 - **Public op names drop `@` too:** `op: 'ping'`, not `op: '@ping'`.
 - **`@` only touches the head of an address.** Later segments are local to child contexts, not to
   the immediate one. Each child spells its own public names with `@` internally; the address that

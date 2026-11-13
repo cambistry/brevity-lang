@@ -1,6 +1,8 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
+import { selfAddress, addressToken } from '../wire_labels.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import {
   resolveSSAName,
@@ -23,13 +25,13 @@ function erlSendVars(ctx) {
 
 // The CAM address an XML `<tag>` constructs against: the element-factory selector
 // of whichever service the tag was imported from (`<Scene: (:node)>` →
-// `Scene @node`). No service name is privileged. Mirrors the JS/rust targets.
+// `Scene node`). No service name is privileged. Mirrors the JS/rust targets.
 function erlDomHostAddr(ctx, tag) {
   const alias = ctx.templateTagHost?.get(tag) || ctx.templateSpreadHost;
   if (!alias) {
     throw new Error(`<${tag}> template has no host service — destructure it from a service, e.g. '<Service: (:${tag})>'`);
   }
-  return `${alias} @${tag}`;
+  return joinAddress([alias, tag]);
 }
 
 // Posted-call argument helpers: resolve each arg's type, wire-serialize a
@@ -146,9 +148,9 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   const tail = awaitReply
     ? `bv_object_pack(await_response_(${v.id}))`
     : `null`;
-  // A locally-constructed lambda held in the field is a local-form self-address
-  // (#<@N>, no path prefix): until the carrying value leaves this actor (where
-  // perspective translation promotes it to #<selfAddr @N>), it names a handler
+  // A locally-constructed lambda held in the field is a relative self-address
+  // (#<. @N>): until the carrying value leaves this actor (where perspective
+  // translation promotes it to #<selfAddr @N>), it names a handler
   // on us, so invoking it loops back to our own dispatch instead of posting
   // outward. A wire address (#<path sel>) is posted as before.
   const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
@@ -162,7 +164,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   return `begin
         ${v.addr} = ${addr},
         case ${v.addr} of
-            <<"#<", ${v.locsig}:8, _/binary>> when ${v.locsig} =:= $@ orelse ${v.locsig} =:= $: orelse ${v.locsig} =:= $# ->
+            <<"#<.", ${v.locsig}:8, _/binary>> when ${v.locsig} =:= 32 orelse ${v.locsig} =:= $> ->
                 ${selfTail};
             _ ->
                 ${postBranch}
@@ -248,7 +250,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       let val;
       if (v.type === 'text') val = erlString(v.value);
       else if (v.type === 'strinterp') val = `bv_str(${genExpr(ctx, v.expr, typeEnv, sCtx)})`;
-      else if (v.type === 'closure_ref') val = erlString('#<' + v.name + '>');
+      else if (v.type === 'closure_ref') val = erlString('#<' + selfAddress(v.name) + '>');
       else throw new Error('Unexpected DomConstructor attr value type: ' + v.type);
       return `${erlString(a.name)} => ${val}`;
     });
@@ -264,7 +266,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         if (c.type === 'text') { (run ??= { pieces: [], texts: [], hasInterp: false }); run.texts.push(c.value); run.pieces.push(`(${erlString(c.value)})/binary`); continue; }
         if (c.type === 'strinterp') { (run ??= { pieces: [], texts: [], hasInterp: false }); run.hasInterp = true; run.pieces.push(strCoerce(c.expr)); continue; }
         flush();
-        if (c.type === 'closure_ref') { entries.push(erlString('#<' + c.name + '>')); continue; }
+        if (c.type === 'closure_ref') { entries.push(erlString('#<' + selfAddress(c.name) + '>')); continue; }
         if (c.type === 'DomConstructor') { entries.push(domSend(c)); continue; }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
       }
@@ -307,7 +309,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // `Self` in expression position resolves to the class wire address as
     // an Erlang binary. fileName is enforced by validate() whenever the AST
     // uses Self as a value.
-    if (name === 'Self') return `<<"#<${ctx.fileName}>"/utf8>>`;
+    if (name === 'Self') return erlString('#<' + quoteToken(ctx.fileName) + '>');
     // Resolve SSA if context has ssaEnv
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));
@@ -545,9 +547,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
               subRegLines.push(`bv_launch_(NewPid_, ${erlString(ps.callbackName)}, [${stateRef}])`);
             }
           }
-          // A public singleton is published at its label in the actor that builds it.
+          // A public singleton is published at its token in the actor that builds it.
           const singleton = ctx.program?.actors?.find(a => a.name === cName)?.singletonOf;
-          if (singleton?.startsWith('@')) subRegLines.push(`bv_publish_at_(${erlString(singleton)}, NewPid_)`);
+          if (singleton?.startsWith('@')) subRegLines.push(`bv_publish_at_(${erlString(quoteToken(addressToken(singleton)))}, NewPid_)`);
           // A class whose construction waits on our later cells isn't waited for here;
           // the end of the block joins it (src/init_order.js).
           const sync = expr.deferredConstruct ? 'bv_join_' : 'bv_spawn_sync_';
@@ -892,7 +894,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
   }
 
-  if (expr.type === 'SelfValue') return '<<"#<>"/utf8>>';
+  if (expr.type === 'SelfValue') return '<<"#<.>"/utf8>>';
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
@@ -918,7 +920,7 @@ function genErlStaticSend(ctx, expr, typeEnv, sCtx, awaited, argHelpers) {
     : ctx.localInstanceVars?.has(rootName) ? erlVarName(resolveSSAName(rootName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
     : genExpr(ctx, root, typeEnv, sCtx);
   const to = address.kind === 'static' ? erlString(address.wire)
-    : `iolist_to_binary([${rootVal}, ${erlString(' ' + address.path.join(' '))}])`;
+    : `iolist_to_binary([${rootVal}, ${erlString(' ' + joinAddress(address.path))}])`;
   const method = erlString(op);
   if (expr.outerCall) {
     const call = erlOuterCall(ctx, expr, positional, named, method, to, argHelpers);
@@ -999,10 +1001,11 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   if (isRemote || isLocalInst) {
     // Local instances are local erlang variables that already hold the
     // instance address (binary); state-var instances are stored under a
-    // state key.
+    // state key. An address value from a self-return still has the brackets
+    // that mark it as a value: `to` is the address itself.
     const to = isLocalInst
-      ? erlVarName(resolveSSAName(objName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
-      : `get(${erlStateKey(ctx, objName)})`;
+      ? `bv_to_addr_(${erlVarName(resolveSSAName(objName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))})`
+      : `bv_to_addr_(get(${erlStateKey(ctx, objName)}))`;
     const method = erlString('@' + expr.method);
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);

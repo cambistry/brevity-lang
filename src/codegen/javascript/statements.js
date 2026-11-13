@@ -2,7 +2,8 @@ import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
 import { isDynamicTy } from '../ty_tags.js';
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, addressToken, selfAddress } from '../wire_labels.js';
+import { _opre_join as joinAddress } from '../opre_tokens.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genDestructureAssign,
   genListDestructureAssign, genPackedReturn, genTyBody, jsSlotTag, jsTyOf,
@@ -14,8 +15,8 @@ import {
 const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
 
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
-// op:"@subscribe" to c's address, with the selector `@x` appended to the `to`
-// field (space-delimited; angles wrap the DI'd alias for remote targets).
+// op:"@subscribe" to c's address, with the member `x` appended to the `to`
+// field as its last token (`#<c x>` for a remote, `. x` for a child).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
 // payload. The statement produces no value and is not assignable.
@@ -39,17 +40,16 @@ export function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be self (@name / #name), a cell-handle param, or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget || isCellHandleTarget ? null : target.object.name;
-  // Wire shape: op is "@subscribe"; the @/#-prefixed selector lives in
-  // the `to` field (space-delimited after the addr, if any). Dispatch
-  // prologue strips the @ sigil and re-synthesizes the internal
-  // `subscribe@<name>` / `subscribe#<name>` opName so the handler
-  // machinery runs unchanged.
+  // Wire shape: op is "@subscribe"; the member is the last token of the
+  // `to` address (a public member bare, `#x` private). The dispatch prologue
+  // re-synthesizes the internal `subscribe@<name>` / `subscribe#<name>`
+  // opName so the handler machinery runs unchanged.
   const selector = '@subscribe';
-  // The `to`-field selector: self uses bare @name/#name (sigil-preserving);
-  // remote prefixes with `@<property>` (public selectors only on remote).
-  // Cell-handle reads the cell name from the runtime handle, so it's set later.
-  const toSelector = isSelfTarget ? target.name :
-    isCellHandleTarget ? null : ('@' + target.property);
+  // The member's token: self keeps its own label's (`@x` → `x`, `#x`);
+  // remote and child members are public (`x`). Cell-handle reads the cell name
+  // from the runtime handle, so it's set later.
+  const toSelector = isSelfTarget ? addressToken(target.name) :
+    isCellHandleTarget ? null : target.property;
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   const pendingSetup = `
           const _sub_id = String(++this.#nextId);
@@ -94,9 +94,9 @@ export function genSubscribeCall(ctx, expr) {
   // Self-subscribe: no wire post — deliver the subscribe directly to our own
   // receive loop. Prologue registers (id, from) and rewrites opName so the
   // local @/# handler arm produces the initial `re`; _route delivers that
-  // back into our own pending correlation. `to` is the bare selector (local).
+  // back into our own pending correlation. `to` is relative: `. x`.
   if (isSelfTarget) {
-    const toExpr = JSON.stringify(toSelector);
+    const toExpr = JSON.stringify(selfAddress(target.name));
     return `
         {${pendingSetup}
           this.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
@@ -109,20 +109,20 @@ export function genSubscribeCall(ctx, expr) {
     const handle = `this.#${stateKey(target.name)}`;
     return `
         {${pendingSetup}
-          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('@' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
+          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('. ' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
   }
   // Remote dep (declared via `( "Alias": Alias { ... } ) *{ }`): post through
-  // binding addressed to "#<alias selector>" — hash-angle delimited.
+  // binding addressed to "#<alias member>" — hash-angle delimited.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
-    const toExpr = JSON.stringify('#<' + encAddr(objectName) + ' ' + encAddr(toSelector) + '>');
+    const toExpr = JSON.stringify('#<' + encAddr(joinAddress([objectName, toSelector])) + '>');
     return `
         {${pendingSetup}
           this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${tyField} });
         }`;
   }
   // Local or state-held child actor instance: route via child.receive. `to`
-  // is the bare selector — the child is the receiver, so no alias needed.
+  // is relative to the child, the receiver: `. x`.
   let childTarget;
   if (ctx.stateVarNames?.has(objectName)) {
     childTarget = `this.#${stateKey(objectName)}`;
@@ -130,7 +130,7 @@ export function genSubscribeCall(ctx, expr) {
     const resolved = ctx.ssaScope?.get(objectName) || jsIdent(objectName);
     childTarget = ctx.childActorVars?.get(objectName) ? `${resolved}.value` : resolved;
   }
-  const toExpr = JSON.stringify(toSelector);
+  const toExpr = JSON.stringify(joinAddress([null, toSelector]));
   return `
         {${pendingSetup}
           ${childTarget}.receive({ id: _sub_id, op: ${opExpr}, to: ${toExpr}, from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
@@ -856,15 +856,15 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorFieldSet') {
-      // Wire shape: op is bare "set"; the `@<field>` selector lives in the
-      // `to` field (space-delimited after the addr, if any). Dispatch
-      // prologue re-synthesizes the internal `set@<field>` opName.
+      // Wire shape: op is bare "set"; the field is the last token of the
+      // `to` address. Dispatch prologue re-synthesizes the internal
+      // `set@<field>` opName.
       const wireOp = 'set';
-      const toSelector = '@' + s.fieldName;
+      const toSelector = s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via *( "Alias": Alias { ... } )): post via
-      // binding addressed to "<<alias selector>>" — the whole address is one
-      // hash-angle delimited "#<alias selector>". Include `ty` so the
+      // binding addressed to "#<alias field>" — the whole address is one
+      // hash-angle delimited address. Include `ty` so the
       // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
@@ -875,7 +875,7 @@ export function genLocals(ctx, body, outerEnv) {
           : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
           : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
         const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
-        const toExpr = JSON.stringify('#<' + encAddr(s.objectName) + ' ' + encAddr(toSelector) + '>');
+        const toExpr = JSON.stringify('#<' + encAddr(joinAddress([s.objectName, toSelector])) + '>');
         return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${tyField} });`;
       }
       let target;
@@ -885,8 +885,8 @@ export function genLocals(ctx, body, outerEnv) {
         const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
         target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
       }
-      // Child actor: bare selector (child is the receiver; no alias needed).
-      const toExpr = JSON.stringify(toSelector);
+      // Child actor: relative to the child, the receiver: `. field`.
+      const toExpr = JSON.stringify(joinAddress([null, toSelector]));
       return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}, from: '__parent' });`;
     }
     if (s.type === 'ActorSetStatement') {

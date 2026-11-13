@@ -56,7 +56,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hello'] }, '#new'],
-          to: 'HTML @div',
+          to: 'HTML div',
         }) },
       );
     });
@@ -73,7 +73,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['42'] }, '#new'],
-          to: 'HTML @div',
+          to: 'HTML div',
         }) },
       );
     });
@@ -90,7 +90,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['true'] }, '#new'],
-          to: 'HTML @div',
+          to: 'HTML div',
         }) },
       );
     });
@@ -107,7 +107,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['1.0e-1'] }, '#new'],
-          to: 'HTML @div',
+          to: 'HTML div',
         }) },
       );
     });
@@ -145,7 +145,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['#<main @0>', ' / static'] }, '#new'],
-          to: 'HTML @div',
+          to: 'HTML div',
         }) },
       );
     });
@@ -225,7 +225,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: '@create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hi Chris'] }, '#new'],
-          to: 'HTML @p',
+          to: 'HTML p',
         }) },
       );
     });
@@ -358,7 +358,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello'] }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -375,7 +375,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello world!'] }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -392,7 +392,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['#<main @0>'] }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -410,7 +410,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['#<main @0>', ' / c'] }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -441,16 +441,16 @@ describe('non-reactive {{ expr }} — pure thunk inlining', () => {
     const pPost = actor.posts[0];
     expect(pPost).toEqual(expect.objectContaining({
       op: [{ children: ['Inner'] }, '#new'],
-      to: 'HTML @p',
+      to: 'HTML p',
     }));
 
     // Stub the HTML @p reply with a constructed element address
-    await actor.sendAsync({ id: pPost.id, re: '#<HTML @p/1>' });
+    await actor.sendAsync({ id: pPost.id, re: '#<HTML p 1>' });
 
     // Actor continues and sends <div> with the <p> address in children
     expect(actor.posts[1]).toEqual(expect.objectContaining({
-      op: [{ children: ['#<HTML @p/1>'] }, '#new'],
-      to: 'HTML @div',
+      op: [{ children: ['#<HTML p 1>'] }, '#new'],
+      to: 'HTML div',
     }));
   });
 });

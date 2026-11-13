@@ -36,9 +36,9 @@ const handler = (body, name = '@handle.') => `
 // A representative Control value as it arrives on the wire (named map): each
 // endpoint field holds the address to fire, the value field holds its datum.
 const ctl = {
-  press: '#<Widget @press1>',
-  release: '#<Widget @release1>',
-  reset: '#<Widget @reset1>',
+  press: '#<Widget press1>',
+  release: '#<Widget release1>',
+  reset: '#<Widget reset1>',
   label: 'ready',
 };
 
@@ -59,20 +59,20 @@ describe('cross-module type with reference fields', () => {
   it('invoking c.press... fires to the endpoint address the value carries', async () => {
     const actor = await (await compileActor(handler('{ c.press... }'), { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: 'Widget ::Control' }], from: 'c' });
-    expect(actor.posts.some(p => p.op === '@press1' && p.to === '#<Widget @press1>')).toBe(true);
+    expect(actor.posts.some(p => p.op === '@press1' && p.to === '#<Widget press1>')).toBe(true);
   });
 
   it('invoking c.release... fires to the release endpoint, not press', async () => {
     const actor = await (await compileActor(handler('{ c.release... }'), { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: 'Widget ::Control' }], from: 'c' });
-    expect(actor.posts.some(p => p.op === '@release1' && p.to === '#<Widget @release1>')).toBe(true);
+    expect(actor.posts.some(p => p.op === '@release1' && p.to === '#<Widget release1>')).toBe(true);
     expect(actor.posts.some(p => p.op === '@press1')).toBe(false);
   });
 
   it('invoking c.reset... fires to the reset endpoint', async () => {
     const actor = await (await compileActor(handler('{ c.reset... }'), { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: [{ c: ctl }, '@handle.'], 'ty': [{ c: 'Widget ::Control' }], from: 'c' });
-    expect(actor.posts.some(p => p.op === '@reset1' && p.to === '#<Widget @reset1>')).toBe(true);
+    expect(actor.posts.some(p => p.op === '@reset1' && p.to === '#<Widget reset1>')).toBe(true);
   });
 
   it('reads a value field locally (no send) and replies with it', async () => {

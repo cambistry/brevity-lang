@@ -44,7 +44,7 @@ describe('a protected cell is set by #set to .name', () => {
   it('a bare name is not its label', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: [[5], '#set'], to: 'val' }, from: 't' } },
-      { output: { id: '1', ex: { set: 'unhandled' }, to: 't' } },
+      { output: { id: '1', ex: { 'set@val': 'unhandled' }, to: 't' } },
       { input: { id: '2', op: '@read', from: 'c' } },
       { output: { id: '2', re: [0], ty: ['Integer'], to: 'c' } },
     );

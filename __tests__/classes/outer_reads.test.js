@@ -46,66 +46,66 @@ const reply = (id, value) => expect.objectContaining({ id, re: [value], to: 'c' 
 describe('a class reads its file\'s cells', () => {
   it('reads a cell', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
-      { input: { id: '2', op: '@get', to: '@W/1', from: 'c' } },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
+      { input: { id: '2', op: '@get', to: '. W 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [4], 'ty': ['Integer'] }) },
     );
   });
 
   it('sees a write the file makes after the class was constructed', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
       { input: { id: '2', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
-      { input: { id: '3', op: '@get', to: '@W/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: '#<.>' }) },
+      { input: { id: '3', op: '@get', to: '. W 1', from: 'c' } },
       { output: reply('3', 14) },
-      { input: { id: '4', op: '@check', to: '@W/1', from: 'c' } },
+      { input: { id: '4', op: '@check', to: '. W 1', from: 'c' } },
       { output: reply('4', 'big') },
     );
   });
 
   it('reads in its constructor block, once', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
       { input: { id: '2', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
-      { input: { id: '3', op: '@seed', to: '@W/1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: '#<.>' }) },
+      { input: { id: '3', op: '@seed', to: '. W 1', from: 'c' } },
       { output: reply('3', 4) },
     );
   });
 
   it('reads a published cell, a constant, and both in one expression', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
-      { input: { id: '2', op: '@title', to: '@W/1', from: 'c' } },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
+      { input: { id: '2', op: '@title', to: '. W 1', from: 'c' } },
       { output: reply('2', 'box') },
-      { input: { id: '3', op: '@k', to: '@W/1', from: 'c' } },
+      { input: { id: '3', op: '@k', to: '. W 1', from: 'c' } },
       { output: reply('3', 5) },
-      { input: { id: '4', op: '@sum', to: '@W/1', from: 'c' } },
+      { input: { id: '4', op: '@sum', to: '. W 1', from: 'c' } },
       { output: reply('4', 9) },
-      { input: { id: '5', op: '@check', to: '@W/1', from: 'c' } },
+      { input: { id: '5', op: '@check', to: '. W 1', from: 'c' } },
       { output: reply('5', 'small') },
     );
   });
 
   it('names the cell in a reply', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
-      { input: { id: '2', op: '@named', to: '@W/1', from: 'c' } },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
+      { input: { id: '2', op: '@named', to: '. W 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { total: 4 } }) },
     );
   });
 
   it('a param of the same name means the param', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '@W', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<@W/1>' }) },
-      { input: { id: '2', op: [[7], '@param'], 'ty': [['Integer']], to: '@W/1', from: 'c' } },
+      { input: { id: '1', op: [{}, '#new'], to: '. W', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: '#<. W 1>' }) },
+      { input: { id: '2', op: [[7], '@param'], 'ty': [['Integer']], to: '. W 1', from: 'c' } },
       { output: reply('2', 7) },
     );
   });
@@ -185,8 +185,8 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: '@read', from: 'c' });
     const [log] = made(actor);
-    expect(log).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc @Log' }));
-    await actor.sendAsync({ id: log.id, re: '#<Svc @Log/1>', 'ty': 'Svc @Log', from: 'Svc' });
+    expect(log).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc Log' }));
+    await actor.sendAsync({ id: log.id, re: '#<Svc Log 1>', 'ty': 'Svc Log', from: 'Svc' });
     expect(replies(actor)).toEqual([{ id: '1', re: [1], 'ty': ['Integer'], to: 'c' }]);
   });
 
@@ -201,15 +201,15 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: '@watchRead', from: 'c' });
     const [first] = made(actor);
-    expect(first).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc @Log' }));
-    await actor.sendAsync({ id: first.id, re: '#<Svc @Log/1>', 'ty': 'Svc @Log', from: 'Svc' });
+    expect(first).toEqual(expect.objectContaining({ op: [[4], '#new'], to: 'Svc Log' }));
+    await actor.sendAsync({ id: first.id, re: '#<Svc Log 1>', 'ty': 'Svc Log', from: 'Svc' });
     await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
     const [, second] = made(actor);
-    expect(second).toEqual(expect.objectContaining({ op: [[5], '#new'], to: 'Svc @Log' }));
-    await actor.sendAsync({ id: second.id, re: '#<Svc @Log/2>', 'ty': 'Svc @Log', from: 'Svc' });
+    expect(second).toEqual(expect.objectContaining({ op: [[5], '#new'], to: 'Svc Log' }));
+    await actor.sendAsync({ id: second.id, re: '#<Svc Log 2>', 'ty': 'Svc Log', from: 'Svc' });
     expect(replies(actor)).toEqual([
       { id: '1', re: [1], 'ty': ['Integer'], to: 'c' },
-      expect.objectContaining({ id: '2', re: '#<>', to: 'c' }),
+      expect.objectContaining({ id: '2', re: '#<.>', to: 'c' }),
     ]);
   });
 
@@ -341,7 +341,7 @@ describe('a file cell holding an actor', () => {
       { input: { id: '1', op: '@read', from: 'c' } },
       { output: reply('1', 5) },
       { input: { id: '2', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '2', re: '#<.>' }) },
       { input: { id: '3', op: '@read', from: 'c' } },
       { output: reply('3', 6) },
     );

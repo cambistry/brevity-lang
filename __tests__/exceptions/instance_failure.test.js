@@ -80,109 +80,109 @@ describe('a failed as on a class instance', () => {
   `;
 
   const newBox = [
-    { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
+    { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+    { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
   ];
 
   describe('on the handler it failed in', () => {
     it('names both types', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: '@bad', to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@bad': 'as Integer: got Text' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: '@bad', to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@bad': 'as Integer: got Text' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('names both types for a typed param whose tag lies', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Integer']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'as Integer: got Text' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Integer']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'as Integer: got Text' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('names both types for a named param whose tag lies', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [{ i: 'x' }, '@typedNamed'], 'ty': [{ i: 'Integer' }], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typedNamed': 'as Integer: got Text' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [{ i: 'x' }, '@typedNamed'], 'ty': [{ i: 'Integer' }], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typedNamed': 'as Integer: got Text' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('answers unhandled for a typed param with an honest wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('goes by the tag when it is wrong and the value would fit', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[1], '@typed'], 'ty': [['Text']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[1], '@typed'], 'ty': [['Text']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('answers unhandled for a named param with an honest wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [{ i: 'x' }, '@typedNamed'], 'ty': [{ i: 'Text' }], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typedNamed': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [{ i: 'x' }, '@typedNamed'], 'ty': [{ i: 'Text' }], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typedNamed': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('answers unhandled when any param has a wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[1, 2], '@typedSecond'], 'ty': [['Integer', 'Integer']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typedSecond': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[1, 2], '@typedSecond'], 'ty': [['Integer', 'Integer']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typedSecond': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('answers unhandled for a tag no overload takes', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[true], '@overloaded'], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@overloaded': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[true], '@overloaded'], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@overloaded': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('picks the overload the tag names', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[1], '@overloaded'], 'ty': [['Integer']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c', from: '@Box/1' } },
-        { input: { id: '3', op: [['x'], '@overloaded'], 'ty': [['Text']], to: '@Box/1', from: 'c' } },
-        { output: { id: '3', re: ['x'], 'ty': ['Text'], to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[1], '@overloaded'], 'ty': [['Integer']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c', from: '. Box 1' } },
+        { input: { id: '3', op: [['x'], '@overloaded'], 'ty': [['Text']], to: '. Box 1', from: 'c' } },
+        { output: { id: '3', re: ['x'], 'ty': ['Text'], to: 'c', from: '. Box 1' } },
       );
     });
     it('answers unhandled on a superclass handler and its own', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [{}, '#new'], to: '@SubBox', from: 'c' } },
-        { output: { id: '1', re: '#<@SubBox/1>', 'ty': '@SubBox', to: 'c' } },
-        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '@SubBox/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '@SubBox/1' } },
-        { input: { id: '3', op: [['x'], '@own'], 'ty': [['Text']], to: '@SubBox/1', from: 'c' } },
-        { output: { id: '3', ex: { '@own': 'unhandled' }, to: 'c', from: '@SubBox/1' } },
+        { input: { id: '1', op: [{}, '#new'], to: '. SubBox', from: 'c' } },
+        { output: { id: '1', re: '#<. SubBox 1>', 'ty': '. SubBox', to: 'c' } },
+        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '. SubBox 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '. SubBox 1' } },
+        { input: { id: '3', op: [['x'], '@own'], 'ty': [['Text']], to: '. SubBox 1', from: 'c' } },
+        { output: { id: '3', ex: { '@own': 'unhandled' }, to: 'c', from: '. SubBox 1' } },
       );
     });
     it('answers unhandled for an op it does not have', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[1], '@missing'], 'ty': [['Integer']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@missing': 'unhandled' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[1], '@missing'], 'ty': [['Integer']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@missing': 'unhandled' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('asks for a schema when args come with no tags', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@typed'], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'schema_required' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [['x'], '@typed'], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'schema_required' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('takes any tag for an Anything param', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@anything'], 'ty': [['Text']], to: '@Box/1', from: 'c' } },
-        { output: expect.objectContaining({ id: '2', re: ['x'], to: 'c', from: '@Box/1' }) },
+        { input: { id: '2', op: [['x'], '@anything'], 'ty': [['Text']], to: '. Box 1', from: 'c' } },
+        { output: expect.objectContaining({ id: '2', re: ['x'], to: 'c', from: '. Box 1' }) },
       );
     });
     it('keeps answering after a wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '@Box/1' } },
-        { input: { id: '3', op: [[4], '@typed'], 'ty': [['Integer']], to: '@Box/1', from: 'c' } },
-        { output: { id: '3', re: [4], 'ty': ['Integer'], to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [['x'], '@typed'], 'ty': [['Text']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@typed': 'unhandled' }, to: 'c', from: '. Box 1' } },
+        { input: { id: '3', op: [[4], '@typed'], 'ty': [['Integer']], to: '. Box 1', from: 'c' } },
+        { output: { id: '3', re: [4], 'ty': ['Integer'], to: 'c', from: '. Box 1' } },
       );
     });
     it('leaves the instance answering, with its state', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: '@bad', to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@bad': 'as Integer: got Text' }, to: 'c', from: '@Box/1' } },
-        { input: { id: '3', op: '@get', to: '@Box/1', from: 'c' } },
-        { output: expect.objectContaining({ id: '3', re: [5], to: 'c', from: '@Box/1' }) },
+        { input: { id: '2', op: '@bad', to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@bad': 'as Integer: got Text' }, to: 'c', from: '. Box 1' } },
+        { input: { id: '3', op: '@get', to: '. Box 1', from: 'c' } },
+        { output: expect.objectContaining({ id: '3', re: [5], to: 'c', from: '. Box 1' }) },
       );
     });
   });
@@ -220,22 +220,22 @@ describe('a failed as on a class instance', () => {
     });
     it('another instance', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [{}, '#new'], to: '@Outer', from: 'c' } },
-        { output: { id: '1', re: '#<@Outer/1>', 'ty': '@Outer', to: 'c' } },
-        { input: { id: '2', op: '@viaInstance', to: '@Outer/1', from: 'c' } },
-        { output: { id: '2', ex: { '@viaInstance': 'error' }, to: 'c', from: '@Outer/1' } },
+        { input: { id: '1', op: [{}, '#new'], to: '. Outer', from: 'c' } },
+        { output: { id: '1', re: '#<. Outer 1>', 'ty': '. Outer', to: 'c' } },
+        { input: { id: '2', op: '@viaInstance', to: '. Outer 1', from: 'c' } },
+        { output: { id: '2', ex: { '@viaInstance': 'error' }, to: 'c', from: '. Outer 1' } },
       );
     });
     it('a function in the instance', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: '@viaFunction', to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@viaFunction': 'error' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: '@viaFunction', to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@viaFunction': 'error' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('a self-call in the instance', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: '@viaSelf', to: '@Box/1', from: 'c' } },
-        { output: { id: '2', ex: { '@viaSelf': 'error' }, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: '@viaSelf', to: '. Box 1', from: 'c' } },
+        { output: { id: '2', ex: { '@viaSelf': 'error' }, to: 'c', from: '. Box 1' } },
       );
     });
     it('leaves the caller its state', async () => {
@@ -563,11 +563,11 @@ describe('a failed as in a constructor block', () => {
   });
 
   describe('constructing through #new', () => {
-    const newGood = (id, arg) => ({ input: { id, op: [[arg], '#new'], ty: [[typeof arg === 'string' ? 'Text' : 'Integer']], to: '@Good', from: 'c' } });
+    const newGood = (id, arg) => ({ input: { id, op: [[arg], '#new'], ty: [[typeof arg === 'string' ? 'Text' : 'Integer']], to: '. Good', from: 'c' } });
 
     it('fails the call', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [[1], '#new'], ty: [['Integer']], to: '@Box', from: 'c' } },
+        { input: { id: '1', op: [[1], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
         { output: { id: '1', ex: { 'new@Box': 'error' }, to: 'c' } },
       );
     });
@@ -576,9 +576,9 @@ describe('a failed as in a constructor block', () => {
         newGood('1', 'x'),
         { output: { id: '1', ex: { 'new@Good': 'error' }, to: 'c' } },
         newGood('2', 5),
-        { output: { id: '2', re: '#<@Good/1>', 'ty': '@Good', to: 'c' } },
-        { input: { id: '3', op: '@get', to: '@Good/1', from: 'c' } },
-        { output: expect.objectContaining({ id: '3', re: { n: 5, m: 1, k: 1, t: 1 }, to: 'c', from: '@Good/1' }) },
+        { output: { id: '2', re: '#<. Good 1>', 'ty': '. Good', to: 'c' } },
+        { input: { id: '3', op: '@get', to: '. Good 1', from: 'c' } },
+        { output: expect.objectContaining({ id: '3', re: { n: 5, m: 1, k: 1, t: 1 }, to: 'c', from: '. Good 1' }) },
       );
     });
     it('leaves the file answering, with its state', async () => {

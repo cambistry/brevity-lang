@@ -85,11 +85,11 @@ describe('repeat until — tail repeat in a `!` function → self', () => {
   `;
 
   it('public handler, tail repeat block — returns self', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: '#<>', to: 'c' }) });
+    await expectBehavior(script, { input: { id: '1', op: '@publicTailBlock!', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: '#<.>', to: 'c' }) });
   });
 
   it('public handler, tail repeat single-line — returns self', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: '#<>', to: 'c' }) });
+    await expectBehavior(script, { input: { id: '2', op: '@publicTailSingleLine!', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: '#<.>', to: 'c' }) });
   });
 
   it('private lambda with tail repeat — call completes void', async () => {

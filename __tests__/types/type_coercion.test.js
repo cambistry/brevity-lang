@@ -751,7 +751,7 @@ describe('as — remote replies', () => {
       await expectBehavior(script,
         { input: { id: '99', op: '@point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: '@any', to: 'Svc' }) },
-        { input: { id: '1', re: [[1, 2]], 'ty': ['::Point'] } },
+        { input: { id: '1', re: [[1, 2]], 'ty': ['. ::Point'] } },
         { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
     });

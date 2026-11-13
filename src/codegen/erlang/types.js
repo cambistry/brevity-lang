@@ -1,7 +1,8 @@
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
 import { erlStateKey, erlString } from './preambles.js';
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, selfAddress } from '../wire_labels.js';
+import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
@@ -11,13 +12,13 @@ import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
 function erlTypeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its label (`@s`).
+  // A singleton's class is itself: it's tagged with its address (`. s`).
   const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
-  if (singleton) return singleton;
+  if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `${authority} ::${name}` : `::${name}`;
+  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
 }
 
 // The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.
@@ -332,8 +333,8 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
 // Register a Function node as a lambda dispatch handler, return its label expression
 // NOTE: uses genExpr via late binding on ctx to avoid circular dependency
 // `wire: true` marks a lambda that flows into a type field or a cross-actor
-// call argument and may be routed through CAM. It is encoded as a local-form
-// self-address `#<@N>` (the host's perspective translation promotes it to
+// call argument and may be routed through CAM. It is encoded as a relative
+// self-address `#<. @N>` (the host's perspective translation promotes it to
 // `#<selfAddr @N>` on the way out), and its dispatch arm is keyed by the `@N`
 // selector. A non-wire lambda keeps its bare `_lambda_N` local dispatch key
 // (used directly in self_send). The internal `_lambda_N` name is kept for
@@ -348,7 +349,7 @@ function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx, { wire = false } = {
     ctx.lambdaCaptureKeys.push(`_cap_${lambdaName}_${v}`);
   }
   ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
-  const labelValue = wire ? `#<${selector}>` : wireLabel(lambdaName);
+  const labelValue = wire ? `#<${selfAddress(selector)}>` : wireLabel(lambdaName);
   // If there are captures, emit put() calls as side effects before returning the label
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {

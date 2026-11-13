@@ -3,6 +3,10 @@
 Design proposal, not implemented. An Opre address is a path of space-delimited tokens. A token
 can hold any characters, sigils included: they're just part of the token.
 
+**Superseded in part by `at-sigil-internal-and-quoted-names-2026-11-12.md`:** a token with a space
+is quoted (`'my file.bv'`, `''` for `'`), replacing the `\ ` escape below, and the whole token `.`
+at the head of an address is self, making it relative to its sender.
+
 Out of scope: local messaging and ops.
 
 Builds on `address-delimiter-change-plan-2026-04-23.md` (`#<…>`) and

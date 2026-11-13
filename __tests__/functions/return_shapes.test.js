@@ -303,8 +303,8 @@ describe('a reply\'s tag', () => {
     @Box = *{${bodies}}
   `;
   const newBox = [
-    { input: { id: '1', op: [{}, '#new'], to: '@Box', from: 'c' } },
-    { output: { id: '1', re: '#<@Box/1>', 'ty': '@Box', to: 'c' } },
+    { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+    { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
   ];
 
   const paths = [
@@ -326,20 +326,20 @@ describe('a reply\'s tag', () => {
     });
     it('tags each path in a class', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [[true], op], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
-        { output: { id: '2', re: earlyRe, 'ty': earlyTag, to: 'c', from: '@Box/1' } },
-        { input: { id: '3', op: [[false], op], 'ty': [['Boolean']], to: '@Box/1', from: 'c' } },
-        { output: { id: '3', re: lateRe, 'ty': lateTag, to: 'c', from: '@Box/1' } },
+        { input: { id: '2', op: [[true], op], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
+        { output: { id: '2', re: earlyRe, 'ty': earlyTag, to: 'c', from: '. Box 1' } },
+        { input: { id: '3', op: [[false], op], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
+        { output: { id: '3', re: lateRe, 'ty': lateTag, to: 'c', from: '. Box 1' } },
       );
     });
   });
 
   it('tags a path by the type of the param it returns', async () => {
     await expectBehavior(script, ...newBox,
-      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
-      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c', from: '@Box/1' } },
-      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '@Box/1', from: 'c' } },
-      { output: { id: '3', re: [9], 'ty': ['Integer'], to: 'c', from: '@Box/1' } },
+      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
+      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c', from: '. Box 1' } },
+      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
+      { output: { id: '3', re: [9], 'ty': ['Integer'], to: 'c', from: '. Box 1' } },
     );
   });
 });

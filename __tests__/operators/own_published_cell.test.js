@@ -12,7 +12,7 @@ describe('@a <- v', () => {
       @bump! = { @a <- @a + 1 }
     `,
       { input: { id: '1', op: '@bump!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
       { input: { id: '2', op: '@a', from: 'c' } },
       { output: reply('2', 4) },
     );
@@ -66,7 +66,7 @@ describe('@a <- v', () => {
       @add! = (n Integer) { @items <- @items.append(n) }
     `,
       { input: { id: '1', op: [[5], '@add!'], 'ty': [['Integer']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
       { input: { id: '2', op: '@items', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [[5]] }) },
     );
@@ -80,7 +80,7 @@ describe('@a <- v', () => {
       }
     `,
       { input: { id: '1', op: [[true], '@set_if!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
       { input: { id: '2', op: '@a', from: 'c' } },
       { output: reply('2', 9) },
     );
@@ -92,7 +92,7 @@ describe('@a <- v', () => {
       @replace! = { @a <| 7 }
     `,
       { input: { id: '1', op: '@replace!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
       { input: { id: '2', op: '@a', from: 'c' } },
       { output: reply('2', 7) },
     );
@@ -111,7 +111,7 @@ describe('@a <- v', () => {
       { input: { id: '1', op: '@both', from: 'c' } },
       { output: reply('1', 3) },
       { input: { id: '2', op: '@write!', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '2', re: '#<.>' }) },
       { input: { id: '3', op: '@both', from: 'c' } },
       { output: reply('3', 30) },
     );
@@ -125,11 +125,11 @@ describe('subscribers', () => {
       @bump! = { @a <- @a + 1 }
     `)).spawn();
     await expectActorBehavior(actor,
-      { input: { id: 's', op: '@subscribe', to: '@a', from: 'sub' } },
+      { input: { id: 's', op: '@subscribe', to: '. a', from: 'sub' } },
       { output: expect.objectContaining({ id: 's', re: [3], to: 'sub' }) },
       { input: { id: '1', op: '@bump!', from: 'c' } },
       { output: expect.objectContaining({ id: 's', re: [4], to: 'sub' }) },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
     );
   });
 
@@ -140,11 +140,11 @@ describe('subscribers', () => {
       @bump! = { @a <- @a + 1 }
     `)).spawn();
     await expectActorBehavior(actor,
-      { input: { id: 's', op: '@subscribe', to: '@twice', from: 'sub' } },
+      { input: { id: 's', op: '@subscribe', to: '. twice', from: 'sub' } },
       { output: expect.objectContaining({ id: 's', re: [6], to: 'sub' }) },
       { input: { id: '1', op: '@bump!', from: 'c' } },
       { output: expect.objectContaining({ id: 's', re: [8], to: 'sub' }) },
-      { output: expect.objectContaining({ id: '1', re: '#<>' }) },
+      { output: expect.objectContaining({ id: '1', re: '#<.>' }) },
     );
   });
 

@@ -18,6 +18,7 @@ import { validate } from '../../validate.js';
 import { renamePublicClasses, validateWithSourceNames } from '../../subclass.js';
 import { codegen as jsCodegen } from '../javascript/classes.js';
 import { start } from './runtime.js';
+import { _opre_quote as quote, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 import { runExtractPasses } from '../../extract_passes.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -64,46 +65,42 @@ async function compileAndLoad(source, compileOptions = {}) {
 // Lives on window.__bv_harness__. Each call is one round-trip from Node-side
 // Playwright into the page. Handles are id-keyed, stored in `handles`.
 //
-// The harness acts as the "parent" of each spawned actor in the CAM tree
-// sense. Actors emit messages in their own coordinate system; the parent
-// translates on the way out (see notes/layer-a-closure-as-child-2026-04-22.md):
+// The harness is the global boundary for each spawned actor: the node that
+// replaces the self token `.` with the actor's own address, `selfAddr` (see
+// notes/at-sigil-internal-and-quoted-names-2026-11-12.md):
 //
-//   - Payload `#<@N>` / `#<#N>` → `#<selfAddr @N>` (space between alias and selector).
-//   - Self address `#<>` (local form, no selector) → `#<selfAddr>`.
-//     Global-form addresses (word-char start inside the angles) are left
-//     alone; the discriminator is leading non-word-char = local.
-//   - `ty` has no brackets: a tag that starts with a delimiter (`::Point`,
-//     `@Box`, a bare `@`) → `selfAddr ::Point`; a global tag is left alone.
-//   - Missing `from` → filled in with selfAddr.
-//   - Local-form `from: '@N'` → prepended to `from: 'selfAddr @N'`.
-//   - `to` field is untouched; the sender writes it in its own DI frame
-//     already (e.g. 'HTML @div'), which is application-absolute for now.
-//
-// The address rewrite runs as a raw-text regex on serialized JSON because `#<`
-// can only appear inside JSON string values (never structural); `ty` is walked.
+//   - Payload `#<. x>` → `#<selfAddr x>`; self `#<.>` → `#<selfAddr>`.
+//   - `ty` has no brackets: a relative tag (`.`, `. Box`, `. ::Point`) is
+//     resolved whole.
+//   - Missing `from` → selfAddr; a relative `from: '. x'` → `selfAddr x`.
+//   - Any address whose head token isn't `.` is global and passes through,
+//     `to` included (the sender writes it in its own DI frame, 'HTML div').
 
 const handles = new Map();
 const compiled = new Map();
 let nextId = 0;
 
 function rewriteLocalTags(v, selfAddr) {
-  if (typeof v === 'string') return v === '' || /^\w/.test(v) ? v : `${selfAddr} ${v}`;
+  if (typeof v === 'string') return resolve(v, selfAddr);
   if (Array.isArray(v)) return v.map(x => rewriteLocalTags(x, selfAddr));
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rewriteLocalTags(x, selfAddr)]));
   return v;
 }
 
+function rewriteLocalPayload(v, selfAddr) {
+  if (typeof v === 'string') return mapBracketed(v, a => resolve(a, selfAddr));
+  if (Array.isArray(v)) return v.map(x => rewriteLocalPayload(x, selfAddr));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rewriteLocalPayload(x, selfAddr)]));
+  return v;
+}
+
 function rewriteLocalAddresses(msg, selfAddr) {
   const { ty, ...rest } = msg;
-  const json = JSON.stringify(rest);
-  const rewritten = json.replace(/#<([^\w>][^>]*)?>/g, (_, content) => (content ? `#<${selfAddr} ${content}>` : `#<${selfAddr}>`));
-  const out = JSON.parse(rewritten);
-  if ('ty' in msg) out.ty = rewriteLocalTags(ty, selfAddr);
-  if (out.from == null || out.from === '') {
-    out.from = selfAddr;
-  } else if (typeof out.from === 'string' && !/^\w/.test(out.from)) {
-    out.from = selfAddr + ' ' + out.from;
-  }
+  const self = quote(selfAddr);
+  const out = rewriteLocalPayload(rest, self);
+  if ('ty' in msg) out.ty = rewriteLocalTags(ty, self);
+  if (out.from == null || out.from === '') out.from = self;
+  else if (typeof out.from === 'string') out.from = resolve(out.from, self);
   return out;
 }
 

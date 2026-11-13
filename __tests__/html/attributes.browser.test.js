@@ -88,7 +88,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], class: 'basic' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -104,7 +104,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], id: 'main', class: 'card' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -120,7 +120,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello'], class: 'static' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -136,7 +136,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello'] }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -157,7 +157,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], class: '#<main @0>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -174,7 +174,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], id: 'root', class: '#<main @0>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -194,7 +194,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['#<main @0>'], class: '#<main @1>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
     );
   });
@@ -218,9 +218,9 @@ describe('Q4: reactive attr closure subscription', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], class: '#<main @0>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
-      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '. @0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['active'] }) },
     );
   });
@@ -238,9 +238,9 @@ describe('Q4: reactive attr closure subscription', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], class: '#<main @0>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
-      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '. @0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['active'] }) },
       { input: { id: 'b1', op: [{ v: 'highlighted' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['highlighted'] }) },
@@ -260,9 +260,9 @@ describe('Q4: reactive attr closure subscription', () => {
       { input: { id: '1', op: '@create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: [], class: '#<main @0>' }, '#new'],
-        to: 'HTML @div',
+        to: 'HTML div',
       }) },
-      { input: { id: 'sub1', op: '@subscribe', to: '@0', from: 'c' } },
+      { input: { id: 'sub1', op: '@subscribe', to: '. @0', from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['a'] }) },
       { input: { id: 'b1', op: [{ v: 'b' }, '@bump.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: expect.objectContaining({ id: 'sub1', re: ['b'] }) },
