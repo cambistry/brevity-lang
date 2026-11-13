@@ -91,18 +91,23 @@ A token containing spaces is written in single quotes:
 
 ### External names that start with a sigil
 
-Locally, quotes also mark an external name that begins with one of Brevity's internal sigils, so it
-isn't read as a local label:
+They aren't quoted, locally or globally. Whether an address is local depends only on its head
+token: `.` is relative, and anything else is global and passes through translation unchanged. A
+token is read only by the actor it names, so no Brevity actor reads a foreign `@foreign` or `#tag`
+as one of its own labels:
 
 ```
-'@foreign'          // a non-local name that happens to start with @
-'.hidden.file'
+@foreign x          // a global address: the top actor `@foreign`
+#tag x              // the top actor `#tag`
+@ xyz               // the actor named, literally, `@`
+main @foreign ~x    // sigils after the head belong to the actors they name
 ```
 
-On the public wire the quotes drop: the token is just `@foreign` / `.hidden.file`.
+So quoting is required exactly when a token contains a space or starts with `'`, or when it is
+the head token `.` meant literally (`'.'`).
 
-So, locally, quoting is required exactly when a token contains a space, starts with `'`, or starts
-with `@`, `.` or `#`.
+Writing such a name in Brevity source is a separate question. The source lexer reads `@`, `.`,
+`#`, `~` and `$` itself, and `'…'` is already its Text literal. That is still open.
 
 ## `.` is self: the relative-address marker
 
@@ -130,8 +135,8 @@ file/path Svc 1          // global
 - **What follows the head is the sender's business.** How an actor or subactor formats the rest of
   its address isn't Opre's concern.
 - **`ty` uses the same token.** "My class" is `ty: '.'` (was a bare `@`): self and my class are
-  both the sender's own frame. A local type tag is `. ::Point`, not `::Point`; it is no longer
-  local by virtue of its leading delimiter.
+  both the sender's own frame. A local type tag is `. Point`: its authority, `.`, then its bare
+  name (see `type-keyword-and-actor-scoped-types-2026-11-13.md`).
 - **`..` is not defined.** It would suggest a parent, i.e. upward addressing, which CAM avoids.
 
 ## Instance addresses
