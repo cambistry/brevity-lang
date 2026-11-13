@@ -325,7 +325,7 @@ export function validate(ast, options = {}) {
   // source service's interface (`__typeDecls`) binds locally as a type.
   // Construction sites (`Local(...)` / aliased `P(...)`) compile to a typed
   // Object with the canonical (remote) wire tag, regardless of any local
-  // rename — `(Point: P)` keeps `::Point` on the wire.
+  // rename — `(Point: P)` keeps `Point` on the wire.
   //
   // Stored on the AST as `ast.importedTypes`:
   //   { localName: { remote, sourceAlias, decl: { fields } } }
@@ -1058,7 +1058,7 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
 }
 
 // ── Type declaration registry checks ──────────────────────────────────────
-// Slice 2 of types-implementation-plan-2026-04-27: a `::Name` is the canonical
+// Slice 2 of types-implementation-plan-2026-04-27: a declared type is the canonical
 // home for that name within its file. Enforce uniqueness and basic shape so
 // downstream slices can rely on `ast.types` having one well-formed entry per
 // declared name.
@@ -1285,7 +1285,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
   }
   if (typesByName.size === 0) return;
 
-  // File-scope nameable types: locally declared `::Name` plus explicitly
+  // File-scope nameable types: locally declared types plus explicitly
   // imported names. An *explicit* lambda-param annotation naming a bare type
   // outside this set is an error — implicit (inferred) import is inference-only
   // and never widens this set.
@@ -1419,7 +1419,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
 
 // Slice 5 of types-implementation-plan-2026-04-27: when `obj.field` is read
 // and `obj` is statically a typed object (a TypeConstruction directly, or
-// an identifier whose typeEnv binding is a user-declared `::Name`), the
+// an identifier whose typeEnv binding is a user-declared type), the
 // property must be one of that type's declared fields.
 function checkTypeFieldAccess(ast) {
   const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
@@ -1697,7 +1697,7 @@ function checkTypeDestructure(ast) {
 // rewrite any `FunctionCallExpr` whose callee is an imported-type local name
 // into a `TypeConstruction` whose typeName is the *canonical* (remote) name.
 // This keeps the wire tag invariant under local renames: `(Point: P)` still
-// produces `::Point` annotations.
+// produces `Point` annotations.
 function rewriteImportedTypeConstructions(ast, importedTypes) {
   const isImportedTypeCall = (n) =>
     n && n.type === 'FunctionCallExpr' &&

@@ -201,10 +201,10 @@ describe('Unions — ty is the type of the value sent', () => {
         return result: xs
   `;
 
-  it('a Point in a Point | null slot is tagged ::Point', async () => {
+  it('a Point in a Point | null slot is tagged Point', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'point', from: 'c' } },
-      { output: { id: '1', 'ty': { result: '. ::Point' }, re: { result: [1, 2] }, to: 'c' } },
+      { output: { id: '1', 'ty': { result: '. Point' }, re: { result: [1, 2] }, to: 'c' } },
     );
   });
 

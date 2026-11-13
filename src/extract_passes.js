@@ -331,7 +331,7 @@ export function injectFileParamsIntoFileActor(ast) {
   fileActor.params = [...fileParams, ...(fileActor.params || [])];
 }
 
-// Slice 9: when a typed assignment expects a user-declared `::Type` and the
+// Slice 9: when a typed assignment expects a user-declared type and the
 // RHS is a bare Object, coerce the Object into a TypeConstruction by
 // mapping positional args to the declared fields. The bare-tuple form
 // `p Point = (1, 2)` becomes equivalent to `p Point = Point(1, 2)`.

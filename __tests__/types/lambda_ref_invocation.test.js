@@ -40,7 +40,7 @@ const WIDGET_METHOD = `{
 // A Signal value as it arrives on the wire: its silent `dismiss` reference
 // holds an address, its `code` a datum. Positional — all fields required.
 const sigWire = ['#<caller d>', 7];
-const sigTag = 'Widget ::Signal';
+const sigTag = 'Widget Signal';
 
 // ── Carrier 1: a service-hosted type's callback field ────────────────────────
 // Construct `Panel` (imported from Widget) with a lambda for its `onpress`

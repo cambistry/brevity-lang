@@ -37,13 +37,13 @@ maybe Text | null = null
 - Field access on typed values.
 - Type equality and tag-aware comparison.
 - Type destructuring, including optional fields and fallback.
-- Type wire format with `::Tag` annotations.
+- Type wire format with `authority Name` tags.
 - Cross-module type references such as `Geom::Point`.
 - Type coercion, dependencies, matching, unions, and actorization.
 
 ## Wire Notes
 
-- Tagged type values use `::Type` annotations in `ty`.
+- Tagged type values use `authority Name` tags in `ty`.
 - All-required positional types can travel as positional payloads.
 - Optional-bearing types can travel as named maps with absent optional fields
   omitted.

@@ -865,7 +865,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `bv_object_pack(bv_inst_call_(${pid}, ${erlString(memberOp(expr.property))}, #{}))`;
     }
     // Slice 5/9: field access on a TypeConstruction or a local typed with a
-    // user-declared `::Name`. Tagged structures live in maps keyed by binary
+    // user-declared type. Tagged structures live in maps keyed by binary
     // field names. Absent fields read as the atom null. Slice 10 extends
     // this to RefRead: type-valued state cells (`coords *Point`).
     const objStaticType = (() => {

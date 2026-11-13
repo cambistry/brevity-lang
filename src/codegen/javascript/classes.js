@@ -760,9 +760,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     : '';
   const tyDecl = "\n    const _ty = message['ty'];";
   // Slice 12 inbound: when the message carries a parallel ty tag set, walk
-  // the packed object and reconstruct any `::Name`-tagged type values
+  // the packed object and reconstruct any type-tagged values
   // before destructure runs. `_bv_unwire_packed` no-ops when types is null
-  // and per-slot `_bv_from_wire` no-ops on tags that don't start with `::`.
+  // and per-slot `_bv_from_wire` no-ops on tags that name no known type.
   const typesLines = usesTypeMatching
     ? `\n    const _types = _ty != null ? BvObject.pack(_ty[0] ?? null) : null;${(usesObject || hasLambdas) ? `\n    if (_types && _s) Object.assign(_s, _bv_unwire_packed(_s, _types));` : ''}`
     : ((usesObject || hasLambdas)
@@ -1240,11 +1240,11 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       return v;
     };
     // \`ty\` has no brackets. A bare \`.\` is the sender's own class, which we know.
-    // A type is declared at the top of a file, so \`. ::Point\` already names the
-    // file actor, which is where the instance found it: it stays as it is.
+    // A type's tag names its authority from the file actor (\`. Point\`,
+    // \`. W X\`), which is where the instance found it: it stays as it is.
     const localTy = (v) => {
       if (v === '.') return tag;
-      if (typeof v === 'string') return v.startsWith('. ::') ? v : _opre_under(v, addr);
+      if (typeof v === 'string') return _bv_type_name(v) ? v : _opre_under(v, addr);
       if (Array.isArray(v)) return v.map(localTy);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
       return v;
@@ -1547,9 +1547,9 @@ export function codegen(ast, options = {}) {
 
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
   // Authority (path where the type is defined) per type key. Local types have
-  // empty authority (`#<::Name>`, filled by perspective translation as a value
+  // empty authority (`. Name`, filled by perspective translation as a value
   // rises); imported/cross-module types carry the dependency path
-  // (`#<geometry.bv ::Point>`). See notes/type-authority-address-tags-2026-10-26.
+  // (`geometry.bv Point`). See notes/type-authority-address-tags-2026-10-26.
   ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: register imported types under both the local and canonical
   // names so identifier-based lookups (`tagFor`, `isType`) resolve through
@@ -1636,7 +1636,7 @@ export function codegen(ast, options = {}) {
 
   // Slice 12+13: per-program type registry. Carries field order plus an
   // `allRequired` flag so wire helpers can encode positional vs. named
-  // payload without re-inspecting AST. Empty registry when no `::Name`
+  // payload without re-inspecting AST. Empty registry when no `type`
   // declarations exist — `_bv_to_wire` still safely passes values through.
   // Slice 15: imported types are added under their canonical (remote) name
   // — wire tags are renaming-invariant.

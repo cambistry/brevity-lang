@@ -6,8 +6,8 @@ import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
-// Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
-// type, `::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
+// Wire tag for a type-valued slot: `path Name` for an imported/cross-module
+// type, `. Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
@@ -18,7 +18,7 @@ function erlTypeTag(ctx, t) {
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
+  return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
 }
 
 // The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.

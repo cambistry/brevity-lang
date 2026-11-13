@@ -1,5 +1,5 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens } from './runtime/wire.js';
+import { _bv_to_wire, _bv_type_name, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens } from './runtime/wire.js';
 import { OPRE_TOKENS_PREAMBLE } from '../opre_tokens.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
@@ -13,6 +13,7 @@ export const EQUALITY_PREAMBLE = _bv_eq.toString();
 // inline-edit — source of truth is runtime/wire.js.
 export const WIRE_PREAMBLE = [
   _bv_to_wire.toString().replace(', _bv_types)', ')'),
+  _bv_type_name.toString().replace(', _bv_types)', ')'),
   _bv_from_wire.toString().replace(', _bv_types)', ')'),
   _bv_unwire_packed.toString().replace(', _bv_types)', ')'),
   _bv_unwire_reply.toString().replace(', _bv_types)', ')'),
@@ -545,7 +546,7 @@ const _bvTyOf = (v, m) => {
     for (let l = v; l != null; l = l.tail) a.push(_bvTyOf(l.head, el));
     return a;
   }
-  if (typeof v?.__type === 'string') return '. ::' + v.__type.split('::').pop();
+  if (typeof v?.__type === 'string') return '. ' + v.__type;
   return k;
 };
 const _bvAsFields = (v, d) => {
@@ -681,9 +682,10 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
-  // A type value's wire tag is \`::Name\` or \`authority ::Name\`. The parameter
-  // spells the type by name (possibly Alias::Name). Match on the bare type
-  // name; authority is identity that travels, not a v1 match key.
+  // A type value's wire tag is its authority's address and its bare name
+  // (\`. Point\`, \`Svc Point\`). The parameter spells the type by name, possibly
+  // reached through an actor (\`Svc::Point\`). Match on the bare type name;
+  // authority is identity that travels, not a v1 match key.
   const bareName = (t) => {
     if (typeof t !== 'string') return t;
     if (t.indexOf('::') !== -1) return t.slice(t.lastIndexOf('::') + 2);
@@ -691,10 +693,10 @@ function _matchTypes(types, named, positional, requiredPos) {
   };
   const memberOf = (actual, expected) => {
     if (actual === expected || expected === 'Anything') return true;
-    const isTypeTag = typeof actual === 'string' && actual.indexOf('::') !== -1;
-    if (isTypeTag && bareName(actual) === bareName(expected)) return true;
+    const tagName = _bv_type_name(actual);
+    if (tagName && tagName === bareName(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
-      return expected.split('|').some(m => m.trim() === actual || (isTypeTag && bareName(actual) === bareName(m.trim())));
+      return expected.split('|').some(m => m.trim() === actual || (tagName && tagName === bareName(m.trim())));
     }
     return false;
   };

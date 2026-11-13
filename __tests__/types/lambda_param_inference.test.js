@@ -9,7 +9,7 @@ import { compileSource } from '../helpers.js';
 // that type (`s.code` is a real field; `s.bogus` is not). Explicit annotations
 // are honored and never overwritten.
 //
-// Pure-language tests — a plain local `::Signal` / `::Panel`, no services, no
+// Pure-language tests — a plain local `Signal` / `Panel`, no services, no
 // browser. (Cross-module + implicit scoped import is a separate file.)
 // ═══════════════════════════════════════════════════════════════════════════
 

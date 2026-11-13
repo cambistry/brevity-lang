@@ -687,7 +687,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
     const reBody = genRustReBody(fields, te, refNames);
     const tyBody = genRustTyBody(fields, te, refNames);
     if (!tyBody) return reBody;
-    const unwire = tyBody.includes('::') ? `if from == "__parent" { bv_unwire_reply(&_r, &${tyBody}) } else { _r }` : '_r';
+    const unwire = `if from == "__parent" { bv_unwire_reply(&_r, &${tyBody}) } else { _r }`;
     return `{ let _r = ${reBody}; ${tagWireReply(tyBody)} ${unwire} }`;
   };
   const childGuards = body.filter(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr));
@@ -774,7 +774,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
     if (spreadField && !spreadField.localObject) {
       lines.push(`                if bv_from_wire_caller(from) { self.wire_tag = self.wire_msg.get("ty").and_then(|b| b.as_array()).and_then(|a| a.first()).map(BvObject::splat_ty); }`);
     }
-    if (childTy?.includes('::')) {
+    if (childTy) {
       lines.push(`                if from == "__parent" { re = re.map(|_r| bv_unwire_reply(&_r, &${childTy})); }`);
     }
   } else if (implicitReturn && !childGuards.includes(implicitReturn)) {

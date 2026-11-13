@@ -2163,7 +2163,7 @@ emit_await_(Event, Payload) ->
 
   // Slice 12+13: per-program type registry. `bv_type_fields/1` returns the
   // declared field list for a given type so `bv_unwire_payload/2` can walk
-  // ty annotations and reconstruct ::Name-tagged values from wire form.
+  // ty annotations and reconstruct type-tagged values from wire form.
   const _seenErlType = new Set();
   const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).filter(t => {
     if (_seenErlType.has(t.name)) return false; // dedup: keyed under alias + canonical name
@@ -2319,7 +2319,7 @@ export function codegenErlang(ast, options = {}) {
   ctx.ephCounter = 0;
   ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
-  // Authority (defining path) per type key: '' for local (#<::Name>, filled by
+  // Authority (defining path) per type key: '' for local (`. Name`, filled by
   // perspective translation), the dependency path for imported/cross-module.
   ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: imported types — register under both local and canonical names

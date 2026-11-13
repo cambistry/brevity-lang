@@ -109,7 +109,7 @@ describe('reference fields — captured in the type declaration', () => {
 //
 // Values with reference fields arrive as typed params on the wire: the param
 // payload is a name-keyed map whose value is the type's positional array, with
-// a parallel `ty: [{ param: '. ::Type' }]` tag (mirrors type_wire.test.js).
+// a parallel `ty: [{ param: '. Type' }]` tag (mirrors type_wire.test.js).
 // Each reference field slot carries an address string.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ describe('reference fields — runtime invocation', () => {
   it('bang-invoking a silent reference posts a fire-and-forget to its address', async () => {
     // push = "#<x p>"  → selector "@p", addressed to the full address.
     await expectBehavior(fixture,
-      { input: { id: '1', op: [{ s: ['#<x p>', '#<x f>'] }, 'one.'], 'ty': [{ s: '. ::Sink' }], from: 'caller' } },
+      { input: { id: '1', op: [{ s: ['#<x p>', '#<x f>'] }, 'one.'], 'ty': [{ s: '. Sink' }], from: 'caller' } },
       { output: expect.objectContaining({ op: 'p', to: '#<x p>' }) },
     );
   });
@@ -146,14 +146,14 @@ describe('reference fields — runtime invocation', () => {
     // Only the fire-and-forget post appears; no `re` to the caller. A second
     // post (a handler reply) would break this exact match.
     await expectBehavior(fixture,
-      { input: { id: '2', op: [{ s: ['#<x p>', '#<x f>'] }, 'one.'], 'ty': [{ s: '. ::Sink' }], from: 'caller' } },
+      { input: { id: '2', op: [{ s: ['#<x p>', '#<x f>'] }, 'one.'], 'ty': [{ s: '. Sink' }], from: 'caller' } },
       { output: { id: expect.any(String), op: 'p', to: '#<x p>' } },
     );
   });
 
   it('two silent calls post in source order to their own addresses', async () => {
     await expectBehavior(fixture,
-      { input: { id: '3', op: [{ s: ['#<x p>', '#<x f>'] }, 'both.'], 'ty': [{ s: '. ::Sink' }], from: 'caller' } },
+      { input: { id: '3', op: [{ s: ['#<x p>', '#<x f>'] }, 'both.'], 'ty': [{ s: '. Sink' }], from: 'caller' } },
       { output: expect.objectContaining({ op: 'p', to: '#<x p>' }) },
       { output: expect.objectContaining({ op: 'f', to: '#<x f>' }) },
     );
@@ -163,7 +163,7 @@ describe('reference fields — runtime invocation', () => {
     // External request id '50' avoids colliding with the handler's own
     // internal send ids, which start at '1'.
     await expectBehavior(fixture,
-      { input: { id: '50', op: [{ c: [200, '#<caller cb>'] }, 'callback'], 'ty': [{ c: '. ::Call' }], from: 'caller' } },
+      { input: { id: '50', op: [{ c: [200, '#<caller cb>'] }, 'callback'], 'ty': [{ c: '. Call' }], from: 'caller' } },
       // The callback send: arg 200, selector @cb, addressed to the closure.
       { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller cb>' }) },
       // Synthesize the callback's typed reply (internal send id '1'). 999 is an

@@ -70,7 +70,7 @@ async function compileAndLoad(source, compileOptions = {}) {
 // notes/at-sigil-internal-and-quoted-names-2026-11-12.md):
 //
 //   - Payload `#<. x>` → `#<selfAddr x>`; self `#<.>` → `#<selfAddr>`.
-//   - `ty` has no brackets: a relative tag (`.`, `. Box`, `. ::Point`) is
+//   - `ty` has no brackets: a relative tag (`.`, `. Box`, `. Point`) is
 //     resolved whole.
 //   - Missing `from` → selfAddr; a relative `from: '. x'` → `selfAddr x`.
 //   - Any address whose head token isn't `.` is global and passes through,

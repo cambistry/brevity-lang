@@ -500,8 +500,8 @@ export function tokenize(source) {
       continue;
     }
 
-    // Double colon — the type-level operator. `::Name` declares a type;
-    // `Service::Name` is a cross-module type reference. Distinct from the
+    // Double colon — reaches a type through an actor: `Svc::Point`,
+    // `Class::X`. Distinct from the
     // `:name` named-param sigil and the bare `COLON` separator below.
     if (source[i] === ':' && source[i + 1] === ':') {
       tokens.push({ type: 'DCOLON' });

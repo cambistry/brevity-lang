@@ -626,7 +626,7 @@ export function genExpr(ctx, expr) {
     // Slice 4 of types-implementation-plan-2026-04-27: tag-aware equality.
     // Route `==`/`!=` through `_bv_eq` when either operand is a Brevity Type
     // (TypeConstruction directly or a typed identifier whose declared type
-    // is a user-declared `::Name`). `_bv_eq` enforces strict tag-matching:
+    // is a user-declared type). `_bv_eq` enforces strict tag-matching:
     // `Point(0,0) == (0,0)` and `Point(0,0) == Pair(0,0)` are both false.
     // Note: parser maps `==`/`!=` to `===`/`!==` per CMP_OPS in parser.js.
     if (expr.op === '===' || expr.op === '!==') {
@@ -1260,7 +1260,7 @@ export function genReplyField(ctx, field, typeEnv) {
     if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
     // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
     // form (positional list when all fields are required, named map when any
-    // optional). The ty `::Tag` annotation tells the receiver how to read.
+    // optional). The ty tag tells the receiver how to read.
     if (isType(t)) return `_bv_to_wire(${expr})`;
     if (t === 'Object') return `((v) => (v !== null && typeof v === 'object' && Array.isArray(v.positional) ? BvObject.splat(v) : v))(${expr})`;
     return expr;
@@ -1365,8 +1365,8 @@ export function genDefaultValue(node) {
   return 'undefined';
 }
 
-// The wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
-// type, `. ::Name` for a local one (authority filled by perspective translation as
+// The wire tag for a type-valued slot: `path Name` for an imported/cross-module
+// type, `. Name` for a local one (authority filled by perspective translation as
 // the value rises; `ty` is a translated field, so it needs no `#<…>`). Non-type tags (primitives
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
@@ -1377,7 +1377,7 @@ export function typeTag(ctx, t) {
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   const name = ctx.typeDecls.get(t).name || t;
   const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
+  return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
 }
 
 // Resolve a call argument's declared/inferred type for wire tagging. Covers

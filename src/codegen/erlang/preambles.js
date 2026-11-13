@@ -16,7 +16,7 @@ const PREAMBLE = `
 %% ── Slice 12+13 wire format helpers ──────────────────────────────────────
 %% Outbound: strip __type from a tagged object and reshape to wire form.
 %% Inbound: reconstruct a tagged object from a positional list or named
-%% map given the type tag (::Name) and declared fields.
+%% map given the type tag and declared fields.
 bv_to_wire(V, _Fields, _AllRequired) when not is_map(V) -> V;
 bv_to_wire(V, Fields, AllRequired) ->
     case maps:is_key(<<"__type">>, V) of
@@ -35,12 +35,17 @@ bv_to_wire(V, Fields, AllRequired) ->
             end
     end.
 
-%% A type's wire tag is ::Name or authority ::Name. Returns the bare type
-%% name, or undefined when the tag does not denote a type.
+%% A type's wire tag is its authority's address followed by its bare name
+%% (. Point, Svc Point). Nothing in its shape says it names a type: it does
+%% when its last token is a type this program knows. Returns that name, or
+%% undefined.
 bv_type_name(Tag) when is_binary(Tag) ->
-    case binary:matches(Tag, <<"::">>) of
+    case binary:matches(Tag, <<" ">>) of
         [] -> undefined;
-        Ms -> {P, _} = lists:last(Ms), binary:part(Tag, P + 2, byte_size(Tag) - P - 2)
+        Ms ->
+            {P, _} = lists:last(Ms),
+            Name = binary:part(Tag, P + 1, byte_size(Tag) - P - 1),
+            case bv_type_fields(Name) of undefined -> undefined; _ -> Name end
     end;
 bv_type_name(_) -> undefined.
 
@@ -1007,11 +1012,12 @@ bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
 bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
 bv_wire_own_(V) -> V.
 %% A tag from an actor we published, relative to it: a bare . is its class;
-%% any other relative tag goes under its address. A type is declared at the
-%% top of a file, so . ::Point already names us. A global tag passes.
+%% any other relative tag goes under its address. A type's tag names its
+%% authority from the file actor (. Point, . W X), so it stays as it is. A
+%% global tag passes.
 bv_local_tag_(<<".">>, Addr) -> bv_addr_class_(Addr);
-bv_local_tag_(<<". ::", _/binary>> = T, _) -> T;
-bv_local_tag_(<<". ", _/binary>> = T, Addr) -> bv_opre_under_(T, Addr);
+bv_local_tag_(<<". ", _/binary>> = T, Addr) ->
+    case bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
 bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
 bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
 bv_local_tag_(T, _) -> T.
@@ -1126,13 +1132,14 @@ structure_splat_ty(M) when is_map(M) -> M;
 structure_splat_ty(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
-%% Bare type name of a parameter annotation (Alias::Name -> Name, Name -> Name).
+%% Bare type name of a parameter annotation (Svc::Name -> Name, Name -> Name).
 bv_bare_name(T) when is_binary(T) -> lists:last(binary:split(T, <<"::">>, [global]));
 bv_bare_name(T) -> T.
 
-%% A type value's wire tag is its authority address carrying ::Name; the
-%% parameter spells the type by name (possibly Alias::Name). Match on the bare
-%% type name (authority is identity that travels, not a v1 match key).
+%% A type value's wire tag is its authority's address and its bare name; the
+%% parameter spells the type by name, possibly reached through an actor
+%% (Svc::Name). Match on the bare type name (authority is identity that
+%% travels, not a v1 match key).
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
 type_member_of(Actual, Expected) when is_binary(Expected) ->
     An = bv_type_name(Actual),
@@ -1268,7 +1275,7 @@ bv_ty_of(V, M) ->
     case bv_ty_pick_([K | Alt] ++ [<<"*">>], M) of
         {ok, T} -> T;
         none when is_list(V) -> El = [E || {Ek, _} = E <- M, Ek =/= <<"List">>], [bv_ty_of(X, El) || X <- V];
-        none when is_map(V), is_map_key(<<"__type">>, V) -> <<"::", (lists:last(binary:split(K, <<"::">>, [global])))/binary>>;
+        none when is_map(V), is_map_key(<<"__type">>, V) -> <<". ", K/binary>>;
         none -> K
     end.
 bv_ty_pick_([], _) -> none;

@@ -151,7 +151,7 @@ export default {
           if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalize(x)]));
           return v;
         };
-        // `ty` has no brackets: a relative tag (`.`, `. Box`, `. ::Point`) is
+        // `ty` has no brackets: a relative tag (`.`, `. Box`, `. Point`) is
         // resolved whole.
         const globalizeTy = (v) => {
           if (typeof v === 'string') return resolve(v, self);

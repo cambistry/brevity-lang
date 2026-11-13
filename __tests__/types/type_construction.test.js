@@ -6,7 +6,7 @@ import { compileSource } from '../helpers.js';
 // named, and optional field forms land in later slices.
 
 describe('type declaration — parser', () => {
-  it('parses ::Point (x Integer, y Integer)', () => {
+  it('parses type Point (x Integer, y Integer)', () => {
     const { ast } = extract('type Point (x Integer, y Integer)\n');
     expect(ast.types).toEqual([
       {

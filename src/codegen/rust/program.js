@@ -747,7 +747,7 @@ ${bodyLines}
             let rewritten = target.to_string();
             return self.handle_op(&rewritten, message, payload, from, id);
         }
-        // Slice 12 inbound: reconstruct any ::Name-tagged type values
+        // Slice 12 inbound: reconstruct any type-tagged values
         // from their wire payload (positional list or named map without
         // __type) so handler bodies can read them as tagged structures.
         // We shadow payload with a locally-owned reconstructed copy so
@@ -1054,13 +1054,13 @@ fn bv_addr_class(addr: &str) -> String {
     }
 }
 // A tag from an actor we published, relative to it: a bare . is its class; any
-// other relative tag goes under its address. . ::Types name the file. A global
-// tag passes through.
+// other relative tag goes under its address. A type's tag names its authority
+// from the file (. Point, . W X), so it stays as it is. A global tag passes.
 #[allow(dead_code)]
 fn bv_local_tag(t: &Value, addr: &str) -> Value {
     match t {
         Value::String(s) if s == "." => json!(bv_addr_class(addr)),
-        Value::String(s) if s.starts_with(". ::") => t.clone(),
+        Value::String(s) if s.starts_with(". ") && bv_type_name(s).is_some() => t.clone(),
         Value::String(s) if bv_opre_is_relative(s) => json!(bv_opre_under(s, addr)),
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_local_tag(x, addr)).collect()),
         Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_local_tag(x, addr))).collect()),
@@ -1097,10 +1097,13 @@ fn bv_sel(addr: &str) -> String {
     }
 }
 
-// A type's wire tag is ::Name or authority ::Name. Returns the bare type
-// name when the tag denotes a type, None otherwise (e.g. a scalar tag).
+// A type's wire tag is its authority's address followed by its bare name
+// (\`. Point\`, \`Svc Point\`). Nothing in its shape says it names a type: it
+// does when its last token is a type this program knows. Returns that name.
 fn bv_type_name(tag: &str) -> Option<&str> {
-    tag.rfind("::").map(|i| &tag[i + 2..])
+    let i = tag.rfind(' ')?;
+    let name = &tag[i + 1..];
+    bv_type_fields(name).map(|_| name)
 }
 
 // Whether a call came from outside the process, so it has tags to check.
@@ -2087,7 +2090,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();
   G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
-  // Authority (defining path) per type key: '' for local (#<::Name>, filled by
+  // Authority (defining path) per type key: '' for local (`. Name`, filled by
   // perspective translation), the dependency path for imported/cross-module.
   G.ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
   // Slice 15: imported types — registered under both the local and canonical

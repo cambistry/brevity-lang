@@ -7,9 +7,10 @@ import { selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
-    // A type value's wire tag is its authority address carrying ::Name; the
-    // parameter spells the type by name (possibly Alias::Name). Match on the
-    // bare type name (authority is identity that travels, not a v1 match key).
+    // A type value's wire tag is its authority's address and its bare name; the
+    // parameter spells the type by name, possibly reached through an actor
+    // (Svc::Point). Match on the bare type name (authority is identity that
+    // travels, not a v1 match key).
     let an = bv_type_name(actual);
     let en = expected.rsplit("::").next().unwrap_or(expected);
     if let Some(a) = an {
@@ -353,7 +354,7 @@ fn bv_ty_of(v: &Value, m: &[(&str, &str)]) -> Value {
             let el: Vec<(&str, &str)> = m.iter().filter(|e| e.0 != "List").cloned().collect();
             Value::Array(a.iter().map(|x| bv_ty_of(x, &el)).collect())
         }
-        Value::Object(o) if o.contains_key("__type") => json!(format!(". ::{}", k.rsplit("::").next().unwrap_or(k.as_str()))),
+        Value::Object(o) if o.contains_key("__type") => json!(format!(". {}", k)),
         _ => json!(k),
     }
 }`;
@@ -364,8 +365,8 @@ const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 
 export const G = { ctx: null };
 export function setCtx(newCtx) { G.ctx = newCtx; }
 
-// Wire tag for a type-valued slot: `path ::Name` for an imported/cross-module
-// type, `. ::Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
+// Wire tag for a type-valued slot: `path Name` for an imported/cross-module
+// type, `. Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
@@ -375,7 +376,7 @@ export function rustTypeTag(t) {
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
   const name = G.ctx.typeDecls.get(t).name || t;
   const authority = G.ctx.typeAuthority?.get(t) || '';
-  return authority ? `${quoteToken(authority)} ::${name}` : `. ::${name}`;
+  return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
 }
 
 // The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or

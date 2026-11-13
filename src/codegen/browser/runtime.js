@@ -1989,7 +1989,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             // value (positional arg, tagged with its authority address). The
             // consumer reads value fields freely and invokes endpoint fields
             // in-frame; see buildEventValue.
-            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML ::Event']] });
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML Event']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;
@@ -2228,7 +2228,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // at the boundary, so the self token `.` becomes its own address. Payload
   // `#<.>` / `#<. x>` → `#<selfAddr>` / `#<selfAddr x>`; a missing `from` is
   // filled in and a relative one (`. x`) resolved; `ty` has no brackets, so a
-  // relative tag (`.`, `. Box`, `. ::Point`) is resolved whole. An address
+  // relative tag (`.`, `. Box`, `. Point`) is resolved whole. An address
   // whose head token isn't `.` is global and passes through. Structural walk
   // (not JSON round-trip) so BigInt and other non-JSON primitives survive.
   // See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.

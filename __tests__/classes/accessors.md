@@ -75,6 +75,6 @@ File params publish the same way:
 ## LLM Rules
 
 - Params are private by default; write `@name` only for values callers need.
-- Prefer a `::Type` value over an actor with many published params when the
+- Prefer a type value over an actor with many published params when the
   thing is plain data.
 - Call accessors as `box.value()` and bind them positionally.

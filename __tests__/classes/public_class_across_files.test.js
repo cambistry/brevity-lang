@@ -771,17 +771,17 @@ describe('end to end: type values cross to and from a class in another file', ()
   }, 120000);
 
   // A type's authority is the file that declares it, never the instance that uses it: the
-  // instance leaves `::Point` as it is, and the caller gets it as `Svc ::Point`.
+  // instance leaves `. Point` as it is, and the caller gets it as `Svc Point`.
   it('the class replies with the value in wire form, and its ty', async () => {
     const { sent, served } = await call('got');
     const get = sent.findIndex(m => m.op === 'get');
-    expect(served[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['. ::Point'], to: 'Caller', from: '. W 1' });
+    expect(served[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['. Point'], to: 'Caller', from: '. W 1' });
   }, 120000);
 
   it('the caller receives the ty with the file as its authority', async () => {
     const { sent, received } = await call('got');
     const get = sent.findIndex(m => m.op === 'get');
-    expect(received[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['Svc ::Point'], to: undefined, from: 'Svc W 1' });
+    expect(received[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['Svc Point'], to: undefined, from: 'Svc W 1' });
   }, 120000);
 
   it('a type nested in a reply decodes in the caller', async () => {
@@ -803,8 +803,8 @@ describe('end to end: type values cross to and from a class in another file', ()
   it('a type nested in a reply is tagged the same way', async () => {
     const { sent, served, received } = await call('paired');
     const pair = sent.findIndex(m => m.op === 'pair');
-    expect(served[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: '. ::Point', n: 'Integer' }, to: 'Caller', from: '. W 1' });
-    expect(received[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: 'Svc ::Point', n: 'Integer' }, to: undefined, from: 'Svc W 1' });
+    expect(served[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: '. Point', n: 'Integer' }, to: 'Caller', from: '. W 1' });
+    expect(received[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: 'Svc Point', n: 'Integer' }, to: undefined, from: 'Svc W 1' });
   }, 120000);
 
   it('a type value passed to a constructor decodes in the class', async () => {
@@ -814,6 +814,6 @@ describe('end to end: type values cross to and from a class in another file', ()
 
   it('the #new carries the value in wire form, and its ty', async () => {
     const { sent } = await call('passed');
-    expect(sent.find(m => m.to === 'Svc Holder')).toEqual({ id: expect.any(String), op: [[[1, 2]], '$new'], ty: [['svc.bv ::Point']], to: 'Svc Holder' });
+    expect(sent.find(m => m.to === 'Svc Holder')).toEqual({ id: expect.any(String), op: [[[1, 2]], '$new'], ty: [['svc.bv Point']], to: 'Svc Holder' });
   }, 120000);
 });

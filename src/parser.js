@@ -6198,7 +6198,7 @@ export function parse(tokensIn) {
   // A type name in scope is reserved: no param may share it. So a lone name
   // after a named param's colon (`key: X`) is the type X when one is in scope,
   // and otherwise the param's local name (untyped). In scope: built-ins, the
-  // file's `::` types and classes (coercions included), and every name the
+  // file's types and classes (coercions included), and every name the
   // header binds.
   function resolveLoneNames(program) {
     const typeNames = new Set(AST.BUILTIN_TYPE_NAMES);

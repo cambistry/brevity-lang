@@ -200,7 +200,7 @@ describe('type destructure — mixed-form types', () => {
   });
 
   it('mixed positional/named declaration: both forms reach both fields', async () => {
-    // ::Mixed has one positional-declared field and one named-declared field.
+    // Mixed has one positional-declared field and one named-declared field.
     // Field-name identity dominates: each can be reached either way.
     await expectBehavior(`
       type Mixed (count Integer, label: Text)

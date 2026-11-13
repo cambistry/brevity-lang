@@ -3,10 +3,10 @@ import { compileActor } from '../helpers.js';
 // Perspective translation of `ty` tags.
 //
 // `ty` is a translated field, like `to` and `from`, so its tags carry no
-// `#<…>`. A tag whose head token is `.` is relative (`. ::Point`, `. Box`, `.`
+// `#<…>`. A tag whose head token is `.` is relative (`. Point`, `. Box`, `.`
 // alone for "my class"); a parent puts its child in after the `.`, and the
 // global boundary replaces the `.` with its own address. Any other tag is
-// global (`Integer`, `main ::Point`) and is left alone. This is the Opre
+// global (`Integer`, `main Point`) and is left alone. This is the Opre
 // convention for addresses too.
 //
 // This exercises the browser harness's parent-layer translation
@@ -33,23 +33,23 @@ async function forwardingActor(selfAddr) {
 }
 
 describe('type authority tag — perspective translation (browser)', () => {
-  it('a relative . ::Name tag gets the boundary address on the way out', async () => {
+  it('a relative . Name tag gets the boundary address on the way out', async () => {
     const actor = await forwardingActor('main');
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
-    // The boundary ('main') resolves the self token: `. ::Point` → `main ::Point`.
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. Point' }] });
+    // The boundary ('main') resolves the self token: `. Point` → `main Point`.
     // Payload stays wire-shaped.
     expect(actor.posts[0]).toEqual(expect.objectContaining({
       op: [{ p: [3, 4] }, 'take'],
       to: 'Sink',
-      'ty': [{ p: 'main ::Point' }],
+      'ty': [{ p: 'main Point' }],
     }));
   });
 
   it('without a parent frame the tag stays relative (same-process)', async () => {
     const actor = await forwardingActor(undefined);
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. Point' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      'ty': [{ p: '. ::Point' }],
+      'ty': [{ p: '. Point' }],
     }));
   });
 
