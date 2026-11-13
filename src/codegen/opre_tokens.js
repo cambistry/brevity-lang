@@ -103,9 +103,11 @@ export function _opre_resolve(address, self) {
 }
 
 // Rewrite every `#<…>` address in a string with `f`, which maps the address
-// inside the brackets. `\>` and `\\` inside the brackets stay as they are.
+// inside the brackets. Escapes stay as they are: `\>` and `\\` inside the
+// brackets, and outside them `\#<` (a literal `#<`, not an address) and `\\`.
+// See notes/address-delimiter-change-plan-2026-04-23.md.
 export function _opre_map_bracketed(s, f) {
-  return s.replace(/#<((?:[^>\\]|\\.)*)>/g, (_, a) => '#<' + f(a) + '>');
+  return s.replace(/\\[\s\S]|#<((?:[^>\\]|\\[\s\S])*)>/g, (m, a) => a === undefined ? m : '#<' + f(a) + '>');
 }
 
 // The functions above, for the JS runtime preamble.

@@ -1,4 +1,4 @@
-import { split, join, quote, isRelative, under, resolve } from '../../src/codegen/opre_tokens.js';
+import { split, join, quote, isRelative, under, resolve, mapBracketed } from '../../src/codegen/opre_tokens.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Opre addresses as tokens: space-delimited, quoted only when they must be, and a
@@ -17,6 +17,11 @@ describe('split and join', () => {
     ["'''tis'", ["'tis"]],
     ["'.' abc", ['.', 'abc']],
     ['.hidden.file @foreign', ['.hidden.file', '@foreign']],
+    ['#tag x', ['#tag', 'x']],
+    ['~x y', ['~x', 'y']],
+    ['$x y', ['$x', 'y']],
+    ['@ xyz', ['@', 'xyz']],
+    ['main @foreign ~x #tag $x', ['main', '@foreign', '~x', '#tag', '$x']],
     ['', []],
   ])('%s', (address, tokens) => {
     expect(split(address)).toEqual(tokens);
@@ -68,6 +73,11 @@ describe('isRelative', () => {
     ['.hidden.file x', false],
     ["'.' abc", false],
     ['@foreign', false],
+    ['#tag x', false],
+    ['~x y', false],
+    ['$x y', false],
+    ['@ xyz', false],
+    ['@', false],
     ['main s', false],
     ['', false],
   ])('%s', (address, relative) => {
@@ -82,6 +92,14 @@ describe('translation', () => {
     ['. x', 'Box 1', '. Box 1 x'],
     ['main s', 'c', 'main s'],
     ['.hidden.file', 'c', '.hidden.file'],
+    ['#tag x', 'c', '#tag x'],
+    ['~x y', 'c', '~x y'],
+    ['$x y', 'c', '$x y'],
+    ['@ xyz', 'c', '@ xyz'],
+    ['main @foreign ~x', 'c', 'main @foreign ~x'],
+    ["'has space' x", 'c', "'has space' x"],
+    [". 'has space' x", 'c', ". c 'has space' x"],
+    [". 'it''s' x", 'Box 1', ". Box 1 'it''s' x"],
   ])('under: %s from child %s', (address, name, translated) => {
     expect(under(address, name)).toBe(translated);
   });
@@ -92,7 +110,31 @@ describe('translation', () => {
     ['. Box 1 tally', "'my app.bv'", "'my app.bv' Box 1 tally"],
     ['@foreign x', 'app.bv', '@foreign x'],
     ['.hidden.file x', 'app.bv', '.hidden.file x'],
+    ['#tag x', 'app.bv', '#tag x'],
+    ['@ xyz', 'app.bv', '@ xyz'],
+    [". 'has space' x", "'my app.bv'", "'my app.bv' 'has space' x"],
   ])('resolve: %s at %s', (address, self, translated) => {
     expect(resolve(address, self)).toBe(translated);
+  });
+});
+
+// `#<…>` in a payload string, with the escapes of
+// notes/address-delimiter-change-plan-2026-04-23.md: `\\` is a literal
+// backslash everywhere, `\>` a literal `>` inside the brackets, `\#<` a literal
+// `#<` outside them.
+describe('bracketed addresses in a payload', () => {
+  it.each([
+    ['#<. x>', '#<. c x>'],
+    ['see #<. x> and #<main y>', 'see #<. c x> and #<main y>'],
+    ['#<#tag x>', '#<#tag x>'],
+    ["#<'has space' x>", "#<'has space' x>"],
+    ["#<. 'has space'>", "#<. c 'has space'>"],
+    ['#<. a\\>b>', '#<. c a\\>b>'],
+    ['#<a\\> #<. b>', '#<a\\> #<. b>'],
+    ['#<. a\\\\>', '#<. c a\\\\>'],
+    ['\\#<. x>', '\\#<. x>'],
+    ['\\\\#<. x>', '\\\\#<. c x>'],
+  ])('%s', (payload, translated) => {
+    expect(mapBracketed(payload, a => under(a, 'c'))).toBe(translated);
   });
 });

@@ -144,21 +144,20 @@ bv_opre_under_(<<".">>, Name) -> <<". ", Name/binary>>;
 bv_opre_under_(<<". ", R/binary>>, Name) -> <<". ", Name/binary, " ", R/binary>>;
 bv_opre_under_(A, _) -> A.
 %% Every #<…> in a value, its relative addresses under the child Name.
-bv_under_payload_(B, Name) when is_binary(B) -> bv_under_bracketed_(B, Name, <<>>);
+bv_under_payload_(B, Name) when is_binary(B) -> case binary:match(B, <<"#<">>) of nomatch -> B; _ -> bv_under_bracketed_(B, Name, <<>>) end;
 bv_under_payload_(L, Name) when is_list(L) -> [bv_under_payload_(X, Name) || X <- L];
 bv_under_payload_(M, Name) when is_map(M) -> maps:map(fun(_, X) -> bv_under_payload_(X, Name) end, M);
 bv_under_payload_(V, _) -> V.
-bv_under_bracketed_(B, Name, Acc) ->
-    case binary:match(B, <<"#<">>) of
-        nomatch -> <<Acc/binary, B/binary>>;
-        {P_, _} ->
-            Pre_ = binary:part(B, 0, P_),
-            Rest_ = binary:part(B, P_ + 2, byte_size(B) - P_ - 2),
-            case bv_bracket_close_(Rest_, <<>>) of
-                {Inner_, After_} -> bv_under_bracketed_(After_, Name, <<Acc/binary, Pre_/binary, "#<", (bv_opre_under_(Inner_, Name))/binary, ">">>);
-                none -> <<Acc/binary, B/binary>>
-            end
-    end.
+%% Escapes stay as they are: \\> and \\\\ inside the brackets, \\#< and \\\\ outside
+%% (notes/address-delimiter-change-plan-2026-04-23.md).
+bv_under_bracketed_(<<>>, _, Acc) -> Acc;
+bv_under_bracketed_(<<$\\\\, C, R/binary>>, Name, Acc) -> bv_under_bracketed_(R, Name, <<Acc/binary, $\\\\, C>>);
+bv_under_bracketed_(<<"#<", R/binary>> = B, Name, Acc) ->
+    case bv_bracket_close_(R, <<>>) of
+        {Inner_, After_} -> bv_under_bracketed_(After_, Name, <<Acc/binary, "#<", (bv_opre_under_(Inner_, Name))/binary, ">">>);
+        none -> <<Acc/binary, B/binary>>
+    end;
+bv_under_bracketed_(<<C, R/binary>>, Name, Acc) -> bv_under_bracketed_(R, Name, <<Acc/binary, C>>).
 bv_bracket_close_(<<$\\\\, C, R/binary>>, Acc) -> bv_bracket_close_(R, <<Acc/binary, $\\\\, C>>);
 bv_bracket_close_(<<$>, R/binary>>, Acc) -> {Acc, R};
 bv_bracket_close_(<<C, R/binary>>, Acc) -> bv_bracket_close_(R, <<Acc/binary, C>>);

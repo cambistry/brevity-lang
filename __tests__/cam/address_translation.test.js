@@ -25,11 +25,15 @@ const script = `
     @tally = **{
       @me = { return self }
       @refs = { return near: "#<. x>", hidden: "#<.hidden.file x>", foreign: "#<@foreign y>", global: "#<main x>" }
+      @heads = { return tag: "#<#tag x>", prot: "#<~x y>", intr: "#<$x y>", at: "#<@ xyz>", inner: "#<main @foreign ~x #tag $x>" }
+      @quoted = { return spaced: "#<'has space' x>", near: "#<. 'has space'>", gt: '#<. a\\>b>', skip: '#<a\\> #<. b>', lit: '\\#<. x>' }
       @tell = { Svc.take(r: "#<. x>") }
     }
 
     @me = { return self }
     @refs = { return near: "#<. x>", hidden: "#<.hidden.file x>", foreign: "#<@foreign y>", global: "#<main x>" }
+    @heads = { return tag: "#<#tag x>", prot: "#<~x y>", intr: "#<$x y>", at: "#<@ xyz>", inner: "#<main @foreign ~x #tag $x>" }
+    @quoted = { return spaced: "#<'has space' x>", near: "#<. 'has space'>", gt: '#<. a\\>b>', skip: '#<a\\> #<. b>', lit: '\\#<. x>' }
   }
 `;
 
@@ -57,6 +61,36 @@ describe('child to parent', () => {
       } },
     );
   });
+
+  it('a global #<…> passes through whatever its head, and whatever follows it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
+      { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
+      { input: { id: '2', op: 'heads', to: '. Box 1', from: 'c' } },
+      { output: {
+        id: '2',
+        re: { tag: '#<#tag x>', prot: '#<~x y>', intr: '#<$x y>', at: '#<@ xyz>', inner: '#<main @foreign ~x #tag $x>' },
+        ty: { tag: 'Text', prot: 'Text', intr: 'Text', at: 'Text', inner: 'Text' },
+        to: 'c',
+        from: '. Box 1',
+      } },
+    );
+  });
+
+  it('quoted tokens and escapes survive the hop', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
+      { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
+      { input: { id: '2', op: 'quoted', to: '. Box 1', from: 'c' } },
+      { output: {
+        id: '2',
+        re: { spaced: "#<'has space' x>", near: "#<. Box 1 'has space'>", gt: '#<. Box 1 a\\>b>', skip: '#<a\\> #<. b>', lit: '\\#<. x>' },
+        ty: { spaced: 'Text', near: 'Text', gt: 'Text', skip: 'Text', lit: 'Text' },
+        to: 'c',
+        from: '. Box 1',
+      } },
+    );
+  });
 });
 
 describe('grandchild to child to parent', () => {
@@ -78,6 +112,36 @@ describe('grandchild to child to parent', () => {
         id: '2',
         re: { near: '#<. Box 1 tally x>', hidden: '#<.hidden.file x>', foreign: '#<@foreign y>', global: '#<main x>' },
         ty: { near: 'Text', hidden: 'Text', foreign: 'Text', global: 'Text' },
+        to: 'c',
+        from: '. Box 1 tally',
+      } },
+    );
+  });
+
+  it('a global #<…> passes through every hop, whatever its head', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
+      { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
+      { input: { id: '2', op: 'heads', to: '. Box 1 tally', from: 'c' } },
+      { output: {
+        id: '2',
+        re: { tag: '#<#tag x>', prot: '#<~x y>', intr: '#<$x y>', at: '#<@ xyz>', inner: '#<main @foreign ~x #tag $x>' },
+        ty: { tag: 'Text', prot: 'Text', intr: 'Text', at: 'Text', inner: 'Text' },
+        to: 'c',
+        from: '. Box 1 tally',
+      } },
+    );
+  });
+
+  it('quoted tokens and escapes survive each hop', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
+      { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
+      { input: { id: '2', op: 'quoted', to: '. Box 1 tally', from: 'c' } },
+      { output: {
+        id: '2',
+        re: { spaced: "#<'has space' x>", near: "#<. Box 1 tally 'has space'>", gt: '#<. Box 1 tally a\\>b>', skip: '#<a\\> #<. b>', lit: '\\#<. x>' },
+        ty: { spaced: 'Text', near: 'Text', gt: 'Text', skip: 'Text', lit: 'Text' },
         to: 'c',
         from: '. Box 1 tally',
       } },

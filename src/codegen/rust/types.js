@@ -277,17 +277,28 @@ fn bv_opre_under(address: &str, name: &str) -> String {
 #[allow(dead_code)]
 fn bv_under_payload(v: &Value, name: &str) -> Value {
     match v {
+        // Escapes stay as they are: \\> and \\\\ inside the brackets, \\#< and
+        // \\\\ outside (notes/address-delimiter-change-plan-2026-04-23.md).
         Value::String(s) if s.contains("#<") => {
             let mut out = String::new();
-            let mut rest = s.as_str();
-            while let Some(i) = rest.find("#<") {
-                out.push_str(&rest[..i]);
-                match rest[i + 2..].find('>') {
-                    Some(j) => { out.push_str("#<"); out.push_str(&bv_opre_under(&rest[i + 2..i + 2 + j], name)); out.push('>'); rest = &rest[i + 2 + j + 1..]; }
-                    None => { out.push_str(&rest[i..]); rest = ""; }
+            let mut chars = s.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\\\' { out.push(c); if let Some(n) = chars.next() { out.push(n); } continue; }
+                if c == '#' && chars.peek() == Some(&'<') {
+                    chars.next();
+                    let mut inner = String::new();
+                    let mut closed = false;
+                    while let Some(d) = chars.next() {
+                        if d == '\\\\' { inner.push(d); if let Some(n) = chars.next() { inner.push(n); } continue; }
+                        if d == '>' { closed = true; break; }
+                        inner.push(d);
+                    }
+                    out.push_str("#<");
+                    if closed { out.push_str(&bv_opre_under(&inner, name)); out.push('>'); } else { out.push_str(&inner); }
+                    continue;
                 }
+                out.push(c);
             }
-            out.push_str(rest);
             Value::String(out)
         }
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_under_payload(x, name)).collect()),
