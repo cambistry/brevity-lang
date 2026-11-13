@@ -39,10 +39,10 @@ export default [
     },
   },
   {
-    // .browser.test.js files use page.evaluate(() => document.…) — the callback
+    // .dom.test.js files use page.evaluate(() => document.…) — the callback
     // body is serialized and executed in Chromium, so `document` et al. are
     // legitimate even though ESLint is lexing them in Node context.
-    files: ['__tests__/**/*.browser.test.js'],
+    files: ['__tests__/**/*.dom.test.js'],
     languageOptions: {
       globals: { ...globals.browser },
     },

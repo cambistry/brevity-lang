@@ -7,7 +7,7 @@
 //     globalThis.__bv_harness__. Runner methods in ./index.js round-trip
 //     through this page via callHarness().
 //
-//   - Test pages: .browser.test.js files need pages with custom HTML.
+//   - Test pages: .dom.test.js files need pages with custom HTML.
 //     loadPage() mounts the HTML on the server, navigates a fresh page
 //     to it, waits for brevity.js bootstrap, and returns a Node-side
 //     wrapper with async send() and async register().
@@ -141,7 +141,7 @@ export async function callHarness(method, args) {
   );
 }
 
-// ── Test page loader for .browser.test.js ────────────────────────────────────
+// ── Test page loader for .dom.test.js ────────────────────────────────────
 //
 // Each call creates a fresh page in the test context, mounts the provided HTML
 // on the server, navigates to it, and returns a wrapper:

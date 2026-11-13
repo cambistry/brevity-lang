@@ -6,7 +6,7 @@ import { expectBehavior } from '../helpers.js';
 // `. c x`. Any other address is global and passes through unchanged, even one
 // whose head starts with a dot or `@` (`.hidden.file`, `@foreign`): only the whole
 // token `.` is self. The global boundary (the node that replaces `.` with its own
-// address) is the host's: see browser/address_boundary.browser.test.js.
+// address) is the host's: see browser/address_boundary.dom.test.js.
 // See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 //
 // Hops here: an instance `Box 1` to the file actor, and a singleton `tally`

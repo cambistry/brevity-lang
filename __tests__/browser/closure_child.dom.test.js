@@ -51,7 +51,7 @@ async function expectEmission(script, ...steps) {
 // Tests here use a capture-only harness (no HTML responder). Only the first
 // outbound `new` lands in posts before the await chain blocks on a reply;
 // end-to-end traversal through nested elements is covered by
-// nested_template.browser.test.js and factory_end_to_end.browser.test.js
+// nested_template.dom.test.js and factory_end_to_end.dom.test.js
 // which use the real in-page runtime.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -161,7 +161,7 @@ describe('template emission — structured children wire shape', () => {
   // into the parent's children array. Here the capture-only harness never
   // replies, so only the first pre-dispatch lands in posts — the inner <h1>
   // (source-first nested element). End-to-end nesting (all posts flowing,
-  // addresses threading through) is covered by nested_template.browser.test.js.
+  // addresses threading through) is covered by nested_template.dom.test.js.
   describe('nested tags pre-dispatch in source order', () => {
     it('<div><h1>Title</h1><p>{{ content }}</p></div> posts <h1> first', async () => {
       const script = `

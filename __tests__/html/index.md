@@ -15,6 +15,6 @@ forms in the browser target.
 ## LLM Rules
 
 - Treat this area as actively evolving.
-- Prefer examples from `html/*.browser.test.js` and `xml/*.test.js`.
+- Prefer examples from `html/*.dom.test.js` and `xml/*.test.js`.
 - Do not infer broad web-framework behavior from a single element test.
 - Mention browser target constraints when describing runtime behavior.

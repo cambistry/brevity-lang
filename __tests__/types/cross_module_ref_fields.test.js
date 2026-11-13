@@ -10,7 +10,7 @@ import { compileSource, compileActor } from '../helpers.js';
 // each field holds). This exercises cross-module type resolution + the
 // reference-field mechanism together, abstractly. Live integration of a
 // concrete service's event type (e.g. the browser's HTML::Event, with its full
-// field set) belongs in a .browser.test.js, not here.
+// field set) belongs in a .dom.test.js, not here.
 //
 // `Control` carries an optional field, so it travels as a name-keyed map.
 

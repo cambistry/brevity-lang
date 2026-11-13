@@ -24,10 +24,9 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     excludeTests = meta.excludeTests || [];
   }
 
-  const ignorePatterns = ['/node_modules/', ...exclude(excludeTests)];
-  if (targetName !== 'browser') {
-    ignorePatterns.push('\\.browser\\.test\\.js$');
-  }
+  // `*.dom.test.js` files need a DOM; they run only in the `dom` project
+  // below. Every target project (browser included) runs the shared suite.
+  const ignorePatterns = ['/node_modules/', ...exclude(excludeTests), '\\.dom\\.test\\.js$'];
 
   // Optional per-target setup file (e.g. raise test/hook timeouts).
   const setupPath = join(codegenDir, entry.name, 'jest.setup.js');
@@ -44,6 +43,20 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     globals: { BREVITY_TARGET: targetName },
     ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
   });
+
+  // The browser target also gets a `dom` project: only the DOM-specific
+  // `*.dom.test.js` files, run against the browser target.
+  if (targetName === 'browser') {
+    projects.push({
+      displayName: 'dom',
+      testEnvironment: 'node',
+      transform: {},
+      testMatch: ['**/__tests__/**/*.dom.test.js'],
+      testPathIgnorePatterns: ['/node_modules/', ...exclude(excludeTests)],
+      globals: { BREVITY_TARGET: targetName },
+      ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
+    });
+  }
 }
 
 export default { projects };

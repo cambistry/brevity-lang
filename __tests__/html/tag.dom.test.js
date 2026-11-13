@@ -6,7 +6,7 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 // Per-tag smoke tests for the HTML manifest
 //
 // Element + Aria carry the full attribute discipline (covered exhaustively in
-// element.browser.test.js); this file just confirms each concrete tag in
+// element.dom.test.js); this file just confirms each concrete tag in
 // domManifest:
 //
 //   1. is reachable as a typed class (`tag()` compiles with no args
@@ -57,7 +57,7 @@ describe('HTML tag smoke — no-arg construction', () => {
 //
 // Sampling :id Text on every tag is enough — the inheritance machinery is
 // the same for all Element fields, and we already exhaustively test those
-// fields in element.browser.test.js. A single representative call per tag
+// fields in element.dom.test.js. A single representative call per tag
 // confirms `<Element |>` actually pulls the parent's surface in.
 // ═══════════════════════════════════════════════════════════════════════════════
 
