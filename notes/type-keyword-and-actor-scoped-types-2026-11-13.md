@@ -17,11 +17,15 @@ type Point
 - `::Point (…)` is not a declaration. It is unrecognized syntax, a plain parse error; the message
   does not mention any earlier form.
 - Service documents use the same syntax: `{ type Point (x Integer, y Integer) }`.
+- Every field has a name. A positional field's name is its accessor (`p.x`).
 
 ## Names
 
-- A type's name is its bare name, `Point`, internally and on the Opre wire. There is no `::` in
-  the name.
+- A type is written by its bare name, `Point`, with no `::` in the name.
+- A type is identified by its full address: its authority, the classes that own it, and its bare
+  name (`. Point`, `. W X`, `svc.bv W X`). The address is the type's runtime identity, its key
+  in the receiver's registry, and its tag. Two types of one bare name are two types: `A::X` and
+  `B::X` in one file, or `Svc::Point` and `Geo::Point`.
 - A type name is public. There is no private (`#Type`) or protected type at this time.
 - `type Box` and a class `@Box` in the same scope conflict: compile error.
 
@@ -35,9 +39,7 @@ type Point
 - A type declaration may not depend on its containing actor: no field defaults from constructor
   params, no mutable reads. (A type could otherwise differ per instance; that is locked out for
   now.)
-- A type's bare name is unique within its file, whichever actor declares it: `A::X` and `B::X` in
-  one file is a duplicate declaration. The bare name is the type's internal name (`__type`) and
-  its key in the receiver's registry, so two of them in one file could not be told apart.
+- A bare name is the type declared in the nearest actor enclosing the place it's written.
 
 ## `::` reaches a type through an actor
 
@@ -46,7 +48,7 @@ actor.
 
 ```brevity
 Class = *{
-  type X (Integer)
+  type X (n Integer)
 }
 
 actor = Class()
@@ -72,9 +74,18 @@ x = actor.X(123)          // error: `.` is a message, not a type
 - A type tag is its authority's address followed by the bare name, with no `::`:
   `. Point`, `main Point`, `. Singleton Widget`, `. Class X`. The authority is the declaring
   class, not an instance (no `. Class 1 X`).
+- An imported type's authority is the dependency's path: `svc.bv Point`. The path is
+  definitive; an alias is local to the file that gave it. A reply's tag reaches the caller in its
+  alias spelling (`Svc Point`), since a parent names a service by the alias its child gave it, so
+  the receiver's registry also holds each imported type under that spelling, as a lookup for the
+  same key.
+- A tag naming a file reaches that file relative to it: `svc.bv Point` arrives at `svc.bv` as
+  `. Point`.
 - A tag no longer shows by its shape that it names a type. A receiver recognises a type tag by
-  looking the name up under its authority in the descriptions it knows: its own declarations and
-  the service documents it imports. A tag it cannot resolve passes through as it does today.
+  looking the whole tag up in the types it knows: its own declarations and the service documents
+  it imports. A tag it cannot resolve passes through as it does today.
+- A param's type matches a tag when both come to the same key. A value's identity (equality,
+  `as`, a union's member) is its key too.
 
 ## Service documents
 
@@ -82,7 +93,7 @@ A class's entry carries its types inside its interface block, recursively:
 
 ```
 @Class (…) -> *{
-  type X (Integer)
+  type X (n Integer)
   …
 }
 ```
@@ -95,7 +106,3 @@ A non-public class's types are visible only within its file.
 - Types declared inside a function body, rather than a constructor block.
 - Types as values (`t = Class::X`, `svc.decode(Class::X, …)`): needs a type of types and a wire
   form for a type. Separate feature.
-- Unnamed fields (`type X (Integer)`, `type Widget (Text, Text)`): every field has a name today.
-- Two types of one bare name in one file (see Where a type is declared).
-- The receiver recognises a tag by its last token alone. Two imported types of one bare name,
-  from different authorities, still share a registry entry.

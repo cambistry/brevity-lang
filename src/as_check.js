@@ -3,6 +3,7 @@
 // emits as a call to its `as` runtime. It also adds that check to typed binds of
 // remote replies, whose docs are only claims. See notes/session-2026-11-01-as-renders-or-fails.md.
 import { inferExprType, listElementType } from './inference.js';
+import { buildTypeTable } from './codegen/type_table.js';
 
 const SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Float', 'Decimal', 'Blob']);
 const NUMBERS = new Set(['Integer', 'Float', 'Decimal']);
@@ -31,7 +32,7 @@ export function asDescriptor(t, typeDecls, seen = new Set()) {
   const decl = typeDecls.get(t);
   if (!decl || seen.has(t)) return null;
   const inner = new Set(seen).add(t);
-  return { t: decl.name || t, f: (decl.fields || []).map(f => [f.name, asDescriptor(f.paramType, typeDecls, inner), !!f.optional]) };
+  return { t: decl.key ?? decl.name ?? t, f: (decl.fields || []).map(f => [f.name, asDescriptor(f.paramType, typeDecls, inner), !!f.optional]) };
 }
 
 const known = (s) => typeof s === 'string' && s !== 'Anything' && !s.includes('Anything');
@@ -61,13 +62,7 @@ function checkRenderable(t, s, expr, typeDecls) {
 }
 
 export function lowerAs(ast) {
-  const typeDecls = new Map((ast.types || []).map(d => [d.name, d]));
-  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
-    typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
-  }
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    typeDecls.set(key, { name: info.name, fields: info.fields });
-  }
+  const typeDecls = buildTypeTable(ast);
   const classes = new Set((ast.actors || []).filter(a => a.name).map(a => a.name));
   const deps = new Set((ast.dependencies || []).filter(d => d.type !== 'FileParam').map(d => d.name));
   const members_ = new Set((ast.dependencies || []).flatMap(d => (d.destructures || []).map(m => m.local || m.alias || m.name || m)));

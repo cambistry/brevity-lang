@@ -209,12 +209,13 @@ function formatTypeField(field) {
 }
 
 function formatTypeDecl(decl) {
+  const name = decl.bareName ?? decl.name;
   const fields = (decl.fields || []).map(formatTypeField);
-  if (fields.length === 0) return `type ${decl.name} ()`;
+  if (fields.length === 0) return `type ${name} ()`;
   if (fields.length <= 2 && fields.every(f => f.length < 24)) {
-    return `type ${decl.name} (${fields.join(', ')})`;
+    return `type ${name} (${fields.join(', ')})`;
   }
-  return `type ${decl.name} (\n    ${fields.join(',\n    ')}\n  )`;
+  return `type ${name} (\n    ${fields.join(',\n    ')}\n  )`;
 }
 
 // A private superclass has no doc entry for `...T` to expand from, so a public

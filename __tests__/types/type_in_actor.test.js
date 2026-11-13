@@ -104,6 +104,63 @@ describe('a type declared in a class', () => {
   });
 });
 
+// Each type is known by its address, so two of one bare name are two types.
+describe('types of one name in different actors', () => {
+  const script = `
+    type X (n Integer)
+    W = *{
+      type X (n Integer)
+      @make = -> X(1)
+    }
+    V = *{
+      type X (n Integer, m Integer)
+    }
+    @file = -> result: X(1)
+    @w = -> result: W::X(2)
+    @v = -> result: V::X(3, 4)
+    @same = {
+      w = W()
+      a W::X = w.make()
+      b W::X = W::X(1)
+      return result: a == b
+    }
+    @differ = -> result: X(1) == W::X(1)
+    @readW = (p: W::X) -> result: p.n as Integer
+    @readV = (p: V::X) -> result: p.m as Integer
+  `;
+
+  it('each is tagged with its own address', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'file', from: 'c' } },
+      { output: { id: '1', ty: { result: '. X' }, re: { result: [1] }, to: 'c' } },
+      { input: { id: '2', op: 'w', from: 'c' } },
+      { output: { id: '2', ty: { result: '. W X' }, re: { result: [2] }, to: 'c' } },
+      { input: { id: '3', op: 'v', from: 'c' } },
+      { output: { id: '3', ty: { result: '. V X' }, re: { result: [3, 4] }, to: 'c' } },
+    );
+  });
+
+  it('values of one type are equal, and of two types are not', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'same', from: 'c' } },
+      { output: { id: '1', ty: { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+      { input: { id: '2', op: 'differ', from: 'c' } },
+      { output: { id: '2', ty: { result: 'Boolean' }, re: { result: false }, to: 'c' } },
+    );
+  });
+
+  it('a param takes its own type, and refuses the other', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [{ p: [5, 6] }, 'readV'], ty: [{ p: '. V X' }], from: 'c' } },
+      { output: { id: '1', ty: { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { input: { id: '2', op: [{ p: [5] }, 'readW'], ty: [{ p: '. W X' }], from: 'c' } },
+      { output: { id: '2', ty: { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { input: { id: '3', op: [{ p: [5, 6] }, 'readW'], ty: [{ p: '. V X' }], from: 'c' } },
+      { output: expect.objectContaining({ id: '3', to: 'c', ex: expect.anything() }) },
+    );
+  });
+});
+
 describe('a type of another file, reached through the service', () => {
   const DOC = '{\n  type Point (x Integer, y Integer)\n  W () -> *{\n    type X (n Integer)\n    get () -> (X)\n  }\n}';
   const remotes = [{ path: 'svc.bv', service: DOC }];
@@ -150,6 +207,55 @@ describe('a type of another file, reached through the service', () => {
   });
 });
 
+// Two services' types of one name are two types: each is known by its address.
+describe('types of one name in two services', () => {
+  const remotes = [
+    { path: 'svc.bv', service: '{\n  type Point (x Integer, y Integer)\n  origin () -> (Point)\n}' },
+    { path: 'geo.bv', service: '{\n  type Point (lat Integer, lon Integer, alt Integer)\n  origin () -> (Point)\n}' },
+  ];
+  const script = `
+    *
+      "svc.bv": Svc
+      "geo.bv": Geo
+    *
+    @svc = -> result: Svc::Point(1, 2)
+    @geo = -> result: Geo::Point(1, 2, 3)
+    @fromSvc = {
+      p Svc::Point = Svc.origin()
+      return result: p.y as Integer
+    }
+    @fromGeo = {
+      p Geo::Point = Geo.origin()
+      return result: p.alt as Integer
+    }
+  `;
+  const compileOptions = { remotes };
+
+  it('each is tagged with its own authority', async () => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: 'svc', from: 'c' } },
+      { output: { id: '1', ty: { result: 'svc.bv Point' }, re: { result: [1, 2] }, to: 'c' } },
+      { input: { id: '2', op: 'geo', from: 'c' } },
+      { output: { id: '2', ty: { result: 'geo.bv Point' }, re: { result: [1, 2, 3] }, to: 'c' } },
+    );
+  });
+
+  it('each decodes with its own fields, from the alias spelling of its authority', async () => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: 'a', op: 'fromGeo', from: 'c' } },
+      { output: expect.objectContaining({ op: 'origin', to: 'Geo' }) },
+      { input: { id: '1', re: [[7, 8, 9]], ty: ['Geo Point'], from: 'Geo' } },
+      { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
+      { input: { id: 'b', op: 'fromSvc', from: 'c' } },
+      { output: expect.objectContaining({ op: 'origin', to: 'Svc' }) },
+      { input: { id: '2', re: [[5, 6]], ty: ['Svc Point'], from: 'Svc' } },
+      { output: { id: 'b', re: { result: 6 }, ty: { result: 'Integer' }, to: 'c' } },
+    );
+  });
+});
+
 describe('reaching a type: errors', () => {
   const W = 'W = *{\n  type X (n Integer)\n  @get = -> 1\n}\n';
 
@@ -181,8 +287,8 @@ describe('reaching a type: errors', () => {
     expect(() => compileSource(`${W}@go = -> W::Nope(1)\n`)).toThrow(/^'W' has no type 'Nope'$/);
   });
 
-  it('two types of one name in a file, in different classes', () => {
-    expect(() => compileSource(`${W}V = *{\n  type X (n Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'X'/);
+  it('two types of one name in one class', () => {
+    expect(() => compileSource(`W = *{\n  type X (n Integer)\n  type X (m Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
   });
 
   it('`::Name (…)` in a class body', () => {

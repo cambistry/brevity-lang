@@ -546,7 +546,7 @@ const _bvTyOf = (v, m) => {
     for (let l = v; l != null; l = l.tail) a.push(_bvTyOf(l.head, el));
     return a;
   }
-  if (typeof v?.__type === 'string') return '. ' + v.__type;
+  if (typeof v?.__type === 'string') return v.__type;
   return k;
 };
 const _bvAsFields = (v, d) => {
@@ -682,21 +682,16 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
-  // A type value's wire tag is its authority's address and its bare name
-  // (\`. Point\`, \`Svc Point\`). The parameter spells the type by name, possibly
-  // reached through an actor (\`Svc::Point\`). Match on the bare type name;
-  // authority is identity that travels, not a v1 match key.
-  const bareName = (t) => {
-    if (typeof t !== 'string') return t;
-    if (t.indexOf('::') !== -1) return t.slice(t.lastIndexOf('::') + 2);
-    return t;
-  };
+  // A type value's tag is its address (\`. Point\`, \`svc.bv W X\`, or the alias
+  // spelling \`Svc Point\`); the parameter spells the type as the source does
+  // (\`Point\`, \`Svc::Point\`). Both come to the type's key.
+  const keyOf = (t) => (typeof t === 'string' && Object.hasOwn(_bv_type_keys, t) ? _bv_type_keys[t] : null);
   const memberOf = (actual, expected) => {
     if (actual === expected || expected === 'Anything') return true;
-    const tagName = _bv_type_name(actual);
-    if (tagName && tagName === bareName(expected)) return true;
+    const key = _bv_type_name(actual);
+    if (key && key === keyOf(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
-      return expected.split('|').some(m => m.trim() === actual || (tagName && tagName === bareName(m.trim())));
+      return expected.split('|').some(m => m.trim() === actual || (key && key === keyOf(m.trim())));
     }
     return false;
   };

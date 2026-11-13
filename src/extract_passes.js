@@ -336,7 +336,8 @@ export function injectFileParamsIntoFileActor(ast) {
 // mapping positional args to the declared fields. The bare-tuple form
 // `p Point = (1, 2)` becomes equivalent to `p Point = Point(1, 2)`.
 export function coerceObjectsToTypes(ast) {
-  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
+  // A class's type is written bare inside the class; validate settles which.
+  const typesByName = new Map((ast.types || []).flatMap(t => (t.bareName ? [[t.bareName, t], [t.name, t]] : [[t.name, t]])));
   if (typesByName.size === 0) return;
 
   function structureToTypeConstruction(typeName, structureExpr) {
@@ -370,7 +371,8 @@ export function coerceObjectsToTypes(ast) {
 // once we know the full set of declared types in the file, rewrite any call
 // whose callee identifier matches a declared type into TypeConstruction.
 export function rewriteTypeConstructions(ast) {
-  const typeNames = new Set((ast.types || []).map(t => t.name));
+  // A class's type is written bare inside the class; validate settles which.
+  const typeNames = new Set((ast.types || []).map(t => t.bareName ?? t.name));
   if (typeNames.size === 0) return;
 
   const isTypeCall = (n) =>

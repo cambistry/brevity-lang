@@ -1737,12 +1737,13 @@ function rewriteImportedTypeConstructions(ast, importedTypes) {
 // types — `Name` must be one of those types.
 function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
   const checked = new Set();
+  const localTypeNames = new Set((ast.types || []).map(t => t.name));
   const check = (typeStr) => {
     if (typeof typeStr !== 'string') return;
     if (checked.has(typeStr)) return;
     checked.add(typeStr);
     const m = typeStr.match(/^(\w+)::(\w+)(?:\s*\|\s*null)?$/);
-    if (!m) return;
+    if (!m || localTypeNames.has(`${m[1]}::${m[2]}`)) return; // a class's type in this file
     const [, alias, remoteName] = m;
     if (!dependencyNames.has(alias)) {
       throw new Error(`Cross-module type '${alias}::${remoteName}' references unknown dependency alias '${alias}'`);

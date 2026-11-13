@@ -118,10 +118,12 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     }
   };
 
+  const localTypeNames = new Set((ast.types || []).map(t => t.name));
   // `Svc::Point` names a type in Svc's document. A class has no `::` form.
   const checkQualifiedType = (node) => {
     if (node.type !== 'TypedAssign' || typeof node.typeName !== 'string') return;
     for (const [written, alias, member] of node.typeName.matchAll(/(?<![\w:])(\w+)::(\w+)(?![\w:])/g)) {
+      if (localTypeNames.has(written)) continue; // a class's type in this file
       const dep = depNamed(alias);
       if (!dep) throw new Error(`'${alias}' in '${written}' isn't in the header`);
       const doc = remotesParsed[alias];

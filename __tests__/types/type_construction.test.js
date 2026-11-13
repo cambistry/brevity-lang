@@ -158,7 +158,7 @@ describe('type construction — Name(args)', () => {
         return result: 1
       }
     `);
-    expect(output).toMatch(/__type:\s*"Point"/);
+    expect(output).toMatch(/__type:\s*"\. Point"/);
     expect(output).toMatch(/"x":\s*7n/);
     expect(output).toMatch(/"y":\s*8n/);
   });

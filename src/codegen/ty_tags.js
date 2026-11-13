@@ -15,7 +15,7 @@ export function isDynamicTy(t) {
 
 // The tags a runtime tag may pick from, as [kind, tag] pairs. `kind` is what the
 // target's kind function (`_bvAsKind`, `bv_as_kind`) reports for a value of that
-// member; `*` stands for a member with no kind of its own (a class), taken when
+// member (a type value's kind is its `__type`, its key); `*` stands for a member with no kind of its own (a class), taken when
 // nothing else matches. A slot that admits `Anything` may hold any known type
 // value, so every type this file knows is a member too, with its authority tag.
 export function tyMembers(t, tagFor, typeDecls) {
@@ -25,10 +25,10 @@ export function tyMembers(t, tagFor, typeDecls) {
     if (isPlaceholder(m)) continue;
     if (KINDS.has(m)) add(m, m);
     else if (/^Lists?\b/.test(m)) add('List', m);
-    else if (typeDecls?.has(m)) add(m, tagFor(m));
+    else if (typeDecls?.has(m)) add(tagFor(m), tagFor(m));
     else add('*', tagFor(m));
   }
-  if (/\bAnything\b/.test(t)) for (const k of typeDecls?.keys() ?? []) add(k, tagFor(k));
+  if (/\bAnything\b/.test(t)) for (const k of typeDecls?.keys() ?? []) add(tagFor(k), tagFor(k));
   return out;
 }
 

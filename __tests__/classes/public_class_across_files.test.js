@@ -732,6 +732,14 @@ describe('end to end: type values cross to and from a class in another file', ()
     for (let i = 0; i < 200 && actor.posts.length <= count; i++) await new Promise(resolve => setTimeout(resolve, 5));
   };
 
+  // A parent delivering into a file gives a tag naming that file relative to it.
+  const localTy = (v, self) => {
+    if (typeof v === 'string') return v.startsWith(`${self} `) ? `.${v.slice(self.length)}` : v;
+    if (Array.isArray(v)) return v.map(x => localTy(x, self));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x, self)]));
+    return v;
+  };
+
   // What the caller sent on the way, what Svc replied to each, what the caller got
   // back from the relay, and the caller's reply.
   async function call(op) {
@@ -749,7 +757,9 @@ describe('end to end: type values cross to and from a class in another file', ()
       if (msg.to === 'c') return { sent, served: svcReplies, received, reply: msg };
       sent.push(msg);
       const to = msg.to.slice('Svc'.length).trim();
-      await svc.sendAsync({ ...msg, to: to || undefined, from: 'Caller' });
+      // A tag naming svc.bv reaches svc.bv relative to it: `. Point`.
+      const arrived = 'ty' in msg ? { ty: localTy(msg.ty, 'svc.bv') } : {};
+      await svc.sendAsync({ ...msg, ...arrived, to: to || undefined, from: 'Caller' });
       await settle(svc, served);
       svcReplies.push(svc.posts[served]);
       const { ty, ...reply } = svc.posts[served++];

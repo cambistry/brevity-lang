@@ -1,5 +1,6 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
+import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
@@ -2161,19 +2162,21 @@ emit_await_(Event, Payload) ->
 ` : '';
 
 
-  // Slice 12+13: per-program type registry. `bv_type_fields/1` returns the
-  // declared field list for a given type so `bv_unwire_payload/2` can walk
-  // ty annotations and reconstruct type-tagged values from wire form.
-  const _seenErlType = new Set();
-  const typeArms = (ctx.typeDecls ? [...ctx.typeDecls.values()] : []).filter(t => {
-    if (_seenErlType.has(t.name)) return false; // dedup: keyed under alias + canonical name
-    _seenErlType.add(t.name);
-    return true;
-  }).map(t => {
-    const fields = (t.fields || []).map(f => erlString(f.name)).join(', ');
-    return `bv_type_fields(${erlString(t.name)}) -> [${fields}];`;
-  }).join('\n');
-  const bvTypeFieldsBlock = `${typeArms}\nbv_type_fields(_) -> undefined.\n\n` +
+  // The wire registry. `bv_type_name/1` is the key of the type a tag names (its
+  // address, or the alias spelling of its authority), `bv_type_fields/1` its
+  // declared field names, and `bv_source_key/1` the key of the type the source
+  // calls a name, for matching a tag against a param's type.
+  const registry = registryEntries(ctx.program, ctx.typeDecls);
+  const typeArms = [
+    ...registry.filter(([lookup, key]) => lookup === key)
+      .map(([, key, fields]) => `bv_type_fields(${erlString(key)}) -> [${fields.map(f => erlString(f.name)).join(', ')}];`),
+    'bv_type_fields(_) -> undefined.',
+    ...registry.map(([lookup, key]) => `bv_type_name(${erlString(lookup)}) -> ${erlString(key)};`),
+    'bv_type_name(_) -> undefined.',
+    ...[...ctx.typeDecls.entries()].map(([name, e]) => `bv_source_key(${erlString(name)}) -> ${erlString(e.key)};`),
+    'bv_source_key(_) -> undefined.',
+  ].join('\n');
+  const bvTypeFieldsBlock = `${typeArms}\n\n` +
 `%% A reply's re and its parallel ty, in wire shape: a positional reply tags per
 %% slot, with named slots in a trailing map, and a named reply tags per key.
 bv_unwire_slot(Tag, V) when is_list(Tag); is_map(Tag) -> bv_unwire_reply(V, Tag);
@@ -2318,26 +2321,13 @@ export function codegenErlang(ast, options = {}) {
   ctx.actorInfo = new Map();
   ctx.ephCounter = 0;
   ctx.actorNodes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
-  ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
-  // Authority (defining path) per type key: '' for local (`. Name`, filled by
-  // perspective translation), the dependency path for imported/cross-module.
-  ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
-  // Slice 15: imported types — register under both local and canonical names
-  // so bv_type_fields/1 and TypeConstruction emit resolve through either
-  // side of an `(Point: P)` rename. The validate pass already rewrites the
-  // callee identifier to the canonical remote name.
-  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
-    if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
-    if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
-    ctx.typeAuthority.set(local, info.sourceAlias || '');
-    ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
-  }
-  // Cross-module type references (`Alias::Name`).
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    ctx.typeAuthority.set(key, info.path || '');
-    ctx.typeAuthority.set(info.name, info.path || '');
+  // Every type this program knows, by the name the source uses for it, with
+  // the address that identifies it (src/codegen/type_table.js). A service's
+  // type is also known by its bare name, for what its document says.
+  ctx.typeDecls = buildTypeTable(ast);
+  for (const info of Object.values(ast.crossModuleTypes || {})) {
+    const entry = [...ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, entry);
   }
 
   // Include actors that inherit public functions from superclasses even if they have none of their own

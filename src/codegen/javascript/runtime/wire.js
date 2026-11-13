@@ -25,24 +25,20 @@ export function _bv_to_wire(v, _bv_types) {
   return out;
 }
 
-// A type's tag is its authority's address followed by its bare name
-// (`. Point`, `Svc Point`, `. Class X`). Nothing in its shape says it names a
-// type: it does when its last token is a type this program knows. Returns that
-// name, or null.
+// A type's tag is its address: its authority, the classes that own it, and its
+// bare name (`. Point`, `. W X`, `svc.bv Point`). Nothing in its shape says it
+// names a type: it does when the registry has it, under its key or the alias
+// spelling of its authority (`Svc Point`). Returns the type's key, or null.
 export function _bv_type_name(tag, _bv_types) {
-  if (typeof tag !== 'string' || !_bv_types) return null;
-  let tokens;
-  try { tokens = _opre_split(tag); } catch { return null; }
-  if (tokens.length < 2) return null;
-  const name = tokens[tokens.length - 1];
-  return typeof name === 'string' && Object.hasOwn(_bv_types, name) ? name : null;
+  if (typeof tag !== 'string' || !_bv_types || !Object.hasOwn(_bv_types, tag)) return null;
+  return _bv_types[tag].key;
 }
 
 export function _bv_from_wire(tag, payload, _bv_types) {
-  const name = _bv_type_name(tag, _bv_types);
-  if (!name) return payload;
-  const decl = _bv_types[name];
-  const out = { __type: name };
+  const key = _bv_type_name(tag, _bv_types);
+  if (!key) return payload;
+  const decl = _bv_types[key];
+  const out = { __type: key };
   if (Array.isArray(payload)) {
     for (let i = 0; i < decl.fields.length && i < payload.length; i++) {
       out[decl.fields[i]] = payload[i];

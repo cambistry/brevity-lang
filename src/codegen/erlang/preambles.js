@@ -35,19 +35,10 @@ bv_to_wire(V, Fields, AllRequired) ->
             end
     end.
 
-%% A type's wire tag is its authority's address followed by its bare name
-%% (. Point, Svc Point). Nothing in its shape says it names a type: it does
-%% when its last token is a type this program knows. Returns that name, or
-%% undefined.
-bv_type_name(Tag) when is_binary(Tag) ->
-    case binary:matches(Tag, <<" ">>) of
-        [] -> undefined;
-        Ms ->
-            {P, _} = lists:last(Ms),
-            Name = binary:part(Tag, P + 1, byte_size(Tag) - P - 1),
-            case bv_type_fields(Name) of undefined -> undefined; _ -> Name end
-    end;
-bv_type_name(_) -> undefined.
+%% A type's wire tag is its address: its authority, the classes that own it,
+%% and its bare name (. Point, . W X, svc.bv Point). bv_type_name/1, emitted
+%% with the program's registry, gives the key of the type a tag names, under
+%% its key or the alias spelling of its authority (Svc Point), or undefined.
 
 bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
     case bv_type_name(Tag) of
@@ -1132,18 +1123,13 @@ structure_splat_ty(M) when is_map(M) -> M;
 structure_splat_ty(_) -> null.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
-%% Bare type name of a parameter annotation (Svc::Name -> Name, Name -> Name).
-bv_bare_name(T) when is_binary(T) -> lists:last(binary:split(T, <<"::">>, [global]));
-bv_bare_name(T) -> T.
-
-%% A type value's wire tag is its authority's address and its bare name; the
-%% parameter spells the type by name, possibly reached through an actor
-%% (Svc::Name). Match on the bare type name (authority is identity that
-%% travels, not a v1 match key).
+%% A type value's tag is its address (or the alias spelling of its authority);
+%% the parameter spells the type as the source does (Point, Svc::Point). Both
+%% come to the type's key.
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
 type_member_of(Actual, Expected) when is_binary(Expected) ->
     An = bv_type_name(Actual),
-    case (An =/= undefined) andalso (An =:= bv_bare_name(Expected)) of
+    case (An =/= undefined) andalso (An =:= bv_source_key(Expected)) of
         true -> true;
         false ->
             case binary:match(Expected, <<"|">>) of
@@ -1153,7 +1139,7 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
                     lists:any(fun(P) ->
                         T = string:trim(P),
                         T =:= Actual orelse
-                            ((An =/= undefined) andalso (An =:= bv_bare_name(T)))
+                            ((An =/= undefined) andalso (An =:= bv_source_key(T)))
                     end, Parts)
             end
     end;
@@ -1275,7 +1261,7 @@ bv_ty_of(V, M) ->
     case bv_ty_pick_([K | Alt] ++ [<<"*">>], M) of
         {ok, T} -> T;
         none when is_list(V) -> El = [E || {Ek, _} = E <- M, Ek =/= <<"List">>], [bv_ty_of(X, El) || X <- V];
-        none when is_map(V), is_map_key(<<"__type">>, V) -> <<". ", K/binary>>;
+        none when is_map(V), is_map_key(<<"__type">>, V) -> K;
         none -> K
     end.
 bv_ty_pick_([], _) -> none;

@@ -1,3 +1,4 @@
+import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
@@ -1545,31 +1546,13 @@ export function codegen(ast, options = {}) {
   }
   active.push(...syntheticActors);
 
-  ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
-  // Authority (path where the type is defined) per type key. Local types have
-  // empty authority (`. Name`, filled by perspective translation as a value
-  // rises); imported/cross-module types carry the dependency path
-  // (`geometry.bv Point`). See notes/type-authority-address-tags-2026-10-26.
-  ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
-  // Slice 15: register imported types under both the local and canonical
-  // names so identifier-based lookups (`tagFor`, `isType`) resolve through
-  // either side of an `(Point: P)` rename. The validate-time rewrite has
-  // already remapped TypeConstruction.typeName to the canonical remote.
-  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
-    if (!ctx.typeDecls.has(local)) ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
-    if (!ctx.typeDecls.has(info.remote)) ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
-    // sourceAlias is the dependency path.
-    ctx.typeAuthority.set(local, info.sourceAlias || '');
-    ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
-  }
-  // Cross-module type references (`Alias::Name`): register under the full ref
-  // key and the bare remote name so field access, reference-field dispatch,
-  // and wire reconstruction resolve them.
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    ctx.typeAuthority.set(key, info.path || '');
-    ctx.typeAuthority.set(info.name, info.path || '');
+  // Every type this program knows, by the name the source uses for it, with
+  // the address that identifies it (src/codegen/type_table.js). A service's
+  // type is also known by its bare name, for what its document says.
+  ctx.typeDecls = buildTypeTable(ast);
+  for (const info of Object.values(ast.crossModuleTypes || {})) {
+    const entry = [...ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, entry);
   }
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // A class reads its file actor's cells through it, and sends everything bound
@@ -1634,29 +1617,16 @@ export function codegen(ast, options = {}) {
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
-  // Slice 12+13: per-program type registry. Carries field order plus an
-  // `allRequired` flag so wire helpers can encode positional vs. named
-  // payload without re-inspecting AST. Empty registry when no `type`
-  // declarations exist — `_bv_to_wire` still safely passes values through.
-  // Slice 15: imported types are added under their canonical (remote) name
-  // — wire tags are renaming-invariant.
-  const wireDecls = [...(ast.types || [])];
-  for (const info of Object.values(ast.importedTypes || {})) {
-    if (!wireDecls.some(t => t.name === info.remote)) {
-      wireDecls.push({ name: info.remote, fields: info.decl.fields });
-    }
-  }
-  for (const info of Object.values(ast.crossModuleTypes || {})) {
-    if (!wireDecls.some(t => t.name === info.name)) {
-      wireDecls.push({ name: info.name, fields: info.fields });
-    }
-  }
-  const wireRegistryEntries = wireDecls.map(t => {
-    const fields = t.fields || [];
+  // The wire registry, by tag: each type's key and field order, plus an
+  // `allRequired` flag so wire helpers encode positional vs. named payload
+  // without re-inspecting the AST. `_bv_type_keys` maps the source's name for a
+  // type to its key, for matching a tag against a param's type.
+  const wireRegistryEntries = registryEntries(ast, ctx.typeDecls).map(([lookup, key, fields]) => {
     const allRequired = fields.every(f => !f.optional);
-    return `${JSON.stringify(t.name)}: { fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;
+    return `${JSON.stringify(lookup)}: { key: ${JSON.stringify(key)}, fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;
   }).join(', ');
-  const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\n${WIRE_PREAMBLE}\n\n`;
+  const typeKeyEntries = [...ctx.typeDecls.entries()].map(([name, e]) => `${JSON.stringify(name)}: ${JSON.stringify(e.key)}`).join(', ');
+  const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\nconst _bv_type_keys = { ${typeKeyEntries} };\n${WIRE_PREAMBLE}\n\n`;
 
   return (needsPreamble ? OBJECT_PREAMBLE + '\n\n' : '') +
          DECIMAL_PREAMBLE + '\n\n' +

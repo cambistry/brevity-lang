@@ -10,11 +10,13 @@
 //
 // This pass rewrites every such path, in a construction (`TypeConstruction`
 // with a `qualifier`) or a type annotation, to the type's key:
-//   - a type of this file → its bare name (`X`), which is unique in the file;
+//   - a type of this file → its name in the program: its path (`W::X`), or its
+//     bare name for a type of the file actor (`Point`);
 //   - a type of an injected service → `Svc::X` / `Svc::C::X`, registered in
 //     `ast.crossModuleTypes` with its authority (the service's path) and its
 //     owner classes, so codegen can tag it `svc.bv C X`.
-// It also rejects a bare type used outside the actor it belongs to.
+// A bare type becomes the one declared nearest the scope it's written in, and is
+// rejected outside the actor it belongs to.
 
 const PATH_RE = /(?<![\w:@#])(\w+(?:::\w+)+)/g;
 
@@ -23,6 +25,7 @@ const isPrefix = (prefix, path) => prefix.length <= path.length && prefix.every(
 
 export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new Set()) {
   const localTypes = ast.types || [];
+  const bareOf = (t) => t.bareName ?? t.name;
   const owned = localTypes.filter(t => t.owner?.length);
   const hasQualified = JSON.stringify(ast).includes('::') || owned.length > 0;
   if (!hasQualified) return;
@@ -118,9 +121,9 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     }
     if (base.local) {
       const owner = [...base.local, ...between];
-      const decl = localTypes.find(t => t.name === name && samePath(t.owner || [], owner));
+      const decl = localTypes.find(t => bareOf(t) === name && samePath(t.owner || [], owner));
       if (!decl) throw new Error(`'${[...segments.slice(0, -1)].join('::')}' has no type '${name}'`);
-      return name;
+      return decl.name;
     }
     const classes = [...base.classes, ...between];
     let doc = remotesParsed[base.alias];
@@ -155,18 +158,20 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     })
     : str);
 
-  // A bare type that belongs to a class is visible only inside it.
-  const ownedByName = new Map(owned.map(t => [t.name, t]));
-  const checkBare = (name, scope) => {
-    const t = ownedByName.get(name);
-    if (t && !isPrefix(t.owner, scope)) {
-      throw new Error(`'${name}' is a type of '${t.owner.join('::')}' — reach it as '${t.owner.join('::')}::${name}'`);
-    }
+  // A bare type is the one declared in the nearest actor enclosing the scope. A
+  // class's type is visible only inside the class. Its name in the program is
+  // its path (`W::X`).
+  const bareNames = new Set(owned.map(bareOf));
+  const bareToName = (name, scope) => {
+    if (!bareNames.has(name)) return name;
+    const seen = localTypes.filter(t => bareOf(t) === name && isPrefix(t.owner || [], scope));
+    if (seen.length) return seen.reduce((best, t) => ((t.owner || []).length > (best.owner || []).length ? t : best)).name;
+    const t = owned.find(o => bareOf(o) === name);
+    throw new Error(`'${name}' is a type of '${t.owner.join('::')}' — reach it as '${t.owner.join('::')}::${name}'`);
   };
-  const checkBareString = (str, scope) => {
-    if (typeof str !== 'string' || !ownedByName.size) return;
-    for (const m of str.matchAll(/(?<![\w:@#])\w+(?![\w:])/g)) checkBare(m[0], scope);
-  };
+  const bareString = (str, scope) => (typeof str === 'string' && bareNames.size
+    ? str.replace(/(?<![\w:@#])\w+(?![\w:])/g, (m) => bareToName(m, scope))
+    : str);
 
   const visit = (node, scope, env) => {
     if (!node || typeof node !== 'object') return;
@@ -176,24 +181,22 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
         node.typeName = resolve([...node.qualifier, node.typeName], scope, env);
         delete node.qualifier;
       } else {
-        checkBare(node.typeName, scope);
+        node.typeName = bareToName(node.typeName, scope);
       }
     }
     if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
       const c = env.get(node.object.name) ?? (localClass(node.object.name, scope) ? { local: localClass(node.object.name, scope) } : null);
-      if (c?.local && localTypes.some(t => t.name === node.method && samePath(t.owner || [], c.local))) {
+      if (c?.local && localTypes.some(t => bareOf(t) === node.method && samePath(t.owner || [], c.local))) {
         throw new Error(`'${node.method}' is a type, not a message — '${node.object.name}::${node.method}'`);
       }
     }
     for (const k of ['typeName', 'paramType']) {
       if (typeof node[k] === 'string' && node.type !== 'TypeConstruction') {
-        checkBareString(node[k], scope);
-        node[k] = resolveString(node[k], scope, env);
+        node[k] = resolveString(bareString(node[k], scope), scope, env);
       }
     }
     if (typeof node.name === 'string' && typeof node.type === 'string' && 'positional' in node) {
-      checkBareString(node.type, scope);
-      node.type = resolveString(node.type, scope, env);
+      node.type = resolveString(bareString(node.type, scope), scope, env);
     }
     for (const k of Object.keys(node)) if (k !== 'type') visit(node[k], scope, env);
   };
@@ -204,7 +207,7 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
   // A type's own fields are written where the type is declared.
   for (const t of localTypes) {
     for (const f of t.fields || []) {
-      f.paramType = resolveString(f.paramType, t.owner || [], envOf.get((t.owner || []).join(' ')) || new Map());
+      f.paramType = resolveString(bareString(f.paramType, t.owner || []), t.owner || [], envOf.get((t.owner || []).join(' ')) || new Map());
     }
   }
 }

@@ -4,22 +4,19 @@ import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { selfAddress, wireLabel } from '../wire_labels.js';
-import { _opre_quote as quoteToken } from '../opre_tokens.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
-    // A type value's wire tag is its authority's address and its bare name; the
-    // parameter spells the type by name, possibly reached through an actor
-    // (Svc::Point). Match on the bare type name (authority is identity that
-    // travels, not a v1 match key).
+    // A type value's tag is its address (or the alias spelling of its
+    // authority); the parameter spells the type as the source does (Point,
+    // Svc::Point). Both come to the type's key.
     let an = bv_type_name(actual);
-    let en = expected.rsplit("::").next().unwrap_or(expected);
     if let Some(a) = an {
-        if a == en { return true; }
+        if bv_source_key(expected) == Some(a) { return true; }
     }
     if expected.contains('|') {
         return expected.split('|').any(|m| {
             let m = m.trim();
-            m == actual || an.map(|a| a == m.rsplit("::").next().unwrap_or(m)).unwrap_or(false)
+            m == actual || an.map(|a| bv_source_key(m) == Some(a)).unwrap_or(false)
         });
     }
     false
@@ -354,7 +351,7 @@ fn bv_ty_of(v: &Value, m: &[(&str, &str)]) -> Value {
             let el: Vec<(&str, &str)> = m.iter().filter(|e| e.0 != "List").cloned().collect();
             Value::Array(a.iter().map(|x| bv_ty_of(x, &el)).collect())
         }
-        Value::Object(o) if o.contains_key("__type") => json!(format!(". {}", k)),
+        Value::Object(o) if o.contains_key("__type") => json!(k),
         _ => json!(k),
     }
 }`;
@@ -374,11 +371,8 @@ export function rustTypeTag(t) {
   const singleton = typeof t === 'string' && G.ctx.actorNodes?.get(t)?.singletonOf;
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
-  const decl = G.ctx.typeDecls.get(t);
-  // A type declared in a class names the class path after its authority.
-  const name = [...(decl.owner || []), decl.name || t].map(quoteToken).join(' ');
-  const authority = G.ctx.typeAuthority?.get(t) || '';
-  return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
+  // A type's tag is its address (src/codegen/type_table.js).
+  return G.ctx.typeDecls.get(t).key;
 }
 
 // The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or
@@ -410,7 +404,7 @@ export function rustTypeWireWrap(valueExpr, t) {
   };
   if (G.ctx.typeDecls.has(t)) return wire(valueExpr, t);
   // A union: the value's own `__type` says which type's fields to send.
-  const arms = types.map(n => `Some(${JSON.stringify(n)}) => ${wire('_w', n)},`).join(' ');
+  const arms = [...new Map(types.map(n => [G.ctx.typeDecls.get(n).key, n])).entries()].map(([k, n]) => `Some(${JSON.stringify(k)}) => ${wire('_w', n)},`).join(' ');
   return `{ let _w: Value = ${valueExpr}; match _w.get("__type").and_then(|t| t.as_str()) { ${arms} _ => _w.clone() } }`;
 }
 

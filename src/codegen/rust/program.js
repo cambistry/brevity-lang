@@ -21,6 +21,7 @@ ${arms.join('\n')}
 }
 
 // program.js — Program assembly and entry for Rust codegen
+import { buildTypeTable, registryEntries } from '../type_table.js';
 import { addressToken, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import * as AST from '../../ast.js';
@@ -81,24 +82,37 @@ function genRustProgram(actor, allActors) {
   const tyOfFn = '\n' + BV_TY_OF_FN + '\n';
   // Always include Object — handle_op uses BvObject::pack
   const objectPreamble = '\n' + RUST_OBJECT_PREAMBLE + '\n';
-  // Slice 12+13: per-program type registry. `bv_type_fields(name)` returns
-  // a static slice of declared field names for known types so the inbound
-  // dispatch can reconstruct tagged values from wire payloads.
-  const _seenBvType = new Set();
-  const bvTypeFieldsArms = (G.ctx.typeDecls ? [...G.ctx.typeDecls.values()] : []).filter(t => {
-    if (_seenBvType.has(t.name)) return false; // dedup: a type may be keyed under alias + canonical name
-    _seenBvType.add(t.name);
-    return true;
-  }).map(t => {
-    const fieldList = (t.fields || []).map(f => `"${f.name}"`).join(', ');
-    return `        "${t.name}" => Some(&[${fieldList}]),`;
-  }).join('\n');
-  const bvTypeFieldsFn = `\nfn bv_type_fields(name: &str) -> Option<&'static [&'static str]> {
-    match name {
-${bvTypeFieldsArms}
+  // The wire registry. `bv_type_name(tag)` is the key of the type a tag names
+  // (its address, or the alias spelling of its authority), `bv_type_fields(key)`
+  // its declared field names, and `bv_source_key(name)` the key of the type the
+  // source calls `name`, for matching a tag against a param's type.
+  const registry = registryEntries(G.ctx.outerProgram, G.ctx.typeDecls);
+  const keyArms = registry.map(([lookup, key]) => `        ${JSON.stringify(lookup)} => Some(${JSON.stringify(key)}),`).join('\n');
+  const fieldArms = registry.filter(([lookup, key]) => lookup === key)
+    .map(([, key, fields]) => `        ${JSON.stringify(key)} => Some(&[${fields.map(f => JSON.stringify(f.name)).join(', ')}]),`).join('\n');
+  const sourceArms = [...G.ctx.typeDecls.entries()].map(([name, e]) => `        ${JSON.stringify(name)} => Some(${JSON.stringify(e.key)}),`).join('\n');
+  const bvTypeFieldsFn = `
+fn bv_type_fields(key: &str) -> Option<&'static [&'static str]> {
+    match key {
+${fieldArms}
         _ => None,
     }
-}\n`;
+}
+#[allow(dead_code)]
+fn bv_type_name(tag: &str) -> Option<&'static str> {
+    match tag {
+${keyArms}
+        _ => None,
+    }
+}
+#[allow(dead_code)]
+fn bv_source_key(name: &str) -> Option<&'static str> {
+    match name {
+${sourceArms}
+        _ => None,
+    }
+}
+`;
   const wireHelpers = '\n' + RUST_WIRE_HELPERS + bvTypeFieldsFn;
   const mainActorStateful = actor.stateVarDecls && actor.stateVarDecls.length > 0;
   const constructorParams = actor.initParams || [];
@@ -1097,14 +1111,6 @@ fn bv_sel(addr: &str) -> String {
     }
 }
 
-// A type's wire tag is its authority's address followed by its bare name
-// (\`. Point\`, \`Svc Point\`). Nothing in its shape says it names a type: it
-// does when its last token is a type this program knows. Returns that name.
-fn bv_type_name(tag: &str) -> Option<&str> {
-    let i = tag.rfind(' ')?;
-    let name = &tag[i + 1..];
-    bv_type_fields(name).map(|_| name)
-}
 
 // Whether a call came from outside the process, so it has tags to check.
 #[allow(dead_code)]
@@ -2089,26 +2095,13 @@ function codegenRust(ast, options = {}) {
   G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();
-  G.ctx.typeDecls = new Map((ast.types || []).map(t => [t.name, t]));
-  // Authority (defining path) per type key: '' for local (`. Name`, filled by
-  // perspective translation), the dependency path for imported/cross-module.
-  G.ctx.typeAuthority = new Map((ast.types || []).map(t => [t.name, '']));
-  // Slice 15: imported types — registered under both the local and canonical
-  // names so the bv_type_fields registry and TypeConstruction emit resolve
-  // through either side of an `(Point: P)` rename. The validate pass already
-  // rewrites callee identifiers to the canonical remote name.
-  for (const [local, info] of Object.entries(ast.importedTypes || {})) {
-    if (!G.ctx.typeDecls.has(local)) G.ctx.typeDecls.set(local, { name: info.remote, fields: info.decl.fields });
-    if (!G.ctx.typeDecls.has(info.remote)) G.ctx.typeDecls.set(info.remote, { name: info.remote, fields: info.decl.fields });
-    G.ctx.typeAuthority.set(local, info.sourceAlias || '');
-    G.ctx.typeAuthority.set(info.remote, info.sourceAlias || '');
-  }
-  // Cross-module type references (`Alias::Name`).
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!G.ctx.typeDecls.has(key)) G.ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    if (!G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
-    G.ctx.typeAuthority.set(key, info.path || '');
-    G.ctx.typeAuthority.set(info.name, info.path || '');
+  // Every type this program knows, by the name the source uses for it, with
+  // the address that identifies it (src/codegen/type_table.js). A service's
+  // type is also known by its bare name, for what its document says.
+  G.ctx.typeDecls = buildTypeTable(ast);
+  for (const info of Object.values(ast.crossModuleTypes || {})) {
+    const entry = [...G.ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, entry);
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   G.ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);

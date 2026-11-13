@@ -2,7 +2,6 @@
 
 import { erlStateKey, erlString } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
-import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
@@ -16,11 +15,8 @@ function erlTypeTag(ctx, t) {
   const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-  const decl = ctx.typeDecls.get(t);
-  // A type declared in a class names the class path after its authority.
-  const name = [...(decl.owner || []), decl.name || t].map(quoteToken).join(' ');
-  const authority = ctx.typeAuthority?.get(t) || '';
-  return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
+  // A type's tag is its address (src/codegen/type_table.js).
+  return ctx.typeDecls.get(t).key;
 }
 
 // The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.
@@ -50,7 +46,7 @@ function erlTypeWireWrap(ctx, valueExpr, t) {
   };
   if (ctx.typeDecls.has(t)) return wire(valueExpr, t);
   // A union: the value's own `__type` says which type's fields to send.
-  const arms = types.map(n => `#{<<"__type">> := ${erlString(n)}} -> ${wire('W_', n)}`).join('; ');
+  const arms = [...new Map(types.map(n => [ctx.typeDecls.get(n).key, n])).entries()].map(([k, n]) => `#{<<"__type">> := ${erlString(k)}} -> ${wire('W_', n)}`).join('; ');
   return `(fun(W_) -> case W_ of ${arms}; _ -> W_ end end)(${valueExpr})`;
 }
 

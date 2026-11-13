@@ -5947,7 +5947,8 @@ export function parse(tokensIn) {
   actors.push(...hoistedClasses);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
-  // A singleton is named by its binding.
+  // A singleton is named by its binding. Its name in the program is its path
+  // (`A::B::X`); `bareName` is the name it was declared with.
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const classPath = (name) => {
     const a = name && byName.get(name);
@@ -5957,6 +5958,8 @@ export function parse(tokensIn) {
   for (const t of types) {
     if (!t.ownerClass) continue;
     t.owner = classPath(t.ownerClass);
+    t.bareName = t.name;
+    t.name = [...t.owner, t.name].join('::');
   }
   if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
   const result = AST.program(actors, dependencies, types);
