@@ -5488,15 +5488,13 @@ export function parse(tokensIn) {
     return AST.typeField(silentFieldName(fieldName, paramType), paramType, { optional, named });
   }
 
-  // Parse `::Name (fields)` (delimited form, single- or multi-line) or
-  // `::Name <linebreak> <indented fields>` (lineal form). The lineal form
+  // Parse `type Name (fields)` (delimited form, single- or multi-line) or
+  // `type Name <linebreak> <indented fields>` (lineal form). The lineal form
   // terminates at the first BLOCK_SEP (blank line) or EOF.
+  const isTypeKw = (t = peek()) => t?.type === 'KEYWORD' && t.value === 'type';
   function parseTypeDecl() {
-    consume(); // DCOLON
+    consume(); // type
     const name = expect('IDENT').value;
-    if (peek().type === 'EQUALS') {
-      throw new Error(`Type declaration '::${name} = …' — the '=' is retired; write '::${name} (fields)'`);
-    }
     const fields = [];
     if (peek().type === 'LPAREN') {
       consume();
@@ -5510,7 +5508,7 @@ export function parse(tokensIn) {
       expect('RPAREN');
     } else {
       while (peek().type === 'NEWLINE') consume();
-      while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && peek().type !== 'DCOLON') {
+      while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && !isTypeKw()) {
         if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
         if (peek().type !== 'IDENT') break;
         fields.push(parseTypeField());
@@ -5813,10 +5811,11 @@ export function parse(tokensIn) {
     skipBlanks();
     if (peek().type === 'EOF') break;
 
-    if (peek().type === 'DCOLON') {
+    if (isTypeKw()) {
       types.push(parseTypeDecl());
       continue;
     }
+    if (peek().type === 'DCOLON') throw new Error(`Unexpected '::'`);
 
     // ── File-level constructor header — delimited ─────────────────────────
     //   ( "/path": Alias ) *{ body }                  — service ref, fetched externally

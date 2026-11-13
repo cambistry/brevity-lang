@@ -19,7 +19,7 @@ For source generation patterns, use
 - `#name` defines a private function.
 - A `*` … `*` header at file top declares class params and dependency context.
 - `Name = (...) *{ ... }` declares a class (constructs actors).
-- `::Name (...)` declares a type (constructs values).
+- `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` constructs an actor of the named class.
 - Argument lists can be positional, named, or mixed on both input and return.
@@ -277,7 +277,7 @@ The returned actor address remains messageable.
 Types declare value shapes with `::`:
 
 ```brevity
-::Point (x Integer, y Integer)
+type Point (x Integer, y Integer)
 
 @x = -> result: Point(1, 2).x as Integer
 ```

@@ -13,7 +13,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('type destructure — positional', () => {
   it('(x, y) = p — paren positional pulls all fields', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         (x, y) = p
@@ -27,7 +27,7 @@ describe('type destructure — positional', () => {
 
   it('x, y = p — bare positional (no parens) pulls all fields', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         x, y = p
@@ -41,7 +41,7 @@ describe('type destructure — positional', () => {
 
   it('(x) = p — single positional drops trailing fields', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
         (x) = p
@@ -55,7 +55,7 @@ describe('type destructure — positional', () => {
 
   it('(a, b) = p — locals named freely (renamed positions)', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         (a, b) = p
@@ -69,7 +69,7 @@ describe('type destructure — positional', () => {
 
   it('rejects positional destructure with more locals than fields', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         x, y, z = p
@@ -82,7 +82,7 @@ describe('type destructure — positional', () => {
 describe('type destructure — named', () => {
   it(':x, :y = p — full named destructure', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         :x, :y = p
@@ -96,7 +96,7 @@ describe('type destructure — named', () => {
 
   it(':x = p — selective single-field destructure', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
         :x = p
@@ -110,7 +110,7 @@ describe('type destructure — named', () => {
 
   it('x: alias_x = p — rename on extraction', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
         x: alias_x = p
@@ -124,7 +124,7 @@ describe('type destructure — named', () => {
 
   it(':y, :x = p — order-insensitive', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         :y, :x = p
@@ -138,7 +138,7 @@ describe('type destructure — named', () => {
 
   it('rejects named destructure of an undeclared field', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         :z = p
@@ -154,7 +154,7 @@ describe('type destructure — mixed-form types', () => {
     // destructure boundary. A type declared positionally (`x Integer`) is
     // still named-destructurable as `:x`.
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         :x, :y = p
@@ -171,7 +171,7 @@ describe('type destructure — mixed-form types', () => {
     // (`x: Integer`) is named-destructurable. Field-name identity is the
     // contract; declaration form is implementation detail.
     await expectBehavior(`
-      ::Pair (x: Integer, y: Integer)
+      type Pair (x: Integer, y: Integer)
       @go = {
         p = Pair(1, 2)
         :x, :y = p
@@ -187,7 +187,7 @@ describe('type destructure — mixed-form types', () => {
     // Spec line 203: "Pulls field values by position." — applies regardless
     // of declaration form. Declaration order is the position.
     await expectBehavior(`
-      ::Pair (x: Integer, y: Integer)
+      type Pair (x: Integer, y: Integer)
       @go = {
         p = Pair(1, 2)
         (a, b) = p
@@ -203,7 +203,7 @@ describe('type destructure — mixed-form types', () => {
     // ::Mixed has one positional-declared field and one named-declared field.
     // Field-name identity dominates: each can be reached either way.
     await expectBehavior(`
-      ::Mixed (count Integer, label: Text)
+      type Mixed (count Integer, label: Text)
       @go = {
         m = Mixed(3, "hi")
         :count, :label = m
@@ -224,7 +224,7 @@ describe('type destructure — optional fields', () => {
     // who wants to use the value as a typed value supplies an explicit
     // `as` cast (or an annotation on the destructure pattern).
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true, 5)
         :turn = g
@@ -240,7 +240,7 @@ describe('type destructure — optional fields', () => {
     // Mirrors type_optionality's `?? falls back when omitted` but applied
     // after destructuring a typed value.
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true)
         :turn = g
@@ -254,7 +254,7 @@ describe('type destructure — optional fields', () => {
 
   it('optional field absent: presence check on destructured local is false', async () => {
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @go = {
         g = Game(true)
         :turn = g

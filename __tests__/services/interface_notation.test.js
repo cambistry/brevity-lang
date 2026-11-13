@@ -4,7 +4,7 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 // Service-document notation: every entry is a name, a space, and a
 // definition — no entry colon, no `=` on types, one line per overload.
 //
-//   ::Point (x Integer, y Integer)        type declaration
+//   type Point (x Integer, y Integer)        type declaration
 //   my_func (Type) -> (Type)              function
 //   Counter (k: Type) -> *{ … }           constructor (body always written)
 //   set name (Type)                       settable field
@@ -64,8 +64,8 @@ describe('service document — entry forms', () => {
     expect(p.__types.Text).toEqual({ effect: 'read', supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
   });
 
-  it('type declaration: ::Name (fields)', () => {
-    const p = parseInterface('{ ::Point (x Integer, y: Integer) }');
+  it('type declaration: type Name (fields)', () => {
+    const p = parseInterface('{ type Point (x Integer, y: Integer) }');
     expect(p.__typeDecls.Point.fields).toEqual([
       { type: 'TypeField', name: 'x', paramType: 'Integer' },
       { type: 'TypeField', name: 'y', paramType: 'Integer', named: true },
@@ -149,8 +149,8 @@ describe('service document — retired forms are rejected', () => {
     expect(() => parseInterface('{ set label: (Text) }')).toThrow(/entry colon is retired/);
   });
 
-  it('::Name = (…)', () => {
-    expect(() => parseInterface('{ ::Point = (x Integer) }')).toThrow(/'=' is retired/);
+  it('::Name (…) is not an entry', () => {
+    expect(() => parseInterface('{ ::Point (x Integer) }')).toThrow(/^Unrecognized interface entry '::Point \(x Integer\)'$/);
   });
 
   it('*( … ) -> { … } constructor', () => {
@@ -190,7 +190,7 @@ describe('service document — emitted form', () => {
 
   it('emitted document parses back', () => {
     const { interface: iface } = extract(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @val *Integer = 0
       @Counter = (start: Integer) *{
         @get = -> value: start as Integer
@@ -319,7 +319,7 @@ describe('constructor profiles in source', () => {
   it('header dependency: multi-line iface with a nested constructor body', () => {
     const { ast } = extract(`*
   "lib.bv": Lib {
-    ::Point (x Integer, y Integer)
+    type Point (x Integer, y Integer)
     Counter (start: Integer) -> *{
       get () -> (value: Integer)
       slot *Integer
@@ -367,12 +367,12 @@ db = Store as { @get: (key: Text) -> (value: Text) }
 `)).toThrow(/entry colon is retired/);
   });
 
-  it('retired: ::Name = (…) in source', () => {
-    expect(() => extract('::Point = (x Integer, y Integer)\n')).toThrow(/'=' is retired; write '::Point \(fields\)'/);
+  it('::Name (…) in source is unrecognized syntax', () => {
+    expect(() => extract('::Point (x Integer, y Integer)\n@go = -> 1\n')).toThrow(/^Unexpected '::'$/);
   });
 
-  it('lineal type declaration: ::Name then fields', () => {
-    const { ast } = extract('::Point\n  x Integer\n  y Integer\n\n@go = -> 1\n');
+  it('lineal type declaration: type Name then fields', () => {
+    const { ast } = extract('type Point\n  x Integer\n  y Integer\n\n@go = -> 1\n');
     expect(ast.types[0].fields.map(f => f.name)).toEqual(['x', 'y']);
   });
 });

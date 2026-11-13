@@ -171,7 +171,7 @@ Bind it before use. A class named with `!` keeps the `!` at the call, and its ty
 ## Type
 
 ```brevity
-::Point (x Integer, y Integer)
+type Point (x Integer, y Integer)
 
 @x = -> result: Point(1, 2).x as Integer
 ```

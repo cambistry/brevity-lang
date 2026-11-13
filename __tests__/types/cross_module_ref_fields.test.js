@@ -15,7 +15,7 @@ import { compileSource, compileActor } from '../helpers.js';
 // `::Control` carries an optional field, so it travels as a name-keyed map.
 
 const WIDGET = `{
-  ::Control (
+  type Control (
     press.: () => .
     release.: () => .
     reset.: () => .

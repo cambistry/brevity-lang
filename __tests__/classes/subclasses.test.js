@@ -1011,7 +1011,7 @@ describe('subclasses — ++ forms — compilation', () => {
 
   it('a custom type is not a parent', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       U = (Point++) *{}
       @test = -> 1
     `)).toThrow(/In 'U', 'Point' is a type, not a class/);
@@ -1019,7 +1019,7 @@ describe('subclasses — ++ forms — compilation', () => {
 
   it('custom-typed params joined by ++ name the type', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       T = *{}
       U = (T ++ p Point ++ q Point) *{}
       @test = -> 1

@@ -197,7 +197,7 @@ function reactiveCellType(getter, setter, aliasMap) {
 }
 
 // Slice 14 of types-implementation-plan-2026-04-27: types appear in the
-// interface document in the same form as their declaration (`::Name (…)`,
+// interface document in the same form as their declaration (`type Name (…)`,
 // no `=`). Field declarations preserve names regardless of declaration style.
 function formatTypeField(field) {
   const opt = field.optional ? '? ' : '';
@@ -209,11 +209,11 @@ function formatTypeField(field) {
 
 function formatTypeDecl(decl) {
   const fields = (decl.fields || []).map(formatTypeField);
-  if (fields.length === 0) return `::${decl.name} ()`;
+  if (fields.length === 0) return `type ${decl.name} ()`;
   if (fields.length <= 2 && fields.every(f => f.length < 24)) {
-    return `::${decl.name} (${fields.join(', ')})`;
+    return `type ${decl.name} (${fields.join(', ')})`;
   }
-  return `::${decl.name} (\n    ${fields.join(',\n    ')}\n  )`;
+  return `type ${decl.name} (\n    ${fields.join(',\n    ')}\n  )`;
 }
 
 // A private superclass has no doc entry for `...T` to expand from, so a public

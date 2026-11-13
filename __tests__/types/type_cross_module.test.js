@@ -9,7 +9,7 @@ import { extract } from '../../index.js';
 describe('type cross-module reference — Foo::Bar', () => {
   it('parses Foo::Bar in a nested type field annotation', () => {
     const { ast } = extract(`
-      ::User (profile Geom::Profile)
+      type User (profile Geom::Profile)
     `);
     expect(ast.types[0]).toEqual({
       type: 'TypeDecl',
@@ -20,8 +20,8 @@ describe('type cross-module reference — Foo::Bar', () => {
 
   it('parses Foo::Bar alongside bare local types in mixed fields', () => {
     const { ast } = extract(`
-      ::Local (x Integer)
-      ::Mixed (here Local, there Geom::Point)
+      type Local (x Integer)
+      type Mixed (here Local, there Geom::Point)
     `);
     const mixed = ast.types.find(t => t.name === 'Mixed');
     expect(mixed.fields.map(f => f.paramType)).toEqual(['Local', 'Geom::Point']);

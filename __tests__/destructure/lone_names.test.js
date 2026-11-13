@@ -33,7 +33,7 @@ describe('destructure — key: X resolves by scope', () => {
   });
 
   it('a lowercase type in scope is the field type', () => {
-    expect(patternOf(`::pt (x Integer)\ng = (n Integer) { return value: pt(n) }\n@go = { value: pt = g(7); return :value }\n`))
+    expect(patternOf(`type pt (x Integer)\ng = (n Integer) { return value: pt(n) }\n@go = { value: pt = g(7); return :value }\n`))
       .toEqual([{ named: true, name: 'value', type: 'pt' }]);
   });
 
@@ -43,7 +43,7 @@ describe('destructure — key: X resolves by scope', () => {
   });
 
   it('a local may not take the name of a type in scope', () => {
-    expect(() => compileSource(`::Pt (x Integer)\n${f}@go = { value: Pt Integer = f(7); return result: Pt }\n`))
+    expect(() => compileSource(`type Pt (x Integer)\n${f}@go = { value: Pt Integer = f(7); return result: Pt }\n`))
       .toThrow(/type name is reserved/);
   });
 
@@ -57,7 +57,7 @@ describe('destructure — key: X resolves by scope', () => {
 
 describe('public constant — @x = Name(…) needs a type in scope', () => {
   it('a lowercase type constructs a constant', () => {
-    expect(() => compileSource('::pt (x Integer)\n@origin = pt(0)\n')).not.toThrow();
+    expect(() => compileSource('type pt (x Integer)\n@origin = pt(0)\n')).not.toThrow();
   });
 
   it('a function call is not a constant', () => {

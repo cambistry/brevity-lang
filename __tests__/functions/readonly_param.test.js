@@ -165,7 +165,7 @@ describe('readonly param — &Type rejects mutation', () => {
 
   it('`<-` against an &Point param → compile error', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @run
         =
         coords *Point = Point(0, 0)

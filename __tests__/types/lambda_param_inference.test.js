@@ -14,8 +14,8 @@ import { compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const TYPES = `
-  ::Signal (code: Integer)
-  ::Panel (onpress.: (s: Signal) => ., label: Text)
+  type Signal (code: Integer)
+  type Panel (onpress.: (s: Signal) => ., label: Text)
 `;
 
 describe('lambda param inference — C1 local type callback field', () => {
@@ -86,8 +86,8 @@ describe('lambda param inference — C1 local type callback field', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET = `{
-  ::Signal (dismiss.: () => ., code: Integer)
-  ::Panel (onpress.: (s: Signal) => ., label: Text)
+  type Signal (dismiss.: () => ., code: Integer)
+  type Panel (onpress.: (s: Signal) => ., label: Text)
 }`;
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
@@ -162,7 +162,7 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIDGET_M = `{
-  ::Signal (dismiss.: () => ., code: Integer)
+  type Signal (dismiss.: () => ., code: Integer)
   watch. (on: (s: Signal) => .) => .
 }`;
 const remotesM = [{ path: 'Widget', service: WIDGET_M }];

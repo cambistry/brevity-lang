@@ -7,14 +7,14 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 // Aliases are source-local; the wire tag stays canonical.
 
 const remoteIface = extract(`
-  ::Point (x Integer, y Integer)
-  ::Pair (a Integer, b Integer)
+  type Point (x Integer, y Integer)
+  type Pair (a Integer, b Integer)
   @get_origin = -> coords: Point(0, 0)
 `).interface.service;
 
-describe('type imports — interface parser captures `::Name (...)`', () => {
+describe('type imports — interface parser captures `type Name (...)`', () => {
   it('parses a single typedecl into __typeDecls', () => {
-    const parsed = parseInterface('{ ::Point (x Integer, y Integer) }');
+    const parsed = parseInterface('{ type Point (x Integer, y Integer) }');
     expect(parsed.__typeDecls).toEqual({
       Point: {
         fields: [
@@ -27,7 +27,7 @@ describe('type imports — interface parser captures `::Name (...)`', () => {
 
   it('parses optional/named field forms', () => {
     const parsed = parseInterface(`{
-      ::Game (
+      type Game (
         ? started Boolean,
         ? turn: Integer,
         ? players: List of Texts
@@ -41,13 +41,13 @@ describe('type imports — interface parser captures `::Name (...)`', () => {
   });
 
   it('parses the empty type', () => {
-    const parsed = parseInterface('{ ::Empty () }');
+    const parsed = parseInterface('{ type Empty () }');
     expect(parsed.__typeDecls.Empty).toEqual({ fields: [] });
   });
 
   it('keeps method entries alongside typedecls', () => {
     const parsed = parseInterface(`{
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       get_origin () -> (coords: Point)
     }`);
     expect(Object.keys(parsed.__typeDecls)).toEqual(['Point']);
@@ -86,11 +86,11 @@ describe('type imports — destructured type binding', () => {
       *
         "geometry.bv": (:Point)
       *
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
-      .toThrow(/collides with local '::Point'/);
+      .toThrow(/collides with local 'Point'/);
   });
 
   it('multiple imports in one destructure list bind together', () => {
@@ -134,7 +134,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
       *
         "geometry.bv": Geom
       *
-      ::User (profile Geom::Point)
+      type User (profile Geom::Point)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
@@ -145,16 +145,16 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
       *
         "geometry.bv": Geom
       *
-      ::User (profile Geom::NoSuch)
+      type User (profile Geom::NoSuch)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
-      .toThrow(/'::NoSuch' is not exported by 'Geom'/);
+      .toThrow(/'NoSuch' is not exported by 'Geom'/);
   });
 
   it('rejects Alias::Name when Alias is not a declared dependency', () => {
     const { ast } = extract(`
-      ::User (profile NoSuch::Point)
+      type User (profile NoSuch::Point)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast)).toThrow(/unknown dependency alias 'NoSuch'/);

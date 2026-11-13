@@ -33,7 +33,7 @@ definition: no entry colon, no `=` on types.
 
 ```text
 {
-  ::Point (x Integer, y Integer)          type declaration
+  type Point (x Integer, y Integer)          type declaration
   add (a: Integer, b: Integer) -> (sum: Integer)
   clone () -> (Node)                      overloads: one line each,
   clone (deep: Boolean) -> (Node)         repeating the name

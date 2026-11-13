@@ -12,7 +12,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - `#name` is an explicitly private function.
 - A `*` … `*` header at file top declares construction context and dependencies.
 - `Name = (...) *{ ... }` declares a class (constructs actors).
-- `::Name (...)` declares a type (constructs values).
+- `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` constructs an actor of the named class.
 - Replies are explicit structures.
@@ -152,7 +152,7 @@ show a positional form.
 ## Types
 
 ```brevity
-::Point (x Integer, y Integer)
+type Point (x Integer, y Integer)
 
 @make = -> point: Point(1, 2)
 

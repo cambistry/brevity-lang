@@ -11,7 +11,7 @@ import { createActor } from '../helpers.js';
 
 describe('type actorization — *Point state cell', () => {
   const script = `
-    ::Point (x Integer, y Integer)
+    type Point (x Integer, y Integer)
 
     coords *Point = Point(0, 0)
 

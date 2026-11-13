@@ -763,7 +763,7 @@ export const domManifest = `{
     open () -> (Boolean | null)
   }
 
-  ::Event (
+  type Event (
     prevent.: () => .
     stop.: () => .
     stop_immediate.: () => .

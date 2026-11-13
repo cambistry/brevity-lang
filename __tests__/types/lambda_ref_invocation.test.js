@@ -28,12 +28,12 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WIDGET_FIELD = `{
-  ::Signal (dismiss.: () => ., code: Integer)
-  ::Panel (onpress.: (s: Signal) => ., label: Text)
+  type Signal (dismiss.: () => ., code: Integer)
+  type Panel (onpress.: (s: Signal) => ., label: Text)
 }`;
 
 const WIDGET_METHOD = `{
-  ::Signal (dismiss.: () => ., code: Integer)
+  type Signal (dismiss.: () => ., code: Integer)
   watch. (on: (s: Signal) => .) => .
 }`;
 

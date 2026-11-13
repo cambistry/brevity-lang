@@ -14,7 +14,7 @@ import { expectBehavior, createActor } from '../helpers.js';
 describe('type wire — outbound payload + ty', () => {
   it('all-required type → positional payload + ::Tag annotation', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @coords = -> result: Point(1, 2)
     `,
       { input: { id: '1', op: 'coords', from: 'c' } },
@@ -24,7 +24,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('all-required type with mixed scalar fields', async () => {
     await expectBehavior(`
-      ::Mixed (count Integer, label Text, ok Boolean)
+      type Mixed (count Integer, label Text, ok Boolean)
       @go = -> result: Mixed(3, "hi", true)
     `,
       { input: { id: '2', op: 'go', from: 'c' } },
@@ -34,7 +34,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('type with optional field → named map; absent fields omitted', async () => {
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @go = -> result: Game(turn: 3)
     `,
       { input: { id: '3', op: 'go', from: 'c' } },
@@ -44,7 +44,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('type with optional field, all present → named map', async () => {
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @go = -> result: Game(true, 5)
     `,
       { input: { id: '4', op: 'go', from: 'c' } },
@@ -56,7 +56,7 @@ describe('type wire — outbound payload + ty', () => {
 describe('type wire — inbound payload reconstruction', () => {
   it('all-required type: positional payload + ::Tag annotation rebuilds the tagged value', async () => {
     await expectBehavior(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @get_x = (p: Point) -> result: p.x as Integer
     `,
       { input: { id: '1', op: [{ p: [1, 2] }, 'get_x'], 'ty': [{ p: '. ::Point' }], from: 'c' } },
@@ -66,7 +66,7 @@ describe('type wire — inbound payload reconstruction', () => {
 
   it('optional-bearing type: named map payload reads field directly', async () => {
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 0)
     `,
       { input: { id: '2', op: [{ g: { turn: 7 } }, 'get_turn'], 'ty': [{ g: '. ::Game' }], from: 'c' } },
@@ -76,7 +76,7 @@ describe('type wire — inbound payload reconstruction', () => {
 
   it('optional-bearing type: absent optional reads as null via ??', async () => {
     await expectBehavior(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 99)
     `,
       { input: { id: '3', op: [{ g: {} }, 'get_turn'], 'ty': [{ g: '. ::Game' }], from: 'c' } },
@@ -92,7 +92,7 @@ describe('type wire — outbound argument payload + ty', () => {
   // arg-slot follow-up in notes/type-authority-address-tags-2026-10-26.
   it('forwarded type value → positional payload + authority tag', async () => {
     const actor = await createActor(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       *
         "Sink": Sink {
           take (p: Point) -> ()
@@ -115,7 +115,7 @@ describe('type wire — outbound argument payload + ty', () => {
 
   it('optional-bearing type arg → named-map payload + authority tag', async () => {
     const actor = await createActor(`
-      ::Game (? started Boolean, ? turn: Integer)
+      type Game (? started Boolean, ? turn: Integer)
       *
         "Sink": Sink {
           take (g: Game) -> ()
@@ -138,7 +138,7 @@ describe('type wire — outbound argument payload + ty', () => {
 
   it('primitive args keep bare tags; type arg carries authority tag (mixed)', async () => {
     const actor = await createActor(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       *
         "Sink": Sink {
           take (n: Integer, p: Point) -> ()

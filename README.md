@@ -47,7 +47,7 @@ The language keeps a small center of gravity:
 - `@name` defines a public message handler
 - a top-level `*` … `*` header (or `( ... ) *{ }`) declares construction-time context and dependencies
 - `Name = (...) *{ ... }` declares a class (constructs actors)
-- `::Name (...)` declares a type (constructs values)
+- `type Name (...)` declares a type (constructs values)
 - `*Type` marks a mutable cell or actor-shaped binding
 - `*Name(...)` constructs an actor of the named class
 - replies are explicit data shapes

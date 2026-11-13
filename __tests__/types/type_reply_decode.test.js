@@ -6,8 +6,8 @@ import { createActor, expectActorBehavior, expectBehavior } from '../helpers.js'
 
 describe('a typed reply from a class in the same file', () => {
   const script = `
-    ::Item (name: Text)
-    ::Game (turn: Integer, ? note: Text)
+    type Item (name: Text)
+    type Game (turn: Integer, ? note: Text)
 
     C = *{
       n *Integer = 0
@@ -135,7 +135,7 @@ describe('a typed reply from a remote', () => {
         pop () -> (Item)
       }
     *
-    ::Item (name: Text)
+    type Item (name: Text)
     t = Thing(a: 5)
     @go = {
       i Item = t.pop()

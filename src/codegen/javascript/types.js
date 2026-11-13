@@ -355,15 +355,11 @@ function parseEntry(text) {
   const prefixed = text.match(/^untracked\s+([A-Za-z_][\s\S]*)$/);
   if (prefixed) return { ...parseEntry(prefixed[1]), untracked: true };
   if (text.startsWith('...')) return { kind: 'spread', name: text.slice(3).trim() };
-  if (text.startsWith('::')) {
-    const m = text.slice(2).match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([\s\S]*)$/);
-    if (!m) throw new Error(`Malformed type declaration '${text}'`);
-    const [, name, rest] = m;
-    if (rest.startsWith('=')) {
-      throw new Error(`Type declaration '::${name} = (…)' — the '=' is retired; write '::${name} (…)'`);
-    }
+  const typeDecl = text.match(/^type\s+([A-Za-z_][A-Za-z0-9_]*)\s*([\s\S]*)$/);
+  if (typeDecl) {
+    const [, name, rest] = typeDecl;
     if (!rest.startsWith('(') || groupEnd(rest, 0) !== rest.length) {
-      throw new Error(`Type declaration '::${name}' expects a parenthesized field list: '::${name} (fields)'`);
+      throw new Error(`Type declaration 'type ${name}' expects a parenthesized field list: 'type ${name} (fields)'`);
     }
     return { kind: 'type', name, fields: parseTypeDeclFields(rest) };
   }

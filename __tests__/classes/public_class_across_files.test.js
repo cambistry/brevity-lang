@@ -13,7 +13,7 @@ const SVC = `
     }
   *
 
-  ::Point (x: Integer)
+  type Point (x: Integer)
 
   @Counter = (start Integer, step: Integer) *{
     n *Integer = start
@@ -31,7 +31,7 @@ const SVC = `
   @origin = { return Point(x: 1) }
 `;
 
-const DOC = '{ Counter (Integer, step: Integer) -> *{\n  get () -> (Integer)\n  inc! () => self\n}\nW! () => *{\n  one () -> (Integer)\n}\nplain () -> (Integer)\n::Point (x: Integer)\norigin () -> (Point) }';
+const DOC = '{ Counter (Integer, step: Integer) -> *{\n  get () -> (Integer)\n  inc! () => self\n}\nW! () => *{\n  one () -> (Integer)\n}\nplain () -> (Integer)\ntype Point (x: Integer)\norigin () -> (Point) }';
 const remotes = [{ path: 'svc.bv', service: DOC }];
 
 describe('caller side', () => {
@@ -665,7 +665,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
 // address and each local ty tag.
 describe('end to end: type values cross to and from a class in another file', () => {
   const POINT_SVC = `
-    ::Point (x Integer, y Integer)
+    type Point (x Integer, y Integer)
 
     @W = *{
       @get = { return Point(1, 2) }

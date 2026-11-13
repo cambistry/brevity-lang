@@ -2,12 +2,12 @@ import { extract } from '../../index.js';
 import { compileSource } from '../helpers.js';
 
 // Slice 1 of types-implementation-plan-2026-04-27.md: parser support for
-// inline `::Name (positional fields)` declarations. Multi-line, lineal,
+// inline `type Name (positional fields)` declarations. Multi-line, lineal,
 // named, and optional field forms land in later slices.
 
 describe('type declaration — parser', () => {
   it('parses ::Point (x Integer, y Integer)', () => {
-    const { ast } = extract('::Point (x Integer, y Integer)\n');
+    const { ast } = extract('type Point (x Integer, y Integer)\n');
     expect(ast.types).toEqual([
       {
         type: 'TypeDecl',
@@ -23,15 +23,15 @@ describe('type declaration — parser', () => {
 
   it('parses multiple type declarations in one file', () => {
     const { ast } = extract(`
-      ::Point (x Integer, y Integer)
-      ::Pair (a Integer, b Integer)
+      type Point (x Integer, y Integer)
+      type Pair (a Integer, b Integer)
     `);
     expect(ast.types.map(t => t.name)).toEqual(['Point', 'Pair']);
   });
 
   it('coexists with an actor body in the same file', () => {
     const { ast } = extract(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
 
       @ping = -> ok: 1
     `);
@@ -42,7 +42,7 @@ describe('type declaration — parser', () => {
   });
 
   it('captures field name and declared type per field', () => {
-    const { ast } = extract('::Mixed (count Integer, label Text, ok Boolean)\n');
+    const { ast } = extract('type Mixed (count Integer, label Text, ok Boolean)\n');
     const [decl] = ast.types;
     expect(decl.fields).toEqual([
       { type: 'TypeField', name: 'count', paramType: 'Integer' },
@@ -58,28 +58,28 @@ describe('type declaration — parser', () => {
 describe('type declaration — registry validation', () => {
   it('accepts a well-formed declaration alongside an actor', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @ping = -> result: 1
     `)).not.toThrow();
   });
 
   it('accepts a lowercase type name — capitalization is convention', () => {
-    expect(() => compileSource('::point (x Integer)\n@ping = -> ok: 1\n')).not.toThrow();
+    expect(() => compileSource('type point (x Integer)\n@ping = -> ok: 1\n')).not.toThrow();
   });
 
   it('rejects two declarations of the same type name', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
-      ::Point (a Integer, b Integer)
+      type Point (x Integer, y Integer)
+      type Point (a Integer, b Integer)
       @ping = -> ok: 1
-    `)).toThrow(/Duplicate type declaration.*::Point/);
+    `)).toThrow(/Duplicate type declaration: 'Point'/);
   });
 
   it('rejects duplicate field names within a type', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, x Integer)
+      type Point (x Integer, x Integer)
       @ping = -> ok: 1
-    `)).toThrow(/Duplicate field 'x' in '::Point'/);
+    `)).toThrow(/Duplicate field 'x' in 'Point'/);
   });
 });
 
@@ -90,7 +90,7 @@ describe('type declaration — registry validation', () => {
 describe('type construction — Name(args)', () => {
   it('rewrites Point(1, 2) into a TypeConstruction node', () => {
     const { ast } = extract(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
 
       @use_point = {
         p = Point(3, 4)
@@ -108,7 +108,7 @@ describe('type construction — Name(args)', () => {
 
   it('does not rewrite a call to an undeclared name', () => {
     const { ast } = extract(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
 
       @go = {
         p = Other(3, 4)
@@ -122,7 +122,7 @@ describe('type construction — Name(args)', () => {
 
   it('rejects too few arguments', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1)
         return result: 1
@@ -132,7 +132,7 @@ describe('type construction — Name(args)', () => {
 
   it('rejects too many arguments', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2, 3)
         return result: 1
@@ -142,7 +142,7 @@ describe('type construction — Name(args)', () => {
 
   it('compiles a construction without requiring a type annotation on the local', () => {
     expect(() => compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(1, 2)
         return result: 1
@@ -152,7 +152,7 @@ describe('type construction — Name(args)', () => {
 
   it('emits a tagged object carrying the declared field names', () => {
     const { output } = compileSource(`
-      ::Point (x Integer, y Integer)
+      type Point (x Integer, y Integer)
       @go = {
         p = Point(7, 8)
         return result: 1

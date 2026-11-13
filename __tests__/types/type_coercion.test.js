@@ -283,7 +283,7 @@ describe('as — provably wrong is a compile error', () => {
     ['"x" as a Type', 'return "x" as Point', 'Text as Point'],
     ['a Type as a scalar', 'p Point = Point(1, 2)\nreturn p as Text', 'Point as Text'],
   ])('%s', (_, body, message) => {
-    expect(() => compileSource(`::Point (x: Integer, y: Integer)\n@go = {\n${body}\n}\n`)).toThrow(`Cannot render ${message}`);
+    expect(() => compileSource(`type Point (x: Integer, y: Integer)\n@go = {\n${body}\n}\n`)).toThrow(`Cannot render ${message}`);
   });
 });
 
@@ -599,7 +599,7 @@ describe('as — values in this file', () => {
 
 describe('as — remote replies', () => {
   const script = `
-    ::Point (x: Integer, y: Integer)
+    type Point (x: Integer, y: Integer)
 
     *
       "/s": Svc {

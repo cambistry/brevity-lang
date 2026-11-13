@@ -343,7 +343,7 @@ export function validate(ast, options = {}) {
       const decl = declMap[entry.remote];
       if (!decl) continue;
       if (localTypeNames.has(entry.local)) {
-        throw new Error(`Imported type '${entry.remote}' from '${d.name}' collides with local '::${entry.local}' — rename one side`);
+        throw new Error(`Imported type '${entry.remote}' from '${d.name}' collides with local '${entry.local}' — rename one side`);
       }
       importedTypes[entry.local] = { remote: entry.remote, sourceAlias: d.name, decl };
     }
@@ -1066,14 +1066,14 @@ function checkTypeDecls(ast) {
   const seen = new Set();
   for (const decl of (ast.types || [])) {
     if (seen.has(decl.name)) {
-      throw new Error(`Duplicate type declaration: '::${decl.name}' is declared more than once in this file`);
+      throw new Error(`Duplicate type declaration: '${decl.name}' is declared more than once in this file`);
     }
     seen.add(decl.name);
 
     const fieldNames = new Set();
     for (const field of (decl.fields || [])) {
       if (fieldNames.has(field.name)) {
-        throw new Error(`Duplicate field '${field.name}' in '::${decl.name}'`);
+        throw new Error(`Duplicate field '${field.name}' in '${decl.name}'`);
       }
       fieldNames.add(field.name);
     }
@@ -1327,7 +1327,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
     if (node.type === 'TypeConstruction') {
       const decl = typesByName.get(node.typeName);
       if (!decl) {
-        throw new Error(`Type '::${node.typeName}' is referenced but not declared`);
+        throw new Error(`Type '${node.typeName}' is referenced but not declared`);
       }
       // Args follow FunctionCallExpr's calling convention: bare expressions
       // for positional fields, plus an optional trailing `NamedArgsBag` for
@@ -1493,18 +1493,18 @@ function checkTypeFieldAccess(ast) {
         const name = bang || dotted ? raw.slice(0, -1) : raw;
         const disc = fieldDiscipline(decl, name);
         if (disc === null && !bang && !dotted && fieldDiscipline(decl, name + '!')) {
-          throw new Error(`Field '${name}!' on '::${tname}' writes — call it '.${name}!(…)'`);
+          throw new Error(`Field '${name}!' on '${tname}' writes — call it '.${name}!(…)'`);
         }
         if (disc === null) {
-          throw new Error(`Type '::${tname}' has no field '${name}'`);
+          throw new Error(`Type '${tname}' has no field '${name}'`);
         }
         // A silent reference field is named `name.` (stored without the dot):
         // read or launched as `.name.` / `.name...`, never called as `.name()`.
         if (dotted && disc !== 'silent') {
-          throw new Error(`Field '${name}' on '::${tname}' is not silent — it is '.${name}', not '.${raw}'`);
+          throw new Error(`Field '${name}' on '${tname}' is not silent — it is '.${name}', not '.${raw}'`);
         }
         if (!dotted && !bang && disc === 'silent') {
-          throw new Error(`Reference field '${name}.' on '::${tname}' is silent — call it '.${name}...' (fire-and-forget), or read it as '.${name}.'`);
+          throw new Error(`Reference field '${name}.' on '${tname}' is silent — call it '.${name}...' (fire-and-forget), or read it as '.${name}.'`);
         }
         if (dotted) {
           if (expr.type === 'DotAccessExpr') expr.property = name; else expr.method = name;
@@ -1517,13 +1517,13 @@ function checkTypeFieldAccess(ast) {
         if (bang) {
           throw new Error(
             disc === 'value'
-              ? `Field '${name}' on '::${tname}' is a value, not a function — it cannot be invoked with '!'`
-              : `Reference field '${name}' on '::${tname}' is declared without '!' — invoke it as '.${name}(...)' ('!' names a distinct member, not a call-site marker)`,
+              ? `Field '${name}' on '${tname}' is a value, not a function — it cannot be invoked with '!'`
+              : `Reference field '${name}' on '${tname}' is declared without '!' — invoke it as '.${name}(...)' ('!' names a distinct member, not a call-site marker)`,
           );
         }
         // Invoking a plain value field is an error; a bare read of it is fine.
         if (expr.type === 'DotCallExpr' && disc === 'value') {
-          throw new Error(`Field '${name}' on '::${tname}' is not a reference and cannot be invoked`);
+          throw new Error(`Field '${name}' on '${tname}' is not a reference and cannot be invoked`);
         }
       }
     }
@@ -1661,15 +1661,15 @@ function checkTypeDestructure(ast) {
       if (item.discard || item.spread) continue;
       if (item.positional) {
         if (item.idx >= fields.length) {
-          throw new Error(`Type '::${tname}' has ${fields.length} field${fields.length === 1 ? '' : 's'}; positional destructure requested ${item.idx + 1}`);
+          throw new Error(`Type '${tname}' has ${fields.length} field${fields.length === 1 ? '' : 's'}; positional destructure requested ${item.idx + 1}`);
         }
       } else if (item.named) {
         if (!fields.find(f => f.name === item.name)) {
-          throw new Error(`Type '::${tname}' has no field '${item.name}'`);
+          throw new Error(`Type '${tname}' has no field '${item.name}'`);
         }
       } else if (item.key !== undefined) {
         if (!fields.find(f => f.name === item.key)) {
-          throw new Error(`Type '::${tname}' has no field '${item.key}'`);
+          throw new Error(`Type '${tname}' has no field '${item.key}'`);
         }
       }
     }
@@ -1746,7 +1746,7 @@ function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
     const iface = remotesParsed[alias];
     if (!iface || !iface.__typeDecls) return;
     if (!iface.__typeDecls[remoteName]) {
-      throw new Error(`Type '::${remoteName}' is not exported by '${alias}'`);
+      throw new Error(`Type '${remoteName}' is not exported by '${alias}'`);
     }
     // Stash the resolved decl so codegen can treat `Alias::Name` as a known
     // type (field access, reference-field dispatch, wire reconstruction). The
