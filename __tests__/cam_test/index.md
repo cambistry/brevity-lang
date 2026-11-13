@@ -11,7 +11,7 @@ Reads actor state:
 { "id": "1", "test": { "get": "count" }, "from": "t" }
 ```
 
-Reads a cell by its wire label (`.x`, `@x`). Targets child actors with a run of labels (`.b`, `.o.inner`) in tested cases.
+Reads a cell by its wire name (`~x`, `x`). Targets child actors with a run of wire names, space-delimited (`~b`, `~o ~inner`), in tested cases.
 
 ## `test.set`
 
@@ -31,9 +31,9 @@ Exercises an actor's `update` path through the test harness.
 Dispatches public or private ops directly for tests. It bypasses normal schema
 validation in tested cases, so no `ty` is required.
 
-A protected op is spelled with a leading `.` (`.double`), as on the wire. A `to`
+A protected op is spelled with a leading `~` (`~double`), as on the wire. A `to`
 is forwarded, so a protected cell is set from inside by
-`{ "test": { "op": [[5], "#set"], "to": ".val" } }`.
+`{ "test": { "op": [[5], "$set"], "to": ". ~val" } }`.
 
 ## LLM Rules
 

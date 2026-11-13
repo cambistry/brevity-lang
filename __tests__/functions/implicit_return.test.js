@@ -56,42 +56,42 @@ const lambdaSingleValue = `
 describe('implicit return — single value', () => {
   it('integer expression', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@intExpr', from: 'c' } },
+      { input: { id: '1', op: 'intExpr', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('integer expression with explicit type annotation', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@intExprTyped', from: 'c' } },
+      { input: { id: '1', op: 'intExprTyped', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
 
   it('string literal', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@strLit', from: 'c' } },
+      { input: { id: '1', op: 'strLit', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('boolean literal', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@boolLit', from: 'c' } },
+      { input: { id: '1', op: 'boolLit', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
 
   it('variable reference', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@varRef', from: 'c' } },
+      { input: { id: '1', op: 'varRef', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
   it('assignment resolves to assigned value', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@assignReturn', from: 'c' } },
+      { input: { id: '1', op: 'assignReturn', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
@@ -100,7 +100,7 @@ describe('implicit return — single value', () => {
 describe('implicit return — sigil', () => {
   it(':x — return var x under the "x" key', async () => {
     await expectBehavior(lambdaSingleValue,
-      { input: { id: '1', op: '@sigil', from: 'c' } },
+      { input: { id: '1', op: 'sigil', from: 'c' } },
       { output: { id: '1', re: { x: 6 }, to: 'c' } },
     );
   });
@@ -173,14 +173,14 @@ const lambdaMultiValue = `
 describe('implicit return — positional lists', () => {
   it('a, b — two positionals from vars', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@posVars', from: 'c' } },
+      { input: { id: '1', op: 'posVars', from: 'c' } },
       { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
     );
   });
 
   it('(a, b) — with parens', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@posParens', from: 'c' } },
+      { input: { id: '1', op: 'posParens', from: 'c' } },
       { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
     );
   });
@@ -189,14 +189,14 @@ describe('implicit return — positional lists', () => {
 describe('implicit return — named fields', () => {
   it('x: a, y: b — named', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@namedVars', from: 'c' } },
+      { input: { id: '1', op: 'namedVars', from: 'c' } },
       { output: { id: '1', re: { x: 10, y: 20 }, to: 'c' } },
     );
   });
 
   it('(x: a, y: b) — named with parens', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@namedParens', from: 'c' } },
+      { input: { id: '1', op: 'namedParens', from: 'c' } },
       { output: { id: '1', re: { x: 10, y: 20 }, to: 'c' } },
     );
   });
@@ -205,28 +205,28 @@ describe('implicit return — named fields', () => {
 describe('implicit return — mixed', () => {
   it('a, b, x: y — mixed positional + named', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@mixed', from: 'c' } },
+      { input: { id: '1', op: 'mixed', from: 'c' } },
       { output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' } },
     );
   });
 
   it('(a, b, x: y) — mixed with parens', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@mixedParens', from: 'c' } },
+      { input: { id: '1', op: 'mixedParens', from: 'c' } },
       { output: { id: '1', re: { x: 1, y: 2, extra: 3 }, to: 'c' } },
     );
   });
 
   it('1, "text", c, d: e — mixed with literals', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@mixedLiterals', from: 'c' } },
+      { input: { id: '1', op: 'mixedLiterals', from: 'c' } },
       { output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' } },
     );
   });
 
   it('(1, "text", c, d: e) — mixed with literals in parens', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@mixedLiteralsParens', from: 'c' } },
+      { input: { id: '1', op: 'mixedLiteralsParens', from: 'c' } },
       { output: { id: '1', re: { a: 1, b: 'text', x: 99, d: 77 }, to: 'c' } },
     );
   });
@@ -235,14 +235,14 @@ describe('implicit return — mixed', () => {
 describe('implicit return — structuring', () => {
   it(':x, :y — structuring (means x: x, y: y)', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@structSigils', from: 'c' } },
+      { input: { id: '1', op: 'structSigils', from: 'c' } },
       { output: { id: '1', re: { x: 4, y: 6 }, to: 'c' } },
     );
   });
 
   it('(:x, :y) — structuring with parens', async () => {
     await expectBehavior(lambdaMultiValue,
-      { input: { id: '1', op: '@structSigilsParens', from: 'c' } },
+      { input: { id: '1', op: 'structSigilsParens', from: 'c' } },
       { output: { id: '1', re: { x: 4, y: 6 }, to: 'c' } },
     );
   });
@@ -292,42 +292,42 @@ const publicHandlers = `
 describe('implicit return — public handler braced body', () => {
   it('single sigil: :x', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedSigil', from: 'c' } },
+      { input: { id: '1', op: 'bracedSigil', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('multiple sigils: :x, :y', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedMultiSigils', from: 'c' } },
+      { input: { id: '1', op: 'bracedMultiSigils', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedParenSigils', from: 'c' } },
+      { input: { id: '1', op: 'bracedParenSigils', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedMixed', from: 'c' } },
+      { input: { id: '1', op: 'bracedMixed', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
 
   it('single expression: "hello"', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedExpr', from: 'c' } },
+      { input: { id: '1', op: 'bracedExpr', from: 'c' } },
       { output: { id: '1', re: ['hello'], to: 'c' } },
     );
   });
 
   it('function call: p()', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@bracedFnCall', from: 'c' } },
+      { input: { id: '1', op: 'bracedFnCall', from: 'c' } },
       { output: { id: '1', re: ['yes'], to: 'c' } },
     );
   });
@@ -344,28 +344,28 @@ describe('implicit return — public handler braced body', () => {
 describe('implicit return — public handler lineal body', () => {
   it('single sigil: :x', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@linealSigil', from: 'c' } },
+      { input: { id: '1', op: 'linealSigil', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('multiple sigils: :x, :y', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@linealMultiSigils', from: 'c' } },
+      { input: { id: '1', op: 'linealMultiSigils', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('paren-wrapped sigils: (:x, :y)', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@linealParenSigils', from: 'c' } },
+      { input: { id: '1', op: 'linealParenSigils', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 1, y: 2 }, to: 'c' } },
     );
   });
 
   it('mixed positional, sigil, alias: x, :y, alias: z', async () => {
     await expectBehavior(publicHandlers,
-      { input: { id: '1', op: '@linealMixed', from: 'c' } },
+      { input: { id: '1', op: 'linealMixed', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer', { y: 'Integer', alias: 'Integer' }], re: [1, { y: 2, alias: 3 }], to: 'c' } },
     );
   });
@@ -397,14 +397,14 @@ const spreadFixture = `
 describe('implicit return — spread', () => {
   it('...args — spreading an Object', async () => {
     await expectBehavior(spreadFixture,
-      { input: { id: '1', op: '@spreadNoParens', from: 'c' } },
+      { input: { id: '1', op: 'spreadNoParens', from: 'c' } },
       { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
     );
   });
 
   it('(...args) — spreading with parens', async () => {
     await expectBehavior(spreadFixture,
-      { input: { id: '1', op: '@spreadParens', from: 'c' } },
+      { input: { id: '1', op: 'spreadParens', from: 'c' } },
       { output: { id: '1', re: { x: 3, y: 4 }, to: 'c' } },
     );
   });
@@ -432,14 +432,14 @@ const fnTypedFixture = `
 describe('implicit return — function-typed assignment', () => {
   it('LHS function-type provides return type for braced literal', async () => {
     await expectBehavior(fnTypedFixture,
-      { input: { id: '1', op: '@fnTypedSimple', from: 'c' } },
+      { input: { id: '1', op: 'fnTypedSimple', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
 
   it('multi-statement body — last expression takes LHS return type', async () => {
     await expectBehavior(fnTypedFixture,
-      { input: { id: '1', op: '@fnTypedMultistep', from: 'c' } },
+      { input: { id: '1', op: 'fnTypedMultistep', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });

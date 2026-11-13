@@ -68,16 +68,16 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
   it('invokes a generic lambda assigned to the field (fires to the carried address)', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: [{ sig: sigWire }, '@generic.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
-      { output: { id: expect.any(String), op: '@d', to: '#<caller d>' } },
+      { input: { id: '1', op: [{ sig: sigWire }, 'generic.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
+      { output: { id: expect.any(String), op: 'd', to: '#<caller d>' } },
     );
   });
 
   it('invokes a correctly-typed lambda assigned to the field', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '2', op: [{ sig: sigWire }, '@typed.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
-      { output: { id: expect.any(String), op: '@d', to: '#<caller d>' } },
+      { input: { id: '2', op: [{ sig: sigWire }, 'typed.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
+      { output: { id: expect.any(String), op: 'd', to: '#<caller d>' } },
     );
   });
 });
@@ -99,8 +99,8 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
 
   it('hands the remote a routable self-reference to the lambda', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
-    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch.');
+    await actor.sendAsync({ id: '1', op: 'go.', from: 'caller' });
+    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === 'watch.');
     expect(watch).toBeTruthy();
     expect(watch.to).toBe('Widget');
     // The callback arg is a relative self-address (#<. @N>): a reference the
@@ -110,8 +110,8 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
 
   it('runs the lambda when the remote invokes the reference through CAM', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
-    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === '@watch.');
+    await actor.sendAsync({ id: '1', op: 'go.', from: 'caller' });
+    const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === 'watch.');
     const name = watch.op[0].on.slice('#<. '.length, -1); // '#<. @0>' → '@0'
 
     const before = actor.posts.length;
@@ -128,7 +128,7 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     });
     const fired = actor.posts.slice(before);
     expect(fired).toContainEqual(
-      expect.objectContaining({ op: '@d', to: '#<caller d>' }),
+      expect.objectContaining({ op: 'd', to: '#<caller d>' }),
     );
   });
 });

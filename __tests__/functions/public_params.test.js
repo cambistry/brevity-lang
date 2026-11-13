@@ -27,42 +27,42 @@ describe('@params — delimited (pipe)', () => {
 
   it('single named param :n : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 42 }, '@singleNamed'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [{ n: 42 }, 'singleNamed'], 'ty': [{ n: 'Integer' }], from: 'c' } },
       { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 42 }, to: 'c' } },
     );
   });
 
   it('two named params :n : Integer, :m : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ n: 3, m: 4 }, '@twoNamed'], 'ty': [{ n: 'Integer', m: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 3, m: 4 }, 'twoNamed'], 'ty': [{ n: 'Integer', m: 'Integer' }], from: 'c' } },
       { output: { id: '2', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('positional param n : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[99], '@singlePos'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '3', op: [[99], 'singlePos'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '3', 'ty': ['Integer'], re: [99], to: 'c' } },
     );
   });
 
   it('two positional params a : Integer, b : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [[5, 6], '@twoPos'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { input: { id: '4', op: [[5, 6], 'twoPos'], 'ty': [['Integer', 'Integer']], from: 'c' } },
       { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } },
     );
   });
 
   it('key-mapped a: x : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [{ a: 77 }, '@keyMapped'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '5', op: [{ a: 77 }, 'keyMapped'], 'ty': [{ a: 'Integer' }], from: 'c' } },
       { output: { id: '5', 'ty': ['Integer'], re: [77], to: 'c' } },
     );
   });
 
   it('mixed positional + named', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [[3, { b: 4 }], '@mixedPosNamed'], 'ty': [['Integer', { b: 'Integer' }]], from: 'c' } },
+      { input: { id: '6', op: [[3, { b: 4 }], 'mixedPosNamed'], 'ty': [['Integer', { b: 'Integer' }]], from: 'c' } },
       { output: { id: '6', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
@@ -130,49 +130,49 @@ describe('@params — lineal form', () => {
 
   it('no params — = opens body directly', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@noParams', from: 'c' } },
+      { input: { id: '1', op: 'noParams', from: 'c' } },
       { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('single param :n : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ n: 10 }, '@singleParam'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ n: 10 }, 'singleParam'], 'ty': [{ n: 'Integer' }], from: 'c' } },
       { output: { id: '2', 'ty': { n: 'Integer' }, re: { n: 10 }, to: 'c' } },
     );
   });
 
   it('two params :a : Integer, :b : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 10, b: 20 }, '@twoParams'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ a: 10, b: 20 }, 'twoParams'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 30 }, to: 'c' } },
     );
   });
 
   it('key-mapped a: x : Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 55 }, '@keyMappedOpen'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ a: 55 }, 'keyMappedOpen'], 'ty': [{ a: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'ty': ['Integer'], re: [55], to: 'c' } },
     );
   });
 
   it('mixed positional + named', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [[3, { m: 4 }], '@mixedOpen'], 'ty': [['Integer', { m: 'Integer' }]], from: 'c' } },
+      { input: { id: '5', op: [[3, { m: 4 }], 'mixedOpen'], 'ty': [['Integer', { m: 'Integer' }]], from: 'c' } },
       { output: { id: '5', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('multiple functions — @foo', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ x: 1 }, '@foo'], 'ty': [{ x: 'Integer' }], from: 'c' } },
+      { input: { id: '6', op: [{ x: 1 }, 'foo'], 'ty': [{ x: 'Integer' }], from: 'c' } },
       { output: { id: '6', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('multiple functions — @bar', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: [{ y: 2 }, '@bar'], 'ty': [{ y: 'Integer' }], from: 'c' } },
+      { input: { id: '7', op: [{ y: 2 }, 'bar'], 'ty': [{ y: 'Integer' }], from: 'c' } },
       { output: { id: '7', 'ty': { y: 'Integer' }, re: { y: 2 }, to: 'c' } },
     );
   });
@@ -229,35 +229,35 @@ describe('@params — optional args — delimited (pipe)', () => {
 
   it('positional default — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[3, 7], '@posOpt'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { input: { id: '1', op: [[3, 7], 'posOpt'], 'ty': [['Integer', 'Integer']], from: 'c' } },
       { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } },
     );
   });
 
   it('positional default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [[3], '@posOpt'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '2', op: [[3], 'posOpt'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '2', 'ty': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
     );
   });
 
   it('named default — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 3, b: 7 }, '@namedOpt'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ a: 3, b: 7 }, 'namedOpt'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } },
     );
   });
 
   it('named default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3 }, '@namedOpt'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ a: 3 }, 'namedOpt'], 'ty': [{ a: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 102 }, to: 'c' } },
     );
   });
 
   it('mixed — named omitted uses default', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [[10], '@mixedOpt'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '5', op: [[10], 'mixedOpt'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '5', 'ty': { sum: 'Integer' }, re: { sum: 60 }, to: 'c' } },
     );
   });
@@ -286,28 +286,28 @@ describe('@params — optional args — lineal form', () => {
 
   it('lineal positional default — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[5, 3], '@posOptOpen'], 'ty': [['Integer', 'Integer']], from: 'c' } },
+      { input: { id: '1', op: [[5, 3], 'posOptOpen'], 'ty': [['Integer', 'Integer']], from: 'c' } },
       { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 8 }, to: 'c' } },
     );
   });
 
   it('lineal positional default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [[5], '@posOptOpen'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '2', op: [[5], 'posOptOpen'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '2', 'ty': { sum: 'Integer' }, re: { sum: 5 }, to: 'c' } },
     );
   });
 
   it('lineal named default — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 5, b: 3 }, '@namedOptOpen'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ a: 5, b: 3 }, 'namedOptOpen'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 8 }, to: 'c' } },
     );
   });
 
   it('lineal named default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 5 }, '@namedOptOpen'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ a: 5 }, 'namedOptOpen'], 'ty': [{ a: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 104 }, to: 'c' } },
     );
   });

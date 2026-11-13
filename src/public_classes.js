@@ -1,13 +1,13 @@
 // Public classes across files. A doc's constructor entry (`W () -> *{ … }`) is
-// reached three ways, all sending `#new` with the class as its selector:
+// reached three ways, all sending `$new` with the class as the last token of `to`:
 //
 //   "svc.bv": (:W)    W()        to: `svc.bv W`
 //   "svc.bv": Svc     Svc.W()    to: `Svc W`
 //   s = Svc()         s.W()      to: `<s's address> W`
 //
 // The caller's side lowers each to a dependency of its own, which every backend
-// already knows how to construct. The receiver's side gains a `new@W` function per
-// public class, which `#new` normalizes to the way `set` normalizes to `set@a`.
+// already knows how to construct. The receiver's side gains a `new@W` arm per
+// public class: `$new` to `W`, as `set@a` is `$set` to `a`.
 
 import * as AST from './ast.js';
 import { lowerConstructionChains } from './chains.js';

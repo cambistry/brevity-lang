@@ -129,14 +129,14 @@ describe('constructor overload — << append — runtime', () => {
 
   it('integer arg matches first clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testInteger', from: 'c' } },
+      { input: { id: '1', op: 'testInteger', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('text arg matches appended clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testText', from: 'c' } },
+      { input: { id: '2', op: 'testText', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'text' }, to: 'c' } },
     );
   });
@@ -177,21 +177,21 @@ describe('constructor overload — arity dispatch — runtime', () => {
 
   it('1-arg matches first clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test1d', from: 'c' } },
+      { input: { id: '1', op: 'test1d', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
     );
   });
 
   it('2-arg matches second clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@test2d', from: 'c' } },
+      { input: { id: '2', op: 'test2d', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('3-arg matches third clause', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@test3d', from: 'c' } },
+      { input: { id: '3', op: 'test3d', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
     );
   });
@@ -231,14 +231,14 @@ describe('constructor overload — lineal form — runtime', () => {
 
   it('integer arg matches first clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testInt', from: 'c' } },
+      { input: { id: '1', op: 'testInt', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
 
   it('text arg matches appended clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testLabel', from: 'c' } },
+      { input: { id: '2', op: 'testLabel', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
@@ -274,14 +274,14 @@ describe('constructor overload — subclasses — runtime', () => {
 
   it('integer subclass arg matches first clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testIntSub', from: 'c' } },
+      { input: { id: '1', op: 'testIntSub', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('text subclass arg matches appended clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testTextSub', from: 'c' } },
+      { input: { id: '2', op: 'testTextSub', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
     );
   });
@@ -352,42 +352,42 @@ describe('constructor optional args — delimited form', () => {
 
   it('typed positional — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testPairBoth', from: 'c' } },
+      { input: { id: '1', op: 'testPairBoth', from: 'c' } },
       { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
     );
   });
 
   it('typed positional — default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testPairDefault', from: 'c' } },
+      { input: { id: '2', op: 'testPairDefault', from: 'c' } },
       { output: { id: '2', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
     );
   });
 
   it('inferred positional — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testOffsetBoth', from: 'c' } },
+      { input: { id: '3', op: 'testOffsetBoth', from: 'c' } },
       { output: { id: '3', 'ty': { total: 'Integer' }, re: { total: 25 }, to: 'c' } },
     );
   });
 
   it('inferred positional — default 10 fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testOffsetDefault', from: 'c' } },
+      { input: { id: '4', op: 'testOffsetDefault', from: 'c' } },
       { output: { id: '4', 'ty': { total: 'Integer' }, re: { total: 15 }, to: 'c' } },
     );
   });
 
   it('named — provided', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@testLabeledProvided', from: 'c' } },
+      { input: { id: '5', op: 'testLabeledProvided', from: 'c' } },
       { output: { id: '5', 'ty': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
     );
   });
 
   it('named — default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@testLabeledDefault', from: 'c' } },
+      { input: { id: '6', op: 'testLabeledDefault', from: 'c' } },
       { output: { id: '6', 'ty': { label: 'Text' }, re: { label: 'unnamed' }, to: 'c' } },
     );
   });
@@ -423,21 +423,21 @@ describe('constructor optional args — mixed', () => {
 
   it('all args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testAllProvided', from: 'c' } },
+      { input: { id: '1', op: 'testAllProvided', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
     );
   });
 
   it('optional positional + named use defaults', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testDefaultsUsed', from: 'c' } },
+      { input: { id: '2', op: 'testDefaultsUsed', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 35 }, to: 'c' } },
     );
   });
 
   it('text params passed through correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testLabels', from: 'c' } },
+      { input: { id: '3', op: 'testLabels', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
@@ -477,21 +477,21 @@ describe('constructor optional args — lineal form', () => {
 
   it('lineal — named arg provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testLinealProvided', from: 'c' } },
+      { input: { id: '1', op: 'testLinealProvided', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'custom' }, to: 'c' } },
     );
   });
 
   it('lineal — named arg defaults', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testLinealDefault', from: 'c' } },
+      { input: { id: '2', op: 'testLinealDefault', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'pdq' }, to: 'c' } },
     );
   });
 
   it('lineal — positional arg works', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testLinealQuery', from: 'c' } },
+      { input: { id: '3', op: 'testLinealQuery', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
@@ -624,28 +624,28 @@ describe('Function() — empty overload — runtime', () => {
 
   it('1-arg matches square clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testSquare', from: 'c' } },
+      { input: { id: '1', op: 'testSquare', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
     );
   });
 
   it('2-arg matches rect clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testRect', from: 'c' } },
+      { input: { id: '2', op: 'testRect', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 12 }, to: 'c' } },
     );
   });
 
   it('square kind returns "square"', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testSquareKind', from: 'c' } },
+      { input: { id: '3', op: 'testSquareKind', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'square' }, to: 'c' } },
     );
   });
 
   it('rect kind returns "rect"', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testRectKind', from: 'c' } },
+      { input: { id: '4', op: 'testRectKind', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'rect' }, to: 'c' } },
     );
   });

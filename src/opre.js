@@ -12,7 +12,7 @@
 //              a param, an own singleton); its runtime value is the address,
 //              and `path` the member tokens under it, for an actor of a
 //              dependency's class (`b.tally.get()` for a `b = Svc.Box(1)`)
-//   op       the wire op, '@' + the member called, as targets emit it today
+//   op       the wire op: the member called, bare (`@get` is `get`)
 //   args     the call's own `args`: the target builds its slots and their `ty`
 //            from them, as before (the message holds no AST nodes, so walkers
 //            don't meet an arg twice)
@@ -20,12 +20,12 @@
 //   label    how the receiver reads in source, for messages ('Svc.s')
 //
 // A member path is space-delimited tokens (src/codegen/opre_tokens.js):
-// `Svc.s.inner.ping()` is `@ping` to `Svc s inner`, a public member `.x`
+// `Svc.s.inner.ping()` is `ping` to `Svc s inner`, a public member `.x`
 // travelling bare. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 //
 // A sub-service read in value position (`x = Svc.s`) is that address, too, when
 // the document says `s` is one: `expr.opreAddress`. A local bound once to an
-// address like that stands for it, so `x.get()` is `@get` to `Svc s`.
+// address like that stands for it, so `x.get()` is `get` to `Svc s`.
 //
 // How a message is delivered (in process or on the wire, a call or a send) is
 // still each target's choice. Where it goes comes from here.
@@ -154,7 +154,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
   const lowerCall = (call) => {
     const { root, members } = memberPath(call.object);
     const base = staticRoot(root);
-    const op = '@' + call.method;
+    const op = call.method;
     if (base) {
       const tokens = [...base.tokens, ...members];
       let doc = null;

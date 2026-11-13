@@ -4,7 +4,7 @@ import { inferExprType } from '../../inference.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { wireLabel, selfAddress } from '../wire_labels.js';
+import { wireLabel, selfAddress, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
@@ -81,7 +81,7 @@ export function domHostAddr(ctx, tag) {
 export function genCellNotify(ctx, cell, cellType) {
   const value = `this.#${stateKey('@' + cell)}`;
   const tyPart = cellType ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
-  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify('@' + cell)}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(wireLabel('@' + cell))}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
 }
 
 export function collectFreeVars(ctx, funcNode) {
@@ -418,7 +418,7 @@ export function genExpr(ctx, expr) {
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
           if (attrsInner) fields.push(attrsInner);
-          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
+          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "$new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -432,9 +432,9 @@ export function genExpr(ctx, expr) {
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
     if (attrsJs) topFields.push(attrsJs);
-    return `await this.#send([{${topFields.join(', ')}}, "#new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
+    return `await this.#send([{${topFields.join(', ')}}, "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
-  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(expr.name)}, ${expr.outerLevel ?? 1}))`;
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;
   if (expr.type === 'RefArg')        return expr.name;
@@ -891,7 +891,7 @@ export function genExpr(ctx, expr) {
       if (ctx.destructuredMembers?.has(name)) {
         const { service, remote } = ctx.destructuredMembers.get(name);
         const to = JSON.stringify(service);
-        const method = JSON.stringify('@' + remote);
+        const method = JSON.stringify(memberOp(remote));
         if (expr.args.length === 0) {
           return `this.#send(${method}, ${to})`;
         }
@@ -1019,7 +1019,7 @@ export function genExpr(ctx, expr) {
       ctx.usesChildSend = true;
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
-      const method = JSON.stringify('@' + expr.method);
+      const method = JSON.stringify(memberOp(expr.method));
       const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
       const posVals = positional.map(genArgVal).join(', ');
       const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
@@ -1042,7 +1042,7 @@ export function genExpr(ctx, expr) {
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       let op;
-      const wireMethod = '@' + expr.method;
+      const wireMethod = memberOp(expr.method);
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(wireMethod);
       } else if (positional.length > 0) {
@@ -1070,7 +1070,7 @@ export function genExpr(ctx, expr) {
       // Local instance vars resolve through SSA scope (the assignment may
       // have renamed `t` to `t__1`, etc.); state-var instances use this.#name.
       const to = isLocalInstance ? (ctx.ssaScope?.get(objName) || objName) : `this.#${stateKey(objName)}`;
-      const method = '@' + expr.method;
+      const method = memberOp(expr.method);
       let op;
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(method);
@@ -1101,7 +1101,7 @@ export function genExpr(ctx, expr) {
         : ctx.stateVarNames.has(objName)
         ? `this.#${stateKey(objName)}`
         : (ctx.ssaScope?.get(objName) || jsIdent(objName));
-      const wireMethod = '@' + expr.method;
+      const wireMethod = memberOp(expr.method);
       let op;
       if (positional.length === 0 && named.length === 0) {
         op = JSON.stringify(wireMethod);
@@ -1142,14 +1142,14 @@ export function genExpr(ctx, expr) {
           : `this.#send(_bv_sel(${addr}), ${addr})`;
       }
     }
-    // Bare field read on a child actor: c.val → this.#childSend(c, "@val")
+    // Bare field read on a child actor: c.val → this.#childSend(c, "val")
     // Mirrors the no-args DotCallExpr path — the generated send is awaited
     // by the caller (DestructureAssign/Assign/ExprStatement check for
     // #childSend in the emitted code and insert an await).
     if (expr.object.type === 'Identifier' && ctx.childActorVars?.has(expr.object.name)) {
       const resolved = ctx.ssaScope?.get(expr.object.name) || expr.object.name;
       const target = ctx.childActorVars.get(expr.object.name) ? `${resolved}.value` : resolved;
-      return `this.#childSend(${target}, ${JSON.stringify('@' + expr.property)})`;
+      return `this.#childSend(${target}, ${JSON.stringify(memberOp(expr.property))})`;
     }
     const obj = genExpr(ctx, expr.object);
     return `${obj}.${expr.property}`;

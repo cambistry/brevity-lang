@@ -2,7 +2,7 @@ import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../inference.js';
 import { isDynamicTy } from '../ty_tags.js';
-import { wireLabel, addressToken, selfAddress } from '../wire_labels.js';
+import { wireLabel, addressToken, selfAddress, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genDestructureAssign,
@@ -15,7 +15,7 @@ import {
 const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
 
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
-// op:"@subscribe" to c's address, with the member `x` appended to the `to`
+// op:"$subscribe" to c's address, with the member `x` appended to the `to`
 // field as its last token (`#<c x>` for a remote, `. x` for a child).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
@@ -40,12 +40,10 @@ export function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be self (@name / #name), a cell-handle param, or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget || isCellHandleTarget ? null : target.object.name;
-  // Wire shape: op is "@subscribe"; the member is the last token of the
-  // `to` address (a public member bare, `#x` private). The dispatch prologue
-  // re-synthesizes the internal `subscribe@<name>` / `subscribe#<name>`
-  // opName so the handler machinery runs unchanged.
-  const selector = '@subscribe';
-  // The member's token: self keeps its own label's (`@x` → `x`, `#x`);
+  // Wire shape: op is "$subscribe"; the member is the last token of the
+  // `to` address (a public member bare, `#x` private).
+  const selector = '$subscribe';
+  // The member's token: self uses its own label's wire name (`@x` → `x`, `#x`);
   // remote and child members are public (`x`). Cell-handle reads the cell name
   // from the runtime handle, so it's set later.
   const toSelector = isSelfTarget ? addressToken(target.name) :
@@ -260,7 +258,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastSetName = s.name;
       if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         code += `\n  ${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
         code += `\n  this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
@@ -555,7 +553,7 @@ function genWhileBody(ctx, body, inner, outerEnv, counters) {
       code += `\n${inner}${genBlockBind(ctx, s, outerEnv)}`;
     } else if (s.type === 'SetStatement') {
       if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       } else if (ctx.stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
@@ -618,7 +616,7 @@ function genDepConstructorAsAssign(ctx, s, emitBinding) {
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
   const tmpRef = `_ref_${s.name}`;
   const newLine = `const ${tmpRef} = await ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))};`;
-  const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${tmpRef}))[0]`);
+  const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${tmpRef}))[0]`);
   return `\n        ${newLine}${asLine}`;
 }
 
@@ -637,7 +635,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
         const tmpRef = `_ref_${s.name}`;
         const createExpr = genExpr(ctx, s.value);
         const newLine = `const ${tmpRef} = ${createExpr};`;
-        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(s.typeName)}, "as"]))[0]`);
+        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(s.typeName)}, "$as"]))[0]`);
         return `\n        ${newLine}${asLine}`;
       }
       return emitBinding(s.name, genExpr(ctx, clause.expr));
@@ -655,10 +653,10 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
     if (ctx.destructuredMembers?.has(s.value.name)) {
       const { service, remote } = ctx.destructuredMembers.get(s.value.name);
-      return emitBinding(s.name, `BvObject.one(BvObject.pack(await this.#send(${JSON.stringify('@' + remote)}, ${JSON.stringify(service)})), ${JSON.stringify(s.name)})`);
+      return emitBinding(s.name, `BvObject.one(BvObject.pack(await this.#send(${JSON.stringify(memberOp(remote))}, ${JSON.stringify(service)})), ${JSON.stringify(s.name)})`);
     }
     const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(s.value.name);
-    return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${target}))[0]`);
+    return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${target}))[0]`);
   }
   // Typed assign from child actor ref: n Integer = c → childSend [Type, as]
   if (s.value.type === 'Identifier' && s.typeName) {
@@ -666,14 +664,14 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     if (ctx.childActorVars?.has(varName)) {
       const resolved = ctx.ssaScope?.get(varName) || varName;
       const target = ctx.childActorVars.get(varName) ? `${resolved}.value` : resolved;
-      return emitBinding(s.name, `(await this.#childSend(${target}, [${JSON.stringify(s.typeName)}, "as"]))[0]`);
+      return emitBinding(s.name, `(await this.#childSend(${target}, [${JSON.stringify(s.typeName)}, "$as"]))[0]`);
     }
     if (ctx.localInstanceVars?.has(varName)) {
       const resolved = ctx.ssaScope?.get(varName) || varName;
-      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], ${resolved}))[0]`);
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${resolved}))[0]`);
     }
     if (ctx.remoteInstanceVars?.has(varName)) {
-      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "as"], this.#${stateKey(varName)}))[0]`);
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], this.#${stateKey(varName)}))[0]`);
     }
   }
   if (s.value.type === 'IfExpr') {
@@ -828,7 +826,7 @@ export function genLocals(ctx, body, outerEnv) {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
       if (ctx.childActorVars.has(s.name)) {
         const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
       }
       if (ctx.stateVarNames.has(s.name)) {
@@ -840,7 +838,7 @@ export function genLocals(ctx, body, outerEnv) {
         const derivedFns = ctx._refCapturedBy?.get(s.name);
         if (derivedFns && derivedFns.size > 0) {
           for (const fnFullName of derivedFns) {
-            const fnOpAt = JSON.stringify(fnFullName);
+            const fnOpAt = JSON.stringify(wireLabel(fnFullName));
             replay += `
         { const _fnSubs = this.#_cellSubs?.get(${fnOpAt}); if (_fnSubs) for (const _sub of _fnSubs) {
           const _op = _sub.args != null ? [_sub.args, ${fnOpAt}] : ${fnOpAt};
@@ -856,10 +854,9 @@ export function genLocals(ctx, body, outerEnv) {
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
     if (s.type === 'ActorFieldSet') {
-      // Wire shape: op is bare "set"; the field is the last token of the
-      // `to` address. Dispatch prologue re-synthesizes the internal
-      // `set@<field>` opName.
-      const wireOp = 'set';
+      // Wire shape: op is "$set"; the field is the last token of the `to`
+      // address, a public member bare.
+      const wireOp = '$set';
       const toSelector = s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via *( "Alias": Alias { ... } )): post via
@@ -876,7 +873,7 @@ export function genLocals(ctx, body, outerEnv) {
           : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
         const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
         const toExpr = JSON.stringify('#<' + encAddr(joinAddress([s.objectName, toSelector])) + '>');
-        return `\n        this.#binding.post({ op: [[${v}], "#set"], to: ${toExpr}${tyField} });`;
+        return `\n        this.#binding.post({ op: [[${v}], "$set"], to: ${toExpr}${tyField} });`;
       }
       let target;
       if (ctx.stateVarNames?.has(s.objectName)) {
@@ -892,7 +889,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.type === 'ActorSetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
       const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-      const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
       const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
       const named = s.args.filter(a => !a.positional);
       let payload;
@@ -916,7 +913,7 @@ export function genLocals(ctx, body, outerEnv) {
         if (stmt.type === 'SetStatement') {
           const stmtResolved = ctx.ssaScope?.get(stmt.name) || jsIdent(stmt.name);
           if (ctx.childActorVars.has(stmt.name)) {
-            const wireOp = stmt.updateOp === '<|' ? 'update' : 'set';
+            const wireOp = stmt.updateOp === '<|' ? '$update' : '$set';
             code += `\n          ${stmtResolved}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
           } else {
             code += `\n          ${stmtResolved}.value = ${genExpr(ctx, stmt.value)};`;
@@ -1189,7 +1186,7 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   }
   if (s.type === 'SetStatement') {
     if (ctx.childActorVars?.has(s.name)) {
-      const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
       return `\n${indent}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
     }
     if (ctx.stateVarNames.has(s.name)) {

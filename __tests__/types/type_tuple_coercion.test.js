@@ -29,7 +29,7 @@ describe('type coercion — typed assignment', () => {
         return result: p.x as Integer
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
@@ -42,7 +42,7 @@ describe('type coercion — typed assignment', () => {
         return result: p.y as Integer
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });

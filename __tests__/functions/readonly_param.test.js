@@ -26,7 +26,7 @@ describe('readonly param — &Type permits reads', () => {
         result List of Integers = echo(ns)
         return :result
     `,
-      { input: { id: '1', op: '@run', from: 'c' } },
+      { input: { id: '1', op: 'run', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'List of Integers' }, re: { result: [10, 20, 30] }, to: 'c' } },
     );
   });
@@ -75,34 +75,34 @@ describe('readonly param — &Type is live', () => {
 
     @bump! = { @n <- @n + 1 }
   `;
-  const notes = (actor) => actor.posts.filter(p => Array.isArray(p.op) && p.op[1] === '@note.');
+  const notes = (actor) => actor.posts.filter(p => Array.isArray(p.op) && p.op[1] === 'note.');
 
   it('a subscriber sees the cell now and after each write', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@watch', from: 'c' });
-    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
-    await actor.sendAsync({ id: '3', op: '@bump!', from: 'c' });
+    await actor.sendAsync({ id: '1', op: 'watch', from: 'c' });
+    await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
+    await actor.sendAsync({ id: '3', op: 'bump!', from: 'c' });
     expect(notes(actor)).toEqual([
-      expect.objectContaining({ op: [[0], '@note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[1], '@note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[2], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[0], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[1], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[2], 'note.'], to: 'Svc' }),
     ]);
   });
 
   it('a named one is live too', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@watchNamed', from: 'c' });
-    await actor.sendAsync({ id: '2', op: '@bump!', from: 'c' });
+    await actor.sendAsync({ id: '1', op: 'watchNamed', from: 'c' });
+    await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
     expect(notes(actor)).toEqual([
-      expect.objectContaining({ op: [[0], '@note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[1], '@note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[0], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[1], 'note.'], to: 'Svc' }),
     ]);
   });
 
   it('a class that only reads it gets the cell\'s value', () => expectBehavior(script,
-    { input: { id: '1', op: '@bump!', from: 'c' } },
+    { input: { id: '1', op: 'bump!', from: 'c' } },
     { output: expect.objectContaining({ id: '1', re: '#<.>', to: 'c' }) },
-    { input: { id: '2', op: '@read', from: 'c' } },
+    { input: { id: '2', op: 'read', from: 'c' } },
     { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
   ));
 });

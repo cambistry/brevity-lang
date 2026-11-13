@@ -105,7 +105,7 @@ describe("function — all forms", () => {
   it("(a) { a + 1 } — single positional, curly body", async () => {
     await expectBehavior(
       script,
-      { input: { id: "1", op: "@curlyOne", from: "c" } },
+      { input: { id: "1", op: "curlyOne", from: "c" } },
       {
         output: {
           id: "1",
@@ -120,7 +120,7 @@ describe("function — all forms", () => {
   it("(a, b) { a + b } — two positionals, curly body", async () => {
     await expectBehavior(
       script,
-      { input: { id: "2", op: "@curlyTwo", from: "c" } },
+      { input: { id: "2", op: "curlyTwo", from: "c" } },
       {
         output: {
           id: "2",
@@ -135,7 +135,7 @@ describe("function — all forms", () => {
   it("(a, b) { a * b } — multiplication", async () => {
     await expectBehavior(
       script,
-      { input: { id: "3", op: "@curlyMult", from: "c" } },
+      { input: { id: "3", op: "curlyMult", from: "c" } },
       {
         output: {
           id: "3",
@@ -150,7 +150,7 @@ describe("function — all forms", () => {
   it("a -> a + 1 — bare single param, expr body", async () => {
     await expectBehavior(
       script,
-      { input: { id: "4", op: "@bareExpr", from: "c" } },
+      { input: { id: "4", op: "bareExpr", from: "c" } },
       {
         output: {
           id: "4",
@@ -165,7 +165,7 @@ describe("function — all forms", () => {
   it("(a) -> a + 1 — parens single param, expr body", async () => {
     await expectBehavior(
       script,
-      { input: { id: "4b", op: "@parenSingleExpr", from: "c" } },
+      { input: { id: "4b", op: "parenSingleExpr", from: "c" } },
       {
         output: {
           id: "4b",
@@ -180,7 +180,7 @@ describe("function — all forms", () => {
   it("(a Integer) -> a * 2 — typed param requires parens", async () => {
     await expectBehavior(
       script,
-      { input: { id: "5", op: "@exprTyped", from: "c" } },
+      { input: { id: "5", op: "exprTyped", from: "c" } },
       {
         output: {
           id: "5",
@@ -195,7 +195,7 @@ describe("function — all forms", () => {
   it("(a, b) -> a - b — two params, expr body", async () => {
     await expectBehavior(
       script,
-      { input: { id: "6", op: "@exprTwo", from: "c" } },
+      { input: { id: "6", op: "exprTwo", from: "c" } },
       {
         output: {
           id: "6",
@@ -210,7 +210,7 @@ describe("function — all forms", () => {
   it("(a, b) { a / b } — return type annotation", async () => {
     await expectBehavior(
       script,
-      { input: { id: "7", op: "@returnAnnotation", from: "c" } },
+      { input: { id: "7", op: "returnAnnotation", from: "c" } },
       {
         output: {
           id: "7",
@@ -225,7 +225,7 @@ describe("function — all forms", () => {
   it("function reads outer-scope variable", async () => {
     await expectBehavior(
       script,
-      { input: { id: "8", op: "@closureRead", from: "c" } },
+      { input: { id: "8", op: "closureRead", from: "c" } },
       {
         output: {
           id: "8",
@@ -240,7 +240,7 @@ describe("function — all forms", () => {
   it("a function's own name leaves the outer variable unchanged", async () => {
     await expectBehavior(
       script,
-      { input: { id: "9", op: "@closureOwnName", from: "c" } },
+      { input: { id: "9", op: "closureOwnName", from: "c" } },
       {
         output: {
           id: "9",
@@ -255,7 +255,7 @@ describe("function — all forms", () => {
   it("same function called twice gives independent results", async () => {
     await expectBehavior(
       script,
-      { input: { id: "10", op: "@calledTwice", from: "c" } },
+      { input: { id: "10", op: "calledTwice", from: "c" } },
       {
         output: {
           id: "10",
@@ -270,7 +270,7 @@ describe("function — all forms", () => {
   it("two distinct functions in same public function", async () => {
     await expectBehavior(
       script,
-      { input: { id: "11", op: "@twoFunctions", from: "c" } },
+      { input: { id: "11", op: "twoFunctions", from: "c" } },
       {
         output: {
           id: "11",

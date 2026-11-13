@@ -48,9 +48,9 @@ describe('Q1: onclick wire encoding', () => {
       @create = -> <div onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
-      { input: { id: '1', op: '@create', from: 'c' } },
+      { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], onclick: '#<main @0>' }, '#new'],
+        op: [{ children: [], onclick: '#<main @0>' }, '$new'],
         to: 'HTML div',
       }) },
     );
@@ -65,9 +65,9 @@ describe('Q1: onclick wire encoding', () => {
       @create = -> <div onclick={ count <- count + 1 }>click me</div>
     `;
     await expectEmission(script,
-      { input: { id: '1', op: '@create', from: 'c' } },
+      { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['click me'], onclick: '#<main @0>' }, '#new'],
+        op: [{ children: ['click me'], onclick: '#<main @0>' }, '$new'],
         to: 'HTML div',
       }) },
     );
@@ -82,9 +82,9 @@ describe('Q1: onclick wire encoding', () => {
       @create = -> <div onclick={ count <- count + 1 }>{{ count }}</div>
     `;
     await expectEmission(script,
-      { input: { id: '1', op: '@create', from: 'c' } },
+      { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>'], onclick: '#<main @1>' }, '#new'],
+        op: [{ children: ['#<main @0>'], onclick: '#<main @1>' }, '$new'],
         to: 'HTML div',
       }) },
     );
@@ -98,9 +98,9 @@ describe('Q1: onclick wire encoding', () => {
       @create = -> <div>hello</div>
     `;
     await expectEmission(script,
-      { input: { id: '1', op: '@create', from: 'c' } },
+      { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'] }, '#new'],
+        op: [{ children: ['hello'] }, '$new'],
         to: 'HTML div',
       }) },
     );
@@ -115,9 +115,9 @@ describe('Q1: onclick wire encoding', () => {
       @create = -> <div class="counter" onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
-      { input: { id: '1', op: '@create', from: 'c' } },
+      { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: 'counter', onclick: '#<main @0>' }, '#new'],
+        op: [{ children: [], class: 'counter', onclick: '#<main @0>' }, '$new'],
         to: 'HTML div',
       }) },
     );
@@ -205,14 +205,14 @@ describe('Q3: external set on host ref cell', () => {
 
   it('external set on @count updates DOM to 1', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
-    await page.send({ id: '1', op: [[1], '#set'], to: '#<factory.bv count>', from: 'test', 'ty': [['Integer']] });
+    await page.send({ id: '1', op: [[1], '$set'], to: '#<factory.bv count>', from: 'test', 'ty': [['Integer']] });
     const text = await page.evaluate(() => document.querySelector('div').textContent);
     expect(text).toBe('1');
   });
 
   it('external set on @count updates DOM to 5', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': constructorSource } });
-    await page.send({ id: '1', op: [[5], '#set'], to: '#<factory.bv count>', from: 'test', 'ty': [['Integer']] });
+    await page.send({ id: '1', op: [[5], '$set'], to: '#<factory.bv count>', from: 'test', 'ty': [['Integer']] });
     const text = await page.evaluate(() => document.querySelector('div').textContent);
     expect(text).toBe('5');
   });

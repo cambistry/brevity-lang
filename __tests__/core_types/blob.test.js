@@ -27,15 +27,15 @@ describe('Blob — declaration and return', () => {
   `;
 
   it('Blob constant declaration', async () => {
-    await expectBehavior(script, inp('1', '@constBlob'), out('1', 'Blob', 'hello'));
+    await expectBehavior(script, inp('1', 'constBlob'), out('1', 'Blob', 'hello'));
   });
 
   it('Blob ref declaration', async () => {
-    await expectBehavior(script, inp('2', '@refBlob'), out('2', 'Blob', 'hello'));
+    await expectBehavior(script, inp('2', 'refBlob'), out('2', 'Blob', 'hello'));
   });
 
   it('Blob ref mutation', async () => {
-    await expectBehavior(script, inp('3', '@refMutate'), out('3', 'Blob', 'world'));
+    await expectBehavior(script, inp('3', 'refMutate'), out('3', 'Blob', 'world'));
   });
 });
 
@@ -55,11 +55,11 @@ describe('Blob — casting', () => {
   `;
 
   it('Text as Blob — byte-level size', async () => {
-    await expectBehavior(script, inp('1', '@textToBlob'), out('1', 'Integer', 5));
+    await expectBehavior(script, inp('1', 'textToBlob'), out('1', 'Integer', 5));
   });
 
   it('Blob as Text — Unicode operations available', async () => {
-    await expectBehavior(script, inp('2', '@blobToText'), out('2', 'Text', 'HELLO'));
+    await expectBehavior(script, inp('2', 'blobToText'), out('2', 'Text', 'HELLO'));
   });
 });
 
@@ -88,22 +88,22 @@ describe('Blob — size (byte count)', () => {
   `;
 
   it('ascii — 1 byte per char', async () => {
-    await expectBehavior(script, inp('1', '@ascii'), out('1', 'Integer', 5));
+    await expectBehavior(script, inp('1', 'ascii'), out('1', 'Integer', 5));
   });
 
   it('e-acute — 2 bytes in UTF-8', async () => {
-    await expectBehavior(script, inp('2', '@multibyte'), out('2', 'Integer', 2));
+    await expectBehavior(script, inp('2', 'multibyte'), out('2', 'Integer', 2));
   });
 
   it('emoji — 4 bytes in UTF-8', async () => {
-    await expectBehavior(script, inp('3', '@emoji'), out('3', 'Integer', 4));
+    await expectBehavior(script, inp('3', 'emoji'), out('3', 'Integer', 4));
   });
 
   it('empty — 0 bytes', async () => {
-    await expectBehavior(script, inp('4', '@empty'), out('4', 'Integer', 0));
+    await expectBehavior(script, inp('4', 'empty'), out('4', 'Integer', 0));
   });
 
   it('ref.size — byte count', async () => {
-    await expectBehavior(script, inp('5', '@refSize'), out('5', 'Integer', 5));
+    await expectBehavior(script, inp('5', 'refSize'), out('5', 'Integer', 5));
   });
 });

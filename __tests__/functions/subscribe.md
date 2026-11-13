@@ -53,19 +53,19 @@ last *Integer = 0
 
 ## Remote Subscription Wire Shape
 
-Subscribing to a remote function posts `@subscribe` to a function-specific
+Subscribing to a remote function posts `$subscribe` to a function-specific
 address:
 
 ```text
-to: "#<Pub @pub>"
-op: "@subscribe"
+to: "#<Pub pub>"
+op: "$subscribe"
 ```
 
 Parameterized subscribe carries args:
 
 ```text
-to: "#<Pub @pub_w_params>"
-op: [{ p: 100 }, "@subscribe"]
+to: "#<Pub pub_w_params>"
+op: [{ p: 100 }, "$subscribe"]
 ```
 
 Later `re` messages with the same id update subscriber state.

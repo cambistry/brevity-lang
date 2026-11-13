@@ -219,42 +219,42 @@ describe('wrapped child — runtime with *', () => {
 
   it('positional * delegates to child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testPos', from: 'c' } },
+      { input: { id: '1', op: 'testPos', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('attached star* delegates to child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testAttached', from: 'c' } },
+      { input: { id: '1', op: 'testAttached', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed * delegates to child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testKeyed', from: 'c' } },
+      { input: { id: '1', op: 'testKeyed', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed alias * delegates via alias', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testAlias', from: 'c' } },
+      { input: { id: '1', op: 'testAlias', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('keyed sugared alias* delegates via alias', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testSugared', from: 'c' } },
+      { input: { id: '1', op: 'testSugared', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
 
   it('wrapper with state delegates and transforms', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testCached', from: 'c' } },
+      { input: { id: '1', op: 'testCached', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
     );
   });
@@ -294,14 +294,14 @@ describe('wrapped child — independence', () => {
 
   it('child is still callable directly after being wrapped', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testDirectChild', from: 'c' } },
+      { input: { id: '1', op: 'testDirectChild', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('wrapper produces different result than direct child call', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testViaWrapper', from: 'c' } },
+      { input: { id: '1', op: 'testViaWrapper', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 43 }, to: 'c' } },
     );
   });
@@ -1163,7 +1163,7 @@ describe('inline constraint — multi-line form', () => {
 
   it('multi-line constraint delegates at runtime', async () => {
     await expectBehavior(constraintRuntimeScript,
-      { input: { id: '1', op: '@testMultiLine', from: 'c' } },
+      { input: { id: '1', op: 'testMultiLine', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
@@ -1196,7 +1196,7 @@ describe('inline constraint — multi-line form', () => {
 describe('inline constraint — runtime', () => {
   it('delegates through constrained ref', async () => {
     await expectBehavior(constraintRuntimeScript,
-      { input: { id: '1', op: '@testInlineConstraint', from: 'c' } },
+      { input: { id: '1', op: 'testInlineConstraint', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
     );
   });
@@ -1365,14 +1365,14 @@ describe('service coercion — compilation', () => {
 describe('service coercion — runtime', () => {
   it('cast delegates to actual actor at runtime', async () => {
     await expectBehavior(constraintRuntimeScript,
-      { input: { id: '1', op: '@testCastDelegate', from: 'c' } },
+      { input: { id: '1', op: 'testCastDelegate', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('cast narrows wider type — correct arg type passes', async () => {
     await expectBehavior(constraintRuntimeScript,
-      { input: { id: '1', op: '@testCastNarrow', from: 'c' } },
+      { input: { id: '1', op: 'testCastNarrow', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
     );
   });

@@ -1,7 +1,7 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { selfAddress, addressToken } from '../wire_labels.js';
+import { selfAddress, addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import {
@@ -63,8 +63,8 @@ export function erlNewOpEntries(ctx, args, typeEnv, sCtx) {
   const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
   const bag = args.find(a => a.type === 'NamedArgsBag');
   const named = bag ? Object.entries(bag.fields).map(([name, expr]) => ({ name, expr })) : [];
-  if (positional.length === 0 && named.length === 0) return '<<"op">> => [[], <<"#new">>]';
-  const { opExpr, tyExpr } = erlArgSlots(positional, named, '<<"#new">>', erlArgHelpers(ctx, typeEnv, sCtx));
+  if (positional.length === 0 && named.length === 0) return '<<"op">> => [[], <<"$new">>]';
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, '<<"$new">>', erlArgHelpers(ctx, typeEnv, sCtx));
   return `<<"op">> => ${opExpr}, <<"ty">> => ${tyExpr}`;
 }
 
@@ -177,7 +177,7 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
   const value = `get(${erlStateKey(ctx, '@' + cell)})`;
   const tyPart = cellType ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
   return [
-    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString('@' + cell)}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
+    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(wireLabel('@' + cell))}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
     `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,
     `${I}    case SubFrom${sfx}_ of`,
     `${I}        <<"__parent">> ->`,
@@ -281,7 +281,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `begin
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
-        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [#{${payloadPairs.join(', ')}}, ${erlString('#new')}], <<"to">> => ${to}},
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [#{${payloadPairs.join(', ')}}, ${erlString('$new')}], <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\\n]),
         null
     end`;
@@ -469,7 +469,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = ctx.destructuredMembers.get(expr.callee.name);
     const to = erlString(service);
-    const method = erlString('@' + remote);
+    const method = erlString(memberOp(remote));
     const callArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
     const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';
@@ -778,7 +778,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const isWrappedChild = !isRemote && dotObjName && ctx.stateVarNames.has(dotObjName) && ctx.stateVarTypeEnv.get(dotObjName) === 'Anything';
     if (isWrappedChild) {
       const childRef = `get(${erlStateKey(ctx, dotObjName)})`;
-      const method = erlString('@' + expr.method);
+      const method = erlString(memberOp(expr.method));
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
       const argVal = a => (a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name));
@@ -797,7 +797,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const awaitUnlessSilent = (seq) => (expr.method.endsWith('.') || expr.launched ? 'null' : `await_response_(integer_to_binary(${seq}))`);
     if (isRemote) {
       const to = `get(${erlStateKey(ctx, dotObjName)})`;
-      const method = erlString('@' + expr.method);
+      const method = erlString(memberOp(expr.method));
       const named = expr.args.filter(a => !a.positional);
       const positional = expr.args.filter(a => a.positional);
       const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
@@ -817,7 +817,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const to = ctx.localInstanceVars?.has(dotObjName)
       ? erlVarName(resolveSSAName(dotObjName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
       : genExpr(ctx, expr.object, typeEnv, sCtx);
-    const method = erlString('@' + expr.method);
+    const method = erlString(memberOp(expr.method));
     const v2 = erlSendVars(ctx);
     if (positional.length === 0 && named.length === 0) {
       return `begin
@@ -852,7 +852,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (expr.object.type === 'Identifier' && sCtx?.childActorRefs?.has(expr.object.name)) {
       const actorName = sCtx.childActorRefs.get(expr.object.name);
       const prefix = `child_${actorName.toLowerCase()}`;
-      const method = erlString('@' + expr.property);
+      const method = erlString(memberOp(expr.property));
       const n = ctx.ephCounter++;
       const reVar = `Eph_re_${n}_`;
       return `begin
@@ -863,7 +863,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // ...or on an instance process.
     if (expr.object.type === 'Identifier' && sCtx?.selfSpawnedRefs?.has(expr.object.name)) {
       const pid = genExpr(ctx, expr.object, typeEnv, sCtx);
-      return `bv_object_pack(bv_inst_call_(${pid}, ${erlString('@' + expr.property)}, #{}))`;
+      return `bv_object_pack(bv_inst_call_(${pid}, ${erlString(memberOp(expr.property))}, #{}))`;
     }
     // Slice 5/9: field access on a TypeConstruction or a local typed with a
     // user-declared `::Name`. Tagged structures live in maps keyed by binary
@@ -977,7 +977,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const isWrappedChild = !isRemote && objName && ctx.stateVarNames.has(objName) && ctx.stateVarTypeEnv.get(objName) === 'Anything';
   if (isWrappedChild) {
     const childRef = `get(${erlStateKey(ctx, objName)})`;
-    const method = erlString('@' + expr.method);
+    const method = erlString(memberOp(expr.method));
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     let payload;
@@ -1006,7 +1006,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     const to = isLocalInst
       ? `bv_to_addr_(${erlVarName(resolveSSAName(objName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))})`
       : `bv_to_addr_(get(${erlStateKey(ctx, objName)}))`;
-    const method = erlString('@' + expr.method);
+    const method = erlString(memberOp(expr.method));
     const named = expr.args.filter(a => !a.positional);
     const positional = expr.args.filter(a => a.positional);
     const genArgVal = a => a.expr ? genExpr(ctx, a.expr, typeEnv, sCtx) : erlVarName(a.name);
@@ -1025,7 +1025,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
   const named = expr.args.filter(a => !a.positional);
   const positional = expr.args.filter(a => a.positional);
   const to = genExpr(ctx, expr.object, typeEnv, sCtx);
-  const method = erlString('@' + expr.method);
+  const method = erlString(memberOp(expr.method));
   const v2 = erlSendVars(ctx);
   if (positional.length === 0 && named.length === 0) {
     // No args — op is just the method string, no ty
@@ -1072,7 +1072,7 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
     }
   }
   const prefix = `child_${actorName.toLowerCase()}`;
-  const method = erlString('@' + expr.method);
+  const method = erlString(memberOp(expr.method));
   const n = ctx.ephCounter++;
   const reVar = `Eph_re_${n}_`;
 
@@ -1120,7 +1120,7 @@ function refCellTypeIsSelfBearing(ctx, cellName) {
 function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
   const cellName = expr.object.name; // e.g. "@peer"
   const pidExpr = expr.object.outer ? genExpr(ctx, expr.object, typeEnv, sCtx) : `get(${erlStateKey(ctx, cellName)})`;
-  const method = erlString('@' + expr.method);
+  const method = erlString(memberOp(expr.method));
   const positional = expr.args.filter(a => a.positional);
   const named = expr.args.filter(a => !a.positional);
   let payload;
@@ -1153,7 +1153,7 @@ function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
 // message and awaits the matching {bv_reply, Id, Re} reply.
 function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
   const pidExpr = genExpr(ctx, expr.object, typeEnv, sCtx);
-  const method = erlString('@' + expr.method);
+  const method = erlString(memberOp(expr.method));
   const positional = expr.args.filter(a => a.positional);
   const named = expr.args.filter(a => !a.positional);
   let payload;
@@ -1441,11 +1441,11 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
         if (s.type === 'SetStatement') {
           if (sCtx?.childActorRefs?.has(s.name)) {
             const actorName = sCtx.childActorRefs.get(s.name);
-            const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+            const wireOp = s.updateOp === '<|' ? '$update' : '$set';
             lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
           } else if (sCtx?.selfSpawnedRefs?.has(s.name) && !refParams.has(s.name)) {
             // Instance process captured from the enclosing body.
-            const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+            const wireOp = s.updateOp === '<|' ? '$update' : '$set';
             const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
             lines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genInnerExpr(s.value)}])`);
           } else if (refParams.has(s.name)) {
@@ -1577,7 +1577,7 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
       expr.fn.body[0].expr.object.name === expr.fn.params[0].name &&
       (expr.fn.body[0].expr.args || []).length === 0) {
     const method = expr.fn.body[0].expr.method;
-    const methodBin = erlString('@' + method);
+    const methodBin = erlString(memberOp(method));
     // Self-routing: when the iterated Pid is *this* process, sending to
     // self would deadlock (we'd be waiting for our own receive). Call the
     // local handler synchronously instead. Picks the right child handler

@@ -39,27 +39,27 @@ function out(result) {
 
 describe('Decimal addition', () => {
   it('adds two decimals', async () => {
-    await expectBehavior(script, inpDD('@add', 1.5, 2.3), out(3.8));
+    await expectBehavior(script, inpDD('add', 1.5, 2.3), out(3.8));
   });
 
   it('adds with zero', async () => {
-    await expectBehavior(script, inpDD('@add', 0.0, 5.5), out(5.5));
+    await expectBehavior(script, inpDD('add', 0.0, 5.5), out(5.5));
   });
 
   it('adds negative decimals', async () => {
-    await expectBehavior(script, inpDD('@add', -1.5, -2.5), out(-4.0));
+    await expectBehavior(script, inpDD('add', -1.5, -2.5), out(-4.0));
   });
 
   it('0.1 + 0.2 = 0.3 (no floating-point error)', async () => {
-    await expectBehavior(script, inpDD('@add', 0.1, 0.2), out(0.3));
+    await expectBehavior(script, inpDD('add', 0.1, 0.2), out(0.3));
   });
 
   it('adds decimals with different scales', async () => {
-    await expectBehavior(script, inpDD('@add', 1.5, 2.25), out(3.75));
+    await expectBehavior(script, inpDD('add', 1.5, 2.25), out(3.75));
   });
 
   it('adds large decimals', async () => {
-    await expectBehavior(script, inpDD('@add', 999999.99, 0.01), out(1000000.0));
+    await expectBehavior(script, inpDD('add', 999999.99, 0.01), out(1000000.0));
   });
 });
 
@@ -67,19 +67,19 @@ describe('Decimal addition', () => {
 
 describe('Decimal subtraction', () => {
   it('subtracts two decimals', async () => {
-    await expectBehavior(script, inpDD('@sub', 5.5, 2.3), out(3.2));
+    await expectBehavior(script, inpDD('sub', 5.5, 2.3), out(3.2));
   });
 
   it('subtracts to negative', async () => {
-    await expectBehavior(script, inpDD('@sub', 1.0, 3.5), out(-2.5));
+    await expectBehavior(script, inpDD('sub', 1.0, 3.5), out(-2.5));
   });
 
   it('subtracts zero', async () => {
-    await expectBehavior(script, inpDD('@sub', 7.7, 0.0), out(7.7));
+    await expectBehavior(script, inpDD('sub', 7.7, 0.0), out(7.7));
   });
 
   it('0.3 - 0.1 = 0.2 (no floating-point error)', async () => {
-    await expectBehavior(script, inpDD('@sub', 0.3, 0.1), out(0.2));
+    await expectBehavior(script, inpDD('sub', 0.3, 0.1), out(0.2));
   });
 });
 
@@ -87,31 +87,31 @@ describe('Decimal subtraction', () => {
 
 describe('Decimal multiplication', () => {
   it('multiplies two decimals', async () => {
-    await expectBehavior(script, inpDD('@mul', 2.5, 4.0), out(10.0));
+    await expectBehavior(script, inpDD('mul', 2.5, 4.0), out(10.0));
   });
 
   it('multiplies by zero', async () => {
-    await expectBehavior(script, inpDD('@mul', 99.9, 0.0), out(0.0));
+    await expectBehavior(script, inpDD('mul', 99.9, 0.0), out(0.0));
   });
 
   it('multiplies by one', async () => {
-    await expectBehavior(script, inpDD('@mul', 3.14, 1.0), out(3.14));
+    await expectBehavior(script, inpDD('mul', 3.14, 1.0), out(3.14));
   });
 
   it('multiplies negative by positive', async () => {
-    await expectBehavior(script, inpDD('@mul', -2.5, 3.0), out(-7.5));
+    await expectBehavior(script, inpDD('mul', -2.5, 3.0), out(-7.5));
   });
 
   it('multiplies negative by negative', async () => {
-    await expectBehavior(script, inpDD('@mul', -2.0, -3.5), out(7.0));
+    await expectBehavior(script, inpDD('mul', -2.0, -3.5), out(7.0));
   });
 
   it('0.1 * 0.2 = 0.02 (no floating-point error)', async () => {
-    await expectBehavior(script, inpDD('@mul', 0.1, 0.2), out(0.02));
+    await expectBehavior(script, inpDD('mul', 0.1, 0.2), out(0.02));
   });
 
   it('multiplies preserving precision', async () => {
-    await expectBehavior(script, inpDD('@mul', 1.23, 4.56), out(5.6088));
+    await expectBehavior(script, inpDD('mul', 1.23, 4.56), out(5.6088));
   });
 });
 
@@ -120,27 +120,27 @@ describe('Decimal multiplication', () => {
 
 describe('Decimal division', () => {
   it('divides evenly', async () => {
-    await expectBehavior(script, inpDD('@div', 10.0, 2.0), out(5.0));
+    await expectBehavior(script, inpDD('div', 10.0, 2.0), out(5.0));
   });
 
   it('divides with decimal result', async () => {
-    await expectBehavior(script, inpDD('@div', 7.0, 2.0), out(3.5));
+    await expectBehavior(script, inpDD('div', 7.0, 2.0), out(3.5));
   });
 
   it('divides small by large', async () => {
-    await expectBehavior(script, inpDD('@div', 1.0, 4.0), out(0.25));
+    await expectBehavior(script, inpDD('div', 1.0, 4.0), out(0.25));
   });
 
   it('divides negative by positive', async () => {
-    await expectBehavior(script, inpDD('@div', -9.0, 2.0), out(-4.5));
+    await expectBehavior(script, inpDD('div', -9.0, 2.0), out(-4.5));
   });
 
   it('divides preserving precision', async () => {
-    await expectBehavior(script, inpDD('@div', 1.0, 8.0), out(0.125));
+    await expectBehavior(script, inpDD('div', 1.0, 8.0), out(0.125));
   });
 
   it('divides by one', async () => {
-    await expectBehavior(script, inpDD('@div', 3.14, 1.0), out(3.14));
+    await expectBehavior(script, inpDD('div', 3.14, 1.0), out(3.14));
   });
 });
 
@@ -148,19 +148,19 @@ describe('Decimal division', () => {
 
 describe('Decimal remainder', () => {
   it('basic remainder', async () => {
-    await expectBehavior(script, inpDD('@rem', 5.5, 2.0), out(1.5));
+    await expectBehavior(script, inpDD('rem', 5.5, 2.0), out(1.5));
   });
 
   it('even division has zero remainder', async () => {
-    await expectBehavior(script, inpDD('@rem', 6.0, 3.0), out(0.0));
+    await expectBehavior(script, inpDD('rem', 6.0, 3.0), out(0.0));
   });
 
   it('negative dividend — remainder is negative', async () => {
-    await expectBehavior(script, inpDD('@rem', -5.5, 2.0), out(-1.5));
+    await expectBehavior(script, inpDD('rem', -5.5, 2.0), out(-1.5));
   });
 
   it('remainder with fractional divisor', async () => {
-    await expectBehavior(script, inpDD('@rem', 1.0, 0.3), out(0.1));
+    await expectBehavior(script, inpDD('rem', 1.0, 0.3), out(0.1));
   });
 });
 
@@ -168,19 +168,19 @@ describe('Decimal remainder', () => {
 
 describe('Mixed Integer and Decimal arithmetic', () => {
   it('Integer + Decimal = Decimal', async () => {
-    await expectBehavior(mixedScript, inpID('@addMixed', 2, 3.5), out(5.5));
+    await expectBehavior(mixedScript, inpID('addMixed', 2, 3.5), out(5.5));
   });
 
   it('Decimal - Integer = Decimal', async () => {
-    await expectBehavior(mixedScript, inpDI('@subMixed', 10.5, 3), out(7.5));
+    await expectBehavior(mixedScript, inpDI('subMixed', 10.5, 3), out(7.5));
   });
 
   it('Integer * Decimal = Decimal', async () => {
-    await expectBehavior(mixedScript, inpID('@mulMixed', 3, 2.5), out(7.5));
+    await expectBehavior(mixedScript, inpID('mulMixed', 3, 2.5), out(7.5));
   });
 
   it('Decimal / Integer = Decimal', async () => {
-    await expectBehavior(mixedScript, inpDI('@divMixed', 7.5, 3), out(2.5));
+    await expectBehavior(mixedScript, inpDI('divMixed', 7.5, 3), out(2.5));
   });
 });
 
@@ -190,28 +190,28 @@ describe('Mixed Integer and Decimal arithmetic', () => {
 describe('Decimal non-terminating division (runtime)', () => {
   it('1.0 / 3.0 → runtime error', async () => {
     await expectBehavior(script,
-      inpDD('@div', 1.0, 3.0),
-      { output: { id: '1', ex: { '@div': 'error' }, to: 'c' } });
+      inpDD('div', 1.0, 3.0),
+      { output: { id: '1', ex: { 'div': 'error' }, to: 'c' } });
   });
 
   it('1.0 / 7.0 → runtime error', async () => {
     await expectBehavior(script,
-      inpDD('@div', 1.0, 7.0),
-      { output: { id: '1', ex: { '@div': 'error' }, to: 'c' } });
+      inpDD('div', 1.0, 7.0),
+      { output: { id: '1', ex: { 'div': 'error' }, to: 'c' } });
   });
 
   it('2.0 / 6.0 → runtime error (reduces to 1/3)', async () => {
     await expectBehavior(script,
-      inpDD('@div', 2.0, 6.0),
-      { output: { id: '1', ex: { '@div': 'error' }, to: 'c' } });
+      inpDD('div', 2.0, 6.0),
+      { output: { id: '1', ex: { 'div': 'error' }, to: 'c' } });
   });
 
   it('1.0 / 5.0 → 0.2 (terminates, factors are only 5)', async () => {
-    await expectBehavior(script, inpDD('@div', 1.0, 5.0), out(0.2));
+    await expectBehavior(script, inpDD('div', 1.0, 5.0), out(0.2));
   });
 
   it('1.0 / 2.5 → 0.4 (terminates)', async () => {
-    await expectBehavior(script, inpDD('@div', 1.0, 2.5), out(0.4));
+    await expectBehavior(script, inpDD('div', 1.0, 2.5), out(0.4));
   });
 });
 
@@ -252,7 +252,7 @@ const expScript = `
     @exp = (base Decimal, power Integer) -> result: base ^ power
 `;
 function inpExp(base, power) {
-  return { input: { id: '1', op: [[base, power], '@exp'], 'ty': [['Decimal', 'Integer']], from: 'c' } };
+  return { input: { id: '1', op: [[base, power], 'exp'], 'ty': [['Decimal', 'Integer']], from: 'c' } };
 }
 
 describe('Decimal exponentiation', () => {
@@ -283,7 +283,7 @@ describe('Decimal exponentiation', () => {
   it('3.0 ^ -1 → runtime error (1/3 non-terminating)', async () => {
     await expectBehavior(expScript,
       inpExp(3.0, -1),
-      { output: { id: '1', ex: { '@exp': 'error' }, to: 'c' } });
+      { output: { id: '1', ex: { 'exp': 'error' }, to: 'c' } });
   });
 });
 
@@ -305,7 +305,7 @@ describe('Decimal precision at scale', () => {
     const chainScript = `
         @calc = (a Decimal, b Decimal, c Decimal) -> result: (a + b) * c
     `;
-    const inp = { input: { id: '1', op: [[0.1, 0.2, 10.0], '@calc'], 'ty': [['Decimal', 'Decimal', 'Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[0.1, 0.2, 10.0], 'calc'], 'ty': [['Decimal', 'Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(chainScript, inp, out(3.0));
   });
 
@@ -314,7 +314,7 @@ describe('Decimal precision at scale', () => {
     const sumScript = `
         @sum10 = (v Decimal) -> result: v + v + v + v + v + v + v + v + v + v
     `;
-    const inp = { input: { id: '1', op: [[0.1], '@sum10'], 'ty': [['Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[0.1], 'sum10'], 'ty': [['Decimal']], from: 'c' } };
     await expectBehavior(sumScript, inp, out(1.0));
   });
 
@@ -322,7 +322,7 @@ describe('Decimal precision at scale', () => {
     const rtScript = `
         @roundTrip = (a Decimal, b Decimal) -> result: a * b / b
     `;
-    const inp = { input: { id: '1', op: [[3.14, 2.5], '@roundTrip'], 'ty': [['Decimal', 'Decimal']], from: 'c' } };
+    const inp = { input: { id: '1', op: [[3.14, 2.5], 'roundTrip'], 'ty': [['Decimal', 'Decimal']], from: 'c' } };
     await expectBehavior(rtScript, inp, out(3.14));
   });
 });
@@ -389,63 +389,63 @@ describe('Truly long decimals (500 fractional digits)', () => {
   }
 
   it('addition: pi + pi == pi * 2 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@addSelf'), outEqual(true));
+    await expectBehavior(longScript, call('addSelf'), outEqual(true));
   });
 
   it('subtraction inverse: (pi + e) - e == pi (500 digits each)', async () => {
-    await expectBehavior(longScript, call('@subInverse'), outEqual(true));
+    await expectBehavior(longScript, call('subInverse'), outEqual(true));
   });
 
   it('subtraction to zero: pi - pi == 0.0 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@subToZero'), outEqual(true));
+    await expectBehavior(longScript, call('subToZero'), outEqual(true));
   });
 
   it('multiplication commutes: pi * e == e * pi (500 × 500 digits → 1000-digit coeff)', async () => {
-    await expectBehavior(longScript, call('@mulCommute'), outEqual(true));
+    await expectBehavior(longScript, call('mulCommute'), outEqual(true));
   });
 
   it('multiply by 1.0 identity (500 digits)', async () => {
-    await expectBehavior(longScript, call('@mulByOne'), outEqual(true));
+    await expectBehavior(longScript, call('mulByOne'), outEqual(true));
   });
 
   it('distributive: pi*7 == pi*3 + pi*4 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@distrib'), outEqual(true));
+    await expectBehavior(longScript, call('distrib'), outEqual(true));
   });
 
   it('division round-trip by 8 (power of 2, 500 digits)', async () => {
-    await expectBehavior(longScript, call('@divPow2'), outEqual(true));
+    await expectBehavior(longScript, call('divPow2'), outEqual(true));
   });
 
   it('division round-trip by 25 (power of 5, 500 digits)', async () => {
-    await expectBehavior(longScript, call('@divPow5'), outEqual(true));
+    await expectBehavior(longScript, call('divPow5'), outEqual(true));
   });
 
   it('division round-trip by 40 (mixed 2·5 factors, 500 digits)', async () => {
-    await expectBehavior(longScript, call('@divMixed'), outEqual(true));
+    await expectBehavior(longScript, call('divMixed'), outEqual(true));
   });
 
   it('pi ^ 2 == pi * pi (500 digits → 1000-digit result)', async () => {
-    await expectBehavior(longScript, call('@pow2'), outEqual(true));
+    await expectBehavior(longScript, call('pow2'), outEqual(true));
   });
 
   it('pi ^ 3 == pi * pi * pi (500 digits → 1500-digit result)', async () => {
-    await expectBehavior(longScript, call('@pow3'), outEqual(true));
+    await expectBehavior(longScript, call('pow3'), outEqual(true));
   });
 
   it('pi ^ 0 == 1.0 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@pow0'), outEqual(true));
+    await expectBehavior(longScript, call('pow0'), outEqual(true));
   });
 
   it('remainder: pi % pi == 0.0 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@remBySelf'), outEqual(true));
+    await expectBehavior(longScript, call('remBySelf'), outEqual(true));
   });
 
   it('remainder: 3*pi % pi == 0.0 (500 digits)', async () => {
-    await expectBehavior(longScript, call('@remBy2Sum'), outEqual(true));
+    await expectBehavior(longScript, call('remBy2Sum'), outEqual(true));
   });
 
   it('remainder preserved across added multiple: (pi + 10) % pi == 10 % pi', async () => {
-    await expectBehavior(longScript, call('@remPreserved'), outEqual(true));
+    await expectBehavior(longScript, call('remPreserved'), outEqual(true));
   });
 });
 
@@ -461,7 +461,7 @@ describe('Decimal digit-rollover precision', () => {
       @roll = -> equal: ${tiny} + ${big} == 1.0
     `;
     await expectBehavior(rollScript,
-      { input: { id: '1', op: '@roll', from: 'c' } },
+      { input: { id: '1', op: 'roll', from: 'c' } },
       outEqual(true));
   });
 
@@ -471,7 +471,7 @@ describe('Decimal digit-rollover precision', () => {
       @zero = -> equal: ${bigNum} - ${bigNum} == 0.0
     `;
     await expectBehavior(s,
-      { input: { id: '1', op: '@zero', from: 'c' } },
+      { input: { id: '1', op: 'zero', from: 'c' } },
       outEqual(true));
   });
 
@@ -484,7 +484,7 @@ describe('Decimal digit-rollover precision', () => {
       @sum = -> equal: (${sum10}) == ${delta} * 10
     `;
     await expectBehavior(s,
-      { input: { id: '1', op: '@sum', from: 'c' } },
+      { input: { id: '1', op: 'sum', from: 'c' } },
       outEqual(true));
   });
 });
@@ -515,43 +515,43 @@ describe('Decimal type conversions', () => {
   }
 
   it('to_integer(3.7) = 3 (truncates toward zero)', async () => {
-    await expectBehavior(convScript, inpD('@toInteger', 3.7), outI(3));
+    await expectBehavior(convScript, inpD('toInteger', 3.7), outI(3));
   });
 
   it('to_integer(-3.7) = -3 (truncates toward zero)', async () => {
-    await expectBehavior(convScript, inpD('@toInteger', -3.7), outI(-3));
+    await expectBehavior(convScript, inpD('toInteger', -3.7), outI(-3));
   });
 
   it('to_integer(0.0) = 0', async () => {
-    await expectBehavior(convScript, inpD('@toInteger', 0.0), outI(0));
+    await expectBehavior(convScript, inpD('toInteger', 0.0), outI(0));
   });
 
   it('to_integer(5.0) = 5', async () => {
-    await expectBehavior(convScript, inpD('@toInteger', 5.0), outI(5));
+    await expectBehavior(convScript, inpD('toInteger', 5.0), outI(5));
   });
 
   it('to_integer(-10.0) = -10', async () => {
-    await expectBehavior(convScript, inpD('@toInteger', -10.0), outI(-10));
+    await expectBehavior(convScript, inpD('toInteger', -10.0), outI(-10));
   });
 
   it('to_float(3.14) = 3.14', async () => {
-    await expectBehavior(convScript, inpD('@toFloat', 3.14), outF(3.14));
+    await expectBehavior(convScript, inpD('toFloat', 3.14), outF(3.14));
   });
 
   it('to_float(0.0) = 0.0', async () => {
-    await expectBehavior(convScript, inpD('@toFloat', 0.0), outF(0));
+    await expectBehavior(convScript, inpD('toFloat', 0.0), outF(0));
   });
 
   it('to_float(-2.5) = -2.5', async () => {
-    await expectBehavior(convScript, inpD('@toFloat', -2.5), outF(-2.5));
+    await expectBehavior(convScript, inpD('toFloat', -2.5), outF(-2.5));
   });
 
   it('to_float(0.1111) = 0.1111', async () => {
-    await expectBehavior(convScript, inpD('@toFloat', 0.1111), outF(0.1111));
+    await expectBehavior(convScript, inpD('toFloat', 0.1111), outF(0.1111));
   });
 
   it('to_decimal(1.5) = 1.5 (identity)', async () => {
-    await expectBehavior(convScript, inpD('@toSelf', 1.5), out(1.5));
+    await expectBehavior(convScript, inpD('toSelf', 1.5), out(1.5));
   });
 });
 
@@ -569,10 +569,10 @@ describe('Decimal conversion via ref cell dot method', () => {
   }
 
   it('x.to_integer on *Decimal ref', async () => {
-    await expectBehavior(refScript, { input: { id: '1', op: '@toInteger', from: 'c' } }, outI(3));
+    await expectBehavior(refScript, { input: { id: '1', op: 'toInteger', from: 'c' } }, outI(3));
   });
 
   it('x.to_float on *Decimal ref', async () => {
-    await expectBehavior(refScript, { input: { id: '1', op: '@toFloat', from: 'c' } }, outF(2.5));
+    await expectBehavior(refScript, { input: { id: '1', op: 'toFloat', from: 'c' } }, outF(2.5));
   });
 });

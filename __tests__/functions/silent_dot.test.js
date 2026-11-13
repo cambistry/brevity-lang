@@ -90,21 +90,21 @@ describe('silent name — invocation', () => {
 
   it('`fire...` runs the silent `fire.` without waiting', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@elided!', from: 'c' } },
+      { input: { id: '1', op: 'elided!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
 
   it('`bump(7)...` passes args', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@withArgs!', from: 'c' } },
+      { input: { id: '1', op: 'withArgs!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
     );
   });
 
   it('a bare `return` exits a silent function early', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@early!', from: 'c' } },
+      { input: { id: '1', op: 'early!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
     );
   });
@@ -165,8 +165,8 @@ describe('silent name — on the wire', () => {
 
   it('a silent public handler is addressed with its dot and sends no reply', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[5], '@put.'], 'ty': [['Integer']], from: 'c' } },
-      { input: { id: '2', op: '@get', from: 'c' } },
+      { input: { id: '1', op: [[5], 'put.'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '2', op: 'get', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [5], to: 'c' }) },
     );
   });

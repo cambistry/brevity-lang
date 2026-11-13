@@ -16,7 +16,7 @@ describe('public class in its own file', () => {
         return n
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -33,7 +33,7 @@ describe('public class in its own file', () => {
         return v
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -55,7 +55,7 @@ describe('public class in its own file', () => {
         return a + b
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -187,19 +187,19 @@ describe('Box and @Box are different classes', () => {
     { output: { id: '1', re: [value], 'ty': [type], to: 'c' } },
   );
 
-  it('@Box() constructs the public class', () => reads('@public', 'public'));
-  it('Box() constructs the private class', () => reads('@private', 'private'));
-  it('@Box() can be used in place', () => reads('@inPlace', 'public'));
-  it('@Box is a type', () => reads('@annotated', 'public'));
+  it('@Box() constructs the public class', () => reads('public', 'public'));
+  it('Box() constructs the private class', () => reads('private', 'private'));
+  it('@Box() can be used in place', () => reads('inPlace', 'public'));
+  it('@Box is a type', () => reads('annotated', 'public'));
   it('@Box is a param\'s type', () => {
     expect(() => compileSource('@Box = *{\n  @who = { return "x" }\n}\n@go = (b @Box) {\n  t Text = b.nope()\n  return t\n}\n')).toThrow(/'@Box' has no method 'nope'/);
   });
-  it('@Arg() takes args', () => reads('@withArg', 7, 'Integer'));
-  it('a file-level @Box() is held in a cell', () => reads('@viaHeld', 'public'));
-  it('@Box is a superclass', () => reads('@pubSubWho', 'public'));
-  it('Box is a separate superclass', () => reads('@privSubWho', 'private'));
-  it('@Box can be wrapped', () => reads('@wrapped', 'public'));
-  it('a class\'s own @Box comes before the file\'s', () => reads('@ownFunctionFirst', 'own function'));
+  it('@Arg() takes args', () => reads('withArg', 7, 'Integer'));
+  it('a file-level @Box() is held in a cell', () => reads('viaHeld', 'public'));
+  it('@Box is a superclass', () => reads('pubSubWho', 'public'));
+  it('Box is a separate superclass', () => reads('privSubWho', 'private'));
+  it('@Box can be wrapped', () => reads('wrapped', 'public'));
+  it('a class\'s own @Box comes before the file\'s', () => reads('ownFunctionFirst', 'own function'));
 
   it('the doc names only the public class, without its @', () => {
     const { interface: doc } = compileSource(script);
@@ -243,32 +243,32 @@ describe('a self-return from an actor made by #new', () => {
 
   it('names the actor and its class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
-      { input: { id: '2', op: '@bump!', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'bump!', to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: '#<. Box 1>', 'ty': '. Box', to: 'c', from: '. Box 1' } },
     );
   });
 
   it('from an early return', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<. Box 1>' }) },
-      { input: { id: '2', op: [[true], '@maybe!'], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: [[true], 'maybe!'], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: '#<. Box 1>', 'ty': '. Box', to: 'c', from: '. Box 1' } },
-      { input: { id: '3', op: [[false], '@maybe!'], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
+      { input: { id: '3', op: [[false], 'maybe!'], 'ty': [['Boolean']], to: '. Box 1', from: 'c' } },
       { output: { id: '3', re: '#<. Box 1>', 'ty': '. Box', to: 'c', from: '. Box 1' } },
-      { input: { id: '4', op: '@get', to: '. Box 1', from: 'c' } },
+      { input: { id: '4', op: 'get', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [10] }) },
     );
   });
 
   it('a class named with ! keeps it in its class address', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Pub!', from: 'c' } },
-      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
+      { input: { id: '1', op: [{}, '$new'], to: '. Pub!', from: 'c' } },
+      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
       { output: { id: '1', re: '#<. Pub! 1>', 'ty': '. Pub!', to: 'c' } },
-      { input: { id: '2', op: '@go!', to: '. Pub! 1', from: 'c' } },
+      { input: { id: '2', op: 'go!', to: '. Pub! 1', from: 'c' } },
       { output: { id: '2', re: '#<. Pub! 1>', 'ty': '. Pub!', to: 'c', from: '. Pub! 1' } },
     );
   });
@@ -306,25 +306,25 @@ describe('self as one of several return values', () => {
 
   it('positional: the parent names the actor and its class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
-      { input: { id: '2', op: '@pair!', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'pair!', to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: ['#<. Box 1>', 1], 'ty': ['. Box', 'Integer'], to: 'c', from: '. Box 1' } },
     );
   });
 
   it('named: the parent names the actor and its class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
-      { input: { id: '2', op: '@named!', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'named!', to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: { me: '#<. Box 1>', n: 1 }, 'ty': { me: '. Box', n: 'Integer' }, to: 'c', from: '. Box 1' } },
     );
   });
 
   it('in process: the caller gets the actor it called', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@local', from: 'c' } },
+      { input: { id: '1', op: 'local', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7, 5], to: 'c' }) },
     );
   });
@@ -360,30 +360,30 @@ describe('#new beside @Box()', () => {
 
   it('#new reaches the public class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
-      { input: { id: '2', op: '@who', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'who', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['public'], to: 'c', from: '. Box 1' }) },
     );
   });
 
   it('an actor made by #new calls its own private functions', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<. Box 1>' }) },
-      { input: { id: '2', op: '@viaSecret', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'viaSecret', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['secret'] }) },
-      { input: { id: '3', op: '@viaHidden', to: '. Box 1', from: 'c' } },
+      { input: { id: '3', op: 'viaHidden', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: ['hidden'] }) },
     );
   });
 
   it('outside, an actor\'s private functions don\'t answer', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<. Box 1>' }) },
-      { input: { id: '2', op: 'secret', to: '. Box 1', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', ex: { secret: 'unhandled' } }) },
+      { input: { id: '2', op: '~secret', to: '. Box 1', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', ex: { '~secret': 'unhandled' } }) },
       { input: { id: '3', op: '#hidden', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '3', ex: { '#hidden': 'unhandled' } }) },
     );
@@ -391,9 +391,9 @@ describe('#new beside @Box()', () => {
 
   it('@Box() gives its actor no registered address', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@local', from: 'c' } },
+      { input: { id: '1', op: 'local', from: 'c' } },
       { output: { id: '1', re: ['public'], 'ty': ['Text'], to: 'c' } },
-      { input: { id: '2', op: '@who', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'who', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', ex: expect.anything() }) },
     );
   });
@@ -483,23 +483,23 @@ describe('passing an actor to a function', () => {
     { output: { id: '1', re: [value], 'ty': [type], to: 'c' } },
   );
 
-  it('a public function can call it', () => reads('@toPublic', 'public'));
-  it('a private function can call it', () => reads('@toPrivate', 'public'));
-  it('a private class\'s actor passes too', () => reads('@toPrivateClass', 'private'));
-  it('one held in a local passes too', () => reads('@bound', 'public'));
-  it('a named arg passes it, and the caller keeps it', () => reads('@named', 'publicpublic'));
-  it('the function reaches the same actor', () => reads('@sameActor!', 1, 'Integer'));
+  it('a public function can call it', () => reads('toPublic', 'public'));
+  it('a private function can call it', () => reads('toPrivate', 'public'));
+  it('a private class\'s actor passes too', () => reads('toPrivateClass', 'private'));
+  it('one held in a local passes too', () => reads('bound', 'public'));
+  it('a named arg passes it, and the caller keeps it', () => reads('named', 'publicpublic'));
+  it('the function reaches the same actor', () => reads('sameActor!', 1, 'Integer'));
   // Nothing annotates these returns, so there's no type to tag the reply with.
   it('a function can return its call on it', () => expectBehavior(script,
-    { input: { id: '1', op: '@returnsTyped', from: 'c' } },
+    { input: { id: '1', op: 'returnsTyped', from: 'c' } },
     { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
   ));
   it('an untyped param takes it', () => expectBehavior(script,
-    { input: { id: '1', op: '@returnsUntyped', from: 'c' } },
+    { input: { id: '1', op: 'returnsUntyped', from: 'c' } },
     { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
   ));
   it('an untyped param takes one held in a local', () => expectBehavior(script,
-    { input: { id: '1', op: '@returnsUntypedBound', from: 'c' } },
+    { input: { id: '1', op: 'returnsUntypedBound', from: 'c' } },
     { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
   ));
 });
@@ -535,15 +535,15 @@ describe('W and @W! are different classes', () => {
 
   it('@W!() constructs the public class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@public!', from: 'c' } },
-      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
+      { input: { id: '1', op: 'public!', from: 'c' } },
+      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
       { output: { id: '1', re: ['public'], 'ty': ['Text'], to: 'c' } },
     );
   });
 
   it('W() constructs the private class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@private', from: 'c' } },
+      { input: { id: '1', op: 'private', from: 'c' } },
       { output: { id: '1', re: ['private'], 'ty': ['Text'], to: 'c' } },
     );
   });

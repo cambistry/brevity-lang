@@ -1,5 +1,13 @@
 // handlers.js — Handler and child actor generation for Rust codegen
-import { wireLabel, selfAddress } from '../wire_labels.js';
+import { intrinsicArm, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
+
+// The key a handler's match arm answers: its wire op, or for a cell or class arm
+// (`set@val`, `new@Box`) the pair of intrinsic and target, "$set val", as the
+// runtime's bv_op_key builds it from a message's op and `to`.
+export function rustOpKey(name) {
+  const arm = intrinsicArm(name);
+  return arm ? `${arm.op} ${arm.target}` : wireLabel(name);
+}
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
@@ -339,7 +347,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   // Outside, only `@name` is exposed.
   const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@)/.test(name);
   if (isPrivate) guard = guard ? ` if !bv_from_wire_caller(from) && (${guard.replace(/^ if /, '')})` : ' if !bv_from_wire_caller(from)';
-  return `            "${wireLabel(name)}"${guard} => {\n${lines.join('\n')}\n            }`;
+  return `            ${JSON.stringify(rustOpKey(name))}${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
 function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
@@ -548,7 +556,7 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     if (!p.accessor) continue;
     const accessorName = p.accessor;
     const sk = stateKey(p.name);
-    arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n                handled = true;\n            }`);
+    arms.push(`            ${JSON.stringify(wireLabel("@" + accessorName))} => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n                handled = true;\n            }`);
   }
 
   // As-clause dispatch arms for self-as type coercion
@@ -556,15 +564,15 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     const val = genRustExpr(clause.expr, {});
     const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
     } else {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
     }
   }
   // Memoized return-as dispatch arm
   if (declarationReturn && declarationReturn.typeName) {
     const t = declarationReturn.typeName;
-    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                ty_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
+    arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                ty_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
   }
 
   arms.push('            _ => {}');
@@ -795,7 +803,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
   G.ctx.ssaCounts = savedSsaCounts;
 
   // Outside, only `@name` is exposed.
-  return `            "${wireLabel(name)}"${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
+  return `            ${JSON.stringify(rustOpKey(name))}${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
 }
 
 function tagWireReply(tyBody) {
@@ -865,7 +873,7 @@ function genRustChildDispatch(actor) {
     if (!p.accessor) continue;
     const accessorName = p.accessor;
     const sk = stateKey(p.name);
-    arms.push(`            "@${accessorName}" => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
+    arms.push(`            ${JSON.stringify(wireLabel("@" + accessorName))} => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
   // Generate delegation arms for inherited functions from wrapped superclasses
   const delegatedFunctions = actor._delegatedFunctions || [];
@@ -881,31 +889,29 @@ function genRustChildDispatch(actor) {
     const val = genRustExpr(clause.expr, {});
     const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
     } else {
-      arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
     }
   }
   // Memoized return-as dispatch arm for child actor
   if (actor.declarationReturn && actor.declarationReturn.typeName) {
     const t = actor.declarationReturn.typeName;
     const sk = stateKey('__returnAs');
-    arms.push(`            "as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
+    arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
 
   arms.push('            _ => { if bv_from_wire_caller(from) { self.wire_unhandled = true; } }');
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {
-        // Generic subscribe prologue for this child: intercept
-        // subscribe@<T> / subscribe#<T>, stash the sub in _cell_subs_@<T>
-        // (prefixed by child name), and recurse with the rewritten op.
-        if op.starts_with("subscribe@") || op.starts_with("subscribe#") {
-            let sigil = op.chars().nth("subscribe".len()).unwrap_or('@');
-            let target = &op["subscribe".len() + 1..];
+        // \`$subscribe\` to a target: stash the sub in _cell_subs_<target>
+        // (prefixed by child name, keyed by the target's wire name), and
+        // recurse with the target as the op.
+        if let Some(target) = op.strip_prefix("$subscribe ") {
             let sub_args = payload.clone();
             let sub_ty = Value::Null;
-            let subs_key = format!("${name}_cell_subs_{}{}", sigil, target);
+            let subs_key = format!("${name}_cell_subs_{}", target);
             let mut subs = self
                 .state
                 .get(&subs_key)
@@ -918,7 +924,7 @@ function genRustChildDispatch(actor) {
                 "ty": sub_ty,
             }));
             self.state.insert(subs_key, Value::Array(subs));
-            let rewritten = format!("{}{}", sigil, target);
+            let rewritten = target.to_string();
             return self.child_${name}_dispatch(&rewritten, payload, id, from);
         }
         let _ = id; let _ = from;

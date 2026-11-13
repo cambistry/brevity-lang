@@ -85,7 +85,7 @@ describe('Self as value — wire shape', () => {
       @class = { Self }
     `, { fileName: 'c.bv' });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@class', from: 'caller' } },
+      { input: { id: '1', op: 'class', from: 'caller' } },
       { output: { id: '1', re: '#<c.bv>', 'ty': 'Class', to: 'caller' } },
     );
   });

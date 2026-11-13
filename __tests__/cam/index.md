@@ -15,7 +15,7 @@ construction, callback flow, and outgoing wire messages.
 - Replying calls suspend the current continuation until a matching `re` arrives.
 - Silent calls end in `...` (or use `spawn`) and do not produce a value.
 - Source form for a remote actor binding: `view = *Name(...)`. Construction
-  calls the remote class — a `#new` message is sent to the dependency address;
+  calls the remote class — a `$new` message is sent to the dependency address;
   the reply carries the actor's address.
 
 ## Important Tests
@@ -25,8 +25,9 @@ construction, callback flow, and outgoing wire messages.
 - `interop.test.js`: request/reply, silent cross-actor calls, three-actor chains,
   and callbacks.
 - `protected_labels.test.js`: a protected label on the wire takes a leading
-  `.` (`.val`, `.double`); `#set` to `.val` is answered from inside only.
-- `remote_instance.test.js`: `*Name(...)` sends `#new`; the returned
+  `~` (`~val`, `~double`); `$set` to `. ~val` is answered from inside only, and
+  `$set` to a token that isn't a cell answers unhandled.
+- `remote_instance.test.js`: `*Name(...)` sends `$new`; the returned
   `#<Type/id>` address is used for later method calls on the actor.
 
 ## Boundaries

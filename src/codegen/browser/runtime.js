@@ -9,7 +9,6 @@
  */
 
 import { _opre_split as split, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
-import { _bv_label_of as labelOf } from '../javascript/runtime/wire.js';
 
 const documentDI = '*\n  "document": document\n*\n';
 // A constructor header: delimited `( ... ) [->] *{`, no-params `*{`, or a
@@ -1006,14 +1005,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const subRepCounters = { aria: 0, classlist: 0, dataset: 0 };
   const subRepsByElement = new Map(); // Element → { kind → addr }
 
-  // A node's self-return has the shape of its reply to `#new`: its address in
+  // A node's self-return has the shape of its reply to `$new`: its address in
   // `re`, its class in `ty`. A node's address is `HTML kind N`, and its
   // class is `HTML kind`.
   function selfReply(addr) {
     return { re: '#<' + addr + '>', 'ty': addr.replace(/ [0-9]+$/, '') };
   }
 
-  // The field a `#set` names: the last token of its `to`, relative to us.
+  // A public op travels bare: anything but an intrinsic (`$set`), a protected
+  // (`~x`) or a private (`#x`) name.
+  function isPublicOp(opName) {
+    return opName !== '' && !/^[$~#]/.test(opName);
+  }
+
+  // The field a `$set` names: the last token of its `to`, relative to us.
   function fieldOf(to) {
     if (typeof to !== 'string' || to === '') return null;
     try { return split(to).pop() ?? null; } catch { return null; }
@@ -1046,8 +1051,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
-        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-        const accessorName = opName.slice(1);
+        if (typeof opName !== 'string' || !isPublicOp(opName)) return;
+        const accessorName = opName;
         const type = ARIA_ACCESSORS[accessorName];
         if (!type) return;
         const value = readAriaAccessor(el, accessorName, type);
@@ -1068,8 +1073,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
-        // `set value: (Text)` — wire shape `{op: [[v], '#set'], to: '. value'}`.
-        if (opName === '#set') {
+        // `set value: (Text)` — wire shape `{op: [[v], '$set'], to: '. value'}`.
+        if (opName === '$set') {
           const sel = typeof msg.to === 'string' ? msg.to : '';
           const fieldName = fieldOf(sel);
           if (fieldName !== 'value') return;
@@ -1079,8 +1084,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
-        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-        const accessorName = opName.slice(1);
+        if (typeof opName !== 'string' || !isPublicOp(opName)) return;
+        const accessorName = opName;
         const payload = Array.isArray(op) ? op[0] : null;
         switch (accessorName) {
           case 'length': {
@@ -1155,8 +1160,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
-        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-        const accessorName = opName.slice(1);
+        if (typeof opName !== 'string' || !isPublicOp(opName)) return;
+        const accessorName = opName;
         const payload = Array.isArray(op) ? op[0] : null;
         switch (accessorName) {
           case 'size': {
@@ -1279,10 +1284,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         const cls = tagClassification(tag);
         // Bare `set` op carries the field in `to`. Wire form is
-        // `{op: [[v], '#set'], to: '#<<addr> <field>>'}`; route() unwraps
+        // `{op: [[v], '$set'], to: '#<<addr> <field>>'}`; route() unwraps
         // to `to: '<field>'` before handing the message to us. Maps to a
         // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
-        if (eopName === '#set') {
+        if (eopName === '$set') {
           const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
           const fieldName = fieldOf(sel);
           const setter = fieldName && ELEMENT_SETTERS[fieldName];
@@ -1296,7 +1301,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           }));
           return;
         }
-        if (typeof eopName !== 'string' || !eopName.startsWith('@')) return;
+        if (typeof eopName !== 'string' || !isPublicOp(eopName)) return;
         // Mutators end with `!`. They mutate the DOM and reply with `self`,
         // so the caller can chain. Dispatched before the accessor pyramid
         // so that mutator names don't collide with accessor names sharing
@@ -1310,7 +1315,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           }
           return;
         }
-        const accessorName = eopName.slice(1);
+        const accessorName = eopName;
         // Generic-attribute readers carry a payload (the attribute name).
         // They live on the Element layer and apply to every classification.
         if (accessorName === 'get_attribute' || accessorName === 'has_attribute') {
@@ -1450,14 +1455,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
         // Bare `set` directed at the node itself (no field selector in `to`)
-        // writes through to nodeValue. Wire form: `{op: [[v], '#set'], to:
+        // writes through to nodeValue. Wire form: `{op: [[v], '$set'], to:
         // '#<<addr>>'}` — route() unwraps the hash-angle and delivers with
         // `to: undefined`. Distinct from the element field-set form, which
-        // carries `to: '@<field>'`. Text and Comment have nodeValue as
+        // carries `to: '. <field>'`. Text and Comment have nodeValue as
         // their natural settable surface; Element/Document don't accept
         // bare set (semantically ambiguous for elements, no nodeValue
         // meaning for the document).
-        if (opName === '#set') {
+        if (opName === '$set') {
           const sel = typeof msg.to === 'string' ? msg.to : '';
           if (sel) return; // field-targeted set — none declared on these kinds
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
@@ -1466,16 +1471,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
-        if (typeof opName !== 'string' || !opName.startsWith('@')) return;
+        if (typeof opName !== 'string' || !isPublicOp(opName)) return;
         // Node-level mutators (currently just `normalize!`). On non-element
         // nodes the call is a spec no-op (no children to merge) but still
         // replies self so chaining works uniformly across node kinds.
-        if (opName === '@normalize!') {
+        if (opName === 'normalize!') {
           node.normalize();
           Promise.resolve().then(() => route({ id, ...selfReply(addr), from: addr, to: from }));
           return;
         }
-        const accessorName = opName.slice(1);
+        const accessorName = opName;
         const result = readNodeAccessor(node, accessorName, op);
         if (result === undefined) return;
         Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
@@ -1742,7 +1747,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // silent — same shape as missing-accessor today).
   function handleElementMutator(tag, cls, el, opName, payload) {
     // Generic-attribute writers — Element layer, every classification.
-    if (opName === '@set_attribute!') {
+    if (opName === 'set_attribute!') {
       let name = null, value = null;
       if (Array.isArray(payload)) { name = payload[0]; value = payload[1]; }
       else if (payload && typeof payload === 'object') { name = payload.name; value = payload.value; }
@@ -1750,13 +1755,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       el.setAttribute(name, value);
       return true;
     }
-    if (opName === '@remove_attribute!') {
+    if (opName === 'remove_attribute!') {
       const name = extractSingle(payload, 'name');
       if (typeof name !== 'string') return false;
       el.removeAttribute(name);
       return true;
     }
-    if (opName === '@toggle_attribute!') {
+    if (opName === 'toggle_attribute!') {
       let name = null, force;
       if (Array.isArray(payload)) { name = payload[0]; if (payload.length > 1) force = payload[1]; }
       else if (payload && typeof payload === 'object') { name = payload.name; if ('force' in payload) force = payload.force; }
@@ -1766,14 +1771,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       return true;
     }
     // Element-level methods — every classification, including void.
-    if (opName === '@before!')        { el.before(...extractItems(payload));        return true; }
-    if (opName === '@after!')         { el.after(...extractItems(payload));         return true; }
-    if (opName === '@replace_with!')  { el.replaceWith(...extractItems(payload));   return true; }
-    if (opName === '@remove!')        { el.remove();                                return true; }
-    if (opName === '@normalize!')     { el.normalize();                             return true; }
-    if (opName === '@blur!')          { el.blur();                                  return true; }
-    if (opName === '@click!')         { el.click();                                 return true; }
-    if (opName === '@focus!') {
+    if (opName === 'before!')        { el.before(...extractItems(payload));        return true; }
+    if (opName === 'after!')         { el.after(...extractItems(payload));         return true; }
+    if (opName === 'replace_with!')  { el.replaceWith(...extractItems(payload));   return true; }
+    if (opName === 'remove!')        { el.remove();                                return true; }
+    if (opName === 'normalize!')     { el.normalize();                             return true; }
+    if (opName === 'blur!')          { el.blur();                                  return true; }
+    if (opName === 'click!')         { el.click();                                 return true; }
+    if (opName === 'focus!') {
       // Optional named arg `prevent_scroll` translates to FocusOptions
       // `{preventScroll: true}` (camelCase boundary). No-arg form passes
       // undefined so the browser uses its defaults.
@@ -1783,19 +1788,19 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       el.focus(opts);
       return true;
     }
-    if (opName === '@scroll!' || opName === '@scroll_to!' || opName === '@scroll_by!') {
+    if (opName === 'scroll!' || opName === 'scroll_to!' || opName === 'scroll_by!') {
       // Two payload shapes: positional `[left, top]` or named
       // `{left, top, behavior}`. ScrollToOptions takes camelCase fields
       // with the same names (left/top), so only `behavior` passes through
       // verbatim. Empty named form becomes `{}` which scrolls to (0, 0).
       const opts = scrollOptionsFromPayload(payload);
-      const fn = opName === '@scroll!' ? 'scroll'
-              : opName === '@scroll_to!' ? 'scrollTo'
+      const fn = opName === 'scroll!' ? 'scroll'
+              : opName === 'scroll_to!' ? 'scrollTo'
               : 'scrollBy';
       el[fn](opts);
       return true;
     }
-    if (opName === '@scroll_into_view!') {
+    if (opName === 'scroll_into_view!') {
       // Three forms: no args (default-aligned), positional Boolean
       // (alignToTop legacy form), or named `{behavior, block, inline}`.
       if (payload == null) { el.scrollIntoView(); return true; }
@@ -1816,21 +1821,21 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       el.scrollIntoView();
       return true;
     }
-    if (opName === '@insert_adjacent_element!') {
+    if (opName === 'insert_adjacent_element!') {
       const position = payload && typeof payload === 'object' ? payload.position : null;
       const target = payload && typeof payload === 'object' ? resolveWireItem(payload.element) : null;
       if (!positionAllowed(cls, position) || !(target instanceof Node)) return false;
       el.insertAdjacentElement(position, target);
       return true;
     }
-    if (opName === '@insert_adjacent_text!') {
+    if (opName === 'insert_adjacent_text!') {
       const position = payload && typeof payload === 'object' ? payload.position : null;
       const text = payload && typeof payload === 'object' ? payload.text : null;
       if (!positionAllowed(cls, position) || typeof text !== 'string') return false;
       el.insertAdjacentText(position, text);
       return true;
     }
-    if (opName === '@insert_adjacent_html!') {
+    if (opName === 'insert_adjacent_html!') {
       const position = payload && typeof payload === 'object' ? payload.position : null;
       const html = payload && typeof payload === 'object' ? payload.html : null;
       if (!positionAllowed(cls, position) || typeof html !== 'string') return false;
@@ -1842,11 +1847,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     // Text-class is restricted: nodes resolve to `null` (not text strings)
     // so `el.append(node)` would inject elements; we filter to strings.
     if (cls === 'parent' || cls === 'text') {
-      if (opName === '@append!' || opName === '@prepend!' || opName === '@replace_children!') {
+      if (opName === 'append!' || opName === 'prepend!' || opName === 'replace_children!') {
         let items = extractItems(payload);
         if (cls === 'text') items = items.filter(v => typeof v === 'string');
-        const m = opName === '@append!' ? 'append'
-                : opName === '@prepend!' ? 'prepend'
+        const m = opName === 'append!' ? 'append'
+                : opName === 'prepend!' ? 'prepend'
                 : 'replaceChildren';
         el[m](...items);
         return true;
@@ -1855,22 +1860,22 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
     // Single-element node operations — Parent only.
     if (cls === 'parent') {
-      if (opName === '@append_child!') {
+      if (opName === 'append_child!') {
         const child = extractSingle(payload, 'child');
         if (child instanceof Node) el.appendChild(child);
         return true;
       }
-      if (opName === '@remove_child!') {
+      if (opName === 'remove_child!') {
         const child = extractSingle(payload, 'child');
         if (child instanceof Node && child.parentNode === el) el.removeChild(child);
         return true;
       }
-      if (opName === '@insert_before!') {
+      if (opName === 'insert_before!') {
         const [newChild, refChild] = extractPair(payload, ['new_child', 'ref_child']);
         if (newChild instanceof Node) el.insertBefore(newChild, refChild instanceof Node ? refChild : null);
         return true;
       }
-      if (opName === '@replace_child!') {
+      if (opName === 'replace_child!') {
         const [newChild, oldChild] = extractPair(payload, ['new_child', 'old_child']);
         if (newChild instanceof Node && oldChild instanceof Node && oldChild.parentNode === el) {
           el.replaceChild(newChild, oldChild);
@@ -1978,7 +1983,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       if (addr && typeof v === 'string' && v.startsWith('#<') && v.endsWith('>')) {
         if (k.startsWith('on')) {
           const eventName = k.slice(2);
-          const selector = labelOf(split(v.slice(2, -1)).pop());
+          const selector = split(v.slice(2, -1)).pop();
           el.addEventListener(eventName, (ev) => {
             // Emit the native event to the handler address as an HTML::Event
             // value (positional arg, tagged with its authority address). The
@@ -1989,7 +1994,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         } else {
           const subId = `_sub_${++subCounter}`;
           elemSubs.set(subId, { attrName: k });
-          Promise.resolve().then(() => route({ id: subId, op: '@subscribe', to: v, from: addr }));
+          Promise.resolve().then(() => route({ id: subId, op: '$subscribe', to: v, from: addr }));
         }
       } else {
         applyDomAttribute(el, k, v);
@@ -2032,7 +2037,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const subId = `_sub_${++subCounter}`;
         elemSubs.set(subId, textNode);
         Promise.resolve().then(() => route({
-          id: subId, op: '@subscribe', to: child, from: addr,
+          id: subId, op: '$subscribe', to: child, from: addr,
         }));
         continue;
       }
@@ -2108,7 +2113,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     if (domTag) {
       const { op } = msg;
       const opName = typeof op === 'string' ? op : op[op.length - 1];
-      if (opName === '#new') {
+      if (opName === '$new') {
         handleDomNew(domTag, msg);
         return;
       }
@@ -2162,11 +2167,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const { id, op, from } = msg;
     const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
     try {
-      if (opName === '@title') {
+      if (opName === 'title') {
         Promise.resolve().then(() => route({ id, re: document.title, from: 'document', to: from }));
         return;
       }
-      if (opName === '@first') {
+      if (opName === 'first') {
         const payload = Array.isArray(op) ? op[0] : {};
         const selector = payload.selector;
         const el = document.querySelector(selector);
@@ -2176,7 +2181,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         return;
       }
-      if (opName === '@body') {
+      if (opName === 'body') {
         const el = document.body;
         if (el) {
           const addr = addrForNode(el);
@@ -2184,12 +2189,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         return;
       }
-      if (opName === '@normalize!') {
+      if (opName === 'normalize!') {
         document.normalize();
         Promise.resolve().then(() => route({ id, re: '#<document>', from: 'document', to: from }));
         return;
       }
-      if (opName === '@eval') {
+      if (opName === 'eval') {
         const payload = Array.isArray(op) ? op[0] : null;
         const js = extractSingle(payload, 'js');
         // Indirect eval — runs at global scope, no access to runtime locals.
@@ -2198,8 +2203,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         Promise.resolve().then(() => route({ id, re: text, 'ty': 'Text', from: 'document', to: from }));
         return;
       }
-      if (typeof opName !== 'string' || !opName.startsWith('@')) return;
-      const accessorName = opName.slice(1);
+      if (typeof opName !== 'string' || !isPublicOp(opName)) return;
+      const accessorName = opName;
       // Selector queries on the document scope to descendants of <html>.
       const queryValue = readQueryAccessor(document, accessorName, op);
       if (queryValue !== undefined) {

@@ -58,21 +58,21 @@ describe('private functions — file-level actor — runtime', () => {
 
   it('file-level private returns value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testSecret', from: 'c' } },
+      { input: { id: '1', op: 'testSecret', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('file-level private returns text', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testGreeting', from: 'c' } },
+      { input: { id: '1', op: 'testGreeting', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('file-level private used in expression', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testCompose', from: 'c' } },
+      { input: { id: '1', op: 'testCompose', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 50 }, to: 'c' } },
     );
   });
@@ -97,7 +97,7 @@ describe('private functions — named class — runtime', () => {
 
   it('private functions within type are callable by public functions', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
@@ -136,14 +136,14 @@ describe('private functions — forward references', () => {
 
   it('public handler calls #fn defined after it', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testForward', from: 'c' } },
+      { input: { id: '1', op: 'testForward', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('#fn calls another #fn defined after it', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testChained', from: 'c' } },
+      { input: { id: '2', op: 'testChained', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
@@ -167,14 +167,14 @@ describe('private functions — inside function — runtime', () => {
 
   it('private function scoped inside handler', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testLocal', from: 'c' } },
+      { input: { id: '1', op: 'testLocal', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'ten' }, to: 'c' } },
     );
   });
 
   it('multiple private functions compose inside handler', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testLocalCompose', from: 'c' } },
+      { input: { id: '1', op: 'testLocalCompose', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
@@ -194,7 +194,7 @@ describe('private functions — lineal forms', () => {
         :result Integer = #answer()
         return :result
     `,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
@@ -212,7 +212,7 @@ describe('private functions — lineal forms', () => {
         :result Integer = #double(7)
         return :result
     `,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
     );
   });

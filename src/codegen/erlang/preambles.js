@@ -1,4 +1,4 @@
-import { wireLabel } from '../wire_labels.js';
+import { wireLabel, intrinsicArm } from '../wire_labels.js';
 // ── Preamble constants and pure utilities for Erlang codegen ─────────────────
 
 // What a file actor does for its classes in every wait: answer a read of one of its
@@ -70,9 +70,9 @@ bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
 bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 
 %% ── Reference-field invocation: op selector for a held address ──────────────
-%% An address <<"#<alias member>">> resolves to the label of its last token
-%% (#<x p> → @p, #<. @0> → @0); a bare address passes through. Mirrors the
-%% JS/Rust bv_sel helper.
+%% An address <<"#<alias member>">> names its member by its last token, and the
+%% token is the op (#<x p> → p, #<. @0> → @0); a bare address passes through.
+%% Mirrors the JS/Rust bv_sel helper.
 bv_sel_(Addr) when is_binary(Addr) ->
     L = byte_size(Addr),
     case Addr of
@@ -80,7 +80,7 @@ bv_sel_(Addr) when is_binary(Addr) ->
             case binary:at(Addr, L - 1) of
                 $> ->
                     case catch lists:last(bv_opre_split_(binary:part(Addr, 2, L - 3))) of
-                        B_ when is_binary(B_) -> bv_label_of_(B_);
+                        B_ when is_binary(B_) -> B_;
                         _ -> Addr
                     end;
                 _ -> Addr
@@ -92,10 +92,24 @@ bv_sel_(Addr) -> Addr.
 bv_to_addr_(<<"#<", _/binary>> = A) when byte_size(A) >= 3 ->
     case binary:at(A, byte_size(A) - 1) of $> -> binary:part(A, 2, byte_size(A) - 3); _ -> A end;
 bv_to_addr_(A) -> A.
-%% The label an address token names on us: a public member travels bare (get
-%% is @get); a token with a sigil is the label (#x, .x, a closure's @N).
-bv_label_of_(<<C_, _/binary>> = T) when C_ =:= $#; C_ =:= $.; C_ =:= $@ -> T;
-bv_label_of_(T) -> <<"@", T/binary>>.
+%% The key an op dispatches on. An intrinsic ($set, $new, $subscribe, …) names
+%% its cell, class or function as the last token of to, relative to us:
+%% {<<"$set">>, <<"val">>}. One with no target, and any other op, is its name.
+bv_op_key_(<<"$", _/binary>> = Op, To) ->
+    case extract_to_selector_(To) of nomatch -> Op; T_ -> {Op, T_} end;
+bv_op_key_(Op, _) -> Op.
+%% The same, for a to that reached an actor we published at Addr: the target
+%% is what follows Addr.
+bv_op_key_under_(<<"$", _/binary>> = Op, To, Addr) ->
+    Sz_ = byte_size(To),
+    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
+    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    N_ = length(bv_opre_split_(Addr)),
+    case lists:nthtail(min(N_, length(Toks_)), Toks_) of [] -> Op; Rest_ -> {Op, lists:last(Rest_)} end;
+bv_op_key_under_(Op, _, _) -> Op.
+%% The op an ex names: an intrinsic by itself, without its target.
+bv_ex_key_({Op, _}) -> Op;
+bv_ex_key_(Op) -> Op.
 
 %% ── Opre address tokens (mirrors src/codegen/opre_tokens.js) ───────────────
 %% Tokens separated by single spaces; '…' quotes a token with a space or a
@@ -1004,7 +1018,7 @@ bv_local_tag_(T, _) -> T.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<". ", Addr/binary>>},
     case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
-        true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => <<"schema_required">>}}), $\n]);
+        true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => <<"schema_required">>}}), $\n]);
         false ->
             Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
             R_ = bv_await_wire_(Id),
@@ -1018,7 +1032,7 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
                 {ok, V_, Tag_} ->
                     io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
-                {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{Op => F_}}), $\n])
+                {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => F_}}), $\n])
             end
     end.
 %% A child's "me" (#<.>) as one slot of several: its parent swaps in what it knows
@@ -1483,9 +1497,9 @@ await_new_response_(Id) ->
     end.
 
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
-%% Given a to-field binary, the label its last token names on us: a public
-%% member travels bare (val is @val); #x, .x and @N are the label. The to is
-%% relative to us (. x, x, or #<alias x>). Returns the label or nomatch.
+%% Given a to-field binary, the wire name its last token names on us (val,
+%% ~val, #x, @N). The to is relative to us (. x, x, or #<alias x>). Returns the
+%% name or nomatch.
 extract_to_selector_(Bin) when is_binary(Bin) ->
     Sz = byte_size(Bin),
     Inner = case Bin of
@@ -1496,7 +1510,7 @@ extract_to_selector_(Bin) when is_binary(Bin) ->
         Toks when is_list(Toks), Toks =/= [] ->
             case lists:last(Toks) of
                 self -> nomatch;
-                Last when is_binary(Last) -> bv_label_of_(Last)
+                Last when is_binary(Last) -> Last
             end;
         _ -> nomatch
     end;
@@ -1673,9 +1687,20 @@ function erlOpExpr(vals, fields, method) {
   return `[[${[...vals, ...(fields ? [`#{${fields}}`] : [])].join(', ')}], ${method}]`;
 }
 
-// An actor's own label as an op: a protected one takes a leading `.`.
+// An actor's own label as the key it dispatches on: its wire name (`@a` is
+// `a`, `a` is `~a`), and for a cell or class arm (`set@val`, `new@Box`) the
+// intrinsic and the token of `to` it answers for: `{<<"$set">>, <<"val">>}`.
 function erlOp(name) {
+  const arm = intrinsicArm(name);
+  if (arm) return `{${erlString(arm.op)}, ${erlString(arm.target)}}`;
   return erlString(wireLabel(name));
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp };
+// The op an ex names for one of an actor's labels: an intrinsic arm by its
+// intrinsic alone (`set@val` is `$set`).
+function erlExKey(name) {
+  const arm = intrinsicArm(name);
+  return erlString(arm ? arm.op : wireLabel(name));
+}
+
+export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

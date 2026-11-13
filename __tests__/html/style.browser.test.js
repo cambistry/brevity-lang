@@ -22,7 +22,7 @@ describe('<style> compile', () => {
       @t = -> <style>/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: "}"; } } p:hover{color:#f00}</style>
     `);
     expect(output).toContain(
-      `{children: ["/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: \\"}\\"; } } p:hover{color:#f00}"]}, "#new"], "HTML style")`,
+      `{children: ["/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: \\"}\\"; } } p:hover{color:#f00}"]}, "$new"], "HTML style")`,
     );
   });
 
@@ -75,7 +75,7 @@ describe('<style> runtime — a sheet appended to body applies', () => {
   it('the CSS text lands unchanged, its rule applies, and a print sheet does not', async () => {
     const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
     const actor = await page.connectActor('builder.bv');
-    await actor.sendAsync({ id: '1', op: '@build.' });
+    await actor.sendAsync({ id: '1', op: 'build.' });
     const seen = await page.evaluate(() => {
       const [screen, print] = document.querySelectorAll('style');
       const p = document.querySelector('p.note');
@@ -99,9 +99,9 @@ describe('<style> runtime — a sheet appended to body applies', () => {
   it('media() reads the attribute back', async () => {
     const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
     const actor = await page.connectActor('builder.bv');
-    await actor.sendAsync({ id: '1', op: '@build.' });
+    await actor.sendAsync({ id: '1', op: 'build.' });
     const sheet = await page.connectActor('HTML style 2');
-    await sheet.sendAsync({ id: '2', op: '@media' });
+    await sheet.sendAsync({ id: '2', op: 'media' });
     expect(sheet.posts[0]).toEqual(expect.objectContaining({ id: '2', re: 'print' }));
   });
 });
@@ -147,7 +147,7 @@ describe('<style> runtime — an inline @scope sheet styles only its parent subt
   it('each sheet stays in its element and styles only that subtree; :scope is the parent', async () => {
     const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
     const actor = await page.connectActor('builder.bv');
-    await actor.sendAsync({ id: '1', op: '@build.' });
+    await actor.sendAsync({ id: '1', op: 'build.' });
     expect(await look(page)).toEqual({
       styleParents: ['a', 'b'],
       aBorder: '3px',
@@ -163,7 +163,7 @@ describe('<style> runtime — an inline @scope sheet styles only its parent subt
   it('the scope follows the element when it moves', async () => {
     const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
     const actor = await page.connectActor('builder.bv');
-    await actor.sendAsync({ id: '1', op: '@build.' });
+    await actor.sendAsync({ id: '1', op: 'build.' });
     await page.evaluate(() => {
       document.querySelector('#b').append(document.querySelector('#a'));
       document.querySelector('#a').append(document.querySelector('#out'));
@@ -231,7 +231,7 @@ body.append!(<div id="u">unscoped</div>)
   it('a set from inside the actor rewrites its hole and restyles the parent', async () => {
     const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
     const actor = await page.connectActor('sheet.bv');
-    await actor.sendAsync({ id: '1', op: [['rgb(1, 2, 3)'], '@paint!'], ty: [['Text']] });
+    await actor.sendAsync({ id: '1', op: [['rgb(1, 2, 3)'], 'paint!'], ty: [['Text']] });
     expect(await look(page)).toEqual({
       text: '@scope { :scope { color: rgb(1, 2, 3); font-size: 20px; } }',
       color: 'rgb(1, 2, 3)',
@@ -242,8 +242,8 @@ body.append!(<div id="u">unscoped</div>)
 
   it('an outside #set on each cell updates its own hole', async () => {
     const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
-    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '#set'], to: '#<sheet.bv color>', from: 'test', ty: [['Text']] });
-    await page.send({ id: '2', op: [['30px'], '#set'], to: '#<sheet.bv size>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: '#<sheet.bv color>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '2', op: [['30px'], '$set'], to: '#<sheet.bv size>', from: 'test', ty: [['Text']] });
     expect(await look(page)).toEqual({
       text: '@scope { :scope { color: rgb(4, 5, 6); font-size: 30px; } }',
       color: 'rgb(4, 5, 6)',
@@ -292,7 +292,7 @@ body.append!(<div id="scope-ranked"><style>@scope { :scope { color: rgb(1, 2, 3)
 
   it('a {{ }} hole in a bare declaration updates on an outside #set', async () => {
     const page = await loadPage(html, { sources: { '/bare.bv': bareSource } });
-    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '#set'], to: '#<bare.bv color>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: '#<bare.bv color>', from: 'test', ty: [['Text']] });
     expect(await colors(page)).toEqual(['rgb(4, 5, 6)', 'rgb(9, 9, 9)', 'rgb(1, 2, 3)']);
   });
 });

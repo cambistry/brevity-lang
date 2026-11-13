@@ -61,14 +61,14 @@ describe('Type | null — runtime behaviour', () => {
 
   it('Text | null var holding a Text value replies correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@textNonNull', from: 'c' } },
+      { input: { id: '1', op: 'textNonNull', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('Float | null var holding null replies correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@floatNull', from: 'c' } },
+      { input: { id: '2', op: 'floatNull', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
     );
   });
@@ -154,28 +154,28 @@ describe('General unions — runtime behaviour', () => {
 
   it('Integer | Text slot holding an Integer replies correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@intSlot', from: 'c' } },
+      { input: { id: '1', op: 'intSlot', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('Integer | Text slot holding a Text replies correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@textSlot', from: 'c' } },
+      { input: { id: '2', op: 'textSlot', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
   it('Integer | Text public param accepts an Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[99], '@echo'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '3', op: [[99], 'echo'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
 
   it('Integer | Text public param accepts a Text', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [['hi'], '@echo'], 'ty': [['Text']], from: 'c' } },
+      { input: { id: '4', op: [['hi'], 'echo'], 'ty': [['Text']], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
@@ -203,21 +203,21 @@ describe('Unions — ty is the type of the value sent', () => {
 
   it('a Point in a Point | null slot is tagged ::Point', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@point', from: 'c' } },
+      { input: { id: '1', op: 'point', from: 'c' } },
       { output: { id: '1', 'ty': { result: '. ::Point' }, re: { result: [1, 2] }, to: 'c' } },
     );
   });
 
   it('null in a Point | null slot is tagged null', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@none', from: 'c' } },
+      { input: { id: '2', op: 'none', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
     );
   });
 
   it('a list in a List of Integers | null slot is tagged List of Integers', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@items', from: 'c' } },
+      { input: { id: '3', op: 'items', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'List of Integers' }, re: { result: [1, 2] }, to: 'c' } },
     );
   });

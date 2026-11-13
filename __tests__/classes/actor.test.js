@@ -39,21 +39,21 @@ describe('actors', () => {
 
   it('actor declaration — constructed with ref', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@refActor', from: 'c' } },
+      { input: { id: '1', op: 'refActor', from: 'c' } },
       { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('actor declaration — constructed inline', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@inlineActor', from: 'c' } },
+      { input: { id: '2', op: 'inlineActor', from: 'c' } },
       { output: { id: '2', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('multiple actor definitions', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@multiActor', from: 'c' } },
+      { input: { id: '3', op: 'multiActor', from: 'c' } },
       { output: { id: '3', 'ty': ['Text'], re: ['world'], to: 'c' } },
     );
   });
@@ -87,14 +87,14 @@ describe('actors — optional constructor args', () => {
 
   it('actor with provided constructor arg', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testWithArg', from: 'c' } },
+      { input: { id: '1', op: 'testWithArg', from: 'c' } },
       { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'hey' }, to: 'c' } },
     );
   });
 
   it('actor with default constructor arg', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testDefault', from: 'c' } },
+      { input: { id: '2', op: 'testDefault', from: 'c' } },
       { output: { id: '2', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });

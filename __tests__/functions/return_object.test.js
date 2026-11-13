@@ -48,13 +48,13 @@ describe('returning an Object spreads its fields', () => {
     { output: expect.objectContaining({ id: '1', re, to: 'c' }) },
   );
 
-  it('return r — names reach the caller', async () => { await run('@testReturn', { result: 1 }); });
-  it('implicit r — names reach the caller', async () => { await run('@testImplicit', { result: 2 }); });
-  it('implicit r in a lambda', async () => { await run('@testLambda', { result: 3 }); });
+  it('return r — names reach the caller', async () => { await run('testReturn', { result: 1 }); });
+  it('implicit r — names reach the caller', async () => { await run('testImplicit', { result: 2 }); });
+  it('implicit r in a lambda', async () => { await run('testLambda', { result: 3 }); });
   it('an Object param returned whole', async () => {
-    await run('@testParam', [4, 5]);
+    await run('testParam', [4, 5]);
   });
-  it('positional Object spreads its positionals', async () => { await run('@testPositional', [100, 200]); });
-  it('mixed Object spreads both', async () => { await run('@testMixed', [1, 2, { x: 'extra' }]); });
-  it('an Object among several values stays one value', async () => { await run('@testNotSole', [[100], 7]); });
+  it('positional Object spreads its positionals', async () => { await run('testPositional', [100, 200]); });
+  it('mixed Object spreads both', async () => { await run('testMixed', [1, 2, { x: 'extra' }]); });
+  it('an Object among several values stays one value', async () => { await run('testNotSole', [[100], 7]); });
 });

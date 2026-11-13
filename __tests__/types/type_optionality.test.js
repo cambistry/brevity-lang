@@ -70,7 +70,7 @@ describe('type optionality — operators', () => {
       ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true, 5).turn ?? 0)
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
     );
   });
@@ -80,7 +80,7 @@ describe('type optionality — operators', () => {
       ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true).turn ?? 99)
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
@@ -90,7 +90,7 @@ describe('type optionality — operators', () => {
       ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true, 5).turn)?
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
@@ -100,7 +100,7 @@ describe('type optionality — operators', () => {
       ::Game (? started Boolean, ? turn: Integer)
       @go = -> result: (Game(true).turn)?
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } },
     );
   });

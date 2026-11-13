@@ -16,7 +16,7 @@ describe('named param — rename', () => {
       f = (key: k Integer) { k + 1 }
       @test = { r Integer = f(key: 41); return result: r }
     `,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { result: 42 } }) },
     );
   });
@@ -26,7 +26,7 @@ describe('named param — rename', () => {
       f = (key: k) { k * 2 }
       @test = { r Integer = f(key: 21); return result: r }
     `,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { result: 42 } }) },
     );
   });
@@ -37,7 +37,7 @@ describe('named param — rename', () => {
       f = (p: Point) { p.x + p.y }
       @test = { r Integer = f(p: Point(1, 2)); return result: r }
     `,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { result: 3 } }) },
     );
   });
@@ -62,7 +62,7 @@ describe('named param — rename', () => {
       @get = -> l
     `, { constructorArgs: { label: 'hi' } });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@label', from: 'c' } },
+      { input: { id: '1', op: 'label', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: ['hi'], to: 'c' }) },
     );
   });
@@ -75,7 +75,7 @@ describe('named param — rename', () => {
       @get = -> n
     `, { constructorArgs: { limit: 7 } });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@get', from: 'c' } },
+      { input: { id: '1', op: 'get', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
     );
   });

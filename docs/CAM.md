@@ -111,7 +111,7 @@ reply comes back as `re` with the same `id`.
 ```json
 {
   "id": "100",
-  "op": [{ "url": "https://example.com" }, "@get"],
+  "op": [{ "url": "https://example.com" }, "get"],
   "from": "Primary",
   "ty": [{ "url": "Text" }]
 }
@@ -132,7 +132,7 @@ carries Brevity's type attestation for the message payload or reply.
 An operation with no payload can be just a selector:
 
 ```json
-{ "id": "1", "op": "@ping", "from": "Tester" }
+{ "id": "1", "op": "ping", "from": "Tester" }
 ```
 
 and its reply can still be structured:
@@ -141,21 +141,22 @@ and its reply can still be structured:
 { "id": "1", "re": { "status": "ok" }, "to": "Tester" }
 ```
 
-Actor construction is also a message. The construction operation is `#new`,
-and the reply supplies an address that later messages can target:
+Actor construction is also a message. The construction operation is the
+intrinsic `$new`, aimed at the class by `to`, and the reply supplies an address
+that later messages can target:
 
 ```json
-{ "id": "1", "op": [{ "path": "/main" }, "#new"], "to": "WebView" }
+{ "id": "1", "op": [{ "path": "/main" }, "$new"], "to": "WebView" }
 ```
 
 ```json
-{ "id": "1", "re": "#<WebView/1>", "ty": "WebView", "from": "WebView" }
+{ "id": "1", "re": "#<WebView 1>", "ty": "WebView", "from": "WebView" }
 ```
 
 After that, ordinary messages go to the returned actor address:
 
 ```json
-{ "id": "2", "op": "@open", "to": "WebView/1" }
+{ "id": "2", "op": "open", "to": "WebView 1" }
 ```
 
 ## Subscriptions Are Repeated Replies
@@ -164,10 +165,11 @@ A subscription is almost a normal message exchange. The subscriber sends an
 `op`; the publisher replies with `re`. The difference is that the publisher may
 send more than one `re` for the same `id`.
 
-For a local or remote value subscription, the request can look like this:
+For a value subscription, the request is the intrinsic `$subscribe`, with the
+cell named by the last token of `to`:
 
 ```json
-{ "id": "9", "op": "subscribe@val", "from": "Subscriber" }
+{ "id": "9", "op": "$subscribe", "to": ". val", "from": "Subscriber" }
 ```
 
 The first reply carries the current value:
@@ -189,7 +191,7 @@ Later changes replay through the same correlation:
 Remote function subscriptions use the same idea with an addressed member:
 
 ```json
-{ "id": "1", "op": "@subscribe", "to": "#<Remote @val>" }
+{ "id": "1", "op": "$subscribe", "to": "#<Remote val>" }
 ```
 
 The important point is that subscription does not introduce a second protocol.

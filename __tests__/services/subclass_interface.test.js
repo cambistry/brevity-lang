@@ -251,12 +251,12 @@ describe('class params typed with a public class', () => {
   });
 
   it('the actor reaches a positional one', () => expectBehavior(script,
-    { input: { id: '1', op: '@positional', from: 'c' } },
+    { input: { id: '1', op: 'positional', from: 'c' } },
     { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
   ));
 
   it('the actor reaches a named one', () => expectBehavior(script,
-    { input: { id: '1', op: '@named', from: 'c' } },
+    { input: { id: '1', op: 'named', from: 'c' } },
     { output: { id: '1', re: [4], 'ty': ['Integer'], to: 'c' } },
   ));
 });
@@ -304,12 +304,12 @@ describe('a class handler replies with what its actor param answers', () => {
   `;
 
   it('by return', () => expectBehavior(script,
-    { input: { id: '1', op: '@returned', from: 'c' } },
+    { input: { id: '1', op: 'returned', from: 'c' } },
     { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
   ));
 
   it('as its tail', () => expectBehavior(script,
-    { input: { id: '1', op: '@tail', from: 'c' } },
+    { input: { id: '1', op: 'tail', from: 'c' } },
     { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
   ));
 });

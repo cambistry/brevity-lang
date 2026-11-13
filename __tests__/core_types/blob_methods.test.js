@@ -15,13 +15,13 @@ describe('Blob.empty?', () => {
   `;
 
   it('empty blob', async () => {
-    await expectBehavior(script, inp('1', '@emptyYes'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'emptyYes'), out('1', 'Boolean', true));
   });
   it('non-empty blob', async () => {
-    await expectBehavior(script, inp('2', '@emptyNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'emptyNo'), out('2', 'Boolean', false));
   });
   it('ref.empty?', async () => {
-    await expectBehavior(script, inp('3', '@emptyRef'), out('3', 'Boolean', true));
+    await expectBehavior(script, inp('3', 'emptyRef'), out('3', 'Boolean', true));
   });
 });
 
@@ -33,13 +33,13 @@ describe('Blob.slice', () => {
   `;
 
   it('slice from index to end', async () => {
-    await expectBehavior(script, inp('1', '@sliceFrom'), out('1', 'Blob', 'ello'));
+    await expectBehavior(script, inp('1', 'sliceFrom'), out('1', 'Blob', 'ello'));
   });
   it('slice range', async () => {
-    await expectBehavior(script, inp('2', '@sliceRange'), out('2', 'Blob', 'el'));
+    await expectBehavior(script, inp('2', 'sliceRange'), out('2', 'Blob', 'el'));
   });
   it('ref.slice', async () => {
-    await expectBehavior(script, inp('3', '@sliceRef'), out('3', 'Blob', 'ab'));
+    await expectBehavior(script, inp('3', 'sliceRef'), out('3', 'Blob', 'ab'));
   });
 });
 
@@ -52,16 +52,16 @@ describe('Blob.first / Blob.last', () => {
   `;
 
   it('first byte', async () => {
-    await expectBehavior(script, inp('1', '@first'), out('1', 'Blob', 'h'));
+    await expectBehavior(script, inp('1', 'first'), out('1', 'Blob', 'h'));
   });
   it('last byte', async () => {
-    await expectBehavior(script, inp('2', '@last'), out('2', 'Blob', 'o'));
+    await expectBehavior(script, inp('2', 'last'), out('2', 'Blob', 'o'));
   });
   it('first of empty', async () => {
-    await expectBehavior(script, inp('3', '@firstEmpty'), out('3', 'Blob', ''));
+    await expectBehavior(script, inp('3', 'firstEmpty'), out('3', 'Blob', ''));
   });
   it('ref.last', async () => {
-    await expectBehavior(script, inp('4', '@lastRef'), out('4', 'Blob', 'd'));
+    await expectBehavior(script, inp('4', 'lastRef'), out('4', 'Blob', 'd'));
   });
 });
 
@@ -73,13 +73,13 @@ describe('Blob.repeat / Blob.reverse', () => {
   `;
 
   it('repeat', async () => {
-    await expectBehavior(script, inp('1', '@repeat'), out('1', 'Blob', 'ababab'));
+    await expectBehavior(script, inp('1', 'repeat'), out('1', 'Blob', 'ababab'));
   });
   it('reverse', async () => {
-    await expectBehavior(script, inp('2', '@reverse'), out('2', 'Blob', 'cba'));
+    await expectBehavior(script, inp('2', 'reverse'), out('2', 'Blob', 'cba'));
   });
   it('ref.reverse', async () => {
-    await expectBehavior(script, inp('3', '@reverseRef'), out('3', 'Blob', 'zyx'));
+    await expectBehavior(script, inp('3', 'reverseRef'), out('3', 'Blob', 'zyx'));
   });
 });
 
@@ -91,13 +91,13 @@ describe('Blob.trim / trim_start / trim_end', () => {
   `;
 
   it('trim', async () => {
-    await expectBehavior(script, inp('1', '@trim'), out('1', 'Blob', 'hi'));
+    await expectBehavior(script, inp('1', 'trim'), out('1', 'Blob', 'hi'));
   });
   it('trim_start', async () => {
-    await expectBehavior(script, inp('2', '@trimStart'), out('2', 'Blob', 'hi  '));
+    await expectBehavior(script, inp('2', 'trimStart'), out('2', 'Blob', 'hi  '));
   });
   it('trim_end', async () => {
-    await expectBehavior(script, inp('3', '@trimEnd'), out('3', 'Blob', '  hi'));
+    await expectBehavior(script, inp('3', 'trimEnd'), out('3', 'Blob', '  hi'));
   });
 });
 
@@ -111,19 +111,19 @@ describe('Blob.contains / starts_with / ends_with', () => {
   `;
 
   it('contains match', async () => {
-    await expectBehavior(script, inp('1', '@containsYes'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'containsYes'), out('1', 'Boolean', true));
   });
   it('contains no match', async () => {
-    await expectBehavior(script, inp('2', '@containsNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'containsNo'), out('2', 'Boolean', false));
   });
   it('starts_with', async () => {
-    await expectBehavior(script, inp('3', '@startsWith'), out('3', 'Boolean', true));
+    await expectBehavior(script, inp('3', 'startsWith'), out('3', 'Boolean', true));
   });
   it('ends_with', async () => {
-    await expectBehavior(script, inp('4', '@endsWith'), out('4', 'Boolean', true));
+    await expectBehavior(script, inp('4', 'endsWith'), out('4', 'Boolean', true));
   });
   it('ref.contains', async () => {
-    await expectBehavior(script, inp('5', '@containsRef'), out('5', 'Boolean', true));
+    await expectBehavior(script, inp('5', 'containsRef'), out('5', 'Boolean', true));
   });
 });
 
@@ -135,13 +135,13 @@ describe('Blob.index_of', () => {
   `;
 
   it('found — byte offset', async () => {
-    await expectBehavior(script, inp('1', '@found'), out('1', 'Integer', 6));
+    await expectBehavior(script, inp('1', 'found'), out('1', 'Integer', 6));
   });
   it('not found returns -1', async () => {
-    await expectBehavior(script, inp('2', '@notFound'), out('2', 'Integer', -1));
+    await expectBehavior(script, inp('2', 'notFound'), out('2', 'Integer', -1));
   });
   it('ref.index_of', async () => {
-    await expectBehavior(script, inp('3', '@indexRef'), out('3', 'Integer', 2));
+    await expectBehavior(script, inp('3', 'indexRef'), out('3', 'Integer', 2));
   });
 });
 
@@ -154,16 +154,16 @@ describe('Blob.before / Blob.after', () => {
   `;
 
   it('before', async () => {
-    await expectBehavior(script, inp('1', '@before'), out('1', 'Blob', 'hello'));
+    await expectBehavior(script, inp('1', 'before'), out('1', 'Blob', 'hello'));
   });
   it('after', async () => {
-    await expectBehavior(script, inp('2', '@after'), out('2', 'Blob', 'world'));
+    await expectBehavior(script, inp('2', 'after'), out('2', 'Blob', 'world'));
   });
   it('before no match', async () => {
-    await expectBehavior(script, inp('3', '@beforeMiss'), out('3', 'Blob', 'hello'));
+    await expectBehavior(script, inp('3', 'beforeMiss'), out('3', 'Blob', 'hello'));
   });
   it('after no match', async () => {
-    await expectBehavior(script, inp('4', '@afterMiss'), out('4', 'Blob', ''));
+    await expectBehavior(script, inp('4', 'afterMiss'), out('4', 'Blob', ''));
   });
 });
 
@@ -175,13 +175,13 @@ describe('Blob.replace / Blob.replace_first', () => {
   `;
 
   it('replace all', async () => {
-    await expectBehavior(script, inp('1', '@replaceAll'), out('1', 'Blob', 'xxbxx'));
+    await expectBehavior(script, inp('1', 'replaceAll'), out('1', 'Blob', 'xxbxx'));
   });
   it('replace_first', async () => {
-    await expectBehavior(script, inp('2', '@replaceFirst'), out('2', 'Blob', 'xabaa'));
+    await expectBehavior(script, inp('2', 'replaceFirst'), out('2', 'Blob', 'xabaa'));
   });
   it('ref.replace', async () => {
-    await expectBehavior(script, inp('3', '@replaceRef'), out('3', 'Blob', 'herro'));
+    await expectBehavior(script, inp('3', 'replaceRef'), out('3', 'Blob', 'herro'));
   });
 });
 
@@ -209,16 +209,16 @@ describe('Blob vs Text — byte vs scalar size', () => {
   `;
 
   it('Blob.size e-acute = 2 bytes', async () => {
-    await expectBehavior(script, inp('1', '@blobSizeAccented'), out('1', 'Integer', 2));
+    await expectBehavior(script, inp('1', 'blobSizeAccented'), out('1', 'Integer', 2));
   });
   it('Text.size e-acute = 1 scalar', async () => {
-    await expectBehavior(script, inp('2', '@textSizeAccented'), out('2', 'Integer', 1));
+    await expectBehavior(script, inp('2', 'textSizeAccented'), out('2', 'Integer', 1));
   });
   it('Blob.size emoji = 4 bytes', async () => {
-    await expectBehavior(script, inp('3', '@blobSizeEmoji'), out('3', 'Integer', 4));
+    await expectBehavior(script, inp('3', 'blobSizeEmoji'), out('3', 'Integer', 4));
   });
   it('Text.size emoji = 1 scalar', async () => {
-    await expectBehavior(script, inp('4', '@textSizeEmoji'), out('4', 'Integer', 1));
+    await expectBehavior(script, inp('4', 'textSizeEmoji'), out('4', 'Integer', 1));
   });
 });
 
@@ -254,16 +254,16 @@ describe('Blob bang methods', () => {
   `;
 
   it('b.reverse!', async () => {
-    await expectBehavior(script, inp('1', '@bangReverse'), out('1', 'Blob', 'olleh'));
+    await expectBehavior(script, inp('1', 'bangReverse'), out('1', 'Blob', 'olleh'));
   });
   it('b.slice!(0, 5)', async () => {
-    await expectBehavior(script, inp('2', '@bangSlice'), out('2', 'Blob', 'hello'));
+    await expectBehavior(script, inp('2', 'bangSlice'), out('2', 'Blob', 'hello'));
   });
   it('b.replace!("a", "x")', async () => {
-    await expectBehavior(script, inp('3', '@bangReplace'), out('3', 'Blob', 'xxbxx'));
+    await expectBehavior(script, inp('3', 'bangReplace'), out('3', 'Blob', 'xxbxx'));
   });
   it('b.trim!', async () => {
-    await expectBehavior(script, inp('4', '@bangTrim'), out('4', 'Blob', 'hi'));
+    await expectBehavior(script, inp('4', 'bangTrim'), out('4', 'Blob', 'hi'));
   });
 });
 
@@ -286,34 +286,34 @@ describe('Blob regex — pattern matching', () => {
   `;
 
   it('contains with regex', async () => {
-    await expectBehavior(script, inp('1', '@containsRe'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'containsRe'), out('1', 'Boolean', true));
   });
   it('contains with regex — no match', async () => {
-    await expectBehavior(script, inp('2', '@containsReNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'containsReNo'), out('2', 'Boolean', false));
   });
   it('starts_with regex — match', async () => {
-    await expectBehavior(script, inp('3', '@startsRe'), out('3', 'Boolean', true));
+    await expectBehavior(script, inp('3', 'startsRe'), out('3', 'Boolean', true));
   });
   it('starts_with regex — no match', async () => {
-    await expectBehavior(script, inp('4', '@startsReNo'), out('4', 'Boolean', false));
+    await expectBehavior(script, inp('4', 'startsReNo'), out('4', 'Boolean', false));
   });
   it('ends_with regex', async () => {
-    await expectBehavior(script, inp('5', '@endsRe'), out('5', 'Boolean', true));
+    await expectBehavior(script, inp('5', 'endsRe'), out('5', 'Boolean', true));
   });
   it('index_of regex — returns byte offset', async () => {
-    await expectBehavior(script, inp('6', '@indexRe'), out('6', 'Integer', 4));
+    await expectBehavior(script, inp('6', 'indexRe'), out('6', 'Integer', 4));
   });
   it('before regex', async () => {
-    await expectBehavior(script, inp('7', '@beforeRe'), out('7', 'Blob', 'hello '));
+    await expectBehavior(script, inp('7', 'beforeRe'), out('7', 'Blob', 'hello '));
   });
   it('after regex', async () => {
-    await expectBehavior(script, inp('8', '@afterRe'), out('8', 'Blob', ' world'));
+    await expectBehavior(script, inp('8', 'afterRe'), out('8', 'Blob', ' world'));
   });
   it('replace all with regex', async () => {
-    await expectBehavior(script, inp('9', '@replaceRe'), out('9', 'Blob', 'axbxcx'));
+    await expectBehavior(script, inp('9', 'replaceRe'), out('9', 'Blob', 'axbxcx'));
   });
   it('replace_first with regex', async () => {
-    await expectBehavior(script, inp('10', '@replaceFirstRe'), out('10', 'Blob', 'axb2c3'));
+    await expectBehavior(script, inp('10', 'replaceFirstRe'), out('10', 'Blob', 'axb2c3'));
   });
 });
 
@@ -328,10 +328,10 @@ describe('Blob.concat', () => {
   `;
 
   it('Blob.concat(a, b)', async () => {
-    await expectBehavior(script, inp('1', '@concatFunc'), out('1', 'Blob', 'hello world'));
+    await expectBehavior(script, inp('1', 'concatFunc'), out('1', 'Blob', 'hello world'));
   });
   it('ref.concat(b)', async () => {
-    await expectBehavior(script, inp('2', '@concatRef'), out('2', 'Blob', 'hello world'));
+    await expectBehavior(script, inp('2', 'concatRef'), out('2', 'Blob', 'hello world'));
   });
 });
 
@@ -345,7 +345,7 @@ describe('Blob.append!', () => {
   `;
 
   it('b.append!(v) mutates ref', async () => {
-    await expectBehavior(script, inp('1', '@appendBang'), out('1', 'Blob', 'hello world'));
+    await expectBehavior(script, inp('1', 'appendBang'), out('1', 'Blob', 'hello world'));
   });
 });
 
@@ -356,10 +356,10 @@ describe('Blob.at', () => {
   `;
 
   it('Blob.at — returns byte as Integer', async () => {
-    await expectBehavior(script, inp('1', '@atFunc'), out('1', 'Integer', 104));
+    await expectBehavior(script, inp('1', 'atFunc'), out('1', 'Integer', 104));
   });
   it('ref.at(1)', async () => {
-    await expectBehavior(script, inp('2', '@atRef'), out('2', 'Integer', 66));
+    await expectBehavior(script, inp('2', 'atRef'), out('2', 'Integer', 66));
   });
 });
 
@@ -373,7 +373,7 @@ describe('Blob.zeros', () => {
   `;
 
   it('creates blob of n zero bytes', async () => {
-    await expectBehavior(script, inp('1', '@zeros'), out('1', 'Integer', 5));
+    await expectBehavior(script, inp('1', 'zeros'), out('1', 'Integer', 5));
   });
 });
 
@@ -384,10 +384,10 @@ describe('Blob.from_hex / Blob.to_hex', () => {
   `;
 
   it('to_hex', async () => {
-    await expectBehavior(script, inp('1', '@toHex'), out('1', 'Text', '68656c6c6f'));
+    await expectBehavior(script, inp('1', 'toHex'), out('1', 'Text', '68656c6c6f'));
   });
   it('from_hex round-trips', async () => {
-    await expectBehavior(script, inp('2', '@roundtrip'), out('2', 'Blob', 'hello'));
+    await expectBehavior(script, inp('2', 'roundtrip'), out('2', 'Blob', 'hello'));
   });
 });
 
@@ -398,10 +398,10 @@ describe('Blob.from_base64 / Blob.to_base64', () => {
   `;
 
   it('to_base64', async () => {
-    await expectBehavior(script, inp('1', '@toB64'), out('1', 'Text', 'aGVsbG8='));
+    await expectBehavior(script, inp('1', 'toB64'), out('1', 'Text', 'aGVsbG8='));
   });
   it('from_base64', async () => {
-    await expectBehavior(script, inp('2', '@fromB64'), out('2', 'Blob', 'hello'));
+    await expectBehavior(script, inp('2', 'fromB64'), out('2', 'Blob', 'hello'));
   });
 });
 
@@ -412,10 +412,10 @@ describe('Blob.from_utf8 / Blob.to_utf8', () => {
   `;
 
   it('to_utf8 — identity for ASCII', async () => {
-    await expectBehavior(script, inp('1', '@toUtf8'), out('1', 'Text', 'hello'));
+    await expectBehavior(script, inp('1', 'toUtf8'), out('1', 'Text', 'hello'));
   });
   it('from_utf8 — identity for ASCII', async () => {
-    await expectBehavior(script, inp('2', '@fromUtf8'), out('2', 'Blob', 'hello'));
+    await expectBehavior(script, inp('2', 'fromUtf8'), out('2', 'Blob', 'hello'));
   });
 });
 
@@ -425,7 +425,7 @@ describe('Blob.xor', () => {
   `;
 
   it('xor with self produces zeros', async () => {
-    await expectBehavior(script, inp('1', '@xorSelf'), out('1', 'Text', '0000000000'));
+    await expectBehavior(script, inp('1', 'xorSelf'), out('1', 'Text', '0000000000'));
   });
 });
 
@@ -437,12 +437,12 @@ describe('Blob.constant_time_equals', () => {
   `;
 
   it('equal blobs', async () => {
-    await expectBehavior(script, inp('1', '@eqYes'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'eqYes'), out('1', 'Boolean', true));
   });
   it('different blobs', async () => {
-    await expectBehavior(script, inp('2', '@eqNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'eqNo'), out('2', 'Boolean', false));
   });
   it('different lengths', async () => {
-    await expectBehavior(script, inp('3', '@eqLen'), out('3', 'Boolean', false));
+    await expectBehavior(script, inp('3', 'eqLen'), out('3', 'Boolean', false));
   });
 });

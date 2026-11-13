@@ -24,15 +24,15 @@ describe('external send', () => {
 
   it('fires outgoing message for DotCallExpr', async () => {
     await expectBehavior(script,
-      { input: { id: '42', op: [{ url: 'http://example.com' }, '@call_remote_fire.'], from: 'caller', 'ty': [{ url: 'Text' }] } },
-      { output: { id: '1', op: [{ url: 'http://example.com' }, '@get'], to: 'Remote', 'ty': [{ url: 'Text' }] } },
+      { input: { id: '42', op: [{ url: 'http://example.com' }, 'call_remote_fire.'], from: 'caller', 'ty': [{ url: 'Text' }] } },
+      { output: { id: '1', op: [{ url: 'http://example.com' }, 'get'], to: 'Remote', 'ty': [{ url: 'Text' }] } },
     );
   });
 
   it('receives response message for DotCallExpr', async () => {
     await expectBehavior(script,
-      { input: { id: '42', op: [{ url: 'http://example.com' }, '@call_remote_receive'], from: 'caller', 'ty': [{ url: 'Text' }] } },
-      { output: expect.objectContaining({ op: [{ url: 'http://example.com' }, '@get'], to: 'Remote' }) },
+      { input: { id: '42', op: [{ url: 'http://example.com' }, 'call_remote_receive'], from: 'caller', 'ty': [{ url: 'Text' }] } },
+      { output: expect.objectContaining({ op: [{ url: 'http://example.com' }, 'get'], to: 'Remote' }) },
       { input: { id: '1', re: { response: 'hello' } } },
       { output: { id: '42', re: { response: 'hello' }, to: 'caller', 'ty': { response: 'Text' } } },
     );

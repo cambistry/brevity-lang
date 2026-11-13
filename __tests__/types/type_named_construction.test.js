@@ -259,38 +259,38 @@ describe('named construction — runtime field placement', () => {
   );
 
   it('all-named, declared order → fields carry their values', async () => {
-    await expectOp('@allNamed', 10);
+    await expectOp('allNamed', 10);
   });
 
   it('all-named, reversed order → values follow the name, not the slot', async () => {
-    await expectOp('@allNamedReversed', 10);
+    await expectOp('allNamedReversed', 10);
   });
 
   it('mixed: positional x, named y → the named field reads back correctly', async () => {
-    await expectOp('@mixedNamedField', 4);
+    await expectOp('mixedNamedField', 4);
   });
 
   it('mixed: the positional field reads back its own value', async () => {
-    await expectOp('@mixedPositionalField', 3);
+    await expectOp('mixedPositionalField', 3);
   });
 
   it('three named fields out of order each land correctly', async () => {
-    await expectOp('@threeNamed', 3);
+    await expectOp('threeNamed', 3);
   });
 
   it('named required field + omitted optional → optional falls back', async () => {
-    await expectOp('@optOmitted', 99, 'Integer');
+    await expectOp('optOmitted', 99, 'Integer');
   });
 
   it('named required field + supplied optional → optional reads its value', async () => {
-    await expectOp('@optSupplied', 42, 'Integer');
+    await expectOp('optSupplied', 42, 'Integer');
   });
 
   it('a named arg may be a computed expression, not just a literal', async () => {
-    await expectOp('@computedNamed', 10);
+    await expectOp('computedNamed', 10);
   });
 
   it('a non-Integer named field reads back its value', async () => {
-    await expectOp('@textNamed', 'ann');
+    await expectOp('textNamed', 'ann');
   });
 });

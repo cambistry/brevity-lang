@@ -158,7 +158,7 @@ const binding = {
 };
 
 const actor = await Actor.create(binding);
-actor.receive({ id: '1', op: '@ping', from: 'caller' });
+actor.receive({ id: '1', op: 'ping', from: 'caller' });
 ```
 
 ## Erlang target
@@ -168,7 +168,7 @@ JSON from stdin and writes newline-delimited JSON to stdout.
 
 ```bash
 erlc brevity_actor.erl
-echo '{"id":"1","op":"@ping","from":"caller"}' | erl -noshell -pa . -eval 'brevity_actor:main()' -s init stop
+echo '{"id":"1","op":"ping","from":"caller"}' | erl -noshell -pa . -eval 'brevity_actor:main()' -s init stop
 ```
 
 ## Rust target
@@ -178,7 +178,7 @@ writes stdout in the same wire format as Erlang.
 
 ```bash
 cargo build
-echo '{"id":"1","op":"@ping","from":"caller"}' | ./target/debug/brevity-actor
+echo '{"id":"1","op":"ping","from":"caller"}' | ./target/debug/brevity-actor
 ```
 
 ## Wire format
@@ -188,13 +188,13 @@ Actors communicate with JSON messages.
 Simple op:
 
 ```json
-{ "id": "1", "op": "@ping", "from": "caller" }
+{ "id": "1", "op": "ping", "from": "caller" }
 ```
 
 Op with payload:
 
 ```json
-{ "id": "2", "op": [{ "n": 5 }, "@double"], "ty": [{ "n": "Integer" }], "from": "caller" }
+{ "id": "2", "op": [{ "n": 5 }, "double"], "ty": [{ "n": "Integer" }], "from": "caller" }
 ```
 
 Reply:
@@ -206,7 +206,7 @@ Reply:
 Unhandled message:
 
 ```json
-{ "id": "3", "ex": { "@missing": "unhandled" }, "to": "caller" }
+{ "id": "3", "ex": { "missing": "unhandled" }, "to": "caller" }
 ```
 
 `ty` is the type attestation attached to payloads and replies.

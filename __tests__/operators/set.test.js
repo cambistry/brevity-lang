@@ -114,7 +114,7 @@ describe("set operation", () => {
   it("single positional set — actor receives via set handler", async () => {
     await expectBehavior(
       script,
-      { input: { id: "1", op: "@singlePos!", from: "c" } },
+      { input: { id: "1", op: "singlePos!", from: "c" } },
       {
         output: {
           id: "1",
@@ -129,7 +129,7 @@ describe("set operation", () => {
   it("positional + named set", async () => {
     await expectBehavior(
       script,
-      { input: { id: "2", op: "@posNamed!", from: "c" } },
+      { input: { id: "2", op: "posNamed!", from: "c" } },
       {
         output: {
           id: "2",
@@ -144,7 +144,7 @@ describe("set operation", () => {
   it("set without as clause — state persists via getter", async () => {
     await expectBehavior(
       script,
-      { input: { id: "3", op: "@statePersists!", from: "c" } },
+      { input: { id: "3", op: "statePersists!", from: "c" } },
       {
         output: {
           id: "3",
@@ -159,7 +159,7 @@ describe("set operation", () => {
   it("scalar ref set — ref x <- 5", async () => {
     await expectBehavior(
       script,
-      { input: { id: "4", op: "@scalarRef", from: "c" } },
+      { input: { id: "4", op: "scalarRef", from: "c" } },
       {
         output: {
           id: "4",
@@ -174,7 +174,7 @@ describe("set operation", () => {
   it("ref actor — set from if block", async () => {
     await expectBehavior(
       script,
-      { input: { id: "5", op: "@refFromIf", from: "c" } },
+      { input: { id: "5", op: "refFromIf", from: "c" } },
       {
         output: {
           id: "5",
@@ -189,7 +189,7 @@ describe("set operation", () => {
   it("ref actor — set from lambda", async () => {
     await expectBehavior(
       script,
-      { input: { id: "6", op: "@refFromLambda", from: "c" } },
+      { input: { id: "6", op: "refFromLambda", from: "c" } },
       {
         output: {
           id: "6",
@@ -301,8 +301,8 @@ describe("set — public refs (set@name, silent)", () => {
   it("set@val then @val reads the new value", async () => {
     await expectBehavior(
       script,
-      { input: { op: [[42], "set@val"], "ty": [["Integer"]], from: "c" } },
-      { input: { id: "1", op: "@val", from: "c" } },
+      { input: { op: [[42], "$set"], to: ". val", "ty": [["Integer"]], from: "c" } },
+      { input: { id: "1", op: "val", from: "c" } },
       { output: { id: "1", "ty": ["Integer"], re: [42], to: "c" } },
     );
   });
@@ -310,8 +310,8 @@ describe("set — public refs (set@name, silent)", () => {
   it("set@val emits no reply (next output is the subsequent get)", async () => {
     await expectBehavior(
       script,
-      { input: { op: [[99], "set@val"], "ty": [["Integer"]], from: "c" } },
-      { input: { id: "g1", op: "@val", from: "c" } },
+      { input: { op: [[99], "$set"], to: ". val", "ty": [["Integer"]], from: "c" } },
+      { input: { id: "g1", op: "val", from: "c" } },
       { output: { id: "g1", "ty": ["Integer"], re: [99], to: "c" } },
     );
   });
@@ -319,8 +319,8 @@ describe("set — public refs (set@name, silent)", () => {
   it("set@name on text field", async () => {
     await expectBehavior(
       script,
-      { input: { op: [["hello"], "set@name"], "ty": [["Text"]], from: "c" } },
-      { input: { id: "1", op: "@name", from: "c" } },
+      { input: { op: [["hello"], "$set"], to: ". name", "ty": [["Text"]], from: "c" } },
+      { input: { id: "1", op: "name", from: "c" } },
       { output: { id: "1", "ty": ["Text"], re: ["hello"], to: "c" } },
     );
   });
@@ -338,7 +338,7 @@ describe("set — public refs (set@name, silent)", () => {
     `;
     await expectBehavior(
       inner,
-      { input: { id: "1", op: "@writeRead", from: "c" } },
+      { input: { id: "1", op: "writeRead", from: "c" } },
       {
         output: {
           id: "1",

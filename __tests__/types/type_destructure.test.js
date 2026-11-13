@@ -20,7 +20,7 @@ describe('type destructure — positional', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '1', op: '@go', from: 'c' } },
+      { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -34,7 +34,7 @@ describe('type destructure — positional', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '2', op: '@go', from: 'c' } },
+      { input: { id: '2', op: 'go', from: 'c' } },
       { output: { id: '2', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -48,7 +48,7 @@ describe('type destructure — positional', () => {
         return rx: x
       }
     `,
-      { input: { id: '3', op: '@go', from: 'c' } },
+      { input: { id: '3', op: 'go', from: 'c' } },
       { output: { id: '3', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
     );
   });
@@ -62,7 +62,7 @@ describe('type destructure — positional', () => {
         return ra: a, rb: b
       }
     `,
-      { input: { id: '4', op: '@go', from: 'c' } },
+      { input: { id: '4', op: 'go', from: 'c' } },
       { output: { id: '4', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
     );
   });
@@ -89,7 +89,7 @@ describe('type destructure — named', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '5', op: '@go', from: 'c' } },
+      { input: { id: '5', op: 'go', from: 'c' } },
       { output: { id: '5', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -103,7 +103,7 @@ describe('type destructure — named', () => {
         return rx: x
       }
     `,
-      { input: { id: '6', op: '@go', from: 'c' } },
+      { input: { id: '6', op: 'go', from: 'c' } },
       { output: { id: '6', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
     );
   });
@@ -117,7 +117,7 @@ describe('type destructure — named', () => {
         return rx: alias_x
       }
     `,
-      { input: { id: '7', op: '@go', from: 'c' } },
+      { input: { id: '7', op: 'go', from: 'c' } },
       { output: { id: '7', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
     );
   });
@@ -131,7 +131,7 @@ describe('type destructure — named', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '8', op: '@go', from: 'c' } },
+      { input: { id: '8', op: 'go', from: 'c' } },
       { output: { id: '8', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -161,7 +161,7 @@ describe('type destructure — mixed-form types', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '9', op: '@go', from: 'c' } },
+      { input: { id: '9', op: 'go', from: 'c' } },
       { output: { id: '9', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -178,7 +178,7 @@ describe('type destructure — mixed-form types', () => {
         return rx: x, ry: y
       }
     `,
-      { input: { id: '10', op: '@go', from: 'c' } },
+      { input: { id: '10', op: 'go', from: 'c' } },
       { output: { id: '10', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
@@ -194,7 +194,7 @@ describe('type destructure — mixed-form types', () => {
         return ra: a, rb: b
       }
     `,
-      { input: { id: '11', op: '@go', from: 'c' } },
+      { input: { id: '11', op: 'go', from: 'c' } },
       { output: { id: '11', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
     );
   });
@@ -210,7 +210,7 @@ describe('type destructure — mixed-form types', () => {
         return rc: count, rl: label
       }
     `,
-      { input: { id: '12', op: '@go', from: 'c' } },
+      { input: { id: '12', op: 'go', from: 'c' } },
       { output: { id: '12', 'ty': { rc: 'Integer', rl: 'Text' }, re: { rc: 3, rl: 'hi' }, to: 'c' } },
     );
   });
@@ -231,7 +231,7 @@ describe('type destructure — optional fields', () => {
         return rt: turn as Integer
       }
     `,
-      { input: { id: '13', op: '@go', from: 'c' } },
+      { input: { id: '13', op: 'go', from: 'c' } },
       { output: { id: '13', 'ty': { rt: 'Integer' }, re: { rt: 5 }, to: 'c' } },
     );
   });
@@ -247,7 +247,7 @@ describe('type destructure — optional fields', () => {
         return rt: (turn ?? 99)
       }
     `,
-      { input: { id: '14', op: '@go', from: 'c' } },
+      { input: { id: '14', op: 'go', from: 'c' } },
       { output: { id: '14', 'ty': { rt: 'Integer' }, re: { rt: 99 }, to: 'c' } },
     );
   });
@@ -261,7 +261,7 @@ describe('type destructure — optional fields', () => {
         return rp: (turn)?
       }
     `,
-      { input: { id: '15', op: '@go', from: 'c' } },
+      { input: { id: '15', op: 'go', from: 'c' } },
       { output: { id: '15', 'ty': { rp: 'Boolean' }, re: { rp: false }, to: 'c' } },
     );
   });

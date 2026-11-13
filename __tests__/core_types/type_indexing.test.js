@@ -15,10 +15,10 @@ describe('size — Blob vs Text', () => {
   `;
 
   it('Blob.size "café" = 5 bytes (é is 2 bytes)', async () => {
-    await expectBehavior(script, inp('1', '@blobSize'), out('1', 'Integer', 5));
+    await expectBehavior(script, inp('1', 'blobSize'), out('1', 'Integer', 5));
   });
   it('Text.size "café" = 4 scalars (precomposed é)', async () => {
-    await expectBehavior(script, inp('2', '@textSize'), out('2', 'Integer', 4));
+    await expectBehavior(script, inp('2', 'textSize'), out('2', 'Integer', 4));
   });
 });
 
@@ -29,10 +29,10 @@ describe('size — Blob vs Text with combining chars', () => {
   `;
 
   it('Blob.size = 3 bytes', async () => {
-    await expectBehavior(script, inp('1', '@blobSize'), out('1', 'Integer', 3));
+    await expectBehavior(script, inp('1', 'blobSize'), out('1', 'Integer', 3));
   });
   it('Text.size = 2 scalars', async () => {
-    await expectBehavior(script, inp('2', '@textSize'), out('2', 'Integer', 2));
+    await expectBehavior(script, inp('2', 'textSize'), out('2', 'Integer', 2));
   });
 });
 
@@ -43,10 +43,10 @@ describe('index_of — Blob vs Text', () => {
   `;
 
   it('Blob.index_of = 3 (byte offset)', async () => {
-    await expectBehavior(script, inp('1', '@blobIdx'), out('1', 'Integer', 3));
+    await expectBehavior(script, inp('1', 'blobIdx'), out('1', 'Integer', 3));
   });
   it('Text.index_of = 2 (scalar offset)', async () => {
-    await expectBehavior(script, inp('2', '@textIdx'), out('2', 'Integer', 2));
+    await expectBehavior(script, inp('2', 'textIdx'), out('2', 'Integer', 2));
   });
 });
 
@@ -56,7 +56,7 @@ describe('slice — Blob vs Text', () => {
   `;
 
   it('Text.slice(0,1) = "e" (first scalar only)', async () => {
-    await expectBehavior(script, inp('1', '@textSlice'), out('1', 'Text', 'e'));
+    await expectBehavior(script, inp('1', 'textSlice'), out('1', 'Text', 'e'));
   });
 });
 
@@ -67,10 +67,10 @@ describe('first/last — Text', () => {
   `;
 
   it('Text.first = "e" (first scalar)', async () => {
-    await expectBehavior(script, inp('1', '@textFirst'), out('1', 'Text', 'e'));
+    await expectBehavior(script, inp('1', 'textFirst'), out('1', 'Text', 'e'));
   });
   it('Text.last = combining acute (U+0301)', async () => {
-    await expectBehavior(script, inp('2', '@textLast'), out('2', 'Text', '\u{0301}'));
+    await expectBehavior(script, inp('2', 'textLast'), out('2', 'Text', '\u{0301}'));
   });
 });
 
@@ -80,7 +80,7 @@ describe('reverse — Text', () => {
   `;
 
   it('Text.reverse — reverses scalars (breaks combining)', async () => {
-    await expectBehavior(script, inp('1', '@textReverse'), out('1', 'Text', 'b\u{0301}ea'));
+    await expectBehavior(script, inp('1', 'textReverse'), out('1', 'Text', 'b\u{0301}ea'));
   });
 });
 
@@ -104,10 +104,10 @@ describe('Casting — Blob ↔ Text', () => {
   `;
 
   it('Blob → Text', async () => {
-    await expectBehavior(script, inp('1', '@blobToText'), out('1', 'Integer', 5));
+    await expectBehavior(script, inp('1', 'blobToText'), out('1', 'Integer', 5));
   });
   it('Text → Blob', async () => {
-    await expectBehavior(script, inp('2', '@textToBlob'), out('2', 'Integer', 5));
+    await expectBehavior(script, inp('2', 'textToBlob'), out('2', 'Integer', 5));
   });
 });
 
@@ -131,36 +131,36 @@ describe('Regex edge cases', () => {
   `;
 
   it('regex contains — digits', async () => {
-    await expectBehavior(script, inp('1', '@reContainsDigits'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'reContainsDigits'), out('1', 'Boolean', true));
   });
   it('regex contains — no match', async () => {
-    await expectBehavior(script, inp('2', '@reContainsNoMatch'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'reContainsNoMatch'), out('2', 'Boolean', false));
   });
   it('regex replace all', async () => {
-    await expectBehavior(script, inp('3', '@reReplaceAll'), out('3', 'Text', 'abc NUM def NUM'));
+    await expectBehavior(script, inp('3', 'reReplaceAll'), out('3', 'Text', 'abc NUM def NUM'));
   });
   it('regex replace first', async () => {
-    await expectBehavior(script, inp('4', '@reReplaceFirst'), out('4', 'Text', 'abc NUM def 456'));
+    await expectBehavior(script, inp('4', 'reReplaceFirst'), out('4', 'Text', 'abc NUM def 456'));
   });
   it('regex case insensitive flag', async () => {
-    await expectBehavior(script, inp('5', '@reCaseInsensitive'), out('5', 'Boolean', true));
+    await expectBehavior(script, inp('5', 'reCaseInsensitive'), out('5', 'Boolean', true));
   });
   it('regex starts_with — match at start', async () => {
-    await expectBehavior(script, inp('6', '@reStartsWithDigits'), out('6', 'Boolean', true));
+    await expectBehavior(script, inp('6', 'reStartsWithDigits'), out('6', 'Boolean', true));
   });
   it('regex starts_with — no match at start', async () => {
-    await expectBehavior(script, inp('7', '@reStartsWithNoMatch'), out('7', 'Boolean', false));
+    await expectBehavior(script, inp('7', 'reStartsWithNoMatch'), out('7', 'Boolean', false));
   });
   it('regex ends_with', async () => {
-    await expectBehavior(script, inp('8', '@reEndsWithDigits'), out('8', 'Boolean', true));
+    await expectBehavior(script, inp('8', 'reEndsWithDigits'), out('8', 'Boolean', true));
   });
   it('regex before pattern', async () => {
-    await expectBehavior(script, inp('9', '@reBeforePattern'), out('9', 'Text', 'price: $'));
+    await expectBehavior(script, inp('9', 'reBeforePattern'), out('9', 'Text', 'price: $'));
   });
   it('regex after pattern', async () => {
-    await expectBehavior(script, inp('10', '@reAfterPattern'), out('10', 'Text', '42.00'));
+    await expectBehavior(script, inp('10', 'reAfterPattern'), out('10', 'Text', '42.00'));
   });
   it('regex index_of — scalar position', async () => {
-    await expectBehavior(script, inp('11', '@reIndexOfPattern'), out('11', 'Integer', 4));
+    await expectBehavior(script, inp('11', 'reIndexOfPattern'), out('11', 'Integer', 4));
   });
 });

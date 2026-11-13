@@ -132,21 +132,21 @@ describe('a class constructed before a cell its construction reads', () => {
 
   it("reads the cell's value from its line", async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@inner', from: 'c' } },
+      { input: { id: '1', op: 'inner', from: 'c' } },
       { output: { id: '1', re: [8], to: 'c' } },
     );
   });
 
   it('the block goes on past it', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@after', from: 'c' } },
+      { input: { id: '2', op: 'after', from: 'c' } },
       { output: { id: '2', re: [70], to: 'c' } },
     );
   });
 
   it("a class of the file reading the file actor's cell", async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@kid', from: 'c' } },
+      { input: { id: '3', op: 'kid', from: 'c' } },
       { output: { id: '3', re: [8], to: 'c' } },
     );
   });
@@ -173,7 +173,7 @@ describe('a class two levels down reading a later cell', () => {
 
   it('waits for the cell two actors up', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@x', from: 'c' } },
+      { input: { id: '1', op: 'x', from: 'c' } },
       { output: { id: '1', re: [7], to: 'c' } },
     );
   });
@@ -193,21 +193,21 @@ describe('a read below its declaration', () => {
 
   it('reads the declared value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@b', from: 'c' } },
+      { input: { id: '1', op: 'b', from: 'c' } },
       { output: { id: '1', ty: ['Integer'], re: [2], to: 'c' } },
     );
   });
 
   it('a call below every cell it reads', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@c', from: 'c' } },
+      { input: { id: '2', op: 'c', from: 'c' } },
       { output: { id: '2', ty: ['Integer'], re: [12], to: 'c' } },
     );
   });
 
   it('a function declared above the cell it reads, called after construction', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@f', from: 'c' } },
+      { input: { id: '3', op: 'f', from: 'c' } },
       { output: { id: '3', re: [10], to: 'c' } },
     );
   });

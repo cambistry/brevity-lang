@@ -132,7 +132,7 @@ describe("file scalar params — runtime (named)", () => {
 
     await expectActorBehavior(
       actor,
-      { input: { id: "1", op: "@get", from: "caller" } },
+      { input: { id: "1", op: "get", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "1",
@@ -161,7 +161,7 @@ describe("file scalar params — runtime (named)", () => {
 
     await expectActorBehavior(
       actor,
-      { input: { id: "1", op: "@get_name", from: "caller" } },
+      { input: { id: "1", op: "get_name", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "1",
@@ -169,7 +169,7 @@ describe("file scalar params — runtime (named)", () => {
           to: "caller",
         }),
       },
-      { input: { id: "2", op: "@get_count", from: "caller" } },
+      { input: { id: "2", op: "get_count", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "2",
@@ -198,7 +198,7 @@ describe("file scalar params — runtime (positional)", () => {
 
     await expectActorBehavior(
       actor,
-      { input: { id: "1", op: "@echo", from: "caller" } },
+      { input: { id: "1", op: "echo", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "1",
@@ -227,7 +227,7 @@ describe("file scalar params — runtime (positional)", () => {
 
     await expectActorBehavior(
       actor,
-      { input: { id: "1", op: "@first", from: "caller" } },
+      { input: { id: "1", op: "first", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "1",
@@ -235,7 +235,7 @@ describe("file scalar params — runtime (positional)", () => {
           to: "caller",
         }),
       },
-      { input: { id: "2", op: "@second", from: "caller" } },
+      { input: { id: "2", op: "second", from: "caller" } },
       {
         output: expect.objectContaining({
           id: "2",

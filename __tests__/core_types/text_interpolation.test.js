@@ -74,39 +74,39 @@ describe('Text interpolation — Text values', () => {
   `;
 
   it('text literal inside interpolation', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@literalInside', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'literalInside', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
   });
 
   it('Text constant', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@fromConst', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'Hello, World!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'fromConst', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'Hello, World!' }, to: 'c' } });
   });
 
   it('Text ref', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@fromRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'Hello, World!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'fromRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'Hello, World!' }, to: 'c' } });
   });
 
   it('multiple interpolations in one string', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@multipleRefs', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'foo-bar' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'multipleRefs', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'foo-bar' }, to: 'c' } });
   });
 
   it('surrounding text preserved', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@surrounding', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'pre X post' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'surrounding', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'pre X post' }, to: 'c' } });
   });
 
   it('empty value interpolates to empty', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@emptyValue', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: '[]' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'emptyValue', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: '[]' }, to: 'c' } });
   });
 
   it('interpolation at start', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@leading', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'X trails' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'leading', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'X trails' }, to: 'c' } });
   });
 
   it('interpolation at end', async () => {
-    await expectBehavior(script, { input: { id: '8', op: '@trailing', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'leads X' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'trailing', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'leads X' }, to: 'c' } });
   });
 
   it('interpolation with no surrounding text', async () => {
-    await expectBehavior(script, { input: { id: '9', op: '@onlyInterpolation', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'solo' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '9', op: 'onlyInterpolation', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'solo' }, to: 'c' } });
   });
 });
 
@@ -131,15 +131,15 @@ describe('Text interpolation — GraphemeText values', () => {
   `;
 
   it('GraphemeText ref interpolates to its text', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@gtSimple', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'gtSimple', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
   });
 
   it('GraphemeText in surrounding text', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@gtSurrounding', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello world!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'gtSurrounding', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello world!' }, to: 'c' } });
   });
 
   it('GraphemeText with emoji grapheme cluster preserved', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@gtEmoji', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'a\u{1F600}b' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'gtEmoji', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'a\u{1F600}b' }, to: 'c' } });
   });
 });
 
@@ -169,27 +169,27 @@ describe('Text interpolation — Integer values', () => {
   `;
 
   it('integer literal', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@intLit', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'count=42' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'intLit', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'count=42' }, to: 'c' } });
   });
 
   it('integer constant', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@intConst', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'n=7' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'intConst', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'n=7' }, to: 'c' } });
   });
 
   it('negative integer (via param)', async () => {
     await expectBehavior(
       script,
-      { input: { id: '3', op: [[-3], '@intParam'], 'ty': [['Integer']], from: 'c' } },
+      { input: { id: '3', op: [[-3], 'intParam'], 'ty': [['Integer']], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '-3' }, to: 'c' } },
     );
   });
 
   it('zero', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@intZero', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '0' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'intZero', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '0' }, to: 'c' } });
   });
 
   it('large integer', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@intLarge', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: '123456789' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'intLarge', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: '123456789' }, to: 'c' } });
   });
 });
 
@@ -216,23 +216,23 @@ describe('Text interpolation — Decimal values', () => {
   `;
 
   it('decimal constant', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@decConst', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '1.5' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'decConst', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '1.5' }, to: 'c' } });
   });
 
   it('decimal with surrounding text', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@decWithText', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'pi=3.14' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'decWithText', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'pi=3.14' }, to: 'c' } });
   });
 
   it('negative decimal (via param)', async () => {
     await expectBehavior(
       script,
-      { input: { id: '3', op: [[-2.5], '@decParam'], 'ty': [['Decimal']], from: 'c' } },
+      { input: { id: '3', op: [[-2.5], 'decParam'], 'ty': [['Decimal']], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '-2.5' }, to: 'c' } },
     );
   });
 
   it('high-precision decimal preserved', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@decHighPrecision', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '0.123456' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'decHighPrecision', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '0.123456' }, to: 'c' } });
   });
 });
 
@@ -252,27 +252,27 @@ describe('Text interpolation — Float values (e-notation)', () => {
   }
 
   it('1.5 → "1.5e+0"', async () => {
-    await expectBehavior(script, inpF('@fltParam', 1.5e0), outTxt('1.5e+0'));
+    await expectBehavior(script, inpF('fltParam', 1.5e0), outTxt('1.5e+0'));
   });
 
   it('1.0e-10 → "1.0e-10"', async () => {
-    await expectBehavior(script, inpF('@fltParam', 1.0e-10), outTxt('1.0e-10'));
+    await expectBehavior(script, inpF('fltParam', 1.0e-10), outTxt('1.0e-10'));
   });
 
   it('2.5e+10 → "2.5e+10"', async () => {
-    await expectBehavior(script, inpF('@fltParam', 2.5e10), outTxt('2.5e+10'));
+    await expectBehavior(script, inpF('fltParam', 2.5e10), outTxt('2.5e+10'));
   });
 
   it('negative: -3.0e+2 → "-3.0e+2"', async () => {
-    await expectBehavior(script, inpF('@fltParam', -3.0e2), outTxt('-3.0e+2'));
+    await expectBehavior(script, inpF('fltParam', -3.0e2), outTxt('-3.0e+2'));
   });
 
   it('integer-valued float keeps required decimal: 1.0 → "1.0e+0"', async () => {
-    await expectBehavior(script, inpF('@fltParam', 1.0), outTxt('1.0e+0'));
+    await expectBehavior(script, inpF('fltParam', 1.0), outTxt('1.0e+0'));
   });
 
   it('float with surrounding text', async () => {
-    await expectBehavior(script, inpF('@fltWithText', 1.5e0), outTxt('v=1.5e+0'));
+    await expectBehavior(script, inpF('fltWithText', 1.5e0), outTxt('v=1.5e+0'));
   });
 
   // Full IEEE-754 double precision must survive stringification unchanged.
@@ -280,7 +280,7 @@ describe('Text interpolation — Float values (e-notation)', () => {
   // Its shortest round-trippable mantissa has 17 significant digits; every
   // one of them must appear in the output.
   it('full precision preserved — no truncation on 0.1 + 0.2', async () => {
-    await expectBehavior(script, inpF('@fltParam', 0.1 + 0.2), outTxt('3.0000000000000004e-1'));
+    await expectBehavior(script, inpF('fltParam', 0.1 + 0.2), outTxt('3.0000000000000004e-1'));
   });
 });
 
@@ -306,23 +306,23 @@ describe('Text interpolation — Boolean values', () => {
   `;
 
   it('true literal', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@tLit', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'true' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'tLit', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'true' }, to: 'c' } });
   });
 
   it('false literal', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@fLit', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'false' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'fLit', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'false' }, to: 'c' } });
   });
 
   it('true constant', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@tConst', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'flag=true' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'tConst', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'flag=true' }, to: 'c' } });
   });
 
   it('false constant', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@fConst', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'flag=false' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'fConst', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'flag=false' }, to: 'c' } });
   });
 
   it('boolean expression (equality)', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@fromCompare', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'eq=false' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'fromCompare', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'eq=false' }, to: 'c' } });
   });
 });
 
@@ -355,19 +355,19 @@ describe('Text interpolation — expressions', () => {
   `;
 
   it('arithmetic inside interpolation', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@arith', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '7' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'arith', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '7' }, to: 'c' } });
   });
 
   it('concatenation inside interpolation', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@concat', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'world!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'concat', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'world!' }, to: 'c' } });
   });
 
   it('multiple expressions mixed with literal text', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@mixedMulti', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'item 7 of 14' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'mixedMulti', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'item 7 of 14' }, to: 'c' } });
   });
 
   it('mixed types in one string', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@mixedTypes', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'box: 3 (ready=true)' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'mixedTypes', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'box: 3 (ready=true)' }, to: 'c' } });
   });
 });
 
@@ -433,43 +433,43 @@ describe('Text — escape sequences in double-quoted strings', () => {
   `;
 
   it('\\#{...} produces literal "#{...}" and suppresses interpolation there', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@escHash', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '#{name} vs world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'escHash', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: '#{name} vs world' }, to: 'c' } });
   });
 
   it('\\\\ produces a single literal backslash', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@escBackslash', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'back\\slash' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'escBackslash', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'back\\slash' }, to: 'c' } });
   });
 
   it('\\" produces literal double quote', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@escQuote', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'say "hi"' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'escQuote', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'say "hi"' }, to: 'c' } });
   });
 
   it("\\' is accepted as courtesy and yields literal single quote", async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@escApostropheCourtesy', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: "it's fine" }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'escApostropheCourtesy', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: "it's fine" }, to: 'c' } });
   });
 
   it('\\n produces newline', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@escNewline', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'line1\nline2' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'escNewline', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'line1\nline2' }, to: 'c' } });
   });
 
   it('\\t produces tab', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@escTab', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'a\tb' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'escTab', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'a\tb' }, to: 'c' } });
   });
 
   it('\\r produces carriage return', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@escCR', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'a\rb' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'escCR', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'a\rb' }, to: 'c' } });
   });
 
   it('\\u{XXXX} produces Unicode scalar', async () => {
-    await expectBehavior(script, { input: { id: '8', op: '@escUnicode', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'smile \u{1F600}!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'escUnicode', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'smile \u{1F600}!' }, to: 'c' } });
   });
 
   it('\\xXX produces single byte from two-digit hex', async () => {
-    await expectBehavior(script, { input: { id: '9', op: '@escHex', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'byte=A' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '9', op: 'escHex', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'byte=A' }, to: 'c' } });
   });
 
   it('escaped and unescaped interpolation coexist', async () => {
-    await expectBehavior(script, { input: { id: '10', op: '@escMixed', from: 'c' } }, { output: { id: '10', 'ty': { result: 'Text' }, re: { result: '#{ignored}-X-"q"' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '10', op: 'escMixed', from: 'c' } }, { output: { id: '10', 'ty': { result: 'Text' }, re: { result: '#{ignored}-X-"q"' }, to: 'c' } });
   });
 });
 
@@ -533,31 +533,31 @@ describe('Text — single-quoted strings are raw', () => {
   `;
 
   it('#{ ... } is literal, not interpolated', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@rawHash', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello #{name}' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'rawHash', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello #{name}' }, to: 'c' } });
   });
 
   it('backslash is a literal character (no escapes)', async () => {
     // Source is: 'a\nb' — four chars: a, backslash, n, b
-    await expectBehavior(script, { input: { id: '2', op: '@rawBackslash', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'a\\nb' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'rawBackslash', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'a\\nb' }, to: 'c' } });
   });
 
   it('double quote is a literal character', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@rawDoubleQuote', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'say "hi"' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'rawDoubleQuote', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'say "hi"' }, to: 'c' } });
   });
 
   it("doubled '' produces a single literal '", async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@doubledQuote', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: "How's that?" }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'doubledQuote', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: "How's that?" }, to: 'c' } });
   });
 
   it('empty single-quoted string', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@emptySingle', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'emptySingle', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
   });
 
   it("'''wrapped''' produces \"'wrapped'\"", async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@tripleAtEdges', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: "'wrapped'" }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'tripleAtEdges', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: "'wrapped'" }, to: 'c' } });
   });
 
   it('{...} is literal inside single quotes (not a closure context)', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@rawBraces', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: '{not a closure}' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'rawBraces', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: '{not a closure}' }, to: 'c' } });
   });
 });

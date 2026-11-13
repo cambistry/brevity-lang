@@ -54,39 +54,39 @@ describe('a call through a sub-service', () => {
   };
 
   it('is a call to the sub-service\'s address', async () => {
-    await run('@one',
-      { output: { id: '1', op: '@get', to: 'Svc s' } },
+    await run('one',
+      { output: { id: '1', op: 'get', to: 'Svc s' } },
       { input: { id: '1', re: [7], ty: ['Integer'], from: 'Svc s' } },
       { output: { id: 'x', re: [7], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('nests to any depth', async () => {
-    await run('@nested',
-      { output: { id: '1', op: '@ping', to: 'Svc s inner' } },
+    await run('nested',
+      { output: { id: '1', op: 'ping', to: 'Svc s inner' } },
       { input: { id: '1', re: [8], ty: ['Integer'], from: 'Svc s inner' } },
       { output: { id: 'x', re: [8], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('carries its args and their types', async () => {
-    await run('@args',
-      { output: { id: '1', op: [[2, { by: 3 }], '@add'], ty: [['Integer', { by: 'Integer' }]], to: 'Svc s' } },
+    await run('args',
+      { output: { id: '1', op: [[2, { by: 3 }], 'add'], ty: [['Integer', { by: 'Integer' }]], to: 'Svc s' } },
       { input: { id: '1', re: [5], ty: ['Integer'], from: 'Svc s' } },
       { output: { id: 'x', re: [5], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('a silent one doesn\'t wait', async () => {
-    await run('@silent!',
-      { output: { id: '1', op: '@note.', to: 'Svc s' } },
+    await run('silent!',
+      { output: { id: '1', op: 'note.', to: 'Svc s' } },
       { output: { id: 'x', re: [1], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('a dependency\'s own function is still a call to the dependency', async () => {
-    await run('@top',
-      { output: { id: '1', op: '@top', to: 'Svc' } },
+    await run('top',
+      { output: { id: '1', op: 'top', to: 'Svc' } },
       { input: { id: '1', re: [9], ty: ['Integer'], from: 'Svc' } },
       { output: { id: 'x', re: [9], ty: ['Integer'], to: 'c' } },
     );
@@ -100,16 +100,16 @@ describe('a local bound to a sub-service', () => {
   };
 
   it('holds its address', async () => {
-    await run('@bound',
-      { output: { id: '1', op: '@get', to: 'Svc s' } },
+    await run('bound',
+      { output: { id: '1', op: 'get', to: 'Svc s' } },
       { input: { id: '1', re: [7], ty: ['Integer'], from: 'Svc s' } },
       { output: { id: 'x', re: [7], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('reaches the sub-services under it', async () => {
-    await run('@boundNested',
-      { output: { id: '1', op: '@ping', to: 'Svc s inner' } },
+    await run('boundNested',
+      { output: { id: '1', op: 'ping', to: 'Svc s inner' } },
       { input: { id: '1', re: [8], ty: ['Integer'], from: 'Svc s inner' } },
       { output: { id: 'x', re: [8], ty: ['Integer'], to: 'c' } },
     );
@@ -162,10 +162,10 @@ describe('a call through a sub-service from a class', () => {
   it('goes to the sub-service\'s address', async () => {
     const actor = await createActor(classScript, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: [[10], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: '. Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<. Box 1>' }) },
-      { input: { id: '2', op: '@get', to: '. Box 1', from: 'c' } },
-      { output: expect.objectContaining({ op: '@get', to: 'Svc s' }) },
+      { input: { id: '2', op: 'get', to: '. Box 1', from: 'c' } },
+      { output: expect.objectContaining({ op: 'get', to: 'Svc s' }) },
     );
   });
 });
@@ -200,15 +200,15 @@ box = Svc.Box(5)
     const actor = await createActor(instScript, {
       compileOptions: { remotes },
       expects: [
-        { output: expect.objectContaining({ op: [[5], '#new'], to: 'Svc Box' }) },
+        { output: expect.objectContaining({ op: [[5], '$new'], to: 'Svc Box' }) },
         { input: { id: '1', re: '#<Svc Box 1>', ty: 'Svc Box', from: 'Svc' } },
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: 'x', op: '@local', from: 'c' } },
-      { output: expect.objectContaining({ op: [[1], '#new'], to: 'Svc Box' }) },
+      { input: { id: 'x', op: 'local', from: 'c' } },
+      { output: expect.objectContaining({ op: [[1], '$new'], to: 'Svc Box' }) },
       { input: { id: '2', re: '#<Svc Box 2>', ty: 'Svc Box', from: 'Svc' } },
-      { output: { id: '3', op: '@get', to: 'Svc Box 2 tally' } },
+      { output: { id: '3', op: 'get', to: 'Svc Box 2 tally' } },
       { input: { id: '3', re: [4], ty: ['Integer'], from: 'Svc Box 2 tally' } },
       { output: { id: 'x', re: [4], ty: ['Integer'], to: 'c' } },
     );
@@ -218,13 +218,13 @@ box = Svc.Box(5)
     const actor = await createActor(instScript, {
       compileOptions: { remotes },
       expects: [
-        { output: expect.objectContaining({ op: [[5], '#new'], to: 'Svc Box' }) },
+        { output: expect.objectContaining({ op: [[5], '$new'], to: 'Svc Box' }) },
         { input: { id: '1', re: '#<Svc Box 1>', ty: 'Svc Box', from: 'Svc' } },
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: 'x', op: '@cell', from: 'c' } },
-      { output: { id: '2', op: '@get', to: 'Svc Box 1 tally' } },
+      { input: { id: 'x', op: 'cell', from: 'c' } },
+      { output: { id: '2', op: 'get', to: 'Svc Box 1 tally' } },
       { input: { id: '2', re: [6], ty: ['Integer'], from: 'Svc Box 1 tally' } },
       { output: { id: 'x', re: [6], ty: ['Integer'], to: 'c' } },
     );

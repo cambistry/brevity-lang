@@ -3,7 +3,7 @@ import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
 import { isDynamicTy } from '../ty_tags.js';
-import { wireLabel, addressToken, selfAddress } from '../wire_labels.js';
+import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor, enclosesClasses } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
@@ -30,6 +30,16 @@ function methodNameFor(name) {
   if (n.startsWith('set@')) return `setAt_${n.slice(4)}`;
   if (n.startsWith('@')) return `op_${n.slice(1)}`;
   return n.replace(/[^a-zA-Z0-9_$]/g, '_');
+}
+
+// The dispatch test for a handler: its wire op, and for a cell or class arm
+// (`set@val`, `new@Box`) the token of `to` it answers for. The whole-actor
+// `set` and `update` answer only a message with no target.
+function opMatch(name) {
+  const arm = intrinsicArm(name);
+  if (arm) return `opName === ${JSON.stringify(arm.op)} && _target === ${JSON.stringify(arm.target)}`;
+  if (name === 'set' || name === 'update') return `opName === ${JSON.stringify(wireLabel(name))} && _target === null`;
+  return `opName === ${JSON.stringify(wireLabel(name))}`;
 }
 
 // The `{ members }` of a service string: drops a trailing `| AsType` suffix
@@ -201,14 +211,14 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       // External callers are matched by their tags. An in-process call carries
       // values but no tags, so its values pick the clause.
       const valueCondition = genValueCondition(params) ?? 'true';
-      condition = `opName === "${wireLabel(name)}" && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
+      condition = `${opMatch(name)} && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
     } else {
-      condition = `opName === "${wireLabel(name)}" && (${checks.join(' && ')})`;
+      condition = `${opMatch(name)} && (${checks.join(' && ')})`;
     }
   } else if (typeCondition) {
-    condition = `opName === "${wireLabel(name)}" && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+    condition = `${opMatch(name)} && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
   } else {
-    condition = `opName === "${wireLabel(name)}"`;
+    condition = `${opMatch(name)}`;
   }
   // Outside, only `@name` is exposed.
   if (isPrivate) condition += ` && (from === '__parent' || from === '__self' || from === '__test' || from === '__emit')`;
@@ -547,7 +557,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   function genOneInitLine(s) {
     const line = genOneInitLineCore(s);
     const names = s.type === 'ExprStatement' ? [] : [s.name].filter(Boolean);
-    const ready = names.filter(n => pendingCells.includes(n)).map(n => `\n    this.#_cellReady(${JSON.stringify(n)});`).join('');
+    const ready = names.filter(n => pendingCells.includes(n)).map(n => `\n    this.#_cellReady(${JSON.stringify(wireLabel(n))});`).join('');
     return line + ready;
   }
   function genOneInitLineCore(s) {
@@ -700,7 +710,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       const accessorName = p.accessor;
       const internalName = p.name;
       return {
-        condition: `opName === ${JSON.stringify('@' + accessorName)}`,
+        condition: `opName === ${JSON.stringify(wireLabel('@' + accessorName))}`,
         block: `\n        re = [this.#${stateKey(internalName)}];\n        _handled = true;`,
       };
     })
@@ -724,14 +734,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // A union target is tagged from the value; the request names the union.
     const tag = isDynamicTy(clause.targetType) && !clause.negated ? jsTyOf(ctx, clause.targetType, 're[0]') : '_rawPayload';
     return {
-      condition: `opName === "as" && typeof _rawPayload === "string" && ${typeCond}`,
+      condition: `opName === "$as" && typeof _rawPayload === "string" && ${typeCond}`,
       block: `\n        re = [${val}];\n        _ty_re = [${tag}];\n        _handled = true;`,
     };
   });
   if (hasReturnAs) {
     const returnAsType = actor.declarationReturn.typeName;
     asClauseParts.push({
-      condition: `opName === "as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
+      condition: `opName === "$as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
       block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [${isDynamicTy(returnAsType) ? jsTyOf(ctx, returnAsType, 're[0]') : '_rawPayload'}];\n        _handled = true;`,
     });
   }
@@ -807,7 +817,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // ctorParamExprs / preIngestBodyLines / postIngestBodyLines / coercionInitLines
   // here.
   const allInitLines = [
-    ...(hasDeferred ? [`    this.#_pendingCells = new Map(${JSON.stringify(pendingCells)}.map(n => [n, []]));`] : []),
+    ...(hasDeferred ? [`    this.#_pendingCells = new Map(${JSON.stringify(pendingCells.map(wireLabel))}.map(n => [n, []]));`] : []),
     ...paramInitLines, ...preIngestBodyLines,
   ];
 
@@ -914,8 +924,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // The cells this actor answers reads of: a file actor's, or a class's that has
   // classes declared inside it.
   const outerCells = !ctx.readsOuter ? ''
-    : !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
-    : enclosesClasses(ctx.program, actor) ? [...allFieldNames].filter(n => n !== '__returnAs').map(n => `${JSON.stringify(n)}: () => this.#${stateKey(n)}`).join(', ')
+    : !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(wireLabel(n))}: () => this.#${stateKey(n)}`).join(', ')
+    : enclosesClasses(ctx.program, actor) ? [...allFieldNames].filter(n => n !== '__returnAs').map(n => `${JSON.stringify(wireLabel(n))}: () => this.#${stateKey(n)}`).join(', ')
     : '';
   const classAddressField = classUsesSelfAsValue
     ? `\n  static classAddress = ${JSON.stringify('#<' + quoteToken(ctx.fileName) + '>')}`
@@ -1042,7 +1052,7 @@ ${actor.spawnable ? `
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
-      const _msg = { id, op: [args, '#new'], to };
+      const _msg = { id, op: [args, '$new'], to };
       if (ty !== undefined) _msg['ty'] = ty;
       this.#out(_msg);
     });
@@ -1085,12 +1095,12 @@ ${actor.spawnable ? `
   async #childSendRead(recv, prop) {
     const r = BvObject.pack(await recv);
     const v = r.selfReturn ? '#<.>' : r.positional[0];
-    if (typeof v === 'string' || typeof v?.receive === 'function') return BvObject.one(BvObject.pack(await this.#childSend(v, '@' + prop)), prop);
+    if (typeof v === 'string' || typeof v?.receive === 'function') return BvObject.one(BvObject.pack(await this.#childSend(v, prop)), prop);
     throw new Error("'" + prop + "' read on a value in a chain: bind the value first");
   }` : ''}${fnSection}
 
   #capture() {
-    // Each cell by its wire label: .val, @pub.
+    // Each cell by its wire name: ~val, pub.
     return {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
   }
 
@@ -1101,8 +1111,8 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
   async #_test(message) {
     const t = message.test;
     if ('target' in t) {
-      // A target is a run of wire labels: .o.inner
-      const parts = t.target.match(/[@#.][^@#.]+/g) || [];
+      // A target is a run of wire names, space-delimited: \`~o ~inner\`
+      const parts = t.target.split(' ').filter(Boolean);
       const childName = parts[0];
       const _refs = {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
       const child = _refs[childName];
@@ -1113,7 +1123,7 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       const rest = parts.slice(1);
       const fwd = { ...t };
       delete fwd.target;
-      if (rest.length > 0) fwd.target = rest.join('');
+      if (rest.length > 0) fwd.target = rest.join(' ');
       if ('set' in fwd || 'update' in fwd) {
         child.receive({ test: fwd, from: message.from });
       } else {
@@ -1142,11 +1152,11 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
     } else if ('set' in t) {
       const _sv = t.set;
       const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
-      this.#dispatch({ op: [payload, 'set'], from: '__self' });
+      this.#dispatch({ op: [payload, '$set'], from: '__self' });
     } else if ('update' in t) {
       const _uv = t.update;
       const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
-      this.#dispatch({ op: [payload, 'update'], from: '__self' });
+      this.#dispatch({ op: [payload, '$update'], from: '__self' });
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, ...('to' in t ? { to: t.to } : {}), from: '__test', _replyTo: message.from });
     }
@@ -1158,7 +1168,7 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
-      this.#chain[level - 1].receive({ id, op: 'get@' + name, from: '__child', _route: (msg) => this.receive(msg) });
+      this.#chain[level - 1].receive({ id, op: '$get', to: '. ' + name, from: '__child', _route: (msg) => this.receive(msg) });
     });
   }
 
@@ -1174,11 +1184,11 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 ` : ''}${outerCells ? `  // A class declared in us reading one of our cells.
   #_outerGet(message) {
     const cells = { ${outerCells} };
-    const name = message.op.slice(4);${hasDeferred ? `
+    const name = _bv_local_tokens(message.to).pop();${hasDeferred ? `
     // Not declared yet: answered when its line runs.
     const waiting = this.#_pendingCells.get(name);
     if (waiting) { waiting.push(message); return; }` : ''}
-    message._route(name in cells ? { id: message.id, re: [cells[name]()] } : { id: message.id, ex: { [message.op]: 'unhandled' } });
+    message._route(name in cells ? { id: message.id, re: [cells[name]()] } : { id: message.id, ex: { $get: 'unhandled' } });
   }
 
 ` : ''}${hasDeferred ? `  // A cell a child's construction waits on has its value: answer the reads held for it.
@@ -1196,8 +1206,8 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 
 ` : ''}  async #selfSend(op) {
     const _opName = Array.isArray(op) ? op[op.length - 1] : op;
-    const id = String(++this.#nextId);${silentFnNames.size > 0 ? `
-    if (${JSON.stringify([...silentFnNames].map(wireLabel))}.includes(_opName)) {
+    const id = String(++this.#nextId);${[...silentFnNames].some(n => !intrinsicArm(n)) ? `
+    if (${JSON.stringify([...silentFnNames].filter(n => !intrinsicArm(n)).map(wireLabel))}.includes(_opName)) {
       this.#dispatch({ id, op, from: '__self' });
       return;
     }` : ''}
@@ -1289,7 +1299,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       cb(message);
       return;
     }${outerCells ? `
-    if (message.from === '__child' && typeof message.op === 'string' && message.op.startsWith('get@')) { this.#_outerGet(message); return; }` : ''}${!actor.name && ctx.readsOuter ? `
+    if (message.from === '__child' && message.op === '$get') { this.#_outerGet(message); return; }` : ''}${!actor.name && ctx.readsOuter ? `
     if (message.from === '__child' && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
     if (('re' in message || 'ex' in message) && this.#_outerFwd.has(message.id)) {
       const fwd = this.#_outerFwd.get(message.id);
@@ -1341,34 +1351,22 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
-    // Wire to internal normalization: "@subscribe"/"set"/"#new" op carries
-    // its member as the last token of the to-field (\`. x\`, \`x\`, or
-    // \`#<alias x>\`). A public member travels bare; the label is \`@x\`.
-    // Strip @-sigil from @subscribe then re-synthesize subscribe@field /
-    // set@field / new@Class for handler dispatch.
-    if (opName === '#set') opName = 'set';
-    else if (opName === '#update') opName = 'update';
-    else if (opName === '#new') opName = 'new';
-    const _toLast = _bv_local_tokens(message.to).pop();
-    if (opName === 'new' && typeof _toLast === 'string' && !/^[#.]/.test(_toLast)) opName = 'new@' + _toLast;
-    if ((opName === '@subscribe' || opName === 'set') && typeof message.to === 'string') {
-      if (opName === '@subscribe') opName = 'subscribe';
-      if (typeof _toLast === 'string') opName = opName + _bv_label_of(_toLast);
-    }
-    if (typeof opName === 'string' && (opName.startsWith('subscribe@') || opName.startsWith('subscribe#'))) {
-      const _sigil = opName[('subscribe').length];
-      const _subTarget = opName.slice('subscribe'.length + 1);
+    // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
+    // function as the last token of \`to\` (\`. val\`, \`. Box\`), relative to us.
+    const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
+    if (opName === '$subscribe' && _target !== null) {
       const _subArgs = Array.isArray(message.op) ? message.op[0] : null;
-      // Keyed by the whole label: \`a\`, \`@a\` and \`#a\` are different cells.
-      let _subs = this.#_cellSubs?.get(_sigil + _subTarget);
-      if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_sigil + _subTarget, _subs); }
+      // Keyed by the wire name: \`a\`, \`~a\` and \`#a\` are different cells.
+      let _subs = this.#_cellSubs?.get(_target);
+      if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_target, _subs); }
       if (_subs) _subs.push({ id, from: _replyTo, args: _subArgs, route: message._route || null });
-      opName = _sigil + _subTarget;
+      // The first reply is the current value: the target answers its own op.
+      opName = _target;
     }
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== 'as' && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }

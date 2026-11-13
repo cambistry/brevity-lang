@@ -47,8 +47,8 @@ describe('subscribe — in-file fns', () => {
 
   it('initial subscribe captures each fn\'s current projected value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doSubs.', from: 'c' } },
-      { input: { id: '2', op: '@readAll', from: 'c' } },
+      { input: { id: '1', op: 'doSubs.', from: 'c' } },
+      { input: { id: '2', op: 'readAll', from: 'c' } },
       { output: {
         id: '2',
         'ty': { lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' },
@@ -60,9 +60,9 @@ describe('subscribe — in-file fns', () => {
 
   it('set on captured ref replays to every subscription', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doSubs.', from: 'c' } },
-      { input: { id: '2', op: [{ n: 5 }, '@bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
-      { input: { id: '3', op: '@readAll', from: 'c' } },
+      { input: { id: '1', op: 'doSubs.', from: 'c' } },
+      { input: { id: '2', op: [{ n: 5 }, 'bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: 'readAll', from: 'c' } },
       { output: {
         id: '3',
         'ty': { lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' },
@@ -94,9 +94,9 @@ describe('subscribe — in-file fns', () => {
     `;
 
     await expectBehavior(twoSubsScript,
-      { input: { id: '1', op: '@doSubs.', from: 'c' } },
-      { input: { id: '2', op: [{ n: 3 }, '@bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
-      { input: { id: '3', op: '@readBoth', from: 'c' } },
+      { input: { id: '1', op: 'doSubs.', from: 'c' } },
+      { input: { id: '2', op: [{ n: 3 }, 'bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: 'readBoth', from: 'c' } },
       { output: {
         id: '3',
         'ty': { lastA: 'Integer', lastB: 'Integer' },
@@ -131,34 +131,34 @@ describe('subscribe — in-script fns (local child actor)', () => {
 
   it('c.pub.subscribe — initial value after subscribe', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doPubSub.', from: 'caller' } },
-      { input: { id: '2', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+      { input: { id: '2', op: 'readLast', from: 'caller' } },
       { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
     );
   });
 
   it('c.pub.subscribe — replays on set of captured body ref', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doPubSub.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, '@bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 5 }, 'bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 10 }, to: 'caller' } },
     );
   });
 
   it('c.pub_w_params.subscribe(p: 100) — initial evaluation uses caller args', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doParamSub.', from: 'caller' } },
-      { input: { id: '2', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
+      { input: { id: '2', op: 'readLast', from: 'caller' } },
       { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 100 }, to: 'caller' } },
     );
   });
 
   it('c.pub_w_params.subscribe — replays with stored args on dep change', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@doParamSub.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, '@bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 5 }, 'bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
     );
   });
@@ -186,8 +186,8 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
   it('subscribe@pub posted to Pub alias, no inline <Type> for single projection', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: '@doPubSub.', from: 'caller' } },
-        { output: expect.objectContaining({ op: '@subscribe', to: '#<Pub pub>' }) },
+        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { output: expect.objectContaining({ op: '$subscribe', to: '#<Pub pub>' }) },
       ],
     });
   });
@@ -195,9 +195,9 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
   it('parameterized subscribe carries args in op prefix', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: '@doParamSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
         { output: expect.objectContaining({
-          op: [{ p: 100 }, '@subscribe'],
+          op: [{ p: 100 }, '$subscribe'],
           'ty': [{ p: 'Integer' }],
           to: '#<Pub pub_w_params>',
         }) },
@@ -208,10 +208,10 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
   it('stubbed initial re drives subscriber state', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: '@doPubSub.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Pub pub>' }) },
+        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub pub>' }) },
         { input: { id: '1', re: [0] } },
-        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
       ],
     });
@@ -220,12 +220,12 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
   it('stubbed later re replays to subscriber handler', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: '@doPubSub.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Pub pub>' }) },
+        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub pub>' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
-        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
       ],
     });
@@ -234,15 +234,15 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
   it('parameterized: stubbed re propagates through handler', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: '@doParamSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
         { output: expect.objectContaining({
           id: '1',
-          op: [{ p: 100 }, '@subscribe'],
+          op: [{ p: 100 }, '$subscribe'],
           to: '#<Pub pub_w_params>',
         }) },
         { input: { id: '1', re: [100] } },
         { input: { id: '1', re: [105] } },
-        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
       ],
     });
@@ -296,20 +296,20 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     let subPrev = sub.posts.length;
 
     // 1. Subscribe: caller -> sub. sub posts subscribe@pub to Pub.
-    await sub.sendAsync({ id: '1', op: '@doPubSub.', from: 'caller' });
+    await sub.sendAsync({ id: '1', op: 'doPubSub.', from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     //    pub replies with re:[0] addressed back to sub.
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@body(5) to Pub. body <- 5 -> @pub re-evaluates -> re:[10].
-    await sub.sendAsync({ id: '2', op: [{ n: 5 }, '@setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [{ n: 5 }, 'setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
     // 3. Read: caller -> sub.
-    await sub.sendAsync({ id: '3', op: '@readLast', from: 'caller' });
+    await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const reply = sub.posts.slice(subPrev).find(p => p.id === '3');
     expect(reply).toEqual(expect.objectContaining({
       id: '3', re: { last: 10 }, to: 'caller',
@@ -322,17 +322,17 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     let pubPrev = pub.posts.length;
     let subPrev = sub.posts.length;
 
-    await sub.sendAsync({ id: '1', op: '@doParamSub.', from: 'caller' });
+    await sub.sendAsync({ id: '1', op: 'doParamSub.', from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
-    await sub.sendAsync({ id: '2', op: [{ n: 5 }, '@setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [{ n: 5 }, 'setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
-    await sub.sendAsync({ id: '3', op: '@readLast', from: 'caller' });
+    await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const reply = sub.posts.slice(subPrev).find(p => p.id === '3');
     expect(reply).toEqual(expect.objectContaining({
       id: '3', re: { last: 105 }, to: 'caller',

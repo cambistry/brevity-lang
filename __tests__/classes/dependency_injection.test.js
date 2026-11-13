@@ -101,16 +101,16 @@ describe('explicit form — actor routing', () => {
     const actor = await createActor(source, {
       expects: [
         // The actor's construction emission, then the test's reply
-        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
       // Reply to `new` (id '1'), supplying the actor address
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       // Trigger the user-facing handler
-      { input: { id: '99', op: '@go', from: 'caller' } },
+      { input: { id: '99', op: 'go', from: 'caller' } },
       // First post after the cursor: t.get() routed to the actor
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       // Reply to t.get() with the value
       { input: { id: '2', re: { value: 42 } } },
       // Final reply to the original caller
@@ -121,13 +121,13 @@ describe('explicit form — actor routing', () => {
   it('silent method call routes to actor address', async () => {
     const actor = await createActor(source, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/77>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '2', op: '@notify.', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@ping.', to: 'Thing/77' }) },
+      { input: { id: '2', op: 'notify.', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'ping.', to: 'Thing/77' }) },
     );
   });
 });
@@ -154,8 +154,8 @@ describe('explicit form — multiple actors', () => {
         return :ok
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ tag: 'first' }, '#new'], to: 'Thing' }) },
-        { output: expect.objectContaining({ op: [{ tag: 'second' }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'first' }, '$new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ tag: 'second' }, '$new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -163,13 +163,13 @@ describe('explicit form — multiple actors', () => {
       { input: { id: '1', re: '#<Thing/A>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '2', re: '#<Thing/B>', 'ty': 'Thing', from: 'Thing' } },
       // Hit a
-      { input: { id: '10', op: '@ping_a', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@ping', to: 'Thing/A' }) },
+      { input: { id: '10', op: 'ping_a', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'ping', to: 'Thing/A' }) },
       { input: { id: '3', re: { ok: 'A' } } },
       { output: expect.objectContaining({ id: '10', re: { ok: 'A' }, to: 'caller' }) },
       // Hit b
-      { input: { id: '20', op: '@ping_b', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@ping', to: 'Thing/B' }) },
+      { input: { id: '20', op: 'ping_b', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'ping', to: 'Thing/B' }) },
       { input: { id: '4', re: { ok: 'B' } } },
       { output: expect.objectContaining({ id: '20', re: { ok: 'B' }, to: 'caller' }) },
     );
@@ -195,13 +195,13 @@ describe('explicit form — full roundtrip', () => {
         return answer: result + 1
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ base: 0 }, '#new'], to: 'Math' }) },
+        { output: expect.objectContaining({ op: [{ base: 0 }, '$new'], to: 'Math' }) },
       ],
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Math/1>', 'ty': 'Math', from: 'Math' } },
-      { input: { id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'ty': [{ n: 'Integer' }] } },
-      { output: expect.objectContaining({ op: [{ n: 5 }, '@double'], to: 'Math/1' }) },
+      { input: { id: '7', op: [{ n: 5 }, 'compute'], from: 'tester', 'ty': [{ n: 'Integer' }] } },
+      { output: expect.objectContaining({ op: [{ n: 5 }, 'double'], to: 'Math/1' }) },
       { input: { id: '2', re: { result: 10 } } },
       { output: expect.objectContaining({ id: '7', re: { answer: 11 }, to: 'tester' }) },
     );
@@ -220,8 +220,8 @@ describe('explicit form — deferred (function-body) construction', () => {
       }
     `);
     await expectActorBehavior(actor,
-      { input: { id: '99', op: '@spawn.', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+      { input: { id: '99', op: 'spawn.', from: 'caller' } },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
     );
   });
@@ -239,10 +239,10 @@ describe('explicit form — deferred (function-body) construction', () => {
         return :value
     `);
     await expectActorBehavior(actor,
-      { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+      { input: { id: '99', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       { input: { id: '1', re: '#<Thing/42>', 'ty': 'Thing', from: 'Thing' } },
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 17 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 17 }, to: 'caller' }) },
     );
@@ -469,13 +469,13 @@ describe('# form — manifest from options.remotes', () => {
     `, {
       compileOptions: { remotes: [{ path: 'thing.bv', service: ctorManifest }] },
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/9>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '50', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/9' }) },
+      { input: { id: '50', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/9' }) },
       { input: { id: '2', re: { value: 17 } } },
       { output: expect.objectContaining({ id: '50', re: { value: 17 }, to: 'caller' }) },
     );
@@ -548,16 +548,16 @@ describe('coercion to typed class — runtime', () => {
         return :value
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+        { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
       ],
     });
     await expectActorBehavior(actor,
       // `new` is addressed to the underlying dep 'Thing', so the reply
       // arrives under id '1' and supplies the actor address.
       { input: { id: '1', re: '#<Thing/42>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '7', op: '@go', from: 'caller' } },
+      { input: { id: '7', op: 'go', from: 'caller' } },
       // The actor address came from the Thing reply, not 'Coerced/...'
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/42' }) },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/42' }) },
       { input: { id: '2', re: { value: 99 } } },
       { output: expect.objectContaining({ id: '7', re: { value: 99 }, to: 'caller' }) },
     );
@@ -813,10 +813,10 @@ describe('spread `(...)` — runtime routing', () => {
       }
     `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '42', op: '@go', from: 'caller' });
+    await actor.sendAsync({ id: '42', op: 'go', from: 'caller' });
     const outgoing = actor.posts.find(p => p.to === 'Math');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+    expect(outgoing.op).toEqual([{ n: 5 }, 'double']);
     await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply.id).toBe('42');
@@ -836,9 +836,9 @@ describe('spread `(...)` — runtime routing', () => {
       }
     `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '9', op: '@go', from: 'caller' });
+    await actor.sendAsync({ id: '9', op: 'go', from: 'caller' });
     const outgoing = actor.posts.find(p => p.to === 'Math');
-    expect(outgoing.op).toEqual([{ n: 3 }, '@double']);
+    expect(outgoing.op).toEqual([{ n: 3 }, 'double']);
   });
 });
 
@@ -954,10 +954,10 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();
-      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      await actor.sendAsync({ id: '1', op: 'go', from: 'caller' });
       const outgoing = actor.posts.find(p => p.to === 'Math');
       expect(outgoing).toBeDefined();
-      expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+      expect(outgoing.op).toEqual([{ n: 5 }, 'double']);
     });
 
     it('body aliased — `d(...)` routes to the original @double', async () => {
@@ -972,9 +972,9 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();
-      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      await actor.sendAsync({ id: '1', op: 'go', from: 'caller' });
       const outgoing = actor.posts.find(p => p.to === 'Math');
-      expect(outgoing.op).toEqual([{ n: 7 }, '@double']);
+      expect(outgoing.op).toEqual([{ n: 7 }, 'double']);
     });
 
     it('namespace still routes: `Math.double(...)` after `(...) = Math`', async () => {
@@ -989,9 +989,9 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
         }
       `, { compileOptions: { remotes: [{ path: 'Math', service: MATH_MANIFEST }] } });
       const actor = await compiled.spawn();
-      await actor.sendAsync({ id: '1', op: '@go', from: 'caller' });
+      await actor.sendAsync({ id: '1', op: 'go', from: 'caller' });
       const outgoing = actor.posts.find(p => p.to === 'Math');
-      expect(outgoing.op).toEqual([{ n: 5 }, '@inc']);
+      expect(outgoing.op).toEqual([{ n: 5 }, 'inc']);
     });
   });
 });

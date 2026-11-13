@@ -55,13 +55,13 @@ describe('nested template — recursive HTML.X dispatch', () => {
     const factory = await page.connectActor('factory.bv');
 
     await expectBehavior(factory,
-      { input: { id: '1', op: '@create', from: 'caller' } },
+      { input: { id: '1', op: 'create', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: ['#<HTML div 1>'] }) },
     );
 
     const div = await page.connectActor('HTML div 1');
     await expectBehavior(div,
-      { input: { id: 'q1', op: '@inner_html' } },
+      { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({
         re: expect.stringMatching(/<h1>Title<\/h1>.*<p>initial<\/p>/),
       }) },
@@ -72,18 +72,18 @@ describe('nested template — recursive HTML.X dispatch', () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
     const factory = await page.connectActor('factory.bv');
 
-    await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
+    await factory.sendAsync({ id: '1', op: 'create', from: 'caller' });
 
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, '@bump.'],
+      op: [{ v: 'updated' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'caller',
     });
 
     const div = await page.connectActor('HTML div 1');
     await expectBehavior(div,
-      { input: { id: 'q1', op: '@inner_html' } },
+      { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({
         re: expect.stringMatching(/<h1>Title<\/h1>.*<p>updated<\/p>/),
       }) },
@@ -94,11 +94,11 @@ describe('nested template — recursive HTML.X dispatch', () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
     const factory = await page.connectActor('factory.bv');
 
-    await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
+    await factory.sendAsync({ id: '1', op: 'create', from: 'caller' });
 
     const p = await page.connectActor('HTML p 1');
     await expectBehavior(p,
-      { input: { id: 'q1', op: '@inner_html' } },
+      { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
     );
   });

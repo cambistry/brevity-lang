@@ -42,8 +42,8 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Scene node' } },
+      { input: { id: '1', op: 'build.', from: 'caller' } },
+      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '$new'], to: 'Scene node' } },
     );
   });
 
@@ -56,8 +56,8 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     `;
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Canvas', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '#new'], to: 'Canvas node' } },
+      { input: { id: '1', op: 'build.', from: 'caller' } },
+      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '$new'], to: 'Canvas node' } },
     );
   });
 
@@ -72,12 +72,12 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       node (Anything) -> (Anything)
       leaf (Anything) -> (Anything)
     }` }] } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
     // The inner <leaf> is pre-dispatched as its own #new to `Scene leaf`; the
     // outer <node> #new awaits that child's address before it can fire, so with
     // no service answering, only the child send is observable here. That it
     // routes to the imported host (not a privileged `HTML`) is the point.
-    const leafSend = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new' && p.to === 'Scene leaf');
+    const leafSend = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new' && p.to === 'Scene leaf');
     expect(leafSend).toBeTruthy();
     expect(leafSend.op[0]).toEqual({ children: ['deep'] });
   });
@@ -97,16 +97,16 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
 
   it('carries the reactive hole to the host service as a local-form lambda ref', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
-    const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
+    await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
+    const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new');
     expect(post.to).toBe('Scene node');
     expect(post.op[0].label).toMatch(/^#<\. @\d+>$/);
   });
 
   it('runs the reactive lambda when the host invokes the reference through CAM', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
-    await actor.sendAsync({ id: '1', op: '@build.', from: 'caller' });
-    const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
+    await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
+    const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new');
     const name = post.op[0].label.slice('#<. '.length, -1); // '#<. @0>' → '@0'
 
     const before = actor.posts.length;

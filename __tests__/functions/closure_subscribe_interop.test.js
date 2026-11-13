@@ -42,36 +42,36 @@ describe('closure-subscribe — multi-ref capture', () => {
 
   it('initial re reflects composite of both captured refs', async () => {
     await expectBehavior(twoTextRefs,
-      { input: { id: '1', op: '@subscribe', to: '. @0', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. @0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
     );
   });
 
   it('mutation of first captured ref replays composite', async () => {
     await expectBehavior(twoTextRefs,
-      { input: { id: '1', op: '@subscribe', to: '. @0', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. @0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'hi' }, '@setA.'], 'ty': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'hi' }, 'setA.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi world'], to: 'c' } },
     );
   });
 
   it('mutation of second captured ref replays composite', async () => {
     await expectBehavior(twoTextRefs,
-      { input: { id: '1', op: '@subscribe', to: '. @0', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. @0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'earth' }, '@setB.'], 'ty': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'earth' }, 'setB.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hello earth'], to: 'c' } },
     );
   });
 
   it('successive mutations of different refs each produce their own replay', async () => {
     await expectBehavior(twoTextRefs,
-      { input: { id: '1', op: '@subscribe', to: '. @0', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. @0', from: 'c' } },
       { output: { id: '1', re: ['hello world'], to: 'c' } },
-      { input: { id: '2', op: [{ v: 'hi' }, '@setA.'], 'ty': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 'hi' }, 'setA.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi world'], to: 'c' } },
-      { input: { id: '3', op: [{ v: 'there' }, '@setB.'], 'ty': [{ v: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [{ v: 'there' }, 'setB.'], 'ty': [{ v: 'Text' }], from: 'c' } },
       { output: { id: '1', re: ['hi there'], to: 'c' } },
     );
   });
@@ -88,11 +88,11 @@ describe('closure-subscribe — multi-ref capture', () => {
 
   it('Integer composite replays on either dep mutation', async () => {
     await expectBehavior(twoIntegerRefs,
-      { input: { id: '1', op: '@subscribe', to: '. @0', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. @0', from: 'c' } },
       { output: { id: '1', re: [5], to: 'c' } },
-      { input: { id: '2', op: [{ v: 10 }, '@setA.'], 'ty': [{ v: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [{ v: 10 }, 'setA.'], 'ty': [{ v: 'Integer' }], from: 'c' } },
       { output: { id: '1', re: [13], to: 'c' } },
-      { input: { id: '3', op: [{ v: 100 }, '@setB.'], 'ty': [{ v: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [{ v: 100 }, 'setB.'], 'ty': [{ v: 'Integer' }], from: 'c' } },
       { output: { id: '1', re: [110], to: 'c' } },
     );
   });
@@ -125,7 +125,7 @@ describe('closure-subscribe — payload-carried address', () => {
 
   it('handler reply carries closure address; subscribing to it yields initial re', async () => {
     const actor = await createActor(publisherWithGetAddr);
-    await actor.sendAsync({ id: 'A', op: '@getAddr', from: 'c' });
+    await actor.sendAsync({ id: 'A', op: 'getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
     expect(reply).toEqual(expect.objectContaining({ id: 'A', re: { ref: '#<. @0>' }, to: 'c' }));
 
@@ -134,22 +134,22 @@ describe('closure-subscribe — payload-carried address', () => {
     expect(selector).toBe('. @0');
 
     const postsBefore = actor.posts.length;
-    await actor.sendAsync({ id: 'S', op: '@subscribe', to: selector, from: 'c' });
+    await actor.sendAsync({ id: 'S', op: '$subscribe', to: selector, from: 'c' });
     expect(actor.posts[postsBefore]).toEqual({ id: 'S', re: ['initial'], to: 'c' });
   });
 
   it('subsequent set on captured ref replays to the subscriber', async () => {
     const actor = await createActor(publisherWithGetAddr);
-    await actor.sendAsync({ id: 'A', op: '@getAddr', from: 'c' });
+    await actor.sendAsync({ id: 'A', op: 'getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
     const selector = /^#<(.+)>$/.exec(reply.re.ref)[1];
 
-    await actor.sendAsync({ id: 'S', op: '@subscribe', to: selector, from: 'c' });
+    await actor.sendAsync({ id: 'S', op: '$subscribe', to: selector, from: 'c' });
     const postsBefore = actor.posts.length;
 
     await actor.sendAsync({
       id: 'B',
-      op: [{ v: 'updated' }, '@bump.'],
+      op: [{ v: 'updated' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'c',
     });
@@ -173,8 +173,8 @@ describe('closure-subscribe — payload-carried address', () => {
   it('two address handles route to independent closures', async () => {
     const actor = await createActor(publisherWithTwoClosures);
 
-    await actor.sendAsync({ id: 'A', op: '@getContentAddr', from: 'c' });
-    await actor.sendAsync({ id: 'B', op: '@getMetaAddr', from: 'c' });
+    await actor.sendAsync({ id: 'A', op: 'getContentAddr', from: 'c' });
+    await actor.sendAsync({ id: 'B', op: 'getMetaAddr', from: 'c' });
     const replyA = actor.posts.find(p => p.id === 'A');
     const replyB = actor.posts.find(p => p.id === 'B');
     const selectorA = /^#<(.+)>$/.exec(replyA.re.ref)[1];
@@ -182,14 +182,14 @@ describe('closure-subscribe — payload-carried address', () => {
     expect(selectorA).toBe('. @0');
     expect(selectorB).toBe('. @1');
 
-    await actor.sendAsync({ id: 'SA', op: '@subscribe', to: selectorA, from: 'subA' });
-    await actor.sendAsync({ id: 'SB', op: '@subscribe', to: selectorB, from: 'subB' });
+    await actor.sendAsync({ id: 'SA', op: '$subscribe', to: selectorA, from: 'subA' });
+    await actor.sendAsync({ id: 'SB', op: '$subscribe', to: selectorB, from: 'subB' });
 
     // Mutate content only — subA replays, subB does not.
     const postsBefore = actor.posts.length;
     await actor.sendAsync({
       id: 'M1',
-      op: [{ v: 'c-new' }, '@bumpContent.'],
+      op: [{ v: 'c-new' }, 'bumpContent.'],
       'ty': [{ v: 'Text' }],
       from: 'c',
     });
@@ -234,7 +234,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
       if (msg.to !== 'sub' || !Array.isArray(msg.re)) continue;
       await subActor.sendAsync({
         id: 'r-' + msg.id,
-        op: [{ v: msg.re[0] }, '@routedRe.'],
+        op: [{ v: msg.re[0] }, 'routedRe.'],
         'ty': [{ v: 'Text' }],
         from: 'router',
       });
@@ -249,11 +249,11 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     // Driver posts subscribe on behalf of `sub` — this is the role the
     // subscriber's runtime (e.g. HTML on browser) would play.
-    await pub.sendAsync({ id: 'S1', op: '@subscribe', to: '. @0', from: 'sub' });
+    await pub.sendAsync({ id: 'S1', op: '$subscribe', to: '. @0', from: 'sub' });
     await routeReInto(pub, pubPrev, sub);
 
     // Read the subscriber's state — should reflect the forwarded initial re.
-    await sub.sendAsync({ id: 'Q', op: '@readReceived', from: 'caller' });
+    await sub.sendAsync({ id: 'Q', op: 'readReceived', from: 'caller' });
     const reply = sub.posts.find(p => p.id === 'Q');
     expect(reply).toEqual(expect.objectContaining({
       id: 'Q',
@@ -267,12 +267,12 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     const sub = await createActor(subscriber);
     let pubPrev = pub.posts.length;
 
-    await pub.sendAsync({ id: 'S1', op: '@subscribe', to: '. @0', from: 'sub' });
+    await pub.sendAsync({ id: 'S1', op: '$subscribe', to: '. @0', from: 'sub' });
     pubPrev = await routeReInto(pub, pubPrev, sub);
 
     await pub.sendAsync({
       id: 'B1',
-      op: [{ v: 'first' }, '@bump.'],
+      op: [{ v: 'first' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'caller',
     });
@@ -280,13 +280,13 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     await pub.sendAsync({
       id: 'B2',
-      op: [{ v: 'second' }, '@bump.'],
+      op: [{ v: 'second' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'caller',
     });
     await routeReInto(pub, pubPrev, sub);
 
-    await sub.sendAsync({ id: 'Q', op: '@readReceived', from: 'caller' });
+    await sub.sendAsync({ id: 'Q', op: 'readReceived', from: 'caller' });
     const reply = sub.posts.find(p => p.id === 'Q');
     expect(reply).toEqual(expect.objectContaining({
       id: 'Q',
@@ -302,8 +302,8 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     let pubPrev = pub.posts.length;
 
     // Two distinct subscribe ids from two distinct subscriber addresses.
-    await pub.sendAsync({ id: 'SA', op: '@subscribe', to: '. @0', from: 'subA' });
-    await pub.sendAsync({ id: 'SB', op: '@subscribe', to: '. @0', from: 'subB' });
+    await pub.sendAsync({ id: 'SA', op: '$subscribe', to: '. @0', from: 'subA' });
+    await pub.sendAsync({ id: 'SB', op: '$subscribe', to: '. @0', from: 'subB' });
 
     // Route the initial replies (pub addresses them to 'subA' and 'subB').
     async function drainPubTo(addr, target) {
@@ -312,7 +312,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
         if (msg.to !== addr || !Array.isArray(msg.re)) continue;
         await target.sendAsync({
           id: 'r-' + msg.id,
-          op: [{ v: msg.re[0] }, '@routedRe.'],
+          op: [{ v: msg.re[0] }, 'routedRe.'],
           'ty': [{ v: 'Text' }],
           from: 'router',
         });
@@ -324,15 +324,15 @@ describe('closure-subscribe — inter-actor shepherded', () => {
 
     await pub.sendAsync({
       id: 'B',
-      op: [{ v: 'broadcast' }, '@bump.'],
+      op: [{ v: 'broadcast' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'caller',
     });
     await drainPubTo('subA', subA);
     await drainPubTo('subB', subB);
 
-    await subA.sendAsync({ id: 'QA', op: '@readReceived', from: 'caller' });
-    await subB.sendAsync({ id: 'QB', op: '@readReceived', from: 'caller' });
+    await subA.sendAsync({ id: 'QA', op: 'readReceived', from: 'caller' });
+    await subB.sendAsync({ id: 'QB', op: 'readReceived', from: 'caller' });
     expect(subA.posts.find(p => p.id === 'QA')).toEqual(expect.objectContaining({
       re: { received: 'broadcast' },
     }));

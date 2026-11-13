@@ -30,7 +30,7 @@ describe('payload shape — named only is {k: v}', () => {
   it('a construction', async () => {
     await createActor(source, {
       expects: [
-        { output: { id: '1', op: [{ a: 5 }, '#new'], ty: [{ a: 'Integer' }], to: 'Thing' } },
+        { output: { id: '1', op: [{ a: 5 }, '$new'], ty: [{ a: 'Integer' }], to: 'Thing' } },
       ],
     });
   });
@@ -39,8 +39,8 @@ describe('payload shape — named only is {k: v}', () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '90', op: '@go', from: 'c' } },
-      { output: { id: '2', op: [{ k: 1 }, '@put'], to: 'Thing/1' } },
+      { input: { id: '90', op: 'go', from: 'c' } },
+      { output: { id: '2', op: [{ k: 1 }, 'put'], to: 'Thing/1' } },
       { input: { id: '2', re: { value: 42 } } },
       { output: { id: '90', re: { value: 42 }, 'ty': { value: 'Integer' }, to: 'c' } },
     );
@@ -50,8 +50,8 @@ describe('payload shape — named only is {k: v}', () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '91', op: '@note.', from: 'c' } },
-      { output: expect.objectContaining({ op: [{ k: 2 }, '@ping.'], to: 'Thing/1' }) },
+      { input: { id: '91', op: 'note.', from: 'c' } },
+      { output: expect.objectContaining({ op: [{ k: 2 }, 'ping.'], to: 'Thing/1' }) },
     );
   });
 
@@ -59,7 +59,7 @@ describe('payload shape — named only is {k: v}', () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '92', op: '@self', from: 'c' } },
+      { input: { id: '92', op: 'self', from: 'c' } },
       { output: { id: '92', re: { k: 3 }, 'ty': { k: 'Integer' }, to: 'c' } },
     );
   });
@@ -70,8 +70,8 @@ describe('payload shape — mixed is [p, {k: v}]', () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '94', op: '@sum', from: 'c' } },
-      { output: expect.objectContaining({ op: [[7, { k: 8 }], '@add'], to: 'Thing/1' }) },
+      { input: { id: '94', op: 'sum', from: 'c' } },
+      { output: expect.objectContaining({ op: [[7, { k: 8 }], 'add'], to: 'Thing/1' }) },
     );
   });
 
@@ -79,8 +79,8 @@ describe('payload shape — mixed is [p, {k: v}]', () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
-      { input: { id: '93', op: '@both.', from: 'c' } },
-      { output: expect.objectContaining({ op: [[7, { k: 8 }], '@mix.'], to: 'Thing/1' }) },
+      { input: { id: '93', op: 'both.', from: 'c' } },
+      { output: expect.objectContaining({ op: [[7, { k: 8 }], 'mix.'], to: 'Thing/1' }) },
     );
   });
 });

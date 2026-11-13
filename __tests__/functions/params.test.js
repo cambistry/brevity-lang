@@ -79,70 +79,70 @@ describe('function params — all forms', () => {
 
   it('(:name) ->  binds named field', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@namedSigil', from: 'c' } },
+      { input: { id: '1', op: 'namedSigil', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('(n: Integer) ->  typed sigil', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@namedTyped', from: 'c' } },
+      { input: { id: '2', op: 'namedTyped', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(label: x) ->  binds key to local name', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@keyMapped', from: 'c' } },
+      { input: { id: '3', op: 'keyMapped', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(first: a, last: b) ->  two key-mapped params', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@keyMappedTwo', from: 'c' } },
+      { input: { id: '4', op: 'keyMappedTwo', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(label: x Integer) ->  key-mapped with type', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@keyMappedTyped', from: 'c' } },
+      { input: { id: '5', op: 'keyMappedTyped', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('(a, :b) ->  positional + named', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@mixedPosNamed', from: 'c' } },
+      { input: { id: '6', op: 'mixedPosNamed', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(:a, :b) ->  two named-only params', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@twoNamed', from: 'c' } },
+      { input: { id: '7', op: 'twoNamed', from: 'c' } },
       { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
 
   it('(a, b) ->  untyped positional', async () => {
     await expectBehavior(script,
-      { input: { id: '8', op: '@twoPosUntyped', from: 'c' } },
+      { input: { id: '8', op: 'twoPosUntyped', from: 'c' } },
       { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('(a Integer, b Integer) ->  typed positional', async () => {
     await expectBehavior(script,
-      { input: { id: '9', op: '@twoPosTyped', from: 'c' } },
+      { input: { id: '9', op: 'twoPosTyped', from: 'c' } },
       { output: { id: '9', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('no params — bare braces { 42 }', async () => {
     await expectBehavior(script,
-      { input: { id: '10', op: '@noParam', from: 'c' } },
+      { input: { id: '10', op: 'noParam', from: 'c' } },
       { output: { id: '10', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
@@ -239,49 +239,49 @@ describe('function params — optional defaults', () => {
 
   it('positional default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@posDefault', from: 'c' } },
+      { input: { id: '1', op: 'posDefault', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
     );
   });
 
   it('positional default — provided', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@posDefaultProvided', from: 'c' } },
+      { input: { id: '2', op: 'posDefaultProvided', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
     );
   });
 
   it('inferred default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@inferredDefault', from: 'c' } },
+      { input: { id: '3', op: 'inferredDefault', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 107 }, to: 'c' } },
     );
   });
 
   it('named default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@namedDefault', from: 'c' } },
+      { input: { id: '4', op: 'namedDefault', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 53 }, to: 'c' } },
     );
   });
 
   it('named default — provided', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@namedDefaultProvided', from: 'c' } },
+      { input: { id: '5', op: 'namedDefaultProvided', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('mixed positional + named default — named omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@mixedDefault', from: 'c' } },
+      { input: { id: '6', op: 'mixedDefault', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
     );
   });
 
   it('string default — omitted', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@stringDefault', from: 'c' } },
+      { input: { id: '7', op: 'stringDefault', from: 'c' } },
       { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
@@ -317,20 +317,20 @@ describe('function params — expression defaults', () => {
     { output: { id: '1', re: [value], to: 'c' } },
   );
 
-  it('an omitted arg takes the expression', () => reads({ op: [[1], '@sum'], 'ty': [['Integer']] }, 4));
-  it('a given arg wins', () => reads({ op: [[1, 5], '@sum'], 'ty': [['Integer', 'Integer']] }, 6));
-  it('a default reads an earlier param', () => reads({ op: [[3], '@fromEarlier'], 'ty': [['Integer']] }, 9));
-  it('a default reads a later param', () => reads({ op: '@fromLater' }, 21));
-  it('a default reads a later param given by name', () => reads({ op: [{ b: 4 }, '@fromLater'], 'ty': [{ b: 'Integer' }] }, 9));
-  it('a default calls a file-level function', () => reads({ op: [[3], '@fromFile'], 'ty': [['Integer']] }, 9));
-  it('a negative literal default', () => reads({ op: '@negative' }, -1));
-  it('an omitted positional with a named arg given', () => reads({ op: [{ b: 4 }, '@literals'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('an omitted arg takes the expression', () => reads({ op: [[1], 'sum'], 'ty': [['Integer']] }, 4));
+  it('a given arg wins', () => reads({ op: [[1, 5], 'sum'], 'ty': [['Integer', 'Integer']] }, 6));
+  it('a default reads an earlier param', () => reads({ op: [[3], 'fromEarlier'], 'ty': [['Integer']] }, 9));
+  it('a default reads a later param', () => reads({ op: 'fromLater' }, 21));
+  it('a default reads a later param given by name', () => reads({ op: [{ b: 4 }, 'fromLater'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('a default calls a file-level function', () => reads({ op: [[3], 'fromFile'], 'ty': [['Integer']] }, 9));
+  it('a negative literal default', () => reads({ op: 'negative' }, -1));
+  it('an omitted positional with a named arg given', () => reads({ op: [{ b: 4 }, 'literals'], 'ty': [{ b: 'Integer' }] }, 9));
   it('a private function takes one too', () => expectBehavior(script,
-    { input: { id: '1', op: '@local', from: 'c' } },
+    { input: { id: '1', op: 'local', from: 'c' } },
     { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 106 }, to: 'c' } },
   ));
   it('a private function\'s default reads a later param', () => expectBehavior(script,
-    { input: { id: '1', op: '@localLater', from: 'c' } },
+    { input: { id: '1', op: 'localLater', from: 'c' } },
     { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9 }, to: 'c' } },
   ));
 

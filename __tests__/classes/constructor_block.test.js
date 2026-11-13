@@ -60,14 +60,14 @@ describe('a self-call in a constructor block', () => {
 
   it('runs in the file\'s constructor', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@file', from: 'c' } },
+      { input: { id: '1', op: 'file', from: 'c' } },
       { output: { id: '1', re: [3, 5, 7, 9, 8], 'ty': ['Integer', 'Integer', 'Integer', 'Integer', 'Integer'], to: 'c' } },
     );
   });
 
   it('runs in a class\'s constructor, in order', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@child', from: 'c' } },
+      { input: { id: '1', op: 'child', from: 'c' } },
       { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -105,14 +105,14 @@ describe('a write in a constructor block', () => {
 
   it('runs in the file\'s constructor', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@file', from: 'c' } },
+      { input: { id: '1', op: 'file', from: 'c' } },
       { output: { id: '1', re: [2, 4, 2], 'ty': ['Integer', 'Integer', 'Integer'], to: 'c' } },
     );
   });
 
   it('runs in a class\'s constructor', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@child', from: 'c' } },
+      { input: { id: '1', op: 'child', from: 'c' } },
       { output: { id: '1', re: [11], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -160,8 +160,8 @@ describe('a class calling its file\'s dependency', () => {
 
   it('is made by its file actor', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@made!', from: 'c' } },
-      { output: expect.objectContaining({ op: '@note.', to: 'Svc' }) },
+      { input: { id: '1', op: 'made!', from: 'c' } },
+      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -170,8 +170,8 @@ describe('a class calling its file\'s dependency', () => {
   // the call went out with. The caller's reply waits for Svc's.
   it('gets its reply back through its file actor, from a method', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@called!', from: 'c' });
-    const call = actor.posts.find(p => p.op === '@ping!');
+    await actor.sendAsync({ id: '1', op: 'called!', from: 'c' });
+    const call = actor.posts.find(p => p.op === 'ping!');
     expect(call).toEqual(expect.objectContaining({ to: 'Svc' }));
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([]);
     await actor.sendAsync({ id: call.id, re: '#<Svc>', from: 'Svc' });
@@ -182,10 +182,10 @@ describe('a class calling its file\'s dependency', () => {
   // already used.
   it('goes out under an id of the file actor\'s', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@both!', from: 'c' });
-    const first = actor.posts.find(p => p.op === '@ping!');
+    await actor.sendAsync({ id: '1', op: 'both!', from: 'c' });
+    const first = actor.posts.find(p => p.op === 'ping!');
     await actor.sendAsync({ id: first.id, re: '#<Svc>', from: 'Svc' });
-    const second = actor.posts.filter(p => p.op === '@ping!')[1];
+    const second = actor.posts.filter(p => p.op === 'ping!')[1];
     expect(second).toEqual(expect.objectContaining({ to: 'Svc' }));
     expect(second.id).not.toEqual(first.id);
     await actor.sendAsync({ id: second.id, re: '#<Svc>', from: 'Svc' });
@@ -220,13 +220,13 @@ describe('a class using an actor it got from a dependency', () => {
   // The file actor sends them all, so no two share an id.
   it('constructs it and calls it, through its file actor', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@run!', from: 'c' });
-    const ping = actor.posts.find(p => p.op === '@ping!');
+    await actor.sendAsync({ id: '1', op: 'run!', from: 'c' });
+    const ping = actor.posts.find(p => p.op === 'ping!');
     await actor.sendAsync({ id: ping.id, re: '#<Svc>', from: 'Svc' });
-    const made = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '#new');
-    expect(made).toEqual(expect.objectContaining({ op: [[], '#new'], to: 'Svc Thing' }));
+    const made = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new');
+    expect(made).toEqual(expect.objectContaining({ op: [[], '$new'], to: 'Svc Thing' }));
     await actor.sendAsync({ id: made.id, re: '#<Svc Thing 1>', 'ty': 'Svc Thing', from: 'Svc' });
-    const poke = actor.posts.find(p => p.op === '@poke!');
+    const poke = actor.posts.find(p => p.op === 'poke!');
     expect(poke).toEqual(expect.objectContaining({ to: 'Svc Thing 1' }));
     expect(new Set([ping.id, made.id, poke.id]).size).toBe(3);
     await actor.sendAsync({ id: poke.id, re: '#<Svc Thing 1>', from: 'Svc Thing 1' });

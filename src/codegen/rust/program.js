@@ -1,5 +1,5 @@
 // program.js — Program assembly and entry for Rust codegen
-import { wireLabel, addressToken } from '../wire_labels.js';
+import { addressToken, intrinsicArm, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import * as AST from '../../ast.js';
 import {
@@ -468,8 +468,8 @@ ${[...G.ctx.stateVarNames].map(n =>
       const childActor = actors.find(a => a.name === calleeName);
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
-      // A target is a run of wire labels: .o.inner
-      const path = `${pathPrefix}${wireLabel(s.name)}`;
+      // A target is a run of wire names, space-delimited: `~o ~inner`
+      const path = pathPrefix ? `${pathPrefix} ${wireLabel(s.name)}` : wireLabel(s.name);
       const savedCtx = G.ctx; G.ctx = { ...G.ctx, childStatePrefix: parentPrefix };
       const refKey = stateKey(s.name);
       G.ctx = savedCtx;
@@ -510,7 +510,7 @@ ${getClauses}
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
-                            self.child_${r.prefix}_dispatch_at(bv_inst_id(&_r), "set", &p, "", "__parent");
+                            self.child_${r.prefix}_dispatch_at(bv_inst_id(&_r), "$set", &p, "", "__parent");
                         }
                         return;
                     }`;
@@ -545,10 +545,10 @@ ${[...G.ctx.stateVarNames].map(n => {
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
-            self.handle_op("set", &json!({}), &payload, "__test", id);
+            self.handle_op("$set", &json!({}), &payload, "__test", id);
         } else if let Some(upd_val) = test.get("update") {
             let payload = if upd_val.is_array() { upd_val.clone() } else if upd_val.is_object() { upd_val.clone() } else { json!([upd_val]) };
-            self.handle_op("update", &json!({}), &payload, "__test", id);
+            self.handle_op("$update", &json!({}), &payload, "__test", id);
         } else if let Some(op) = test.get("op") {
             let (op_name, payload): (String, Value) = if let Some(s) = op.as_str() {
                 (s.to_string(), json!({}))
@@ -557,15 +557,12 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
                 (name, p)
             } else { return; };
-            // A #set with a to sets the cell it names, as on the wire.
-            let op_name = match (op_name.as_str(), test.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector)) {
-                ("#set", Some(sel)) => format!("set{}", sel),
-                ("#set", None) => "set".to_string(),
-                _ => op_name,
-            };
+            // An intrinsic with a to names its target, as on the wire.
+            let wire_op = op_name.clone();
+            let op_name = bv_op_key(&op_name, test.get("to").and_then(|v| v.as_str()));
             let (re, ty_re, handled) = self.handle_op(&op_name, &json!({}), &payload, "__test", id);
             if !handled {
-                let mut ex = Map::new(); ex.insert(op_name, json!("unhandled"));
+                let mut ex = Map::new(); ex.insert(wire_op, json!("unhandled"));
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
             } else if let Some(re_val) = re {
@@ -700,24 +697,20 @@ ${bodyLines}
 
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
-        // Generic subscribe prologue: intercept subscribe@<T> / subscribe#<T>,
-        // stash the sub in cell_subs (keyed by the whole label, @a), and recurse with the rewritten op_name
-        // so the normal getter arm produces the initial re. Subscribe is an
-        // implicit affordance on every public getter; no per-name handler is
-        // declared.
-        if op_name.starts_with("subscribe@") || op_name.starts_with("subscribe#") {
-            let sigil = op_name.chars().nth("subscribe".len()).unwrap_or('@');
-            let target = &op_name["subscribe".len() + 1..];
+        // \`$subscribe\` to a target: stash the sub in cell_subs, keyed by the
+        // target's wire name (\`a\`, \`~a\`, \`#a\`), and recurse with the target as
+        // the op, so its own arm produces the initial re.
+        if let Some(target) = op_name.strip_prefix("$subscribe ") {
             let sub_args = match message.get("op") {
                 Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
                 _ => Value::Null,
             };
             let sub_ty = message.get("ty").cloned().unwrap_or(Value::Null);
             self.cell_subs
-                .entry(format!("{}{}", sigil, target))
+                .entry(target.to_string())
                 .or_insert_with(Vec::new)
                 .push((id.to_string(), from.to_string(), sub_args, sub_ty));
-            let rewritten = format!("{}{}", sigil, target);
+            let rewritten = target.to_string();
             return self.handle_op(&rewritten, message, payload, from, id);
         }
         // Slice 12 inbound: reconstruct any ::Name-tagged type values
@@ -857,10 +850,13 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
 
     // A class reading a cell of an actor it's declared in, level actors up the chain
     // (src/outer_reads.js). That actor's state is in self.state, set aside while one of
-    // its classes runs, or in its pool.
+    // its classes runs, or in its pool. Construction runs in text order, so the cell
+    // is declared by the time a class reads it; one that isn't is a codegen bug, not
+    // a null (the other targets hold such a read until the cell's line runs).
     fn outer_read(&self, level: usize, key: &str) -> Value {
         let owner = self.state.get("__outers").and_then(|v| v.as_array()).and_then(|a| a.get(level - 1)).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        self.state_of(&owner).and_then(|s| s.get(key)).cloned().unwrap_or(Value::Null)
+        let state = self.state_of(&owner).unwrap_or_else(|| panic!("outer read of {}: no actor {:?}", key, owner));
+        state.get(key).cloned().unwrap_or_else(|| panic!("outer read of {} before it is declared in {:?}", key, owner))
     }
 
     fn state_of(&self, owner: &str) -> Option<&std::collections::HashMap<String, Value>> {
@@ -909,7 +905,7 @@ ${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(
             Ok((re, ty_re, handled)) => {
                 if !handled {
                     let mut ex = Map::new();
-                    ex.insert(op_name.clone(), json!("unhandled"));
+                    ex.insert(wire_op.clone(), json!("unhandled"));
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
                     resp.insert("ex".to_string(), Value::Object(ex));
@@ -928,7 +924,7 @@ ${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(
             }
             Err(e) => {
                 let mut ex = Map::new();
-                ex.insert(op_name.clone(), bv_panic_ex(&e));
+                ex.insert(wire_op.clone(), bv_panic_ex(&e));
                 let mut resp = Map::new();
                 resp.insert("id".to_string(), json!(id));
                 resp.insert("ex".to_string(), Value::Object(ex));
@@ -1045,14 +1041,14 @@ fn bv_inst_id_opt(v: &Value) -> Option<u32> {
 }
 fn bv_inst_id(v: &Value) -> u32 { bv_inst_id_opt(v).unwrap_or(0) }
 
-// Reference-field invocation: the op selector to send to the address a
-// reference field holds. An address "#<alias member>" resolves to the label of
-// its last token ("#<x p>" is "@p", "#<. @0>" is "@0"); a bare address passes
-// through unchanged.
+// Reference-field invocation: the op to send to the address a reference field
+// holds. An address "#<alias member>" names its member by its last token, and
+// the token is the op ("#<x p>" is "p", "#<. @0>" is "@0"); a bare address
+// passes through unchanged.
 fn bv_sel(addr: &str) -> String {
     if addr.starts_with("#<") && addr.ends_with('>') {
         match bv_opre_split(&addr[2..addr.len() - 1]).last() {
-            Some(Some(t)) => bv_label_of(t),
+            Some(Some(t)) => t.clone(),
             _ => addr.to_string(),
         }
     } else {
@@ -1824,27 +1820,11 @@ ${handleOpMethod}
         } else {
             return;
         };
-        // Wire-to-internal normalization: strip '#' from system ops, then
-        // "@subscribe"/"set" carry their selector in the to-field.
-        let op_name = match op_name.as_str() {
-            "#new" | "#set" | "#update" | "#call" => op_name[1..].to_string(),
-            _ => op_name,
-        };
-        let op_name = match op_name.as_str() {
-            "@subscribe" => {
-                match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
-                    Some(sel) => format!("subscribe{}", sel),
-                    None => op_name,
-                }
-            }
-            "set" | "new" => {
-                match message.get("to").and_then(|v| v.as_str()).and_then(extract_to_selector) {
-                    Some(sel) => format!("{}{}", op_name, sel),
-                    None => op_name,
-                }
-            }
-            _ => op_name,
-        };
+        // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
+        // function as the last token of \`to\` (\`. val\`, \`. Box\`), relative to us.
+        // Its arm is keyed by the pair, op then target: "$set val".
+        let wire_op = op_name.clone();
+        let op_name = bv_op_key(&op_name, message.get("to").and_then(|v| v.as_str()));
         let has_payload = match &raw_payload {
             Some(Value::Object(m)) => !m.is_empty(),
             Some(Value::Array(a)) => !a.is_empty(),
@@ -1859,7 +1839,7 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address (
         });
 ` : ''}        if has_payload && message.get("ty").is_none() {
             let mut ex = Map::new();
-            ex.insert(op_name.clone(), json!("schema_required"));
+            ex.insert(wire_op.clone(), json!("schema_required"));
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("ex".to_string(), Value::Object(ex));
@@ -1889,7 +1869,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
             match outcome {
                 Ok(_) if unhandled => {
                     let mut ex = Map::new();
-                    ex.insert(op_name.clone(), json!("unhandled"));
+                    ex.insert(wire_op.clone(), json!("unhandled"));
                     resp.insert("ex".to_string(), Value::Object(ex));
                 }
                 Ok(Value::Null) => return,
@@ -1905,7 +1885,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 }
                 Err(e) => {
                     let mut ex = Map::new();
-                    ex.insert(op_name.clone(), bv_panic_ex(&e));
+                    ex.insert(wire_op.clone(), bv_panic_ex(&e));
                     resp.insert("ex".to_string(), Value::Object(ex));
                 }
             }

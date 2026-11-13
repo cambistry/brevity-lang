@@ -38,49 +38,49 @@ describe('type declarations + typed RHS', () => {
 
   it('x : Integer before assignment — decl then use', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@declThenUse', from: 'c' } },
+      { input: { id: '1', op: 'declThenUse', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('x = 1 as Integer — typed RHS', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@typedInt', from: 'c' } },
+      { input: { id: '2', op: 'typedInt', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('x = "hello" as Text — typed RHS string', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@typedText', from: 'c' } },
+      { input: { id: '3', op: 'typedText', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('x = (a + b) as Integer — typed RHS expression', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, '@typedExpr'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ a: 3, b: 4 }, 'typedExpr'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('x Integer = 2 as Integer — type on both sides', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@bothSides', from: 'c' } },
+      { input: { id: '5', op: 'bothSides', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
   it('x = 1 as Integer then x : Integer — hoisting', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@hoisting', from: 'c' } },
+      { input: { id: '6', op: 'hoisting', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
   it('x : Integer declared three times — all legal', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@tripleDecl', from: 'c' } },
+      { input: { id: '7', op: 'tripleDecl', from: 'c' } },
       { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
     );
   });

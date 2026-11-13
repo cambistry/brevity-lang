@@ -82,23 +82,23 @@ describe('ephemeral process actors', () => {
   `;
 
   it('no-arg ephemeral — inline construct and call', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@noArg', from: 'c' } }, { output: { id: '1', 'ty': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'noArg', from: 'c' } }, { output: { id: '1', 'ty': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } });
   });
 
   it('ephemeral with positional arg to method', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@methodArg', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'methodArg', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } });
   });
 
   it('ephemeral with class arg — read back via accessor', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@initArg', from: 'c' } }, { output: { id: '3', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'initArg', from: 'c' } }, { output: { id: '3', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
   it('ephemeral with multiple class args', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@multiInit', from: 'c' } }, { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'multiInit', from: 'c' } }, { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 10 }, to: 'c' } });
   });
 
   it('ephemeral with class arg and method arg', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@initAndMethod', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'initAndMethod', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 });
 
@@ -148,14 +148,14 @@ describe('ephemeral process — optional class args', () => {
   `;
 
   it('ephemeral with provided class arg', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@withArg', from: 'c' } }, { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'withArg', from: 'c' } }, { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } });
   });
 
   it('ephemeral with default class arg', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@withDefault', from: 'c' } }, { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'withDefault', from: 'c' } }, { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 0 }, to: 'c' } });
   });
 
   it('ephemeral with partial args — default fills in', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@partialArgs', from: 'c' } }, { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 13 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'partialArgs', from: 'c' } }, { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 13 }, to: 'c' } });
   });
 });

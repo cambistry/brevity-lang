@@ -19,21 +19,21 @@ const script = `
 describe('subscribe — initial value', () => {
   it('integer cell: first re carries current value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'subscribe@val', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. val', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [0], to: 'c' } },
     );
   });
 
   it('text cell: first re carries current text', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'subscribe@label', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. label', from: 'c' } },
       { output: { id: '1', 'ty': ['Text'], re: ['hi'], to: 'c' } },
     );
   });
 
   it('boolean cell: first re carries current flag', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'subscribe@flag', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. flag', from: 'c' } },
       { output: { id: '1', 'ty': ['Boolean'], re: [false], to: 'c' } },
     );
   });
@@ -42,31 +42,31 @@ describe('subscribe — initial value', () => {
 describe('subscribe — replay on set', () => {
   it('set after subscribe replays new value with same id', async () => {
     await expectBehavior(script,
-      { input: { id: '9', op: 'subscribe@val', from: 'c' } },
+      { input: { id: '9', op: '$subscribe', to: '. val', from: 'c' } },
       { output: { id: '9', 'ty': ['Integer'], re: [0], to: 'c' } },
-      { input: { op: [[7], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[7], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: '9', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
   });
 
   it('multiple sets each replay', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'subscribe@val', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. val', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [0], to: 'c' } },
-      { input: { op: [[10], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[10], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [10], to: 'c' } },
-      { input: { op: [[20], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[20], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [20], to: 'c' } },
-      { input: { op: [[30], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[30], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [30], to: 'c' } },
     );
   });
 
   it('text cell replays on set', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: 'subscribe@label', from: 'c' } },
+      { input: { id: '5', op: '$subscribe', to: '. label', from: 'c' } },
       { output: { id: '5', 'ty': ['Text'], re: ['hi'], to: 'c' } },
-      { input: { op: [['bye'], 'set@label'], 'ty': [['Text']], from: 'c' } },
+      { input: { op: [['bye'], '$set'], to: '. label', 'ty': [['Text']], from: 'c' } },
       { output: { id: '5', 'ty': ['Text'], re: ['bye'], to: 'c' } },
     );
   });
@@ -75,11 +75,11 @@ describe('subscribe — replay on set', () => {
 describe('subscribe — multiple subscribers', () => {
   it('two subscribers each receive replays under their own ids', async () => {
     await expectBehavior(script,
-      { input: { id: 'A', op: 'subscribe@val', from: 'a' } },
+      { input: { id: 'A', op: '$subscribe', to: '. val', from: 'a' } },
       { output: { id: 'A', 'ty': ['Integer'], re: [0], to: 'a' } },
-      { input: { id: 'B', op: 'subscribe@val', from: 'b' } },
+      { input: { id: 'B', op: '$subscribe', to: '. val', from: 'b' } },
       { output: { id: 'B', 'ty': ['Integer'], re: [0], to: 'b' } },
-      { input: { op: [[42], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[42], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: 'A', 'ty': ['Integer'], re: [42], to: 'a' } },
       { output: { id: 'B', 'ty': ['Integer'], re: [42], to: 'b' } },
     );
@@ -89,11 +89,11 @@ describe('subscribe — multiple subscribers', () => {
 describe('subscribe — independence from get', () => {
   it('subscribe does not interfere with normal get/set', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'subscribe@val', from: 'c' } },
+      { input: { id: '1', op: '$subscribe', to: '. val', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [0], to: 'c' } },
-      { input: { op: [[5], 'set@val'], 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[5], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [5], to: 'c' } },
-      { input: { id: '2', op: '@val', from: 'c' } },
+      { input: { id: '2', op: 'val', from: 'c' } },
       { output: { id: '2', 'ty': ['Integer'], re: [5], to: 'c' } },
     );
   });
@@ -127,28 +127,28 @@ describe('subscribe — call-site syntax', () => {
 
   it('handler captures initial value after subscribe', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-      { input: { id: '2', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+      { input: { id: '2', op: 'readLast', from: 'caller' } },
       { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
     );
   });
 
   it('handler re-runs when the subscribed cell is set', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 42 }, '@setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 42 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
     );
   });
 
   it('handler captures the latest value across multiple sets', async () => {
     await expectBehavior(callSiteScript,
-      { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, '@setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: [{ n: 10 }, '@setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '4', op: [{ n: 99 }, '@setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '5', op: '@readLast', from: 'caller' } },
+      { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+      { input: { id: '2', op: [{ n: 5 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '3', op: [{ n: 10 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '4', op: [{ n: 99 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '5', op: 'readLast', from: 'caller' } },
       { output: { id: '5', 'ty': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
     );
   });
@@ -177,8 +177,8 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('subscribe@val message is posted to the remote alias', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ op: '@subscribe', to: '#<Remote val>' }) },
+        { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+        { output: expect.objectContaining({ op: '$subscribe', to: '#<Remote val>' }) },
       ],
     });
   });
@@ -186,10 +186,10 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('stubbed initial re updates local state', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Remote val>' }) },
+        { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Remote val>' }) },
         { input: { id: '1', re: [7] } },
-        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 7 }, to: 'caller' } },
       ],
     });
@@ -198,13 +198,13 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
   it('stubbed later re (simulated set notification) replays to handler', async () => {
     await createActor(remoteScript, {
       expects: [
-        { input: { id: '1', op: '@doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '@subscribe', to: '#<Remote val>' }) },
+        { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Remote val>' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [5] } },
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
-        { input: { id: '2', op: '@readLast', from: 'caller' } },
+        { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
       ],
     });
@@ -265,7 +265,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     let subPrev = sub.posts.length;
 
     // 1. Subscribe: caller -> sub. sub posts subscribe@val to pub.
-    await sub.sendAsync({ id: '1', op: '@doSubscribe.', from: 'caller' });
+    await sub.sendAsync({ id: '1', op: 'doSubscribe.', from: 'caller' });
     await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub replies with re:[0] addressed back to sub.
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
@@ -273,7 +273,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@val(77) to pub.
-    await sub.sendAsync({ id: '2', op: [{ n: 77 }, '@setPub.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [{ n: 77 }, 'setPub.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
     await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub mutates state, notifies sub with re:[77] on the subscription id.
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
@@ -281,7 +281,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     const finalSubPrev = sub.posts.length;
 
     // 3. Read: caller -> sub. sub replies with {last: 77} to caller.
-    await sub.sendAsync({ id: '3', op: '@readLast', from: 'caller' });
+    await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const readReply = sub.posts.slice(finalSubPrev).find(p => p.id === '3');
     expect(readReply).toEqual(expect.objectContaining({
       id: '3', re: { last: 77 }, to: 'caller',

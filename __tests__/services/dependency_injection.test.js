@@ -114,18 +114,18 @@ describe('file-level DI — outgoing CAM messages', () => {
 
   it('silent call sends correct outgoing message', async () => {
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: '@ping.', from: 'c' });
+    await actor.sendAsync({ id: '1', op: 'ping.', from: 'c' });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toBe('@ping.');
+    expect(outgoing.op).toBe('ping.');
   });
 
   it('call with args sends correct outgoing message', async () => {
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@greet'], from: 'c', 'ty': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, 'greet'], from: 'c', 'ty': [{ name: 'Text' }] });
     const outgoing = actor.posts.find(p => p.to === 'Remote');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{ name: 'Alice' }, '@greet']);
+    expect(outgoing.op).toEqual([{ name: 'Alice' }, 'greet']);
   });
 });
 
@@ -162,11 +162,11 @@ describe('file-level DI — full roundtrip', () => {
 
   it('call out, mock response, return to caller', async () => {
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '42', op: [{ key: 'color' }, '@fetch'], from: 'caller', 'ty': [{ key: 'Text' }] });
+    await actor.sendAsync({ id: '42', op: [{ key: 'color' }, 'fetch'], from: 'caller', 'ty': [{ key: 'Text' }] });
 
     const outgoing = actor.posts.find(p => p.to === 'DB');
     expect(outgoing).toBeDefined();
-    expect(outgoing.op).toEqual([{ key: 'color' }, '@lookup']);
+    expect(outgoing.op).toEqual([{ key: 'color' }, 'lookup']);
 
     await actor.sendAsync({ id: outgoing.id, re: { value: 'blue' } });
 
@@ -178,10 +178,10 @@ describe('file-level DI — full roundtrip', () => {
 
   it('call out, transform result, return to caller', async () => {
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '7', op: [{ n: 5 }, '@compute'], from: 'tester', 'ty': [{ n: 'Integer' }] });
+    await actor.sendAsync({ id: '7', op: [{ n: 5 }, 'compute'], from: 'tester', 'ty': [{ n: 'Integer' }] });
 
     const outgoing = actor.posts.find(p => p.to === 'Math');
-    expect(outgoing.op).toEqual([{ n: 5 }, '@double']);
+    expect(outgoing.op).toEqual([{ n: 5 }, 'double']);
 
     await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
 

@@ -23,14 +23,14 @@ describe('void return — public functions, empty body {}', () => {
 
   it('inline delimited empty body — () { } replies re: []', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@inlineEmpty', from: 'c' } },
+      { input: { id: '1', op: 'inlineEmpty', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
     );
   });
 
   it('lineal header, empty {} body replies re: []', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@linealHeaderEmpty', from: 'c' } },
+      { input: { id: '2', op: 'linealHeaderEmpty', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
     );
   });
@@ -75,49 +75,49 @@ describe('void return — public functions, () as tail value', () => {
 
   it('delimited body, implicit () tail', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@delimImplicit', from: 'c' } },
+      { input: { id: '1', op: 'delimImplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
     );
   });
 
   it('delimited body, explicit -> ()', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@delimExplicit', from: 'c' } },
+      { input: { id: '2', op: 'delimExplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
     );
   });
 
   it('delimited body, ->() no space', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@delimTight', from: 'c' } },
+      { input: { id: '3', op: 'delimTight', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: [], to: 'c' }) },
     );
   });
 
   it('single-line inline -> ()', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@inlineArrow', from: 'c' } },
+      { input: { id: '4', op: 'inlineArrow', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [], to: 'c' }) },
     );
   });
 
   it('lineal body, implicit () tail', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@linealImplicit', from: 'c' } },
+      { input: { id: '5', op: 'linealImplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '5', re: [], to: 'c' }) },
     );
   });
 
   it('lineal body, explicit -> ()', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@linealExplicit', from: 'c' } },
+      { input: { id: '6', op: 'linealExplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '6', re: [], to: 'c' }) },
     );
   });
 
   it('lineal body, ->() no space', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@linealTight', from: 'c' } },
+      { input: { id: '7', op: 'linealTight', from: 'c' } },
       { output: expect.objectContaining({ id: '7', re: [], to: 'c' }) },
     );
   });
@@ -140,7 +140,7 @@ describe('void return — private functions, empty body {}', () => {
 
   it('private lambda with empty body — call completes', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@callEmptyLambda', from: 'c' } },
+      { input: { id: '1', op: 'callEmptyLambda', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
@@ -201,42 +201,42 @@ describe('void return — private functions, () as tail value', () => {
 
   it('lambda { () } — implicit tail', async () => {
     await expectBehavior(lambdaScript,
-      { input: { id: '1', op: '@callDelimImplicit', from: 'c' } },
+      { input: { id: '1', op: 'callDelimImplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
 
   it('lambda { return () } — explicit return', async () => {
     await expectBehavior(lambdaScript,
-      { input: { id: '2', op: '@callDelimExplicit', from: 'c' } },
+      { input: { id: '2', op: 'callDelimExplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
 
   it('lambda () -> () — single-line', async () => {
     await expectBehavior(lambdaScript,
-      { input: { id: '3', op: '@callInlineArrow', from: 'c' } },
+      { input: { id: '3', op: 'callInlineArrow', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
 
   it('lineal fn — implicit () tail', async () => {
     await expectBehavior(linealScript,
-      { input: { id: '4', op: '@callLinealImplicit', from: 'c' } },
+      { input: { id: '4', op: 'callLinealImplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
 
   it('lineal fn — explicit -> ()', async () => {
     await expectBehavior(linealScript,
-      { input: { id: '5', op: '@callLinealExplicit', from: 'c' } },
+      { input: { id: '5', op: 'callLinealExplicit', from: 'c' } },
       { output: expect.objectContaining({ id: '5', re: { ack: 'ok' }, to: 'c' }) },
     );
   });
 
   it('lineal fn — ->() tight', async () => {
     await expectBehavior(linealScript,
-      { input: { id: '6', op: '@callLinealTight', from: 'c' } },
+      { input: { id: '6', op: 'callLinealTight', from: 'c' } },
       { output: expect.objectContaining({ id: '6', re: { ack: 'ok' }, to: 'c' }) },
     );
   });

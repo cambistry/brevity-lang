@@ -1,5 +1,9 @@
 # Protected names on the wire: a leading `.` — 2026-11-11
 
+> **Spelling superseded 2026-11-12:** a protected name's wire prefix is `~`, not `.` (`~val`,
+> `~helper`), public names travel bare, and a cell is set by `{op: [[v], '$set'], to: '. ~val'}`.
+> See `at-sigil-internal-and-quoted-names-2026-11-12.md`. The scope below stands.
+
 Design decision, wire level only. An actor's internal traffic is a set of messages in name only.
 This is the first step toward making those messages real.
 

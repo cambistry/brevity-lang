@@ -14,21 +14,21 @@ describe('public constants — literal initializers', () => {
 
   it('text literal constant', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@magic', from: 'c' } },
+      { input: { id: '1', op: 'magic', from: 'c' } },
       { output: { id: '1', 'ty': ['Text'], re: ['magic_string'], to: 'c' } },
     );
   });
 
   it('integer literal constant', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@answer', from: 'c' } },
+      { input: { id: '2', op: 'answer', from: 'c' } },
       { output: { id: '2', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('boolean literal constant', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@yes', from: 'c' } },
+      { input: { id: '3', op: 'yes', from: 'c' } },
       { output: { id: '3', 'ty': ['Boolean'], re: [true], to: 'c' } },
     );
   });
@@ -37,7 +37,7 @@ describe('public constants — literal initializers', () => {
     // ty for lists differs across targets (js emits element types, erlang
     // emits "List"); assert the value round-trips and leave ty looser.
     await expectBehavior(script,
-      { input: { id: '4', op: '@xs', from: 'c' } },
+      { input: { id: '4', op: 'xs', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [[1, 2, 3]], to: 'c' }) },
     );
   });
@@ -51,14 +51,14 @@ describe('public constants — type-call initialized', () => {
 
   it('Text(...) constant', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@t', from: 'c' } },
+      { input: { id: '1', op: 't', from: 'c' } },
       { output: { id: '1', 'ty': ['Text'], re: ['constant'], to: 'c' } },
     );
   });
 
   it('Integer(...) constant', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@n', from: 'c' } },
+      { input: { id: '2', op: 'n', from: 'c' } },
       { output: { id: '2', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
   });
@@ -77,7 +77,7 @@ describe('public constants — in-script class', () => {
 
   it('wrapper reads constant from child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@readTag', from: 'c' } },
+      { input: { id: '1', op: 'readTag', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });

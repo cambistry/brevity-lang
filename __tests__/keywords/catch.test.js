@@ -68,31 +68,31 @@ describe('catch — Phase 1: bare void exit', () => {
 
   it('exits a catch block from a single-line if', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@simpleExit', from: 'c' } },
+      { input: { id: '1', op: 'simpleExit', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
   });
 
   it('exits from inside a repeat while loop', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@whileExit', from: 'c' } },
+      { input: { id: '2', op: 'whileExit', from: 'c' } },
       { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
   });
 
   it('accepts the empty-paren form #label()', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@parenForm', from: 'c' } },
+      { input: { id: '3', op: 'parenForm', from: 'c' } },
       { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } });
   });
 
   it('bare label invocation as a statement exits catch', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@bareInvocation', from: 'c' } },
+      { input: { id: '4', op: 'bareInvocation', from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
   });
 
   it('exits both inner and outer loops when label targets the outer catch', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@nestedExit', from: 'c' } },
+      { input: { id: '5', op: 'nestedExit', from: 'c' } },
       { output: { id: '5', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 3, y: 10 }, to: 'c' } });
   });
 });
@@ -143,19 +143,19 @@ describe('catch — Phase 2: value-carrying exit', () => {
 
   it('exits with a value via #label(expr)', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@found', from: 'c' } },
+      { input: { id: '1', op: 'found', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('falls through to the tail expression when label is not invoked', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@fallThrough', from: 'c' } },
+      { input: { id: '2', op: 'fallThrough', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('exits a repeat-while loop carrying the current value', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@inWhile', from: 'c' } },
+      { input: { id: '3', op: 'inWhile', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
@@ -163,7 +163,7 @@ describe('catch — Phase 2: value-carrying exit', () => {
     // Body's tail is `catch ... { ... }` with no `->`. ImplicitReturn(CatchExpr)
     // routes through the value-carrying-catch return path.
     await expectBehavior(script,
-      { input: { id: '4', op: '@directReturn', from: 'c' } },
+      { input: { id: '4', op: 'directReturn', from: 'c' } },
       { output: { id: '4', re: [123], to: 'c' } });
   });
 });
@@ -230,25 +230,25 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
 
   it('inner exit returns to inner catch, then outer continues', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@innerExits', from: 'c' } },
+      { input: { id: '1', op: 'innerExits', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 11 }, to: 'c' } });
   });
 
   it('outer label fires from inside inner catch — skips inner cleanup', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@outerSkipsInner', from: 'c' } },
+      { input: { id: '2', op: 'outerSkipsInner', from: 'c' } },
       { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
   });
 
   it('value carries from inner-scope #outer through both catches', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@valueThroughNesting', from: 'c' } },
+      { input: { id: '3', op: 'valueThroughNesting', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('inner catch with non-matching label lets outer throw bubble past', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@outerCatchesNoMatchInner', from: 'c' } },
+      { input: { id: '4', op: 'outerCatchesNoMatchInner', from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
   });
 });
@@ -316,31 +316,31 @@ describe('catch — Phase 4: block-label syntax', () => {
 
   it('block label on repeat exits the loop', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@blockRepeat', from: 'c' } },
+      { input: { id: '1', op: 'blockRepeat', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 4 }, to: 'c' } });
   });
 
   it('block label on a brace block acts like catch', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@blockBrace', from: 'c' } },
+      { input: { id: '2', op: 'blockBrace', from: 'c' } },
       { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
   });
 
   it('matching end#label is consumed silently', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@endLabelOk', from: 'c' } },
+      { input: { id: '4', op: 'endLabelOk', from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 2 }, to: 'c' } });
   });
 
   it('block-label brace form supports value-carrying exit', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@blockValueCarrying', from: 'c' } },
+      { input: { id: '5', op: 'blockValueCarrying', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('nested block labels support multi-level exit', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@nestedBlockLabels', from: 'c' } },
+      { input: { id: '6', op: 'nestedBlockLabels', from: 'c' } },
       { output: { id: '6', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 3, y: 1 }, to: 'c' } });
   });
 });

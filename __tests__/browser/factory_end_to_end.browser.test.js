@@ -61,14 +61,14 @@ describe('factory end-to-end', () => {
     // the initial value ("initial") and updates the text node before the
     // Factory's reply (the element address) reaches the caller.
     await expectBehavior(factory,
-      { input: { id: '1', op: '@create', from: 'caller' } },
+      { input: { id: '1', op: 'create', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: ['#<HTML div 1>'] }) },
     );
 
     // Query the element's innerHTML — should be the initial @content value.
     const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@inner_html' } },
+      { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },
     );
   });
@@ -78,12 +78,12 @@ describe('factory end-to-end', () => {
     const factory = await page.connectActor('factory.bv');
 
     // Build the element.
-    await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
+    await factory.sendAsync({ id: '1', op: 'create', from: 'caller' });
 
     // Mutate content via the public @bump setter.
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, '@bump.'],
+      op: [{ v: 'updated' }, 'bump.'],
       'ty': [{ v: 'Text' }],
       from: 'caller',
     });
@@ -91,7 +91,7 @@ describe('factory end-to-end', () => {
     // Element text should now reflect the new value.
     const el = await page.connectActor('HTML div 1');
     await expectBehavior(el,
-      { input: { id: 'q1', op: '@inner_html' } },
+      { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({ re: 'updated' }) },
     );
   });
@@ -100,19 +100,19 @@ describe('factory end-to-end', () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
     const factory = await page.connectActor('factory.bv');
 
-    await factory.sendAsync({ id: '1', op: '@create', from: 'caller' });
+    await factory.sendAsync({ id: '1', op: 'create', from: 'caller' });
 
     const el = await page.connectActor('HTML div 1');
 
     for (const [seq, value] of [['a', 'first'], ['b', 'second'], ['c', 'third']]) {
       await factory.sendAsync({
         id: seq,
-        op: [{ v: value }, '@bump.'],
+        op: [{ v: value }, 'bump.'],
         'ty': [{ v: 'Text' }],
         from: 'caller',
       });
       await expectBehavior(el,
-        { input: { id: 'q-' + seq, op: '@inner_html' } },
+        { input: { id: 'q-' + seq, op: 'inner_html' } },
         { output: expect.objectContaining({ re: value }) },
       );
     }

@@ -30,7 +30,7 @@ const source = `
 
 async function boundary() {
   const actor = await (await compileActor(source, { compileOptions: { selfAddr: 'app.bv' } })).spawn();
-  await actor.sendAsync({ id: '1', op: [{}, '#new'], to: '. Box', from: 'Tester' });
+  await actor.sendAsync({ id: '1', op: [{}, '$new'], to: '. Box', from: 'Tester' });
   return actor;
 }
 
@@ -38,13 +38,13 @@ describe('global boundary', () => {
   it('re, ty and from of a reply resolve the self token', async () => {
     const actor = await boundary();
     expect(actor.posts[0]).toEqual({ id: '1', re: '#<app.bv Box 1>', ty: 'app.bv Box', to: 'Tester', from: 'app.bv' });
-    await actor.sendAsync({ id: '2', op: '@me', to: '. Box 1 tally', from: 'Tester' });
+    await actor.sendAsync({ id: '2', op: 'me', to: '. Box 1 tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual({ id: '2', re: '#<app.bv Box 1 tally>', ty: 'app.bv Box 1 tally', to: 'Tester', from: 'app.bv Box 1 tally' });
   });
 
   it('a relative #<…> in the payload resolves; a global one passes through', async () => {
     const actor = await boundary();
-    await actor.sendAsync({ id: '2', op: '@refs', to: '. Box 1 tally', from: 'Tester' });
+    await actor.sendAsync({ id: '2', op: 'refs', to: '. Box 1 tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual(expect.objectContaining({
       id: '2',
       re: { near: '#<app.bv Box 1 tally x>', hidden: '#<.hidden.file x>', foreign: '#<@foreign y>' },
@@ -53,9 +53,9 @@ describe('global boundary', () => {
 
   it('a global to passes through, and the payload address and from resolve', async () => {
     const actor = await boundary();
-    await actor.sendAsync({ id: '2', op: '@tell', to: '. Box 1 tally', from: 'Tester' });
+    await actor.sendAsync({ id: '2', op: 'tell', to: '. Box 1 tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual(expect.objectContaining({
-      op: [{ r: '#<app.bv Box 1 tally x>' }, '@take'],
+      op: [{ r: '#<app.bv Box 1 tally x>' }, 'take'],
       to: 'Svc',
     }));
   });

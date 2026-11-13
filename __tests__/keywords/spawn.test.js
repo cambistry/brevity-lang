@@ -23,14 +23,14 @@ describe('spawn', () => {
 
   it('spawn + silent function — fire-and-forget', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@fireAndForget!', from: 'c' } },
+      { input: { id: '1', op: 'fireAndForget!', from: 'c' } },
       { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
     );
   });
 
   it('spawn does not block subsequent statements', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@continuity!', from: 'c' } },
+      { input: { id: '2', op: 'continuity!', from: 'c' } },
       { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } },
     );
   });
@@ -51,7 +51,7 @@ describe('spawn — side-effect (stateful)', () => {
         x <- 1
     `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test!', from: 'c' } },
+      { input: { id: '1', op: 'test!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });

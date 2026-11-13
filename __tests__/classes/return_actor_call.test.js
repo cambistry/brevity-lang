@@ -71,79 +71,79 @@ describe('returning a call on an instance', () => {
 
   it('replies with its value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@sole', from: 'c' } },
+      { input: { id: '1', op: 'sole', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('on an instance constructed in place', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@constructed', from: 'c' } },
+      { input: { id: '1', op: 'constructed', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('keeps several positionals', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@several', from: 'c' } },
+      { input: { id: '1', op: 'several', from: 'c' } },
       { output: { id: '1', re: [1, 2], to: 'c' } },
     );
   });
   it('keeps a named reply', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@wholeNamed', from: 'c' } },
+      { input: { id: '1', op: 'wholeNamed', from: 'c' } },
       { output: { id: '1', re: { a: 1 }, to: 'c' } },
     );
   });
   it('passes args', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@withArg', from: 'c' } },
+      { input: { id: '1', op: 'withArg', from: 'c' } },
       { output: { id: '1', re: [5], to: 'c' } },
     );
   });
   it('tags the reply with nothing from the request', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [['x'], '@withParam'], 'ty': [['Text']], from: 'c' } },
+      { input: { id: '1', op: [['x'], 'withParam'], 'ty': [['Text']], from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('follows a chain', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@chained', from: 'c' } },
+      { input: { id: '1', op: 'chained', from: 'c' } },
       { output: { id: '1', re: [6], to: 'c' } },
     );
   });
   it('takes the sole value beside another field', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@oneOfTwo', from: 'c' } },
+      { input: { id: '1', op: 'oneOfTwo', from: 'c' } },
       { output: { id: '1', re: [1, 2], to: 'c' } },
     );
   });
   it('takes the sole value in a named field', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@namedField', from: 'c' } },
+      { input: { id: '1', op: 'namedField', from: 'c' } },
       { output: { id: '1', re: { z: 1 }, to: 'c' } },
     );
   });
   it('as a tail expression', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@tail', from: 'c' } },
+      { input: { id: '1', op: 'tail', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('bound as Object first', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@object', from: 'c' } },
+      { input: { id: '1', op: 'object', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('bound as Object first, named', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@objectNamed', from: 'c' } },
+      { input: { id: '1', op: 'objectNamed', from: 'c' } },
       { output: { id: '1', re: { a: 1 }, to: 'c' } },
     );
   });
   it('with an as', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@typed', from: 'c' } },
+      { input: { id: '1', op: 'typed', from: 'c' } },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -215,58 +215,58 @@ describe('a call on an instance inside a branch', () => {
 
   it('returned', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[true], '@returned'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'returned'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('bound', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[true], '@bound'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'bound'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
   it('the branch not taken', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[false], '@returned'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[false], 'returned'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
     );
   });
   it('after the branch', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[false], '@other'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[false], 'other'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
   it('tags the other path', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[true], '@other'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'other'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
     );
   });
   it('in a nested branch', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[true], '@nested'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'nested'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });
   it('reads a local from before the branch', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[true], '@rebound'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'rebound'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1, 5], to: 'c' }) },
     );
   });
   it('in a class', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Outer', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Outer', from: 'c' } },
       { output: { id: '1', re: '#<. Outer 1>', 'ty': '. Outer', to: 'c' } },
-      { input: { id: '2', op: [[true], '@viaBranch'], 'ty': [['Boolean']], to: '. Outer 1', from: 'c' } },
+      { input: { id: '2', op: [[true], 'viaBranch'], 'ty': [['Boolean']], to: '. Outer 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [1], to: 'c', from: '. Outer 1' }) },
     );
   });
   it('a failure in the call', async () => {
     await expectBehavior(failing,
-      { input: { id: '1', op: [[true], '@go'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', ex: { '@go': 'error' }, to: 'c' } },
+      { input: { id: '1', op: [[true], 'go'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', ex: { 'go': 'error' }, to: 'c' } },
     );
   });
 });
@@ -283,8 +283,8 @@ describe('returning a call on a remote', () => {
 
   it('waits for the reply', async () => {
     await expectBehavior(script,
-      { input: { id: '99', op: '@go', from: 'c' } },
-      { output: expect.objectContaining({ op: '@t', to: 'Svc' }) },
+      { input: { id: '99', op: 'go', from: 'c' } },
+      { output: expect.objectContaining({ op: 't', to: 'Svc' }) },
       { input: { id: '1', re: [7], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: [7], to: 'c' }) },
     );

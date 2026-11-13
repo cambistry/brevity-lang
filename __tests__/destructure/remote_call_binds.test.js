@@ -17,7 +17,7 @@ const THING = `
 `;
 
 const constructed = (src) => createActor(src, {
-  expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) }],
+  expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) }],
 });
 
 const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } };
@@ -30,8 +30,8 @@ describe('remote actor (constructor-block construction)', () => {
     `);
     await expectActorBehavior(actor,
       NEW_REPLY,
-      { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
+      { input: { id: '99', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: [17], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
     );
@@ -44,8 +44,8 @@ describe('remote actor (constructor-block construction)', () => {
     `);
     await expectActorBehavior(actor,
       NEW_REPLY,
-      { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@get', to: 'Thing/1' }) },
+      { input: { id: '99', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: [17], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
     );
@@ -58,8 +58,8 @@ describe('remote actor (constructor-block construction)', () => {
     `);
     await expectActorBehavior(actor,
       NEW_REPLY,
-      { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@pair', to: 'Thing/1' }) },
+      { input: { id: '99', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'pair', to: 'Thing/1' }) },
       { input: { id: '2', re: { x: 17 } } },
       { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
     );
@@ -68,8 +68,8 @@ describe('remote actor (constructor-block construction)', () => {
 
 describe('remote actor (handler-local construction)', () => {
   const run = (src, reply) => createActor(src).then(actor => expectActorBehavior(actor,
-    { input: { id: '99', op: '@go', from: 'caller' } },
-    { output: expect.objectContaining({ op: [{ a: 5 }, '#new'], to: 'Thing' }) },
+    { input: { id: '99', op: 'go', from: 'caller' } },
+    { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
     NEW_REPLY,
     { output: expect.objectContaining({ to: 'Thing/1' }) },
     { input: { id: '2', ...reply } },
@@ -98,10 +98,10 @@ describe('remote actor (handler-local construction)', () => {
 describe('remote reply carrying only a field named like the local — not a single value', () => {
   const run = (src) => constructed(src).then(actor => expectActorBehavior(actor,
     NEW_REPLY,
-    { input: { id: '99', op: '@go', from: 'caller' } },
-    { output: expect.objectContaining({ op: '@pair', to: 'Thing/1' }) },
+    { input: { id: '99', op: 'go', from: 'caller' } },
+    { output: expect.objectContaining({ op: 'pair', to: 'Thing/1' }) },
     { input: { id: '2', re: { x: 17 } } },
-    { output: expect.objectContaining({ id: '99', ex: { '@go': 'error' }, to: 'caller' }) },
+    { output: expect.objectContaining({ id: '99', ex: { 'go': 'error' }, to: 'caller' }) },
   ));
 
   it('x T = r.m() is a compile error, since the doc shows only a named field', () => {
@@ -127,8 +127,8 @@ describe('destructured service member — bare read', () => {
     @go = { n Integer = count; return a1: n }
   `, { compileOptions: { remotes: [{ path: 'counter.bv', service: '{ count () -> (Integer) }' }] } })
     .then(actor => expectActorBehavior(actor,
-      { input: { id: '99', op: '@go', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@count', to: 'counter.bv' }) },
+      { input: { id: '99', op: 'go', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'count', to: 'counter.bv' }) },
       { input: { id: '1', ...reply } },
       { output: expect.objectContaining({ id: '99', ...expected, to: 'caller' }) },
     ));
@@ -138,7 +138,7 @@ describe('destructured service member — bare read', () => {
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {
-    await run({ re: { n: 17 } }, { ex: { '@go': 'error' } });
+    await run({ re: { n: 17 } }, { ex: { 'go': 'error' } });
   });
 });
 
@@ -148,8 +148,8 @@ describe('reference-field callback — typed bind', () => {
     @go = (c: Call) { out Integer = c.fn(c.arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,
-    { input: { id: '50', op: [{ c: [200, '#<caller cb>'] }, '@go'], 'ty': [{ c: '. ::Call' }], from: 'caller' } },
-    { output: expect.objectContaining({ id: '1', op: [[200], '@cb'], to: '#<caller cb>' }) },
+    { input: { id: '50', op: [{ c: [200, '#<caller cb>'] }, 'go'], 'ty': [{ c: '. ::Call' }], from: 'caller' } },
+    { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller cb>' }) },
     { input: { id: '1', ...reply } },
     { output: expect.objectContaining({ id: '50', ...expected, to: 'caller' }) },
   );
@@ -159,7 +159,7 @@ describe('reference-field callback — typed bind', () => {
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {
-    await run({ re: { out: 999 } }, { ex: { '@go': 'error' } });
+    await run({ re: { out: 999 } }, { ex: { 'go': 'error' } });
   });
 });
 
@@ -169,7 +169,7 @@ describe('actor ref in a lambda — call in tail position', () => {
       C = *{ @seven = { 7 } }
       @run = { cs List = [C(), C()]; xs List = over(cs) (c) { c.seven() }; return a1: xs }
     `,
-      { input: { id: '1', op: '@run', from: 'c' } },
+      { input: { id: '1', op: 'run', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { a1: [7, 7] } }) },
     );
   });
@@ -179,8 +179,8 @@ describe('actor ref in a lambda — call in tail position', () => {
       C = *{ @seven = -> seven: 7 }
       @run = { cs List = [C()]; xs List = over(cs) (c) { c.seven() }; return a1: xs }
     `,
-      { input: { id: '1', op: '@run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', ex: { '@run': 'error' } }) },
+      { input: { id: '1', op: 'run', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', ex: { 'run': 'error' } }) },
     );
   });
 });

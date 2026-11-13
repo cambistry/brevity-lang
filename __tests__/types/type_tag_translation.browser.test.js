@@ -35,11 +35,11 @@ async function forwardingActor(selfAddr) {
 describe('type authority tag — perspective translation (browser)', () => {
   it('a relative . ::Name tag gets the boundary address on the way out', async () => {
     const actor = await forwardingActor('main');
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
     // The boundary ('main') resolves the self token: `. ::Point` → `main ::Point`.
     // Payload stays wire-shaped.
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      op: [{ p: [3, 4] }, '@take'],
+      op: [{ p: [3, 4] }, 'take'],
       to: 'Sink',
       'ty': [{ p: 'main ::Point' }],
     }));
@@ -47,7 +47,7 @@ describe('type authority tag — perspective translation (browser)', () => {
 
   it('without a parent frame the tag stays relative (same-process)', async () => {
     const actor = await forwardingActor(undefined);
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, '@fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
+    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: '. ::Point' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
       'ty': [{ p: '. ::Point' }],
     }));
@@ -69,21 +69,21 @@ describe('type authority tag — perspective translation (browser)', () => {
 
     it('the reply to #new tags its class, translated to global form', async () => {
       const actor = await (await compileActor(source, { compileOptions: { selfAddr: 'main' } })).spawn();
-      await actor.sendAsync({ id: '1', op: [{}, '#new'], to: '. Box', from: 'Tester' });
+      await actor.sendAsync({ id: '1', op: [{}, '$new'], to: '. Box', from: 'Tester' });
       expect(actor.posts[0]).toEqual(expect.objectContaining({ id: '1', re: '#<main Box 1>', 'ty': 'main Box' }));
     });
 
     it('a self-return leaves out its . tag, and both parents fill it in', async () => {
       const actor = await (await compileActor(source, { compileOptions: { selfAddr: 'main' } })).spawn();
-      await actor.sendAsync({ id: '1', op: [{}, '#new'], to: '. Box', from: 'Tester' });
-      await actor.sendAsync({ id: '2', op: '@bump!', to: '. Box 1', from: 'Tester' });
+      await actor.sendAsync({ id: '1', op: [{}, '$new'], to: '. Box', from: 'Tester' });
+      await actor.sendAsync({ id: '2', op: 'bump!', to: '. Box 1', from: 'Tester' });
       expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '2', re: '#<main Box 1>', 'ty': 'main Box' }));
     });
 
     it('self as one slot of several: both parents fill in the slot and its .', async () => {
       const actor = await (await compileActor(source, { compileOptions: { selfAddr: 'main' } })).spawn();
-      await actor.sendAsync({ id: '1', op: [{}, '#new'], to: '. Box', from: 'Tester' });
-      await actor.sendAsync({ id: '2', op: '@pair!', to: '. Box 1', from: 'Tester' });
+      await actor.sendAsync({ id: '1', op: [{}, '$new'], to: '. Box', from: 'Tester' });
+      await actor.sendAsync({ id: '2', op: 'pair!', to: '. Box 1', from: 'Tester' });
       expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '2', re: ['#<main Box 1>', 1], 'ty': ['main Box', 'Integer'] }));
     });
   });

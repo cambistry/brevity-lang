@@ -4015,7 +4015,7 @@ export function parse(tokensIn) {
           [{ name: '_v', type: typeName, positional: true }],
           [AST.setStatement('@' + op, AST.identifier('_v')), AST.silentTerminator()],
         );
-        // `subscribe@<cell>` is not a declared handler — it's an implicit
+        // `$subscribe` to a cell is not a declared handler — it's an implicit
         // affordance on every non-silent public surface, dispatched generically
         // from the receive loop. Synthesizing it here would pollute the class
         // method set and the actor function list.
@@ -5402,9 +5402,9 @@ export function parse(tokensIn) {
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef }));
       }
     }
-    // A protected cell is set by `{op: [[v], "#set"], to: ".val"}`, from inside
-    // only: `set.val`, as a public one's is `set@val`. Same cells as get one
-    // (notes/protected-names-dot-prefix-2026-11-11.md).
+    // A protected cell is set by `{op: [[v], "$set"], to: ". ~val"}`, from inside
+    // only: the arm `set.val`, as a public one's is `set@val`. Same cells as get
+    // one (notes/at-sigil-internal-and-quoted-names-2026-11-12.md).
     for (const stmt of constructorBody) {
       if (stmt.type !== 'RefDecl' || /^[@#]/.test(stmt.name) || typeof stmt.typeName !== 'string') continue;
       if (!PROTECTED_SETTER_TYPES.has(stmt.typeName) && !stmt.typeName.split('|').some(m => m.trim() === 'Self')) continue;

@@ -17,19 +17,19 @@ describe('Text.upper / Text.lower', () => {
   `;
 
   it('Text.upper literal', async () => {
-    await expectBehavior(script, inp('1', '@upper'), out('1', 'Text', 'HELLO'));
+    await expectBehavior(script, inp('1', 'upper'), out('1', 'Text', 'HELLO'));
   });
   it('Text.lower literal', async () => {
-    await expectBehavior(script, inp('2', '@lower'), out('2', 'Text', 'hello'));
+    await expectBehavior(script, inp('2', 'lower'), out('2', 'Text', 'hello'));
   });
   it('ref.upper', async () => {
-    await expectBehavior(script, inp('3', '@upperRef'), out('3', 'Text', 'HELLO'));
+    await expectBehavior(script, inp('3', 'upperRef'), out('3', 'Text', 'HELLO'));
   });
   it('ref.lower', async () => {
-    await expectBehavior(script, inp('4', '@lowerRef'), out('4', 'Text', 'hello'));
+    await expectBehavior(script, inp('4', 'lowerRef'), out('4', 'Text', 'hello'));
   });
   it('upper(const) bare call', async () => {
-    await expectBehavior(script, inp('5', '@upperConst'), out('5', 'Text', 'WORLD'));
+    await expectBehavior(script, inp('5', 'upperConst'), out('5', 'Text', 'WORLD'));
   });
 });
 
@@ -42,16 +42,16 @@ describe('Text.trim / trim_start / trim_end', () => {
   `;
 
   it('trim both sides', async () => {
-    await expectBehavior(script, inp('1', '@trim'), out('1', 'Text', 'hi'));
+    await expectBehavior(script, inp('1', 'trim'), out('1', 'Text', 'hi'));
   });
   it('trim_start', async () => {
-    await expectBehavior(script, inp('2', '@trimStart'), out('2', 'Text', 'hi  '));
+    await expectBehavior(script, inp('2', 'trimStart'), out('2', 'Text', 'hi  '));
   });
   it('trim_end', async () => {
-    await expectBehavior(script, inp('3', '@trimEnd'), out('3', 'Text', '  hi'));
+    await expectBehavior(script, inp('3', 'trimEnd'), out('3', 'Text', '  hi'));
   });
   it('ref.trim', async () => {
-    await expectBehavior(script, inp('4', '@trimRef'), out('4', 'Text', 'ok'));
+    await expectBehavior(script, inp('4', 'trimRef'), out('4', 'Text', 'ok'));
   });
 });
 
@@ -65,19 +65,19 @@ describe('Text.first / Text.last', () => {
   `;
 
   it('first scalar', async () => {
-    await expectBehavior(script, inp('1', '@first'), out('1', 'Text', 'h'));
+    await expectBehavior(script, inp('1', 'first'), out('1', 'Text', 'h'));
   });
   it('last scalar', async () => {
-    await expectBehavior(script, inp('2', '@last'), out('2', 'Text', 'o'));
+    await expectBehavior(script, inp('2', 'last'), out('2', 'Text', 'o'));
   });
   it('first of empty', async () => {
-    await expectBehavior(script, inp('3', '@firstEmpty'), out('3', 'Text', ''));
+    await expectBehavior(script, inp('3', 'firstEmpty'), out('3', 'Text', ''));
   });
   it('first of emoji string — full scalar', async () => {
-    await expectBehavior(script, inp('4', '@firstEmoji'), out('4', 'Text', '\u{1F600}'));
+    await expectBehavior(script, inp('4', 'firstEmoji'), out('4', 'Text', '\u{1F600}'));
   });
   it('ref.last', async () => {
-    await expectBehavior(script, inp('5', '@lastRef'), out('5', 'Text', 'd'));
+    await expectBehavior(script, inp('5', 'lastRef'), out('5', 'Text', 'd'));
   });
 });
 
@@ -89,13 +89,13 @@ describe('Text.repeat', () => {
   `;
 
   it('repeat 3 times', async () => {
-    await expectBehavior(script, inp('1', '@repeat'), out('1', 'Text', 'ababab'));
+    await expectBehavior(script, inp('1', 'repeat'), out('1', 'Text', 'ababab'));
   });
   it('ref.repeat', async () => {
-    await expectBehavior(script, inp('2', '@repeatRef'), out('2', 'Text', 'xxxx'));
+    await expectBehavior(script, inp('2', 'repeatRef'), out('2', 'Text', 'xxxx'));
   });
   it('repeat 0 times', async () => {
-    await expectBehavior(script, inp('3', '@repeatZero'), out('3', 'Text', ''));
+    await expectBehavior(script, inp('3', 'repeatZero'), out('3', 'Text', ''));
   });
 });
 
@@ -107,13 +107,13 @@ describe('Text.empty?', () => {
   `;
 
   it('empty string is true', async () => {
-    await expectBehavior(script, inp('1', '@emptyTrue'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'emptyTrue'), out('1', 'Boolean', true));
   });
   it('non-empty is false', async () => {
-    await expectBehavior(script, inp('2', '@emptyFalse'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'emptyFalse'), out('2', 'Boolean', false));
   });
   it('ref.empty?', async () => {
-    await expectBehavior(script, inp('3', '@emptyRef'), out('3', 'Boolean', true));
+    await expectBehavior(script, inp('3', 'emptyRef'), out('3', 'Boolean', true));
   });
 });
 
@@ -126,16 +126,16 @@ describe('Text.slice', () => {
   `;
 
   it('slice(1) — from index to end', async () => {
-    await expectBehavior(script, inp('1', '@sliceFrom'), out('1', 'Text', 'ello'));
+    await expectBehavior(script, inp('1', 'sliceFrom'), out('1', 'Text', 'ello'));
   });
   it('slice(1, 3) — range', async () => {
-    await expectBehavior(script, inp('2', '@sliceRange'), out('2', 'Text', 'el'));
+    await expectBehavior(script, inp('2', 'sliceRange'), out('2', 'Text', 'el'));
   });
   it('ref.slice(0, 2)', async () => {
-    await expectBehavior(script, inp('3', '@sliceRef'), out('3', 'Text', 'ab'));
+    await expectBehavior(script, inp('3', 'sliceRef'), out('3', 'Text', 'ab'));
   });
   it('slice across emoji — scalar indexed', async () => {
-    await expectBehavior(script, inp('4', '@sliceEmoji'), out('4', 'Text', '\u{1F600}'));
+    await expectBehavior(script, inp('4', 'sliceEmoji'), out('4', 'Text', '\u{1F600}'));
   });
 });
 
@@ -155,25 +155,25 @@ describe('Text.contains / starts_with / ends_with', () => {
   `;
 
   it('contains match', async () => {
-    await expectBehavior(script, inp('1', '@containsYes'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'containsYes'), out('1', 'Boolean', true));
   });
   it('contains no match', async () => {
-    await expectBehavior(script, inp('2', '@containsNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'containsNo'), out('2', 'Boolean', false));
   });
   it('starts_with match', async () => {
-    await expectBehavior(script, inp('3', '@startsWith'), out('3', 'Boolean', true));
+    await expectBehavior(script, inp('3', 'startsWith'), out('3', 'Boolean', true));
   });
   it('starts_with no match', async () => {
-    await expectBehavior(script, inp('4', '@startsNo'), out('4', 'Boolean', false));
+    await expectBehavior(script, inp('4', 'startsNo'), out('4', 'Boolean', false));
   });
   it('ends_with match', async () => {
-    await expectBehavior(script, inp('5', '@endsWith'), out('5', 'Boolean', true));
+    await expectBehavior(script, inp('5', 'endsWith'), out('5', 'Boolean', true));
   });
   it('ends_with no match', async () => {
-    await expectBehavior(script, inp('6', '@endsNo'), out('6', 'Boolean', false));
+    await expectBehavior(script, inp('6', 'endsNo'), out('6', 'Boolean', false));
   });
   it('ref.contains', async () => {
-    await expectBehavior(script, inp('7', '@containsRef'), out('7', 'Boolean', true));
+    await expectBehavior(script, inp('7', 'containsRef'), out('7', 'Boolean', true));
   });
 });
 
@@ -185,13 +185,13 @@ describe('Text.index_of', () => {
   `;
 
   it('index_of found', async () => {
-    await expectBehavior(script, inp('1', '@found'), out('1', 'Integer', 6));
+    await expectBehavior(script, inp('1', 'found'), out('1', 'Integer', 6));
   });
   it('index_of not found returns -1', async () => {
-    await expectBehavior(script, inp('2', '@notFound'), out('2', 'Integer', -1));
+    await expectBehavior(script, inp('2', 'notFound'), out('2', 'Integer', -1));
   });
   it('ref.index_of', async () => {
-    await expectBehavior(script, inp('3', '@indexRef'), out('3', 'Integer', 2));
+    await expectBehavior(script, inp('3', 'indexRef'), out('3', 'Integer', 2));
   });
 });
 
@@ -205,19 +205,19 @@ describe('Text.before / Text.after', () => {
   `;
 
   it('before separator', async () => {
-    await expectBehavior(script, inp('1', '@before'), out('1', 'Text', 'hello'));
+    await expectBehavior(script, inp('1', 'before'), out('1', 'Text', 'hello'));
   });
   it('after separator', async () => {
-    await expectBehavior(script, inp('2', '@after'), out('2', 'Text', 'world'));
+    await expectBehavior(script, inp('2', 'after'), out('2', 'Text', 'world'));
   });
   it('before no match returns whole text', async () => {
-    await expectBehavior(script, inp('3', '@beforeMiss'), out('3', 'Text', 'hello'));
+    await expectBehavior(script, inp('3', 'beforeMiss'), out('3', 'Text', 'hello'));
   });
   it('after no match returns empty', async () => {
-    await expectBehavior(script, inp('4', '@afterMiss'), out('4', 'Text', ''));
+    await expectBehavior(script, inp('4', 'afterMiss'), out('4', 'Text', ''));
   });
   it('ref.before', async () => {
-    await expectBehavior(script, inp('5', '@beforeRef'), out('5', 'Text', 'foo'));
+    await expectBehavior(script, inp('5', 'beforeRef'), out('5', 'Text', 'foo'));
   });
 });
 
@@ -229,13 +229,13 @@ describe('Text.replace / Text.replace_first', () => {
   `;
 
   it('replace all occurrences', async () => {
-    await expectBehavior(script, inp('1', '@replaceAll'), out('1', 'Text', 'xxbxx'));
+    await expectBehavior(script, inp('1', 'replaceAll'), out('1', 'Text', 'xxbxx'));
   });
   it('replace_first — only first occurrence', async () => {
-    await expectBehavior(script, inp('2', '@replaceFirst'), out('2', 'Text', 'xabaa'));
+    await expectBehavior(script, inp('2', 'replaceFirst'), out('2', 'Text', 'xabaa'));
   });
   it('ref.replace', async () => {
-    await expectBehavior(script, inp('3', '@replaceRef'), out('3', 'Text', 'hell0 w0rld'));
+    await expectBehavior(script, inp('3', 'replaceRef'), out('3', 'Text', 'hell0 w0rld'));
   });
 });
 
@@ -259,31 +259,31 @@ describe('Regex arguments', () => {
   `;
 
   it('contains with regex', async () => {
-    await expectBehavior(script, inp('1', '@containsRe'), out('1', 'Boolean', true));
+    await expectBehavior(script, inp('1', 'containsRe'), out('1', 'Boolean', true));
   });
   it('contains with regex — no match', async () => {
-    await expectBehavior(script, inp('2', '@containsReNo'), out('2', 'Boolean', false));
+    await expectBehavior(script, inp('2', 'containsReNo'), out('2', 'Boolean', false));
   });
   it('index_of with regex', async () => {
-    await expectBehavior(script, inp('3', '@indexRe'), out('3', 'Integer', 4));
+    await expectBehavior(script, inp('3', 'indexRe'), out('3', 'Integer', 4));
   });
   it('replace with regex (all)', async () => {
-    await expectBehavior(script, inp('4', '@replaceRe'), out('4', 'Text', 'axbxcx'));
+    await expectBehavior(script, inp('4', 'replaceRe'), out('4', 'Text', 'axbxcx'));
   });
   it('replace_first with regex', async () => {
-    await expectBehavior(script, inp('5', '@replaceFirstRe'), out('5', 'Text', 'axb2c3'));
+    await expectBehavior(script, inp('5', 'replaceFirstRe'), out('5', 'Text', 'axb2c3'));
   });
   it('starts_with regex', async () => {
-    await expectBehavior(script, inp('6', '@startsRe'), out('6', 'Boolean', true));
+    await expectBehavior(script, inp('6', 'startsRe'), out('6', 'Boolean', true));
   });
   it('ends_with regex', async () => {
-    await expectBehavior(script, inp('7', '@endsRe'), out('7', 'Boolean', true));
+    await expectBehavior(script, inp('7', 'endsRe'), out('7', 'Boolean', true));
   });
   it('before regex', async () => {
-    await expectBehavior(script, inp('8', '@beforeRe'), out('8', 'Text', 'hello '));
+    await expectBehavior(script, inp('8', 'beforeRe'), out('8', 'Text', 'hello '));
   });
   it('after regex', async () => {
-    await expectBehavior(script, inp('9', '@afterRe'), out('9', 'Text', ' world'));
+    await expectBehavior(script, inp('9', 'afterRe'), out('9', 'Text', ' world'));
   });
 });
 
@@ -325,23 +325,23 @@ describe('Bang methods — mutation', () => {
   `;
 
   it('t.upper! mutates ref', async () => {
-    await expectBehavior(script, inp('1', '@bangUpper'), out('1', 'Text', 'HELLO'));
+    await expectBehavior(script, inp('1', 'bangUpper'), out('1', 'Text', 'HELLO'));
   });
 
   it('t.lower! mutates ref', async () => {
-    await expectBehavior(script, inp('2', '@bangLower'), out('2', 'Text', 'hello'));
+    await expectBehavior(script, inp('2', 'bangLower'), out('2', 'Text', 'hello'));
   });
 
   it('t.trim! mutates ref', async () => {
-    await expectBehavior(script, inp('3', '@bangTrim'), out('3', 'Text', 'hi'));
+    await expectBehavior(script, inp('3', 'bangTrim'), out('3', 'Text', 'hi'));
   });
 
   it('t.slice!(0, 5) mutates ref', async () => {
-    await expectBehavior(script, inp('4', '@bangSlice'), out('4', 'Text', 'hello'));
+    await expectBehavior(script, inp('4', 'bangSlice'), out('4', 'Text', 'hello'));
   });
 
   it('t.replace!("a", "x") mutates ref', async () => {
-    await expectBehavior(script, inp('5', '@bangReplace'), out('5', 'Text', 'xxbxx'));
+    await expectBehavior(script, inp('5', 'bangReplace'), out('5', 'Text', 'xxbxx'));
   });
 });
 
@@ -355,19 +355,19 @@ describe('Text.reverse', () => {
   `;
 
   it('reverse ascii', async () => {
-    await expectBehavior(script, inp('1', '@rev'), out('1', 'Text', 'olleh'));
+    await expectBehavior(script, inp('1', 'rev'), out('1', 'Text', 'olleh'));
   });
   it('ref.reverse', async () => {
-    await expectBehavior(script, inp('2', '@revRef'), out('2', 'Text', 'edcba'));
+    await expectBehavior(script, inp('2', 'revRef'), out('2', 'Text', 'edcba'));
   });
   it('reverse with emoji — scalar-level', async () => {
-    await expectBehavior(script, inp('3', '@revEmoji'), out('3', 'Text', 'b\u{1F600}a'));
+    await expectBehavior(script, inp('3', 'revEmoji'), out('3', 'Text', 'b\u{1F600}a'));
   });
   it('reverse empty', async () => {
-    await expectBehavior(script, inp('4', '@revEmpty'), out('4', 'Text', ''));
+    await expectBehavior(script, inp('4', 'revEmpty'), out('4', 'Text', ''));
   });
   it('bare reverse(const)', async () => {
-    await expectBehavior(script, inp('5', '@revBare'), out('5', 'Text', 'zyx'));
+    await expectBehavior(script, inp('5', 'revBare'), out('5', 'Text', 'zyx'));
   });
 });
 
@@ -411,22 +411,22 @@ describe('Bang methods — additional', () => {
   `;
 
   it('t.reverse!', async () => {
-    await expectBehavior(script, inp('1', '@bangReverse'), out('1', 'Text', 'olleh'));
+    await expectBehavior(script, inp('1', 'bangReverse'), out('1', 'Text', 'olleh'));
   });
   it('t.trim_start!', async () => {
-    await expectBehavior(script, inp('2', '@bangTrimStart'), out('2', 'Text', 'hi  '));
+    await expectBehavior(script, inp('2', 'bangTrimStart'), out('2', 'Text', 'hi  '));
   });
   it('t.trim_end!', async () => {
-    await expectBehavior(script, inp('3', '@bangTrimEnd'), out('3', 'Text', '  hi'));
+    await expectBehavior(script, inp('3', 'bangTrimEnd'), out('3', 'Text', '  hi'));
   });
   it('t.before!("-")', async () => {
-    await expectBehavior(script, inp('4', '@bangBefore'), out('4', 'Text', 'hello'));
+    await expectBehavior(script, inp('4', 'bangBefore'), out('4', 'Text', 'hello'));
   });
   it('t.after!("-")', async () => {
-    await expectBehavior(script, inp('5', '@bangAfter'), out('5', 'Text', 'world'));
+    await expectBehavior(script, inp('5', 'bangAfter'), out('5', 'Text', 'world'));
   });
   it('t.replace_first!("a", "x")', async () => {
-    await expectBehavior(script, inp('6', '@bangReplaceFirst'), out('6', 'Text', 'xabaa'));
+    await expectBehavior(script, inp('6', 'bangReplaceFirst'), out('6', 'Text', 'xabaa'));
   });
 });
 
@@ -441,10 +441,10 @@ describe('Text.concat', () => {
   `;
 
   it('Text.concat(a, b)', async () => {
-    await expectBehavior(script, inp('1', '@concatFunc'), out('1', 'Text', 'hello world'));
+    await expectBehavior(script, inp('1', 'concatFunc'), out('1', 'Text', 'hello world'));
   });
   it('ref.concat(b)', async () => {
-    await expectBehavior(script, inp('2', '@concatRef'), out('2', 'Text', 'hello world'));
+    await expectBehavior(script, inp('2', 'concatRef'), out('2', 'Text', 'hello world'));
   });
 });
 
@@ -458,7 +458,7 @@ describe('Text.append!', () => {
   `;
 
   it('t.append!(b) mutates ref', async () => {
-    await expectBehavior(script, inp('1', '@appendBang'), out('1', 'Text', 'hello world'));
+    await expectBehavior(script, inp('1', 'appendBang'), out('1', 'Text', 'hello world'));
   });
 });
 
@@ -470,13 +470,13 @@ describe('Text.at', () => {
   `;
 
   it('Text.at(text, 1)', async () => {
-    await expectBehavior(script, inp('1', '@atFunc'), out('1', 'Text', 'e'));
+    await expectBehavior(script, inp('1', 'atFunc'), out('1', 'Text', 'e'));
   });
   it('ref.at(0)', async () => {
-    await expectBehavior(script, inp('2', '@atRef'), out('2', 'Text', 'h'));
+    await expectBehavior(script, inp('2', 'atRef'), out('2', 'Text', 'h'));
   });
   it('at emoji — scalar indexed', async () => {
-    await expectBehavior(script, inp('3', '@atEmoji'), out('3', 'Text', '\u{1F600}'));
+    await expectBehavior(script, inp('3', 'atEmoji'), out('3', 'Text', '\u{1F600}'));
   });
 });
 
@@ -505,36 +505,36 @@ describe('Text bang forms — same-type-returning mutators', () => {
   `;
 
   it('upper! mutates ref to upper-cased', async () => {
-    await expectBehavior(script, inp('1', '@upperBang'), out('1', 'Text', 'HI'));
+    await expectBehavior(script, inp('1', 'upperBang'), out('1', 'Text', 'HI'));
   });
   it('lower! mutates ref to lower-cased', async () => {
-    await expectBehavior(script, inp('2', '@lowerBang'), out('2', 'Text', 'hi'));
+    await expectBehavior(script, inp('2', 'lowerBang'), out('2', 'Text', 'hi'));
   });
   it('trim! mutates ref to trimmed', async () => {
-    await expectBehavior(script, inp('3', '@trimBang'), out('3', 'Text', 'hi'));
+    await expectBehavior(script, inp('3', 'trimBang'), out('3', 'Text', 'hi'));
   });
   it('reverse! mutates ref to reversed', async () => {
-    await expectBehavior(script, inp('4', '@reverseBang'), out('4', 'Text', 'cba'));
+    await expectBehavior(script, inp('4', 'reverseBang'), out('4', 'Text', 'cba'));
   });
   it('repeat! mutates ref to repeated', async () => {
-    await expectBehavior(script, inp('5', '@repeatBang'), out('5', 'Text', 'ababab'));
+    await expectBehavior(script, inp('5', 'repeatBang'), out('5', 'Text', 'ababab'));
   });
   it('replace! mutates all occurrences', async () => {
-    await expectBehavior(script, inp('6', '@replaceBang'), out('6', 'Text', 'xxbxx'));
+    await expectBehavior(script, inp('6', 'replaceBang'), out('6', 'Text', 'xxbxx'));
   });
   it('replace_first! mutates first occurrence', async () => {
-    await expectBehavior(script, inp('7', '@replaceFirstBang'), out('7', 'Text', 'Xaa'));
+    await expectBehavior(script, inp('7', 'replaceFirstBang'), out('7', 'Text', 'Xaa'));
   });
   it('before! mutates ref to prefix', async () => {
-    await expectBehavior(script, inp('8', '@beforeBang'), out('8', 'Text', 'hello'));
+    await expectBehavior(script, inp('8', 'beforeBang'), out('8', 'Text', 'hello'));
   });
   it('after! mutates ref to suffix', async () => {
-    await expectBehavior(script, inp('9', '@afterBang'), out('9', 'Text', 'bye'));
+    await expectBehavior(script, inp('9', 'afterBang'), out('9', 'Text', 'bye'));
   });
   it('slice! mutates ref to range', async () => {
-    await expectBehavior(script, inp('10', '@sliceBang'), out('10', 'Text', 'bcd'));
+    await expectBehavior(script, inp('10', 'sliceBang'), out('10', 'Text', 'bcd'));
   });
   it('concat! mutates ref to concatenated', async () => {
-    await expectBehavior(script, inp('11', '@concatBang'), out('11', 'Text', 'hello world'));
+    await expectBehavior(script, inp('11', 'concatBang'), out('11', 'Text', 'hello world'));
   });
 });

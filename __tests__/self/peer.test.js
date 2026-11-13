@@ -50,7 +50,7 @@ describe('Self — peer-shaped @-cell, two-actor gossip ring', () => {
     const compiled = await compileActor(SCRIPT);
     const actor = await compiled.spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@run!', from: 'caller' } },
+      { input: { id: '1', op: 'run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
         re: expect.objectContaining({
@@ -66,7 +66,7 @@ describe('Self — peer-shaped @-cell, two-actor gossip ring', () => {
     const compiled = await compileActor(SCRIPT);
     const actor = await compiled.spawn();
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@run!', from: 'caller' } },
+      { input: { id: '1', op: 'run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
         re: expect.objectContaining({

@@ -159,7 +159,7 @@ value on one path and falling off the end on another: write `return self` on the
 second. `self` is only a value in return position. On the wire a self-return is
 `{ re: '#<>' }`, where `#<>` is the sender's own address in local form. Its parent
 promotes it, like any other local address, and adds the class in `ty`:
-`{ re: '#<@Counter/1>', ty: '@Counter' }`.
+`{ re: '#<. Counter 1>', ty: '. Counter' }`.
 
 A signature's arrow states its effect, in service docs and function types. A name
 is never interpreted:
@@ -255,7 +255,7 @@ count *Integer = 0
 ## Remote Actors
 
 A remote actor binding uses `*Name(...)`. Construction calls the remote class
-— a `#new` CAM message is sent to the dependency address; the reply carries
+— a `$new` CAM message is sent to the dependency address; the reply carries
 the actor's address:
 
 ```brevity

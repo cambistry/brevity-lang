@@ -33,28 +33,28 @@ describe('untyped param arithmetic in a file-level function', () => {
 
   it('doubles an Integer argument', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('doubles a Decimal argument', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testDecimal', from: 'c' } },
+      { input: { id: '2', op: 'testDecimal', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Decimal' }, re: { result: 2.5 }, to: 'c' } },
     );
   });
 
   it('raises an untyped argument to a power', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testPower', from: 'c' } },
+      { input: { id: '4', op: 'testPower', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 27 }, to: 'c' } },
     );
   });
 
   it('compares an untyped argument', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testCompare', from: 'c' } },
+      { input: { id: '3', op: 'testCompare', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });

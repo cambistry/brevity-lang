@@ -76,14 +76,14 @@ describe('ingest — basic — runtime', () => {
 
   it('superclass receives subclass constructor block return value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testGreeting', from: 'c' } },
+      { input: { id: '1', op: 'testGreeting', from: 'c' } },
       { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
     );
   });
 
   it('different subclasses provide different values', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testFarewell', from: 'c' } },
+      { input: { id: '1', op: 'testFarewell', from: 'c' } },
       { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'goodbye' }, to: 'c' } },
     );
   });
@@ -115,14 +115,14 @@ describe('ingest — with default — runtime', () => {
 
   it('direct construction uses default value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testDefault', from: 'c' } },
+      { input: { id: '1', op: 'testDefault', from: 'c' } },
       { output: { id: '1', 'ty': { content: 'Text' }, re: { content: '' }, to: 'c' } },
     );
   });
 
   it('subclass overrides default value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testOverride', from: 'c' } },
+      { input: { id: '1', op: 'testOverride', from: 'c' } },
       { output: { id: '1', 'ty': { content: 'Text' }, re: { content: 'hello' }, to: 'c' } },
     );
   });
@@ -155,14 +155,14 @@ describe('ingest — with params — runtime', () => {
 
   it('superclass params and ingest coexist — param works', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testId', from: 'c' } },
+      { input: { id: '1', op: 'testId', from: 'c' } },
       { output: { id: '1', 'ty': { id: 'Integer' }, re: { id: 42 }, to: 'c' } },
     );
   });
 
   it('superclass params and ingest coexist — ingest works', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testLabel', from: 'c' } },
+      { input: { id: '1', op: 'testLabel', from: 'c' } },
       { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'widget' }, to: 'c' } },
     );
   });
@@ -188,7 +188,7 @@ describe('ingest — computed value — runtime', () => {
 
   it('subclass provides computed expression', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
     );
   });

@@ -12,7 +12,7 @@ describe('restructure', () => {
 
   it('local var assignment and restructure — a = x, ->(:a)', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ x: 42 }, '@echo2'], 'ty': [{ x: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [{ x: 42 }, 'echo2'], 'ty': [{ x: 'Integer' }], from: 'c' } },
       { output: { id: '1', 'ty': { a: 'Integer' }, re: { a: 42 }, to: 'c' } },
     );
   });

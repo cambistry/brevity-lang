@@ -46,7 +46,7 @@ describe('Self — recursive list reverse', () => {
   it('reverses an empty list (base case, no recursion)', async () => {
     const actor = await createActor(REVERSE_SCRIPT, { constructorArgs: [[]] });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@reverse', from: 'caller' } },
+      { input: { id: '1', op: 'reverse', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: { reversed: [] }, to: 'caller' }) },
     );
   });
@@ -54,7 +54,7 @@ describe('Self — recursive list reverse', () => {
   it('reverses a single-element list (one level of Self recursion)', async () => {
     const actor = await createActor(REVERSE_SCRIPT, { constructorArgs: [[42]] });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@reverse', from: 'caller' } },
+      { input: { id: '1', op: 'reverse', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: { reversed: [42] }, to: 'caller' }) },
     );
   });
@@ -62,7 +62,7 @@ describe('Self — recursive list reverse', () => {
   it('reverses a multi-element list (deep Self recursion)', async () => {
     const actor = await createActor(REVERSE_SCRIPT, { constructorArgs: [[1, 2, 3]] });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@reverse', from: 'caller' } },
+      { input: { id: '1', op: 'reverse', from: 'caller' } },
       { output: expect.objectContaining({ id: '1', re: { reversed: [3, 2, 1] }, to: 'caller' }) },
     );
   });

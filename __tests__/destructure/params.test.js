@@ -320,11 +320,11 @@ describe('destructure params — outgoing messages', () => {
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@go'], from: 'caller', 'ty': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, 'go'], from: 'caller', 'ty': [{ name: 'Text' }] });
 
     const outgoing = actor.posts.find(p => p.op && (
-      (typeof p.op === 'string' && p.op === '@greet') ||
-      (Array.isArray(p.op) && p.op.includes('@greet'))
+      (typeof p.op === 'string' && p.op === 'greet') ||
+      (Array.isArray(p.op) && p.op.includes('greet'))
     ));
     expect(outgoing).toBeDefined();
   });
@@ -339,9 +339,9 @@ describe('destructure params — outgoing messages', () => {
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '1', op: '@go.', from: 'caller' });
+    await actor.sendAsync({ id: '1', op: 'go.', from: 'caller' });
 
-    const outgoing = actor.posts.find(p => p.op === '@ping.');
+    const outgoing = actor.posts.find(p => p.op === 'ping.');
     expect(outgoing).toBeDefined();
   });
 });
@@ -366,11 +366,11 @@ describe('destructure params — full roundtrip', () => {
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
 
     const actor = await compiled.spawn();
-    await actor.sendAsync({ id: '42', op: [{ name: 'Alice' }, '@hello'], from: 'caller', 'ty': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '42', op: [{ name: 'Alice' }, 'hello'], from: 'caller', 'ty': [{ name: 'Text' }] });
 
     const outgoing = actor.posts.find(p => p.op && (
-      (typeof p.op === 'string' && p.op === '@greet') ||
-      (Array.isArray(p.op) && p.op.includes('@greet'))
+      (typeof p.op === 'string' && p.op === 'greet') ||
+      (Array.isArray(p.op) && p.op.includes('greet'))
     ));
     expect(outgoing).toBeDefined();
 
@@ -453,19 +453,19 @@ describe('destructure params — uniform addressable ops', () => {
 
     const actor = await compiled.spawn();
 
-    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, '@useFunction'], from: 'caller', 'ty': [{ name: 'Text' }] });
+    await actor.sendAsync({ id: '1', op: [{ name: 'Alice' }, 'useFunction'], from: 'caller', 'ty': [{ name: 'Text' }] });
     const fnOut = actor.posts.find(p => p.op && (
-      (typeof p.op === 'string' && p.op === '@greet') ||
-      (Array.isArray(p.op) && p.op.includes('@greet'))
+      (typeof p.op === 'string' && p.op === 'greet') ||
+      (Array.isArray(p.op) && p.op.includes('greet'))
     ));
     expect(fnOut).toBeDefined();
 
-    await actor.sendAsync({ id: '2', op: '@useConstant', from: 'caller' });
-    const constOut = actor.posts.find(p => p.op === '@VERSION');
+    await actor.sendAsync({ id: '2', op: 'useConstant', from: 'caller' });
+    const constOut = actor.posts.find(p => p.op === 'VERSION');
     expect(constOut).toBeDefined();
 
-    await actor.sendAsync({ id: '3', op: '@useCell', from: 'caller' });
-    const cellOut = actor.posts.find(p => p.op === '@count');
+    await actor.sendAsync({ id: '3', op: 'useCell', from: 'caller' });
+    const cellOut = actor.posts.find(p => p.op === 'count');
     expect(cellOut).toBeDefined();
   });
 });

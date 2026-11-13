@@ -1,5 +1,5 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens, _bv_label_of } from './runtime/wire.js';
+import { _bv_to_wire, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens } from './runtime/wire.js';
 import { OPRE_TOKENS_PREAMBLE } from '../opre_tokens.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
@@ -18,7 +18,6 @@ export const WIRE_PREAMBLE = [
   _bv_unwire_reply.toString().replace(', _bv_types)', ')'),
   _bv_sel.toString(),
   _bv_local_tokens.toString(),
-  _bv_label_of.toString(),
   OPRE_TOKENS_PREAMBLE,
 ].join('\n');
 

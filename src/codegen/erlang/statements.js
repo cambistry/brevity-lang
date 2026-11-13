@@ -1,7 +1,7 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { addressToken } from '../wire_labels.js';
+import { addressToken, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
@@ -75,14 +75,11 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget ? null : target.object.name;
-  // Internal selector (for direct handle_op calls): compound subscribe@<name>.
-  // Wire selector (for outbound posts): "@subscribe" — the field goes into
-  // the to-field as the last token after the (angle-delimited) alias.
-  const internalSelector = isSelfTarget
-    ? 'subscribe' + target.name[0] + target.name.slice(1)
-    : 'subscribe@' + target.property;
-  const wireOp = '@subscribe';
-  const toSelector = isSelfTarget ? addressToken(target.name) : target.property;
+  // The op is "$subscribe"; its target is the member's wire name, the last
+  // token of to (`a`, `#a` for self, a public member bare). Direct handle_op
+  // calls dispatch on {<<"$subscribe">>, Target}.
+  const wireOp = '$subscribe';
+  const toSelector = isSelfTarget ? addressToken(target.name) : memberOp(target.property);
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
   const params = expr.params || [];
@@ -135,7 +132,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const buildOpExpr = (opStr) => erlOpExpr(positional.map(genArgVal),
     named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', '), `<<"${opStr}">>`);
   const wireOpExpr = buildOpExpr(wireOp);
-  const internalOpExpr = buildOpExpr(internalSelector);
+  const internalOpExpr = wireOpExpr;
   let payloadExpr = 'null';
   let tyExpr = null;
   if (named.length > 0 && positional.length === 0) {
@@ -163,7 +160,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // Self/child direct dispatch passes the compound selector as handle_op's
   // first arg (so the subscribe@/# prologue pattern-matches). Remote posts
   // the bare verb on the wire, with the @field selector in the to-field.
-  const selectorBin = `<<"${internalSelector}">>`;
+  const selectorBin = `{<<"$subscribe">>, ${erlString(toSelector)}}`;
   if (isSelfTarget) {
     // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
     // selector too so the prologue's args extraction (hd(op) when list) still
@@ -217,7 +214,7 @@ function genErlAsSend(ctx, varName, typeName, target, I, lines) {
   const v = erlSendVars(ctx);
   lines.push(`${I}${v.seq} = bv_next_seq_(),`);
   lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
-  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"as">>], <<"to">> => ${target}},`);
+  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"$as">>], <<"to">> => ${target}},`);
   lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
   lines.push(`${I}${varName} = hd(await_response_(${v.id})),`);
 }
@@ -381,7 +378,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
               lines.push(`${I}${childPrefix}_init([${initArgs}]),`);
             }
             // Extract memoized value via child dispatch
-            lines.push(`${I}{ok, [${varName}], _} = ${childPrefix}_handle_op(<<"as">>, #{}, ${erlString(s.typeName)}, <<>>, <<>>),`);
+            lines.push(`${I}{ok, [${varName}], _} = ${childPrefix}_handle_op(<<"$as">>, #{}, ${erlString(s.typeName)}, <<>>, <<>>),`);
             continue;
           }
           lines.push(`${I}${varName} = ${genExpr(ctx, asClause.expr, typeEnv, stmtCtx)},`);
@@ -394,7 +391,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         if (ctx.destructuredMembers?.has(s.value.name)) {
           const { service, remote } = ctx.destructuredMembers.get(s.value.name);
           const to = erlString(service);
-          const method = erlString('@' + remote);
+          const method = erlString(memberOp(remote));
           const v = erlSendVars(ctx);
           lines.push(`${I}${v.seq} = bv_next_seq_(),`);
           lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
@@ -412,14 +409,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = stmtCtx.childActorRefs.get(s.value.name);
         const prefix = `child_${actorName.toLowerCase()}`;
         const n = ctx.ephCounter++;
-        lines.push(`${I}{ok, Eph_as_re_${n}_, _} = ${prefix}_handle_op(<<"as">>, #{}, ${erlString(s.typeName)}, <<"0">>, <<"__parent">>),`);
+        lines.push(`${I}{ok, Eph_as_re_${n}_, _} = ${prefix}_handle_op(<<"$as">>, #{}, ${erlString(s.typeName)}, <<"0">>, <<"__parent">>),`);
         lines.push(`${I}${varName} = hd(Eph_as_re_${n}_),`);
         continue;
       }
       // ...or from an instance process.
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(s.value.name)) {
         const pid = genExpr(ctx, { type: stmtCtx.refVars?.has(s.value.name) ? 'RefRead' : 'Identifier', name: s.value.name }, typeEnv, stmtCtx);
-        lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"as">>, ${erlString(s.typeName)})),`);
+        lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"$as">>, ${erlString(s.typeName)})),`);
         continue;
       }
 
@@ -710,12 +707,12 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'SetStatement') {
       if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
       } else if (sCtx.selfSpawnedRefs?.has(s.name)) {
         // Instance process: send the set and await its (silent) completion.
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, stmtCtx);
         lines.push(`${I}bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, stmtCtx)}]),`);
       } else {
@@ -748,8 +745,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           const nth = ctx._fnReplayCounter;
           for (const fnFullName of derivedFns) {
             const sfx = fnFullName.replace(/[^a-zA-Z0-9]/g, '') + nth;
-            const fnKey = `{cell_subs, ${erlString(fnFullName)}}`;
-            const selectorBin = `<<"${fnFullName}">>`;
+            const fnKey = `{cell_subs, ${erlOp(fnFullName)}}`;
+            const selectorBin = erlOp(fnFullName);
             lines.push(`${I}FnSubs${sfx}_ = case get(${fnKey}) of undefined -> []; FL${sfx}_ -> FL${sfx}_ end,`);
             // Skip inproc-tagged subs so they aren't accidentally treated
             // as remote subscribers (which would emit JSON to stdout) —
@@ -785,7 +782,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     if (s.type === 'ActorSetStatement') {
       if ((sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) || sCtx.selfSpawnedRefs?.has(s.name)) {
         const actorName = sCtx.childActorRefs?.get(s.name);
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const posArgs = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr, typeEnv, stmtCtx));
         const namedArgs = s.args.filter(a => !a.positional);
         let payload;
@@ -808,10 +805,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ActorFieldSet') {
-      // Internal selector for direct child_handle_op calls: set@<field>.
-      // Wire shape for remote posts: op:"#set", to:"#<alias field>".
-      const internalSetSelector = 'set@' + s.fieldName;
-      const toSelector = s.fieldName;
+      // Op "$set"; the field, a public member bare, is the target: the last
+      // token of to on the wire, {<<"$set">>, Field} for direct calls.
+      const toSelector = memberOp(s.fieldName);
+      const setKey = `{<<"$set">>, ${erlString(toSelector)}}`;
       const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
       // Synthetic in-process id/from: set is silent (no reply awaited) so
       // Id is unused; From=<<"__parent">> marks in-process routing, which
@@ -820,14 +817,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Instance process (a local, ref or constructor-block cell): send the
         // set and await it, so its notifications are drained in order.
         const pidExpr = genExpr(ctx, { type: sCtx.refVars?.has(s.objectName) ? 'RefRead' : 'Identifier', name: s.objectName }, typeEnv, stmtCtx);
-        lines.push(`${I}bv_inst_call_(${pidExpr}, <<"${internalSetSelector}">>, [${val}]),`);
+        lines.push(`${I}bv_inst_call_(${pidExpr}, ${setKey}, [${val}]),`);
       } else if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(${setKey}, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.childVarToActor?.has(s.objectName)) {
         // Module-level child state var: c = C() at file init.
         const actorName = ctx.childVarToActor.get(s.objectName);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${internalSetSelector}">>, #{}, [${val}], <<>>, <<"__parent">>),`);
+        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(${setKey}, #{}, [${val}], <<>>, <<"__parent">>),`);
       } else if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep: post to stdout with bare verb + angle-delimited alias + sel.
         // Include `ty` so the remote's schema_required check passes.
@@ -842,7 +839,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           ? `, <<"ty">> => [[${hintTag}]]`
           : '';
         const toBin = erlString('#<' + joinAddress([s.objectName, toSelector]) + '>');
-        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"#set">>], <<"to">> => ${toBin}${tyField}},`);
+        lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"$set">>], <<"to">> => ${toBin}${tyField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }
     }
@@ -1174,10 +1171,10 @@ function genIfStatement(ctx, node, typeEnv, sCtx, indent) {
     if (s.type === 'SetStatement') {
       if (sCtx?.childActorRefs?.has(s.name)) {
         const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(ctx, s.value, typeEnv, sCtx)}], _Id, _From)`);
       } else if (sCtx?.selfSpawnedRefs?.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? 'update' : 'set';
+        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
         bodyLines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, sCtx)}])`);
       } else {
@@ -1237,7 +1234,7 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
   if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.source.callee.name)) {
     const { service, remote } = ctx.destructuredMembers.get(s.source.callee.name);
     const to = erlString(service);
-    const method = erlString('@' + remote);
+    const method = erlString(memberOp(remote));
     const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = s.source.args.find(a => a.type === 'NamedArgsBag');
     const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';

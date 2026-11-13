@@ -171,35 +171,35 @@ describe('XML tags — runtime', () => {
 
   it('string attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testString', from: 'c' } },
+      { input: { id: '1', op: 'testString', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('expression attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testExpr', from: 'c' } },
+      { input: { id: '2', op: 'testExpr', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
     );
   });
 
   it('mixed — string attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testMixed', from: 'c' } },
+      { input: { id: '3', op: 'testMixed', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'world' }, to: 'c' } },
     );
   });
 
   it('mixed — expression attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testMixedCount', from: 'c' } },
+      { input: { id: '4', op: 'testMixedCount', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
   it('computed expression in attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@testComputedExpr', from: 'c' } },
+      { input: { id: '5', op: 'testComputedExpr', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
     );
   });
@@ -222,7 +222,7 @@ describe('XML tags — no attributes', () => {
 
   it('no-attribute tag constructs correctly', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
@@ -253,7 +253,7 @@ describe('XML tags — nested', () => {
   // TODO: nested class calls in named arg position need async handling
   it.skip('nested XML class call in expression attribute', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
@@ -295,28 +295,28 @@ describe('XML tags — equivalence with function syntax', () => {
 
   it('XML and function call produce same string result', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testXml', from: 'c' } },
+      { input: { id: '1', op: 'testXml', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'localhost' }, to: 'c' } },
     );
   });
 
   it('function call produces same string result', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testFn', from: 'c' } },
+      { input: { id: '2', op: 'testFn', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'localhost' }, to: 'c' } },
     );
   });
 
   it('XML and function call produce same integer result', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testXmlPort', from: 'c' } },
+      { input: { id: '3', op: 'testXmlPort', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 8080 }, to: 'c' } },
     );
   });
 
   it('function call produces same integer result', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testFnPort', from: 'c' } },
+      { input: { id: '4', op: 'testFnPort', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 8080 }, to: 'c' } },
     );
   });
@@ -352,21 +352,21 @@ describe('XML tags — optional params', () => {
 
   it('all attributes provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testAllProvided', from: 'c' } },
+      { input: { id: '1', op: 'testAllProvided', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'custom' }, to: 'c' } },
     );
   });
 
   it('no attributes — defaults fill in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testDefaults', from: 'c' } },
+      { input: { id: '2', op: 'testDefaults', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'default' }, to: 'c' } },
     );
   });
 
   it('partial attributes — remaining use defaults', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testPartial', from: 'c' } },
+      { input: { id: '3', op: 'testPartial', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });

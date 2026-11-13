@@ -21,28 +21,28 @@ describe('public function', () => {
 
   it('@hello — lineal form', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@helloOpen', from: 'c' } },
+      { input: { id: '1', op: 'helloOpen', from: 'c' } },
       { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('@hello = -> — delimited inline', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@helloInline', from: 'c' } },
+      { input: { id: '2', op: 'helloInline', from: 'c' } },
       { output: { id: '2', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } },
     );
   });
 
   it('@echo — named param round-trip', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ text: 'abc' }, '@echo'], 'ty': [{ text: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [{ text: 'abc' }, 'echo'], 'ty': [{ text: 'Text' }], from: 'c' } },
       { output: { id: '3', 'ty': { text: 'Text' }, re: { text: 'abc' }, to: 'c' } },
     );
   });
 
   it('whitespace-only blank line between params and body', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, '@add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [{ a: 3, b: 4 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } },
     );
   });
@@ -88,66 +88,60 @@ describe('f, @f and #f are different functions', () => {
     { output: { id: '1', re: [value], 'ty': ['Text'], to: 'c' } },
   );
 
-  it('f() calls f', () => reads('@callsPrivate', 'private'));
-  it('@f() calls @f', () => reads('@callsPublic', 'public'));
-  it('#f() calls #f', () => reads('@callsHash', 'hash'));
+  it('f() calls f', () => reads('callsPrivate', 'private'));
+  it('@f() calls @f', () => reads('callsPublic', 'public'));
+  it('#f() calls #f', () => reads('callsHash', 'hash'));
 
   it('f() in place calls f', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@inPlacePrivate', from: 'c' } },
+      { input: { id: '1', op: 'inPlacePrivate', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: ['private'], to: 'c' }) },
     );
   });
 
   it('@f() in place calls @f', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@inPlacePublic', from: 'c' } },
+      { input: { id: '1', op: 'inPlacePublic', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: ['public'], to: 'c' }) },
     );
   });
 
   it('a destructured f() calls f', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@destructuresPrivate', from: 'c' } },
+      { input: { id: '1', op: 'destructuresPrivate', from: 'c' } },
       { output: { id: '1', re: { v: 'private' }, 'ty': { v: 'Text' }, to: 'c' } },
     );
   });
 
   it('a destructured @f() calls @f', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@destructuresPublic', from: 'c' } },
+      { input: { id: '1', op: 'destructuresPublic', from: 'c' } },
       { output: { id: '1', re: { v: 'public' }, 'ty': { v: 'Text' }, to: 'c' } },
     );
   });
 
-  it('outside, @f answers', () => reads('@f', 'public'));
+  it('outside, @f answers', () => reads('f', 'public'));
 
-  it('outside, f doesn\'t answer', async () => {
+  // On the wire, a protected label takes a leading `~`: f is op `~f`.
+  it('outside, f (op ~f) doesn\'t answer', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: 'f', from: 'c' } },
-      { output: { id: '1', ex: { f: 'unhandled' }, to: 'c' } },
+      { input: { id: '1', op: '~f', from: 'c' } },
+      { output: { id: '1', ex: { '~f': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('outside, .f doesn\'t answer', async () => {
+  it('inside, f is op ~f', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '.f', from: 'c' } },
-      { output: { id: '1', ex: { '.f': 'unhandled' }, to: 'c' } },
-    );
-  });
-
-  // On the wire, a protected label takes a leading `.`: f is op `.f`.
-  it('inside, f is op .f', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', test: { op: '.f' }, from: 't' } },
+      { input: { id: '1', test: { op: '~f' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: ['private'] }) },
     );
   });
 
-  it('inside, op f is nothing', async () => {
+  // A bare op is public: inside too, op f is @f.
+  it('inside, op f is @f', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: 'f' }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', ex: { f: 'unhandled' } }) },
+      { output: expect.objectContaining({ id: '1', re: ['public'] }) },
     );
   });
 

@@ -36,20 +36,20 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
   await page.register('t', m => replies.push(m));
 
   // document.body() → body address
-  await page.send({ id: 'body', op: '@body', to: 'document', from: 't' });
+  await page.send({ id: 'body', op: 'body', to: 'document', from: 't' });
   const bodyAddr = replies.find(m => m.id === 'body').re;
 
   // HTML.<tag>(#new) with the handler wired back to us (`#<t>`)
   await page.send({
     id: 'new',
-    op: [{ id: 'evtel', [on]: '#<t>', children: [] }, '#new'],
+    op: [{ id: 'evtel', [on]: '#<t>', children: [] }, '$new'],
     to: `HTML ${tag}`,
     from: 't',
   });
   const elAddr = replies.find(m => m.id === 'new').re;
 
   // body.append!(element)
-  await page.send({ id: 'app', op: [[elAddr], '@append!'], to: bodyAddr, from: 't' });
+  await page.send({ id: 'app', op: [[elAddr], 'append!'], to: bodyAddr, from: 't' });
 
   // Fire a real DOM event and drain what the listener routed to `t`. The
   // listener runs synchronously inside dispatchEvent, so the message is already

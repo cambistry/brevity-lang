@@ -66,9 +66,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>hello</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hello'] }, '#new'],
+          op: [{ children: ['hello'] }, '$new'],
           to: 'HTML div',
         }) },
       );
@@ -86,9 +86,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '#new'],
+          op: [{ children: ['#<main @0>'] }, '$new'],
           to: 'HTML div',
         }) },
       );
@@ -106,9 +106,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>pre {{ content }} post</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['pre ', '#<main @0>', ' post'] }, '#new'],
+          op: [{ children: ['pre ', '#<main @0>', ' post'] }, '$new'],
           to: 'HTML div',
         }) },
       );
@@ -127,9 +127,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>{{ a }}{{ b }}</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', '#<main @1>'] }, '#new'],
+          op: [{ children: ['#<main @0>', '#<main @1>'] }, '$new'],
           to: 'HTML div',
         }) },
       );
@@ -145,9 +145,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>{{ first }} middle {{ last }}</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', ' middle ', '#<main @1>'] }, '#new'],
+          op: [{ children: ['#<main @0>', ' middle ', '#<main @1>'] }, '$new'],
           to: 'HTML div',
         }) },
       );
@@ -172,9 +172,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div><h1>Title</h1><p>{{ content }}</p></div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['Title'] }, '#new'],
+          op: [{ children: ['Title'] }, '$new'],
           to: 'HTML h1',
         }) },
       );
@@ -198,9 +198,9 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '#new'],
+          op: [{ children: ['#<main @0>'] }, '$new'],
           to: 'HTML div',
           from: 'main',
         }) },
@@ -209,7 +209,7 @@ describe('template emission — structured children wire shape', () => {
 
     it('the self address `#<.>` in a reply is promoted to the sender', async () => {
       await expectEmission('a *Integer = 0\n@inc! = (i Integer) { a <- a + i }\n',
-        { input: { id: '1', op: [[1], '@inc!'], 'ty': [['Integer']], from: 'c' } },
+        { input: { id: '1', op: [[1], 'inc!'], 'ty': [['Integer']], from: 'c' } },
         { output: expect.objectContaining({ id: '1', re: '#<main>', from: 'main' }) },
       );
     });
@@ -230,12 +230,12 @@ describe('template emission — structured children wire shape', () => {
         @create = -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
-        { input: { id: '1', op: '@create', from: 'c' } },
+        { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '#new'],
+          op: [{ children: ['#<main @0>'] }, '$new'],
           to: 'HTML div',
         }) },
-        { input: { id: '2', op: '@subscribe', to: '. @0', from: 'c' } },
+        { input: { id: '2', op: '$subscribe', to: '. @0', from: 'c' } },
         { output: expect.objectContaining({ id: '2', re: ['hello'], to: 'c' }) },
       );
     });

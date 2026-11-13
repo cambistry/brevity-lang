@@ -457,15 +457,15 @@ const PAGE_HTML = `<html><head>
 // run `queryFn` (browser-context) and return its value to the test.
 async function renderAndQuery(page, tag, payload, queryFn) {
   const dom = await page.connectActor('HTML ' + tag);
-  await dom.sendAsync({ id: 'n', op: [payload, '#new'] });
+  await dom.sendAsync({ id: 'n', op: [payload, '$new'] });
   const elementAddr = dom.posts[0].re;
 
   const docActor = await page.connectActor('document');
-  await docActor.sendAsync({ id: 'b', op: '@body' });
+  await docActor.sendAsync({ id: 'b', op: 'body' });
   const bodyAddr = docActor.posts[0].re.slice(2, -1);
 
   const body = await page.connectActor(bodyAddr);
-  await body.sendAsync({ id: 'a', op: [elementAddr, '@append!'] });
+  await body.sendAsync({ id: 'a', op: [elementAddr, 'append!'] });
 
   return page.evaluate(queryFn);
 }
@@ -479,15 +479,15 @@ describe('HTML tag DOM render — every tag lands with the right tagName', () =>
   it('all tags render to document.body with their declared tagName', async () => {
     const page = await loadPage(PAGE_HTML);
     const docActor = await page.connectActor('document');
-    await docActor.sendAsync({ id: 'b', op: '@body' });
+    await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
     const body = await page.connectActor(bodyAddr);
 
     for (const tag of ALL_TAGS) {
       const dom = await page.connectActor('HTML ' + tag);
-      await dom.sendAsync({ id: 'n_' + tag, op: [{}, '#new'] });
+      await dom.sendAsync({ id: 'n_' + tag, op: [{}, '$new'] });
       const elementAddr = dom.posts[0].re;
-      await body.sendAsync({ id: 'a_' + tag, op: [elementAddr, '@append!'] });
+      await body.sendAsync({ id: 'a_' + tag, op: [elementAddr, 'append!'] });
     }
 
     const tagNames = await page.evaluate(() =>

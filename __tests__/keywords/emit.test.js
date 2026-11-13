@@ -143,21 +143,21 @@ describe('emit — compilation', () => {
 describe('emit — silent fire-and-forget', () => {
   it('emit with no subscriber does not crash', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@noSub', from: 'c' } },
+      { input: { id: '1', op: 'noSub', from: 'c' } },
       { output: { id: '1', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
     );
   });
 
   it('emit with subscriber triggers handler', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@oneSub', from: 'c' } },
+      { input: { id: '1', op: 'oneSub', from: 'c' } },
       { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
 
   it('multiple fires accumulate', async () => {
     await expectBehavior(silentEmitScript,
-      { input: { id: '1', op: '@threeFires', from: 'c' } },
+      { input: { id: '1', op: 'threeFires', from: 'c' } },
       { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 3 }, to: 'c' } },
     );
   });
@@ -170,7 +170,7 @@ describe('emit — silent fire-and-forget', () => {
 describe('emit — with args', () => {
   it('emit passes args to subscriber', async () => {
     await expectBehavior(argsEmitScript,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
   });
@@ -210,7 +210,7 @@ describe('emit — multiple subscribers', () => {
         return :count
     `;
     await expectBehavior(script,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 1 }, to: 'c' } },
     );
   });
@@ -223,7 +223,7 @@ describe('emit — multiple subscribers', () => {
 describe('emit — with return value', () => {
   it('emit waits for subscriber response', async () => {
     await expectBehavior(returnEmitScript,
-      { input: { id: '1', op: '@test', from: 'c' } },
+      { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', re: { valid: true }, to: 'c' } },
     );
   });

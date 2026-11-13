@@ -90,77 +90,77 @@ describe('zero-arity calls without parens', () => {
 
   it('a local function', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@local', from: 'c' } },
+      { input: { id: '1', op: 'local', from: 'c' } },
       { output: { id: '1', re: [10], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a local function as the tail', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@tail', from: 'c' } },
+      { input: { id: '1', op: 'tail', from: 'c' } },
       { output: { id: '1', re: [10], to: 'c' } },
     );
   });
 
   it('an own public function', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@ownPublic', from: 'c' } },
+      { input: { id: '1', op: 'ownPublic', from: 'c' } },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a local holding a function literal', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@lambda', from: 'c' } },
+      { input: { id: '1', op: 'lambda', from: 'c' } },
       { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a bang function as a statement', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@bang!', from: 'c' } },
+      { input: { id: '1', op: 'bang!', from: 'c' } },
       { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a member of a child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@member', from: 'c' } },
+      { input: { id: '1', op: 'member', from: 'c' } },
       { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a member of a construction', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@onConstruction', from: 'c' } },
+      { input: { id: '1', op: 'onConstruction', from: 'c' } },
       { output: { id: '1', re: [7], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a published cell, read the same way', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@cell', from: 'c' } },
+      { input: { id: '1', op: 'cell', from: 'c' } },
       { output: { id: '1', re: [4], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a bang member as a statement', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@memberBang', from: 'c' } },
+      { input: { id: '1', op: 'memberBang', from: 'c' } },
       { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('a chain', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@chain', from: 'c' } },
+      { input: { id: '1', op: 'chain', from: 'c' } },
       { output: { id: '1', re: [2], to: 'c' } },
     );
   });
 
   it('launching a bang member and a silent member with args', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@launch', from: 'c' } },
+      { input: { id: '1', op: 'launch', from: 'c' } },
       { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -182,8 +182,8 @@ describe('zero-arity calls on a dependency', () => {
 
   it('a function in its doc is called', async () => {
     await expectBehavior(script,
-      { input: { id: '99', op: '@go', from: 'c' } },
-      { output: expect.objectContaining({ op: '@count' }) },
+      { input: { id: '99', op: 'go', from: 'c' } },
+      { output: expect.objectContaining({ op: 'count' }) },
       { input: { id: '1', re: [5], 'ty': ['Integer'], from: 'Svc' } },
       { output: { id: '99', re: [5], 'ty': ['Integer'], to: 'c' } },
     );

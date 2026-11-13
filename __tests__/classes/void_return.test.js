@@ -70,28 +70,28 @@ describe('class — trailing () in constructor block is ignored', () => {
 
   it('delimited body — trailing () is a no-op, actor still works', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testBox', from: 'c' } },
+      { input: { id: '1', op: 'testBox', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { result: 7 }, to: 'c' }) },
     );
   });
 
   it('delimited body — trailing -> () is a no-op, actor still works', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testBoxArrow', from: 'c' } },
+      { input: { id: '2', op: 'testBoxArrow', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { result: 7 }, to: 'c' }) },
     );
   });
 
   it('lineal body — trailing () before . is a no-op', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testLinealBox', from: 'c' } },
+      { input: { id: '3', op: 'testLinealBox', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: { result: 7 }, to: 'c' }) },
     );
   });
 
   it('lineal body — trailing -> () before . is a no-op', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testLinealBoxArrow', from: 'c' } },
+      { input: { id: '4', op: 'testLinealBoxArrow', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: { result: 7 }, to: 'c' }) },
     );
   });

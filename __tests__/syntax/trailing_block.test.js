@@ -99,56 +99,56 @@ describe('trailing block', () => {
 
   it('single trailing block appended as positional function arg', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@singleBlock', from: 'c' } },
+      { input: { id: '1', op: 'singleBlock', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('regular args + named arg + trailing block', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@argsAndBlock', from: 'c' } },
+      { input: { id: '2', op: 'argsAndBlock', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 4 }, to: 'c' } },
     );
   });
 
   it('inline trailing block on a local function', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@inlineLocal', from: 'c' } },
+      { input: { id: '3', op: 'inlineLocal', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 21 }, to: 'c' } },
     );
   });
 
   it('two trailing blocks appended in order', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@twoInline', from: 'c' } },
+      { input: { id: '4', op: 'twoInline', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('two trailing blocks on subsequent lines', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@twoMultiLine', from: 'c' } },
+      { input: { id: '5', op: 'twoMultiLine', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('lineal trailing block — single', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@spaciousSingle', from: 'c' } },
+      { input: { id: '6', op: 'spaciousSingle', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 
   it('lineal trailing block — with regular args', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@spaciousArgs', from: 'c' } },
+      { input: { id: '7', op: 'spaciousArgs', from: 'c' } },
       { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 4 }, to: 'c' } },
     );
   });
 
   it('lineal trailing block — two blocks', async () => {
     await expectBehavior(script,
-      { input: { id: '8', op: '@spaciousTwo', from: 'c' } },
+      { input: { id: '8', op: 'spaciousTwo', from: 'c' } },
       { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });

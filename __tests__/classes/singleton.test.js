@@ -53,18 +53,18 @@ const script = `
 `;
 
 const made = (id, seed) => [
-  { input: { id, op: [[seed], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
+  { input: { id, op: [[seed], '$new'], ty: [['Integer']], to: '. Box', from: 'c' } },
   { output: expect.objectContaining({ id, re: expect.stringMatching(/^#<\. Box \d+>$/) }) },
 ];
 
 describe('inline singletons', () => {
   it('is built once, so its state outlives each call', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@bump!', from: 'c' } },
+      { input: { id: '1', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', to: 'c' }) },
-      { input: { id: '2', op: '@bump!', from: 'c' } },
+      { input: { id: '2', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', to: 'c' }) },
-      { input: { id: '3', op: '@get', from: 'c' } },
+      { input: { id: '3', op: 'get', from: 'c' } },
       { output: { id: '3', re: [102], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -73,11 +73,11 @@ describe('inline singletons', () => {
     await expectBehavior(script,
       ...made('1', 10),
       ...made('2', 20),
-      { input: { id: '3', op: '@bump!', to: '. Box 1', from: 'c' } },
+      { input: { id: '3', op: 'bump!', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '3', to: 'c' }) },
-      { input: { id: '4', op: '@get', to: '. Box 1', from: 'c' } },
+      { input: { id: '4', op: 'get', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [11], to: 'c' }) },
-      { input: { id: '5', op: '@get', to: '. Box 2', from: 'c' } },
+      { input: { id: '5', op: 'get', to: '. Box 2', from: 'c' } },
       { output: expect.objectContaining({ id: '5', re: [20], to: 'c' }) },
     );
   });
@@ -87,13 +87,13 @@ describe('a class keeps a nested class\'s actor in a cell', () => {
   // The desugared form of a singleton in a class, written out.
   it('each actor constructs its own, which reads the class\'s params', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[7], '#new'], ty: [['Integer']], to: '. Shelf', from: 'c' } },
+      { input: { id: '1', op: [[7], '$new'], ty: [['Integer']], to: '. Shelf', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<\. Shelf \d+>$/) }) },
-      { input: { id: '2', op: [[8], '#new'], ty: [['Integer']], to: '. Shelf', from: 'c' } },
+      { input: { id: '2', op: [[8], '$new'], ty: [['Integer']], to: '. Shelf', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: expect.stringMatching(/^#<\. Shelf \d+>$/) }) },
-      { input: { id: '3', op: '@get', to: '. Shelf 1', from: 'c' } },
+      { input: { id: '3', op: 'get', to: '. Shelf 1', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: [7], to: 'c' }) },
-      { input: { id: '4', op: '@get', to: '. Shelf 2', from: 'c' } },
+      { input: { id: '4', op: 'get', to: '. Shelf 2', from: 'c' } },
       { output: expect.objectContaining({ id: '4', re: [8], to: 'c' }) },
     );
   });
@@ -130,49 +130,49 @@ const published = `
 describe('public singletons', () => {
   it('is addressed by its label', async () => {
     await expectBehavior(published,
-      { input: { id: '1', op: '@bump!', to: '. s', from: 'c' } },
+      { input: { id: '1', op: 'bump!', to: '. s', from: 'c' } },
       { output: { id: '1', re: '#<. s>', ty: '. s', to: 'c', from: '. s' } },
-      { input: { id: '2', op: '@get', to: '. s', from: 'c' } },
+      { input: { id: '2', op: 'get', to: '. s', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: '. s' } },
     );
   });
 
   it('is the same actor its enclosing actor calls', async () => {
     await expectBehavior(published,
-      { input: { id: '1', op: '@bump!', to: '. s', from: 'c' } },
+      { input: { id: '1', op: 'bump!', to: '. s', from: 'c' } },
       { output: { id: '1', re: '#<. s>', ty: '. s', to: 'c', from: '. s' } },
-      { input: { id: '2', op: '@viaMain', from: 'c' } },
+      { input: { id: '2', op: 'viaMain', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('leaves its actor as its address, tagged with its label', async () => {
     await expectBehavior(published,
-      { input: { id: '1', op: '@who', from: 'c' } },
+      { input: { id: '1', op: 'who', from: 'c' } },
       { output: { id: '1', re: ['#<. s>'], ty: ['. s'], to: 'c' } },
     );
   });
 
   it('reading the published cell gives its address', async () => {
     await expectBehavior(published,
-      { input: { id: '1', op: '@s', from: 'c' } },
+      { input: { id: '1', op: 's', from: 'c' } },
       { output: { id: '1', re: ['#<. s>'], ty: ['. s'], to: 'c' } },
     );
   });
 
   it('in a class, it is addressed under each actor of the class', async () => {
     await expectBehavior(published,
-      { input: { id: '1', op: [[10], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: [[20], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
+      { input: { id: '2', op: [[20], '$new'], ty: [['Integer']], to: '. Box', from: 'c' } },
       { output: { id: '2', re: '#<. Box 2>', ty: '. Box', to: 'c' } },
-      { input: { id: '3', op: '@bump!', to: '. Box 1 tally', from: 'c' } },
+      { input: { id: '3', op: 'bump!', to: '. Box 1 tally', from: 'c' } },
       { output: { id: '3', re: '#<. Box 1 tally>', ty: '. Box 1 tally', to: 'c', from: '. Box 1 tally' } },
-      { input: { id: '4', op: '@get', to: '. Box 1 tally', from: 'c' } },
+      { input: { id: '4', op: 'get', to: '. Box 1 tally', from: 'c' } },
       { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: '. Box 1 tally' } },
-      { input: { id: '5', op: '@get', to: '. Box 2 tally', from: 'c' } },
+      { input: { id: '5', op: 'get', to: '. Box 2 tally', from: 'c' } },
       { output: { id: '5', re: [20], ty: ['Integer'], to: 'c', from: '. Box 2 tally' } },
-      { input: { id: '6', op: '@who', to: '. Box 1', from: 'c' } },
+      { input: { id: '6', op: 'who', to: '. Box 1', from: 'c' } },
       { output: { id: '6', re: ['#<. Box 1 tally>'], ty: ['. Box 1 tally'], to: 'c', from: '. Box 1' } },
     );
   });
@@ -272,30 +272,30 @@ const ordered = `
 describe('a singleton runs its block in program order', () => {
   it('reads a cell as it is at the singleton\'s line', async () => {
     await expectBehavior(ordered,
-      { input: { id: '1', op: '@seen', from: 'c' } },
+      { input: { id: '1', op: 'seen', from: 'c' } },
       { output: { id: '1', re: [100], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('a public singleton too', async () => {
     await expectBehavior(ordered,
-      { input: { id: '1', op: '@seen', to: '. pub', from: 'c' } },
+      { input: { id: '1', op: 'seen', to: '. pub', from: 'c' } },
       { output: { id: '1', re: [200], ty: ['Integer'], to: 'c', from: '. pub' } },
     );
   });
 
   it('its functions read the cell when they run', async () => {
     await expectBehavior(ordered,
-      { input: { id: '1', op: '@now', from: 'c' } },
+      { input: { id: '1', op: 'now', from: 'c' } },
       { output: { id: '1', re: [300], ty: ['Integer'], to: 'c' } },
     );
   });
 
   it('in a class, between the class\'s lines', async () => {
     await expectBehavior(ordered,
-      { input: { id: '1', op: [[10], '#new'], ty: [['Integer']], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: '. Box', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<\. Box \d+>$/) }) },
-      { input: { id: '2', op: '@get', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'get', to: '. Box 1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [30], to: 'c' }) },
     );
   });

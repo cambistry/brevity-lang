@@ -221,9 +221,9 @@ fn bv_values_fit(s: &BvObject, pos_types: &[&str], named_types: &[(&str, &str)])
 // at the head is self, making the address relative to its sender. In a token
 // list, self is None.
 //
-// extract_to_selector: the label a received `to` names on us, from its last
-// token: a public member travels bare (`get` is `@get`); a token with a sigil
-// (`#x`, protected `.x`, a closure's `@N`) is the label as it is.
+// bv_op_key: the arm key of a received op. An intrinsic (`$set`) names its
+// target by the last token of `to`, and the key is the pair: "$set val". The
+// token is the wire name (`val`, `~val`, `#val`). Any other op is its own key.
 const RUST_WIRE_HELPERS = `#[allow(dead_code)]
 fn bv_opre_split(address: &str) -> Vec<Option<String>> {
     let mut out = Vec::new();
@@ -304,10 +304,6 @@ fn bv_local_tokens(to: &str) -> Vec<String> {
     bv_opre_split(inner).into_iter().flatten().collect()
 }
 
-#[allow(dead_code)]
-fn bv_label_of(token: &str) -> String {
-    if token.starts_with('#') || token.starts_with('.') || token.starts_with('@') { token.to_string() } else { format!("@{}", token) }
-}
 
 // The address a value holds, for a to: without the brackets that mark it as
 // an address in a payload (a self-return's reply).
@@ -316,9 +312,18 @@ fn bv_addr_to(v: &str) -> String {
     v.strip_prefix("#<").and_then(|t| t.strip_suffix('>')).unwrap_or(v).to_string()
 }
 
-fn extract_to_selector(to: &str) -> Option<String> {
-    bv_local_tokens(to).last().map(|t| bv_label_of(t))
-}`;
+#[allow(dead_code)]
+fn bv_op_key(op: &str, to: Option<&str>) -> String {
+    if !op.starts_with('$') { return op.to_string(); }
+    match to.and_then(|t| bv_local_tokens(t).last().cloned()) {
+        Some(target) => format!("{} {}", op, target),
+        None => op.to_string(),
+    }
+}
+
+// The wire op of an arm key: "$set val" is "$set".
+#[allow(dead_code)]
+fn bv_wire_op(key: &str) -> &str { key.split(' ').next().unwrap_or(key) }`;
 
 // The tag for a value whose slot is declared as a union or `Anything`: the member
 // the value is, else the value's own kind (a list: each element's). `m` is
@@ -482,7 +487,7 @@ function rustIdent(name) {
   // Private function names (#name) → pv_name (# is not valid in Rust identifiers)
   if (name.startsWith('#')) return `pv_${name.slice(1)}`;
   // `set.val` (a protected cell's setter) has a `.` inside, too.
-  name = name.replace(/\./g, '_d_');
+  name = name.replace(/\./g, '_d_').replace(/~/g, '_t_');
   if (RUST_KEYWORDS.has(name)) return `r#${name}`;
   return name;
 }

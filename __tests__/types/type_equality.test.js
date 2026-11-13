@@ -18,35 +18,35 @@ describe('type equality — Name(args) ==', () => {
 
   it('Point(1, 2) == Point(1, 2) is true', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@same', from: 'c' } },
+      { input: { id: '1', op: 'same', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });
 
   it('Point(1, 2) == Point(3, 4) is false', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@diff_field', from: 'c' } },
+      { input: { id: '2', op: 'diff_field', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } },
     );
   });
 
   it('Point(0, 0) == Pair(0, 0) is false (different tags)', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@diff_tag', from: 'c' } },
+      { input: { id: '3', op: 'diff_tag', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } },
     );
   });
 
   it('Point(1, 2) != Point(1, 2) is false', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@neq_same', from: 'c' } },
+      { input: { id: '4', op: 'neq_same', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } },
     );
   });
 
   it('Point(1, 2) != Point(3, 4) is true', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@neq_diff', from: 'c' } },
+      { input: { id: '5', op: 'neq_diff', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
     );
   });

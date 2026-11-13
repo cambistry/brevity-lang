@@ -230,18 +230,18 @@ describe('at runtime', () => {
 
   it('each path returns its own value', async () => {
     await expectBehavior(SOURCE,
-      { input: { id: '1', op: [[true], '@f'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'f'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1] }) },
-      { input: { id: '2', op: [[false], '@f'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '2', op: [[false], 'f'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['x'] }) },
     );
   });
 
   it('a union annotation holds either', async () => {
     await expectBehavior(SOURCE,
-      { input: { id: '1', op: [[true], '@union'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '1', op: [[true], 'union'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1] }) },
-      { input: { id: '2', op: [[false], '@union'], 'ty': [['Boolean']], from: 'c' } },
+      { input: { id: '2', op: [[false], 'union'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: ['x'] }) },
     );
   });
@@ -249,8 +249,8 @@ describe('at runtime', () => {
   it('a typed bind waits for a service\'s reply', async () => {
     const actor = await createActor('*\n  "s.bv": Svc\n*\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) }' }] } });
     await expectActorBehavior(actor,
-      { input: { id: 'x', op: '@go', from: 'c' } },
-      { output: expect.objectContaining({ op: '@f', to: 'Svc' }) },
+      { input: { id: 'x', op: 'go', from: 'c' } },
+      { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
       { input: { id: '1', re: [4], 'ty': ['Integer'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: [5] }) },
     );
@@ -259,8 +259,8 @@ describe('at runtime', () => {
   it('a remote\'s shapes reach the caller', async () => {
     const actor = await createActor('*\n  "s.bv": Svc\n*\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) | (Text) }' }] } });
     await expectActorBehavior(actor,
-      { input: { id: 'x', op: '@go', from: 'c' } },
-      { output: expect.objectContaining({ op: '@f', to: 'Svc' }) },
+      { input: { id: 'x', op: 'go', from: 'c' } },
+      { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
       { input: { id: '1', re: ['y'], 'ty': ['Text'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: ['y'] }) },
     );
@@ -303,16 +303,16 @@ describe('a reply\'s tag', () => {
     @Box = *{${bodies}}
   `;
   const newBox = [
-    { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+    { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
     { output: { id: '1', re: '#<. Box 1>', 'ty': '. Box', to: 'c' } },
   ];
 
   const paths = [
-    ['@positional', ['x'], ['Text'], [9], ['Integer']],
-    ['@named', { n: 'x' }, { n: 'Text' }, { n: 9 }, { n: 'Integer' }],
-    ['@elseBranch', ['x'], ['Text'], [9], ['Integer']],
-    ['@nested', ['x'], ['Text'], [9], ['Integer']],
-    ['@inLoop', ['x'], ['Text'], [9], ['Integer']],
+    ['positional', ['x'], ['Text'], [9], ['Integer']],
+    ['named', { n: 'x' }, { n: 'Text' }, { n: 9 }, { n: 'Integer' }],
+    ['elseBranch', ['x'], ['Text'], [9], ['Integer']],
+    ['nested', ['x'], ['Text'], [9], ['Integer']],
+    ['inLoop', ['x'], ['Text'], [9], ['Integer']],
   ];
 
   describe.each(paths)('%s', (op, earlyRe, earlyTag, lateRe, lateTag) => {
@@ -336,9 +336,9 @@ describe('a reply\'s tag', () => {
 
   it('tags a path by the type of the param it returns', async () => {
     await expectBehavior(script, ...newBox,
-      { input: { id: '2', op: [[true, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: [[true, 'x', 9], 'fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c', from: '. Box 1' } },
-      { input: { id: '3', op: [[false, 'x', 9], '@fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
+      { input: { id: '3', op: [[false, 'x', 9], 'fromParam'], 'ty': [['Boolean', 'Text', 'Integer']], to: '. Box 1', from: 'c' } },
       { output: { id: '3', re: [9], 'ty': ['Integer'], to: 'c', from: '. Box 1' } },
     );
   });
@@ -386,28 +386,28 @@ describe('an unannotated bind of a call', () => {
 
   it('takes an own function\'s, in a handler', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@local', from: 'c' } },
+      { input: { id: '1', op: 'local', from: 'c' } },
       { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('takes one a bind gave its callee', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@later', from: 'c' } },
+      { input: { id: '1', op: 'later', from: 'c' } },
       { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('takes an own function\'s, in a constructor block', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@block', from: 'c' } },
+      { input: { id: '1', op: 'block', from: 'c' } },
       { output: { id: '1', re: [9], 'ty': ['Integer'], to: 'c' } },
     );
   });
 
   it('takes a class method\'s, and one from the class\'s constructor block', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@method', from: 'c' } },
+      { input: { id: '1', op: 'method', from: 'c' } },
       { output: { id: '1', re: [4, 6], 'ty': ['Integer', 'Integer'], to: 'c' } },
     );
   });
@@ -416,8 +416,8 @@ describe('an unannotated bind of a call', () => {
   // the call went out with.
   it('takes a doc entry\'s', async () => {
     const actor = await (await compileActor(script)).spawn();
-    await actor.sendAsync({ id: '1', op: '@remote!', from: 'c' });
-    const call = actor.posts.find(p => p.op === '@count');
+    await actor.sendAsync({ id: '1', op: 'remote!', from: 'c' });
+    const call = actor.posts.find(p => p.op === 'count');
     await actor.sendAsync({ id: call.id, re: [5], 'ty': ['Integer'], from: 'Svc' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [5], 'ty': ['Integer'], to: 'c' }]);
   });

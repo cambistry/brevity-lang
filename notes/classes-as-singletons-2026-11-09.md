@@ -12,7 +12,7 @@ What the three spellings compile to today (JS target):
 | Source     | Compiles to                                                |
 |------------|------------------------------------------------------------|
 | `C()`      | in-process `C.create(…)`; a local `C()` sends no `#new`     |
-| `C.new()`  | a send of `@new`: an ordinary public member, not `#new`    |
+| `C.new()`  | a send of `new`: an ordinary public member, not `$new`     |
 | `C.#new()` | `this.#b_zz = C.;`: invalid JS. **Bug:** should be a compile error |
 
 So `C.new()` names a different function living under `C`. That raises the question of how to
@@ -65,18 +65,21 @@ against `*{ … }`, which is run once per new actor.
 
 A singleton is addressed by its label in the actor that declares it, not as actor N of a class.
 
-- `@s = **{ … }` in `main` is `main @s`; its function is `main @s @get`. This is the endpoint shape
-  already on the wire (`#<caller @cb>`, `#<Thing/1 @n>`): each segment is a member label, and
-  whatever owns the prefix resolves the next one. Locally, `to: '@s'`, ref `#<@s>`.
-- **Its class is itself**, so its `ty` tag is its label (`@s`), the same tag a class gets. The
+- `@s = **{ … }` in `main` is `main s`; its function is `main s get`. This is the endpoint shape
+  already on the wire (`#<caller cb>`, `#<Thing 1 n>`): each token is a member's wire name, and
+  whatever owns the prefix resolves the next one. Locally, `to: '. s'`, ref `#<. s>`.
+- **Its class is itself**, so its `ty` tag is its address (`. s`), the same tag a class gets. The
   hidden class (`s_singleton`) never reaches the wire.
-- **In a class**, each actor has its own: `@tally` in `@Box` is `@Box/1 @tally`, tagged
-  `@Box/1 @tally` (a local tag from `@Box/1`, translated like any other).
-- **The published cell is the actor.** Reading `@s` (op `@s`) replies `#<@s>`, `ty: '@s'`, not a
+- **In a class**, each actor has its own: `@tally` in `@Box` is `Box 1 tally`, tagged
+  `. Box 1 tally` (a local tag from `. Box 1`, translated like any other).
+- **The published cell is the actor.** Reading `@s` (op `s`) replies `#<. s>`, `ty: '. s'`, not a
   wrapper around a ref.
-- **Private singletons (`s = **{ … }`) have no wire address.** Not supported. A protected label
-  can't lead a relative address (a word-character start means global), and the question is
-  left for another day.
+- **Private singletons (`s = **{ … }`) have no wire address.** Not supported. Its wire name would
+  be `~s`, which can now lead a relative address (`. ~s`), but the question is left for another
+  day.
+
+(Spellings as of `at-sigil-internal-and-quoted-names-2026-11-12.md`: tokens, public names bare,
+`.` self.)
 
 ### In the service document
 
@@ -106,7 +109,7 @@ constructor).
 
 ### Open
 
-- ~~**Calling through a sub-service** from another file~~: `Svc.s.get()` is `@get` to `Svc @s`,
+- ~~**Calling through a sub-service** from another file~~: `Svc.s.get()` is `get` to `Svc s`,
   lowered once for every target. See `opre-message-lowering-2026-11-11.md`.
 - **Returning an actor** is `-> (Anything)` in the document, for a singleton (`who`) as for a public
   class's actor. The document has no way yet to name the actor a function returns.
@@ -126,10 +129,10 @@ C = **{
 - Overloaded constructors use the overload model; other factory members (`@from_text`) sit beside
   `new`.
 - **`new` becomes a reserved keyword.** It isn't one today. This follows the precedent of `set` /
-  `subscribe`: an intrinsic op gets a bare keyword in source and a `#` name on the wire (`#new`,
-  `#set`). That keeps `#` unambiguous: private in source, intrinsic on the wire. Spelling it
-  `#new` in source was rejected, because a private-looking label would have to be callable from
-  outside.
+  `subscribe`: an intrinsic op gets a bare keyword in source and a `$` name on the wire (`$new`,
+  `$set`; `#new` / `#set` before 2026-11-12). That keeps `#` unambiguous: private in source and on
+  the wire. Spelling it `#new` in source was rejected, because a private-looking label would have
+  to be callable from outside.
 
 ## Files: the header declares the file's kind
 

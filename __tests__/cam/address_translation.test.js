@@ -36,18 +36,18 @@ const script = `
 describe('child to parent', () => {
   it('re, ty and from of a self-return gain the child', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: '@me', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'me', to: '. Box 1', from: 'c' } },
       { output: { id: '2', re: '#<. Box 1>', ty: '. Box', to: 'c', from: '. Box 1' } },
     );
   });
 
   it('a relative #<…> in the payload gains the child; a global one passes through', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: '@refs', to: '. Box 1', from: 'c' } },
+      { input: { id: '2', op: 'refs', to: '. Box 1', from: 'c' } },
       { output: {
         id: '2',
         re: { near: '#<. Box 1 x>', hidden: '#<.hidden.file x>', foreign: '#<@foreign y>', global: '#<main x>' },
@@ -62,18 +62,18 @@ describe('child to parent', () => {
 describe('grandchild to child to parent', () => {
   it('re, ty and from of a self-return gain each hop', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: '@me', to: '. Box 1 tally', from: 'c' } },
+      { input: { id: '2', op: 'me', to: '. Box 1 tally', from: 'c' } },
       { output: { id: '2', re: '#<. Box 1 tally>', ty: '. Box 1 tally', to: 'c', from: '. Box 1 tally' } },
     );
   });
 
   it('a relative #<…> in the payload gains each hop; a global one passes through', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: '@refs', to: '. Box 1 tally', from: 'c' } },
+      { input: { id: '2', op: 'refs', to: '. Box 1 tally', from: 'c' } },
       { output: {
         id: '2',
         re: { near: '#<. Box 1 tally x>', hidden: '#<.hidden.file x>', foreign: '#<@foreign y>', global: '#<main x>' },
@@ -86,10 +86,10 @@ describe('grandchild to child to parent', () => {
 
   it('a call to a dependency: the global to passes through, a payload address gains each hop', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '#new'], to: '. Box', from: 'c' } },
+      { input: { id: '1', op: [{}, '$new'], to: '. Box', from: 'c' } },
       { output: { id: '1', re: '#<. Box 1>', ty: '. Box', to: 'c' } },
-      { input: { id: '2', op: '@tell', to: '. Box 1 tally', from: 'c' } },
-      { output: expect.objectContaining({ op: [{ r: '#<. Box 1 tally x>' }, '@take'], ty: [{ r: 'Text' }], to: 'Svc' }) },
+      { input: { id: '2', op: 'tell', to: '. Box 1 tally', from: 'c' } },
+      { output: expect.objectContaining({ op: [{ r: '#<. Box 1 tally x>' }, 'take'], ty: [{ r: 'Text' }], to: 'Svc' }) },
     );
   });
 });

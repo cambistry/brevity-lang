@@ -76,35 +76,35 @@ describe('conditional return — block-body (lambda) functions', () => {
 
   it('three-way classify: if-if-fallthrough', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@classify', from: 'c' } },
+      { input: { id: '1', op: 'classify', from: 'c' } },
       { output: { id: '1', 'ty': { pos: 'Text', neg: 'Text', zero: 'Text' }, re: { pos: 'positive', neg: 'negative', zero: 'zero' }, to: 'c' } },
     );
   });
 
   it('single guard and guard-after-locals, all four cases', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@guards', from: 'c' } },
+      { input: { id: '2', op: 'guards', from: 'c' } },
       { output: { id: '2', 'ty': { big: 'Text', small: 'Text', hi: 'Text', lo: 'Text' }, re: { big: 'big', small: 'small', hi: 'over ten', lo: 'under or equal' }, to: 'c' } },
     );
   });
 
   it('else clause — return from else branch', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@elseClause', from: 'c' } },
+      { input: { id: '3', op: 'elseClause', from: 'c' } },
       { output: { id: '3', 'ty': { yes: 'Text', no: 'Text' }, re: { yes: 'positive', no: 'non-positive' }, to: 'c' } },
     );
   });
 
   it('nested if — inner if, outer body, fallthrough', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@nestedIf', from: 'c' } },
+      { input: { id: '4', op: 'nestedIf', from: 'c' } },
       { output: { id: '4', 'ty': { big: 'Text', small: 'Text', none: 'Text' }, re: { big: 'big', small: 'small positive', none: 'non-positive' }, to: 'c' } },
     );
   });
 
   it('nested if/else — all branches', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@nestedIfElse', from: 'c' } },
+      { input: { id: '5', op: 'nestedIfElse', from: 'c' } },
       { output: { id: '5', 'ty': { tt: 'Text', tf: 'Text', ff: 'Text' }, re: { tt: 'both positive', tf: 'a positive b not', ff: 'a not positive' }, to: 'c' } },
     );
   });
@@ -248,105 +248,105 @@ describe('conditional return — lineal functions', () => {
 
   it('if (a > 0) → "positive" branch taken', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@positive', from: 'c' } },
+      { input: { id: '1', op: 'positive', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'positive' }, to: 'c' } },
     );
   });
 
   it('if (a < 0) → "negative" branch taken', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@negative', from: 'c' } },
+      { input: { id: '2', op: 'negative', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'negative' }, to: 'c' } },
     );
   });
 
   it('all conditions false → fallthrough "zero"', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@zero', from: 'c' } },
+      { input: { id: '3', op: 'zero', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'zero' }, to: 'c' } },
     );
   });
 
   it('single guard — condition true → early return', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@singleGuardTrue', from: 'c' } },
+      { input: { id: '4', op: 'singleGuardTrue', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'big' }, to: 'c' } },
     );
   });
 
   it('single guard — condition false → fallthrough', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@singleGuardFalse', from: 'c' } },
+      { input: { id: '5', op: 'singleGuardFalse', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'small' }, to: 'c' } },
     );
   });
 
   it('guard after local assignment — condition true', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@withLocalsTrue', from: 'c' } },
+      { input: { id: '6', op: 'withLocalsTrue', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'over ten' }, to: 'c' } },
     );
   });
 
   it('guard after local assignment — condition false → fallthrough', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@withLocalsFalse', from: 'c' } },
+      { input: { id: '7', op: 'withLocalsFalse', from: 'c' } },
       { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'under or equal' }, to: 'c' } },
     );
   });
 
   it('else clause — condition true → if branch', async () => {
     await expectBehavior(script,
-      { input: { id: '8', op: '@elseTrue', from: 'c' } },
+      { input: { id: '8', op: 'elseTrue', from: 'c' } },
       { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'positive' }, to: 'c' } },
     );
   });
 
   it('else clause — condition false → else branch', async () => {
     await expectBehavior(script,
-      { input: { id: '9', op: '@elseFalse', from: 'c' } },
+      { input: { id: '9', op: 'elseFalse', from: 'c' } },
       { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'non-positive' }, to: 'c' } },
     );
   });
 
   it('nested if — inner condition true → "big"', async () => {
     await expectBehavior(script,
-      { input: { id: '10', op: '@nestedBig', from: 'c' } },
+      { input: { id: '10', op: 'nestedBig', from: 'c' } },
       { output: { id: '10', 'ty': { result: 'Text' }, re: { result: 'big' }, to: 'c' } },
     );
   });
 
   it('nested if — outer true inner false → "small positive"', async () => {
     await expectBehavior(script,
-      { input: { id: '11', op: '@nestedSmall', from: 'c' } },
+      { input: { id: '11', op: 'nestedSmall', from: 'c' } },
       { output: { id: '11', 'ty': { result: 'Text' }, re: { result: 'small positive' }, to: 'c' } },
     );
   });
 
   it('nested if — outer false → "non-positive"', async () => {
     await expectBehavior(script,
-      { input: { id: '12', op: '@nestedNone', from: 'c' } },
+      { input: { id: '12', op: 'nestedNone', from: 'c' } },
       { output: { id: '12', 'ty': { result: 'Text' }, re: { result: 'non-positive' }, to: 'c' } },
     );
   });
 
   it('nested if/else — both positive', async () => {
     await expectBehavior(script,
-      { input: { id: '13', op: '@nestedElseTT', from: 'c' } },
+      { input: { id: '13', op: 'nestedElseTT', from: 'c' } },
       { output: { id: '13', 'ty': { result: 'Text' }, re: { result: 'both positive' }, to: 'c' } },
     );
   });
 
   it('nested if/else — a positive b not', async () => {
     await expectBehavior(script,
-      { input: { id: '14', op: '@nestedElseTF', from: 'c' } },
+      { input: { id: '14', op: 'nestedElseTF', from: 'c' } },
       { output: { id: '14', 'ty': { result: 'Text' }, re: { result: 'a positive b not' }, to: 'c' } },
     );
   });
 
   it('nested if/else — a not positive', async () => {
     await expectBehavior(script,
-      { input: { id: '15', op: '@nestedElseFF', from: 'c' } },
+      { input: { id: '15', op: 'nestedElseFF', from: 'c' } },
       { output: { id: '15', 'ty': { result: 'Text' }, re: { result: 'a not positive' }, to: 'c' } },
     );
   });
@@ -415,42 +415,42 @@ describe('conditional return — single-line form (no curly braces)', () => {
 
   it('lambda: guard — condition true → early return', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@lambdaGuard', from: 'c' } },
+      { input: { id: '1', op: 'lambdaGuard', from: 'c' } },
       { output: { id: '1', 'ty': { big: 'Text', small: 'Text' }, re: { big: 'big', small: 'small' }, to: 'c' } },
     );
   });
 
   it('lambda: if/else — both branches', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@lambdaIfElse', from: 'c' } },
+      { input: { id: '2', op: 'lambdaIfElse', from: 'c' } },
       { output: { id: '2', 'ty': { pos: 'Text', neg: 'Text' }, re: { pos: 'positive', neg: 'non-positive' }, to: 'c' } },
     );
   });
 
   it('lineal: guard — condition true → early return', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@linealGuardTrue', from: 'c' } },
+      { input: { id: '3', op: 'linealGuardTrue', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'big' }, to: 'c' } },
     );
   });
 
   it('lineal: guard — condition false → fallthrough', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@linealGuardFalse', from: 'c' } },
+      { input: { id: '4', op: 'linealGuardFalse', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'small' }, to: 'c' } },
     );
   });
 
   it('lineal: if/else — condition true → if branch', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@linealIfElseTrue', from: 'c' } },
+      { input: { id: '5', op: 'linealIfElseTrue', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'positive' }, to: 'c' } },
     );
   });
 
   it('lineal: if/else — condition false → else branch', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@linealIfElseFalse', from: 'c' } },
+      { input: { id: '6', op: 'linealIfElseFalse', from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'non-positive' }, to: 'c' } },
     );
   });

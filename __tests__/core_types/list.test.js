@@ -67,39 +67,39 @@ describe('List construction + destructure', () => {
   `;
 
   it('empty list is []', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@emptyList', from: 'c' } }, { output: { id: '1', 'ty': { result: 'List of Integers' }, re: { result: [] }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'emptyList', from: 'c' } }, { output: { id: '1', 'ty': { result: 'List of Integers' }, re: { result: [] }, to: 'c' } });
   });
 
   it('[7] head destructure', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@singleHead', from: 'c' } }, { output: { id: '2', 'ty': { head: 'Integer' }, re: { head: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'singleHead', from: 'c' } }, { output: { id: '2', 'ty': { head: 'Integer' }, re: { head: 7 }, to: 'c' } });
   });
 
   it('typed list variable carries List of Integers in ty', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@typedList', from: 'c' } }, { output: expect.objectContaining({ id: '3', 'ty': { result: 'List of Integers' }, re: { result: [1, 2, 3] } }) });
+    await expectBehavior(script, { input: { id: '3', op: 'typedList', from: 'c' } }, { output: expect.objectContaining({ id: '3', 'ty': { result: 'List of Integers' }, re: { result: [1, 2, 3] } }) });
   });
 
   it('List of Texts — head destructure', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@textHead', from: 'c' } }, { output: { id: '4', 'ty': { first: 'Text' }, re: { first: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'textHead', from: 'c' } }, { output: { id: '4', 'ty': { first: 'Text' }, re: { first: 'hello' }, to: 'c' } });
   });
 
   it('[a, b, _] positional destructure', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@posTwo', from: 'c' } }, { output: { id: '5', 'ty': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'posTwo', from: 'c' } }, { output: { id: '5', 'ty': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } });
   });
 
   it('[a, b, c] positional destructure', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@posThree', from: 'c' } }, { output: { id: '6', 'ty': { sum: 'Integer' }, re: { sum: 6 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'posThree', from: 'c' } }, { output: { id: '6', 'ty': { sum: 'Integer' }, re: { sum: 6 }, to: 'c' } });
   });
 
   it('[h, ...t] head+tail — head is first element', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@headTail', from: 'c' } }, { output: { id: '7', 'ty': { head: 'Integer' }, re: { head: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'headTail', from: 'c' } }, { output: { id: '7', 'ty': { head: 'Integer' }, re: { head: 10 }, to: 'c' } });
   });
 
   it('[h, ...t] single element — tail is null', async () => {
-    await expectBehavior(script, { input: { id: '8', op: '@singleTail', from: 'c' } }, { output: { id: '8', re: { tail: null }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'singleTail', from: 'c' } }, { output: { id: '8', re: { tail: null }, to: 'c' } });
   });
 
   it('discard head, destructure tail — second element', async () => {
-    await expectBehavior(script, { input: { id: '9', op: '@discardHead', from: 'c' } }, { output: { id: '9', 'ty': { second: 'Integer' }, re: { second: 200 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '9', op: 'discardHead', from: 'c' } }, { output: { id: '9', 'ty': { second: 'Integer' }, re: { second: 200 }, to: 'c' } });
   });
 });
 
@@ -147,31 +147,31 @@ describe('List type matching + Anything + BV-A', () => {
   `;
 
   it('List of Integers param — type match dispatches', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [{ nums: [3, 4] }, '@sum'], 'ty': [{ nums: 'List of Integers' }], from: 'c' } }, { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: [{ nums: [3, 4] }, 'sum'], 'ty': [{ nums: 'List of Integers' }], from: 'c' } }, { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
   });
 
   it('List of Integers param — type mismatch → unhandled', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [{ nums: ['a'] }, '@sum'], 'ty': [{ nums: 'List of Texts' }], from: 'c' } }, { output: { id: '2', ex: { '@sum': 'unhandled' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: [{ nums: ['a'] }, 'sum'], 'ty': [{ nums: 'List of Texts' }], from: 'c' } }, { output: { id: '2', ex: { 'sum': 'unhandled' }, to: 'c' } });
   });
 
   it('List of Anything — mixed elements, head destructure', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@buildAnything', from: 'c' } }, { output: expect.objectContaining({ re: { first: 1 } }) });
+    await expectBehavior(script, { input: { id: '3', op: 'buildAnything', from: 'c' } }, { output: expect.objectContaining({ re: { first: 1 } }) });
   });
 
   it('bare List → component types array in ty', async () => {
-    await expectBehavior(script, { input: { id: '4', op: '@buildBareList', from: 'c' } }, { output: expect.objectContaining({ 'ty': { result: ['Integer', 'Integer', 'Integer'] } }) });
+    await expectBehavior(script, { input: { id: '4', op: 'buildBareList', from: 'c' } }, { output: expect.objectContaining({ 'ty': { result: ['Integer', 'Integer', 'Integer'] } }) });
   });
 
   it('List of Anything → component types in ty', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@buildMixedTy', from: 'c' } }, { output: { id: '5', 'ty': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'buildMixedTy', from: 'c' } }, { output: { id: '5', 'ty': { result: ['Integer', 'Text'] }, re: { result: [1, 'two'] }, to: 'c' } });
   });
 
   it('List param accepts component ty from caller', async () => {
-    await expectBehavior(script, { input: { id: '6', op: [{ items: [42, '@hello'] }, '@run'], 'ty': [{ items: ['Integer', 'Text'] }], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Integer' }, re: { first: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: [{ items: [42, 'hello'] }, 'run'], 'ty': [{ items: ['Integer', 'Text'] }], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Integer' }, re: { first: 42 }, to: 'c' } });
   });
 
   it('[a, b] = [1,2,3] — under-destructured without discard → runtime error', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@arityError', from: 'c' } }, { output: { id: '7', ex: { '@arityError': 'error' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'arityError', from: 'c' } }, { output: { id: '7', ex: { 'arityError': 'error' }, to: 'c' } });
   });
 });
 

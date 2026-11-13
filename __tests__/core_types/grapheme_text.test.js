@@ -56,14 +56,14 @@ describe('GraphemeText via DI — # class', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['#new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GT' }) },
       ],
     });
 
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GT' } },
-      { input: { id: '99', op: '@getSize', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@size', to: 'GT/1' }) },
+      { input: { id: '99', op: 'getSize', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'size', to: 'GT/1' }) },
       { input: { id: '2', re: { result: 1 } } },
       { output: expect.objectContaining({ id: '99', re: { result: 1 }, to: 'caller' }) },
     );
@@ -73,14 +73,14 @@ describe('GraphemeText via DI — # class', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['#new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GT' }) },
       ],
     });
 
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GT' } },
-      { input: { id: '99', op: '@getFirst', from: 'caller' } },
-      { output: expect.objectContaining({ op: '@first', to: 'GT/1' }) },
+      { input: { id: '99', op: 'getFirst', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'first', to: 'GT/1' }) },
       { input: { id: '2', re: { result: 'e\u{0301}' } } },
       { output: expect.objectContaining({ id: '99', re: { result: 'e\u{0301}' }, to: 'caller' }) },
     );
@@ -103,12 +103,12 @@ describe('GraphemeText concat/append!/at', () => {
   `;
 
   it('gt.concat(b)', async () => {
-    await expectBehavior(script, inp('1', '@concatRef'), out('1', 'GraphemeText', 'hello world'));
+    await expectBehavior(script, inp('1', 'concatRef'), out('1', 'GraphemeText', 'hello world'));
   });
   it('gt.append!(b) mutates ref', async () => {
-    await expectBehavior(script, inp('2', '@appendBang'), out('2', 'GraphemeText', 'hello world'));
+    await expectBehavior(script, inp('2', 'appendBang'), out('2', 'GraphemeText', 'hello world'));
   });
   it('gt.at(1) — grapheme indexed', async () => {
-    await expectBehavior(script, inp('3', '@atRef'), out('3', 'Text', '\u{1F600}'));
+    await expectBehavior(script, inp('3', 'atRef'), out('3', 'Text', '\u{1F600}'));
   });
 });

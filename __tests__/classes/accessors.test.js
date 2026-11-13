@@ -133,12 +133,12 @@ describe('published params — runtime', () => {
     { output: expect.objectContaining({ id: '1', re: { result: value }, to: 'c' }) },
   );
 
-  it('accessor returns the provided value', async () => { await run('@testProvided', 2); });
-  it('accessor returns the default when omitted', async () => { await run('@testDefault', 99); });
-  it('required param accessor alongside an optional one', async () => { await run('@testRequired', 42); });
-  it('aliased named param publishes under its label', async () => { await run('@testAliased', 'x'); });
-  it('a private param is still bound inside the class', async () => { await run('@testPrivateInHandler', 'xy'); });
-  it('an explicit handler renames the public name', async () => { await run('@testRenamed', 7); });
+  it('accessor returns the provided value', async () => { await run('testProvided', 2); });
+  it('accessor returns the default when omitted', async () => { await run('testDefault', 99); });
+  it('required param accessor alongside an optional one', async () => { await run('testRequired', 42); });
+  it('aliased named param publishes under its label', async () => { await run('testAliased', 'x'); });
+  it('a private param is still bound inside the class', async () => { await run('testPrivateInHandler', 'xy'); });
+  it('an explicit handler renames the public name', async () => { await run('testRenamed', 7); });
 });
 
 describe('published file params — runtime', () => {
@@ -153,7 +153,7 @@ describe('published file params — runtime', () => {
   it('a published file param answers its accessor', async () => {
     const actor = await createActor(source, { constructorArgs: [5, { quiet: 6 }] });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@count', from: 'c' } },
+      { input: { id: '1', op: 'count', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
     );
   });
@@ -161,8 +161,8 @@ describe('published file params — runtime', () => {
   it('an unpublished file param has no accessor', async () => {
     const actor = await createActor(source, { constructorArgs: [5, { quiet: 6 }] });
     await expectActorBehavior(actor,
-      { input: { id: '1', op: '@quiet', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', ex: { '@quiet': 'unhandled' }, to: 'c' }) },
+      { input: { id: '1', op: 'quiet', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', ex: { 'quiet': 'unhandled' }, to: 'c' }) },
     );
   });
 });

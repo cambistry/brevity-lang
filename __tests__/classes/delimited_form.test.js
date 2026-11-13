@@ -79,21 +79,21 @@ describe('constructor delimited form — runtime', () => {
 
   it('no-param constructor works', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testGreeter', from: 'c' } },
+      { input: { id: '1', op: 'testGreeter', from: 'c' } },
       { output: { id: '1', 'ty': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
     );
   });
 
   it('constructor with param works', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testCounter', from: 'c' } },
+      { input: { id: '1', op: 'testCounter', from: 'c' } },
       { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
     );
   });
 
   it('multiple params work', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testPair', from: 'c' } },
+      { input: { id: '1', op: 'testPair', from: 'c' } },
       { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
     );
   });
@@ -205,49 +205,49 @@ describe('constructor delimited form — optional args — runtime', () => {
 
   it('both args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@testPairBoth', from: 'c' } },
+      { input: { id: '1', op: 'testPairBoth', from: 'c' } },
       { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
     );
   });
 
   it('optional omitted — default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@testPairDefault', from: 'c' } },
+      { input: { id: '2', op: 'testPairDefault', from: 'c' } },
       { output: { id: '2', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
     );
   });
 
   it('all-default params — both provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: '@testDefaultsBoth', from: 'c' } },
+      { input: { id: '3', op: 'testDefaultsBoth', from: 'c' } },
       { output: { id: '3', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
     );
   });
 
   it('all-default params — none provided', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@testDefaultsNone', from: 'c' } },
+      { input: { id: '4', op: 'testDefaultsNone', from: 'c' } },
       { output: { id: '4', 'ty': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
     );
   });
 
   it('a negative positional default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: '@testBelowDefault', from: 'c' } },
+      { input: { id: '5', op: 'testBelowDefault', from: 'c' } },
       { output: { id: '5', 'ty': { total: 'Integer' }, re: { total: 1 }, to: 'c' } },
     );
   });
 
   it('a negative named default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: '@testOffsetDefault', from: 'c' } },
+      { input: { id: '6', op: 'testOffsetDefault', from: 'c' } },
       { output: { id: '6', 'ty': { total: 'Integer' }, re: { total: 2 }, to: 'c' } },
     );
   });
 
   it('a negative named arg overrides it', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: '@testOffsetGiven', from: 'c' } },
+      { input: { id: '7', op: 'testOffsetGiven', from: 'c' } },
       { output: { id: '7', 'ty': { total: 'Integer' }, re: { total: -2 }, to: 'c' } },
     );
   });
@@ -389,12 +389,12 @@ describe('constructor delimited form — expression defaults', () => {
     { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: value }, to: 'c' } },
   );
 
-  it('an omitted arg takes the expression', () => total('@omitted', 4));
-  it('a given arg wins', () => total('@given', 6));
-  it('a default reads a later param', () => total('@later', 21));
-  it('a default reads a later param given by name', () => total('@laterByName', 9));
-  it('a default reads a file-level cell', () => total('@fromFile', 13));
-  it('a subclass param takes one after ++', () => total('@sub', 3));
+  it('an omitted arg takes the expression', () => total('omitted', 4));
+  it('a given arg wins', () => total('given', 6));
+  it('a default reads a later param', () => total('later', 21));
+  it('a default reads a later param given by name', () => total('laterByName', 9));
+  it('a default reads a file-level cell', () => total('fromFile', 13));
+  it('a subclass param takes one after ++', () => total('sub', 3));
 
   it('renders as optional', () => {
     expect(extract(`

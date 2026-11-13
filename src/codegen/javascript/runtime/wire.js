@@ -63,14 +63,14 @@ export function _bv_unwire_reply(re, ty, _bv_types) {
 }
 
 // Reference-field invocation: given the address held in a reference field,
-// return the op selector to send. An address `#<alias member>` resolves to
-// the label of its last token (`#<x p>` → `@p`); a bare address passes
-// through unchanged.
+// return the op to send. An address `#<alias member>` names its member by its
+// last token, and the token is the op (`#<x p>` → `p`, `#<main @0>` → `@0`);
+// a bare address passes through unchanged.
 export function _bv_sel(addr) {
   if (typeof addr === 'string' && addr.startsWith('#<') && addr.endsWith('>')) {
     const tokens = _opre_split(addr.slice(2, -1));
     const last = tokens[tokens.length - 1];
-    return typeof last === 'string' ? _bv_label_of(last) : addr;
+    return typeof last === 'string' ? last : addr;
   }
   return addr;
 }
@@ -83,13 +83,6 @@ export function _bv_local_tokens(to) {
   let tokens;
   try { tokens = _opre_split(a); } catch { return []; }
   return tokens[0] === null ? tokens.slice(1) : tokens;
-}
-
-// The label an address token names on us: a public member travels bare
-// (`get` is `@get`). A token with a sigil is the label: `#x`, protected `.x`,
-// and a synthesized name such as a closure's `@N`.
-export function _bv_label_of(token) {
-  return /^[#.@]/.test(token) ? token : '@' + token;
 }
 
 // Slice 12 inbound: walk a packed Object (`positional` + `named`)

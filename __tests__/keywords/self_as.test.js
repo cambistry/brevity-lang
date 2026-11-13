@@ -103,43 +103,43 @@ describe('self-as clauses', () => {
   `;
 
   it('self as Integer — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '1', op: '@asInt', from: 'c' } }, { output: { id: '1', 'ty': ['Integer'], re: [1], to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'asInt', from: 'c' } }, { output: { id: '1', 'ty': ['Integer'], re: [1], to: 'c' } });
   });
 
   it('self as Text — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '2', op: '@asText', from: 'c' } }, { output: { id: '2', 'ty': ['Text'], re: ['one'], to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'asText', from: 'c' } }, { output: { id: '2', 'ty': ['Text'], re: ['one'], to: 'c' } });
   });
 
   it('self as Boolean — literal cast', async () => {
-    await expectBehavior(script, { input: { id: '3', op: '@asBool', from: 'c' } }, { output: { id: '3', 'ty': ['Boolean'], re: [true], to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'asBool', from: 'c' } }, { output: { id: '3', 'ty': ['Boolean'], re: [true], to: 'c' } });
   });
 
   it('multiple self-as clauses — correct one selected by target type', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: '@multiCast', from: 'c' } },
+      { input: { id: '4', op: 'multiCast', from: 'c' } },
       { output: { id: '4', 'ty': { n: 'Integer', t: 'Text', b: 'Boolean' }, re: { n: 42, t: 'forty-two', b: false }, to: 'c' } },
     );
   });
 
   it('untyped assignment — no cast, still works via ref', async () => {
-    await expectBehavior(script, { input: { id: '5', op: '@untypedRef', from: 'c' } }, { output: { id: '5', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'untypedRef', from: 'c' } }, { output: { id: '5', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
   });
 
   it('negated catch-all — as !Self (Integer target)', async () => {
-    await expectBehavior(script, { input: { id: '6', op: '@negatedInt', from: 'c' } }, { output: { id: '6', 'ty': ['Integer'], re: [0], to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'negatedInt', from: 'c' } }, { output: { id: '6', 'ty': ['Integer'], re: [0], to: 'c' } });
   });
 
   it('negated catch-all — as !Self (Text target)', async () => {
-    await expectBehavior(script, { input: { id: '7', op: '@negatedText', from: 'c' } }, { output: { id: '7', 'ty': ['Text'], re: ['default'], to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'negatedText', from: 'c' } }, { output: { id: '7', 'ty': ['Text'], re: ['default'], to: 'c' } });
   });
 
   it('self-as clause — two-line form', async () => {
-    await expectBehavior(script, { input: { id: '8', op: '@twoLineForm', from: 'c' } }, { output: { id: '8', 'ty': ['Integer'], re: [1], to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'twoLineForm', from: 'c' } }, { output: { id: '8', 'ty': ['Integer'], re: [1], to: 'c' } });
   });
 
   it('actor with both as clauses and public functions coexist', async () => {
     await expectBehavior(script,
-      { input: { id: '9', op: '@dualCoexist', from: 'c' } },
+      { input: { id: '9', op: 'dualCoexist', from: 'c' } },
       { output: { id: '9', 'ty': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c' } },
     );
   });
@@ -155,14 +155,14 @@ describe('self as — CAM message (file-level actor)', () => {
 
   it('as Integer — file-level actor responds to [Integer, as] op', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { input: { id: '1', op: ['Integer', '$as'], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('public handler still works alongside as clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@ping', from: 'c' } },
+      { input: { id: '2', op: 'ping', from: 'c' } },
       { output: { id: '2', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
     );
   });
@@ -178,21 +178,21 @@ describe('self as — CAM message (file-level, multiple clauses)', () => {
 
   it('as Integer', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { input: { id: '1', op: ['Integer', '$as'], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('as Text', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: ['Text', 'as'], from: 'c' } },
+      { input: { id: '2', op: ['Text', '$as'], from: 'c' } },
       { output: { id: '2', 'ty': ['Text'], re: ['forty-two'], to: 'c' } },
     );
   });
 
   it('as Boolean', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: ['Boolean', 'as'], from: 'c' } },
+      { input: { id: '3', op: ['Boolean', '$as'], from: 'c' } },
       { output: { id: '3', 'ty': ['Boolean'], re: [false], to: 'c' } },
     );
   });
@@ -206,14 +206,14 @@ describe('self as — CAM message (file-level, negated catch-all)', () => {
 
   it('negated catch-all responds to any type', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: ['Integer', 'as'], from: 'c' } },
+      { input: { id: '1', op: ['Integer', '$as'], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [0], to: 'c' } },
     );
   });
 
   it('negated catch-all responds to Text', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: ['Text', 'as'], from: 'c' } },
+      { input: { id: '2', op: ['Text', '$as'], from: 'c' } },
       { output: { id: '2', 'ty': ['Text'], re: [0], to: 'c' } },
     );
   });
@@ -242,14 +242,14 @@ describe('self as — CAM message (two-step: ref then typed assign)', () => {
 
   it('typed assign from ref sends [Integer, as] message', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '@asInt', from: 'c' } },
+      { input: { id: '1', op: 'asInt', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [42], to: 'c' } },
     );
   });
 
   it('typed assign from ref sends [Text, as] message', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: '@asText', from: 'c' } },
+      { input: { id: '2', op: 'asText', from: 'c' } },
       { output: { id: '2', 'ty': ['Text'], re: ['forty-two'], to: 'c' } },
     );
   });

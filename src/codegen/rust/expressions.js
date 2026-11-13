@@ -1,5 +1,5 @@
 // expressions.js — Expression generation for Rust codegen
-import { wireLabel, addressToken, selfAddress } from '../wire_labels.js';
+import { addressToken, intrinsicArm, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { argForParam } from '../../call_args.js';
@@ -111,7 +111,7 @@ export function rustNewArgs(args, typeEnv, eCtx) {
 // The statements that put a #new's op and ty on a message map named `msg`.
 export function rustNewOpInserts(args, typeEnv, eCtx, msg = 'send_msg') {
   const { payload, ty } = rustNewArgs(args, typeEnv, eCtx);
-  return `${msg}.insert("op".to_string(), Value::Array(vec![${payload}, json!("#new")]));${ty ? ` ${msg}.insert("ty".to_string(), ${ty});` : ''}`;
+  return `${msg}.insert("op".to_string(), Value::Array(vec![${payload}, json!("$new")]));${ty ? ` ${msg}.insert("ty".to_string(), ${ty});` : ''}`;
 }
 
 function rustLambdaWireRef(fnNode) {
@@ -139,11 +139,11 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
   const cellKey = stateKey('@' + cell);
   const lines = childPrefix === null
     ? [
-      `let _subs = self.cell_subs.get(${JSON.stringify('@' + cell)}).cloned().unwrap_or_default();`,
+      `let _subs = self.cell_subs.get(${JSON.stringify(wireLabel('@' + cell))}).cloned().unwrap_or_default();`,
       'for (_sub_id, _sub_from, _, _) in _subs {',
     ]
     : [
-      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_@${cell}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
+      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_${wireLabel('@' + cell)}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
       'for _sub in &_subs_snapshot {',
       '    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();',
       '    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();',
@@ -256,7 +256,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         ${attrs}
         let mut send_msg = Map::new();
         send_msg.insert("id".to_string(), json!(seq.to_string()));
-        send_msg.insert("op".to_string(), Value::Array(vec![Value::Object(_payload), json!("#new")]));
+        send_msg.insert("op".to_string(), Value::Array(vec![Value::Object(_payload), json!("$new")]));
         send_msg.insert("to".to_string(), json!(${JSON.stringify(rustDomHostAddr(dc.tag))}));
         let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
         Value::Null
@@ -624,7 +624,7 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
     const to = JSON.stringify(service);
-    const method = JSON.stringify('@' + remote);
+    const method = JSON.stringify(memberOp(remote));
     const callArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
     let opExpr;
@@ -780,7 +780,7 @@ ${subRegLines.join('\n')}
         // the lowercase class name; otherwise this is the file class.
         const enclosing = G.ctx.childStatePrefix || null;
         const idExpr = `bv_inst_id(&self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null))`;
-        const method = JSON.stringify('@' + expr.method);
+        const method = JSON.stringify(memberOp(expr.method));
         const namedX = expr.args.filter(a => !a.positional);
         const positionalX = expr.args.filter(a => a.positional);
         // Bypass json!() to avoid consuming Identifier args that may already
@@ -843,7 +843,7 @@ ${subRegLines.join('\n')}
           const namedInserts = namedC.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
           payloadC = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
         }
-        return `{ let _inst = bv_inst_id(&${cell}); self.child_${t.toLowerCase()}_dispatch_at(_inst, ${JSON.stringify('@' + expr.method)}, &${payloadC}, "", "__parent") }`;
+        return `{ let _inst = bv_inst_id(&${cell}); self.child_${t.toLowerCase()}_dispatch_at(_inst, ${JSON.stringify(memberOp(expr.method))}, &${payloadC}, "", "__parent") }`;
       }
     }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
@@ -851,7 +851,7 @@ ${subRegLines.join('\n')}
     if (dotObjName && eCtx?.selfSpawnedRefs?.has(dotObjName)) {
       const spawnClass = eCtx.selfSpawnedRefs.get(dotObjName);
       const idVar = rustSsaResolve(dotObjName);
-      const method = JSON.stringify('@' + expr.method);
+      const method = JSON.stringify(memberOp(expr.method));
       const named0 = expr.args.filter(a => !a.positional);
       const positional0 = expr.args.filter(a => a.positional);
       const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
@@ -892,7 +892,7 @@ ${subRegLines.join('\n')}
       const to = isLocalInst
         ? `bv_addr_to(${rustSsaResolve(dotObjName)}.as_str().unwrap_or(""))`
         : `bv_addr_to(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or(""))`;
-      const method = JSON.stringify('@' + expr.method);
+      const method = JSON.stringify(memberOp(expr.method));
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;
@@ -925,7 +925,7 @@ ${subRegLines.join('\n')}
     const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
       const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-      const method = JSON.stringify('@' + expr.method);
+      const method = JSON.stringify(memberOp(expr.method));
       let payload;
       if (positional.length === 0 && named.length === 0) {
         payload = 'json!({})';
@@ -951,7 +951,7 @@ ${subRegLines.join('\n')}
     // path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local bound to one.
     // Any other receiver is a value holding an address.
     const to = rustOpreTo(expr, (root) => genRustExpr(root, typeEnv, eCtx));
-    const method = JSON.stringify(expr.opre?.op ?? '@' + expr.method);
+    const method = JSON.stringify(expr.opre?.op ?? memberOp(expr.method));
     if (positional.length === 0 && named.length === 0) {
       return `{
         let seq = self.send_seq.get();
@@ -1217,13 +1217,13 @@ ${subRegLines.join('\n')}
           const lc = actorName.toLowerCase();
           // Self-routing: skip dispatch_at, call dispatch directly with
           // current state.
-          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
-          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify('@' + method)}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
+          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.current_${lc}_instance == Some(_id) { let _r = self.child_${lc}_dispatch(${JSON.stringify(memberOp(method))}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
+          dispatchArms.push(`if _class == ${JSON.stringify(lc)} && self.${lc}_instances.contains_key(&_id) { let _r = self.child_${lc}_dispatch_at(_id, ${JSON.stringify(memberOp(method))}, &json!({}), "", "__parent"); _result.push(BvObject::pack(&_r).one()); continue; }`);
         }
       }
       // Self-routing for the file class
       const fileSelfArm = G.ctx.actorNeedsSelfPool
-        ? `if _class.is_empty() && self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify('@' + method)}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(BvObject::pack(&_r).one()); continue; }`
+        ? `if _class.is_empty() && self.self_instances.contains_key(&_id) { let (re, _, _) = self.handle_op_at(_id, ${JSON.stringify(memberOp(method))}, &json!({}), &json!({}), "__parent", ""); let _r = re.unwrap_or(Value::Null); _result.push(BvObject::pack(&_r).one()); continue; }`
         : '';
       return `{
         let mut _result: Vec<Value> = Vec::new();
@@ -1377,13 +1377,13 @@ ${subRegLines.join('\n')}
     // by the caller so a single positional can be extracted.
     if (expr.object?.type === 'Identifier' && eCtx?.childActorRefs?.has(expr.object.name)) {
       const actorName = eCtx.childActorRefs.get(expr.object.name);
-      const method = JSON.stringify('@' + expr.property);
+      const method = JSON.stringify(memberOp(expr.property));
       return `self.child_${actorName.toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`;
     }
     // ...or on a class instance (an instance ref).
     if (expr.object?.type === 'Identifier' && eCtx?.selfSpawnedRefs?.has(expr.object.name) && eCtx.selfSpawnedRefs.get(expr.object.name) !== '__self__') {
       const lc = eCtx.selfSpawnedRefs.get(expr.object.name).toLowerCase();
-      const method = JSON.stringify('@' + expr.property);
+      const method = JSON.stringify(memberOp(expr.property));
       return `self.child_${lc}_dispatch_at(bv_inst_id(&${rustSsaResolve(expr.object.name)}), ${method}, &json!({}), "", "__parent")`;
     }
     // Slice 5 (Rust target): field access on a typed object. The object

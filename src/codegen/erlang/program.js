@@ -9,7 +9,7 @@ import { lowerChains } from '../../chains.js';
 import { outerNamesFor } from '../../outer_reads.js';
 import { withCellReady } from '../../init_order.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
-import { PREAMBLE, erlVarName, erlString, erlStateKey, erlOp } from './preambles.js';
+import { PREAMBLE, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../inference.js';
 import {
@@ -381,10 +381,10 @@ function genFn(ctx, fn) {
 
 // ── Program codegen ─────────────────────────────────────────────────────────
 
-// Generic subscribe prologue: two handle_op clauses that intercept
-// subscribe@<target> / subscribe#<target>, stash {Id, From, Args} in the
-// cell_subs list (keyed by the whole label, `@a`), and recurse with the rewritten op so the normal @/# arm
-// runs. Args come from the incoming op-array payload (null for no-arg
+// Generic subscribe prologue: a handle_op clause that intercepts
+// {$subscribe, Target}, stashes {Id, From, Args} in the cell_subs list (keyed
+// by the target's wire name: `a`, `~a`, `#a`), and recurses with the target as
+// the op so its own arm gives the first value. Args come from the incoming op-array payload (null for no-arg
 // subscribe). Route (the JS _route callback) has no Erlang analogue — the
 // in-process path uses {pending_subscribe, Id} as before.
 function genSubscribePrologue(fnName) {
@@ -393,20 +393,13 @@ function genSubscribePrologue(fnName) {
             _ -> null
         end`;
   return [
-    `${fnName}(<<"subscribe@", Target_/binary>>, Message, Payload, Id, From) ->
+    `${fnName}({<<"$subscribe">>, Target_}, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     SubTy_ = maps:get(<<"ty">>, Message, null),
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
-    CellSubs_ = case get({cell_subs, <<"@", Target_/binary>>}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, <<"@", Target_/binary>>}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
-    ${fnName}(<<"@", Target_/binary>>, Message, Payload, Id, From)`,
-    `${fnName}(<<"subscribe#", Target_/binary>>, Message, Payload, Id, From) ->
-    SubArgs_ = ${extractArgs},
-    SubTy_ = maps:get(<<"ty">>, Message, null),
-    SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
-    CellSubs_ = case get({cell_subs, <<"#", Target_/binary>>}) of undefined -> []; L_ -> L_ end,
-    put({cell_subs, <<"#", Target_/binary>>}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
-    ${fnName}(<<"#", Target_/binary>>, Message, Payload, Id, From)`,
+    CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
+    ${fnName}(Target_, Message, Payload, Id, From)`,
   ];
 }
 
@@ -425,7 +418,7 @@ function genDispatch(ctx, publicFns) {
   const clauses = [...genSubscribePrologue('handle_op')];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
-    if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlOp(op)}}`);
+    if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
@@ -445,7 +438,7 @@ function genDispatch(ctx, publicFns) {
       }
 
       // Chain: try first, if nomatch try next, etc.
-      let chainExpr = '    {error, ' + erlOp(op) + '}';
+      let chainExpr = '    {error, ' + erlExKey(op) + '}';
       for (let i = tryFns.length - 1; i >= 0; i--) {
         const fn = tryFns[i];
         chainExpr = `    case ${fn.fnName}(Message, Payload, _From) of\n        nomatch ->\n    ${chainExpr};\n        Result -> Result\n    end`;
@@ -468,19 +461,19 @@ function genDispatch(ctx, publicFns) {
   for (const clause of asClauses) {
     const val = genExpr(ctx, clause.expr, {}, {});
     if (clause.negated) {
-      clauses.push(`handle_op(<<"as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+      clauses.push(`handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
     } else {
-      clauses.push(`handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
+      clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
     }
   }
   // Memoized return-as dispatch arm
   if (ctx.mainActorReturnAs) {
     const t = ctx.mainActorReturnAs;
-    clauses.push(`handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
+    clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
   // Catch-all clause
-  clauses.push(`handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
+  clauses.push(`handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, bv_ex_key_(Op)}`);
 
   return clauses;
 }
@@ -884,12 +877,12 @@ function genChildHandleOp(ctx, actor) {
     variants.forEach((h, i) => {
       typedHelpers.push(`${names[i]}(Message, Payload, _Id, _From) ->\n${genPublicFnInner(ctx, h, { hasOverloads, instance: true })}.`);
     });
-    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlOp(op)}}`);
+    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlExKey(op)}}`);
     clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
   }
   // Add private function dispatch clauses for child actor
   for (const h of childPrivateFns) {
-    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlOp(h.name)}}`);
+    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlExKey(h.name)}}`);
     const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
@@ -937,7 +930,7 @@ function genChildHandleOp(ctx, actor) {
     if (!p.accessor) continue;
     const accessorName = p.accessor;
     const stateKey = erlStateKey(ctx, p.name);
-    clauses.push(`${prefix}_handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`);
+    clauses.push(`${prefix}_handle_op(${erlOp('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`);
   }
 
   // Generate delegation clauses for inherited functions from wrapped superclasses
@@ -955,19 +948,19 @@ function genChildHandleOp(ctx, actor) {
   for (const clause of (actor.asClauses || [])) {
     const val = genExpr(ctx, clause.expr, {}, {});
     if (clause.negated) {
-      clauses.push(`${prefix}_handle_op(<<"as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
     } else {
-      clauses.push(`${prefix}_handle_op(<<"as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
+      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
     }
   }
   // Memoized return-as dispatch arm for child actor
   if (actor.declarationReturn && actor.declarationReturn.typeName) {
     const t = actor.declarationReturn.typeName;
-    clauses.push(`${prefix}_handle_op(<<"as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
+    clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
   // Catch-all clause
-  clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}`);
+  clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, bv_ex_key_(Op)}`);
 
   ctx.emitNames = savedEmitNames;
   return [clauses.join(';\n') + '.', ...typedHelpers].join('\n\n');
@@ -1308,7 +1301,7 @@ function genChildActorCode(ctx, actors) {
         `child_dispatch(${erlString(name.toLowerCase())}, Op, Message, Payload, Id, From) ->\n    child_${name.toLowerCase()}_handle_op(Op, Message, Payload, Id, From)`,
       ),
     ];
-    dispatchClauses.push('child_dispatch(_, Op, _Message, _Payload, _Id, _From) ->\n    {error, Op}');
+    dispatchClauses.push('child_dispatch(_, Op, _Message, _Payload, _Id, _From) ->\n    {error, bv_ex_key_(Op)}');
     sections.push(dispatchClauses.join(';\n') + '.');
   }
 
@@ -1579,7 +1572,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     } else {
       // Multiple handlers with same label — arity-based dispatch
       const tryFns = handlers.map((h, i) => {
-        const fnName = `lambda_${lName.replace(/^\.?_lambda_/, '')}_ov${i}`;
+        const fnName = `lambda_${lName.replace(/^~?_lambda_/, '')}_ov${i}`;
         const posParams = h.params.filter(p => p.positional !== false);
         const posCount = posParams.length;
         const requiredPosCount = posParams.filter(p => !p.defaultValue).length;
@@ -1643,7 +1636,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const accessorName = p.accessor;
     const stateKey = erlStateKey(ctx, p.name);
     allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(${erlString('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`,
+      `handle_op(${erlOp('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`,
     );
   }
 
@@ -1791,8 +1784,8 @@ ${putLines},
       const childActor = actors.find(a => a.name === calleeName);
       if (!childActor) continue;
       const prefix = calleeName.toLowerCase();
-      // A target is a run of wire labels: .o.inner
-      const path = `${pathPrefix}${wireLabel(s.name)}`;
+      // A target is a run of wire names, space-delimited: ~o ~inner
+      const path = pathPrefix ? `${pathPrefix} ${wireLabel(s.name)}` : wireLabel(s.name);
       const refKey = erlStateKey({ ...ctx, childStatePrefix: parentPrefix || '' }, s.name);
       const childChain = [...chain, refKey];
       const childStateVars = (childActor.stateVarDecls || []).filter(v => v.isRef);
@@ -1832,7 +1825,7 @@ ${typeClauses}                            _ -> null
                         case maps:find(<<"set">>, Test) of
                             {ok, TSV} ->
                                 TP = case TSV of L when is_list(L) -> L; M when is_map(M) -> M; _ -> [TSV] end,
-                                bv_inst_call_(${pid}, <<"set">>, TP),
+                                bv_inst_call_(${pid}, <<"$set">>, TP),
                                 ok;
                             error -> ok
                         end
@@ -1873,13 +1866,13 @@ ${testTypeClauses || '                _ -> null'};
                 M when is_map(M) -> M;
                 _ -> [SetVal]
             end,
-            handle_op(<<"set">>, #{}, SetPayload, Id, <<"__test">>),
+            handle_op(<<"$set">>, #{}, SetPayload, Id, <<"__test">>),
             ok;
         error ->
     case maps:find(<<"update">>, Test) of
         {ok, UpdVal} ->
             UpdPayload = case is_list(UpdVal) of true -> UpdVal; false -> case is_map(UpdVal) of true -> UpdVal; false -> [UpdVal] end end,
-            handle_op(<<"update">>, #{}, UpdPayload, Id, <<"__test">>),
+            handle_op(<<"$update">>, #{}, UpdPayload, Id, <<"__test">>),
             ok;
         error ->
     case maps:find(<<"op">>, Test) of
@@ -1888,12 +1881,8 @@ ${testTypeClauses || '                _ -> null'};
                 S when is_binary(S) -> {S, #{}};
                 L when is_list(L) -> {lists:last(L), if length(L) > 1 -> hd(L); true -> #{} end}
             end,
-            %% A #set with a to sets the cell it names, as on the wire.
-            OpName = case {OpName0, maps:get(<<"to">>, Test, null)} of
-                {<<"#set">>, SetTo_} when SetTo_ =/= null ->
-                    case extract_to_selector_(SetTo_) of nomatch -> <<"set">>; SetSel_ -> <<"set", SetSel_/binary>> end;
-                _ -> OpName0
-            end,
+            %% An intrinsic with a to names its target, as on the wire.
+            OpName = bv_op_key_(OpName0, maps:get(<<"to">>, Test, null)),
             Result3 = handle_op(OpName, #{}, Payload, Id, <<"__test">>),
             handle_result(Result3, Id, From, OpName);
         error -> ok
@@ -1909,7 +1898,7 @@ ${testTypeClauses || '                _ -> null'};
     end,
     case HasPayload andalso not maps:is_key(<<"ty">>, Message) of
         true ->
-            Ex = #{OpName => <<"schema_required">>},
+            Ex = #{bv_ex_key_(OpName) => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
             io:put_chars([json_encode(Resp), $\n]);
         false ->
@@ -1930,36 +1919,13 @@ ${testTypeClauses || '                _ -> null'};
             {OpN, P};
         _ -> {<<"">>, #{}}
     end,
-    %% Wire-to-internal normalization: strip '#' from system ops, then
-    %% "@subscribe"/"set" carry their selector in the to-field.
-    OpName0_s = case OpName0 of
-        <<"#new">> -> <<"new">>;
-        <<"#set">> -> <<"set">>;
-        <<"#update">> -> <<"update">>;
-        <<"#call">> -> <<"call">>;
-        _ -> OpName0
-    end,
-    OpName = case OpName0_s of
-        <<"@subscribe">> ->
-            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
-                nomatch -> OpName0_s;
-                Sel_ -> <<"subscribe", Sel_/binary>>
-            end;
-        <<"set">> ->
-            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
-                nomatch -> OpName0_s;
-                Sel_ -> <<"set", Sel_/binary>>
-            end;
-        <<"new">> ->
-            case extract_to_selector_(maps:get(<<"to">>, Message, null)) of
-                nomatch -> OpName0_s;
-                Sel_ -> <<"new", Sel_/binary>>
-            end;
-        _ -> OpName0_s
-    end,
-    case bv_instance_at_(maps:get(<<"to">>, Message, null)) of
-        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, OpName, Message, bv_unwire_payload(Message, Payload), Id, From);
+    %% An intrinsic names its target as the last token of to: {<<"$set">>, <<"val">>}.
+    %% Reaching an actor we published, the target is what follows its address.
+    To_ = maps:get(<<"to">>, Message, null),
+    case bv_instance_at_(To_) of
+        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, bv_op_key_under_(OpName0, To_, InstAddr_), Message, bv_unwire_payload(Message, Payload), Id, From);
         none ->
+    OpName = bv_op_key_(OpName0, To_),
 ${dispatchInner}
     end.
 
@@ -1973,7 +1939,7 @@ handle_result({ok, Re, TyRe}, Id, From, _OpName) when Re =/= null ->
 handle_result({ok, null, _}, _Id, _From, _OpName) ->
     ok;
 handle_result({error, UnhandledOp}, Id, From, _OpName) ->
-    Ex = #{UnhandledOp => <<"unhandled">>},
+    Ex = #{bv_ex_key_(UnhandledOp) => <<"unhandled">>},
     Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
     io:put_chars([json_encode(Resp), $\n]);
 handle_result(_, _Id, _From, _OpName) ->
@@ -1986,7 +1952,7 @@ handle_result(_, _Id, _From, _OpName) ->
       '            Payload2 = bv_unwire_payload(Message, Payload),\n            Result = try handle_op(OpName, Message, Payload2, Id, From)\n            catch error:{bv_as, AsMsg_} ->\n                {caught_error, OpName, AsMsg_};\n            _:_ ->\n                {caught_error, OpName}\n            end,\n            handle_result(Result, Id, From, OpName)',
     ).replace(
       'handle_result(_, _Id, _From, _OpName) ->\n    ok.',
-      'handle_result({caught_error, Op, Msg}, Id, From, _OpName) ->\n    Resp = #{<<"id">> => Id, <<"ex">> => #{Op => Msg}, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{Op => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
+      'handle_result({caught_error, Op, Msg}, Id, From, _OpName) ->\n    Resp = #{<<"id">> => Id, <<"ex">> => #{bv_ex_key_(Op) => Msg}, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result({caught_error, Op}, Id, From, _OpName) ->\n    Ex = #{bv_ex_key_(Op) => <<"error">>},\n    Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},\n    io:put_chars([json_encode(Resp), $\n]);\nhandle_result(_, _Id, _From, _OpName) ->\n    ok.',
     );
   }
 
