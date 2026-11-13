@@ -2105,8 +2105,8 @@ function codegenRust(ast, options = {}) {
   }
   // Cross-module type references (`Alias::Name`).
   for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!G.ctx.typeDecls.has(key)) G.ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
-    if (!G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    if (!G.ctx.typeDecls.has(key)) G.ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
+    if (!G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
     G.ctx.typeAuthority.set(key, info.path || '');
     G.ctx.typeAuthority.set(info.name, info.path || '');
   }

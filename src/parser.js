@@ -77,6 +77,8 @@ export function parse(tokensIn) {
   const hoistNested = (nested, op) => {
     for (const a of nested.nestedActors || []) { a.enclosing = op; hoistedClasses.push(a); }
     nested.nestedActors = [];
+    // A type declared in a class's constructor block belongs to the class.
+    if (op !== '<file-class>') for (const t of nested.types || []) t.ownerClass = op;
   };
   // Suppressed when parsing an expression whose trailing `->` belongs to an
   // outer construct (if-cond, while if-cond, handler-if cond), so that
@@ -429,7 +431,7 @@ export function parse(tokensIn) {
     if (tokens[offset]?.type === 'AT' && tokens[offset + 1]?.type === 'IDENT') return 1 + typeLength(offset + 1);
     if (tokens[offset]?.type !== 'IDENT') return 0;
     let len = 1;
-    if (tokens[offset+1]?.type === 'DCOLON' && tokens[offset+2]?.type === 'IDENT') len = 3;
+    while (tokens[offset+len]?.type === 'DCOLON' && tokens[offset+len+1]?.type === 'IDENT') len += 2;
     if (tokens[offset+len]?.type === 'KEYWORD' && tokens[offset+len]?.value === 'of') {
       const inner = typeLength(offset + len + 1);
       if (inner > 0) len += 1 + inner;
@@ -482,17 +484,15 @@ export function parse(tokensIn) {
       return `${typeName} of ${parseAtomicType(true)}`;
     }
     if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
-      consume(); // .
-      return `${typeName}.${consume().value}`;
+      throw new Error(`Unexpected '.' in type '${typeName}.${tokens[pos+1].value}'`);
     }
-    // Cross-module type reference — `Service::Point`. The `::` separator
-    // distinguishes a type identity from method-style member access (`.`).
-    // See types-implementation-plan-2026-04-27 slice 6.
-    if (peek().type === 'DCOLON' && tokens[pos+1]?.type === 'IDENT') {
+    // A type reached through an actor — `Svc::Point`, `Class::X`, `A::B::X`.
+    let path = typeName;
+    while (peek().type === 'DCOLON' && tokens[pos+1]?.type === 'IDENT') {
       consume(); // ::
-      return `${typeName}::${consume().value}`;
+      path += `::${consume().value}`;
     }
-    return typeName;
+    return path;
   }
 
   // Consume an `&Type` token at the current position and continue parsing
@@ -2215,6 +2215,15 @@ export function parse(tokensIn) {
       return parseXmlConstructor();
     }
 
+    // A type reached through an actor: `A::X(…)`, `A::B::X(…)`. A type is not
+    // a value, so the path must be followed by its construction.
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON' && tokens[pos + 2]?.type === 'IDENT') {
+      const path = [consume().value];
+      while (peek().type === 'DCOLON' && tokens[pos + 1]?.type === 'IDENT') { consume(); path.push(consume().value); }
+      if (peek().type !== 'LPAREN') throw new Error(`'${path.join('::')}' is a type, not a value`);
+      const args = parseCallArgs();
+      return { type: 'TypeConstruction', typeName: path[path.length - 1], qualifier: path.slice(0, -1), args };
+    }
     if (peek().type === 'IDENT' && peek().value === 'Object' && tokens[pos + 1]?.type === 'LPAREN') {
       const tok = consume();
       return parseObjectConstructor(tok.value);
@@ -2668,7 +2677,8 @@ export function parse(tokensIn) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
-      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall()) {
+      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
+                 (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -4682,6 +4692,7 @@ export function parse(tokensIn) {
   function parseActorBody(isEnd) {
     const functions = [];
     const nestedActors = [];
+    const ownTypes = [];
     const asClauses = [];
     const constructorBody = [];
     const outerDecl = declCtx;
@@ -4725,6 +4736,13 @@ export function parse(tokensIn) {
         }
         break;
       }
+      if (isTypeKw()) {
+        const decl = parseTypeDecl();
+        types.push(decl);
+        ownTypes.push(decl);
+        continue;
+      }
+      if (peek().type === 'DCOLON') throw new Error(`Unexpected '::'`);
       if (peek().type === 'KEYWORD' && peek().value === 'self' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
         asClauses.push(parseSelfAsClause());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'IDENT' && functions.length === 0) {
@@ -5422,7 +5440,7 @@ export function parse(tokensIn) {
     for (const decl of [...functions, ...stateVarDecls]) {
       if (untrackedDecls.has(decl.name)) decl.untracked = true;
     }
-    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn };
+    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn, types: ownTypes };
   }
 
   const actors = [];
@@ -5927,6 +5945,20 @@ export function parse(tokensIn) {
   }
 
   actors.push(...hoistedClasses);
+  // A nested type's owner: the path of classes from the file actor down to the
+  // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
+  // A singleton is named by its binding.
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const classPath = (name) => {
+    const a = name && byName.get(name);
+    if (!a) return [];
+    return [...classPath(a.enclosing), (a.singletonOf ?? a.name).replace(/^@/, '')];
+  };
+  for (const t of types) {
+    if (!t.ownerClass) continue;
+    t.owner = classPath(t.ownerClass);
+  }
+  if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
   const result = AST.program(actors, dependencies, types);
   resolveLoneNames(result);
   settleSilentDecls(result);

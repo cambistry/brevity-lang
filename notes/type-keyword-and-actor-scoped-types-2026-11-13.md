@@ -35,6 +35,9 @@ type Point
 - A type declaration may not depend on its containing actor: no field defaults from constructor
   params, no mutable reads. (A type could otherwise differ per instance; that is locked out for
   now.)
+- A type's bare name is unique within its file, whichever actor declares it: `A::X` and `B::X` in
+  one file is a duplicate declaration. The bare name is the type's internal name (`__type`) and
+  its key in the receiver's registry, so two of them in one file could not be told apart.
 
 ## `::` reaches a type through an actor
 
@@ -92,3 +95,7 @@ A non-public class's types are visible only within its file.
 - Types declared inside a function body, rather than a constructor block.
 - Types as values (`t = Class::X`, `svc.decode(Class::X, …)`): needs a type of types and a wire
   form for a type. Separate feature.
+- Unnamed fields (`type X (Integer)`, `type Widget (Text, Text)`): every field has a name today.
+- Two types of one bare name in one file (see Where a type is declared).
+- The receiver recognises a tag by its last token alone. Two imported types of one bare name,
+  from different authorities, still share a registry entry.

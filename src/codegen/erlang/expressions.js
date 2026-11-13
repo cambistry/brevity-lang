@@ -413,7 +413,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         fieldPairs.push(`${erlString(f.name)} => ${fieldValue(named[f.name])}`);
       }
     }
-    const head = `${erlString('__type')} => ${erlString(expr.typeName)}`;
+    const head = `${erlString('__type')} => ${erlString(decl?.name || expr.typeName)}`;
     return `#{${head}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''}}`;
   }
 

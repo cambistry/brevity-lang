@@ -374,7 +374,9 @@ export function rustTypeTag(t) {
   const singleton = typeof t === 'string' && G.ctx.actorNodes?.get(t)?.singletonOf;
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
-  const name = G.ctx.typeDecls.get(t).name || t;
+  const decl = G.ctx.typeDecls.get(t);
+  // A type declared in a class names the class path after its authority.
+  const name = [...(decl.owner || []), decl.name || t].map(quoteToken).join(' ');
   const authority = G.ctx.typeAuthority?.get(t) || '';
   return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
 }

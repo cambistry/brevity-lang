@@ -703,7 +703,7 @@ export function genExpr(ctx, expr) {
         pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(named[f.name])}`);
       }
     }
-    return `{ __type: ${JSON.stringify(expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
+    return `{ __type: ${JSON.stringify(decl?.name || expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
   }
   if (expr.type === 'FunctionCallExpr') {
     if (expr.callee?.type === 'Identifier') {
@@ -1375,7 +1375,9 @@ export function typeTag(ctx, t) {
   const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-  const name = ctx.typeDecls.get(t).name || t;
+  const decl = ctx.typeDecls.get(t);
+  // A type declared in a class names the class path after its authority.
+  const name = [...(decl.owner || []), decl.name || t].map(quoteToken).join(' ');
   const authority = ctx.typeAuthority?.get(t) || '';
   return authority ? `${quoteToken(authority)} ${name}` : `. ${name}`;
 }

@@ -1443,7 +1443,7 @@ export function codegen(ast, options = {}) {
     : null;
   // A subclass with an empty body (`Box = (Base++) *{}`) is still a class: its
   // surface is all inherited.
-  const active = ast.actors.filter(a => a.functions.length > 0 || a.asClauses?.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
+  const active = ast.actors.filter(a => a.functions.length > 0 || a.singletonOf || a.asClauses?.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
   if (active.length === 0) return '';
 
   function bodyUsesObject(body) {
@@ -1566,8 +1566,8 @@ export function codegen(ast, options = {}) {
   // key and the bare remote name so field access, reference-field dispatch,
   // and wire reconstruction resolve them.
   for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
-    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
+    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
     ctx.typeAuthority.set(key, info.path || '');
     ctx.typeAuthority.set(info.name, info.path || '');
   }

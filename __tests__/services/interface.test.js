@@ -458,18 +458,18 @@ describe('service interface — imported type address resolution', () => {
     expect(iface.service).toBe('{\n  query (db: `/services/db`) -> (result: Text)\n}');
   });
 
-  it('member type via dot-access resolves as path.Member', () => {
+  it('member type via :: resolves as path::Member', () => {
     const { interface: iface } = extract(`
       *
         "geometry.bv": Geo
       *
 
-      @assign. = (p Geo.Point) {}
+      @assign. = (p Geo::Point) {}
     `);
-    expect(iface.service).toBe('{\n  assign. (`geometry.bv`.Point) => .\n}');
+    expect(iface.service).toBe('{\n  assign. (`geometry.bv`::Point) => .\n}');
   });
 
-  it('member type in return position resolves as path.Member', () => {
+  it('member type in return position resolves as path::Member', () => {
     const { interface: iface } = extract(`
       *
         "geometry.bv": Geo
@@ -477,20 +477,20 @@ describe('service interface — imported type address resolution', () => {
 
       @make
         =
-        -> Geo.Point(1, 2) as Geo.Point
+        -> Geo::Point(1, 2) as Geo::Point
     `);
-    expect(iface.service).toBe('{\n  make () -> (`geometry.bv`.Point)\n}');
+    expect(iface.service).toBe('{\n  make () -> (`geometry.bv`::Point)\n}');
   });
 
-  it('member type with named param resolves as path.Member', () => {
+  it('member type with named param resolves as path::Member', () => {
     const { interface: iface } = extract(`
       *
         "geometry.bv": Geo
       *
 
-      @move. = (point: Geo.Point, dx: Integer) {}
+      @move. = (point: Geo::Point, dx: Integer) {}
     `);
-    expect(iface.service).toBe('{\n  move. (point: `geometry.bv`.Point, dx: Integer) => .\n}');
+    expect(iface.service).toBe('{\n  move. (point: `geometry.bv`::Point, dx: Integer) => .\n}');
   });
 
   it('constant of imported type resolves in getter', () => {

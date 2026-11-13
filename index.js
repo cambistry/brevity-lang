@@ -49,13 +49,13 @@ function resolveType(typeNameInFile, aliasMap) {
     return `${container} of ${resolveType(inner, aliasMap)}`;
   }
 
-  // Handle dot-access: "Alias.Member"
-  const dotIdx = typeName.indexOf('.');
-  if (dotIdx !== -1) {
-    const alias = typeName.slice(0, dotIdx);
-    const member = typeName.slice(dotIdx + 1);
+  // A type reached through a service: "Alias::Member", "Alias::C::Member"
+  const pathIdx = typeName.indexOf('::');
+  if (pathIdx !== -1) {
+    const alias = typeName.slice(0, pathIdx);
+    const member = typeName.slice(pathIdx + 2);
     const resolved = aliasMap.get(alias);
-    if (resolved) return `${resolved}.${member}`;
+    if (resolved) return `${resolved}::${member}`;
     return typeName;
   }
 
@@ -88,7 +88,7 @@ function formatPublicFnSig(fn, aliasMap, purported = null) {
   return orSelf ? `(${input}) ${arrow} self` : `(${input}) ${arrow} ()`;
 }
 
-function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', singletonBlock = () => null) {
+function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', singletonBlock = () => null, typeDecls = []) {
   const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
   const supertypes = (actor.supertypes || []).map(st => (st.sourceName ?? st.supertype).replace(/^@/, ''));
   // Input: when subtyping, prefix with `Parent1 ++ Parent2 ++ ` and keep only
@@ -113,7 +113,8 @@ function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', s
   // (consumer can expand from the parent's own render). Keep own methods as
   // before; the spread makes additions vs. replacements explicit.
   const spreadLines = supertypes.map(s => `    ...${s}`);
-  const bodyLines = [...spreadLines, ...fieldLines, ...methodLines];
+  const typeLines = typeDecls.map(d => `    ${formatTypeDecl(d)}`);
+  const bodyLines = [...spreadLines, ...typeLines, ...fieldLines, ...methodLines];
   if (bodyLines.length === 0) return `(${input}) ${arrow} *{}`;
   return `(${input}) ${arrow} *{\n${bodyLines.join('\n')}\n  }`;
 }
@@ -256,8 +257,9 @@ function buildServiceDocument(ast) {
   const lines = [];
   const purportedByActor = purportedFunctions(ast, parseInterface);
   const privateClasses = new Map(ast.actors.filter(a => a.name && !a.name.startsWith('@')).map(a => [a.name, a]));
+  // A type declared in a class's constructor block goes in that class's entry.
   for (const decl of (ast.types || [])) {
-    lines.push(formatTypeDecl(decl));
+    if (!decl.ownerClass) lines.push(formatTypeDecl(decl));
   }
   for (const actor of ast.actors) {
     // Public constructor: actor with @-prefixed name
@@ -268,7 +270,7 @@ function buildServiceDocument(ast) {
         const cls = singletonIn(ast, actor, fn.name);
         return cls ? formatSingletonBlock(ast, cls, aliasMap, purportedByActor, 4) : null;
       };
-      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock)}`);
+      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock, ownTypes(ast, actor))}`);
       continue;
     }
     // A private class isn't part of the file's surface.
@@ -292,6 +294,9 @@ function buildServiceDocument(ast) {
   return `${base} | ${asTypes.join(' | ')}`;
 }
 
+// The types declared in a class's constructor block.
+const ownTypes = (ast, actor) => (ast.types || []).filter(t => t.ownerClass && (t.ownerClass === actor.name || t.ownerClass === actor.sourceName));
+
 // The public singleton `@name` declared directly in `owner` (src/parser.js), if any.
 const singletonIn = (ast, owner, name) =>
   ast.actors.find(a => a.singletonOf === name && (a.enclosing ?? null) === (owner.name ?? null));
@@ -299,7 +304,7 @@ const singletonIn = (ast, owner, name) =>
 // A public singleton is a sub-service: `name { members }`, its members one level
 // in. `depth` is the indent of the line it starts on.
 function formatSingletonBlock(ast, cls, aliasMap, purportedByActor, depth) {
-  const members = publicMemberLines(ast, cls, aliasMap, purportedByActor, depth + 2);
+  const members = [...ownTypes(ast, cls).map(formatTypeDecl), ...publicMemberLines(ast, cls, aliasMap, purportedByActor, depth + 2)];
   if (members.length === 0) return '{}';
   const pad = ' '.repeat(depth + 2);
   return `{\n${members.map(l => pad + l).join('\n')}\n${' '.repeat(depth)}}`;

@@ -453,7 +453,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const named = namedBag?.fields || {};
     const seen = new Set();
     const inserts = [];
-    inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(expr.typeName)}.to_string()));`);
+    inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(decl?.name || expr.typeName)}.to_string()));`);
     // A lambda stored in a type field is a callback reference that travels with
     // the value: lower it to a routable self-address (#<. @N>).
     const fieldValue = (e) => {

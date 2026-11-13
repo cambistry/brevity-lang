@@ -121,7 +121,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
   // `Svc::Point` names a type in Svc's document. A class has no `::` form.
   const checkQualifiedType = (node) => {
     if (node.type !== 'TypedAssign' || typeof node.typeName !== 'string') return;
-    for (const [written, alias, member] of node.typeName.matchAll(/(\w+)::(\w+)/g)) {
+    for (const [written, alias, member] of node.typeName.matchAll(/(?<![\w:])(\w+)::(\w+)(?![\w:])/g)) {
       const dep = depNamed(alias);
       if (!dep) throw new Error(`'${alias}' in '${written}' isn't in the header`);
       const doc = remotesParsed[alias];

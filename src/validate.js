@@ -7,6 +7,7 @@ import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
+import { resolveTypePaths, checkTypeClassConflicts } from './type_paths.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { markOuterReads } from './outer_reads.js';
 import { checkInitOrder } from './init_order.js';
@@ -296,6 +297,9 @@ export function validate(ast, options = {}) {
     }
   }
 
+  // ── Types reached through an actor (`A::X`), and where a bare type is seen ──
+  checkTypeClassConflicts(ast);
+  resolveTypePaths(ast, remotesParsed, dependencyNames);
   lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependencyNames);
 
   // ── Destructured-member index + name-collision check ────────────────────

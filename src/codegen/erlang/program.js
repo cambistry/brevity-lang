@@ -2334,8 +2334,8 @@ export function codegenErlang(ast, options = {}) {
   }
   // Cross-module type references (`Alias::Name`).
   for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields });
-    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields });
+    if (!ctx.typeDecls.has(key)) ctx.typeDecls.set(key, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
+    if (!ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, { name: info.name, fields: info.fields, ...(info.owner ? { owner: info.owner } : {}) });
     ctx.typeAuthority.set(key, info.path || '');
     ctx.typeAuthority.set(info.name, info.path || '');
   }
