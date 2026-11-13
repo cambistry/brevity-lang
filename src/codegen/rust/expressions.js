@@ -1,5 +1,5 @@
 // expressions.js — Expression generation for Rust codegen
-import { addressToken, intrinsicArm, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
+import { addressToken, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { argForParam } from '../../call_args.js';
@@ -780,7 +780,7 @@ ${subRegLines.join('\n')}
         // the lowercase class name; otherwise this is the file class.
         const enclosing = G.ctx.childStatePrefix || null;
         const idExpr = `bv_inst_id(&self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null))`;
-        const method = JSON.stringify(memberOp(expr.method));
+        const method = JSON.stringify(wireOpOf(expr));
         const namedX = expr.args.filter(a => !a.positional);
         const positionalX = expr.args.filter(a => a.positional);
         // Bypass json!() to avoid consuming Identifier args that may already
@@ -843,7 +843,7 @@ ${subRegLines.join('\n')}
           const namedInserts = namedC.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
           payloadC = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
         }
-        return `{ let _inst = bv_inst_id(&${cell}); self.child_${t.toLowerCase()}_dispatch_at(_inst, ${JSON.stringify(memberOp(expr.method))}, &${payloadC}, "", "__parent") }`;
+        return classCall(t.toLowerCase(), `bv_inst_id(&${cell})`, JSON.stringify(wireOpOf(expr)), payloadC, expr);
       }
     }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
@@ -851,7 +851,7 @@ ${subRegLines.join('\n')}
     if (dotObjName && eCtx?.selfSpawnedRefs?.has(dotObjName)) {
       const spawnClass = eCtx.selfSpawnedRefs.get(dotObjName);
       const idVar = rustSsaResolve(dotObjName);
-      const method = JSON.stringify(memberOp(expr.method));
+      const method = JSON.stringify(wireOpOf(expr));
       const named0 = expr.args.filter(a => !a.positional);
       const positional0 = expr.args.filter(a => a.positional);
       const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
@@ -871,8 +871,7 @@ ${subRegLines.join('\n')}
       if (spawnClass === '__self__') {
         return `{ let (re, ty, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); let re = re.unwrap_or(Value::Null); ty.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
-      const lc = spawnClass.toLowerCase();
-      return `self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent")`;
+      return classCall(spawnClass.toLowerCase(), `bv_inst_id(&${idVar})`, method, payload, expr);
     }
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
@@ -892,7 +891,7 @@ ${subRegLines.join('\n')}
       const to = isLocalInst
         ? `bv_addr_to(${rustSsaResolve(dotObjName)}.as_str().unwrap_or(""))`
         : `bv_addr_to(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or(""))`;
-      const method = JSON.stringify(memberOp(expr.method));
+      const method = JSON.stringify(wireOpOf(expr));
       let opExpr;
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;
@@ -925,7 +924,7 @@ ${subRegLines.join('\n')}
     const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
       const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-      const method = JSON.stringify(memberOp(expr.method));
+      const method = JSON.stringify(wireOpOf(expr));
       let payload;
       if (positional.length === 0 && named.length === 0) {
         payload = 'json!({})';
@@ -951,7 +950,7 @@ ${subRegLines.join('\n')}
     // path through it (`Svc.s.get()` is `@get` to `Svc @s`), or a local bound to one.
     // Any other receiver is a value holding an address.
     const to = rustOpreTo(expr, (root) => genRustExpr(root, typeEnv, eCtx));
-    const method = JSON.stringify(expr.opre?.op ?? memberOp(expr.method));
+    const method = JSON.stringify(wireOpOf(expr));
     if (positional.length === 0 && named.length === 0) {
       return `{
         let seq = self.send_seq.get();
@@ -1978,5 +1977,20 @@ export function rustOpreTo(expr, gen) {
   const held = `bv_addr_to(bv_val((${gen(root)}).clone()).as_str().unwrap_or(""))`;
   return address?.path?.length ? `format!("{} {}", ${held}, ${JSON.stringify(joinAddress(address.path))})` : held;
 }
+
+// A call into one of this file's classes, by instance. A silent or launched call
+// isn't waited for: it's queued and runs once this turn ends (bv_run_deferred), not
+// inside it. A call that waits first lets what's queued run, so a class takes its
+// messages in the order they were sent.
+function classCall(lc, instExpr, method, payload, expr) {
+  if (expr.method.endsWith('.') || expr.launched) {
+    return `{ let _inst = ${instExpr}; let _p = ${payload}; self.bv_deferred.push_back(Box::new(move |s: &mut Actor| { let _ = s.child_${lc}_dispatch_at(_inst, ${method}, &_p, "", "__parent"); })); Value::Null }`;
+  }
+  return `{ let _inst = ${instExpr}; let _p = ${payload}; self.bv_run_deferred(); self.child_${lc}_dispatch_at(_inst, ${method}, &_p, "", "__parent") }`;
+}
+
+// A call's wire op: the lowered one (`$get` for a cell read, src/opre.js), else
+// the member called.
+export const wireOpOf = (expr) => expr.opre?.op ?? memberOp(expr.method);
 
 export const isOpreAddressed = (expr) => expr?.opre?.address.kind === 'static' || !!expr?.opre?.address.path?.length;

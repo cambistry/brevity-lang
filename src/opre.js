@@ -164,9 +164,13 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
         if (walked.failedAt >= 0) missing = { label: [base.label, ...members.slice(0, walked.failedAt)].join('.'), member: members[walked.failedAt] };
         doc = walked.doc;
       }
+      // A read of a cell is `$get` to the cell: its name is the last token. A
+      // prop stays an op (`{op: 'count'}`); see cellRead.
+      const read = cellRead(doc, op, call);
+      if (read) tokens.push(op);
       call.opre = withDoc({
         address: { kind: 'static', wire: joinAddress(tokens), tokens, dep: base.dep },
-        op,
+        op: read ? '$get' : op,
         label: [base.label, ...members].join('.'),
         ...(missing ? { missing } : {}),
       }, doc);
@@ -210,6 +214,25 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
   };
   visit(body);
 }
+
+// A member of a service document that is a cell (`val &Integer`, `val *Integer`),
+// not a prop (`val Integer`) or a function. Its read is `$get` sent to it.
+export function fieldOf(doc, name) {
+  return doc?.__fields?.[name] ?? null;
+}
+
+// `Svc.s.val` when `Svc` is a dependency: the member's label, name and the
+// document it's declared in, with its field record if it is one.
+export function remoteMember(expr, remotesParsed = {}) {
+  if (expr?.type !== 'DotAccessExpr') return null;
+  const { root, members } = memberPath(expr.object);
+  if (root?.type !== 'Identifier' || !remotesParsed[root.name]) return null;
+  const { doc } = walkServices(remotesParsed[root.name], members);
+  if (!doc) return null;
+  return { root: root.name, label: [root.name, ...members, expr.property].join('.'), name: expr.property, doc, field: fieldOf(doc, expr.property) };
+}
+
+const cellRead = (doc, op, call) => !call.args?.length && fieldOf(doc, op)?.cell === true && !fieldOf(doc, op).writeOnly;
 
 // What the document says a lowered call resolves to: its signatures, or why it
 // has none. `null` when there's nothing to check it against.

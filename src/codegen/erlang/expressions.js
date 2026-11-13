@@ -297,11 +297,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'NullLiteral') return 'null';
 
   // A cell a class's construction waits on has its value (src/init_order.js).
-  if (expr.type === 'CellReady') return `bv_cell_ready_(${erlStateKey(ctx, expr.name)})`;
+  if (expr.type === 'CellReady') return `bv_cell_ready_(${erlString(wireLabel(expr.name))})`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
-    // The owner's key: a file's or a class param's has no class prefix.
-    const keyCtx = expr.outerClass && !expr.outerParam ? { childStatePrefix: expr.outerClass.toLowerCase() } : {};
-    return `bv_outer_get_(${expr.outerLevel ?? 1}, ${erlStateKey(keyCtx, expr.name)})`;
+    // `$get` to the owner's name, by its wire token (bv_read_ in program.js).
+    return `bv_outer_get_(${expr.outerLevel ?? 1}, ${erlString(wireLabel(expr.name))})`;
   }
   if (expr.type === 'Identifier') {
     const name = expr.name;
@@ -1137,6 +1136,9 @@ function genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx) {
   } else {
     payload = '#{}';
   }
+  // A silent or launched call isn't waited for: it's delivered, and runs once the
+  // class takes it, not inside this turn.
+  if (expr.method.endsWith('.') || expr.launched) return `begin bv_launch_(${pidExpr}, ${method}, ${payload}), null end`;
   const n = ctx.ephCounter++;
   const idVar = `Eph_id_${n}_`;
   const reVar = `Eph_re_${n}_`;
@@ -1170,6 +1172,9 @@ function genErlSelfSpawnedDispatch(ctx, expr, typeEnv, sCtx) {
   } else {
     payload = '#{}';
   }
+  // A silent or launched call isn't waited for: it's delivered, and runs once the
+  // class takes it, not inside this turn.
+  if (expr.method.endsWith('.') || expr.launched) return `begin bv_launch_(${pidExpr}, ${method}, ${payload}), null end`;
   const n = ctx.ephCounter++;
   const idVar = `Eph_id_${n}_`;
   const reVar = `Eph_re_${n}_`;

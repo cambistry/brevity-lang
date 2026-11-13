@@ -328,22 +328,25 @@ function parseConstructor(name, paramsInner, bodyInner) {
   const functions = [];
   const setters = [];
   const services = {};
+  const fields = {};
   for (const e of parseEntries(bodyInner)) {
     if (e.kind === 'function') {
       functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}) });
     } else if (e.kind === 'field') {
-      // A field reads as a zero-arg getter; a ref cell is also settable.
+      // A field reads as a zero-arg getter; a `*` cell is also settable.
       functions.push({ name: e.name, params: [], returns: [{ name: null, type: e.type, positional: true }] });
       if (!e.readOnly) setters.push({ name: e.name, type: e.type });
+      fields[e.name] = fieldRecord(e);
     } else if (e.kind === 'setter') {
       setters.push({ name: e.name, type: e.type });
+      fields[e.name] = { type: e.type, cell: true, writeOnly: true };
     } else if (e.kind === 'service') {
       services[e.name] = e.service;
     } else if (e.kind !== 'spread') {
       throw new Error(`Interface entry '${e.name}': a ${e.kind} cannot be declared inside constructor '${name}'`);
     }
   }
-  return { supertypes, initParams, functions, setters, ...(Object.keys(services).length ? { services } : {}) };
+  return { supertypes, initParams, functions, setters, ...(Object.keys(services).length ? { services } : {}), ...(Object.keys(fields).length ? { fields } : {}) };
 }
 
 function parseEntry(text) {
@@ -391,11 +394,18 @@ function parseEntry(text) {
     return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}) };
   }
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
-  const readOnly = !rest.startsWith('*');
-  const type = readOnly ? rest : rest.slice(1).trim();
+  // `name Type` is a prop: an attribute, read as `{op: 'name'}`, not an address.
+  // `name &Type` is a read-only cell and `name *Type` a writable one: addresses
+  // that answer `$get` / `$subscribe` (and `$set`, for `*`).
+  const sigil = rest[0] === '*' || rest[0] === '&' ? rest[0] : null;
+  const type = sigil ? rest.slice(1).trim() : rest;
   if (!FIELD_TYPE_RE.test(type)) throw new Error(`Interface entry '${name}': malformed definition '${rest}'`);
-  return { kind: 'field', name, type, readOnly };
+  return { kind: 'field', name, type, cell: !!sigil, readOnly: sigil !== '*' };
 }
+
+// What a field record says about a member, for the wire: `prop`, a read-only
+// `cell` (`&`), a writable one (`*`), or a write-only cell (`set name (Type)`).
+export const fieldRecord = (e) => ({ type: e.type, cell: e.cell, readOnly: e.readOnly });
 
 // One record per top-level entry. Entries are separated by newlines or
 // commas; separators inside a bracket group do not end an entry, so
@@ -417,7 +427,9 @@ export function parseInterface(manifestStr) {
   //                                `returns` it's `=> (Type) | self`
   //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`
   //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
-  //   result.__fields[name]      — `{ type, readOnly }` for `name Type` / `name *Type`
+  //   result.__fields[name]      — `{ type, cell, readOnly }`: a prop `name Type`
+  //                                (cell false), a cell `name &Type` / `name *Type`;
+  //                                `{ type, cell, writeOnly }` for `set name (Type)`
   //   result.__setters           — `[{ name, type }]` for top-level `set name (Type)`
   //   result.__services[name]    — a sub-service `name { … }`: its own parsed document
   const result = {};
@@ -430,8 +442,8 @@ export function parseInterface(manifestStr) {
     } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
       if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
-      const { effect, supertypes, initParams, functions, setters, services } = e;
-      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}) };
+      const { effect, supertypes, initParams, functions, setters, services, fields } = e;
+      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}) };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });
@@ -439,10 +451,12 @@ export function parseInterface(manifestStr) {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: [], returns: [{ name: null, type: e.type, positional: true }] });
       result.__fields = result.__fields || {};
-      result.__fields[e.name] = { type: e.type, readOnly: e.readOnly };
+      result.__fields[e.name] = fieldRecord(e);
     } else if (e.kind === 'setter') {
       result.__setters = result.__setters || [];
       result.__setters.push({ name: e.name, type: e.type });
+      result.__fields = result.__fields || {};
+      result.__fields[e.name] = { type: e.type, cell: true, writeOnly: true };
     } else if (e.kind === 'service') {
       result.__services = result.__services || {};
       result.__services[e.name] = e.service;

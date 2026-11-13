@@ -101,8 +101,11 @@ function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', s
   // Published params (`@name Type`) read as read-only fields.
   const fieldLines = publishedParamLines(actor, aliasMap).map(l => `    ${l}`);
   const methods = (actor.functions || []).filter(f => f.name && f.name.startsWith('@'));
+  const setterOf = (name) => (actor.functions || []).filter(f => f.name === 'set' + name);
   const methodLines = methods.map(fn => {
     const name = fn.name.replace(/^@/, '');
+    const cell = cellLine(actor, name, [fn], setterOf(fn.name), aliasMap);
+    if (cell) return `    ${cell}`;
     const sig = singletonBlock(fn) ?? formatPublicFnSig(fn, aliasMap, purported);
     return `    ${name} ${sig}`;
   });
@@ -161,6 +164,20 @@ function buildParamsDocument(ast) {
   // Same outer shape as a delimited header's param list: `( … )`.
   if (entries.length === 0) return '()';
   return '(\n  ' + entries.join('\n  ') + '\n)';
+}
+
+// A public cell's entry: `name *Type` when it's settable, `name &Type` when it
+// isn't (a cell whose type has no synthesized setter). Null for anything else.
+function cellLine(actor, bare, getters, setters, aliasMap) {
+  if (getters.length !== 1 || setters.length > 1) return null;
+  const [getter] = getters;
+  if (setters.length === 1) {
+    const cellType = reactiveCellType(getter, setters[0], aliasMap);
+    return cellType ? `${bare} *${cellType}` : null;
+  }
+  if (!getter.cellGetter) return null;
+  const field = getter.body.find(s => s.type === 'Reply')?.fields?.[0];
+  return field?.type ? `${bare} &${resolveType(field.type, aliasMap)}` : null;
 }
 
 function reactiveCellType(getter, setter, aliasMap) {
@@ -309,12 +326,10 @@ function publicMemberLines(ast, actor, aliasMap, purportedByActor, depth) {
     }
     const ordered = [...grouped.entries()].sort((a, b) => a[1].order - b[1].order);
     for (const [bare, { getters, setters }] of ordered) {
-      if (getters.length === 1 && setters.length === 1) {
-        const cellType = reactiveCellType(getters[0], setters[0], aliasMap);
-        if (cellType) {
-          lines.push(`${untrackedPrefix(actor, '@' + bare)}${bare} *${cellType}`);
-          continue;
-        }
+      const cell = cellLine(actor, bare, getters, setters, aliasMap);
+      if (cell) {
+        lines.push(`${untrackedPrefix(actor, '@' + bare)}${cell}`);
+        continue;
       }
       const singleton = getters.length === 1 && singletonIn(ast, actor, '@' + bare);
       if (singleton) {

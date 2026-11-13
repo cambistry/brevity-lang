@@ -78,31 +78,52 @@ describe('service document — entry forms', () => {
     expect(p.label).toBeUndefined();
   });
 
-  it('ref cell: name *Type — readable and settable', () => {
+  it('writable cell: name *Type — readable and settable', () => {
     const p = parseInterface('{ count *Integer }');
-    expect(p.__fields.count).toEqual({ type: 'Integer', readOnly: false });
+    expect(p.__fields.count).toEqual({ type: 'Integer', cell: true, readOnly: false });
     expect(p.count).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
   });
 
-  it('read-only field: name Type', () => {
-    const p = parseInterface('{ count Integer\n  names List of Texts\n  parent Node | null }');
+  it('read-only cell: name &Type — readable, not settable', () => {
+    const p = parseInterface('{ count &Integer\n  names &List of Texts }');
     expect(p.__fields).toEqual({
-      count: { type: 'Integer', readOnly: true },
-      names: { type: 'List of Texts', readOnly: true },
-      parent: { type: 'Node | null', readOnly: true },
+      count: { type: 'Integer', cell: true, readOnly: true },
+      names: { type: 'List of Texts', cell: true, readOnly: true },
     });
     expect(p.count).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
   });
 
-  it('fields inside a constructor: getter, plus setter for a cell', () => {
-    const p = parseInterface('{ Box () -> *{\n  total Integer\n  slot *Integer\n} }');
-    expect(p.__types.Box.functions.map(f => f.name)).toEqual(['total', 'slot']);
-    expect(p.__types.Box.setters).toEqual([{ name: 'slot', type: 'Integer' }]);
+  it('prop: name Type — an attribute, not a cell', () => {
+    const p = parseInterface('{ count Integer\n  names List of Texts\n  parent Node | null }');
+    expect(p.__fields).toEqual({
+      count: { type: 'Integer', cell: false, readOnly: true },
+      names: { type: 'List of Texts', cell: false, readOnly: true },
+      parent: { type: 'Node | null', cell: false, readOnly: true },
+    });
+    expect(p.count).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
+  });
+
+  it('setter: set name (Type) is a write-only cell', () => {
+    const p = parseInterface('{ set label (Text) }');
+    expect(p.__fields.label).toEqual({ type: 'Text', cell: true, writeOnly: true });
+  });
+
+  it('fields inside a constructor: getter, plus setter for a * cell', () => {
+    const p = parseInterface('{ Box () -> *{\n  total Integer\n  seen &Integer\n  slot *Integer\n  set label (Text)\n} }');
+    expect(p.__types.Box.functions.map(f => f.name)).toEqual(['total', 'seen', 'slot']);
+    expect(p.__types.Box.setters).toEqual([{ name: 'slot', type: 'Integer' }, { name: 'label', type: 'Text' }]);
+    expect(p.__types.Box.fields).toEqual({
+      total: { type: 'Integer', cell: false, readOnly: true },
+      seen: { type: 'Integer', cell: true, readOnly: true },
+      slot: { type: 'Integer', cell: true, readOnly: false },
+      label: { type: 'Text', cell: true, writeOnly: true },
+    });
   });
 
   it('entries may be comma-separated', () => {
     const p = parseInterface('{ val *Integer, get () -> (Integer), set name (Text) }');
     expect(Object.keys(p).sort()).toEqual(['__fields', '__setters', 'get', 'val']);
+    expect(Object.keys(p.__fields).sort()).toEqual(['name', 'val']);
   });
 
   it('names may end in ? or !', () => {
@@ -178,27 +199,77 @@ describe('service document — emitted form', () => {
     `);
     const p = parseInterface(iface.service);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
-    expect(p.__fields.val).toEqual({ type: 'Integer', readOnly: false });
+    expect(p.__fields.val).toEqual({ type: 'Integer', cell: true, readOnly: false });
     expect(p.__types.Counter.functions.map(f => f.name)).toEqual(['get']);
     expect(p.add[0].returns).toEqual([{ name: 'sum', type: 'Integer', positional: false }]);
   });
+
+  it('a public cell with no setter emits &, and round-trips', () => {
+    const { interface: iface } = extract(`
+      @names *List of Texts = []
+      @val *Integer = 0
+    `);
+    expect(iface.service).toBe('{\n  names &List of Texts\n  val *Integer\n}');
+    expect(parseInterface(iface.service).__fields).toEqual({
+      names: { type: 'List of Texts', cell: true, readOnly: true },
+      val: { type: 'Integer', cell: true, readOnly: false },
+    });
+  });
+
+  it('a class\'s public cells emit as cells, and its published params as props', () => {
+    const { interface: iface } = extract(`
+      @Box = (@start Integer) *{
+        @slot *Integer = 0
+        @names *List of Texts = []
+        @get = -> value: start as Integer
+      }
+    `);
+    expect(iface.service).toBe('{\n  Box (Integer) -> *{\n    start Integer\n    slot *Integer\n    names &List of Texts\n    get () -> (value: Integer)\n  }\n}');
+    expect(parseInterface(iface.service).__types.Box.fields).toEqual({
+      start: { type: 'Integer', cell: false, readOnly: true },
+      slot: { type: 'Integer', cell: true, readOnly: false },
+      names: { type: 'List of Texts', cell: true, readOnly: true },
+    });
+  });
 });
 
-describe('read-only fields — validation', () => {
+describe('props and cells — validation', () => {
   const remote = (iface, body) => compileSrc(`*\n  "remote.bv": Remote ${iface}\n*\n${body}\n`);
 
-  it('a read-only service field can be read and subscribed to', () => {
-    expect(() => remote('{ count Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
+  it('a prop can be read', () => {
     expect(() => remote('{ count Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
   });
 
-  it('a read-only service field cannot be set', () => {
-    expect(() => remote('{ count Integer }', '@go. = { Remote.count <- 5 }'))
-      .toThrow(/'Remote.count' is a read-only property/);
+  it('a prop cannot be subscribed to', () => {
+    expect(() => remote('{ count Integer }', '@go. = { Remote.count.subscribe (v) { . } }'))
+      .toThrow(/'Remote.count' is a prop, not an address, so it can't be subscribed to \(a live read-only member is a cell: 'count &Integer'\)/);
   });
 
-  it('a ref-cell service field can be set', () => {
+  it('a prop cannot be set', () => {
+    expect(() => remote('{ count Integer }', '@go. = { Remote.count <- 5 }'))
+      .toThrow(/'Remote.count' is a prop, not an address, so it can't be set/);
+  });
+
+  it('a & cell can be read and subscribed to', () => {
+    expect(() => remote('{ count &Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
+    expect(() => remote('{ count &Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
+  });
+
+  it('a & cell cannot be set', () => {
+    expect(() => remote('{ count &Integer }', '@go. = { Remote.count <- 5 }'))
+      .toThrow(/'Remote.count' is a read-only cell \('count &Integer'\)/);
+  });
+
+  it('a * cell can be read, subscribed to and set', () => {
     expect(() => remote('{ count *Integer }', '@go. = { Remote.count <- 5 }')).not.toThrow();
+    expect(() => remote('{ count *Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
+    expect(() => remote('{ count *Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
+  });
+
+  it('a write-only cell can be set, not subscribed to', () => {
+    expect(() => remote('{ set label (Text) }', '@go. = { Remote.label <- "x" }')).not.toThrow();
+    expect(() => remote('{ set label (Text) }', '@go. = { Remote.label.subscribe (v) { . } }'))
+      .toThrow(/'Remote.label' is a write-only cell, so it can't be subscribed to/);
   });
 
   const shapes = `{

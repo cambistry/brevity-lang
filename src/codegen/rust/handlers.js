@@ -1,5 +1,5 @@
 // handlers.js — Handler and child actor generation for Rust codegen
-import { intrinsicArm, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
+import { intrinsicArm, selfAddress, wireLabel } from '../wire_labels.js';
 
 // The key a handler's match arm answers: its wire op, or for a cell or class arm
 // (`set@val`, `new@Box`) the pair of intrinsic and target, "$set val", as the
@@ -9,7 +9,7 @@ export function rustOpKey(name) {
   return arm ? `${arm.op} ${arm.target}` : wireLabel(name);
 }
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
-import { outerNamesFor } from '../../outer_reads.js';
+import { outerNamesFor, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
 import { orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -905,10 +905,19 @@ function genRustChildDispatch(actor) {
 
   return `
     fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {
+        // \`$get\` to one of our names (bv_get_key): a public cell answers anyone,
+        // through its own reader; any other name only from inside or a class
+        // declared in us.
+        if let Some(target) = op.strip_prefix("$get ") {
+            if let Some((key, open)) = bv_get_key("${name}", target) {
+                if open { let t = target.to_string(); return self.child_${name}_dispatch(&t, payload, id, from); }
+                if !bv_from_wire_caller(from) { return json!([self.state.get(key).cloned().unwrap_or(Value::Null)]); }
+            }
+        }
         // \`$subscribe\` to a target: stash the sub in _cell_subs_<target>
         // (prefixed by child name, keyed by the target's wire name), and
-        // recurse with the target as the op.
-        if let Some(target) = op.strip_prefix("$subscribe ") {
+        // recurse with the target as the op. A prop isn't an address.
+        if let Some(target) = op.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = payload.clone();
             let sub_ty = Value::Null;
             let subs_key = format!("${name}_cell_subs_{}", target);

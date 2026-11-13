@@ -5,7 +5,7 @@ import { unionMembers } from '../../return_shapes.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
-import { fileOuterNames, hasOuterReads, outerNamesFor, enclosesClasses } from '../../outer_reads.js';
+import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -921,12 +921,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const classUsesSelfAsValue = astUsesSelfAsValue(actor);
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
   const readsOuter = !!actor.name && ctx.readsOuter;
-  // The cells this actor answers reads of: a file actor's, or a class's that has
-  // classes declared inside it.
-  const outerCells = !ctx.readsOuter ? ''
-    : !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()].map(n => `${JSON.stringify(wireLabel(n))}: () => this.#${stateKey(n)}`).join(', ')
-    : enclosesClasses(ctx.program, actor) ? [...allFieldNames].filter(n => n !== '__returnAs').map(n => `${JSON.stringify(wireLabel(n))}: () => this.#${stateKey(n)}`).join(', ')
-    : '';
+  // The names this actor answers `$get` for, by wire name. A public cell answers
+  // anyone, through its own reader; every other name (a protected or private cell,
+  // a constant, a param) answers only from inside, and from a class declared in us
+  // reading it (src/outer_reads.js). A prop isn't an address: from outside, `$get`
+  // to it is unhandled. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+  const ownNames = !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()]
+    : [...allFieldNames].filter(n => n !== '__returnAs');
+  const isPublicCell = (n) => n.startsWith('@') && mergedActor.functions.some(f => f.name === n && f.cellGetter);
+  const readable = ownNames.filter(n => typeof n === 'string')
+    .map(n => `${JSON.stringify(wireLabel(n))}: { read: () => this.#${stateKey(n)}, open: ${isPublicCell(n)} }`).join(', ');
+  // Published params: props, which `$subscribe` doesn't apply to.
+  const propNames = [...new Set([...(actor.initParams || []), ...(mergedActor.initParams || [])].filter(p => p.accessor).map(p => p.accessor.replace(/^@/, '')))];
   const classAddressField = classUsesSelfAsValue
     ? `\n  static classAddress = ${JSON.stringify('#<' + quoteToken(ctx.fileName) + '>')}`
     : '';
@@ -1164,11 +1170,14 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
 
 ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`level\` actors up the
   // chain. A class is its own actor, so it asks.
+  // It's delivered, not run in the sender's turn: the owner answers at its next
+  // await, or once the turn it's in ends.
   async #outerRead(name, level) {
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
-      this.#chain[level - 1].receive({ id, op: '$get', to: '. ' + name, from: '__child', _route: (msg) => this.receive(msg) });
+      const owner = this.#chain[level - 1];
+      queueMicrotask(() => owner.receive({ id, op: '$get', to: '. ' + name, from: '__child', _route: (msg) => this.receive(msg) }));
     });
   }
 
@@ -1181,21 +1190,14 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     this.#binding.post({ ...call, id });
   }
 
-` : ''}${outerCells ? `  // A class declared in us reading one of our cells.
-  #_outerGet(message) {
-    const cells = { ${outerCells} };
-    const name = _bv_local_tokens(message.to).pop();${hasDeferred ? `
-    // Not declared yet: answered when its line runs.
-    const waiting = this.#_pendingCells.get(name);
-    if (waiting) { waiting.push(message); return; }` : ''}
-    message._route(name in cells ? { id: message.id, re: [cells[name]()] } : { id: message.id, ex: { $get: 'unhandled' } });
-  }
+` : ''}${readable ? `  // \`$get\` to one of our names: \`{ read, open }\`, open for a public cell.
+  #_readableNames() { return { ${readable} }; }
 
 ` : ''}${hasDeferred ? `  // A cell a child's construction waits on has its value: answer the reads held for it.
   #_cellReady(name) {
     const waiting = this.#_pendingCells.get(name) || [];
     this.#_pendingCells.delete(name);
-    for (const message of waiting) this.#_outerGet(message);
+    for (const message of waiting) this.#dispatch(message);
   }
 
   // A child constructed without waiting; the block's end waits for it.
@@ -1298,9 +1300,8 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       this.#_testFwd.delete(message.id);
       cb(message);
       return;
-    }${outerCells ? `
-    if (message.from === '__child' && message.op === '$get') { this.#_outerGet(message); return; }` : ''}${!actor.name && ctx.readsOuter ? `
-    if (message.from === '__child' && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
+    }${!actor.name && ctx.readsOuter ? `
+    if (message.from === '__child' && message.op !== '$get' && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
     if (('re' in message || 'ex' in message) && this.#_outerFwd.has(message.id)) {
       const fwd = this.#_outerFwd.get(message.id);
       this.#_outerFwd.delete(message.id);
@@ -1354,7 +1355,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
     // function as the last token of \`to\` (\`. val\`, \`. Box\`), relative to us.
     const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
-    if (opName === '$subscribe' && _target !== null) {
+    if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
       const _subArgs = Array.isArray(message.op) ? message.op[0] : null;
       // Keyed by the wire name: \`a\`, \`~a\` and \`#a\` are different cells.
       let _subs = this.#_cellSubs?.get(_target);
@@ -1362,7 +1363,20 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (_subs) _subs.push({ id, from: _replyTo, args: _subArgs, route: message._route || null });
       // The first reply is the current value: the target answers its own op.
       opName = _target;
-    }
+    }${readable ? `
+    if (opName === '$get' && _target !== null) {
+      const _cell = this.#_readableNames()[_target];
+      const _inside = from === '__self' || from === '__test' || from === '__parent' || from === '__child';
+      if (_cell && (_cell.open || _inside)) {${hasDeferred ? `
+        // Not declared yet: answered when its line runs.
+        const _waiting = this.#_pendingCells.get(_target);
+        if (_waiting) { _waiting.push(message); return; }` : ''}
+        // A public cell answers through its own reader, typed; an inside read is
+        // a value in this process.
+        if (_cell.open) opName = _target;
+        else { (message._route || ((msg) => this.#binding.post({ ...msg, to: _replyTo })))({ id, re: [_cell.read()] }); return; }
+      }
+    }` : ''}
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);

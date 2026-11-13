@@ -63,7 +63,7 @@ File params publish the same way:
 - An accessor replies with the value positionally: bind it with
   `value Integer = box.value()`. `:value Integer = box.value()` is a compile
   error.
-- The service document lists published params as read-only fields
+- The service document lists published params as props (read-only fields; not addresses, so not subscribable)
   (`value Integer`), on the class entry or at the top level for file params.
 - A published param and a handler of the same name is a compile error.
 - `@` on a function or handler param is a compile error.

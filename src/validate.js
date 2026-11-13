@@ -18,7 +18,7 @@ import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
-import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel } from './opre.js';
+import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel, remoteMember } from './opre.js';
 
 // `Self` in value position: any Identifier with name 'Self' that isn't the
 // callee of a function call. Construction calls `Self(args)` don't trip this
@@ -2828,10 +2828,12 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       // dependencyNames but still resolve to a manifest class; the type
       // lookup below handles them. A service's own read-only field
       // (`name Type` in its document) is not settable.
-      const iface = remotesParsed?.[objName];
-      const field = iface?.__fields?.[s.fieldName];
-      if (field?.readOnly && !(iface.__setters || []).some(st => st.name === s.fieldName)) {
-        throw new Error(`'${objName}.${s.fieldName}' is a read-only property`);
+      const field = remotesParsed?.[objName]?.__fields?.[s.fieldName];
+      if (field && !field.cell) {
+        throw new Error(`'${objName}.${s.fieldName}' is a prop, not an address, so it can't be set (a settable member is a cell: '${s.fieldName} *${field.type}')`);
+      }
+      if (field?.readOnly) {
+        throw new Error(`'${objName}.${s.fieldName}' is a read-only cell ('${s.fieldName} &${field.type}')`);
       }
     }
     const typeName = resolveObjType(objName);
@@ -2844,11 +2846,22 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       `'${typeName}' has no settable field '${s.fieldName}' (available: ${available.length ? available.join(', ') : '(none)'})`,
     );
   };
+  // `.subscribe` needs an address: a cell or a function. A prop is an attribute
+  // of its actor, and a write-only cell (`set name (Type)`) answers only `$set`.
+  const checkSubscribeTarget = (sub) => {
+    const m = remoteMember(sub.target, remotesParsed || {});
+    if (!m || !dependencyNames?.has(m.root) || !m.field) return;
+    if (!m.field.cell) {
+      throw new Error(`'${m.label}' is a prop, not an address, so it can't be subscribed to (a live read-only member is a cell: '${m.name} &${m.field.type}')`);
+    }
+    if (m.field.writeOnly) throw new Error(`'${m.label}' is a write-only cell, so it can't be subscribed to`);
+  };
   const walkForMethodChecks = (node) => {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'Function') return; // function literal: validated by recursive validateBody
     if (node.type === 'DotCallExpr') checkMethodCall(node);
     if (node.type === 'ActorFieldSet') checkFieldSet(node);
+    if (node.type === 'SubscribeCall') checkSubscribeTarget(node);
     for (const val of Object.values(node)) {
       if (Array.isArray(val)) {
         for (const item of val) walkForMethodChecks(item);

@@ -4003,6 +4003,9 @@ export function parse(tokensIn) {
       const getter = AST.functionDecl('@' + op, [], [
         AST.reply([{ type: typeName, positional: true, expr: AST.identifier('@' + op) }]),
       ]);
+      // A cell's own reader: the document shows the cell (`op *Type`, or
+      // `op &Type` with no setter), not a zero-arg function.
+      getter.cellGetter = true;
       const baseTypes = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
       // Synthesize a setter for value cells (base types) and for actor-reference
       // cells (any union member equal to `Self`). The address-not-value argument:
@@ -5522,6 +5525,7 @@ export function parse(tokensIn) {
   // dependencies and scalar file-params onto `dependencies`.
   const tokText = (tok) => {
     if (tok.type === 'SIGIL') return ':' + tok.value;
+    if (tok.type === 'AMPERSAND_IDENT') return '&' + tok.value;
     if (tok.value != null) return String(tok.value);
     const map = {
       COLON: ':', LPAREN: '(', RPAREN: ')', LBRACE: '{', RBRACE: '}', DOT: '.', COMMA: ',', PIPE: '|',

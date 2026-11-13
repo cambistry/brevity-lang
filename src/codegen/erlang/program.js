@@ -6,7 +6,7 @@ import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
-import { outerNamesFor } from '../../outer_reads.js';
+import { outerNamesFor, readableNames, propNames } from '../../outer_reads.js';
 import { withCellReady } from '../../init_order.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { PREAMBLE, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
@@ -381,6 +381,47 @@ function genFn(ctx, fn) {
 
 // ── Program codegen ─────────────────────────────────────────────────────────
 
+// The names an actor answers `$get` for, by wire token, with the state key each
+// one reads: `{ token, key, open }`, open for a public cell. A file actor's are
+// its cells, constants and params; a class's its own cells and params. See
+// notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+function readEntries(actor) {
+  const cls = actor.name ? actor.name.toLowerCase() : null;
+  return readableNames(actor).map(({ name, param, open }) => ({
+    token: wireLabel(name),
+    key: !cls || param ? erlStateKey({}, name) : erlStateKey({ childStatePrefix: cls }, name),
+    open,
+  }));
+}
+
+const propTokens = (actor) => propNames(actor).map(n => wireLabel('@' + n));
+
+// `$get` to one of an actor's names. A public cell answers anyone, through its
+// own reader; any other name answers only from inside, or from a class declared
+// in this actor (its outer reads, bv_outer_get_). A prop's `$subscribe` is unhandled.
+function genGetClauses(fnName, actor) {
+  const inside = ['__self', '__test', '__parent', '__emit', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join('; ');
+  const clauses = propTokens(actor).map(t => `${fnName}({<<"$subscribe">>, ${erlString(t)}}, _Message, _Payload, _Id, _From) ->\n    {error, <<"$subscribe">>}`);
+  for (const e of readEntries(actor)) {
+    clauses.push(e.open
+      ? `${fnName}({<<"$get">>, ${erlString(e.token)}}, Message, Payload, Id, From) ->\n    ${fnName}(${erlString(e.token)}, Message, Payload, Id, From)`
+      : `${fnName}({<<"$get">>, ${erlString(e.token)}}, _Message, _Payload, _Id, From) when ${inside} ->\n    {ok, [get(${e.key})], null}`);
+  }
+  return clauses;
+}
+
+// What each actor's names read as, for an outer read answered by bv_answer_outer_:
+// the same table `$get` reads.
+function genReadTable(actors) {
+  const clauses = [];
+  for (const a of actors) {
+    const cls = a.name ? a.name.toLowerCase() : '';
+    for (const e of readEntries(a)) clauses.push(`bv_read_(${erlString(cls)}, ${erlString(e.token)}) -> get(${e.key})`);
+  }
+  clauses.push('bv_read_(_, _) -> null');
+  return clauses.join(';\n') + '.';
+}
+
 // Generic subscribe prologue: a handle_op clause that intercepts
 // {$subscribe, Target}, stashes {Id, From, Args} in the cell_subs list (keyed
 // by the target's wire name: `a`, `~a`, `#a`), and recurses with the target as
@@ -403,7 +444,7 @@ function genSubscribePrologue(fnName) {
   ];
 }
 
-function genDispatch(ctx, publicFns) {
+function genDispatch(ctx, publicFns, actor = null) {
   // Group public functions by op name
   const grouped = new Map();
   for (const h of publicFns) {
@@ -415,7 +456,7 @@ function genDispatch(ctx, publicFns) {
     grouped.get(h.name).push(h);
   }
 
-  const clauses = [...genSubscribePrologue('handle_op')];
+  const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$subscribe')) : []), ...genSubscribePrologue('handle_op'), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$subscribe')) : [])];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
     if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
@@ -784,7 +825,7 @@ function genCamInit(ctx, actor) {
   // Generate init body statements (StateAssign, TypedAssign, etc.). Cells a class
   // constructed here waits on are held until their lines (src/init_order.js).
   const pendingCells = actor.pendingCells || [];
-  if (pendingCells.length) lines.push(`${I}bv_pending_cells_([${pendingCells.map(n => erlStateKey(ctx, n)).join(', ')}]),`);
+  if (pendingCells.length) lines.push(`${I}bv_pending_cells_([${pendingCells.map(n => erlString(wireLabel(n))).join(', ')}]),`);
   const fileInitBody = withCellReady(initBody, pendingCells);
   const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(fileInitBody) };
   const localLines = genLocals(ctx, fileInitBody, typeEnv, sCtx, I);
@@ -807,7 +848,8 @@ function genCamInit(ctx, actor) {
 function genChildHandleOp(ctx, actor) {
   const name = actor.name.toLowerCase();
   const prefix = `child_${name}`;
-  const clauses = [...genSubscribePrologue(`${prefix}_handle_op`)];
+  const getClauses = genGetClauses(`${prefix}_handle_op`, actor);
+  const clauses = [...getClauses.filter(c => c.includes('$subscribe')), ...genSubscribePrologue(`${prefix}_handle_op`), ...getClauses.filter(c => !c.includes('$subscribe'))];
 
   // Set emit names for this child actor
   const savedEmitNames = ctx.emitNames;
@@ -989,7 +1031,7 @@ function genChildInit(ctx, actor) {
     ctx, afterBind: p => [`${I}put(${erlStateKey(ctx, p.name)}, ${erlVarName(p.name)}),`],
   });
   lines.push(...paramLines);
-  if (pendingCells.length) lines.push(`${I}bv_pending_cells_([${pendingCells.map(n => erlStateKey(ctx, n)).join(', ')}]),`);
+  if (pendingCells.length) lines.push(`${I}bv_pending_cells_([${pendingCells.map(n => erlString(wireLabel(n))).join(', ')}]),`);
 
   // Split init body into pre-ingest, ingest, and post-ingest phases
   let ownIngestInfo = null;
@@ -1543,7 +1585,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const childActorSection = genChildActorCode(ctx, allActors);
 
   // Generate all function dispatch clauses (public + private via self-send)
-  const allClauses = genDispatch(ctx, [...publicFns, ...privateFns]);
+  const allClauses = genDispatch(ctx, [...publicFns, ...privateFns], actor);
 
   // Generate lambda handler clauses (registered during codegen above)
   // Use index loop since nested lambdas may add new handlers during iteration
@@ -1664,7 +1706,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // constructed here waits on are held until their lines (src/init_order.js).
   const blockLines = [];
   const pendingCells = actor.pendingCells || [];
-  if (pendingCells.length) blockLines.push(`    bv_pending_cells_([${pendingCells.map(n => erlStateKey(ctx, n)).join(', ')}])`);
+  if (pendingCells.length) blockLines.push(`    bv_pending_cells_([${pendingCells.map(n => erlString(wireLabel(n))).join(', ')}])`);
   const ownFnNames = new Set((actor.functions || []).map(f => f.name));
   const ownCallEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeName]),
@@ -2200,6 +2242,8 @@ bv_unwire_payload(Message, Payload) ->
 ${PREAMBLE}
 ${bvTypeFieldsBlock}
 ${fnSection}${childActorSection}${helperSection}
+${genReadTable(allActors)}
+
 ${handleOpClauses.join(';\n')}.
 
 ${selfSendFn}${emitFns}

@@ -191,10 +191,95 @@ Where `$get`, `$set` and `$subscribe` apply depends on what a member is.
 |---|---|---|---|
 | cell, `&` | yes | no | yes |
 | cell, `*` | yes | yes | yes |
+| cell, write-only | no | yes | no |
 | function | no | no | yes |
 | prop | not an address | | |
 
 A verb that doesn't apply answers unhandled.
+
+### In the service document
+
+```
+seen &Integer           read-only cell
+count *Integer          writable cell
+set label (Text)        write-only cell
+total Integer           prop
+sum (a: Integer) -> (Integer)
+```
+
+- **`&` is a new entry form.** A bare `name Type` is a prop; `&` and `*` make it a cell.
+- **The emitter writes `&`** for a public cell with no setter: one whose type has no
+  synthesized setter (`@names *List of Texts = []`). A class's public cells are written as
+  cells too (`slot *Integer`), not as zero-arg functions. Published params are props.
+- **`set label (Text)` stays, as a write-only cell.** It answers `$set` only; reading or
+  subscribing to it is an error. It keeps the DOM manifest's write-only properties
+  (`inner_html`, `text_content`, `value`, `scroll_top`, …) writable without making them
+  readable or live.
+
+### Compiling a member access
+
+- **Read:** `Remote.seen()` on a cell is `{op: '$get', to: 'Remote seen'}`; on a prop it is
+  `{op: 'total', to: 'Remote'}`.
+- **Subscribe:** on a cell or function, `$subscribe` to `… name` (a function's args in the
+  slots). On a prop, a compile error: `'Remote.total' is a prop, not an address, so it can't
+  be subscribed to`. On a write-only cell, also a compile error.
+- **Write:** `Remote.count <- 5` on a `*` cell or write-only cell is `$set` to `… count`. On
+  a prop, a compile error ("not an address"); on an `&` cell, a compile error ("read-only
+  cell").
+
+### Answering
+
+Each actor has one table of the names it answers `$get` for: its cells, and, for a file
+actor, its constants and params.
+
+- **A public cell answers anyone,** through its own reader, so the reply is typed.
+- **Every other name** (a protected or private cell, a constant, a param) answers only from
+  inside the actor, and from a class declared in it (outer reads, below). From outside,
+  `$get` to it is unhandled.
+- **A prop** answers `{op: 'prop'}` only; `$get` and `$subscribe` to its name are unhandled.
+
+## Outer reads are `$get`
+
+A class reading a cell of an actor it's declared in (`src/outer_reads.js`) sends `$get` to
+that actor's name: `{op: '$get', to: '. ~total'}`. Same op, same table, as any other cell
+read. It replaces three in-process mechanisms (JS's `$get`-shaped message intercepted
+before dispatch, Erlang's private `bv_outer_get` key read, Rust's direct read of the
+owner's state).
+
+- **The bus is internal.** Actors inside a process exchange Opre-shaped messages. Most never
+  leave through a node. An outer read is one of those, not a wire message.
+- **`to` is relative to the owner.** The class hands the message to the owner it was
+  constructed under (its chain, a capture), and the owner reads `. ~total` as its own name.
+  The class names no parent: this is not upward addressing, and `..` stays undefined.
+- **A class may read the owner's `~` names.** Protected means reachable from the actor's
+  neighbourhood and never exposed outward. A class the actor constructed, asking over the
+  internal bus, is in that neighbourhood. Nothing outside gains access.
+- **A name not yet declared:** the read is held until the name's line runs
+  (`forward-reads-in-constructor-blocks-2026-11-11.md`). Rust, on one thread, gets the same
+  effect by running the class's construction after the last line it waits on.
+- **When it's answered:** at the owner's next wait, or once its current turn ends. Never in
+  the middle of a statement. So a call a turn launches (`w.look...`) or makes silently
+  (`w.look.()`) doesn't run inside that turn. It is delivered and runs once the class takes
+  it. Under T2 turns, this fixes what an outer read sees:
+
+  ```
+  @race! = {
+    w.look...        // W's read of total is answered after this turn: 5
+    total <- 5
+    return 1
+  }
+  ```
+
+  Each target implements it its own way:
+  - JS posts the read on a microtask.
+  - Erlang sends a launched call without waiting.
+  - Rust queues launched calls and runs them when the turn ends, or before a call that
+    waits.
+
+  A call that waits on a class first lets the queued ones run, so a class takes its
+  messages in the order they were sent.
+- **Out of scope:** call-scoped turns (T3). This fixes what an outer read sees under today's
+  T2 turns only.
 
 - **A prop reads like a zero-arg function** (`{op: 'prop'}` / `{op: 'fn'}`), so props and
   zero-arg functions have uniform access. They differ only in that a function is subscribable.
@@ -220,9 +305,6 @@ source, locality is expressed by the sigils and quoting above.
 
 ## Open
 
-- **`&` cells in service documents** (`val &Integer`) are a new entry form. Today the doc has only
-  bare (read-only field) and `*` (ref cell).
-- **`set label (Text)`**, the doc's write-only setter, has no place in the table above.
 - **`ex` keys lose the target** once compound ops are retired (`ex: {'$set': …}`). Accepted for
   now; tracked as a follow-up.
 - **Generated identifiers** for `~` names in Rust and Erlang need a spelling (the `.` was `_d_`).

@@ -347,3 +347,85 @@ describe('a file cell holding an actor', () => {
     );
   });
 });
+
+// An outer read is `$get` to the owner's name, delivered like any message: the owner
+// answers at its next wait or once its turn ends, never in the middle of a statement.
+// A launched call doesn't run inside the turn that launched it, so the class reads the
+// cell as the owner has it after that turn. Every target reads the same value.
+// See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+describe('a class reads a cell as the owner has it when it answers', () => {
+  const script = `
+    total *Integer = 1
+
+    W = *{
+      seen *Integer = 0
+      @look. = { seen <- total }
+      @seen = { return seen }
+    }
+
+    w = W()
+
+    @race! = {
+      w.look...
+      total <- 5
+      return 1
+    }
+
+    @seen = {
+      x Integer = w.seen()
+      return x
+    }
+  `;
+
+  it('sees a write the owner made after launching the read', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'race!', from: 'c' } },
+      { output: reply('1', 1) },
+      { input: { id: '2', op: 'seen', from: 'c' } },
+      { output: reply('2', 5) },
+    );
+  });
+});
+
+describe('a class that waits on another actor before it reads', () => {
+  const script = `
+    total *Integer = 1
+
+    Counter = *{
+      @get = { return 7 }
+    }
+
+    counter = Counter()
+
+    W = *{
+      seen *Integer = 0
+      @look. = {
+        y Integer = counter.get()
+        seen <- total
+      }
+      @seen = { return seen }
+    }
+
+    w = W()
+
+    @race! = {
+      w.look...
+      total <- 5
+      return 1
+    }
+
+    @seen = {
+      x Integer = w.seen()
+      return x
+    }
+  `;
+
+  it('sees the write the owner made meanwhile', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'race!', from: 'c' } },
+      { output: reply('1', 1) },
+      { input: { id: '2', op: 'seen', from: 'c' } },
+      { output: reply('2', 5) },
+    );
+  });
+});

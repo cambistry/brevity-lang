@@ -43,6 +43,11 @@ comma-separated.
 
 ### Read-only fields
 
+> **Superseded (2026-11-13):** a bare `name Type` is now a *prop*. It is read as an op, can't
+> be subscribed to or set, and isn't an address. A live read-only member is an `&` cell
+> (`name &Type`), and `set name (Type)` is a write-only cell. See "Functions, cells and
+> props" in `at-sigil-internal-and-quoted-names-2026-11-12.md`.
+
 `name Type` (bare, no `*`) is a read-only field: a zero-arg getter that cannot
 be set.
 

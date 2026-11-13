@@ -765,29 +765,31 @@ bv_chain_from_(_, [Last_]) -> [Last_];
 bv_chain_from_(E_, [{E_, _} | _] = C_) -> C_;
 bv_chain_from_(E_, [_ | T_]) -> bv_chain_from_(E_, T_).
 bv_adopt_outer_({Pid, Ref, Chain}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref), put(bv_chain_, Chain).
-%% A class reading a cell of an actor it's declared in, Level actors up the chain.
-%% Each of them answers in every wait, its idle one included.
-bv_outer_get_(Level, Key) ->
+%% A class reading a cell of an actor it's declared in, Level actors up the chain:
+%% \`$get\` to that actor's Token (\`~total\`), from a class declared in it. Each of
+%% them answers in every wait, its idle one included, so a read is answered at the
+%% owner's next wait or once its turn ends.
+bv_outer_get_(Level, Token) ->
     Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
     case Owner_ of
-        Self_ when Self_ =:= self() -> get(Key);
+        Self_ when Self_ =:= self() -> bv_read_(bv_my_class_(), Token);
         _ ->
             Ref_ = make_ref(),
-            Owner_ ! {bv_outer_get, self(), Key, Ref_},
+            Owner_ ! {bv_outer_get, self(), Token, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
-%% A read of one of our cells by a class declared in us. A cell that a class's
-%% construction waits on isn't declared yet: the read is held until its line runs
-%% (src/init_order.js).
-bv_answer_outer_(From, Key, Ref) ->
-    case get({bv_pending_, Key}) of
-        undefined -> From ! {bv_reply, Ref, get(Key)};
-        Waiting_ -> put({bv_pending_, Key}, [{From, Ref} | Waiting_])
+%% \`$get\` from a class declared in us, answered from the table \`$get\` reads
+%% (bv_read_). A cell that a class's construction waits on isn't declared yet: the
+%% read is held until its line runs (src/init_order.js).
+bv_answer_outer_(From, Token, Ref) ->
+    case get({bv_pending_, Token}) of
+        undefined -> From ! {bv_reply, Ref, bv_read_(bv_my_class_(), Token)};
+        Waiting_ -> put({bv_pending_, Token}, [{From, Ref} | Waiting_])
     end.
-bv_pending_cells_(Keys) -> [put({bv_pending_, K_}, []) || K_ <- Keys], ok.
-bv_cell_ready_(Key) ->
-    Waiting_ = case erase({bv_pending_, Key}) of undefined -> []; W_ -> W_ end,
-    [From_ ! {bv_reply, Ref_, get(Key)} || {From_, Ref_} <- lists:reverse(Waiting_)],
+bv_pending_cells_(Tokens) -> [put({bv_pending_, T_}, []) || T_ <- Tokens], ok.
+bv_cell_ready_(Token) ->
+    Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
+    [From_ ! {bv_reply, Ref_, bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
     ok.
 %% A class constructed without waiting for it; the end of the block waits.
 bv_join_(Pid) ->

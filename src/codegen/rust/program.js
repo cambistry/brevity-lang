@@ -1,5 +1,27 @@
+// The state key of each name an actor answers `$get` for, by class ("" is the
+// file) and wire token, and whether it's a public cell (open to anyone). The
+// `$get` arms and outer reads both read through it (src/outer_reads.js).
+function genGetKeyFn(actors) {
+  const arms = [];
+  for (const a of actors) {
+    const cls = a.name ? a.name.toLowerCase() : '';
+    for (const { name, param, open } of readableNames(a)) {
+      const key = !cls || param ? stateKey(name) : `${cls}_${stateKey(name)}`;
+      arms.push(`        (${JSON.stringify(cls)}, ${JSON.stringify(wireLabel(name))}) => Some((${JSON.stringify(key)}, ${open})),`);
+    }
+  }
+  return `#[allow(dead_code)]
+fn bv_get_key(class: &str, token: &str) -> Option<(&'static str, bool)> {
+    match (class, token) {
+${arms.join('\n')}
+        _ => None,
+    }
+}
+`;
+}
+
 // program.js — Program assembly and entry for Rust codegen
-import { addressToken, intrinsicArm, memberOp, wireLabel } from '../wire_labels.js';
+import { addressToken, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import * as AST from '../../ast.js';
 import {
@@ -22,7 +44,7 @@ import {
 } from './handlers.js';
 import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { lowerChains } from '../../chains.js';
-import { fileOuterNames, hasOuterReads } from '../../outer_reads.js';
+import { fileOuterNames, hasOuterReads, readableNames, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
 import { genRustLocals } from './statements.js';
 
@@ -286,6 +308,9 @@ ${bvTypeFieldsArms}
   }
   structFields.push('    send_seq: std::cell::Cell<i64>');
   newArgs.push('send_seq: std::cell::Cell::new(1)');
+  // A silent or launched call into one of our classes: run once this turn ends.
+  structFields.push('    bv_deferred: std::collections::VecDeque<Box<dyn FnOnce(&mut Actor)>>');
+  newArgs.push('bv_deferred: std::collections::VecDeque::new()');
   // The call from outside that an instance is answering: the message its tags came
   // in, and what the instance's handler adds to the reply. Handlers return only a value.
   structFields.push('    wire_msg: Value', '    wire_tag: Option<Value>', '    wire_unhandled: bool');
@@ -697,10 +722,19 @@ ${bodyLines}
 
   // Handle op — shared match logic for dispatch and self_send
   const handleOpMethod = `    fn handle_op(&mut self, op_name: &str, message: &Value, payload: &Value, from: &str, id: &str) -> (Option<Value>, Option<Value>, bool) {
+        // \`$get\` to one of our names (bv_get_key): a public cell answers anyone,
+        // through its own reader; any other name only from inside or a class
+        // declared in us.
+        if let Some(target) = op_name.strip_prefix("$get ") {
+            if let Some((key, open)) = bv_get_key("", target) {
+                if open { let t = target.to_string(); return self.handle_op(&t, message, payload, from, id); }
+                if !bv_from_wire_caller(from) { return (Some(json!([self.state.get(key).cloned().unwrap_or(Value::Null)])), None, true); }
+            }
+        }
         // \`$subscribe\` to a target: stash the sub in cell_subs, keyed by the
         // target's wire name (\`a\`, \`~a\`, \`#a\`), and recurse with the target as
-        // the op, so its own arm produces the initial re.
-        if let Some(target) = op_name.strip_prefix("$subscribe ") {
+        // the op, so its own arm produces the initial re. A prop isn't an address.
+        if let Some(target) = op_name.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = match message.get("op") {
                 Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
                 _ => Value::Null,
@@ -853,10 +887,17 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
     // its classes runs, or in its pool. Construction runs in text order, so the cell
     // is declared by the time a class reads it; one that isn't is a codegen bug, not
     // a null (the other targets hold such a read until the cell's line runs).
-    fn outer_read(&self, level: usize, key: &str) -> Value {
+    //
+    // It is \`$get\` to that actor's name, by its wire token (\`~total\`), answered from
+    // the table its \`$get\` arms read (bv_get_key). A class's calls are run once the
+    // turn that launched them ends (bv_run_deferred), so the read sees the owner's
+    // cells as of its next wait or the end of its turn, as on the other targets.
+    fn outer_read(&self, level: usize, token: &str) -> Value {
         let owner = self.state.get("__outers").and_then(|v| v.as_array()).and_then(|a| a.get(level - 1)).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let state = self.state_of(&owner).unwrap_or_else(|| panic!("outer read of {}: no actor {:?}", key, owner));
-        state.get(key).cloned().unwrap_or_else(|| panic!("outer read of {} before it is declared in {:?}", key, owner))
+        let class = match owner.split_once('/') { Some(("self", _)) | None => "", Some((c, _)) => c };
+        let (key, _) = bv_get_key(class, token).unwrap_or_else(|| panic!("outer read of {}: {:?} has no such name", token, owner));
+        let state = self.state_of(&owner).unwrap_or_else(|| panic!("outer read of {}: no actor {:?}", token, owner));
+        state.get(key).cloned().unwrap_or_else(|| panic!("outer read of {} before it is declared in {:?}", token, owner))
     }
 
     fn state_of(&self, owner: &str) -> Option<&std::collections::HashMap<String, Value>> {
@@ -1790,6 +1831,7 @@ fn bv_list_join(v: &Value, sep: &Value) -> String {
 }
 
 ${typeMemberOfFn}${matchTypesFn}${matchTypesPosFn}${tyOfFn}${objectPreamble}${wireHelpers}
+${genGetKeyFn(allActors || [actor])}
 struct Actor {
 ${structFields.join(',\n')},
 }
@@ -1803,6 +1845,13 @@ ${captureMethod}
 
     fn receive(&mut self, message: &Value) {
 ${receiveBody}
+    }
+
+    // The calls into our classes that the turn just ended launched, in order. They
+    // run after it, as they would in a class's own process.
+    #[allow(dead_code)]
+    fn bv_run_deferred(&mut self) {
+        while let Some(f) = self.bv_deferred.pop_front() { f(self); }
     }
 ${initMethod}
 ${handleOpMethod}
@@ -1898,6 +1947,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();
+            self.bv_run_deferred();
             bv_ready(&self.binding);
             match self.reader.read_line(&mut buf) {
                 Ok(0) => return Value::Null,
@@ -1936,6 +1986,7 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
         // angle-delimited \`re\` field (falls back to \`from\`).
         loop {
             let mut buf = String::new();
+            self.bv_run_deferred();
             bv_ready(&self.binding);
             match self.reader.read_line(&mut buf) {
                 Ok(0) => return Value::Null,
@@ -1978,7 +2029,8 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
             }
         }
     }
-` : ''}${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}${hasDotCallAwait ? `    let mut buf = String::new();
+` : ''}${stateInitLines.length > 0 ? stateInitLines.join('\n') + '\n' : ''}    actor.bv_run_deferred();
+${hasDotCallAwait ? `    let mut buf = String::new();
     loop {
         buf.clear();
         bv_ready(&actor.binding);
@@ -1989,6 +2041,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
                 if line.is_empty() { continue; }
                 let message: Value = serde_json::from_str(line).unwrap();
                 actor.receive(&message);
+                actor.bv_run_deferred();
             }
             Err(_) => break,
         }
@@ -2004,6 +2057,7 @@ ${constructorParams.map((p, i) => `                if let Some(v) = arr.get(${i}
                 if line.is_empty() { continue; }
                 let message: Value = serde_json::from_str(line).unwrap();
                 actor.receive(&message);
+                actor.bv_run_deferred();
             }
             Err(_) => break,
         }

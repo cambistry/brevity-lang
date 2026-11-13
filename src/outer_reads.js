@@ -29,6 +29,26 @@ export function fileOuterNames(program) {
   return names;
 }
 
+// The names an actor answers `$get` for: `{ name, param, open }`. A file actor's are
+// its cells, constants and params; a class's its own cells and params. `open` marks a
+// public cell, which answers anyone; every other name answers only from inside the
+// actor and from a class declared in it (an outer read). The same table answers both.
+// See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+export function readableNames(actor) {
+  const isPublicCell = (n) => n.startsWith('@') && (actor.functions || []).some(f => f.name === n && f.cellGetter);
+  const params = new Set((actor.initParams || []).map(p => p.name));
+  const names = !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()]
+    : [...params, ...(actor.stateVarDecls || []).map(d => d.name)];
+  return [...new Set(names.filter(n => typeof n === 'string'))].map(name => ({ name, param: params.has(name), open: isPublicCell(name) }));
+}
+
+// An actor's props, by source name: its published params (`@name Type` in a
+// header). A prop is read as an op and isn't an address: `$get` and `$subscribe`
+// to it answer unhandled.
+export function propNames(actor) {
+  return (actor.initParams || []).filter(p => p.accessor).map(p => p.accessor.replace(/^@/, ''));
+}
+
 // The classes a class is declared in, innermost first, ending with the file (null).
 export function enclosingChain(program, actor) {
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));

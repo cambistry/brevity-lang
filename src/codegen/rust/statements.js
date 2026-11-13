@@ -1,5 +1,5 @@
 // statements.js — Statement generation for Rust codegen
-import { addressToken, intrinsicArm, memberOp, wireLabel } from '../wire_labels.js';
+import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { returnsOnlySelf } from '../../chains.js';
 import { argForParam } from '../../call_args.js';
@@ -20,8 +20,7 @@ import {
   genRustCondition, isRustGuardIf, buildRustGuardChainExpr, inRustBranchScope, genRustBranchBind,
   refFieldInvocationRust, refAddrExpr,
   rustNewOpInserts,
-  isOpreAddressed, rustOpreTo,
-} from './expressions.js';
+  isOpreAddressed, rustOpreTo, wireOpOf } from './expressions.js';
 
 function genRustDefaultExpr(param, typeEnv) {
   let expr = genRustExpr(param.defaultValue, typeEnv);
@@ -1306,7 +1305,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
         // (a u32 instance id) as the first argument.
         if (dotName && sCtx?.selfSpawnedRefs?.has(dotName)) {
           const spawnClass = sCtx.selfSpawnedRefs.get(dotName);
-          const method = JSON.stringify(memberOp(expr.method));
+          const method = JSON.stringify(wireOpOf(expr));
           // `d = c.inc!(5)` where every path of `inc!` returns self: the result is a
           // handle to the receiver, so the new name dispatches the same way.
           const calleeFn = G.ctx.actorInfo?.get(spawnClass)?.actor?.functions?.find(f => f.name === '@' + expr.method);
@@ -1381,7 +1380,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               }
             }
           }
-          const method = JSON.stringify(memberOp(expr.method));
+          const method = JSON.stringify(wireOpOf(expr));
           // Build payload from method args
           const positional = expr.args.filter(a => a.positional);
           const named = expr.args.filter(a => !a.positional);
@@ -1420,7 +1419,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           {const isWrappedChildD = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
           if (isWrappedChildD) {
             const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
-            const method = JSON.stringify(memberOp(expr.method));
+            const method = JSON.stringify(wireOpOf(expr));
             const named = expr.args.filter(a => !a.positional);
             const positional = expr.args.filter(a => a.positional);
             const wrapArgWC = (expr) => { const raw = genRustExpr(expr, typeEnv); const t = inferLiteralType(expr) || inferExprType(expr, typeEnv); return toJsonValue(raw, t || 'Anything'); };
@@ -1705,7 +1704,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
           }
         }
       }
-      const method = JSON.stringify(memberOp(expr.method));
+      const method = JSON.stringify(wireOpOf(expr));
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       let payload;
@@ -1763,7 +1762,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
         : isRemoteInst
           ? `bv_addr_to(self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or(""))`
           : rustOpreTo(expr, (root) => genRustExpr(root, typeEnv));
-      const method = JSON.stringify(memberOp(expr.method));
+      const method = JSON.stringify(wireOpOf(expr));
       const positional = expr.args.filter(a => a.positional);
       const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
       let opJson;
@@ -2629,7 +2628,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
         const spawnClass = sCtx.selfSpawnedRefs.get(dotObjName);
         const idVar = rustSsaResolve(dotObjName);
-        const method = JSON.stringify(memberOp(expr.method));
+        const method = JSON.stringify(wireOpOf(expr));
         const positional = expr.args.filter(a => a.positional);
         const named = expr.args.filter(a => !a.positional);
         const wrapArgSA = (e) => { const raw = genRustExpr(e, typeEnv); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
@@ -2660,7 +2659,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const expr = s.expr;
         const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : expr.object.name;
         const actorName = sCtx.childActorRefs.get(dotObjName);
-        const method = JSON.stringify(memberOp(expr.method));
+        const method = JSON.stringify(wireOpOf(expr));
         const positional = expr.args.filter(a => a.positional);
         const named = expr.args.filter(a => !a.positional);
         let payload;

@@ -3,7 +3,7 @@ import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { selfAddress } from '../wire_labels.js';
+import { selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
@@ -645,13 +645,10 @@ function createRustContext() {
 }
 
 // A read of a cell of an actor a class is declared in (src/outer_reads.js), as a typed
-// value (a ref read stays a Value). The key is the owner's: a file's or a class
-// param's has no class prefix, and a class's cell has its class's.
+// value (a ref read stays a Value).
 function outerRead(expr) {
-  const bare = expr.name.replace(/^[@#]/, '');
-  const prefix = expr.name.startsWith('@') ? 'a_' : expr.name.startsWith('#') ? 'h_' : 'b_';
-  const owner = expr.outerClass && !expr.outerParam ? `${expr.outerClass.toLowerCase()}_` : '';
-  const read = `self.outer_read(${expr.outerLevel ?? 1}, "${owner}${prefix}${bare}")`;
+  // `$get` to the owner's name, by its wire token (bv_get_key in program.js).
+  const read = `self.outer_read(${expr.outerLevel ?? 1}, ${JSON.stringify(wireLabel(expr.name))})`;
   // A ref read is a Value here, as a class's own cell is.
   if (expr.type === 'RefRead') return read;
   return `(${convertFromValue(read, expr.outerType ?? G.ctx.outerTypes?.get(expr.name))})`;
