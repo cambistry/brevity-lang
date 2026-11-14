@@ -85,7 +85,7 @@ export function rustNewArgs(args, typeEnv, eCtx) {
   const positional = args.filter(a => a.type !== 'NamedArgsBag');
   const bag = args.find(a => a.type === 'NamedArgsBag');
   const named = bag ? Object.entries(bag.fields) : [];
-  if (positional.length === 0 && named.length === 0) return { payload: 'json!([])', ty: null };
+  if (positional.length === 0 && named.length === 0) return { payload: null, ty: null };
   const typeOf = (e) => inferLiteralType(e) || inferExprType(e, typeEnv) || null;
   const raw = (e) => genRustExpr(e, typeEnv, eCtx);
   const val = (e) => {
@@ -110,8 +110,10 @@ export function rustNewArgs(args, typeEnv, eCtx) {
 }
 
 // The statements that put a #new's op and ty on a message map named `msg`.
+// No args, the op is bare `$new`.
 export function rustNewOpInserts(args, typeEnv, eCtx, msg = 'send_msg') {
   const { payload, ty } = rustNewArgs(args, typeEnv, eCtx);
+  if (payload === null) return `${msg}.insert("op".to_string(), json!("$new"));`;
   return `${msg}.insert("op".to_string(), Value::Array(vec![${payload}, json!("$new")]));${ty ? ` ${msg}.insert("ty".to_string(), ${ty});` : ''}`;
 }
 

@@ -113,7 +113,7 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
     // Host promoted our #<. @N> to a full address and now invokes the callback
     // through CAM (no args — a reactive read), delivered to us relative to us.
     // The actor replies with the value.
-    await actor.sendAsync({ id: '9', op: [[], name], to: `. ${name}`, from: 'Scene' });
+    await actor.sendAsync({ id: '9', op: name, to: `. ${name}`, from: 'Scene' });
     const fired = actor.posts.slice(before);
     expect(fired).toContainEqual(
       expect.objectContaining({ re: ['ready'], to: 'Scene' }),

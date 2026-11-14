@@ -59,12 +59,12 @@ function erlArgHelpers(ctx, typeEnv, sCtx) {
 }
 
 // A #new's op and ty entries, as for any other op: a type value goes in wire form
-// with its tag. No args, no ty.
+// with its tag. No args, no ty, and the op is bare `$new`.
 export function erlNewOpEntries(ctx, args, typeEnv, sCtx) {
   const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
   const bag = args.find(a => a.type === 'NamedArgsBag');
   const named = bag ? Object.entries(bag.fields).map(([name, expr]) => ({ name, expr })) : [];
-  if (positional.length === 0 && named.length === 0) return '<<"op">> => [[], <<"$new">>]';
+  if (positional.length === 0 && named.length === 0) return '<<"op">> => <<"$new">>';
   const { opExpr, tyExpr } = erlArgSlots(positional, named, '<<"$new">>', erlArgHelpers(ctx, typeEnv, sCtx));
   return `<<"op">> => ${opExpr}, <<"ty">> => ${tyExpr}`;
 }

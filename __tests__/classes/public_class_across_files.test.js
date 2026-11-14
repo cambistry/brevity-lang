@@ -57,9 +57,9 @@ describe('caller side', () => {
     const actor = await createActor(`**\n  "svc.bv": Svc #\n**\n@go! = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go!', from: 'c' } },
-      { output: { id: '1', op: [[], '$new'], to: 'Svc' } },
+      { output: { id: '1', op: '$new', to: 'Svc' } },
       { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
-      { output: { id: '2', op: [[], '$new'], to: 'Svc/7 W!' } },
+      { output: { id: '2', op: '$new', to: 'Svc/7 W!' } },
     );
   });
 });
@@ -182,7 +182,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'chain', from: 'c' } },
-        { output: { id: '1', op: [[], '$new'], to: 'Svc' } },
+        { output: { id: '1', op: '$new', to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 Counter' } },
         { input: { id: '2', re: '#<Svc/7 Counter 1>', 'ty': 'Svc/7 Counter', from: 'Svc/7' } },
@@ -194,7 +194,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'give', from: 'c' } },
-        { output: { id: '1', op: [[], '$new'], to: 'Svc' } },
+        { output: { id: '1', op: '$new', to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 Counter' } },
       );
@@ -204,7 +204,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'pass', from: 'c' } },
-        { output: { id: '1', op: [[], '$new'], to: 'Svc' } },
+        { output: { id: '1', op: '$new', to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7 Counter' } },
       );
@@ -214,7 +214,7 @@ describe('a new actor used in place', () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'own', from: 'c' } },
-        { output: { id: '1', op: [[], '$new'], to: 'Svc' } },
+        { output: { id: '1', op: '$new', to: 'Svc' } },
         { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' } },
         { output: expect.objectContaining({ id: '2', op: 'plain', to: 'Svc/7' }) },
       );
@@ -635,7 +635,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
       await settle(caller, answered);
       const msg = caller.posts[answered++];
       if (msg.to === 'c') return msg.re;
-      if (msg.to === 'Svc' && Array.isArray(msg.op) && msg.op[1] === '$new') {
+      if (msg.to === 'Svc' && (Array.isArray(msg.op) ? msg.op[msg.op.length - 1] : msg.op) === '$new') {
         actors['Svc/7'] = { actor: await (await compileActor(READER_SVC)).spawn(), served: 0 };
         await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'ty': 'Svc', from: 'Svc' });
         continue;

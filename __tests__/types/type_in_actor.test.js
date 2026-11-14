@@ -198,7 +198,7 @@ describe('a type of another file, reached through the service', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'got', from: 'c' } },
-      { output: expect.objectContaining({ op: [[], '$new'], to: 'Svc W' }) },
+      { output: expect.objectContaining({ op: '$new', to: 'Svc W' }) },
       { input: { id: '1', re: '#<Svc W 1>', ty: 'Svc W', from: 'Svc' } },
       { output: expect.objectContaining({ op: 'get', to: 'Svc W 1' }) },
       { input: { id: '2', re: [[7]], ty: ['Svc W X'], from: 'Svc W 1' } },

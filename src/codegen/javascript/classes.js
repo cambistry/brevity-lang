@@ -1075,7 +1075,7 @@ ${actor.spawnable ? `
     const id = String(++this.#nextId);
     return new Promise(resolve => {
       this.#_newPending.set(id, resolve);
-      const _msg = { id, op: [args, '$new'], to };
+      const _msg = { id, op: args === undefined ? '$new' : [args, '$new'], to };
       if (ty !== undefined) _msg['ty'] = ty;
       this.#out(_msg);
     });

@@ -1463,12 +1463,13 @@ export function genArgSlots(ctx, positional, named) {
 }
 
 // A #new's args as the wire carries them, and the ty that tells the receiver how to
-// read them, as for any other op: `[[t…]]`, `[{k: t}]` or `[[t…, {k: t}]]`. No args, no ty.
+// read them, as for any other op: `[[t…]]`, `[{k: t}]` or `[[t…, {k: t}]]`. No args, no
+// payload and no ty: the op is bare `$new`.
 export function genNewArgs(ctx, args) {
   const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
   const bag = args.find(a => a.type === 'NamedArgsBag');
   const named = bag ? Object.entries(bag.fields).map(([name, expr]) => ({ name, expr })) : [];
-  if (positional.length === 0 && named.length === 0) return { payload: '[]', ty: null };
+  if (positional.length === 0 && named.length === 0) return { payload: null, ty: null };
   const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
   if (positional.length > 0 && named.length > 0) return { payload: `[${posVals}, {${namedFields}}]`, ty: `[[${posTy}, {${namedTy}}]]` };
   if (named.length > 0) return { payload: `{${namedFields}}`, ty: `[{${namedTy}}]` };
@@ -1478,7 +1479,7 @@ export function genNewArgs(ctx, args) {
 // The call that sends a #new and waits for the new actor's address.
 export function genSendNew(ctx, args, to) {
   const { payload, ty } = genNewArgs(ctx, args);
-  return `this.#sendNew(${payload}, ${to}${ty ? `, ${ty}` : ''})`;
+  return `this.#sendNew(${payload ?? 'undefined'}, ${to}${ty ? `, ${ty}` : ''})`;
 }
 
 export function genTyBody(ctx, fields, typeEnv) {
