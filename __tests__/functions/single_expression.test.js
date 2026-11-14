@@ -5,8 +5,33 @@ import { expectBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('single-expression — fn = (params) -> return_vals', () => {
-  it.todo('fn = (a, b) -> (a + b) as Integer — lambda arrow return');
-  it.todo('fn = (name) -> name as Text — lambda arrow string return');
+  const script = `
+    @sum
+      =
+      add = (a, b) -> (a + b) as Integer
+      result Integer = add(2, 3)
+      return :result
+
+    @greet
+      =
+      echo = (name) -> name as Text
+      result Text = echo("Ada")
+      return :result
+  `;
+
+  it('fn = (a, b) -> (a + b) as Integer — lambda arrow return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'sum', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+    );
+  });
+
+  it('fn = (name) -> name as Text — lambda arrow string return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'greet', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'Ada' }, to: 'c' } },
+    );
+  });
 });
 
 describe('single-expression — fn = (params) ->  side_effect .', () => {
@@ -30,12 +55,33 @@ describe('single-expression — fn = (params) ->  side_effect .', () => {
 });
 
 describe('single-expression — fn = -> return_vals (no params)', () => {
-  it.todo('fn = -> 42 as Integer — no-param lambda arrow return');
-  it.todo('fn = -> "hello" as Text — no-param lambda string return');
-});
+  const script = `
+    @answer
+      =
+      fn = -> 42 as Integer
+      result Integer = fn()
+      return :result
 
-describe('single-expression — fn = side_effect . (no params)', () => {
-  it.todo('fn = count <- count + 1 . — no-param silent lambda');
+    @hello
+      =
+      fn = -> "hello" as Text
+      result Text = fn()
+      return :result
+  `;
+
+  it('fn = -> 42 as Integer — no-param lambda arrow return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'answer', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('fn = -> "hello" as Text — no-param lambda string return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'hello', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

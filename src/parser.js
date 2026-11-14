@@ -2177,6 +2177,10 @@ export function parse(tokensIn) {
     if (bareFuncAllowed && peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
       return parseFunction();
     }
+    // No-param arrow: -> expr
+    if (bareFuncAllowed && peek().type === '->') {
+      return parseFunction();
+    }
     if (peek().type === 'LBRACE') {
       return parseFunction(); // no-arg function
     }
@@ -3900,6 +3904,9 @@ export function parse(tokensIn) {
         // Standalone function call, dot-call, or self-handler dot-call (side effects)
         const expr = parseExpr();
         pushExprOrBang(body, expr);
+      } else if (peek().type === 'KEYWORD' && peek().value === 'over') {
+        // Standalone over: run the per-element body for its side effects.
+        body.push(AST.exprStatement(parseExpr()));
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
         throw new Error("'reduce' must be assigned to a variable — use 'result : Type = reduce ...'");
       } else if (lineHasPrependOp()) {

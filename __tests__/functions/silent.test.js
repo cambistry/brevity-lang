@@ -68,16 +68,6 @@ describe('silent public functions + type matching', () => {
       { output: { id: '5', ex: { 'unknown': 'unhandled' }, to: 'c' } },
     );
   });
-
-  it.skip('silent messages produce no output', async () => {
-    await expectBehavior(script,
-      { input: { id: '6', op: [{ msg: 'attention' }, 'notify.'], 'ty': [{ msg: 'Text' }], from: 'c' } },
-      { input: { id: '7', op: [{ info: 'hello' }, 'log.'], 'ty': [{ info: 'Text' }], from: 'c' } },
-      { input: { id: '8', op: [{ msg: 42 }, 'overloaded.'], 'ty': [{ msg: 'Integer' }], from: 'c' } },
-      // is this testing anything?
-      { output: [] },
-    );
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

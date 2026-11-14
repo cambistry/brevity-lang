@@ -228,37 +228,6 @@ describe('XML tags — no attributes', () => {
   });
 });
 
-// ── Runtime: nested XML class calls ─────────────────────────────────────────
-
-describe('XML tags — nested', () => {
-  const script = `
-    Inner = (value: Integer) *{
-      @get = -> result: value
-    }
-
-    Outer = (child: Inner) *{
-      @getValue = {
-        :result Integer = child.get()
-        return :result
-      }
-    }
-
-    @test
-      =
-      o = <Outer child={<Inner value={99} />} />
-      :result Integer = o.getValue()
-      return :result
-  `;
-
-  // TODO: nested class calls in named arg position need async handling
-  it.skip('nested XML class call in expression attribute', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'test', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
-    );
-  });
-});
-
 // ── R:untime XML equivalent to function call syntax ─────────────────────────
 
 describe('XML tags — equivalence with function syntax', () => {

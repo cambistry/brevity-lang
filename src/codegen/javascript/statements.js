@@ -380,7 +380,8 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       const resolved = ctx.ssaScope?.get(_lastTypedName) || jsIdent(_lastTypedName);
       code += `\n  return BvObject.pack([${resolved}]);`;
     } else if (_lastSetName !== null) {
-      code += `\n  return BvObject.pack([${_lastSetName}.value]);`;
+      // The set cell's new value: a local ref or an actor cell, read as such.
+      code += `\n  return BvObject.pack([${genExpr(ctx, AST.refRead(_lastSetName))}]);`;
     }
   }
   ctx.currentTypeEnv = savedTypeEnv;

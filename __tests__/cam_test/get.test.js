@@ -56,20 +56,6 @@ describe('test.get — after mutation', () => {
   });
 });
 
-describe('test.get — single-positional Object', () => {
-  const script = `
-    s *Object = Object(42)
-    @noop = -> s
-  `;
-
-  it.skip('get returns Object in wire format with type', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', test: { get: '~s' }, from: 't' } },
-      { output: { id: '1', 'ty': 'Object', re: [42], to: 't' } },
-    );
-  });
-});
-
 // A cell is read by its wire label: protected `a` is `.a`, public `@a` is `@a`.
 describe('test.get — by wire label', () => {
   const script = `

@@ -209,5 +209,20 @@ describe('over — compile errors', () => {
 });
 
 describe('over — standalone', () => {
-  it.todo('standalone over (side-effect only) — requires actor state, not yet implemented');
+  const script = `
+    total *Integer = 0
+
+    @sumAll!
+      =
+      nums List of Integers = [1, 2, 3]
+      over(nums) (item Integer) { total <- total + item }
+      return :total
+  `;
+
+  it('standalone over (side-effect only) mutates actor state', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'sumAll!', from: 'c' } },
+      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 6 }, to: 'c' } },
+    );
+  });
 });

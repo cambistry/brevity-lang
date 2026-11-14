@@ -1453,6 +1453,10 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
           lines.push(`${I}{ok, [${erlVarName(lastSSA)}], null}`);
         } else if (last.type === 'WhileStatement') {
           lines.push(`${I}{ok, [null], null}`);
+        } else if (last.type === 'SetStatement') {
+          // A set as the tail yields the cell's new value.
+          const readExpr = genExpr(ctx, AST.refRead(last.name), typeEnv, { ...sCtx, stmtIdx: body.length });
+          lines.push(`${I}{ok, [${readExpr}], null}`);
         } else {
           lines.push(`${I}{ok, null, null}`);
         }

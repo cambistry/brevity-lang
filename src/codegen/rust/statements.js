@@ -2419,7 +2419,27 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
       }
     } else if (s.type === 'ExprStatement') {
-      if (s.expr.type === 'SubscribeCall') {
+      if (s.expr.type === 'OverExpr' && s.expr.fn.type === 'Function' && Array.isArray(s.expr.fn.body)) {
+        // Standalone over: the results are discarded, so run the body once
+        // per element as a plain loop.
+        const fn = s.expr.fn;
+        const param = fn.params?.[0];
+        const loopEnv = new Map(typeEnv);
+        const coll = genRustExpr(s.expr.collection, typeEnv);
+        lines.push(`${I}if let Some(_arr) = ${coll}.as_array().cloned() {`);
+        lines.push(`${I}    for _el in _arr {`);
+        if (param?.type) {
+          lines.push(`${I}        let ${rustIdent(param.name)}: ${rustType(param.type)} = ${convertFromValue('_el.clone()', param.type)};`);
+          loopEnv.set(param.name, param.type);
+        } else if (param) {
+          lines.push(`${I}        let ${rustIdent(param.name)} = _el.clone();`);
+        }
+        const stmts = fn.body.map(b => b.type === 'ImplicitReturn' ? { type: 'ExprStatement', expr: b.expr } : b);
+        lines.push(...inRustBranchScope(() => genRustWhileBody(stmts, loopEnv, `${I}    `, null, 'return')));
+        lines.push(`${I}    }`);
+        lines.push(`${I}}`);
+        continue;
+      } else if (s.expr.type === 'SubscribeCall') {
         const target = s.expr.target;
         const isSelfTarget = target?.type === 'Identifier' &&
           (target.name.startsWith('@') || target.name.startsWith('#'));

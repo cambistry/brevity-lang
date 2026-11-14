@@ -20,9 +20,20 @@ describe('assignment', () => {
         0
       }
       return :result
+
+    @plainLocal
+      =
+      x = 40
+      result Integer = x + 2
+      return :result
     `;
 
-  it.todo('plain local var used in expression before reply');
+  it('plain local var used in expression before reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'plainLocal', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
 
   it('typed assign as last block statement evaluates to assigned value', async () => {
     await expectBehavior(script,

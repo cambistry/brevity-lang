@@ -40,11 +40,11 @@ result List of Integers = over nums
 - Empty lists map to `[]`.
 - Untyped bodies can emit per-element `ty` component types.
 - A bare function name without `&` is a compile error.
+- Standalone `over` (a statement, result discarded) runs its body per element
+  for side effects, e.g. `over(nums) (item Integer) { total <- total + item }`.
 
 ## LLM Rules
 
 - Use `&name` when passing a named function to `over`.
 - Use `over` for element-wise transformation, not accumulation.
 - Use `reduce` when the result is a single accumulated value.
-- Do not claim standalone side-effect-only `over` is implemented; the test is
-  still todo.

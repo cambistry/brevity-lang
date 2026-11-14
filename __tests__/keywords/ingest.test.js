@@ -30,6 +30,27 @@ describe('ingest — keyword basics — compilation', () => {
     `)).not.toThrow();
   });
 
-  it.todo('ingest without a default cannot be constructed directly');
-  it.todo('ingest with typed binding checks subclass return type');
+  // `ingest` may be deprecated (it outlived its templating purpose), so these
+  // compile checks are skipped rather than implemented.
+  it.skip('ingest without a default cannot be constructed directly', () => {
+    expect(() => compileSource(`
+      Base = * {
+        count Integer = ingest
+      }
+      @test = {
+        b = Base()
+        return 1 as Integer
+      }
+    `)).toThrow(/ingest/);
+  });
+
+  it.skip('ingest with typed binding checks subclass return type', () => {
+    expect(() => compileSource(`
+      Base = * {
+        count Integer = ingest
+      }
+      Child = (Base++) *{ "three" }
+      @test = -> 1 as Integer
+    `)).toThrow(/ingest/);
+  });
 });

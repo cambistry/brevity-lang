@@ -45,8 +45,32 @@ describe('ingest — compilation', () => {
     `)).not.toThrow();
   });
 
-  it.todo('typed ingest with mismatched subclass return is a compiler error');
-  it.todo('ingest without default — direct construction is a compiler error');
+  // `ingest` may be deprecated (it outlived its templating purpose), so these
+  // compile checks are skipped rather than implemented.
+  it.skip('typed ingest with mismatched subclass return is a compiler error', () => {
+    expect(() => compileSource(`
+      Base = * {
+        label Text = ingest
+        @label = -> :label
+      }
+      Child = (Base++) *{ 42 }
+      @test = -> 1
+    `)).toThrow(/ingest/);
+  });
+
+  it.skip('ingest without default — direct construction is a compiler error', () => {
+    expect(() => compileSource(`
+      Base = * {
+        label Text = ingest
+        @label = -> :label
+      }
+      @test = {
+        b = Base()
+        :label Text = b.label()
+        return :label
+      }
+    `)).toThrow(/ingest/);
+  });
 });
 
 // ── Runtime: basic ingest ────────────────────────────────────────────────────
