@@ -130,12 +130,12 @@ describe('a class reads its file\'s cells', () => {
 // What the class sends and what the file actor replies can come in either order.
 describe('a class reaches its file actor while the file actor is idle', () => {
   const script = `
-    *
+    **
       "svc.bv": Svc {
         note. (Integer) => .
         Log (Integer) -> *{}
       }
-    *
+    **
     total *Integer = 4
     @n *Integer = 0
 
@@ -263,9 +263,9 @@ describe('a class can\'t call its file\'s functions yet', () => {
 // constructs reads its cells, not the first file actor's.
 describe('a class constructed by a Self() actor reads that actor', () => {
   const script = `
-    *
+    **
       n Integer
-    *
+    **
     total *Integer = n
 
     W = *{

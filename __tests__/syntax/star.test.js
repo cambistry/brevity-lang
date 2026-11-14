@@ -456,9 +456,9 @@ describe('public class @Cls = (...) *{...}', () => {
 describe('service coercion — `as *(...)`', () => {
   it('Coerced = Alias as (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
-      *
+      **
         "thing.bv": Thing #
-      *
+      **
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
       @test = -> 1
@@ -490,10 +490,10 @@ describe('file-level header — lineal', () => {
 
   it('inline manifest class: (Alias) (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
-      *
+      **
         "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
         base: Integer
-      *
+      **
 
       t = Thing(a: base)
       @go = { :value Integer = t.get(); return :value }

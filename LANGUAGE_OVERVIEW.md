@@ -17,7 +17,7 @@ For source generation patterns, use
 - The file is the actor.
 - `@name` defines a public message handler.
 - `#name` defines a private function.
-- A `*` … `*` header at file top declares class params and dependency context.
+- A `**` … `**` header at file top declares the file singleton's DI (dependencies and load-time params).
 - `Name = (...) *{ ... }` declares a class (constructs actors).
 - `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
@@ -117,11 +117,11 @@ in `...` (fire-and-forget), and the ellipsis stands for the dot, so a call never
 writes it (`fire...`, `Log.write(:message)...`):
 
 ```brevity
-*
+**
   "/services/log": Log {
     write. (message: Text) => .
   }
-*
+**
 
 @notify. = (message: Text) {
   Log.write(:message)...
@@ -203,14 +203,15 @@ The `*` on the body marks the form as actor-producing. The `(value Integer)` is
 the class header — the params accepted at construction. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
-The file actor itself can declare dependencies in a top-level header:
+The file actor is a singleton, built once at load. It can declare its DI in a
+header at the head of the file (`**` … `**`, or `( … ) **{ body }`):
 
 ```brevity
-*
+**
   "Remote": Remote {
     get (url: Text) -> (response: Text)
   }
-*
+**
 
 @fetch
   =
@@ -259,11 +260,11 @@ A remote actor binding uses `*Name(...)`. Construction calls the remote class
 the actor's address:
 
 ```brevity
-*
+**
   "WebView": WebView (path: Text) -> *{
     open. () => .
   }
-*
+**
 
 view = *WebView(path: "/main")
 
@@ -318,7 +319,7 @@ If you are trying to understand Brevity quickly, start here:
 
 1. The file is the actor.
 2. `@` is the public message surface.
-3. The `*` header is the actor's construction and dependency boundary.
+3. The `**` header is the file singleton's DI: who it can talk to.
 4. `*Type` is an explicit cell, actor-shaped state, or actor-shaped binding.
 5. CAM messages are the common model across local, remote, test, and lifecycle
    behavior.

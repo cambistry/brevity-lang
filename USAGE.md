@@ -25,14 +25,15 @@ const output = compile(ast, { target: 'js' });
 
 ## File-level class params
 
-A file can declare its construction-time inputs in a top-level lineal
-header (`*` … `*`, each star alone on its line). The header is the class header for the file actor:
+A file is a singleton: its host builds it once, at load. It can declare its
+DI in a header at the head of the file, lineal (`**` … `**`, each `**` alone on
+its line) or delimited (`( … ) **{ body }`):
 
 ```
-*
+**
   "/services/db": DB { lookup (key: Text) -> (value: Text) }
   "/services/cache": Cache { get (key: Text) -> (value: Text) }
-*
+**
 
 @fetch = (key: Text) {
   :value Text = DB.lookup(:key)
@@ -58,7 +59,7 @@ A single name is never parenthesized (`"/path": (Alias)` is retired). Parens
 are for destructuring several members: `HTML: (:div, :span)`; one member needs
 none: `HTML: :div`.
 
-Typed scalar params live in the same header, supplied at construction:
+Typed scalar params live in the same header, supplied by the host at load:
 
 - Named scalar: `port: Integer`
 - Named, renamed locally: `port: p Integer` (callers pass `port`; the file sees `p`)
@@ -95,11 +96,11 @@ For example, a mixed header might come back as:
 
 ```javascript
 const { interface: iface } = extract(`
-  *
+  **
     root Text
     "/services/db": DB
     cache_size: Integer
-  *
+  **
   @noop. = {}
 `);
 

@@ -34,11 +34,11 @@ type. Bindings are private and not surfaced — a dependency's local name or
 destructure, a positional param's name, a renamed param's local:
 
 ```brevity
-*
+**
   "/db": DB
   HTML: (:div, :span)
   limit: n Integer
-*
+**
 ```
 
 renders params as:

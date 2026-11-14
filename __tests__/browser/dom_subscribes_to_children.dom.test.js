@@ -225,10 +225,10 @@ describe('HTML element — a subscribed element address fills the slot', () => {
 
 describe('template — a function returning an element, interpolated as a child', () => {
   const factorySource = `
-    *
+    **
       :document
       HTML: (:div, :span)
-    *
+    **
     #badge = -> <span>new</span>
     el = <div>[{{ #badge() }}]</div>
     body = document.body()

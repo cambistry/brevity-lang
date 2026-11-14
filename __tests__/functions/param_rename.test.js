@@ -56,9 +56,9 @@ describe('named param — rename', () => {
 
   it('a published class param renames', async () => {
     const actor = await createActor(`
-      *
+      **
         @label: l Text
-      *
+      **
       @get = -> l
     `, { constructorArgs: { label: 'hi' } });
     await expectActorBehavior(actor,
@@ -69,9 +69,9 @@ describe('named param — rename', () => {
 
   it('a file param renames', async () => {
     const actor = await createActor(`
-      *
+      **
         limit: n Integer
-      *
+      **
       @get = -> n
     `, { constructorArgs: { limit: 7 } });
     await expectActorBehavior(actor,
@@ -110,9 +110,9 @@ describe('type names are reserved', () => {
 
   it('a header binding is a type in scope', () => {
     expect(() => compileSource(`
-      *
+      **
         "thing.bv": Thing #
-      *
+      **
       f = (Thing Integer) { 1 }
       @test = -> 1
     `)).toThrow(/Param 'Thing' has the name of a type in scope/);

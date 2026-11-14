@@ -452,22 +452,22 @@ export function tokenize(source) {
     // `^` is the exponent. `**` is reserved for define-and-instantiate (`**{ }`
     // singletons, `**` file headers); the parser rejects it as an operator.
     if (source[i] === '^') { tokens.push({ type: 'POWER', value: '^' }); i++; continue; }
-    if (source[i] === '*' && source[i + 1] === '*') { tokens.push({ type: 'STARSTAR', value: '**' }); i += 2; continue; }
     if (source[i] === '*') {
-      // Lineal constructor headers require `*` to be the only token on its
-      // line. `alone`: nothing but whitespace on either side. `aloneBeforeBrace`:
-      // first on its line and followed only by `{` (closing star of a lineal
-      // header opening a delimited body).
-      const tok = { type: 'STAR', value: '*' };
+      // Lineal headers require `*` (a constructor) or `**` (a file singleton)
+      // to be the only token on its line. `alone`: nothing but whitespace on
+      // either side. `aloneBeforeBrace`: first on its line and followed only by
+      // `{` (closing star of a lineal header opening a delimited body).
+      const width = source[i + 1] === '*' ? 2 : 1;
+      const tok = width === 2 ? { type: 'STARSTAR', value: '**' } : { type: 'STAR', value: '*' };
       let b = i - 1;
       while (b >= 0 && (source[b] === ' ' || source[b] === '\t')) b--;
       if (b < 0 || source[b] === '\n') {
-        let f = i + 1;
+        let f = i + width;
         while (f < source.length && (source[f] === ' ' || source[f] === '\t')) f++;
         if (f >= source.length || source[f] === '\n') tok.alone = true;
         else if (source[f] === '{') tok.aloneBeforeBrace = true;
       }
-      tokens.push(tok); i++; continue;
+      tokens.push(tok); i += width; continue;
     }
     if (source[i] === '%') { tokens.push({ type: 'PERCENT', value: '%' }); i++; continue; }
 

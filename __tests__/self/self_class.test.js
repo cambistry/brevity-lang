@@ -34,7 +34,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 describe('Self as value — compilation', () => {
   it('@class = { Self } compiles in a file-as-class body', () => {
     expect(() => compileSource(`
-      *
+      **
       @class = { Self }
       @ping = -> ok: "pong" as Text
     `, { fileName: 'c.bv' })).not.toThrow();
@@ -52,7 +52,7 @@ describe('Self as value — compilation', () => {
   it('handler name is not reserved — any name returning Self compiles', () => {
     // Confirms the mechanism is Self-as-value, not a privileged @class hook.
     expect(() => compileSource(`
-      *
+      **
       @kind = { Self }
       @species = { Self }
     `, { fileName: 'c.bv' })).not.toThrow();
@@ -64,7 +64,7 @@ describe('Self as value — compilation', () => {
     // for `Self` to resolve to — fail loudly rather than emit a class with
     // an unresolvable address.
     expect(() => compileSource(`
-      *
+      **
       @class = { Self }
     `)).toThrow();
   });
@@ -81,7 +81,7 @@ describe('Self as value — compilation', () => {
 describe('Self as value — wire shape', () => {
   it('@class reply carries the class address with ty "Class"', async () => {
     const actor = await createActor(`
-      *
+      **
       @class = { Self }
     `, { fileName: 'c.bv' });
     await expectActorBehavior(actor,

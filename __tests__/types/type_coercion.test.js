@@ -4,7 +4,7 @@ import { createActor, expectActorBehavior, expectBehavior, compileActor, compile
 
 describe('type coercion — declared in the header', () => {
   const script = `
-    *
+    **
       "/services/counter": Counter {
         get () -> (count: Integer)
       } | Integer
@@ -14,7 +14,7 @@ describe('type coercion — declared in the header', () => {
       "service.bv": Service () -> *{
         ping. () => .
       } | Integer | Text
-    *
+    **
 
     @counterInt
       =
@@ -87,11 +87,11 @@ describe('type coercion — declared in the header', () => {
 
 describe('type coercion — documents supplied through options.remotes', () => {
   const script = `
-    *
+    **
       "/services/counter": Counter
       "/services/store": Store
       "service.bv": Service #
-    *
+    **
 
     @counterInt
       =
@@ -188,11 +188,11 @@ describe('type coercion — class ref constructed at the top level', () => {
 
   it('declared in the header', async () => {
     const actor = await createActor(`
-      *
+      **
         "service.bv": Service () -> *{
           ping. () => .
         } | Integer
-      *
+      **
       ${body}
     `, { expects: construct });
     await expectActorBehavior(actor, ...steps);
@@ -200,9 +200,9 @@ describe('type coercion — class ref constructed at the top level', () => {
 
   it('document supplied through options.remotes', async () => {
     const actor = await createActor(`
-      *
+      **
         "service.bv": Service #
-      *
+      **
       ${body}
     `, {
       compileOptions: { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n} | Integer' }] },
@@ -228,40 +228,40 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('service ref, declared in the header', () => {
     expect(() => compileSource(`
-      *
+      **
         "/services/counter": Counter {
           get () -> (count: Integer)
         }
-      *
+      **
       ${counter}
     `)).toThrow();
   });
 
   it('class ref, declared in the header', () => {
     expect(() => compileSource(`
-      *
+      **
         "service.bv": Service () -> *{
           ping. () => .
         }
-      *
+      **
       ${service}
     `)).toThrow();
   });
 
   it('service ref, through options.remotes', () => {
     expect(() => compileSource(`
-      *
+      **
         "/services/counter": Counter
-      *
+      **
       ${counter}
     `, { remotes: [{ path: '/services/counter', service: '{\n  get () -> (count: Integer)\n}' }] })).toThrow();
   });
 
   it('class ref, through options.remotes', () => {
     expect(() => compileSource(`
-      *
+      **
         "service.bv": Service #
-      *
+      **
       ${service}
     `, { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n}' }] })).toThrow();
   });
@@ -599,9 +599,7 @@ describe('as — values in this file', () => {
 
 describe('as — remote replies', () => {
   const script = `
-    type Point (x: Integer, y: Integer)
-
-    *
+    **
       "/s": Svc {
         text () -> (Text)
         int () -> (Integer)
@@ -609,7 +607,8 @@ describe('as — remote replies', () => {
         field () -> (a: Integer)
         any () -> (Anything)
       }
-    *
+    **
+    type Point (x: Integer, y: Integer)
 
     @overDoc = {
       x Integer = Svc.text() as Integer

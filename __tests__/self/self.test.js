@@ -23,9 +23,9 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const REVERSE_SCRIPT = `
-*
+**
   list List
-*
+**
 
 @reverse = {
   if (List.empty?(list)) { return reversed: [] }

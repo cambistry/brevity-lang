@@ -273,9 +273,9 @@ describe('a call on an instance inside a branch', () => {
 
 describe('returning a call on a remote', () => {
   const script = `
-    *
+    **
       "svc": Svc { t () -> (Integer) }
-    *
+    **
     @go = {
       return Svc.t()
     }

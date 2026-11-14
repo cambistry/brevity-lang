@@ -10,12 +10,12 @@
 
 import { _opre_split as split, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 
-const documentDI = '*\n  "document": document\n*\n';
-// A constructor header: delimited `( ... ) [->] *{`, no-params `*{`, or a
-// lineal `*` alone on the first line.
+const documentDI = '**\n  "document": document\n**\n';
+// A file header: delimited `( ... ) [->] *{` / `**{`, no-params `*{` / `**{`,
+// or a lineal `*` / `**` alone on the first line.
 const hasHeader = (source) => {
   const s = source.trim();
-  if (/^\*(\s*\{|[ \t]*(\n|$))/.test(s)) return true;
+  if (/^\*\*?(\s*\{|[ \t]*(\n|$))/.test(s)) return true;
   if (s[0] !== '(') return false;
   let depth = 0, quote = null;
   for (let i = 0; i < s.length; i++) {
@@ -23,7 +23,7 @@ const hasHeader = (source) => {
     if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
     if (c === '"') quote = c;
     else if (c === '(') depth++;
-    else if (c === ')' && --depth === 0) return /^\s*([-=~]>\s*)?\*\s*\{/.test(s.slice(i + 1));
+    else if (c === ')' && --depth === 0) return /^\s*([-=~]>\s*)?\*\*?\s*\{/.test(s.slice(i + 1));
   }
   return false;
 };

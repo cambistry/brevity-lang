@@ -11,7 +11,7 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 
 - Treat a `.bv` file as the main actor or factory unit.
 - Use `@name` for the public message surface.
-- Use a top-level `*` … `*` header (each star alone on its line) for dependencies or constructor-like inputs.
+- Use a top-level `**` … `**` header (each `**` alone on its line) for dependencies and load-time params. A file is a singleton.
 - Prefer named parameters and named returns.
 - Name a function that writes with `!` (or `.` if it doesn't reply); leave read-only
   functions unmarked. End a `!` function with its write or a `return`.
@@ -39,7 +39,7 @@ Do not try to use the whole language. Prefer boring, explicit forms.
 ## Boundaries
 
 - Stay within the forms shown in this pack.
-- Keep dependency interfaces explicit in `*` … `*` headers.
+- Keep dependency interfaces explicit in `**` … `**` headers.
 - Treat transport, discovery, and cluster infrastructure as surrounding services
   unless the app explicitly implements them.
 - Use documented wire examples only when the task is about CAM protocol.

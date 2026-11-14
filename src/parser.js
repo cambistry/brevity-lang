@@ -4511,6 +4511,8 @@ export function parse(tokensIn) {
   // A star that closes a lineal constructor header: alone on its line, or
   // first on its line and followed only by `{` (delimited body).
   const isClosingStar = (t) => t?.type === 'STAR' && (t.alone || t.aloneBeforeBrace);
+  // The same for a file singleton's lineal header (`**\n entries\n **`).
+  const isClosingStarStar = (t) => t?.type === 'STARSTAR' && (t.alone || t.aloneBeforeBrace);
 
   // Try to parse the param run of a lineal header (`*\n params\n *`). Caller
   // has consumed the opening `*`. Returns the params with the closing `*`
@@ -4611,6 +4613,23 @@ export function parse(tokensIn) {
       const t = tokens[j].type;
       if (t === 'LPAREN') depth++;
       else if (t === 'RPAREN' && --depth === 0) return isSingletonStart(j + 1);
+      else if (t === 'EOF') return false;
+    }
+    return false;
+  }
+
+  // `( entries ) [->] **{` at token index `i`: a file singleton's delimited
+  // header (at the head of a file only).
+  function isFileSingletonStart(i = pos) {
+    if (tokens[i]?.type !== 'LPAREN') return false;
+    let depth = 0;
+    for (let j = i; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN' && --depth === 0) {
+        const k = tokens[j + 1]?.type === '->' ? j + 2 : j + 1;
+        return isSingletonStart(k);
+      }
       else if (t === 'EOF') return false;
     }
     return false;
@@ -5372,6 +5391,9 @@ export function parse(tokensIn) {
         if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
         constructorBody.push(AST.implicitReturn(expr, typeName));
       } else {
+        if (peek().type === 'STARSTAR' && (peek().alone || tokens[pos + 1]?.type === 'LBRACE')) {
+          throw new Error(`a '**' file header must open the file — an inline singleton is named: 'name = **{ … }'`);
+        }
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
@@ -5454,6 +5476,9 @@ export function parse(tokensIn) {
   const dependencies = [];
   const types = [];
   let headerSeen = false;
+  // The file's kind, from its header: `**` a singleton (built once at load, its
+  // header is DI), `*` a factory. A headerless file is a singleton.
+  let fileKind = 'singleton';
 
   // Parse one type field declaration:
   //   `name Type`   — positional (no colon)
@@ -5842,6 +5867,59 @@ export function parse(tokensIn) {
     }
     if (peek().type === 'DCOLON') throw new Error(`Unexpected '::'`);
 
+    // ── File singleton header ─────────────────────────────────────────────
+    //   **\n entries\n **\n body     — lineal: entries one per line, closed
+    //   **\n entries\n ** { body }     by `**` alone on its line
+    //   **\n body                      — lineal, no DI
+    //   ( entries ) [->] **{ body }    — delimited
+    //   **{ body }                     — delimited, no DI
+    // The entries are the file's DI, filled in once by its host at load. Only
+    // the head of a file takes one: an inline singleton has nobody to fill it.
+    if (peek().type === 'STARSTAR' && (peek().alone || tokens[pos + 1]?.type === 'LBRACE') ||
+        peek().type === 'LPAREN' && isFileSingletonStart()) {
+      if (headerSeen || actors.length || types.length) {
+        throw new Error(headerSeen
+          ? `Multiple file headers are not allowed — combine all dependencies into a single header`
+          : `a '**' file header must open the file`);
+      }
+      headerSeen = true;
+      if (peek().type === 'LPAREN') {
+        consume(); // (
+        skipNewlines();
+        parseFileHeaderEntries(() => peek().type === 'RPAREN');
+        expect('RPAREN');
+        if (peek().type === '->') consume();
+        expect('STARSTAR');
+        parseFileHeaderBody(false);
+        continue;
+      }
+      const star = consume(); // **
+      if (!star.alone) {
+        parseFileHeaderBody(false);
+        continue;
+      }
+      const savedPos = pos;
+      const savedDeps = dependencies.length;
+      let closed = false;
+      try {
+        parseFileHeaderEntries(() => isClosingStarStar(peek()));
+        if (isClosingStarStar(peek())) { consume(); closed = true; }
+      } catch (e) {
+        if (e.fatal) throw e; // a recognised entry in a retired form
+        // not an entry run — no-DI form
+      }
+      if (!closed) {
+        pos = savedPos;
+        dependencies.length = savedDeps;
+      }
+      skipBlanks();
+      parseFileHeaderBody(true);
+      continue;
+    }
+    if (peek().type === 'STARSTAR') {
+      throw new Error(`a '**' file header is '**' alone on its line, '**{ … }', or '( … ) **{ … }'`);
+    }
+
     // ── File-level constructor header — delimited ─────────────────────────
     //   ( "/path": Alias ) *{ body }                  — service ref, fetched externally
     //   ( "/path": Alias { iface } ) *{ body }        — service ref, inline interface
@@ -5855,6 +5933,7 @@ export function parse(tokensIn) {
         throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single ( ... ) *{ ... } header`);
       }
       headerSeen = true;
+      fileKind = 'factory';
       consume(); // (
       skipNewlines();
       parseFileHeaderEntries(() => peek().type === 'RPAREN');
@@ -5879,6 +5958,7 @@ export function parse(tokensIn) {
         throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single header`);
       }
       headerSeen = true;
+      fileKind = 'factory';
       consume(); // *
       const savedPos = pos;
       const savedDeps = dependencies.length;
@@ -5908,6 +5988,7 @@ export function parse(tokensIn) {
         throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single header`);
       }
       headerSeen = true;
+      fileKind = 'factory';
       consume(); // *
       const { params, nested } = parseConstructorAfterStar('<file-class>');
       actors.push(AST.actor(null, {
@@ -5970,7 +6051,18 @@ export function parse(tokensIn) {
   }
   if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
   const result = AST.program(actors, dependencies, types);
+  result.fileKind = fileKind;
   resolveLoneNames(result);
+  // A `*` header makes the file a factory: its entries are `new`'s params.
+  // DI is the host filling in a singleton at load, so a factory takes none —
+  // its actors reach services through their params.
+  if (fileKind === 'factory') {
+    const dep = result.dependencies.find(d => d.type === 'Dependency');
+    if (dep) {
+      const shown = /^\w+$/.test(dep.path) ? dep.path : `"${dep.path}"`;
+      throw new Error(`A '*' file header is a factory's params and takes no DI ('${shown}') — inject it in a '**' header`);
+    }
+  }
   settleSilentDecls(result);
   settleBangDecls(result);
   settleWrites(result);

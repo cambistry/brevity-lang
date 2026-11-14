@@ -6,11 +6,11 @@ dependencies. Prefer explicit inline constraints in examples.
 ## Canonical Form
 
 ```brevity
-*
+**
   "/services/db": DB {
     lookup (key: Text) -> (value: Text)
   }
-*
+**
 
 @query
   =
@@ -43,9 +43,9 @@ Meaning:
 This parses:
 
 ```brevity
-*
+**
   "Remote": Remote
-*
+**
 ```
 
 But compilation needs a remote interface:
@@ -61,7 +61,7 @@ For generated examples, prefer inline constraints unless the point is testing
 
 ## LLM Rules
 
-- Use a lineal `*` … `*` header (or `( ... ) *{ ... }`) at file top for
+- Use a lineal `**` … `**` header (or `( ... ) **{ ... }`) at file top for
   dependencies.
 - Use `(name: Type)` in service signatures for named args.
 - Silent service methods are named with a glued `.` and typed `=> .` (`ping. () => .`); call them with `...`.

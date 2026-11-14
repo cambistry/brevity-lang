@@ -234,7 +234,7 @@ describe('service document — emitted form', () => {
 });
 
 describe('props and cells — validation', () => {
-  const remote = (iface, body) => compileSrc(`*\n  "remote.bv": Remote ${iface}\n*\n${body}\n`);
+  const remote = (iface, body) => compileSrc(`**\n  "remote.bv": Remote ${iface}\n**\n${body}\n`);
 
   it('a prop can be read', () => {
     expect(() => remote('{ count Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
@@ -279,7 +279,7 @@ describe('props and cells — validation', () => {
       set label (Text)
     }
   }`;
-  const withBox = (body) => compileSrc(`*\n  Shapes: (:Box)\n*\n${body}\n`, {
+  const withBox = (body) => compileSrc(`**\n  Shapes: (:Box)\n**\n${body}\n`, {
     remotes: [{ path: 'Shapes', service: shapes }],
   });
 
@@ -301,7 +301,7 @@ describe('props and cells — validation', () => {
 describe('constructor profiles in source', () => {
   it('header dependency: (Alias) (params) -> *{ iface }, arrow optional', () => {
     for (const arrow of ['-> ', '']) {
-      const { ast } = extract(`*\n  "thing.bv": Thing (a: Integer) ${arrow}*{ get () -> (value: Integer) }\n*\n@go = -> 1\n`);
+      const { ast } = extract(`**\n  "thing.bv": Thing (a: Integer) ${arrow}*{ get () -> (value: Integer) }\n**\n@go = -> 1\n`);
       const dep = ast.dependencies[0];
       expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', type: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
@@ -309,7 +309,7 @@ describe('constructor profiles in source', () => {
   });
 
   it('header dependency in a delimited ( … ) *{ … } header', () => {
-    expect(() => compileSrc(`( "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) } ) *{
+    expect(() => compileSrc(`( "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) } ) **{
   t = Thing(a: 1)
   @go = { :value Integer = t.get(); return :value }
 }
@@ -317,7 +317,7 @@ describe('constructor profiles in source', () => {
   });
 
   it('header dependency: multi-line iface with a nested constructor body', () => {
-    const { ast } = extract(`*
+    const { ast } = extract(`**
   "lib.bv": Lib {
     type Point (x Integer, y Integer)
     Counter (start: Integer) -> *{
@@ -326,7 +326,7 @@ describe('constructor profiles in source', () => {
     }
     ping. () => .
   }
-*
+**
 @go = -> 1
 `);
     const p = parseInterface(ast.dependencies[0].interface);
@@ -336,32 +336,32 @@ describe('constructor profiles in source', () => {
   });
 
   it('retired: Alias *( … ) -> { … }', () => {
-    expect(() => extract('*\n  "thing.bv": Thing *(a: Integer) -> { get: () -> (value: Integer) }\n*\n@go = -> 1\n'))
+    expect(() => extract('**\n  "thing.bv": Thing *(a: Integer) -> { get: () -> (value: Integer) }\n**\n@go = -> 1\n'))
       .toThrow(/retired/);
   });
 
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
-    expect(() => compileSrc(`*
+    expect(() => compileSrc(`**
   "thing.bv": Thing #
-*
+**
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 @go = -> 1
 `)).not.toThrow();
   });
 
   it('retired: as *( … ) -> { … }', () => {
-    expect(() => extract(`*
+    expect(() => extract(`**
   "thing.bv": Thing #
-*
+**
 Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 @go = -> 1
 `)).toThrow(/retired/);
   });
 
   it('service constraint entries drop the colon', () => {
-    expect(() => extract(`*
+    expect(() => extract(`**
   "store.bv": Store { get (key: Text) -> (value: Text) }
-*
+**
 db = Store as { @get: (key: Text) -> (value: Text) }
 @go = -> 1
 `)).toThrow(/entry colon is retired/);
@@ -379,14 +379,14 @@ db = Store as { @get: (key: Text) -> (value: Text) }
 
 describe('file-level params — function-typed', () => {
   it('named: cb: (s: Integer) => .', () => {
-    const { ast } = extract('*\n  cb: (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
+    const { ast } = extract('**\n  cb: (s: Integer) => .\n**\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
       { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: false },
     ]);
   });
 
   it('positional: cb (s: Integer) => .', () => {
-    const { ast } = extract('*\n  cb (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
+    const { ast } = extract('**\n  cb (s: Integer) => .\n**\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
       { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: true },
     ]);

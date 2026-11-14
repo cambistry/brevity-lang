@@ -16,11 +16,11 @@ import { expectBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-  *
+  **
     "svc.bv": Svc {
       take (r: Text) -> ()
     }
-  *
+  **
   @Box = *{
     @tally = **{
       @me = { return self }

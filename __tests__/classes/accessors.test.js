@@ -95,11 +95,11 @@ describe('published params — service document', () => {
 
   it('lists published file params as read-only fields', () => {
     const { interface: iface } = compileSource(`
-      *
+      **
         @count Integer
         @tag: Text
         quiet Integer
-      *
+      **
       @test = -> 1
     `);
     expect(iface.service).toBe('{\n  count Integer\n  tag Text\n  test () -> (Integer)\n}');
@@ -143,10 +143,10 @@ describe('published params — runtime', () => {
 
 describe('published file params — runtime', () => {
   const source = `
-    *
+    **
       @count Integer
       quiet: Integer
-    *
+    **
     @go = -> 1
   `;
 

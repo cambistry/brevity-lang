@@ -7,11 +7,11 @@ lowering to explicit CAM message traffic.
 ## Canonical Dependency Form
 
 ```brevity
-*
+**
   "Remote": Remote {
     get (url: Text) -> (response: Text)
   }
-*
+**
 
 @call_remote
   =
@@ -34,11 +34,11 @@ Use `spawn` when calling a silent remote operation from a replying handler.
 Calling a silent operation counts as a write, so the handler is named with `!`:
 
 ```brevity
-*
+**
   "Store": Store {
     notify. (msg: Text) => .
   }
-*
+**
 
 @send_notify!
   =

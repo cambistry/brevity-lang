@@ -7,14 +7,14 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 // `{}`, `[{}]` and `[{k: v}]` are consumable but never generated.
 
 const source = `
-  *
+  **
       "thing.bv": Thing (a: Integer) -> *{
       put (k: Integer) -> (value: Integer)
       ping. (k: Integer) => .
       mix. (Integer, k: Integer) => .
       add (Integer, k: Integer) -> (value: Integer)
     }
-  *
+  **
 
   t = Thing(a: 5)
 

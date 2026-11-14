@@ -70,11 +70,11 @@ interfaces, browser facilities, or parent-child routing. Brevity exposes that
 context with a top-level class/dependency boundary:
 
 ```brevity
-*
+**
   "/services/store": Store {
     get (key: Text) -> (value: Text)
   }
-*
+**
 
 @fetch = (key: Text) {
   :value Text = Store.get(:key)

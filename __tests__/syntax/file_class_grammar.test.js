@@ -44,8 +44,8 @@ describe('file-class header — delimited', () => {
   it('multi-line entries', () => {
     expect(() => compileSource(`
       (
-        "Remote": Remote { get () -> (value: Integer) }
         name: Text
+        count: Integer
       ) *{
         @get = -> name
       }
@@ -210,7 +210,7 @@ describe('file-class header — lineal forms', () => {
     `)).not.toThrow();
   });
 
-  it('dependency entries, one per line', () => {
+  it('dependency entries are refused: a factory takes no DI', () => {
     expect(() => compileSource(`
       *
         "/services/counter": Counter {
@@ -220,7 +220,7 @@ describe('file-class header — lineal forms', () => {
       *
 
       @go = { :count Integer = Counter.get(); return :count }
-    `)).not.toThrow();
+    `)).toThrow(/A '\*' file header is a factory's params and takes no DI \('"\/services\/counter"'\)/);
   });
 });
 
@@ -231,7 +231,6 @@ describe('file-class header — lineal params land as file params', () => {
   it('lineal and delimited headers yield identical dependencies', () => {
     const lineal = extract(`
       *
-        "Remote": Remote
         name: Text
         n Integer
       *
@@ -239,7 +238,7 @@ describe('file-class header — lineal params land as file params', () => {
       @get = -> name
     `);
     const delimited = extract(`
-      ( "Remote": Remote, name: Text, n Integer ) *{
+      ( name: Text, n Integer ) *{
         @get = -> name
       }
     `);

@@ -1,7 +1,7 @@
-*
+**
   :document
   HTML: (:div, :p, :style)
-*
+**
 @color *Text = "rgb(0, 0, 0)"
 
 el = <div>

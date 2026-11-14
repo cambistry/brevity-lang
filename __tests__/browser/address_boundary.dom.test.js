@@ -14,11 +14,11 @@ import { compileActor } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const source = `
-  *
+  **
     "svc.bv": Svc {
       take (r: Text) -> ()
     }
-  *
+  **
   @Box = *{
     @tally = **{
       @me = { return self }

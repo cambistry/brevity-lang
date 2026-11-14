@@ -26,9 +26,9 @@ function compileWithHTML(source, extraRemotes = []) {
 describe('DI spread operator — <HTML: (...)>', () => {
   it('`(...)` spreads the full manifest — any manifest tag compiles', () => {
     const source = `
-      *
+      **
         HTML: (...)
-      *
+      **
       @create = -> <div><h1>Title</h1><p>body</p><span>x</span></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -38,9 +38,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // Spread only pulls in what the manifest declares; tags the manifest doesn't
     // define remain a compile error.
     const source = `
-      *
+      **
         HTML: (...)
-      *
+      **
       @create = -> <marquee>nope</marquee>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<marquee>.*:marquee.*HTML/);
@@ -51,9 +51,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // check uses the remote name of the destructure entry (div), not the local
     // alias (D). This is existing behavior for explicit destructures.
     const source = `
-      *
+      **
         HTML: (div: D, ...)
-      *
+      **
       @create = -> <div><p>body</p></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -63,9 +63,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // div is consumed by _, so the spread does not supply it, and the tag
     // check should reject `<div>`.
     const source = `
-      *
+      **
         HTML: (div: _, ...)
-      *
+      **
       @create = -> <div>nope</div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<div>.*:div.*HTML/);
@@ -73,9 +73,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
 
   it('`name: _` discards but other tags from spread still work', () => {
     const source = `
-      *
+      **
         HTML: (div: _, ...)
-      *
+      **
       @create = -> <p>ok</p>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -86,9 +86,9 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // the missing manifest before spread expansion even runs. Same root cause,
     // same outcome: compile fails naming the dependency.
     const source = `
-      *
+      **
         HTML: (...)
-      *
+      **
       @create = -> <div>x</div>
     `;
     const { ast } = extract(source);
@@ -101,10 +101,10 @@ describe('DI spread operator — <HTML: (...)>', () => {
       section (inner_html: Text | null) -> *{}
     }`;
     const source = `
-      *
+      **
         HTML: (...)
         "OTHER": (...)
-      *
+      **
       @create = -> <div>x</div>
     `;
     const { ast } = extract(source);

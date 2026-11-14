@@ -47,9 +47,9 @@ Multiple `_` entries create no bindings.
 Dependency headers can destructure public members from a remote service:
 
 ```brevity
-*
+**
   "geometry.bv": (:Point)
-*
+**
 
 @go
   =
@@ -60,25 +60,25 @@ Dependency headers can destructure public members from a remote service:
 Multiple members:
 
 ```brevity
-*
+**
   "dom.bv": (:Element, :div, :p)
-*
+**
 ```
 
 Aliased member:
 
 ```brevity
-*
+**
   "service.bv": (create: fn)
-*
+**
 ```
 
 Aliased with type annotation:
 
 ```brevity
-*
+**
   "service.bv": (CONFIG: cfg Text)
-*
+**
 ```
 
 ## Interface Requirement
