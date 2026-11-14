@@ -411,12 +411,4 @@ describe('constructor delimited form — expression defaults', () => {
   it('defaults that name each other are an error', () => {
     expect(() => compileSource('C = (a Integer = b, b Integer = a) *{}\n@go = -> 1')).toThrow(/Param defaults form a cycle: a → b → a/);
   });
-
-  it('a default can\'t call a file-level function, as the body can\'t', () => {
-    expect(() => compileSource(`
-      double = (n Integer) { n * 2 }
-      C = (a Integer, b Integer = double(a)) *{}
-      @go = -> 1
-    `)).toThrow(/'double' is a function of this file, and a class can't call it yet/);
-  });
 });

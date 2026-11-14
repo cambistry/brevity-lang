@@ -5,6 +5,7 @@ import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { wireLabel, selfAddress, memberOp } from '../wire_labels.js';
+import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
@@ -23,11 +24,23 @@ export function jsIdent(rawName) {
 // through, and the actors it's declared in, innermost first, which it reads names from
 // (src/outer_reads.js). `cls` is the class being constructed. This actor is in that
 // chain, or one of the actors it's declared in is, so the new chain is a slice of ours.
+//
+// A class whose constructor closes over its members (src/singleton_classes.js) is
+// built where it is declared, its home, and reads its members first: the chain is
+// the members' actor, held in the home's cell `C__class`, then the home's.
 export function childBinding(ctx, cls) {
   if (!ctx.readsOuter) return '{post: (msg) => this.receive(msg)}';
   const outer = ctx.inClass ? 'this.#outer' : 'this';
   const here = ctx.currentActor?.name ?? null;
-  const enclosing = (cls && ctx.actorNodes?.get(cls)?.enclosing) ?? null;
+  const node = cls && ctx.actorNodes?.get(cls);
+  let enclosing = node?.enclosing ?? null;
+  let head = null;
+  if (node?.membersClass && enclosing === node.membersClass && enclosing !== here) {
+    enclosing = node.home ?? null;
+    const cell = ctx.actorNodes.get(node.membersClass)?.singletonOf;
+    const level = enclosingChain(ctx.program, ctx.currentActor).indexOf(enclosing) + 1;
+    head = enclosing === here ? `this.#${stateKey(cell)}` : `(await this.#outerRead(${JSON.stringify(wireLabel(cell))}, ${level}))`;
+  }
   let chain;
   if (!ctx.inClass) chain = '[this]';
   else if (enclosing === here) chain = '[this, ...this.#chain]';
@@ -35,6 +48,7 @@ export function childBinding(ctx, cls) {
     const at = enclosingChain(ctx.program, ctx.currentActor).indexOf(enclosing);
     chain = at <= 0 ? 'this.#chain' : `this.#chain.slice(${at})`;
   }
+  if (head) chain = chain.startsWith('[') ? `[${head}, ${chain.slice(1)}` : `[${head}, ...${chain}]`;
   return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}}`;
 }
 
@@ -705,6 +719,31 @@ export function genExpr(ctx, expr) {
     }
     return `{ __type: ${JSON.stringify(decl?.key ?? expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
   }
+  // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
+  // `$set` sent to it, as a closure's write goes to its enclosing scope.
+  if (expr.type === 'OuterSet') {
+    const op = expr.updateOp === '<|' ? '$update' : '$set';
+    return `this.#_up(${expr.outerLevel}).receive({ id: String(++this.#nextId), op: [[${genExpr(ctx, expr.value)}], ${JSON.stringify(op)}], to: ${JSON.stringify('. ' + wireLabel(expr.name))}, _route: () => {} })`;
+  }
+  // A call to a function of an actor this class is declared in: a message to it.
+  // A param default the file evaluates for a class (`$new` with a default left out)
+  // runs in the file: its owner is us, so the call is our own.
+  if (expr.type === 'FunctionCallExpr' && expr.outerFnCall && (ctx.currentActor?.name ?? null) === expr.outerClass) {
+    return genExpr(ctx, { ...expr, outerFnCall: false });
+  }
+  if (expr.type === 'FunctionCallExpr' && expr.outerFnCall) {
+    ctx.usesChildSend = true;
+    const name = expr.callee.name;
+    const genArg = arg => {
+      if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
+      return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
+    };
+    const op = expr.args.length === 0
+      ? JSON.stringify(wireLabel(name))
+      : `[[${expr.args.map(genArg).join(', ')}], ${JSON.stringify(wireLabel(name))}]`;
+    if (name.endsWith('.') || expr.launched) return `this.#childFire(this.#_up(${expr.outerLevel}), ${op})`;
+    return `BvObject.pack(await this.#childSend(this.#_up(${expr.outerLevel}), ${op}))`;
+  }
   if (expr.type === 'FunctionCallExpr') {
     if (expr.callee?.type === 'Identifier') {
       const name = expr.callee.name;
@@ -1372,7 +1411,8 @@ export function genDefaultValue(node) {
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
   // A singleton's class is itself: it's tagged with its address (`. s`).
-  const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
+  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
+  const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   // A type's tag is its address (src/codegen/type_table.js).

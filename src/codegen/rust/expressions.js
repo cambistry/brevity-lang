@@ -2,6 +2,7 @@
 import { addressToken, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
+import { publicLabel } from '../../singleton_classes.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -537,7 +538,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const childActor = G.ctx.actorInfo.get(cName)?.actor;
     if (childActor && classNeedsSpawnedInstances(childActor)) {
       const lc = cName.toLowerCase();
-      const singletonLabel = G.ctx.actorNodes?.get(cName)?.singletonOf?.startsWith('@') ? G.ctx.actorNodes.get(cName).singletonOf : null;
+      const singletonLabel = publicLabel(G.ctx.actorNodes?.get(cName));
       const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
       const positionalArgs = expr.args.filter(a => a.type !== 'NamedArgsBag');
       let initArgsExpr;
@@ -591,6 +592,16 @@ ${subRegLines.join('\n')}
         bv_inst_ref(${JSON.stringify(lc)}, _id)
     }`;
     }
+  }
+  // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
+  // `$set` sent to it.
+  if (expr.type === 'OuterSet') {
+    const op = `${expr.updateOp === '<|' ? '$update' : '$set'} ${wireLabel(expr.name)}`;
+    const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
+    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; let _ = self.outer_send(${expr.outerLevel}, ${JSON.stringify(op)}, &Value::Array(vec![_v])); }`;
+  }
+  if (expr.type === 'FunctionCallExpr' && expr.outerFnCall) {
+    return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
   // Emit invocation
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.emitNames.has(expr.callee.name)) {
@@ -1785,7 +1796,10 @@ function genRustFnCallExpr(expr, typeEnv) {
   const calleeName = expr.callee.name;
   // Self-send: call through handle_op dispatch, return re value
   // Use child dispatch when inside child actor context
-  const selfSendCall = (payload) => (G.ctx.childSelfSendPrefix
+  const selfSendCall = (payload) => (expr.outerFnCall
+    // A function of an actor this class is declared in (src/outer_reads.js).
+    ? `bv_call_self(|| self.outer_send(${expr.outerLevel}, "${wireLabel(calleeName)}", ${payload}))`
+    : G.ctx.childSelfSendPrefix
     ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${wireLabel(calleeName)}", ${payload}, "", "__parent"))`
     : `bv_call_self(|| self.self_send("${wireLabel(calleeName)}", ${payload}))`);
   if (expr.args.length === 0) {

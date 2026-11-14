@@ -851,7 +851,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         sCtx.selfSpawnedRefs?.add(s.name);
       } else {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${s.soleValue && s.value.type !== 'AsExpr' ? `bv_object_one(${val})` : val}),`);
+        // A call on an actor in this process replies with an Object; the cell holds
+        // its one value, unless it is an Object cell.
+        const instanceReply = s.value?.type === 'DotCallExpr' && val.includes('bv_object_pack(Eph_re_')
+          && ctx.stateVarTypeEnv?.get(s.name) !== 'Object';
+        lines.push(`${I}put(${erlStateKey(ctx, s.name)}, ${(s.soleValue && s.value.type !== 'AsExpr') || instanceReply ? `bv_object_one(${val})` : val}),`);
       }
     }
 

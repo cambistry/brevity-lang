@@ -213,7 +213,7 @@ function makeErlDispatchRet(ctx, fields, typeEnv, replyCtx) {
   return `{ok, [${posVals.join(', ')}], ${genTyBody(ctx, fields, typeEnv, replyCtx) ?? 'null'}}`;
 }
 
-const isPrivateOp = op => !/^(@|set$|update$|set@|subscribe@|new@)/.test(op);
+const isPrivateOp = op => !/^(@|set$|update$|set@|subscribe@|new@|new$)/.test(op);
 
 // ── Public function codegen ──────────────────────────────────────────────────
 
@@ -409,6 +409,18 @@ function genGetClauses(fnName, actor) {
       : `${fnName}({<<"$get">>, ${erlString(e.token)}}, _Message, _Payload, _Id, From) when ${inside} ->\n    {ok, [get(${e.key})], null}`);
   }
   return clauses;
+}
+
+// How each actor runs an op sent to it by a class declared in it (outer_self_send):
+// its own handle_op, as from inside.
+function genRunAs(actors) {
+  const clauses = actors.map(a => a.name
+    ? `bv_run_as_(${erlString(a.name.toLowerCase())}, Op, Payload) -> child_${a.name.toLowerCase()}_handle_op(Op, #{<<"op">> => Op}, Payload, <<"0">>, <<"__bv_internal">>)`
+    // The file actor's in-process callers are itself: its typed arms take values untagged from __self.
+    : 'bv_run_as_(_, Op, Payload) -> handle_op(Op, #{<<"op">> => Op}, Payload, <<"0">>, <<"__self">>)');
+  // The file actor's clause catches every other class, so it goes last.
+  if (!actors.some(a => !a.name)) clauses.push('bv_run_as_(_, Op, _) -> {error, bv_ex_key_(Op)}');
+  return clauses.sort((x, y) => x.startsWith('bv_run_as_(_') - y.startsWith('bv_run_as_(_')).join(';\n') + '.';
 }
 
 // What each actor's names read as, for an outer read answered by bv_answer_outer_:
@@ -697,6 +709,10 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const selector = fn.name.slice('new@'.length);
     const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
     replyBlock = `${I}{ok, bv_publish_(${erlString(quoteToken(selector))}, ${inst}), ${erlString(selfAddress('@' + selector))}}`;
+  } else if (fn.name === 'new') {
+    // The file's own class (a `*` section): its actor is `N` under us, of class `.`.
+    const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
+    replyBlock = `${I}{ok, bv_publish_own_(${inst}), <<".">>}`;
   } else if (erlGuards.length > 0) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
     const makeRet = (fields, scope) => makeErlDispatchRet(ctx, fields, scope.typeEnv, { ...replyCtx, stmtIdx: scope.stmtIdx, ssaEnv: scope.ssaEnv });
@@ -1321,7 +1337,7 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    bv_adopt_outer_(Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<.>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_swap_self_(bv_unwire_reply(Re_, Ty_), self())};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_outer_get, From_, Key_, Ref_} ->\n            bv_answer_outer_(From_, Key_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_self_class_, ${erlString(lowerName)}),\n    bv_adopt_outer_(Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<.>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_swap_self_(bv_unwire_reply(Re_, Ty_), self())};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_outer_get, From_, Key_, Ref_} ->\n            bv_answer_outer_(From_, Key_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_outer_op, From_, OClass_, OOp_, OPayload_, ORef_} ->\n            bv_answer_outer_op_(From_, OClass_, OOp_, OPayload_, ORef_),\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1969,7 +1985,7 @@ ${testTypeClauses || '                _ -> null'};
     %% An intrinsic names its target as the last token of to: {<<"$set">>, <<"val">>}.
     %% Reaching an actor we published, the target is what follows its address.
     To_ = maps:get(<<"to">>, Message, null),
-    case bv_instance_at_(To_) of
+    case bv_route_at_(OpName0, To_) of
         {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, bv_op_key_under_(OpName0, To_, InstAddr_), Message, bv_unwire_payload(Message, Payload), Id, From);
         none ->
     OpName = bv_op_key_(OpName0, To_),
@@ -2250,6 +2266,8 @@ ${PREAMBLE}
 ${bvTypeFieldsBlock}
 ${fnSection}${childActorSection}${helperSection}
 ${genReadTable(allActors)}
+
+${genRunAs(allActors)}
 
 ${handleOpClauses.join(';\n')}.
 

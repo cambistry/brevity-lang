@@ -2,6 +2,7 @@
 
 import { erlStateKey, erlString } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
+import { publicLabel } from '../../singleton_classes.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
@@ -12,7 +13,8 @@ import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 // notes/type-authority-address-tags-2026-10-26.
 function erlTypeTag(ctx, t) {
   // A singleton's class is itself: it's tagged with its address (`. s`).
-  const singleton = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t)?.singletonOf;
+  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
+  const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   // A type's tag is its address (src/codegen/type_table.js).

@@ -7,6 +7,7 @@ import { isDynamicTy } from '../ty_tags.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.js';
+import { publicLabel } from '../../singleton_classes.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
@@ -39,7 +40,8 @@ function methodNameFor(name) {
 function opMatch(name) {
   const arm = intrinsicArm(name);
   if (arm) return `opName === ${JSON.stringify(arm.op)} && _target === ${JSON.stringify(arm.target)}`;
-  if (name === 'set' || name === 'update') return `opName === ${JSON.stringify(wireLabel(name))} && _target === null`;
+  // `new` is the file's own: `$new` to the file itself (a file with a `*` section).
+  if (name === 'set' || name === 'update' || name === 'new') return `opName === ${JSON.stringify(wireLabel(name))} && _target === null`;
   return `opName === ${JSON.stringify(wireLabel(name))}`;
 }
 
@@ -135,7 +137,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
-  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && !name.startsWith('set@') && !name.startsWith('new@');
+  const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && name !== 'new' && !name.startsWith('set@') && !name.startsWith('new@');
   // Handler body is bare `Self` — reply with the class address as a bare wire
   // value (mirrors the #new reply shape: bare string in `re`, bare metatype
   // tag in `ty`). Skip the standard positional array wrapping.
@@ -146,6 +148,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   if (name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
     reLine = `\n        re = '#<. ' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(selfAddress('@' + selector))};`;
+  } else if (name === 'new') {
+    // The file's own class: its actor is `n` under us, and its class is ours, `.`.
+    reLine = `\n        re = '#<. ' + this.#_publishInstance(null, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = '.';`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (isBareSelfReturn) {
@@ -212,17 +217,17 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       // External callers are matched by their tags. An in-process call carries
       // values but no tags, so its values pick the clause.
       const valueCondition = genValueCondition(params) ?? 'true';
-      condition = `${opMatch(name)} && (${checks.join(' && ')}) && ((from === '__parent' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
+      condition = `${opMatch(name)} && (${checks.join(' && ')}) && ((from === '__parent' || from === '__inner' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
     } else {
       condition = `${opMatch(name)} && (${checks.join(' && ')})`;
     }
   } else if (typeCondition) {
-    condition = `${opMatch(name)} && (from === '__parent' || from === '__self' || from === '__test' || ${typeCondition})`;
+    condition = `${opMatch(name)} && (from === '__parent' || from === '__inner' || from === '__self' || from === '__test' || ${typeCondition})`;
   } else {
     condition = `${opMatch(name)}`;
   }
   // Outside, only `@name` is exposed.
-  if (isPrivate) condition += ` && (from === '__parent' || from === '__self' || from === '__test' || from === '__emit')`;
+  if (isPrivate) condition += ` && (from === '__parent' || from === '__inner' || from === '__self' || from === '__test' || from === '__emit')`;
   // set@<cell>: after mutation, replay the new value to each registered
   // subscriber using the stored id. Notification shape matches the getter
   // (positional `re` plus `ty` type tag). Additionally, for every public
@@ -390,7 +395,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
   const isFnDecl = f => f.type === 'FunctionDecl';
-  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('new@'));
+  const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('new@') || f.name === 'new');
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
   const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
@@ -589,6 +594,13 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       expr = expr.replace('this.#send(', 'this.#sendRef(');
     }
     if (s.soleValue && s.value.type !== 'AsExpr') expr = `BvObject.one(${expr}, ${JSON.stringify(s.name)})`;
+    // A call on another actor in this process (a child, or one held in an enclosing
+    // actor's cell) waits for its reply, and the cell holds its one value.
+    if (s.value.type === 'DotCallExpr' && expr.startsWith('this.#childSend(')) {
+      const decl = (mergedActor.stateVarDecls || []).find(d => d.name === s.name);
+      const reply = `BvObject.pack(await ${expr})`;
+      return `    this.#${stateKey(s.name)} = ${decl?.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`};`;
+    }
     return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
   let ownIngestInfo = null;
@@ -885,15 +897,19 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx, wb.supertype)}${args}${ingestArg});`);
     }
   }
-  const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@'));
+  const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
   // Public singletons declared directly in this actor (`@s = **{ … }`). Each is
   // published at `. s`, as an actor made by `#new` is at `. C N`.
+  // A public class's members are published at the class's label (`. C`).
   const publicSingletons = (ctx.program?.actors || [])
-    .filter(a => a.singletonOf?.startsWith('@') && (a.enclosing ?? null) === (actor.name ?? null));
+    .filter(a => publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
   const publishesClasses = publishesNew || publicSingletons.length > 0;
   for (const sg of publicSingletons) {
-    allInitLines.push(`    this.#_publishAt(${JSON.stringify(quoteToken(addressToken(sg.singletonOf)))}, ${JSON.stringify(selfAddress(sg.singletonOf))}, this.#${stateKey(sg.singletonOf)});`);
+    const label = publicLabel(sg);
+    allInitLines.push(`    this.#_publishAt(${JSON.stringify(quoteToken(addressToken(label)))}, ${JSON.stringify(selfAddress(label))}, this.#${stateKey(sg.singletonOf)});`);
   }
+  // A constructor block's call on another actor in this process needs the helper too.
+  if (allInitLines.some(l => childCall.test(l))) ctx.usesChildSend = true;
   if (hasDeferred) allInitLines.push(`    await Promise.all(this.#_joins);`);
   // Regenerate initMethodBody with on-handler lines
   const finalInitBody = allInitLines.length > 0
@@ -1182,6 +1198,13 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     });
   }
 
+  // The actor \`level\` up the chain, as a receiver: a write or a call to it is a
+  // message from inside it, delivered as a read is.
+  #_up(level) {
+    const owner = this.#chain[level - 1];
+    return { receive: (msg) => queueMicrotask(() => owner.receive({ ...msg, from: '__inner' })) };
+  }
+
 ` : ''}${!actor.name && ctx.readsOuter ? `  // A class of this file calling one of our dependencies: we make the call as our
   // own, and pass its reply back.
   #_outerCall(message) {
@@ -1221,9 +1244,11 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 
 ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
   // and we translate what it sends, as a parent does.
+  // \`cls\` null is our own class (a file with a \`*\` section): \`N\`, tagged \`.\`.
   #_publishInstance(cls, inst) {
     const n = (this.#_instanceSeq.get(cls) || 0) + 1;
     this.#_instanceSeq.set(cls, n);
+    if (cls === null) return this.#_publishAt(String(n), '.', inst);
     return this.#_publishAt(_opre_join([cls, String(n)]), _opre_join([null, cls]), inst);
   }
 
@@ -1291,7 +1316,11 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       // An actor we published: \`Box 1\` (by \`#new\`) or \`s\` (a singleton),
       // then whatever is inside it, which we pass on relative to it.
       const _toks = _bv_local_tokens(message.to);
+      // \`$new\` to a class's own label (\`. C\`) builds one here, though its members
+      // are published there.
+      const _isNew = (Array.isArray(message.op) ? message.op[message.op.length - 1] : message.op) === '$new';
       for (let _n = Math.min(2, _toks.length); _n > 0; _n--) {
+        if (_isNew && _n === _toks.length) continue;
         const _inst = this.#_instances.get(_opre_join(_toks.slice(0, _n)));
         if (_inst) { _inst.receive({ ...message, to: _toks.length > _n ? _opre_join([null, ..._toks.slice(_n)]) : undefined }); return; }
       }
@@ -1367,7 +1396,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }${readable ? `
     if (opName === '$get' && _target !== null) {
       const _cell = this.#_readableNames()[_target];
-      const _inside = from === '__self' || from === '__test' || from === '__parent' || from === '__child';
+      const _inside = from === '__self' || from === '__test' || from === '__parent' || from === '__child' || from === '__inner';
       if (_cell && (_cell.open || _inside)) {${hasDeferred ? `
         // Not declared yet: answered when its line runs.
         const _waiting = this.#_pendingCells.get(_target);
@@ -1381,7 +1410,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__inner' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }

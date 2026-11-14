@@ -1,4 +1,4 @@
-import { compileSource } from '../helpers.js';
+import { compileSource, expectBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -175,5 +175,77 @@ describe('file singleton header — only at the head of a file', () => {
         @get = -> value
       }
     `)).toThrow(/Multiple file headers|must open the file/);
+  });
+});
+
+// A `**` header, the file's members, then a `*` section: the file is a class. The
+// section is the file's `new` (params between the `*`s), the nested form with
+// `new =` left unwritten, so it closes over the file's members. It is the last
+// section: everything below it is the constructor body.
+// See notes/class-singleton-forms-2026-11-13.md.
+const classFile = `
+  **
+  count *Integer = 10
+  @total = -> count
+
+  @make = {
+    c = new(5)
+    x Integer = c.n()
+    return x
+  }
+
+  @viaLate = {
+    c = new(1)
+    x Integer = c.late()
+    return x
+  }
+
+  *
+    seed Integer
+  *
+  n Integer = count + seed
+  @n = { return n }
+
+  @late = { return seed }
+`;
+
+describe('file with a `*` section', () => {
+  it('is a class', () => {
+    expect(extract(classFile).ast.fileKind).toBe('class');
+  });
+
+  it('its actor sees the file\'s members', async () => {
+    await expectBehavior(classFile,
+      { input: { id: '1', op: 'make', from: 'c' } },
+      { output: { id: '1', re: [15], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('`$new` to the file builds one, at `n` under it, of class `.`', async () => {
+    await expectBehavior(classFile,
+      { input: { id: '1', op: [[5], '$new'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<. 1>', ty: '.', to: 'c' } },
+      { input: { id: '2', op: [[6], '$new'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: '#<. 2>', ty: '.', to: 'c' } },
+      { input: { id: '3', op: 'n', to: '. 2', from: 'c' } },
+      { output: { id: '3', re: [16], ty: ['Integer'], to: 'c', from: '. 2' } },
+    );
+  });
+
+  it('runs to the end of the file, past a blank line', async () => {
+    await expectBehavior(classFile,
+      { input: { id: '1', op: 'viaLate', from: 'c' } },
+      { output: { id: '1', re: [1], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('the file keeps its own members', () => {
+    const file = extract(classFile).ast.actors.find(a => !a.name);
+    expect(file.functions.map(f => f.name)).toEqual(expect.arrayContaining(['@total', '@make', '@viaLate']));
+    expect(file.functions.map(f => f.name)).not.toContain('@late');
+  });
+
+  it('a file with only a `*` header is still a factory', () => {
+    expect(extract('*\n  n Integer\n*\n@get = -> n\n').ast.fileKind).toBe('factory');
   });
 });

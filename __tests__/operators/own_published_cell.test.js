@@ -186,7 +186,9 @@ describe('checks', () => {
 
   it('only a published cell can be written', () => {
     expect(() => compileSource('@f = { return 1 }\n@go! = { @f <- 2 }\n')).toThrow(/'@f' — it isn't a published cell/);
-    expect(() => compileSource('C = *{\n  @go! = { @a <- 2 }\n}\n@a *Integer = 1\n')).toThrow(/'@a' — it isn't a published cell of this class/);
+    // Not the class's, and no actor it's declared in has one (a write to the file's
+    // own `@a` is a message to it: outer_writes.test.js).
+    expect(() => compileSource('C = *{\n  @go! = { @a <- 2 }\n}\n@go = -> 1\n')).toThrow(/'@a' — it isn't a published cell of this class/);
   });
 
   it('a write needs !, unless the cell is untracked', () => {

@@ -13,7 +13,12 @@
 //   outerClass   the owner's class name, or null for the file actor
 //   outerParam   whether it's one of the owner's class params
 //   outerType    its declared type, if any
-// Writes are refused before this runs: a class can't set an enclosing actor's cells.
+//
+// A write (`total <- total + 1`) and a call (`helper(3)`) reach the owner the same
+// way, as messages: a write becomes an `OuterSet` statement, a `$set` to the owner's
+// cell; a call is marked `outerFnCall`, with its level. Only a `*` cell can be set.
+// A closure sends to a cell of its enclosing scope; a class sends to a cell of its
+// enclosing actor. See notes/class-singleton-forms-2026-11-13.md.
 // See notes/session-2026-11-03-class-reads-file-cells.md and
 // notes/session-2026-11-07-enclosing-actor-chain.md.
 
@@ -60,11 +65,19 @@ export function enclosingChain(program, actor) {
 
 // Where a class `name` may be constructed from: inside the class it's declared in, or
 // inside any class declared within that one. A file-level class is everywhere.
+// A class with members (src/singleton_classes.js) is declared where its singleton
+// is: its `home`, whatever its constructor closes over.
 export function classVisibleFrom(program, name, from) {
   const cls = program.actors.find(a => a.name === name);
-  if (!cls?.enclosing) return true;
+  const home = homeOf(cls);
+  if (!home) return true;
   if (!from?.name) return false;
-  return from.name === cls.enclosing || enclosingChain(program, from).includes(cls.enclosing);
+  return from.name === home || enclosingChain(program, from).includes(home);
+}
+
+// The actor a class is declared in: where it is built and published.
+export function homeOf(cls) {
+  return cls && 'home' in cls ? cls.home : cls?.enclosing ?? null;
 }
 
 // The names a class declares itself, inherited ones included, with each one's type and
@@ -72,12 +85,13 @@ export function classVisibleFrom(program, name, from) {
 function classOwnNames(classes, actor) {
   const { inheritedParams, inheritedState, wrappedBindings } = resolveSuperclassChain(classes, actor);
   const names = new Map();
-  const add = (name, type, param) => { if (typeof name === 'string' && !names.has(name)) names.set(name, { type: type || null, param }); };
-  for (const p of actor.initParams || []) add(p.name, p.type, true);
-  for (const p of inheritedParams) add(p.name, p.type, true);
-  for (const d of actor.stateVarDecls || []) add(d.name, d.typeName, false);
-  for (const d of inheritedState || []) add(d.name, d.typeName, false);
-  for (const s of actor.initBody || []) add(s.name, s.typeName, false);
+  const add = (name, type, param, ref = false) => { if (typeof name === 'string' && !names.has(name)) names.set(name, { type: type || null, param, ref: !!ref }); };
+  for (const p of actor.initParams || []) add(p.name, p.type, true, p.ref);
+  for (const p of inheritedParams) add(p.name, p.type, true, p.ref);
+  for (const d of actor.stateVarDecls || []) add(d.name, d.typeName, false, d.isRef);
+  for (const d of inheritedState || []) add(d.name, d.typeName, false, d.isRef);
+  // A write in the constructor block (`total <- 1`) names a cell; it doesn't declare one.
+  for (const s of actor.initBody || []) if (s.type !== 'SetStatement' && s.type !== 'ActorSetStatement') add(s.name, s.typeName, false, s.isRef);
   for (const w of wrappedBindings) add(w.name, null, false);
   return names;
 }
@@ -95,7 +109,8 @@ function functionNames(classes, actor, cells) {
 function levelOf(program, classes, owner) {
   if (owner === null) {
     const file = program.actors.find(a => !a.name);
-    const names = new Map([...fileOuterNames(program)].map(([n, type]) => [n, { type, param: false }]));
+    const refs = new Set([...(file?.stateVarDecls || []), ...(file?.initParams || [])].filter(d => d.isRef || d.ref).map(d => d.name));
+    const names = new Map([...fileOuterNames(program)].map(([n, type]) => [n, { type, param: false, ref: refs.has(n) }]));
     return { owner, names, functions: file ? functionNames(classes, file, names) : new Set() };
   }
   const actor = classes.get(owner);
@@ -138,25 +153,30 @@ export function markOuterReads(program) {
   for (const name of classes.keys()) levels.set(name, levelOf(program, classes, name));
 
   for (const actor of classes.values()) {
-    if (actor.enclosing && actor.isPublic) {
-      throw new Error(`'${actor.name}' is declared inside '${actor.enclosing}', and a class declared in a class can't be public yet`);
+    if (homeOf(actor) && actor.isPublic) {
+      throw new Error(`'${actor.name}' is declared inside '${homeOf(actor)}', and a class declared in a class can't be public yet`);
     }
   }
 
   for (const actor of program.actors) {
     // The file is the outermost actor, so it reads nothing from outside itself. It
     // still mustn't construct a class declared inside one of its classes.
-    const chain = actor.name ? enclosingChain(program, actor).map(owner => levels.get(owner)) : [];
+    // A trailing class's members (src/singleton_classes.js) are in its chain, but no
+    // bare name reaches them: their level is opaque, and only `C.count` (`viaClass`)
+    // reads it.
+    const opaque = new Set();
+    for (let at = actor; at?.enclosing; at = classes.get(at.enclosing)) if (at.membersOpaque) opaque.add(at.enclosing);
+    const chain = actor.name ? enclosingChain(program, actor).map(owner => ({ ...levels.get(owner), opaque: opaque.has(owner) })) : [];
     const ownLevel = levels.get(actor.name ?? null);
     const own = actor.name ? ownLevel.names : new Map();
     const ownFunctions = ownLevel.functions;
     // Every class's names, to say whose a name is when it's out of reach.
-    const elsewhere = (name) => [...classes.values()].find(c => c !== actor && !chain.some(l => l.owner === c.name)
+    const elsewhere = (name) => [...classes.values()].find(c => c !== actor && !chain.some(l => !l.opaque && l.owner === c.name)
       && levels.get(c.name).names.has(name));
 
     const ownerOf = (name, bound) => {
       if (typeof name !== 'string' || own.has(name) || bound.has(name)) return null;
-      const at = chain.findIndex(l => l.names.has(name));
+      const at = chain.findIndex(l => !l.opaque && l.names.has(name));
       return at < 0 ? null : { level: at + 1, ...chain[at] };
     };
     const mark = (node, found) => {
@@ -174,22 +194,37 @@ export function markOuterReads(program) {
       if (typeof name !== 'string' || bound.has(name) || own.has(name)) return;
       if (classes.has(name)) {
         if (!classVisibleFrom(program, name, actor)) {
-          throw new Error(`'${name}' is declared inside '${classes.get(name).enclosing}', so only that class and the classes inside it can construct it`);
+          throw new Error(`'${name}' is declared inside '${homeOf(classes.get(name))}', so only that class and the classes inside it can construct it`);
         }
         return;
       }
       if (!actor.name || ownFunctions.has(name)) return;
-      // Calling an enclosing actor's function isn't supported yet, so it's refused
-      // here rather than failing at runtime.
-      const owner = chain.find(l => l.functions.has(name));
-      if (owner) throw new Error(`'${name}' is a function of ${shown(owner.owner)}, and a class can't call it yet — pass what it needs as a class param`);
+      // A function of an enclosing actor: a message to that actor.
+      const at = chain.findIndex(l => !l.opaque && l.functions.has(name));
+      if (at >= 0) {
+        node.outerFnCall = true;
+        node.outerLevel = at + 1;
+        node.outerClass = chain[at].owner;
+      }
+    };
+    // `x <- v` on an enclosing actor's cell: a `$set` (or `$update`) sent to it.
+    const markSet = (node, bound) => {
+      if (!actor.name) return;
+      const found = ownerOf(node.name, bound);
+      if (!found) return;
+      const { type, ref } = found.names.get(node.name);
+      if (!ref) throw new Error(`Cannot set '${node.name}' — it's a cell of ${shown(found.owner)} that isn't '*', so it can't be set`);
+      const { name, value, updateOp } = node;
+      for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
+      node.type = 'ExprStatement';
+      node.expr = { type: 'OuterSet', name, value, updateOp: updateOp ?? null, outerLevel: found.level, outerClass: found.owner, outerType: type };
     };
     // A name that a class outside the chain declares is out of reach. Anything the
     // class binds anywhere (a destructure, a catch, a lambda) is its own.
     const binders = actor.name ? boundAnywhere(actor) : new Set();
     const checkReach = (node, bound) => {
       if (!actor.name || typeof node.name !== 'string' || own.has(node.name) || bound.has(node.name) || binders.has(node.name)) return;
-      if (chain.some(l => l.names.has(node.name)) || classes.has(node.name) || dependencies.has(node.name)) return;
+      if (chain.some(l => !l.opaque && l.names.has(node.name)) || classes.has(node.name) || dependencies.has(node.name)) return;
       const other = elsewhere(node.name);
       if (other) throw new Error(`'${node.name}' is a name of '${other.name}', which '${actor.name}' isn't declared in`);
     };
@@ -203,15 +238,20 @@ export function markOuterReads(program) {
       }
       if (node.type === 'ForStatement' && node.name) bound = new Set([...bound, node.name]);
       if (Array.isArray(node.body)) {
-        const locals = node.body.filter(st => (st?.type === 'Assign' || st?.type === 'TypedAssign') && typeof st.name === 'string').map(st => st.name);
+        const locals = node.body.filter(st => (st?.type === 'Assign' || st?.type === 'TypedAssign' || st?.type === 'RefDecl') && typeof st.name === 'string').map(st => st.name);
         if (locals.length) bound = new Set([...bound, ...locals]);
       }
       if (node.type === 'FunctionCallExpr') checkCall(node, bound);
+      if (node.type === 'SetStatement') markSet(node, bound);
       // Its address is global (src/opre.js): a dependency, or a path through one.
       const dep = node.type === 'DotCallExpr' && node.opre?.address.kind === 'static' ? node.opre.address.dep : null;
       if (actor.name && dep && dependencies.has(dep)
           && !own.has(dep) && !bound.has(dep) && !chain.some(l => l.owner !== null && l.names.has(dep))) {
         node.outerCall = true;
+      }
+      if (actor.name && node.type === 'Identifier' && node.viaClass) {
+        const at = chain.findIndex(l => l.opaque && l.names.has(node.name));
+        if (at >= 0) { mark(node, { level: at + 1, ...chain[at] }); return; }
       }
       if (actor.name && (node.type === 'Identifier' || node.type === 'RefRead')) {
         const found = ownerOf(node.name, bound);
@@ -274,7 +314,7 @@ export function hasOuterReads(program) {
   const walk = (node) => {
     if (found || !node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
-    if (node.outer === true || node.outerCall === true) { found = true; return; }
+    if (node.outer === true || node.outerCall === true || node.outerFnCall === true || node.type === 'OuterSet') { found = true; return; }
     for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
   };
   for (const a of program.actors) if (a.name) walk(a);

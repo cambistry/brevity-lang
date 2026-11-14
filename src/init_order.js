@@ -166,6 +166,19 @@ export function checkInitOrder(ast) {
     },
   };
 
+  // A class with members built while they're being built says so, before any read
+  // through it is reported as an early one.
+  for (const actor of actors) {
+    const body = actor.constructorBody || [];
+    const declaredAt = new Map();
+    body.forEach((s, i) => { for (const n of declaredNames(s)) if (!declaredAt.has(n)) declaredAt.set(n, i); });
+    const params = new Set((actor.params || []).map(p => p?.name).filter(Boolean));
+    body.forEach((s, i) => {
+      const early = (name) => { const at = declaredAt.get(name); return at !== undefined && at >= i && !params.has(name); };
+      checkMembersOrder(actor, s, constructionCall(s), ctx, early, actors);
+    });
+  }
+
   let nextSite = 0;
   for (const actor of actors) {
     const body = actor.constructorBody || [];
@@ -216,6 +229,35 @@ export function checkInitOrder(ast) {
         throw new Error(`'${name}' is used before '${waitsOn[0]}' is declared, and its construction reads '${waitsOn[0]}' (by ${by}${through}) — use '${name}' below '${waitsOn[0]}'`);
       }
     });
+  }
+}
+
+// A class with members (src/singleton_classes.js) built while they're still being
+// built. Its actors read the members, and the members are waiting for the new actor,
+// so neither would finish:
+//   - nested, in the class block, above a member the constructor reads;
+//   - trailing, in the class block, when the constructor reaches the class at all
+//     (`C.count`): the class isn't in its cell until its block is done;
+//   - either, in the declaring actor, above the class block.
+function checkMembersOrder(actor, s, call, ctx, early, actors) {
+  if (!call) return;
+  const cls = actors.find(c => c.name === call.callee.name && c.membersClass);
+  if (!cls) return;
+  const members = actors.find(c => c.name === cls.membersClass);
+  const by = statementLabel(s);
+  const shown = (cls.sourceName ?? cls.name).replace(/__pub$/, '');
+  if (actor === members && !cls.membersOpaque) {
+    const waitsOn = [...ctx.constructionReads(cls).own.keys()].filter(early);
+    if (waitsOn.length) {
+      throw new Error(`'${shown}' is built in its class block (by ${by}) above '${waitsOn[0]}', which its constructor reads, so each would wait on the other — declare '${waitsOn[0]}' above it`);
+    }
+  } else if (actor === members) {
+    const ctor = JSON.stringify([cls.constructorBody, cls.initParams]);
+    if (ctor.includes(JSON.stringify(members.singletonOf)) || ctor.includes('"viaClass":true')) {
+      throw new Error(`'${shown}' is built in its class block (by ${by}), and its constructor reaches the class, which isn't built until its block ends — build it outside the class block`);
+    }
+  } else if ((actor.name ?? null) === (members.enclosing ?? null) && early(members.singletonOf)) {
+    throw new Error(`'${shown}' is built (by ${by}) above its class block — build it below`);
   }
 }
 

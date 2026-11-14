@@ -224,30 +224,8 @@ describe('a class reaches its file actor while the file actor is idle', () => {
   });
 });
 
-describe('a class can\'t write its file\'s cells', () => {
-  it('is a compile error', () => {
-    expect(() => compileSource(`
-      total *Integer = 4
-      W = *{ @reset! = { total <- 2 } }
-    `)).toThrow(/Cannot set 'total'/);
-  });
-});
-
-describe('a class can\'t call its file\'s functions yet', () => {
-  it('a private function is a compile error', () => {
-    expect(() => compileSource(`
-      f = () { return 6 }
-      W = *{ @get = { x Integer = f(); return x } }
-    `)).toThrow(/'f' is a function of this file, and a class can't call it yet/);
-  });
-
-  it('a public function is a compile error', () => {
-    expect(() => compileSource(`
-      @f = { return 6 }
-      W = *{ @get = { x Integer = @f(); return x } }
-    `)).toThrow(/'@f' is a function of this file, and a class can't call it yet/);
-  });
-
+// Writes and calls to the file are in outer_writes.test.js.
+describe('a class calls its own function before its file\'s', () => {
   it('a class\'s own function of the same name is fine', () => {
     expect(() => compileSource(`
       @f = { return 6 }

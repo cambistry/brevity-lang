@@ -38,5 +38,5 @@ body
 - **`#` on header entries.** `"svc.bv": Svc #` (something to construct from) is the importer saying
   what the file is. Once a file's doc carries its kind, `#` becomes either a check against it or
   redundant. The service document doesn't carry the kind yet.
-- **The two-section layout** for a factory with class-level state (a `**` header for DI, then a
-  `*` header for `new`'s params) is still as open as it was on 2026-11-09.
+- ~~**The two-section layout**~~ for a factory with class-level state: a `**` header, members, then
+  a `*` section as the file's `new`. See `class-singleton-forms-2026-11-13.md`.

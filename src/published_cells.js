@@ -3,6 +3,7 @@
 // subscribers, as a `set` from outside does.
 
 import { resolveSuperclassChain } from './subclass.js';
+import { outerNamesFor } from './outer_reads.js';
 
 // Every name a function could mean by a bare `a`, however it was declared.
 function declaredNames(fn) {
@@ -25,6 +26,9 @@ export function lowerOwnCellWrites(ast) {
     const inherited = resolveSuperclassChain(classes, actor).inheritedState || [];
     const state = new Map([...inherited, ...(actor.stateVarDecls || [])].map(v => [v.name, v]));
     const params = new Set((actor.initParams || []).map(p => p.name));
+    // A cell of an actor this class is declared in is set by a message to it
+    // (src/outer_reads.js), and that actor notifies its own subscribers.
+    const outer = actor.name ? outerNamesFor(ast, actor) : new Map();
     const check = (name) => {
       if (name.startsWith('@') || state.has(name) || params.has(name) || !state.get('@' + name)) return;
       throw new Error(`'${name}' isn't in scope — the published cell is '@${name}'`);
@@ -43,6 +47,7 @@ export function lowerOwnCellWrites(ast) {
           }
           // A public constant (`@magic = "x"`) is state, but not a cell.
           const cell = state.get(s.name);
+          if (!cell && outer.has(s.name)) continue;
           if (!cell || cell.isRef === false) throw new Error(`Cannot set '${s.name}' — it isn't a published cell of this ${actor.name ? 'class' : 'file'}`);
           node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name.slice(1), cellType: cell.typeName } });
         }

@@ -244,7 +244,8 @@ function retiredEntryColon(name) {
   );
 }
 
-// Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`.
+// Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`. A
+// class with members of its own has them after: `*{ … } **{ members }`.
 function parseSignature(name, text) {
   const pEnd = groupEnd(text, 0);
   if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
@@ -258,10 +259,17 @@ function parseSignature(name, text) {
   if (rest.startsWith('*{')) {
     const bEnd = groupEnd(rest, 1);
     if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
-    if (rest.slice(bEnd).trim()) {
-      throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${rest.slice(bEnd).trim()}'`);
+    const after = rest.slice(bEnd).trim();
+    let membersInner = null;
+    if (after.startsWith('**{')) {
+      const mEnd = groupEnd(after, 2);
+      if (mEnd === -1) throw new Error(`Interface entry '${name}': unbalanced class members`);
+      if (after.slice(mEnd).trim()) throw new Error(`Interface entry '${name}': unexpected text after class members: '${after.slice(mEnd).trim()}'`);
+      membersInner = after.slice(3, mEnd - 1);
+    } else if (after) {
+      throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${after}'`);
     }
-    return { kind: 'constructor', effect, paramsInner, bodyInner: rest.slice(2, bEnd - 1) };
+    return { kind: 'constructor', effect, paramsInner, bodyInner: rest.slice(2, bEnd - 1), membersInner };
   }
   const params = paramsInner ? parseFieldList(paramsInner) : [];
   // A trailing `.` on the name means silent. A foreign function can be silent
@@ -388,7 +396,9 @@ function parseEntry(text) {
   if (rest.startsWith('(')) {
     const sig = parseSignature(name, rest);
     if (sig.kind === 'constructor') {
-      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, sig.paramsInner, sig.bodyInner) };
+      // A class's own members read as a service document of their own.
+      const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
+      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
     }
     return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}) };
   }
@@ -424,7 +434,9 @@ export function parseInterface(manifestStr) {
   //                                a field contributes a zero-arg getter.
   //                                `returnsSelf` alone is `=> self`; with a non-null
   //                                `returns` it's `=> (Type) | self`
-  //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`
+  //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`,
+  //                                and `members`, a document of their own, for a class
+  //                                with members (`*{ … } **{ … }`)
   //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
   //   result.__fields[name]      — `{ type, cell, readOnly }`: a prop `name Type`
   //                                (cell false), a cell `name &Type` / `name *Type`;
@@ -441,8 +453,8 @@ export function parseInterface(manifestStr) {
     } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
       if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
-      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls } = e;
-      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}) };
+      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls, members } = e;
+      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}) };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });

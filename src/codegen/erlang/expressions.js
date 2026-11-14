@@ -2,6 +2,7 @@
 
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { selfAddress, addressToken, memberOp, wireLabel } from '../wire_labels.js';
+import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import {
@@ -442,7 +443,13 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return `${emitFn}(${eventName}, #{})`;
   }
 
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.actorFnNames.has(expr.callee.name)) {
+  // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
+  // `$set` sent to it, waited on, so a read after it sees it.
+  if (expr.type === 'OuterSet') {
+    const op = expr.updateOp === '<|' ? '$update' : '$set';
+    return `outer_self_send(${expr.outerLevel}, {${erlString(op)}, ${erlString(wireLabel(expr.name))}}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}], false)`;
+  }
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && (ctx.actorFnNames.has(expr.callee.name) || expr.outerFnCall)) {
     return genActorFnCallExpr(ctx, expr, typeEnv, sCtx);
   }
 
@@ -547,8 +554,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
             }
           }
           // A public singleton is published at its token in the actor that builds it.
-          const singleton = ctx.program?.actors?.find(a => a.name === cName)?.singletonOf;
-          if (singleton?.startsWith('@')) subRegLines.push(`bv_publish_at_(${erlString(quoteToken(addressToken(singleton)))}, NewPid_)`);
+          const singleton = publicLabel(ctx.program?.actors?.find(a => a.name === cName));
+          if (singleton) subRegLines.push(`bv_publish_at_(${erlString(quoteToken(addressToken(singleton)))}, NewPid_)`);
           // A class whose construction waits on our later cells isn't waited for here;
           // the end of the block joins it (src/init_order.js).
           const sync = expr.deferredConstruct ? 'bv_join_' : 'bv_spawn_sync_';
@@ -1103,8 +1110,15 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
 // cell holds a spawned-instance PID rather than a flat actor address.
 // What a class spawned here starts with: the file actor, the message counter, and the
 // actors it's declared in, taken from ours (src/outer_reads.js).
+// A class whose constructor closes over its members (src/singleton_classes.js) reads
+// them first: their actor, in its home's cell `C__class`, then the home's chain.
 export function erlOuterCtx(ctx, cls) {
-  const enclosing = ctx.actorInfo?.get(cls)?.actor?.enclosing ?? ctx.program?.actors?.find(a => a.name === cls)?.enclosing ?? '';
+  const node = ctx.actorInfo?.get(cls)?.actor ?? ctx.program?.actors?.find(a => a.name === cls);
+  const enclosing = node?.enclosing ?? '';
+  if (node?.membersClass && node.enclosing === node.membersClass) {
+    const members = ctx.actorInfo?.get(node.membersClass)?.actor ?? ctx.program?.actors?.find(a => a.name === node.membersClass);
+    return `bv_outer_ctx_with_members_(${erlString(enclosing.toLowerCase())}, ${erlString((node.home ?? '').toLowerCase())}, ${erlString(wireLabel(members.singletonOf))})`;
+  }
   return `bv_outer_ctx_(${erlString(enclosing.toLowerCase())})`;
 }
 
@@ -1243,6 +1257,14 @@ function genErlRuntimeFunctionCall(ctx, expr, typeEnv, sCtx) {
 
 function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   const name = expr.callee.name;
+  // A function of an actor this class is declared in goes to that actor
+  // (src/outer_reads.js); a silent one doesn't wait.
+  if (expr.outerFnCall) {
+    const silent = name.endsWith('.') || !!expr.launched;
+    const inner = genActorFnCallExpr(ctx, { ...expr, outerFnCall: false }, typeEnv, sCtx);
+    const args = inner.slice(inner.indexOf('(') + 1, -1);
+    return `outer_self_send(${expr.outerLevel}, ${args}, ${silent})`;
+  }
   // Use child-specific self_send when inside child actor context
   const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   // Self-send: call through dispatch, return Object
@@ -1361,6 +1383,10 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
       return `case is_truthy(${cond}) of true -> ${thenCode}; false -> ${elseCode} end`;
     }
     if (e.type === 'Function') return genFunctionLiteral(ctx, e, typeEnv, ctx, undefined, innerRenames);
+    if (e.type === 'FunctionCallExpr' && e.outerFnCall) {
+      const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
+      return `outer_self_send(${e.outerLevel}, ${erlOp(e.callee.name)}, [${args.join(', ')}], ${e.callee.name.endsWith('.') || !!e.launched})`;
+    }
     if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && ctx.actorFnNames.has(e.callee.name)) {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
       return `self_send(${erlOp(e.callee.name)}, [${args.join(', ')}])`;
@@ -1410,7 +1436,9 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
         if (s.type === 'TypedAssign' || s.type === 'Assign') {
           const renamed = prefix + erlVarName(s.name);
           innerRenames.set(s.name, renamed);
-          if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
+          if (s.value?.type === 'FunctionCallExpr' && s.value.outerFnCall) {
+            lines.push(`${renamed} = bv_object_one(${genInnerExpr(s.value)})`);
+          } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
             const args = s.value.args.map(a => genInnerExpr(a)).join(', ');
             lines.push(`${renamed} = bv_object_one(self_send(${erlOp(s.value.callee.name)}, [${args}]))`);
           } else {
@@ -1420,7 +1448,9 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
         if (s.type === 'DestructureAssign') {
           const tmpName = `${prefix}Dtmp_${si}`;
           const isActorFnCall = s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.source.callee.name);
-          if (isActorFnCall) {
+          if (s.source.type === 'FunctionCallExpr' && s.source.outerFnCall) {
+            lines.push(`${tmpName} = ${genInnerExpr(s.source)}`);
+          } else if (isActorFnCall) {
             const args = s.source.args.map(a => genInnerExpr(a)).join(', ');
             lines.push(`${tmpName} = self_send(${erlOp(s.source.callee.name)}, [${args}])`);
           } else {

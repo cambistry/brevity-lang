@@ -271,7 +271,11 @@ function buildServiceDocument(ast) {
         const cls = singletonIn(ast, actor, fn.name);
         return cls ? formatSingletonBlock(ast, cls, aliasMap, purportedByActor, 4) : null;
       };
-      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock, ownTypes(ast, actor))}`);
+      // A class with members of its own (src/singleton_classes.js) has them after
+      // its constructor: `C (…) -> *{ … } **{ members }`.
+      const members = actor.membersClass ? ast.actors.find(a => a.name === actor.membersClass) : null;
+      const membersBlock = members ? ` **${formatSingletonBlock(ast, members, aliasMap, purportedByActor, 2)}` : '';
+      lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock, ownTypes(ast, actor))}${membersBlock}`);
       continue;
     }
     // A private class isn't part of the file's surface.

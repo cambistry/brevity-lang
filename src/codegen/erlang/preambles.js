@@ -5,6 +5,7 @@ import { wireLabel, intrinsicArm } from '../wire_labels.js';
 // cells, make a call to one of its dependencies, and take note of a class waiting on
 // a reply from the wire. `loop` is the wait to go back to.
 const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), ${loop};
+        {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), ${loop};
         {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(bv_lift_(CFrom_, CMsg_), CSilent_)}, ${loop};
         {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
 
@@ -756,6 +757,24 @@ bv_my_class_() -> case get(bv_self_class_) of undefined -> <<>>; C_ -> C_ end.
 %% What a class constructed here starts with. Its chain is this actor and the ones it's
 %% declared in, from the one of class Enclosing out.
 bv_outer_ctx_(Enclosing) -> {bv_outer_(), bv_seq_ref_(), bv_chain_from_(Enclosing, [{bv_my_class_(), self()} | bv_chain_()])}.
+%% The same for a class whose constructor closes over its members: built in their
+%% actor, it is any class's; built in its home (or a class inside it), the members'
+%% actor, from the home's cell Token, comes first.
+bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
+    case bv_my_class_() of
+        Enclosing -> bv_outer_ctx_(Enclosing);
+        _ ->
+            {Outer_, Ref_, Chain_} = bv_outer_ctx_(Home),
+            [{HomeClass_, HomePid_} | _] = Chain_,
+            Members_ = case HomePid_ =:= self() of
+                true -> bv_read_(HomeClass_, Token);
+                false ->
+                    MRef_ = make_ref(),
+                    HomePid_ ! {bv_outer_get, self(), Token, MRef_},
+                    receive {bv_reply, MRef_, V_} -> V_ end
+            end,
+            {Outer_, Ref_, [{Enclosing, Members_} | Chain_]}
+    end.
 bv_chain_from_(_, [Last_]) -> [Last_];
 bv_chain_from_(E_, [{E_, _} | _] = C_) -> C_;
 bv_chain_from_(E_, [_ | T_]) -> bv_chain_from_(E_, T_).
@@ -772,6 +791,27 @@ bv_outer_get_(Level, Token) ->
             Ref_ = make_ref(),
             Owner_ ! {bv_outer_get, self(), Token, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
+    end.
+%% A write or a call from a class to an actor it's declared in, Level actors up the
+%% chain (src/outer_reads.js): Op (\`{<<"$set">>, <<"~total">>}\`, \`<<"~helper">>\`) sent to
+%% it as from inside it. It's served wherever a read is, so a class reads its own
+%% writes. The result is an Object, as a self_send's is; a silent call doesn't wait.
+outer_self_send(Level, Op, Payload, Silent) ->
+    {Class_, Owner_} = case bv_chain_() of [] -> {<<>>, bv_outer_()}; C_ -> lists:nth(Level, C_) end,
+    Ref_ = make_ref(),
+    case Owner_ of
+        Self_ when Self_ =:= self() -> bv_answer_outer_op_(self(), Class_, Op, Payload, Ref_);
+        _ -> Owner_ ! {bv_outer_op, self(), Class_, Op, Payload, Ref_}
+    end,
+    case Silent of
+        true -> bv_object_pack([]);
+        false -> receive {bv_reply, Ref_, V_} -> bv_object_pack(V_); {bv_error, Ref_, _} -> error(bv_call_failed) end
+    end.
+bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
+    case bv_guard_(fun() -> bv_run_as_(Class, Op, Payload) end) of
+        {ok, Re_, Ty_} -> From ! {bv_reply, Ref, bv_unwire_reply(Re_, Ty_)};
+        {bv_failed, Fail_} -> From ! {bv_error, Ref, Fail_};
+        _ -> From ! {bv_error, Ref, <<"error">>}
     end.
 %% \`$get\` from a class declared in us, answered from the table \`$get\` reads
 %% (bv_read_). A cell that a class's construction waits on isn't declared yet: the
@@ -895,7 +935,8 @@ bv_await_line_from_(Id) ->
     receive
         {bv_line, Id, eof} -> eof;
         {bv_line, Id, M_} -> bv_reply_kind_(M_);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id)
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id);
+        {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), bv_await_line_from_(Id)
     end.
 bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
 bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.
@@ -961,6 +1002,13 @@ bv_publish_(Class, Pid) ->
     Addr_ = <<Class/binary, " ", (integer_to_binary(N_))/binary>>,
     bv_publish_at_(Addr_, Pid),
     <<"#<. ", Addr_/binary, ">">>.
+%% The same for an actor of our own class (a file with a \`*\` section): N, #<. N>.
+bv_publish_own_(Pid) ->
+    N_ = case get({bv_inst_seq, own}) of undefined -> 1; C_ -> C_ + 1 end,
+    put({bv_inst_seq, own}, N_),
+    Addr_ = integer_to_binary(N_),
+    bv_publish_at_(Addr_, Pid),
+    <<"#<. ", Addr_/binary, ">">>.
 %% Publish an actor of ours under the tokens Addr: C N for one made by #new, s
 %% for a singleton. The public singletons it published itself go under it
 %% (C N s), so a wire message reaches them from here.
@@ -989,9 +1037,25 @@ bv_instance_at_(To) when is_binary(To) ->
               get({bv_instance, A_}) =/= undefined],
     case Found_ of [F_ | _] -> F_; [] -> none end;
 bv_instance_at_(_) -> none.
+%% The same for a message: \`$new\` to a class's own label (\`. C\`) builds one here,
+%% though its members are published there.
+bv_route_at_(<<"$new">>, To) when is_binary(To) ->
+    Sz_ = byte_size(To),
+    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
+    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    case bv_instance_at_(To) of
+        {A_, _} = F_ -> case bv_opre_join_(Toks_) =:= A_ of true -> none; false -> F_ end;
+        none -> none
+    end;
+bv_route_at_(_, To) -> bv_instance_at_(To).
 %% An actor's class tag from its address: C N is of . C; a singleton (s, C N s)
-%% is its own class.
+%% is its own class; N alone is of ours, . (a file with a \`*\` section).
 bv_addr_class_(Addr) ->
+    case re:run(Addr, <<"^[0-9]+$">>) of
+        {match, _} -> <<".">>;
+        nomatch -> bv_addr_class_named_(Addr)
+    end.
+bv_addr_class_named_(Addr) ->
     Base_ = case re:run(Addr, <<" [0-9]+$">>) of
         {match, [{P_, _}]} -> binary:part(Addr, 0, P_);
         nomatch -> Addr

@@ -47,10 +47,11 @@ import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from 
 import { lowerChains } from '../../chains.js';
 import { fileOuterNames, hasOuterReads, readableNames, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
+import { publicLabel, FILE_CLASS } from '../../singleton_classes.js';
 import { genRustLocals } from './statements.js';
 
 function genRustProgram(actor, allActors) {
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   const publicFns = actor.functions.filter(_isPublic);
   const privateFns = actor.functions.filter(f => !_isPublic(f) && !f.actorDef && !f.emptyOverload);
   const hasFns = privateFns.length > 0;
@@ -330,7 +331,7 @@ ${sourceArms}
   structFields.push('    wire_msg: Value', '    wire_tag: Option<Value>', '    wire_unhandled: bool');
   newArgs.push('wire_msg: Value::Null', 'wire_tag: None', 'wire_unhandled: false');
   const hasPublicSingletons = G.ctx.publicSingletons;
-  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@')) || hasPublicSingletons;
+  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@') || f.name === 'new') || hasPublicSingletons;
   if (publishesClasses) {
     // Each actor we published, by its pool ref: its address under us.
     structFields.push('    published_instances: std::collections::HashSet<String>', '    lift_of: std::collections::HashMap<String, String>');
@@ -397,7 +398,7 @@ ${sourceArms}
         stateInitLines.push(`    let _ = ${genRustFnCallExpr(s.expr, initTypeEnv).replace(/\bself\./g, 'actor.')};`);
         continue;
       }
-      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
         // A write or a call in the constructor block, generated as in a function body.
         const lines = genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '        ', new Map());
         stateInitLines.push(`    {\n${lines.replace(/\bself\./g, 'actor.')}\n    }`);
@@ -445,7 +446,7 @@ ${sourceArms}
           const argsJson = positionalArgs.length > 0
             ? `json!([${positionalArgs.map(a => forceJsonWrap(toJsonValue(genRustExpr(a, initTypeEnv), inferLiteralType(a)))).join(', ')}])`
             : 'json!([])';
-          const singletonLabel = G.ctx.actorNodes?.get(s.value.callee.name)?.singletonOf;
+          const singletonLabel = publicLabel(G.ctx.actorNodes?.get(s.value.callee.name));
           const deferred = s.value.deferredConstruct;
           if (deferred) {
             // Its construction waits on cells below: its address is made here, and it
@@ -453,7 +454,7 @@ ${sourceArms}
             stateInitLines.push(`    { let _id = actor.${childName}_next_id.get(); actor.${childName}_next_id.set(_id + 1); actor.${childName}_instances.insert(_id, std::collections::HashMap::new()); actor.state.insert(${JSON.stringify(`__deferred_${deferred.site}`)}.to_string(), Value::Array(vec![json!(_id), ${argsJson}])); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id)); }`);
             continue;
           }
-          stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id));${singletonLabel?.startsWith('@') ? ` actor.bv_singleton_made(${JSON.stringify(quoteToken(addressToken(singletonLabel)))}, bv_inst_ref(${JSON.stringify(childName)}, _id).as_str().unwrap_or("").to_string());` : ''} }`);
+          stateInitLines.push(`    { let _id = actor.spawn_${childName}_instance(&${argsJson}); actor.state.insert("${stateKey(s.name)}".to_string(), bv_inst_ref(${JSON.stringify(childName)}, _id));${singletonLabel ? ` actor.bv_singleton_made(${JSON.stringify(quoteToken(addressToken(singletonLabel)))}, bv_inst_ref(${JSON.stringify(childName)}, _id).as_str().unwrap_or("").to_string());` : ''} }`);
         } else {
           // There's no `self` in main: a self-call here goes through `actor`, so
           // the value is bound before `actor.state` is borrowed.
@@ -896,6 +897,22 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         Value::Array(chain.split_off(at))
     }
 
+    // The same for a class whose constructor closes over its members: built in their
+    // actor, it is any class's chain; built in its home (or a class inside it), the
+    // members' actor, from the home's cell (token), comes first.
+    #[allow(dead_code)]
+    fn outers_with_members(&self, enclosing: &str, home: &str, token: &str) -> Value {
+        let class_of = |o: &str| -> String { match o.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } };
+        if class_of(&self.state_owner) == enclosing { return self.outers_for(enclosing); }
+        let mut chain = match self.outers_for(home) { Value::Array(a) => a, _ => Vec::new() };
+        let owner = chain.first().and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let members = bv_get_key(&class_of(&owner), token)
+            .and_then(|(key, _)| self.state_of(&owner).and_then(|st| st.get(key)).cloned())
+            .unwrap_or_else(|| panic!("class built before its members, {} in {:?}", token, owner));
+        chain.insert(0, members);
+        Value::Array(chain)
+    }
+
     // A class reading a cell of an actor it's declared in, level actors up the chain
     // (src/outer_reads.js). That actor's state is in self.state, set aside while one of
     // its classes runs, or in its pool. Construction runs in text order, so the cell
@@ -922,6 +939,45 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         match class {
 ${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(&id),'] : []), ...(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a => `            ${JSON.stringify(a.name.toLowerCase())} => self.${a.name.toLowerCase()}_instances.get(&id),`)].join('\n')}
             _ => None,
+        }
+    }
+
+    // A write or a call from a class to an actor it's declared in, level actors up the
+    // chain (src/outer_reads.js): a message from inside that actor, run as it, in its
+    // state. A read is answered from its state at once; so is this, so a class reads
+    // its own writes. The owner is waiting on the call that is running us, so its
+    // state is set aside (outer_states), or it is in its pool.
+    #[allow(dead_code)]
+    fn outer_send(&mut self, level: usize, op: &str, payload: &Value) -> Value {
+        let owner = self.state.get("__outers").and_then(|v| v.as_array()).and_then(|a| a.get(level - 1)).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if let Some(pos) = self.outer_states.iter().rposition(|(o, _)| *o == owner) {
+            let st = std::mem::take(&mut self.outer_states[pos].1);
+            self.enter_state(owner.clone(), st);
+            let outcome = catch_unwind(AssertUnwindSafe(|| self.run_as(&owner, op, payload)));
+            let st = self.leave_state();
+            self.outer_states[pos].1 = st;
+            return match outcome { Ok(v) => v, Err(e) => std::panic::resume_unwind(e) };
+        }
+        match owner.split_once('/') {
+            Some(("self", _)) | None => self.self_send(op, payload),
+            Some(_) => self.child_dispatch(&owner, op, payload, "", "__parent"),
+        }
+    }
+
+    // Run op as owner, whose state is already in self.state.
+    #[allow(dead_code)]
+    fn run_as(&mut self, owner: &str, op: &str, payload: &Value) -> Value {
+        let (class, id) = match owner.split_once('/') { Some(("self", _)) | None => return self.self_send(op, payload), Some((c, i)) => (c, i.parse::<u32>().ok()) };
+        let _ = id;
+        match class {
+${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a => {
+    const lc = a.name.toLowerCase();
+    const pooled = classNeedsSpawnedInstances(G.ctx.actorInfo.get(a.name)?.actor || a);
+    return pooled
+      ? `            ${JSON.stringify(lc)} => { let saved = std::mem::replace(&mut self.current_${lc}_instance, id); let r = catch_unwind(AssertUnwindSafe(|| self.child_${lc}_dispatch(op, payload, "", "__parent"))); self.current_${lc}_instance = saved; match r { Ok(v) => v, Err(e) => std::panic::resume_unwind(e) } }`
+      : `            ${JSON.stringify(lc)} => self.child_${lc}_dispatch(op, payload, "", "__parent"),`;
+  }).join('\n')}
+            _ => Value::Null,
         }
     }
 
@@ -1062,6 +1118,8 @@ fn bv_swap_self(v: &Value, me: &Value, with: &Value) -> Value {
 // class . C; a singleton (s, C N s) is its own class.
 #[allow(dead_code)]
 fn bv_addr_class(addr: &str) -> String {
+    // N alone is of our own class, . (a file with a \`*\` section).
+    if !addr.is_empty() && addr.chars().all(|ch| ch.is_ascii_digit()) { return ".".to_string(); }
     match addr.rsplit_once(' ') {
         Some((c, n)) if !n.is_empty() && n.chars().all(|ch| ch.is_ascii_digit()) => format!(". {}", c),
         _ => format!(". {}", addr),
@@ -1893,7 +1951,10 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address (
         // address the received \`to\` starts with. It is relative to us.
         let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
             let segs: Vec<String> = bv_local_tokens(to).iter().map(|t| bv_opre_quote(t)).collect();
-            (1..=segs.len()).rev().map(|j| segs[..j].join(" ")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || self.singleton_at.contains_key(a)' : ''})
+            // \`$new\` to a class's own label (\`. C\`) builds one here, though its
+            // members are published there.
+            let whole = segs.join(" ");
+            (1..=segs.len()).rev().map(|j| segs[..j].join(" ")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || (self.singleton_at.contains_key(a) && !(wire_op == "$new" && *a == whole))' : ''})
         });
 ` : ''}        if has_payload && message.get("ty").is_none() {
             let mut ex = Map::new();
@@ -2083,14 +2144,15 @@ function codegenRust(ast, options = {}) {
   // Self-as-value: validate() has enforced fileName when the AST uses Self
   // as a bare value. Stash it for handlers/expressions to read.
   G.ctx.fileName = options.fileName;
-  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
+  const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   // A class with no functions of its own still has to be constructible.
   const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   // A public singleton is published under the actor that builds it, which needs
   // to know whose state is current (state_owner).
-  G.ctx.publicSingletons = ast.actors.some(a => a.singletonOf?.startsWith('@'));
+  // A file class's actors are published at `N` and found, as a singleton is, by address.
+  G.ctx.publicSingletons = ast.actors.some(a => publicLabel(a) || a.name === FILE_CLASS);
   G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons;
   G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.outerProgram = ast;
@@ -2145,7 +2207,7 @@ function codegenRust(ast, options = {}) {
         for (const st of (actor.supertypes || [])) {
           const sup = G.ctx.actorNodes.get(st.supertype);
           if (!sup) continue;
-          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@')))) return true;
+          if (sup.functions.some(f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new'))) return true;
           if (check(sup)) return true;
         }
         return false;

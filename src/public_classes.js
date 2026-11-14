@@ -10,6 +10,7 @@
 // public class: `$new` to `W`, as `set@a` is `$set` to `a`.
 
 import * as AST from './ast.js';
+import { FILE_CLASS } from './singleton_classes.js';
 import { lowerConstructionChains } from './chains.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
@@ -256,6 +257,13 @@ export function addConstructHandlers(ast) {
   const file = ast.actors.find(a => !a.name);
   if (!file) return;
   const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  // A file whose `*` section is its `new` (src/singleton_classes.js): `$new` to the
+  // file builds one, published at `n` under it, its `ty` the file's own class, `.`.
+  const fileClass = classes.get(FILE_CLASS);
+  if (fileClass && !file.functions?.some(f => f.name === 'new')) {
+    const params = (fileClass.initParams || []).map(p => ({ ...p, accessor: undefined }));
+    (file.functions ||= []).push(AST.functionDecl('new', params, [AST.assign('_inst', AST.functionCallExpr(AST.identifier(FILE_CLASS), constructArgs(params)))]));
+  }
   for (const cls of classes.values()) {
     if (!cls.isPublic) continue;
     const { selector } = cls;
@@ -265,12 +273,16 @@ export function addConstructHandlers(ast) {
     const own = cls.initParams || [];
     const params = [...inheritedParams.filter(p => !own.some(o => o.name === p.name)), ...own]
       .map(p => ({ ...p, accessor: undefined }));
-    const positional = params.filter(p => p.positional).map(p => AST.identifier(p.name));
-    const named = params.filter(p => !p.positional);
-    const args = named.length
-      ? [...positional, AST.namedArgsBag(Object.fromEntries(named.map(p => [p.key || p.name, AST.identifier(p.name)])))]
-      : positional;
-    const fn = AST.functionDecl(name, params, [AST.assign('_inst', AST.functionCallExpr(AST.identifier(cls.name), args))]);
+    const fn = AST.functionDecl(name, params, [AST.assign('_inst', AST.functionCallExpr(AST.identifier(cls.name), constructArgs(params)))]);
     (file.functions ||= []).push(fn);
   }
+}
+
+// The args that pass a handler's params on to a constructor, by position and name.
+function constructArgs(params) {
+  const positional = params.filter(p => p.positional).map(p => AST.identifier(p.name));
+  const named = params.filter(p => !p.positional);
+  return named.length
+    ? [...positional, AST.namedArgsBag(Object.fromEntries(named.map(p => [p.key || p.name, AST.identifier(p.name)])))]
+    : positional;
 }

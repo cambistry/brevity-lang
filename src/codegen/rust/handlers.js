@@ -39,6 +39,17 @@ function outerTypesOf(actor) {
 // A constructor-block statement calling the actor's own function: `@reg!(1)`.
 const isOwnCallStatement = (s) => isOwnCall(s, G.ctx.actorFnNames);
 
+// The actors a new actor of `actor` reads from, from whoever is constructing it. A
+// class whose constructor closes over its members (src/singleton_classes.js) reads
+// them first: their actor, in its home's cell `C__class`, then the home's chain.
+function outersExpr(actor) {
+  const enclosing = (actor.enclosing ?? '').toLowerCase();
+  const members = actor.membersClass && actor.enclosing === actor.membersClass
+    ? (G.ctx.actorInfo?.get(actor.membersClass)?.actor ?? G.ctx.actorInfo?.get(actor.membersClass)) : null;
+  if (!members) return `self.outers_for(${JSON.stringify(enclosing)})`;
+  return `self.outers_with_members(${JSON.stringify(enclosing)}, ${JSON.stringify((actor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel(members.singletonOf))})`;
+}
+
 const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
 
 function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
@@ -332,6 +343,15 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     lines.push(`                re = Some(Value::String(format!("#<. {}>", _addr)));`);
     lines.push(`                ty_re = Some(json!(${JSON.stringify(selfAddress('@' + selector))}));`);
   }
+  // new: the file's own class (a `*` section): its actor is `N` under us, of class `.`.
+  if (name === 'new') {
+    lines.push(`                let _addr = format!("{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
+    lines.push(`                self.published_instances.insert(_addr.clone());`);
+    lines.push(`                self.lift_of.insert(${rustSsaResolve('_inst')}.as_str().unwrap_or("").to_string(), _addr.clone());`);
+    lines.push(`                self.singleton_at.insert(_addr.clone(), ${rustSsaResolve('_inst')}.as_str().unwrap_or("").to_string());`);
+    lines.push(`                re = Some(Value::String(format!("#<. {}>", _addr)));`);
+    lines.push(`                ty_re = Some(json!("."));`);
+  }
   // set@<cell>: after mutation, replay new value to each registered subscriber
   // using the stored id. Notification shape matches the getter (positional
   // `re` with optional `ty` type tag). Derived fn replay for this cell is
@@ -345,7 +365,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   G.ctx.ssaCounts = savedSsaCounts;
 
   // Outside, only `@name` is exposed.
-  const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@)/.test(name);
+  const isPrivate = !/^(@|set$|update$|set@|subscribe@|new@|new$)/.test(name);
   if (isPrivate) guard = guard ? ` if !bv_from_wire_caller(from) && (${guard.replace(/^ if /, '')})` : ' if !bv_from_wire_caller(from)';
   return `            ${JSON.stringify(rustOpKey(name))}${guard} => {\n${lines.join('\n')}\n            }`;
 }
@@ -811,7 +831,7 @@ function tagWireReply(tyBody) {
 }
 
 function genRustChildDispatch(actor) {
-  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@'));
+  const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   const publicFns = actor.functions.filter(f => _isPublicFn(f));
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -1011,7 +1031,7 @@ function genRustChildInit(actor) {
     } else if (isOwnCallStatement(s)) {
       // A call to the class's own function, run while constructing.
       lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
@@ -1039,6 +1059,17 @@ function genRustChildInit(actor) {
         const read = { type: 'Identifier', name };
         const val = genRustExpr(s.value.type === 'AsExpr' ? { ...s.value, expr: read } : read, initTypeEnv);
         lines.push(`        {\n${bound}\n            let _v = ${forceJsonWrap(toJsonValue(val, initTypeEnv.get(s.name)))};\n            self.state.insert("${stateKey(s.name)}".to_string(), _v);\n        }`);
+      } else if (s.value?.type === 'DotCallExpr') {
+        // A call on another actor binds its reply as a handler's local would, then
+        // the cell holds it.
+        const t = initTypeEnv.get(s.name);
+        const name = 'cell_call';
+        const binds = [t && t !== 'Anything'
+          ? { type: 'TypedAssign', name, typeName: t, value: s.value }
+          : { type: 'Assign', name, value: s.value }];
+        const bound = genRustLocals(binds, initTypeEnv, analyzeFunctions(binds, new Set(), initTypeEnv), findMutableVars(binds), '            ');
+        const val = genRustExpr({ type: 'Identifier', name }, new Map([...initTypeEnv, [name, t]]));
+        lines.push(`        {\n${bound}\n            let _v = ${forceJsonWrap(toJsonValue(val, t))};\n            self.state.insert("${stateKey(s.name)}".to_string(), _v);\n        }`);
       } else {
         const val = genRustExpr(s.value, initTypeEnv);
         const t = initTypeEnv.get(s.name);
@@ -1060,7 +1091,7 @@ function genRustChildInit(actor) {
     for (const s of postIngestBody) {
       if (isOwnCallStatement(s)) {
         lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'DotCallExpr')) {
+      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
@@ -1281,11 +1312,22 @@ function genRustChildMethods(allActors) {
 
     // Add merged non-public function names to actorFnNames so expression codegen routes through self_send
     const savedActorFnNames = new Set(G.ctx.actorFnNames);
-    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@') && !f.name.startsWith('new@'));
+    const allChildPrivateFns = mergedActor.functions.filter(f => f.name && !f.name.startsWith('@') && f.name !== 'set' && f.name !== 'update' && !f.name.startsWith('set@') && !f.name.startsWith('subscribe@') && !f.name.startsWith('new@') || f.name === 'new');
     for (const f of allChildPrivateFns) {
       G.ctx.actorFnNames.add(f.name);
     }
     for (const f of mergedActor.functions) if (f.name?.startsWith('@') && !f.actorDef && !f.emptyOverload) G.ctx.actorFnNames.add(f.name);
+    // A call to a function of an actor we're declared in takes the same paths as a call
+    // to our own, and goes to that actor (outer_send) instead (src/outer_reads.js).
+    const addOuterCalls = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(addOuterCalls); return; }
+      if (node.type === 'FunctionCallExpr' && node.outerFnCall) G.ctx.actorFnNames.add(node.callee.name);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') addOuterCalls(v);
+    };
+    addOuterCalls(mergedActor.functions);
+    addOuterCalls(mergedActor.initBody);
+    addOuterCalls(mergedActor.initParams);
 
     // Set child self-send prefix so a call to the class's own function routes through child dispatch
     G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
@@ -1304,7 +1346,7 @@ function genRustChildMethods(allActors) {
       parts.push(`
     fn child_${lc}_init_at(&mut self, instance_id: u32, args: &Value) {
         ${G.ctx.readsOuter ? `// The actors it's declared in, taken from whoever is constructing it.
-        let outers = self.outers_for(${JSON.stringify((mergedActor.enclosing ?? '').toLowerCase())});
+        let outers = ${outersExpr(mergedActor)};
         let mut incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         incoming.insert("__outers".to_string(), outers);
         self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);

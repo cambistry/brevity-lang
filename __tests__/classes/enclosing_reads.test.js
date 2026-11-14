@@ -187,16 +187,4 @@ describe('a class reaches only the actors it is declared in', () => {
       }
     `)).toThrow(/'@In' is declared inside 'A', and a class declared in a class can't be public yet/);
   });
-
-  it('calling an enclosing class\'s function is a compile error', () => {
-    expect(() => compileSource(`
-      A = *{
-        #f = { return 1 }
-
-        In = *{
-          @get = { return #f() }
-        }
-      }
-    `)).toThrow(/'#f' is a function of 'A', and a class can't call it yet/);
-  });
 });

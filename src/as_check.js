@@ -337,8 +337,8 @@ export function lowerAs(ast) {
   }
 
   // What a constructor block runs is its initBody, whose cells store the value in
-  // place. A cell set from a call to the actor's own function holds the reply's one
-  // value. In a class, a failed `as` fails the construction. The file's own block
+  // place. A cell set from a call to the actor's own function, or to one of an actor
+  // it's declared in, holds the reply's one value. In a class, a failed `as` fails the construction. The file's own block
   // gets no `as` lowering: nothing has a call open on it to report to.
   const lowerConstructorBlock = (actor) => {
     const env = new Map((actor.initParams || []).filter(p => p?.name).map(p => [p.name, p.type || null]));
@@ -346,7 +346,7 @@ export function lowerAs(ast) {
     for (const s of actor.initBody || []) {
       if (s.type !== 'StateAssign') continue;
       const decl = (actor.stateVarDecls || []).find(d => d.name === s.name);
-      if (s.value?.type === 'FunctionCallExpr' && ownFns.has(s.value.callee?.name) && decl?.typeName !== 'Object') s.soleValue = true;
+      if (s.value?.type === 'FunctionCallExpr' && (ownFns.has(s.value.callee?.name) || s.value.outerFnCall) && decl?.typeName !== 'Object') s.soleValue = true;
       if (actor.name && s.value?.attestedAs) wrapInPlace(s, 'value', s.value.attestedAs, env);
       env.set(s.name, decl?.typeName || null);
     }
