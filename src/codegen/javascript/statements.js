@@ -16,7 +16,7 @@ const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
 
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
 // op:"$subscribe" to c's address, with the member `x` appended to the `to`
-// field as its last token (`#<c x>` for a remote, `. x` for a child).
+// field as its last token (`#<c:x>` for a remote, `:x` for a child).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
 // payload. The statement produces no value and is not assignable.
@@ -92,7 +92,7 @@ export function genSubscribeCall(ctx, expr) {
   // Self-subscribe: no wire post — deliver the subscribe directly to our own
   // receive loop. Prologue registers (id, from) and rewrites opName so the
   // local @/# handler arm produces the initial `re`; _route delivers that
-  // back into our own pending correlation. `to` is relative: `. x`.
+  // back into our own pending correlation. `to` is relative: `:x`.
   if (isSelfTarget) {
     const toExpr = JSON.stringify(selfAddress(target.name));
     return `
@@ -107,7 +107,7 @@ export function genSubscribeCall(ctx, expr) {
     const handle = `this.#${stateKey(target.name)}`;
     return `
         {${pendingSetup}
-          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: ('. ' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
+          ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: (':' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
   }
   // Remote dep (declared via `( "Alias": Alias { ... } ) *{ }`): post through
@@ -120,7 +120,7 @@ export function genSubscribeCall(ctx, expr) {
         }`;
   }
   // Local or state-held child actor instance: route via child.receive. `to`
-  // is relative to the child, the receiver: `. x`.
+  // is relative to the child, the receiver: `:x`.
   let childTarget;
   if (ctx.stateVarNames?.has(objectName)) {
     childTarget = `this.#${stateKey(objectName)}`;
@@ -607,7 +607,7 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
-    ? `${genExpr(ctx, AST.identifier(s.value.viaInstance))} + ${JSON.stringify(' ' + s.value.viaSelector)}`
+    ? `${genExpr(ctx, AST.identifier(s.value.viaInstance))} + ${JSON.stringify(':' + s.value.viaSelector)}`
     : JSON.stringify(targetName);
   return emitBinding(s.name, `await ${genSendNew(ctx, s.value.args, toExpr)}`);
 }
@@ -883,7 +883,7 @@ export function genLocals(ctx, body, outerEnv) {
         const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
         target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
       }
-      // Child actor: relative to the child, the receiver: `. field`.
+      // Child actor: relative to the child, the receiver: `:field`.
       const toExpr = JSON.stringify(joinAddress([null, toSelector]));
       return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}, from: '__parent' });`;
     }

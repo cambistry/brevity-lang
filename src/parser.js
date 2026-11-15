@@ -5563,7 +5563,7 @@ export function parse(tokensIn) {
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef }));
       }
     }
-    // A protected cell is set by `{op: [[v], "$set"], to: ". ~val"}`, from inside
+    // A protected cell is set by `{op: [[v], "$set"], to: ":~val"}`, from inside
     // only: the arm `set.val`, as a public one's is `set@val`. Same cells as get
     // one (notes/at-sigil-internal-and-quoted-names-2026-11-12.md).
     for (const stmt of constructorBody) {

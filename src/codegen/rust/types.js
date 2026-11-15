@@ -215,10 +215,9 @@ fn bv_values_fit(s: &BvObject, pos_types: &[&str], named_types: &[(&str, &str)])
 }`;
 
 // Opre addresses as tokens (src/codegen/opre_tokens.js; see
-// notes/at-sigil-internal-and-quoted-names-2026-11-12.md). Space-delimited, a
-// token quoted with '…' only when it must be ('' is one '); the whole token `.`
-// at the head is self, making the address relative to its sender. In a token
-// list, self is None.
+// notes/opre-colon-separator-2026-11-14.md). Colon-separated, a token quoted
+// with '…' only when it must be ('' is one '); a leading `:` is self, making the
+// address relative to its sender. In a token list, self is None.
 //
 // bv_op_key: the arm key of a received op. An intrinsic (`$set`) names its
 // target by the last token of `to`, and the key is the pair: "$set val". The
@@ -228,6 +227,8 @@ fn bv_opre_split(address: &str) -> Vec<Option<String>> {
     let mut out = Vec::new();
     let chars: Vec<char> = address.chars().collect();
     let mut i = 0;
+    // A leading ":" is self.
+    if !chars.is_empty() && chars[0] == ':' { out.push(None); i = 1; }
     while i < chars.len() {
         if chars[i] == '\\'' {
             let mut tok = String::new();
@@ -244,9 +245,9 @@ fn bv_opre_split(address: &str) -> Vec<Option<String>> {
             out.push(Some(tok));
         } else {
             let start = i;
-            while i < chars.len() && chars[i] != ' ' { i += 1; }
+            while i < chars.len() && chars[i] != ':' { i += 1; }
             let tok: String = chars[start..i].iter().collect();
-            if tok == "." && out.is_empty() { out.push(None); } else if !tok.is_empty() { out.push(Some(tok)); }
+            if !tok.is_empty() { out.push(Some(tok)); }
         }
         i += 1;
     }
@@ -255,7 +256,7 @@ fn bv_opre_split(address: &str) -> Vec<Option<String>> {
 
 #[allow(dead_code)]
 fn bv_opre_quote(token: &str) -> String {
-    if token.is_empty() || token == "." || token.contains(' ') || token.starts_with('\\'') {
+    if token.is_empty() || token.contains(':') || token.starts_with('\\'') {
         format!("'{}'", token.replace('\\'', "''"))
     } else {
         token.to_string()
@@ -263,13 +264,15 @@ fn bv_opre_quote(token: &str) -> String {
 }
 
 #[allow(dead_code)]
-fn bv_opre_is_relative(address: &str) -> bool { address == "." || address.starts_with(". ") }
+fn bv_opre_is_relative(address: &str) -> bool { address.starts_with(':') }
 
 // A relative address as its sender's parent sees it, from child "name":
-// ". x" → ". name x". Any other address is unchanged.
+// ":x" → ":name:x", ":" → ":name". Any other address is unchanged.
 #[allow(dead_code)]
 fn bv_opre_under(address: &str, name: &str) -> String {
-    if bv_opre_is_relative(address) { format!(". {}{}", name, &address[1..]) } else { address.to_string() }
+    if !bv_opre_is_relative(address) { address.to_string() }
+    else if address == ":" { format!(":{}", name) }
+    else { format!(":{}{}", name, address) }
 }
 
 // Every relative #<…> in a value, as the sender's parent sees it.
@@ -307,7 +310,7 @@ fn bv_under_payload(v: &Value, name: &str) -> Value {
 }
 
 // The tokens of a received "to" that name something inside us: what reaches
-// us is relative to us (". Box 1" or "Box 1", bracketed or not).
+// us is relative to us (":Box:1" or "Box:1", bracketed or not).
 #[allow(dead_code)]
 fn bv_local_tokens(to: &str) -> Vec<String> {
     let inner = if to.starts_with("#<") && to.ends_with('>') { &to[2..to.len() - 1] } else { to };
@@ -363,12 +366,12 @@ const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 
 export const G = { ctx: null };
 export function setCtx(newCtx) { G.ctx = newCtx; }
 
-// Wire tag for a type-valued slot: `path Name` for an imported/cross-module
-// type, `. Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
+// Wire tag for a type-valued slot: `path:Name` for an imported/cross-module
+// type, `:Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
-  // A singleton's class is itself: it's tagged with its address (`. s`).
+  // A singleton's class is itself: it's tagged with its address (`:s`).
   const node = typeof t === 'string' && G.ctx.actorNodes?.get(t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);

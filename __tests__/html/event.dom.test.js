@@ -43,7 +43,7 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
   await page.send({
     id: 'new',
     op: [{ id: 'evtel', [on]: '#<t>', children: [] }, '$new'],
-    to: `HTML ${tag}`,
+    to: `HTML:${tag}`,
     from: 't',
   });
   const elAddr = replies.find(m => m.id === 'new').re;
@@ -68,7 +68,7 @@ describe('HTML::Event — emitted on a real DOM event (browser)', () => {
     const page = await loadPage(PAGE);
     const events = await fireAndCapture(page, { on: 'onclick', event: CLICK });
     expect(events).toHaveLength(1);
-    expect(events[0]['ty']).toEqual([['HTML Event']]);
+    expect(events[0]['ty']).toEqual([['HTML:Event']]);
   });
 
   it('carries every endpoint field as an HTML-rooted address', async () => {
@@ -77,7 +77,7 @@ describe('HTML::Event — emitted on a real DOM event (browser)', () => {
     const e = msg.op[0][0];
     for (const f of ENDPOINT_FIELDS) {
       expect(typeof e[f]).toBe('string');
-      expect(e[f]).toMatch(/^#<HTML @__evt_/);
+      expect(e[f]).toMatch(/^#<HTML:@__evt_/);
     }
   });
 
@@ -100,7 +100,7 @@ describe('HTML::Event — emitted on a real DOM event (browser)', () => {
     // The listener is attached to the button, and the click is dispatched on
     // it, so both references resolve to the same element actor address — an
     // HTML-rooted element address, distinct from the ephemeral @__evt_ endpoints.
-    expect(e.target).toMatch(/^#<HTML button /);
+    expect(e.target).toMatch(/^#<HTML:button:/);
     expect(e.current_target).toBe(e.target);
     // relatedTarget is absent on a plain click — the field drops out.
     expect('related_target' in e).toBe(false);

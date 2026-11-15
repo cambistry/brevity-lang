@@ -1,8 +1,8 @@
 # Opre addresses: colon as the token separator — 2026-11-14
 
-Proposal, undecided, not implemented. Would revise the token rules of
-`opre-addresses-as-tokens-2026-11-11.md` and the self/relative head of
-`at-sigil-internal-and-quoted-names-2026-11-12.md`. Came up from `trace` (see
+Decided 2026-11-15. Revises the token rules of `opre-addresses-as-tokens-2026-11-11.md` and the
+self/relative head of `at-sigil-internal-and-quoted-names-2026-11-12.md`. The `HTML:div` header
+shorthand below is not part of the decision. Came up from `trace` (see
 `from-names-calling-scope-2026-11-14.md`): a DOM attribute holding a list of addresses wants
 addresses without spaces.
 

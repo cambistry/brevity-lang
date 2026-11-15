@@ -137,8 +137,8 @@ export const documentManifest = `{
 // them after the `Element |` divider.
 //
 // `:children` is a list of wire tokens — text runs as bare strings,
-// element references as `#<HTML tag N>`, closure subscriptions as
-// `#<actor @N>` — and the runtime parses each entry to decide what to
+// element references as `#<HTML:tag:N>`, closure subscriptions as
+// `#<actor:@N>` — and the runtime parses each entry to decide what to
 // attach.
 //
 // `inner_html` is a method, not a constructor attribute — read the
@@ -980,14 +980,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const addresses = new Map();
   const elements = new Map();
   // Reverse lookup: DOM Node → its registered actor address (global form,
-  // e.g. `HTML div 3`). Populated whenever we mint an actor for a Node.
+  // e.g. `HTML:div:3`). Populated whenever we mint an actor for a Node.
   // Traversal accessors consult this before minting on-the-fly so the same
   // DOM Node always surfaces the same wire token (identity preservation).
   const nodeToAddr = new Map();
 
   // ── HTML service — element constructors ───────────────────────────────────
   // Per-tag counters: each tag (div, p, span, …) numbers independently from 1,
-  // so the address `HTML div 1` and `HTML p 1` refer to distinct elements.
+  // so the address `HTML:div:1` and `HTML:p:1` refer to distinct elements.
   // Text and Comment nodes also use this map under keys `text` / `comment`.
   const tagCounters = new Map();
   // Per-element subscription bookkeeping (built inside registerElementActor)
@@ -1006,10 +1006,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const subRepsByElement = new Map(); // Element → { kind → addr }
 
   // A node's self-return has the shape of its reply to `$new`: its address in
-  // `re`, its class in `ty`. A node's address is `HTML kind N`, and its
-  // class is `HTML kind`.
+  // `re`, its class in `ty`. A node's address is `HTML:kind:N`, and its
+  // class is `HTML:kind`.
   function selfReply(addr) {
-    return { re: '#<' + addr + '>', 'ty': addr.replace(/ [0-9]+$/, '') };
+    return { re: '#<' + addr + '>', 'ty': addr.replace(/:[0-9]+$/, '') };
   }
 
   // A public op travels bare: anything but an intrinsic (`$set`), a protected
@@ -1034,8 +1034,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       subRepsByElement.set(el, perEl);
     }
     const idx = ++subRepCounters[kind];
-    const addr = `HTML ${kind} ${idx}`;
-    const localAddr = `. ${kind} ${idx}`;
+    const addr = `HTML:${kind}:${idx}`;
+    const localAddr = `:${kind}:${idx}`;
     elements.set(addr, el);
     elements.set(localAddr, el);
     perEl.set(kind, addr);
@@ -1044,8 +1044,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   // Aria sub-rep: every accessor reads aria-* attributes off `el` live;
-  // no storage of its own. Wire address `HTML aria N` (global) +
-  // `. aria N` (local) routes through standard dispatch.
+  // no storage of its own. Wire address `HTML:aria:N` (global) +
+  // `:aria:N` (local) routes through standard dispatch.
   function registerAriaSubRep(el) {
     return getOrMintSubRep('aria', el, addr => msg => {
       const { id, op, from } = msg;
@@ -1073,7 +1073,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id, op, from } = msg;
       const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
       try {
-        // `set value: (Text)` — wire shape `{op: [[v], '$set'], to: '. value'}`.
+        // `set value: (Text)` — wire shape `{op: [[v], '$set'], to: ':value'}`.
         if (opName === '$set') {
           const sel = typeof msg.to === 'string' ? msg.to : '';
           const fieldName = fieldOf(sel);
@@ -1239,21 +1239,21 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   // Mint a fresh HTML element address (per-tag counter) and register its
   // actor handler. Elements are registered in the shared `elements` map
-  // under BOTH their global form (`HTML tag N`) and local form (`. tag N`).
-  // External lookups (e.g., document.body.append! receiving a `#<HTML p 1>`
+  // under BOTH their global form (`HTML:tag:N`) and local form (`:tag:N`).
+  // External lookups (e.g., document.body.append! receiving a `#<HTML:p:1>`
   // reference from another subsystem) use the global form; HTML-internal
   // lookups after strip-on-hop (where the `HTML` alias has been stripped
   // from embedded payload tokens) use the local form. The two keys are
-  // disjoint — HTML element local addresses are `. tag N` (tag token and
-  // number token), while closure addresses are `. @N` — so they can coexist
+  // disjoint — HTML element local addresses are `:tag:N` (tag token and
+  // number token), while closure addresses are `:@N` — so they can coexist
   // in a single map.
   function registerElementActor(tag, el) {
     const existing = nodeToAddr.get(el);
     if (existing) return { addr: existing, elemSubs: elemSubsByAddr.get(existing) || new Map() };
     const idx = (tagCounters.get(tag) || 0) + 1;
     tagCounters.set(tag, idx);
-    const addr = `HTML ${tag} ${idx}`;
-    const localAddr = `. ${tag} ${idx}`;
+    const addr = `HTML:${tag}:${idx}`;
+    const localAddr = `:${tag}:${idx}`;
     const elemSubs = new Map();
     elemSubsByAddr.set(addr, elemSubs);
     elements.set(addr, el);
@@ -1267,7 +1267,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const target = elemSubs.get(eid);
           const val = Array.isArray(eRe) ? eRe[0] : eRe;
           if (target instanceof Node) {
-            // A value naming a live element (`#<HTML tag N>`, or its local
+            // A value naming a live element (`#<HTML:tag:N>`, or its local
             // form) puts that element in the slot; anything else is text.
             const ref = typeof val === 'string' && val.startsWith('#<') && val.endsWith('>')
               ? elements.get(val.slice(2, -1)) : null;
@@ -1445,8 +1445,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     if (existing) return existing;
     const idx = (tagCounters.get(kind) || 0) + 1;
     tagCounters.set(kind, idx);
-    const addr = `HTML ${kind} ${idx}`;
-    const localAddr = `. ${kind} ${idx}`;
+    const addr = `HTML:${kind}:${idx}`;
+    const localAddr = `:${kind}:${idx}`;
     elements.set(addr, node);
     elements.set(localAddr, node);
     nodeToAddr.set(node, addr);
@@ -1458,7 +1458,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // writes through to nodeValue. Wire form: `{op: [[v], '$set'], to:
         // '#<<addr>>'}` — route() unwraps the hash-angle and delivers with
         // `to: undefined`. Distinct from the element field-set form, which
-        // carries `to: '. <field>'`. Text and Comment have nodeValue as
+        // carries `to: ':<field>'`. Text and Comment have nodeValue as
         // their natural settable surface; Element/Document don't accept
         // bare set (semantically ambiguous for elements, no nodeValue
         // meaning for the document).
@@ -1913,9 +1913,9 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const endpoints = [];
     const mint = (tag, fn) => {
       const sel = `@__evt_${tag}_${n}`;
-      addresses.set('HTML ' + sel, () => { try { fn(); } catch { /* event gone */ } });
-      endpoints.push('HTML ' + sel);
-      return '#<HTML ' + sel + '>';
+      addresses.set('HTML:' + sel, () => { try { fn(); } catch { /* event gone */ } });
+      endpoints.push('HTML:' + sel);
+      return '#<HTML:' + sel + '>';
     };
     const value = {
       prevent: mint('prevent', () => ev.preventDefault()),
@@ -1989,7 +1989,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             // value (positional arg, tagged with its authority address). The
             // consumer reads value fields freely and invokes endpoint fields
             // in-frame; see buildEventValue.
-            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML Event']] });
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML:Event']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;
@@ -2013,8 +2013,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   // Children is an ordered array of bare strings (text runs), closure
-  // addresses `#<actor @N>` (subscribe + text node), or already-live
-  // element addresses `#<HTML tag N>` (appendChild). Matches XML
+  // addresses `#<actor:@N>` (subscribe + text node), or already-live
+  // element addresses `#<HTML:tag:N>` (appendChild). Matches XML
   // Infoset's [children] property. Caller pre-dispatches nested element
   // `new`s and passes their returned addresses here; by the time the
   // parent's dispatch lands, all child element actors are already
@@ -2051,32 +2051,32 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const payload = Array.isArray(op) ? op[0] : {};
     const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
-      id, re: '#<' + addr + '>', 'ty': 'HTML ' + tag, from: 'HTML', to: from,
+      id, re: '#<' + addr + '>', 'ty': 'HTML:' + tag, from: 'HTML', to: from,
     }));
   }
 
   // Extract the destination's alias from a `to` field: the head token of
-  // the bare form (`ALIAS sel`) or the delimited form (`#<ALIAS sel>`).
-  // Returns null for a relative address (`. sel`, `#<. sel>`) — it names no
+  // the bare form (`ALIAS:sel`) or the delimited form (`#<ALIAS:sel>`).
+  // Returns null for a relative address (`:sel`, `#<:sel>`) — it names no
   // outer alias to strip.
   function destAliasOf(to) {
     if (typeof to !== 'string') return null;
     let candidate = to;
     if (to.startsWith('#<') && to.endsWith('>')) candidate = to.slice(2, -1);
     if (candidate === '' || isRelative(candidate)) return null;
-    const sp = candidate.indexOf(' ');
+    const sp = candidate.indexOf(':');
     return sp === -1 ? candidate : candidate.slice(0, sp);
   }
 
-  // Strip the destination's alias from embedded `#<ALIAS sel>` tokens in
+  // Strip the destination's alias from embedded `#<ALIAS:sel>` tokens in
   // payload strings — the inbound mirror of `rewriteAddressStrings`'s
-  // outbound resolve: `#<ALIAS x>` → `#<. x>`, `#<ALIAS>` → `#<.>`. After
+  // outbound resolve: `#<ALIAS:x>` → `#<:x>`, `#<ALIAS>` → `#<:>`. After
   // strip, HTML's receive handler sees its own elements in relative form
-  // (`#<. p 1>`), which the dual-keyed `elements`
+  // (`#<:p:1>`), which the dual-keyed `elements`
   // map resolves without needing knowledge of its own alias.
   function stripMatchingAlias(v, alias) {
     if (typeof v === 'string') {
-      return mapBracketed(v, (a) => (a === alias ? '.' : a.startsWith(alias + ' ') ? '.' + a.slice(alias.length) : a));
+      return mapBracketed(v, (a) => (a === alias ? ':' : a.startsWith(alias + ':') ? a.slice(alias.length) : a));
     }
     if (Array.isArray(v)) return v.map(el => stripMatchingAlias(el, alias));
     if (v && typeof v === 'object') {
@@ -2091,7 +2091,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const destAlias = destAliasOf(originalMsg.to);
     let msg = originalMsg;
     if (destAlias) {
-      // Strip matching alias from embedded `#<ALIAS sel>` tokens in payload
+      // Strip matching alias from embedded `#<ALIAS:sel>` tokens in payload
       // fields only. Leaves `to` and `from` untouched — those identify the
       // dispatch endpoints, not payload content. `to` is decoded below by
       // the alias-aware dispatch paths; `from` names the sender's global
@@ -2104,10 +2104,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }
     const to = msg.to;
 
-    // `HTML tag` form resolves to the tag's element constructor.
+    // `HTML:tag` form resolves to the tag's element constructor.
     let domTag = null;
     if (typeof to === 'string' && !addresses.has(to)) {
-      const sepMatch = /^HTML (\w+)$/.exec(to);
+      const sepMatch = /^HTML:(\w+)$/.exec(to);
       if (sepMatch) domTag = sepMatch[1];
     }
     if (domTag) {
@@ -2123,14 +2123,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       addresses.get(to)(msg);
       return;
     }
-    // `#<alias selector>` form (hash-angle delimited): the full address is
+    // `#<alias:selector>` form (hash-angle delimited): the full address is
     // one chunk; interior is split into alias + selector. Deliver to alias
-    // with the selector, relative to it (`. selector`), as the new `to` for
+    // with the selector, relative to it (`:selector`), as the new `to` for
     // the receiver's dispatcher.
     //
-    // Multi-segment instance addresses (`#<HTML div 1 field>`) need the
+    // Multi-segment instance addresses (`#<HTML:div:1:field>`) need the
     // longest registered prefix, since the alias is the *instance address*
-    // (`HTML div 1`), not just the first token. Try prefixes from longest
+    // (`HTML:div:1`), not just the first token. Try prefixes from longest
     // to shortest before falling back to the first-token alias.
     if (typeof to === 'string' && to.startsWith('#<') && to.endsWith('>')) {
       const inner = to.slice(2, -1);
@@ -2138,20 +2138,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         addresses.get(inner)({ ...msg, to: undefined });
         return;
       }
-      let cut = inner.lastIndexOf(' ');
+      let cut = inner.lastIndexOf(':');
       while (cut > 0) {
         const prefix = inner.slice(0, cut);
         if (addresses.has(prefix)) {
-          addresses.get(prefix)({ ...msg, to: '. ' + inner.slice(cut + 1) });
+          addresses.get(prefix)({ ...msg, to: ':' + inner.slice(cut + 1) });
           return;
         }
-        cut = inner.lastIndexOf(' ', cut - 1);
+        cut = inner.lastIndexOf(':', cut - 1);
       }
-      const sp = inner.indexOf(' ');
+      const sp = inner.indexOf(':');
       const alias = sp === -1 ? inner : inner.slice(0, sp);
       const selector = sp === -1 ? undefined : inner.slice(sp + 1);
       if (addresses.has(alias)) {
-        const forwarded = selector ? { ...msg, to: '. ' + selector } : { ...msg, to: undefined };
+        const forwarded = selector ? { ...msg, to: ':' + selector } : { ...msg, to: undefined };
         addresses.get(alias)(forwarded);
       }
     }
@@ -2177,7 +2177,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.querySelector(selector);
         if (el) {
           const addr = addrForNode(el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML ' + el.localName, from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML:' + el.localName, from: 'document', to: from }));
         }
         return;
       }
@@ -2185,7 +2185,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.body;
         if (el) {
           const addr = addrForNode(el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML body', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML:body', from: 'document', to: from }));
         }
         return;
       }
@@ -2225,13 +2225,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   });
 
   // Global-boundary address translation for runtime-loaded actors: each sits
-  // at the boundary, so the self token `.` becomes its own address. Payload
-  // `#<.>` / `#<. x>` → `#<selfAddr>` / `#<selfAddr x>`; a missing `from` is
-  // filled in and a relative one (`. x`) resolved; `ty` has no brackets, so a
-  // relative tag (`.`, `. Box`, `. Point`) is resolved whole. An address
-  // whose head token isn't `.` is global and passes through. Structural walk
+  // at the boundary, so the leading `:` (self) becomes its own address. Payload
+  // `#<:>` / `#<:x>` → `#<selfAddr>` / `#<selfAddr:x>`; a missing `from` is
+  // filled in and a relative one (`:x`) resolved; `ty` has no brackets, so a
+  // relative tag (`:`, `:Box`, `:Point`) is resolved whole. An address
+  // that doesn't start with `:` is global and passes through. Structural walk
   // (not JSON round-trip) so BigInt and other non-JSON primitives survive.
-  // See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+  // See notes/opre-colon-separator-2026-11-14.md.
   function rewriteAddressStrings(v, selfAddr) {
     if (typeof v === 'string') return mapBracketed(v, (a) => resolve(a, selfAddr));
     if (Array.isArray(v)) return v.map(el => rewriteAddressStrings(el, selfAddr));
@@ -2270,8 +2270,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     // Without one, replies to the actor's own init-time messages have
     // nowhere to land, and the await on (e.g.) document.body() never resolves.
     //
-    // Address scheme (one token each, quoted if it holds a space; only the
-    // whole token `.` is reserved, as self):
+    // Address scheme (one token each, quoted if it holds a colon):
     //   - external src=path → path with leading `/` stripped (e.g. `app.bv`)
     //   - inline with id    → `script#id` (CSS-selector-shaped, single token)
     //   - anonymous inline  → `script#__bv_anon_N`

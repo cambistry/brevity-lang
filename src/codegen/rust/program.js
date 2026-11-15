@@ -859,14 +859,14 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
     fn bv_publish_under(&mut self, addr: &str, child: &str) {
         self.addr_of.insert(child.to_string(), addr.to_string());
         for (label, c) in self.singletons_of.get(child).cloned().unwrap_or_default() {
-            self.bv_publish_at(format!("{} {}", addr, label), c);
+            self.bv_publish_at(format!("{}:{}", addr, label), c);
         }
     }
 
     // A reply leaving for the wire names an actor we published by its address.
     fn bv_wire_own(&self, v: &Value) -> Value {
         match v {
-            Value::String(s) => match self.addr_of.get(s) { Some(a) => json!(format!("#<. {}>", a)), None => v.clone() },
+            Value::String(s) => match self.addr_of.get(s) { Some(a) => json!(format!("#<:{}>", a)), None => v.clone() },
             Value::Array(a) => Value::Array(a.iter().map(|x| self.bv_wire_own(x)).collect()),
             Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), self.bv_wire_own(x))).collect()),
             _ => v.clone(),
@@ -1114,25 +1114,25 @@ fn bv_swap_self(v: &Value, me: &Value, with: &Value) -> Value {
         _ => v.clone(),
     }
 }
-// An actor's class tag from its address (the tokens under us): C N is of
-// class . C; a singleton (s, C N s) is its own class.
+// An actor's class tag from its address (the tokens under us): C:N is of
+// class :C; a singleton (s, C:N:s) is its own class.
 #[allow(dead_code)]
 fn bv_addr_class(addr: &str) -> String {
-    // N alone is of our own class, . (a file with a \`*\` section).
-    if !addr.is_empty() && addr.chars().all(|ch| ch.is_ascii_digit()) { return ".".to_string(); }
-    match addr.rsplit_once(' ') {
-        Some((c, n)) if !n.is_empty() && n.chars().all(|ch| ch.is_ascii_digit()) => format!(". {}", c),
-        _ => format!(". {}", addr),
+    // N alone is of our own class, : (a file with a \`*\` section).
+    if !addr.is_empty() && addr.chars().all(|ch| ch.is_ascii_digit()) { return ":".to_string(); }
+    match addr.rsplit_once(':') {
+        Some((c, n)) if !n.is_empty() && n.chars().all(|ch| ch.is_ascii_digit()) => format!(":{}", c),
+        _ => format!(":{}", addr),
     }
 }
-// A tag from an actor we published, relative to it: a bare . is its class; any
+// A tag from an actor we published, relative to it: a bare : is its class; any
 // other relative tag goes under its address. A type's tag names its authority
-// from the file (. Point, . W X), so it stays as it is. A global tag passes.
+// from the file (:Point, :W:X), so it stays as it is. A global tag passes.
 #[allow(dead_code)]
 fn bv_local_tag(t: &Value, addr: &str) -> Value {
     match t {
-        Value::String(s) if s == "." => json!(bv_addr_class(addr)),
-        Value::String(s) if s.starts_with(". ") && bv_type_name(s).is_some() => t.clone(),
+        Value::String(s) if s == ":" => json!(bv_addr_class(addr)),
+        Value::String(s) if s.starts_with(':') && bv_type_name(s).is_some() => t.clone(),
         Value::String(s) if bv_opre_is_relative(s) => json!(bv_opre_under(s, addr)),
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_local_tag(x, addr)).collect()),
         Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_local_tag(x, addr))).collect()),
@@ -1142,7 +1142,7 @@ fn bv_local_tag(t: &Value, addr: &str) -> Value {
 #[allow(dead_code)]
 fn bv_swap_self_tag(t: &Value, class: &str) -> Value {
     match t {
-        Value::String(s) if s == "." => Value::String(class.to_string()),
+        Value::String(s) if s == ":" => Value::String(class.to_string()),
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_swap_self_tag(x, class)).collect()),
         Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_swap_self_tag(x, class))).collect()),
         _ => t.clone(),
@@ -1937,7 +1937,7 @@ ${handleOpMethod}
             return;
         };
         // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
-        // function as the last token of \`to\` (\`. val\`, \`. Box\`), relative to us.
+        // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
         // Its arm is keyed by the pair, op then target: "$set val".
         let wire_op = op_name.clone();
         let op_name = bv_op_key(&op_name, message.get("to").and_then(|v| v.as_str()));
@@ -1951,10 +1951,10 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address (
         // address the received \`to\` starts with. It is relative to us.
         let _inst_addr = message.get("to").and_then(|v| v.as_str()).and_then(|to| {
             let segs: Vec<String> = bv_local_tokens(to).iter().map(|t| bv_opre_quote(t)).collect();
-            // \`$new\` to a class's own label (\`. C\`) builds one here, though its
+            // \`$new\` to a class's own label (\`:C\`) builds one here, though its
             // members are published there.
-            let whole = segs.join(" ");
-            (1..=segs.len()).rev().map(|j| segs[..j].join(" ")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || (self.singleton_at.contains_key(a) && !(wire_op == "$new" && *a == whole))' : ''})
+            let whole = segs.join(":");
+            (1..=segs.len()).rev().map(|j| segs[..j].join(":")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || (self.singleton_at.contains_key(a) && !(wire_op == "$new" && *a == whole))' : ''})
         });
 ` : ''}        if has_payload && message.get("ty").is_none() {
             let mut ex = Map::new();
@@ -1963,20 +1963,20 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address (
             resp.insert("id".to_string(), json!(id));
             resp.insert("ex".to_string(), Value::Object(ex));
             resp.insert("to".to_string(), json!(from));
-${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert("from".to_string(), json!(format!(". {}", addr))); }
+${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert("from".to_string(), json!(format!(":{}", addr))); }
 ` : ''}            let _ = self.binding.send(Value::Object(resp));
             return;
         }
         let payload = raw_payload.unwrap_or(json!({}));${publishesClasses ? `
         if let Some(addr) = _inst_addr {
-            let (class, inst) = addr.split_once(' ').unwrap_or(("", ""));
+            let (class, inst) = addr.split_once(':').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             // Only a public class is published, and its identifier has this suffix.
             let child = ${hasPublicSingletons ? `match self.singleton_at.get(&addr) { Some(c) => c.clone(), None => format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst) }` : `format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst)`};
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("to".to_string(), json!(from));
-            resp.insert("from".to_string(), json!(format!(". {}", addr)));
+            resp.insert("from".to_string(), json!(format!(":{}", addr)));
             // A call can arrive while another waits on a reply, so each restores the last's.
             let saved_msg = std::mem::replace(&mut self.wire_msg, message.clone());
             self.wire_tag = None;
@@ -1995,11 +1995,11 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // A self-return: we made this actor, so we name it and its class, as for #new.
                 Ok(v) if v == json!(child) => {
                     resp.insert("ty".to_string(), json!(bv_addr_class(&addr)));
-                    resp.insert("re".to_string(), json!(format!("#<. {}>", addr)));
+                    resp.insert("re".to_string(), json!(format!("#<:{}>", addr)));
                 }
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
-                    resp.insert("re".to_string(), ${hasPublicSingletons ? 'self.bv_wire_own(&' : '('}bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<.>")), &addr)));
+                    resp.insert("re".to_string(), ${hasPublicSingletons ? 'self.bv_wire_own(&' : '('}bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<:>")), &addr)));
                     if let Some(t) = tag { resp.insert("ty".to_string(), bv_local_tag(&t, &addr)); }
                 }
                 Err(e) => {
@@ -2029,10 +2029,10 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
                                 // A reply whose whole value is one actor: its address is in re,
-                                // and ty, if any, is its class: the address it heads (Svc Counter
-                                // of Svc Counter 1; an opaque Thing/9 of Thing).
+                                // and ty, if any, is its class: the address it heads (Svc:Counter
+                                // of Svc:Counter:1; an opaque Thing/9 of Thing).
                                 let one_actor = re.as_str().and_then(|t| t.strip_prefix("#<")).and_then(|t| t.strip_suffix('>')).is_some_and(|x| {
-                                    msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|c| x == c || (x.starts_with(c) && matches!(x.as_bytes().get(c.len()), Some(b' ') | Some(b'/')))))
+                                    msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|c| x == c || (x.starts_with(c) && matches!(x.as_bytes().get(c.len()), Some(b':') | Some(b'/')))))
                                 });
                                 if one_actor {
                                     return Value::Array(vec![re.clone()]);

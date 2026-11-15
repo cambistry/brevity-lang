@@ -17,7 +17,7 @@ describe('a protected cell is set by $set to . ~name', () => {
 
   it('from inside', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [[5], '$set'], to: '. ~val' }, from: 't' } },
+      { input: { id: '1', test: { op: [[5], '$set'], to: ':~val' }, from: 't' } },
       { input: { id: '2', op: 'read', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c' } },
     );
@@ -25,7 +25,7 @@ describe('a protected cell is set by $set to . ~name', () => {
 
   it('each cell by its own label', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [['hi'], '$set'], to: '. ~label' }, from: 't' } },
+      { input: { id: '1', test: { op: [['hi'], '$set'], to: ':~label' }, from: 't' } },
       { input: { id: '2', op: 'readLabel', from: 'c' } },
       { output: { id: '2', re: ['hi'], ty: ['Text'], to: 'c' } },
       { input: { id: '3', op: 'read', from: 'c' } },
@@ -35,7 +35,7 @@ describe('a protected cell is set by $set to . ~name', () => {
 
   it('not from outside', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: '. ~val', from: 'c' } },
+      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: ':~val', from: 'c' } },
       { output: { id: '1', ex: { $set: 'unhandled' }, to: 'c' } },
       { input: { id: '2', op: 'read', from: 'c' } },
       { output: { id: '2', re: [0], ty: ['Integer'], to: 'c' } },
@@ -44,7 +44,7 @@ describe('a protected cell is set by $set to . ~name', () => {
 
   it('a bare token is the public name, not the protected cell', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [[5], '$set'], to: '. val' }, from: 't' } },
+      { input: { id: '1', test: { op: [[5], '$set'], to: ':val' }, from: 't' } },
       { output: { id: '1', ex: { $set: 'unhandled' }, to: 't' } },
       { input: { id: '2', op: 'read', from: 'c' } },
       { output: { id: '2', re: [0], ty: ['Integer'], to: 'c' } },
@@ -53,7 +53,7 @@ describe('a protected cell is set by $set to . ~name', () => {
 
   it('a public cell is set from outside by its bare name', async () => {
     await expectBehavior(script,
-      { input: { op: [[3], '$set'], ty: [['Integer']], to: '. pub', from: 'c' } },
+      { input: { op: [[3], '$set'], ty: [['Integer']], to: ':pub', from: 'c' } },
       { input: { id: '1', op: 'pub', from: 'c' } },
       { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
     );
@@ -70,14 +70,14 @@ describe('$set to a token that isn\'t a cell', () => {
 
   it('a name nothing has', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: '. nope', from: 'c' } },
+      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: ':nope', from: 'c' } },
       { output: { id: '1', ex: { $set: 'unhandled' }, to: 'c' } },
     );
   });
 
   it('a function', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: '. read', from: 'c' } },
+      { input: { id: '1', op: [[7], '$set'], ty: [['Integer']], to: ':read', from: 'c' } },
       { output: { id: '1', ex: { $set: 'unhandled' }, to: 'c' } },
       { input: { id: '2', op: 'read', from: 'c' } },
       { output: { id: '2', re: [0], ty: ['Integer'], to: 'c' } },

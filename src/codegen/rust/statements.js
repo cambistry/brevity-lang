@@ -1536,7 +1536,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(new_id.clone()));`);
   lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv)}`);
   const toJson = s.value.viaInstance
-    ? `json!(format!("{} ${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
+    ? `json!(format!("{}:${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
     : `json!("${targetName}")`;
   lines.push(`${I}    send_msg.insert("to".to_string(), ${toJson});`);
   lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
@@ -3209,7 +3209,7 @@ function genRustReBody(fields, typeEnv, refNames) {
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return 'Value::Array(vec![])';
   // Self-return: the bare local self address. The parent promotes it.
-  if (fields[0].selfReturn) return 'json!("#<.>")';
+  if (fields[0].selfReturn) return 'json!("#<:>")';
   const spread = fields.find(f => f.spread);
   if (spread) return `bv_val(&${rustSsaResolve(spread.name)})`;
 
@@ -3323,7 +3323,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push('"."'); continue; }
+    if (f.expr?.type === 'SelfValue') { posTypes.push('":"'); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -3334,7 +3334,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": "."`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": ":"`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

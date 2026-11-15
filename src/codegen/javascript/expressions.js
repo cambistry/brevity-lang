@@ -275,9 +275,9 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
 //     `_lambda_N`, and the handler arm matches that name.
 //   - `wire: true` -- the lambda is a VALUE that flows into a type field or a
 //     remote-call argument and may be routed through CAM. It is encoded as a
-//     relative self-address `#<. @N>` (matching the DOM closure-prop
+//     relative self-address `#<:@N>` (matching the DOM closure-prop
 //     convention): the relayer's perspective translation promotes it to
-//     `#<selfAddr @N>` as the carrying message leaves the actor, so a remote
+//     `#<selfAddr:@N>` as the carrying message leaves the actor, so a remote
 //     holds a fully-qualified reference back to this lambda and can invoke it
 //     through CAM. The handler arm then matches the `@N` selector (reachable
 //     both locally -- via #fire self-dispatch on the local form -- and on the
@@ -393,9 +393,9 @@ export function genExpr(ctx, expr) {
     // — an ordered array matching XML Infoset's [children] property. Text
     // children are bare strings; closure children (`{ expr }` interpolations
     // that synthesizeTemplateClosures replaced with `closure_ref`) are bare
-    // `#<. @N>` address strings; nested `DomConstructor` children are
+    // `#<:@N>` address strings; nested `DomConstructor` children are
     // pre-dispatched by `await this.#send(...)`, whose return value is an
-    // already-wrapped `#<HTML tag N>` address string (see classes.js:941 —
+    // already-wrapped `#<HTML:tag:N>` address string (see classes.js:941 —
     // #send resolves to message.re which handleDomNew sends wrapped).
     //
     // `#{ expr }` interpolations (strinterp) are pure textual splices — they
@@ -723,7 +723,7 @@ export function genExpr(ctx, expr) {
   // `$set` sent to it, as a closure's write goes to its enclosing scope.
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
-    return `this.#_up(${expr.outerLevel}).receive({ id: String(++this.#nextId), op: [[${genExpr(ctx, expr.value)}], ${JSON.stringify(op)}], to: ${JSON.stringify('. ' + wireLabel(expr.name))}, _route: () => {} })`;
+    return `this.#_up(${expr.outerLevel}).receive({ id: String(++this.#nextId), op: [[${genExpr(ctx, expr.value)}], ${JSON.stringify(op)}], to: ${JSON.stringify(':' + wireLabel(expr.name))}, _route: () => {} })`;
   }
   // A call to a function of an actor this class is declared in: a message to it.
   // A param default the file evaluates for a class (`$new` with a default left out)
@@ -872,7 +872,7 @@ export function genExpr(ctx, expr) {
             if (!p?.ref && !p?.readonly) return null;
             if (!subscribed?.has(p.name)) return null;
             if (!ctx.stateVarNames?.has(argExpr.name)) return null;
-            // The handle names the public member: `peers` and `@peers` are both `. peers`.
+            // The handle names the public member: `peers` and `@peers` are both `:peers`.
             return `{host: this, cell: ${JSON.stringify(quoteToken(argExpr.name.replace(/^@/, '')))}}`;
           };
           // If the call uses named args, reorder to match constructor param order
@@ -921,7 +921,7 @@ export function genExpr(ctx, expr) {
       // A class in another file, constructed in place.
       if (ctx.constructorCoercions?.has(name) && ctx.depWireTargets?.some(([n]) => n === name)) {
         const to = expr.viaInstance
-          ? `${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance })} + ${JSON.stringify(' ' + expr.viaSelector)}`
+          ? `${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance })} + ${JSON.stringify(':' + expr.viaSelector)}`
           : JSON.stringify(ctx.constructorCoercions.get(name));
         return `BvObject.pack([await ${genSendNew(ctx, expr.args, to)}])`;
       }
@@ -1039,7 +1039,7 @@ export function genExpr(ctx, expr) {
       const positional = expr.args.filter(a => a.positional);
       const named = expr.args.filter(a => !a.positional);
       const to = address.kind === 'static' ? JSON.stringify(address.wire)
-        : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(' ' + joinAddress(address.path))})`;
+        : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(':' + joinAddress(address.path))})`;
       const method = JSON.stringify(wireOp);
       const send = (op, ty) => {
         if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
@@ -1160,7 +1160,7 @@ export function genExpr(ctx, expr) {
       return `this.#childSend(${resolved}, ${op})`;
     }
   }
-  if (expr.type === 'SelfValue') return '"#<.>"';
+  if (expr.type === 'SelfValue') return '"#<:>"';
   if (expr.type === 'DotAccessExpr') {
     // A sub-service (`Svc.s`) is its address (src/opre.js).
     if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);
@@ -1405,12 +1405,12 @@ export function genDefaultValue(node) {
 }
 
 // The wire tag for a type-valued slot: `path Name` for an imported/cross-module
-// type, `. Name` for a local one (authority filled by perspective translation as
+// type, `:Name` for a local one (authority filled by perspective translation as
 // the value rises; `ty` is a translated field, so it needs no `#<…>`). Non-type tags (primitives
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its address (`. s`).
+  // A singleton's class is itself: it's tagged with its address (`:s`).
   const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
@@ -1498,8 +1498,8 @@ export function genTyBody(ctx, fields, typeEnv) {
   };
   const posTypes = [];
   for (const f of pos) {
-    // A `self` slot is tagged with a bare `.`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push('"."'); continue; }
+    // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push('":"'); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
@@ -1510,7 +1510,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: "."`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: ":"`); continue; }
     if ('sigil' in f) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
@@ -1557,7 +1557,7 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   // Self-return: the bare local self address. The parent promotes it.
-  if (fields[0].selfReturn) return '"#<.>"';
+  if (fields[0].selfReturn) return '"#<:>"';
   if (!skipTypeCheck) checkReplyFieldTypes(ctx, fields, declaredReturnType);
   const spread = fields.find(f => f.spread);
   if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;

@@ -165,7 +165,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   return `begin
         ${v.addr} = ${addr},
         case ${v.addr} of
-            <<"#<.", ${v.locsig}:8, _/binary>> when ${v.locsig} =:= 32 orelse ${v.locsig} =:= $> ->
+            <<"#<:", _/binary>> ->
                 ${selfTail};
             _ ->
                 ${postBranch}
@@ -463,7 +463,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
     const seq = ctx.sendCounter++;
     const newTo = expr.viaInstance
-      ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, " ${expr.viaSelector}"/utf8>>`
+      ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, ":${expr.viaSelector}"/utf8>>`
       : erlString(ctx.constructorCoercions.get(expr.callee.name));
     return `begin
         New_seq_${seq} = bv_next_seq_(),
@@ -900,7 +900,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     throw new Error(`Unsupported DotAccessExpr on ${expr.object?.type} in erlang target`);
   }
 
-  if (expr.type === 'SelfValue') return '<<"#<.>"/utf8>>';
+  if (expr.type === 'SelfValue') return '<<"#<:>"/utf8>>';
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
@@ -926,7 +926,7 @@ function genErlStaticSend(ctx, expr, typeEnv, sCtx, awaited, argHelpers) {
     : ctx.localInstanceVars?.has(rootName) ? erlVarName(resolveSSAName(rootName, sCtx?.stmtIdx ?? 0, sCtx?.ssaEnv))
     : genExpr(ctx, root, typeEnv, sCtx);
   const to = address.kind === 'static' ? erlString(address.wire)
-    : `iolist_to_binary([${rootVal}, ${erlString(' ' + joinAddress(address.path))}])`;
+    : `iolist_to_binary([${rootVal}, ${erlString(':' + joinAddress(address.path))}])`;
   const method = erlString(op);
   if (expr.outerCall) {
     const call = erlOuterCall(ctx, expr, positional, named, method, to, argHelpers);

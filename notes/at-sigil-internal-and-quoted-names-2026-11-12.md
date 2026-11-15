@@ -4,6 +4,12 @@ Design decision, not implemented. Builds on `opre-addresses-as-tokens-2026-11-11
 space-delimited) and supersedes the wire spellings in `protected-names-dot-prefix-2026-11-11.md`
 (`.a` / `@a` / `#a`).
 
+**Superseded in part by `opre-colon-separator-2026-11-14.md`:** tokens are separated by `:`, and
+the relative head is a leading `:`, not the whole token `.`: `#<:>` for `#<.>`, `#<:Box:123>` for
+`#<. Box 123>`, `to: ':~val'` for `to: '. ~val'`, `ty: ':'` for `ty: '.'`. A token is quoted when it
+holds a colon, not a space. Sigils and wire names are unchanged. The examples below are in the old
+form.
+
 ## The wire at a glance
 
 | Wire | Meaning | Owner |

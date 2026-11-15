@@ -26,9 +26,9 @@ export function _bv_to_wire(v, _bv_types) {
 }
 
 // A type's tag is its address: its authority, the classes that own it, and its
-// bare name (`. Point`, `. W X`, `svc.bv Point`). Nothing in its shape says it
+// bare name (`:Point`, `:W:X`, `svc.bv:Point`). Nothing in its shape says it
 // names a type: it does when the registry has it, under its key or the alias
-// spelling of its authority (`Svc Point`). Returns the type's key, or null.
+// spelling of its authority (`Svc:Point`). Returns the type's key, or null.
 export function _bv_type_name(tag, _bv_types) {
   if (typeof tag !== 'string' || !_bv_types || !Object.hasOwn(_bv_types, tag)) return null;
   return _bv_types[tag].key;
@@ -68,8 +68,8 @@ export function _bv_unwire_reply(re, ty, _bv_types) {
 }
 
 // Reference-field invocation: given the address held in a reference field,
-// return the op to send. An address `#<alias member>` names its member by its
-// last token, and the token is the op (`#<x p>` → `p`, `#<main @0>` → `@0`);
+// return the op to send. An address `#<alias:member>` names its member by its
+// last token, and the token is the op (`#<x:p>` → `p`, `#<main:@0>` → `@0`);
 // a bare address passes through unchanged.
 export function _bv_sel(addr) {
   if (typeof addr === 'string' && addr.startsWith('#<') && addr.endsWith('>')) {
@@ -81,7 +81,7 @@ export function _bv_sel(addr) {
 }
 
 // The tokens of a received `to` that name something inside us. What reaches
-// us is relative to us: `. Box 1` or `Box 1`, bracketed or not.
+// us is relative to us: `:Box:1` or `Box 1`, bracketed or not.
 export function _bv_local_tokens(to) {
   if (typeof to !== 'string' || to === '') return [];
   const a = to.startsWith('#<') && to.endsWith('>') ? to.slice(2, -1) : to;

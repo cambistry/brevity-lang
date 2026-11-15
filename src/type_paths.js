@@ -14,7 +14,7 @@
 //     bare name for a type of the file actor (`Point`);
 //   - a type of an injected service → `Svc::X` / `Svc::C::X`, registered in
 //     `ast.crossModuleTypes` with its authority (the service's path) and its
-//     owner classes, so codegen can tag it `svc.bv C X`.
+//     owner classes, so codegen can tag it `svc.bv:C:X`.
 // A bare type becomes the one declared nearest the scope it's written in, and is
 // rejected outside the actor it belongs to.
 

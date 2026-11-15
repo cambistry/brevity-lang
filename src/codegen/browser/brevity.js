@@ -66,15 +66,15 @@ async function compileAndLoad(source, compileOptions = {}) {
 // Playwright into the page. Handles are id-keyed, stored in `handles`.
 //
 // The harness is the global boundary for each spawned actor: the node that
-// replaces the self token `.` with the actor's own address, `selfAddr` (see
-// notes/at-sigil-internal-and-quoted-names-2026-11-12.md):
+// replaces the leading `:` (self) with the actor's own address, `selfAddr` (see
+// notes/opre-colon-separator-2026-11-14.md):
 //
-//   - Payload `#<. x>` → `#<selfAddr x>`; self `#<.>` → `#<selfAddr>`.
-//   - `ty` has no brackets: a relative tag (`.`, `. Box`, `. Point`) is
+//   - Payload `#<:x>` → `#<selfAddr:x>`; self `#<:>` → `#<selfAddr>`.
+//   - `ty` has no brackets: a relative tag (`:`, `:Box`, `:Point`) is
 //     resolved whole.
-//   - Missing `from` → selfAddr; a relative `from: '. x'` → `selfAddr x`.
-//   - Any address whose head token isn't `.` is global and passes through,
-//     `to` included (the sender writes it in its own DI frame, 'HTML div').
+//   - Missing `from` → selfAddr; a relative `from: ':x'` → `selfAddr:x`.
+//   - Any address that doesn't start with `:` is global and passes through,
+//     `to` included (the sender writes it in its own DI frame, 'HTML:div').
 
 const handles = new Map();
 const compiled = new Map();

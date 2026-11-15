@@ -224,11 +224,11 @@ describe('file with a `*` section', () => {
   it('`$new` to the file builds one, at `n` under it, of class `.`', async () => {
     await expectBehavior(classFile,
       { input: { id: '1', op: [[5], '$new'], ty: [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<. 1>', ty: '.', to: 'c' } },
+      { output: { id: '1', re: '#<:1>', ty: ':', to: 'c' } },
       { input: { id: '2', op: [[6], '$new'], ty: [['Integer']], from: 'c' } },
-      { output: { id: '2', re: '#<. 2>', ty: '.', to: 'c' } },
-      { input: { id: '3', op: 'n', to: '. 2', from: 'c' } },
-      { output: { id: '3', re: [16], ty: ['Integer'], to: 'c', from: '. 2' } },
+      { output: { id: '2', re: '#<:2>', ty: ':', to: 'c' } },
+      { input: { id: '3', op: 'n', to: ':2', from: 'c' } },
+      { output: { id: '3', re: [16], ty: ['Integer'], to: 'c', from: ':2' } },
     );
   });
 

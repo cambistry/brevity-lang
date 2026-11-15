@@ -14,7 +14,7 @@ async function expectEmission(script, ...steps) {
       // posts flow through the harness untouched (raw sender frame). With
       // it, the harness acts as the parent — fills in missing `from`,
       // prepends selfAddr to local-form `from`, and rewrites payload
-      // `#<. @N>` addresses to `#<main @N>` space-inside-angles form.
+      // `#<:@N>` addresses to `#<main:@N>` space-inside-angles form.
       selfAddr: 'main',
     },
   });
@@ -37,14 +37,14 @@ async function expectEmission(script, ...steps) {
 // `[children]` property. Entries are:
 //
 //   - bare text strings — literal text runs
-//   - `#<actor @N>` address strings — closure subscribers (from `{{ expr }}`
+//   - `#<actor:@N>` address strings — closure subscribers (from `{{ expr }}`
 //     interpolations; synthesizeTemplateClosures allocates @N per actor)
-//   - `#<HTML tag N>` address strings — already-live nested element actors
+//   - `#<HTML:tag:N>` address strings — already-live nested element actors
 //     (pre-dispatched by the codegen's await chain before the parent)
 //
-// Addresses in local form (`#<. @N>` as the sender emits) get the sender's
+// Addresses in local form (`#<:@N>` as the sender emits) get the sender's
 // address prepended by the parent routing layer (harness) on outbound —
-// `#<main @0>` space-inside-angles form. Global form (word-char start
+// `#<main:@0>` space-inside-angles form. Global form (word-char start
 // inside the angles) is left alone. The discriminator is the leading char:
 // non-word = local, word = global.
 //
@@ -69,7 +69,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hello'] }, '$new'],
-          to: 'HTML div',
+          to: 'HTML:div',
         }) },
       );
     });
@@ -77,7 +77,7 @@ describe('template emission — structured children wire shape', () => {
 
   // ── Core: single dynamic interpolation → single closure address entry ───
   describe('single dynamic interpolation', () => {
-    it('<div>{{ content }}</div> emits children: ["#<main @0>"]', async () => {
+    it('<div>{{ content }}</div> emits children: ["#<main:@0>"]', async () => {
       const script = `
         **
           HTML: (:div)
@@ -88,8 +88,8 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>'] }, '$new'],
+          to: 'HTML:div',
         }) },
       );
     });
@@ -108,8 +108,8 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['pre ', '#<main @0>', ' post'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['pre ', '#<main:@0>', ' post'] }, '$new'],
+          to: 'HTML:div',
         }) },
       );
     });
@@ -129,8 +129,8 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', '#<main @1>'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>', '#<main:@1>'] }, '$new'],
+          to: 'HTML:div',
         }) },
       );
     });
@@ -147,8 +147,8 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', ' middle ', '#<main @1>'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>', ' middle ', '#<main:@1>'] }, '$new'],
+          to: 'HTML:div',
         }) },
       );
     });
@@ -175,7 +175,7 @@ describe('template emission — structured children wire shape', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['Title'] }, '$new'],
-          to: 'HTML h1',
+          to: 'HTML:h1',
         }) },
       );
     });
@@ -186,8 +186,8 @@ describe('template emission — structured children wire shape', () => {
   // The harness is the parent of the spawned actor. It translates outbound
   // messages as they leave the child: fills in `from` if the child omitted
   // it (selfAddr = 'main' by convention), prepends selfAddr to local-form
-  // `from` values, and rewrites payload `#<. @N>` addresses to
-  // `#<selfAddr @N>` space-inside-angles form.
+  // `from` values, and rewrites payload `#<:@N>` addresses to
+  // `#<selfAddr:@N>` space-inside-angles form.
   describe('parent-layer translation on outbound', () => {
     it('missing `from` on outbound is filled in with selfAddr', async () => {
       const script = `
@@ -200,14 +200,14 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>'] }, '$new'],
+          to: 'HTML:div',
           from: 'main',
         }) },
       );
     });
 
-    it('the self address `#<.>` in a reply is promoted to the sender', async () => {
+    it('the self address `#<:>` in a reply is promoted to the sender', async () => {
       await expectEmission('a *Integer = 0\n@inc! = (i Integer) { a <- a + i }\n',
         { input: { id: '1', op: [[1], 'inc!'], 'ty': [['Integer']], from: 'c' } },
         { output: expect.objectContaining({ id: '1', re: '#<main>', from: 'main' }) },
@@ -217,7 +217,7 @@ describe('template emission — structured children wire shape', () => {
 
   // ── Integration with Phase 1: the emitted closure is subscribable ───────
   //
-  // Once the `new` op is emitted with `#<. @0>` in children, @0 itself is a
+  // Once the `new` op is emitted with `#<:@0>` in children, @0 itself is a
   // real subscribable handler on the enclosing actor (Phase 1 primitive). A
   // caller who has learned the address can subscribe to it directly.
   describe('emitted closure address is independently subscribable', () => {
@@ -232,10 +232,10 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>'] }, '$new'],
+          to: 'HTML:div',
         }) },
-        { input: { id: '2', op: '$subscribe', to: '. @0', from: 'c' } },
+        { input: { id: '2', op: '$subscribe', to: ':@0', from: 'c' } },
         { output: expect.objectContaining({ id: '2', re: ['hello'], to: 'c' }) },
       );
     });

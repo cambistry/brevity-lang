@@ -3,6 +3,10 @@
 Design proposal, not implemented. An Opre address is a path of space-delimited tokens. A token
 can hold any characters, sigils included: they're just part of the token.
 
+**Superseded in part by `opre-colon-separator-2026-11-14.md`:** tokens are separated by `:`, not
+a space. Spaces are ordinary token characters; a token with a colon is quoted. The space-delimited
+examples below are in the old form.
+
 **Superseded in part by `at-sigil-internal-and-quoted-names-2026-11-12.md`:** a token with a space
 is quoted (`'my file.bv'`, `''` for `'`), replacing the `\ ` escape below, and the whole token `.`
 at the head of an address is self, making it relative to its sender.

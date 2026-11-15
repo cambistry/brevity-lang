@@ -147,10 +147,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let reLine;
   if (name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
-    reLine = `\n        re = '#<. ' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(selfAddress('@' + selector))};`;
+    reLine = `\n        re = '#<:' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(selfAddress('@' + selector))};`;
   } else if (name === 'new') {
     // The file's own class: its actor is `n` under us, and its class is ours, `.`.
-    reLine = `\n        re = '#<. ' + this.#_publishInstance(null, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = '.';`;
+    reLine = `\n        re = '#<:' + this.#_publishInstance(null, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ':';`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (isBareSelfReturn) {
@@ -899,8 +899,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
   // Public singletons declared directly in this actor (`@s = **{ … }`). Each is
-  // published at `. s`, as an actor made by `#new` is at `. C N`.
-  // A public class's members are published at the class's label (`. C`).
+  // published at `:s`, as an actor made by `#new` is at `:C:N`.
+  // A public class's members are published at the class's label (`:C`).
   const publicSingletons = (ctx.program?.actors || [])
     .filter(a => publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
   const publishesClasses = publishesNew || publicSingletons.length > 0;
@@ -1021,7 +1021,7 @@ ${actor.spawnable ? `
     // Locally-held lambda in a reply-awaiting callback field: a relative
     // self-address (#<. @N>) names a handler on us, so dispatch it to
     // ourselves and await the reply rather than posting outward. (See #fire.)
-    if (typeof to === 'string' && /^#<\\.[ >]/.test(to)) {
+    if (typeof to === 'string' && /^#<:/.test(to)) {
       const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
       this.#dispatch({ id, op, from: '__self' });
       return p;
@@ -1044,7 +1044,7 @@ ${actor.spawnable ? `
     // actor (where perspective translation promotes it to #<selfAddr @N>), it
     // names a handler on us, so invoking it loops back to our own dispatch
     // instead of posting outward to a peer that isn't there.
-    if (typeof to === 'string' && /^#<\\.[ >]/.test(to)) {
+    if (typeof to === 'string' && /^#<:/.test(to)) {
       this.#dispatch({ id, op, from: '__self' });
       return;
     }
@@ -1088,10 +1088,10 @@ ${actor.spawnable ? `
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       // A child's self-return arrives untranslated. We're its parent, so the
-      // translation is ours: its self address \`#<.>\` means this handle,
+      // translation is ours: its self address \`#<:>\` means this handle,
       // as the whole value or one slot of several.
       const mine = (v) => {
-        if (v === '#<.>') return child;
+        if (v === '#<:>') return child;
         if (Array.isArray(v)) return v.map(mine);
         if (v && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mine(x)]));
         return v;
@@ -1112,12 +1112,12 @@ ${actor.spawnable ? `
   // yielded: a child handle, or an address from a self-return.
   async #childSendChain(recv, op) {
     const r = BvObject.pack(await recv);
-    return this.#childSend(r.selfReturn ? '#<.>' : r.positional[0], op);
+    return this.#childSend(r.selfReturn ? '#<:>' : r.positional[0], op);
   }
 
   async #childSendRead(recv, prop) {
     const r = BvObject.pack(await recv);
-    const v = r.selfReturn ? '#<.>' : r.positional[0];
+    const v = r.selfReturn ? '#<:>' : r.positional[0];
     if (typeof v === 'string' || typeof v?.receive === 'function') return BvObject.one(BvObject.pack(await this.#childSend(v, prop)), prop);
     throw new Error("'" + prop + "' read on a value in a chain: bind the value first");
   }` : ''}${fnSection}
@@ -1194,7 +1194,7 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
       const owner = this.#chain[level - 1];
-      queueMicrotask(() => owner.receive({ id, op: '$get', to: '. ' + name, from: '__child', _route: (msg) => this.receive(msg) }));
+      queueMicrotask(() => owner.receive({ id, op: '$get', to: ':' + name, from: '__child', _route: (msg) => this.receive(msg) }));
     });
   }
 
@@ -1244,20 +1244,20 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 
 ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
   // and we translate what it sends, as a parent does.
-  // \`cls\` null is our own class (a file with a \`*\` section): \`N\`, tagged \`.\`.
+  // \`cls\` null is our own class (a file with a \`*\` section): \`N\`, tagged \`:\`.
   #_publishInstance(cls, inst) {
     const n = (this.#_instanceSeq.get(cls) || 0) + 1;
     this.#_instanceSeq.set(cls, n);
-    if (cls === null) return this.#_publishAt(String(n), '.', inst);
+    if (cls === null) return this.#_publishAt(String(n), ':', inst);
     return this.#_publishAt(_opre_join([cls, String(n)]), _opre_join([null, cls]), inst);
   }
 
   // Publish an actor of ours under the tokens \`addr\`, its class tagged \`tag\`:
-  // \`C N\` / \`. C\` for one made by \`#new\`, \`s\` / \`. s\` for a singleton.
+  // \`C:N\` / \`:C\` for one made by \`#new\`, \`s\` / \`:s\` for a singleton.
   #_publishAt(addr, tag, inst) {
     this.#_instances.set(addr, inst);
     this.#_addrOf.set(inst, addr);
-    // What it sends relative to itself, \`. x\`, is \`. addr x\` to us. Any other
+    // What it sends relative to itself, \`:x\`, is \`:addr:x\` to us. Any other
     // address is global and passes through.
     const local = (v) => {
       if (typeof v === 'string') return _opre_map_bracketed(v, (a) => _opre_under(a, addr));
@@ -1265,25 +1265,25 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
       return v;
     };
-    // \`ty\` has no brackets. A bare \`.\` is the sender's own class, which we know.
-    // A type's tag names its authority from the file actor (\`. Point\`,
-    // \`. W X\`), which is where the instance found it: it stays as it is.
+    // \`ty\` has no brackets. A bare \`:\` is the sender's own class, which we know.
+    // A type's tag names its authority from the file actor (\`:Point\`,
+    // \`:W:X\`), which is where the instance found it: it stays as it is.
     const localTy = (v) => {
-      if (v === '.') return tag;
+      if (v === ':') return tag;
       if (typeof v === 'string') return _bv_type_name(v) ? v : _opre_under(v, addr);
       if (Array.isArray(v)) return v.map(localTy);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
       return v;
     };
-    // A self-return says "me" with a bare \`#<.>\` and leaves out its \`.\` tag.
+    // A self-return says "me" with a bare \`#<:>\` and leaves out its \`:\` tag.
     // A call it makes through the file actor (\`lift\`) is translated here and
     // by each parent above us, but its \`from\` is the file actor's.
     inst._adoptBinding({
       post: (msg) => {
         const { ty, ...rest } = msg;
-        const out = { ...local(rest), to: msg.to, from: msg.from ? _opre_under(msg.from, addr) : '. ' + addr };
+        const out = { ...local(rest), to: msg.to, from: msg.from ? _opre_under(msg.from, addr) : ':' + addr };
         if ('ty' in msg) out['ty'] = localTy(ty);
-        else if (msg.re === '#<.>') out['ty'] = tag;
+        else if (msg.re === '#<:>') out['ty'] = tag;
         this.#binding.post(out);
       },
       lift: (msg) => {
@@ -1299,7 +1299,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
   // A reply leaving for the wire names an actor we published by its address.
   #_wireOwn(v) {
     const addr = v && typeof v === 'object' ? this.#_addrOf.get(v) : undefined;
-    if (addr) return '#<. ' + addr + '>';
+    if (addr) return '#<:' + addr + '>';
     if (Array.isArray(v)) return v.map(x => this.#_wireOwn(x));
     if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, this.#_wireOwn(x)]));
     return v;
@@ -1313,10 +1313,10 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       return;
     }` : ''}${publishesClasses ? `
     if (typeof message.to === 'string') {
-      // An actor we published: \`Box 1\` (by \`#new\`) or \`s\` (a singleton),
+      // An actor we published: \`Box:1\` (by \`#new\`) or \`s\` (a singleton),
       // then whatever is inside it, which we pass on relative to it.
       const _toks = _bv_local_tokens(message.to);
-      // \`$new\` to a class's own label (\`. C\`) builds one here, though its members
+      // \`$new\` to a class's own label (\`:C\`) builds one here, though its members
       // are published there.
       const _isNew = (Array.isArray(message.op) ? message.op[message.op.length - 1] : message.op) === '$new';
       for (let _n = Math.min(2, _toks.length); _n > 0; _n--) {
@@ -1383,7 +1383,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
-    // function as the last token of \`to\` (\`. val\`, \`. Box\`), relative to us.
+    // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
     const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
     if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
       const _subArgs = Array.isArray(message.op) ? message.op[0] : null;

@@ -5,7 +5,7 @@
 //
 // Either way the members are a singleton, kept in the declaring actor's cell
 // `C__class`, and `C` is an ordinary class of the declaring actor: `C()` builds
-// one, its actors are `C n` on the wire under it, and their `ty` names `C`. What
+// one, its actors are `C:n` on the wire under it, and their `ty` names `C`. What
 // differs is the constructor's lexical scope:
 //
 // - Nested: the constructor block is inside the singleton, so it closes over it,
@@ -26,7 +26,7 @@ export const FILE_CLASS = 'new__file';
 
 // The label an actor is published at in the actor that builds it, sigil and all
 // (`@s`), or null: a public singleton's, or a public class's members, which are
-// reached at the class's label (`. C count`; `$new` to `. C` still builds a `C`).
+// reached at the class's label (`:C:count`; `$new` to `:C` still builds a `C`).
 export function publicLabel(actor) {
   if (actor?.singletonOf?.startsWith('@')) return actor.singletonOf;
   return actor?.publishedAs ? '@' + actor.publishedAs : null;

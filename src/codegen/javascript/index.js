@@ -130,7 +130,7 @@ export default {
         instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
       }
       // Parse the `to` wire field into { alias, selector }: the head token
-      // names a peer, the rest is relative to it. A relative address (`. x`)
+      // names a peer, the rest is relative to it. A relative address (`:x`)
       // names no peer. Forms: "#<alias rest>", "alias rest", "alias".
       const unescAddr = (s) => s.replace(/\\(\\|>)/g, (_, c) => c);
       const parseTo = (toStr) => {
@@ -142,7 +142,7 @@ export default {
       };
       for (const [name, inst] of Object.entries(instances)) {
         // Each peer sits at the global boundary: what it sends relative to
-        // itself (`. x`) is `name x` on the way out. Anything else is global
+        // itself (`:x`) is `name x` on the way out. Anything else is global
         // and passes through.
         const self = quote(name);
         const globalize = (v) => {
@@ -151,7 +151,7 @@ export default {
           if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalize(x)]));
           return v;
         };
-        // `ty` has no brackets: a relative tag (`.`, `. Box`, `. Point`) is
+        // `ty` has no brackets: a relative tag (`.`, `:Box`, `:Point`) is
         // resolved whole.
         const globalizeTy = (v) => {
           if (typeof v === 'string') return resolve(v, self);

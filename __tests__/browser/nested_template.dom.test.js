@@ -17,10 +17,10 @@ import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
 //   }
 //
 // On Template(), HTML.div receives
-//   inner_html: "<h1>Title</h1><p>#<factory.bv @0></p>"
+//   inner_html: "<h1>Title</h1><p>#<factory.bv:@0></p>"
 // HTML.div handles:
 //   - <h1>Title</h1> inline (no #<…>).
-//   - <p>#<factory.bv @0></p> → new to HTML @p with inner_html "#<factory.bv @0>".
+//   - <p>#<factory.bv:@0></p> → new to HTML @p with inner_html "#<factory.bv:@0>".
 // HTML.p subscribes, receives initial value, sets text.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -56,10 +56,10 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     await expectBehavior(factory,
       { input: { id: '1', op: 'create', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', re: ['#<HTML div 1>'] }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'] }) },
     );
 
-    const div = await page.connectActor('HTML div 1');
+    const div = await page.connectActor('HTML:div:1');
     await expectBehavior(div,
       { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({
@@ -81,7 +81,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
       from: 'caller',
     });
 
-    const div = await page.connectActor('HTML div 1');
+    const div = await page.connectActor('HTML:div:1');
     await expectBehavior(div,
       { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({
@@ -96,7 +96,7 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     await factory.sendAsync({ id: '1', op: 'create', from: 'caller' });
 
-    const p = await page.connectActor('HTML p 1');
+    const p = await page.connectActor('HTML:p:1');
     await expectBehavior(p,
       { input: { id: 'q1', op: 'inner_html' } },
       { output: expect.objectContaining({ re: 'initial' }) },

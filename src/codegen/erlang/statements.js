@@ -198,7 +198,7 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
-    ? `<<(${genExpr(ctx, { type: 'Identifier', name: s.value.viaInstance }, typeEnv, stmtCtx)})/binary, " ${s.value.viaSelector}"/utf8>>`
+    ? `<<(${genExpr(ctx, { type: 'Identifier', name: s.value.viaInstance }, typeEnv, stmtCtx)})/binary, ":${s.value.viaSelector}"/utf8>>`
     : erlString(targetName);
   // Emit `new` and synchronously await the reply (returning the instance addr).
   // Use a unique seq slot per call site so the var names don't collide.
@@ -1462,7 +1462,7 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
 
 function genReplyBody(ctx, fields, typeEnv, sCtx) {
   // Self-return: the bare local self address. The parent promotes it.
-  if (fields[0]?.selfReturn) return '<<"#<.>"/utf8>>';
+  if (fields[0]?.selfReturn) return '<<"#<:>"/utf8>>';
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   const spread = fields.find(f => f.spread);
@@ -1575,8 +1575,8 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
 
   const posTypes = [];
   for (const f of pos) {
-    // A `self` slot is tagged with a bare `.`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString('.')); continue; }
+    // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
+    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString(':')); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -1587,7 +1587,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString('.')}`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString(':')}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

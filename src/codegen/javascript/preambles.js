@@ -661,14 +661,14 @@ export const OBJECT_PREAMBLE = `const BvObject = {
   one(s, name) {
     // A class constructed in place: the actor itself.
     if (typeof s?.receive === 'function') return s;
-    if (s.selfReturn) return '#<.>';
+    if (s.selfReturn) return '#<:>';
     if (s.positional.length !== 1)
       throw new Error("'" + name + "' requires exactly 1 positional return value, got " + s.positional.length);
     return s.positional[0];
   },
   splat(s) {
     // A self-return's reply is the bare local self address.
-    if (s.selfReturn) return '#<.>';
+    if (s.selfReturn) return '#<:>';
     const { positional, named } = s;
     const hasPos = positional.length > 0;
     const hasNamed = Object.keys(named).length > 0;
@@ -682,8 +682,8 @@ function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;
   const minPos = requiredPos !== undefined ? requiredPos : positional.length;
   if (types.positional.length < minPos || types.positional.length > positional.length) return false;
-  // A type value's tag is its address (\`. Point\`, \`svc.bv W X\`, or the alias
-  // spelling \`Svc Point\`); the parameter spells the type as the source does
+  // A type value's tag is its address (\`:Point\`, \`svc.bv:W:X\`, or the alias
+  // spelling \`Svc:Point\`); the parameter spells the type as the source does
   // (\`Point\`, \`Svc::Point\`). Both come to the type's key.
   const keyOf = (t) => (typeof t === 'string' && Object.hasOwn(_bv_type_keys, t) ? _bv_type_keys[t] : null);
   const memberOf = (actual, expected) => {

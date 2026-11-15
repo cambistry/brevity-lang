@@ -20,12 +20,12 @@
 //   label    how the receiver reads in source, for messages ('Svc.s')
 //
 // A member path is space-delimited tokens (src/codegen/opre_tokens.js):
-// `Svc.s.inner.ping()` is `ping` to `Svc s inner`, a public member `.x`
+// `Svc.s.inner.ping()` is `ping` to `Svc:s:inner`, a public member `.x`
 // travelling bare. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 //
 // A sub-service read in value position (`x = Svc.s`) is that address, too, when
 // the document says `s` is one: `expr.opreAddress`. A local bound once to an
-// address like that stands for it, so `x.get()` is `get` to `Svc s`.
+// address like that stands for it, so `x.get()` is `get` to `Svc:s`.
 //
 // How a message is delivered (in process or on the wire, a call or a send) is
 // still each target's choice. Where it goes comes from here.

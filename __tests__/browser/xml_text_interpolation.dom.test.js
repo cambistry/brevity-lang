@@ -12,7 +12,7 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 //
 // Contrast with `{{expr}}` (the prior form): that lifts `expr` into a
 // synthesized `@N` closure on the enclosing actor and sends the closure
-// address `#<main @N>` on the wire; the HTML runtime subscribes and lives
+// address `#<main:@N>` on the wire; the HTML runtime subscribes and lives
 // re-renders. Reactivity comes from the closure; `#{}` is a snapshot splice.
 //
 // Escapes in XML text are narrow:
@@ -56,7 +56,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hello'] }, '$new'],
-          to: 'HTML div',
+          to: 'HTML:div',
         }) },
       );
     });
@@ -73,7 +73,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['42'] }, '$new'],
-          to: 'HTML div',
+          to: 'HTML:div',
         }) },
       );
     });
@@ -90,7 +90,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['true'] }, '$new'],
-          to: 'HTML div',
+          to: 'HTML:div',
         }) },
       );
     });
@@ -107,7 +107,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['1.0e-1'] }, '$new'],
-          to: 'HTML div',
+          to: 'HTML:div',
         }) },
       );
     });
@@ -116,7 +116,7 @@ describe('XML text interpolation `#{expr}`', () => {
   // ── Non-reactive: `#{ }` does NOT synthesize a closure address ──────────
 
   describe('non-reactive — no closure is synthesized', () => {
-    it('`#{x}` emits no `#<main @N>` address for its expression', async () => {
+    it('`#{x}` emits no `#<main:@N>` address for its expression', async () => {
       const script = `
         **
           HTML: (:div)
@@ -144,8 +144,8 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main @0>', ' / static'] }, '$new'],
-          to: 'HTML div',
+          op: [{ children: ['#<main:@0>', ' / static'] }, '$new'],
+          to: 'HTML:div',
         }) },
       );
     });
@@ -204,7 +204,7 @@ describe('XML text interpolation `#{expr}`', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['A p B ', '#<main @0>', ' C q D'] }, '$new'],
+          op: [{ children: ['A p B ', '#<main:@0>', ' C q D'] }, '$new'],
         }) },
       );
     });
@@ -225,7 +225,7 @@ describe('XML text interpolation `#{expr}`', () => {
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
           op: [{ children: ['hi Chris'] }, '$new'],
-          to: 'HTML p',
+          to: 'HTML:p',
         }) },
       );
     });
@@ -338,7 +338,7 @@ describe('XML text interpolation `#{expr}`', () => {
 //
 // `{{ expr }}` where expr has no RefRead nodes collapses to an inline text splice
 // (same wire shape as `#{expr}`). Reactive `{{ expr }}` (reads a * ref) continues
-// to emit a `#<actor @N>` subscription address.
+// to emit a `#<actor:@N>` subscription address.
 //
 // Pure-thunk case: `{ para }` where `para = -> <p>…</p>` inlines the element —
 // the <p> is pre-dispatched before the parent <div>, exactly as if the element
@@ -358,7 +358,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello'] }, '$new'],
-        to: 'HTML div',
+        to: 'HTML:div',
       }) },
     );
   });
@@ -375,7 +375,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
         op: [{ children: ['hello world!'] }, '$new'],
-        to: 'HTML div',
+        to: 'HTML:div',
       }) },
     );
   });
@@ -391,8 +391,8 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>'] }, '$new'],
-        to: 'HTML div',
+        op: [{ children: ['#<main:@0>'] }, '$new'],
+        to: 'HTML:div',
       }) },
     );
   });
@@ -409,8 +409,8 @@ describe('non-reactive { expr } collapses to inline text', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main @0>', ' / c'] }, '$new'],
-        to: 'HTML div',
+        op: [{ children: ['#<main:@0>', ' / c'] }, '$new'],
+        to: 'HTML:div',
       }) },
     );
   });
@@ -441,16 +441,16 @@ describe('non-reactive {{ expr }} — pure thunk inlining', () => {
     const pPost = actor.posts[0];
     expect(pPost).toEqual(expect.objectContaining({
       op: [{ children: ['Inner'] }, '$new'],
-      to: 'HTML p',
+      to: 'HTML:p',
     }));
 
     // Stub the HTML @p reply with a constructed element address
-    await actor.sendAsync({ id: pPost.id, re: '#<HTML p 1>' });
+    await actor.sendAsync({ id: pPost.id, re: '#<HTML:p:1>' });
 
     // Actor continues and sends <div> with the <p> address in children
     expect(actor.posts[1]).toEqual(expect.objectContaining({
-      op: [{ children: ['#<HTML p 1>'] }, '$new'],
-      to: 'HTML div',
+      op: [{ children: ['#<HTML:p:1>'] }, '$new'],
+      to: 'HTML:div',
     }));
   });
 });

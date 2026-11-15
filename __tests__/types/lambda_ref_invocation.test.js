@@ -12,9 +12,9 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 //     fully-qualified reference back to it and invokes it through CAM.
 //
 // A lambda in a routed position is lowered to a synthesized dispatch handler
-// `@N` and encoded as a local-form self-address `#<. @N>` — the same convention
+// `@N` and encoded as a local-form self-address `#<:@N>` — the same convention
 // the DOM closure-prop path uses. The host's perspective translation promotes
-// `#<. @N>` to `#<selfAddr @N>` as the carrying message leaves the actor, so a
+// `#<:@N>` to `#<selfAddr:@N>` as the carrying message leaves the actor, so a
 // holder on another actor gets a reference it can route back through. The base
 // runner doesn't relay in-process, so these tests model that promotion
 // explicitly when invoking the reference back.
@@ -39,8 +39,8 @@ const WIDGET_METHOD = `{
 
 // A Signal value as it arrives on the wire: its silent `dismiss` reference
 // holds an address, its `code` a datum. Positional — all fields required.
-const sigWire = ['#<caller d>', 7];
-const sigTag = 'Widget Signal';
+const sigWire = ['#<caller:d>', 7];
+const sigTag = 'Widget:Signal';
 
 // ── Carrier 1: a service-hosted type's callback field ────────────────────────
 // Construct `Panel` (imported from Widget) with a lambda for its `onpress`
@@ -69,7 +69,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: [{ sig: sigWire }, 'generic.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
-      { output: { id: expect.any(String), op: 'd', to: '#<caller d>' } },
+      { output: { id: expect.any(String), op: 'd', to: '#<caller:d>' } },
     );
   });
 
@@ -77,15 +77,15 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '2', op: [{ sig: sigWire }, 'typed.'], 'ty': [{ sig: sigTag }], from: 'caller' } },
-      { output: { id: expect.any(String), op: 'd', to: '#<caller d>' } },
+      { output: { id: expect.any(String), op: 'd', to: '#<caller:d>' } },
     );
   });
 });
 
 // ── Carrier 2: a service method callback parameter, invoked through CAM ───────
 // Pass a lambda to `Widget.watch`. The outgoing call must carry a routable
-// self-reference to the lambda (`#<. @N>`), not a bare label. Then — modelling
-// the host promoting it to `#<selfAddr @N>` and the remote invoking it — a CAM
+// self-reference to the lambda (`#<:@N>`), not a bare label. Then — modelling
+// the host promoting it to `#<selfAddr:@N>` and the remote invoking it — a CAM
 // message routed to that reference runs the lambda.
 
 describe('lambda ref invocation — service method callback param (CAM round-trip)', () => {
@@ -103,16 +103,16 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === 'watch.');
     expect(watch).toBeTruthy();
     expect(watch.to).toBe('Widget');
-    // The callback arg is a relative self-address (#<. @N>): a reference the
-    // host promotes to #<selfAddr @N> so the remote can route back to us.
-    expect(watch.op[0].on).toMatch(/^#<\. @\d+>$/);
+    // The callback arg is a relative self-address (#<:@N>): a reference the
+    // host promotes to #<selfAddr:@N> so the remote can route back to us.
+    expect(watch.op[0].on).toMatch(/^#<:@\d+>$/);
   });
 
   it('runs the lambda when the remote invokes the reference through CAM', async () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: 'go.', from: 'caller' });
     const watch = actor.posts.find(p => Array.isArray(p.op) && p.op[p.op.length - 1] === 'watch.');
-    const name = watch.op[0].on.slice('#<. '.length, -1); // '#<. @0>' → '@0'
+    const name = watch.op[0].on.slice('#<:'.length, -1); // '#<:@0>' → '@0'
 
     const before = actor.posts.length;
     // The host promoted our reference to a fully-qualified address; the remote
@@ -123,12 +123,12 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
       id: '2',
       op: [[sigWire], name],
       'ty': [[sigTag]],
-      to: `. ${name}`,
+      to: `:${name}`,
       from: 'Widget',
     });
     const fired = actor.posts.slice(before);
     expect(fired).toContainEqual(
-      expect.objectContaining({ op: 'd', to: '#<caller d>' }),
+      expect.objectContaining({ op: 'd', to: '#<caller:d>' }),
     );
   });
 });

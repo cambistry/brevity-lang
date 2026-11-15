@@ -6,13 +6,13 @@ import { publicLabel } from '../../singleton_classes.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
-// Wire tag for a type-valued slot: `path Name` for an imported/cross-module
-// type, `. Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
+// Wire tag for a type-valued slot: `path:Name` for an imported/cross-module
+// type, `:Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
 function erlTypeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its address (`. s`).
+  // A singleton's class is itself: it's tagged with its address (`:s`).
   const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
@@ -334,8 +334,8 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
 // NOTE: uses genExpr via late binding on ctx to avoid circular dependency
 // `wire: true` marks a lambda that flows into a type field or a cross-actor
 // call argument and may be routed through CAM. It is encoded as a relative
-// self-address `#<. @N>` (the host's perspective translation promotes it to
-// `#<selfAddr @N>` on the way out), and its dispatch arm is keyed by the `@N`
+// self-address `#<:@N>` (the host's perspective translation promotes it to
+// `#<selfAddr:@N>` on the way out), and its dispatch arm is keyed by the `@N`
 // selector. A non-wire lambda keeps its bare `_lambda_N` local dispatch key
 // (used directly in self_send). The internal `_lambda_N` name is kept for
 // capture keys regardless.

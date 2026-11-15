@@ -74,8 +74,8 @@ function coerceOperand(code, isValue, srcType, target) {
 
 // A lambda in a routed position (a type-field value or a cross-actor call
 // argument) is lowered to a synthesized `@N` dispatch handler and encoded as a
-// relative self-address `#<. @N>`. The host's perspective translation promotes
-// it to `#<selfAddr @N>` as the carrying message leaves the actor, so a holder
+// relative self-address `#<:@N>`. The host's perspective translation promotes
+// it to `#<selfAddr:@N>` as the carrying message leaves the actor, so a holder
 // on another actor can invoke it back through CAM. Mirrors the JS/erlang
 // targets. The internal `_lambda_N` name is kept for capture-field keys.
 // A #new's args as the wire carries them, and the ty that tells the receiver how to
@@ -213,7 +213,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // `{children: [...], ...attrs}` sent to the tag's host service address. Pure
     // CAM — no DOM. Text/`#{}` runs merge into one string child; a reactive hole
     // `{{expr}}` (closure_ref) and a nested element each break a run. A closure_ref
-    // travels as its relative self-address `#<. @N>` (a lambda ref the host can
+    // travels as its relative self-address `#<:@N>` (a lambda ref the host can
     // invoke back through CAM). Fire-and-forget like every rust send: each #new
     // posts and yields Null (nested children post their own #new).
     const strCoerce = (e) => `(&(${genRustExpr(e, typeEnv, eCtx)})).bv_str()`;
@@ -630,7 +630,7 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
     G.ctx.needsAwaitNew = true;
     const newTo = expr.viaInstance
-      ? `json!(format!("{} ${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
+      ? `json!(format!("{}:${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
       : `json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})`;
     return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(self.bv_lift(Value::Object(send_msg))); self.await_new_response(&new_id) }`;
   }
@@ -764,7 +764,7 @@ ${subRegLines.join('\n')}
         // instead of posting outward.
         return `{
         let _addr = ${refAddrExpr(expr.object, ref.field, typeEnv, eCtx)};
-        if _addr == "#<.>" || _addr.starts_with("#<. ") {
+        if _addr == "#<:>" || _addr.starts_with("#<:") {
             let _ = self.self_send(&bv_sel(&_addr), &json!([${posVals}]));
             Value::Null
         } else {
@@ -1427,7 +1427,7 @@ ${subRegLines.join('\n')}
     }
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
-  if (expr.type === 'SelfValue') return 'json!("#<.>")';
+  if (expr.type === 'SelfValue') return 'json!("#<:>")';
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 
@@ -1991,7 +1991,7 @@ export function rustOpreTo(expr, gen) {
   // A value holding an address (a self-return's reply, say) may carry the
   // brackets that mark it as one; `to` is the address itself.
   const held = `bv_addr_to(bv_val((${gen(root)}).clone()).as_str().unwrap_or(""))`;
-  return address?.path?.length ? `format!("{} {}", ${held}, ${JSON.stringify(joinAddress(address.path))})` : held;
+  return address?.path?.length ? `format!("{}:{}", ${held}, ${JSON.stringify(joinAddress(address.path))})` : held;
 }
 
 // A call into one of this file's classes, by instance. A silent or launched call

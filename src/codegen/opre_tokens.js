@@ -1,21 +1,23 @@
-// Opre addresses as tokens. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
+// Opre addresses as tokens. See notes/opre-colon-separator-2026-11-14.md, which
+// revises notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 //
-// An address is a sequence of tokens separated by single spaces. A token holds
-// any characters. It is written in single quotes only when it must be:
+// An address is a sequence of tokens separated by `:`. A token holds any
+// characters, spaces included. It is written in single quotes only when it must be:
 //
-//   - it contains a space:                'file/with spaces/'
+//   - it contains a colon:                'bluster://n1'
 //   - it starts with `'`:                 '''tis'
-//   - it is a reserved whole token meant literally: '.'
+//   - it is empty:                        ''
 //
 // Inside quotes, `''` is one `'`. Outside quotes, `'` is an ordinary character
 // (`Chris's-Computer`). Quoting a token that doesn't need it is an error.
 //
-// The whole token `.` at the head of an address is self: the address is
-// relative to its sender. A parent that receives `. x` from child `c` rewrites
-// it to `. c x`; the node at the global boundary replaces `.` with its own
-// address. An address whose head isn't `.` passes through unchanged.
+// A leading `:` makes the address relative to its sender: `:x` is `x` under
+// self, and a bare `:` is self. A parent that receives `:x` from child `c`
+// rewrites it to `:c:x`; the node at the global boundary replaces the leading
+// `:` with its own address and a colon (`self:x`). An address that doesn't
+// start with `:` passes through unchanged.
 //
-// In a token list, self is `null`; a literal `.` is the string '.'.
+// In a token list, self is `null`, and only the head may be self.
 //
 // These functions are also stringified into the JS runtime preamble, so each
 // one stands alone: no module-level constants, and calls between them go only to
@@ -23,12 +25,13 @@
 
 // Does `token` have to be written in quotes?
 export function _opre_needs_quote(token) {
-  return token === '' || token === '.' || token.includes(' ') || token.startsWith("'");
+  return token === '' || token.includes(':') || token.startsWith("'");
 }
 
-// One token as it is written in an address. `null` is self.
+// One token as it is written in an address. `null` (self) is written as
+// nothing: the address's leading `:` stands for it.
 export function _opre_quote(token) {
-  if (token === null) return '.';
+  if (token === null) return '';
   if (typeof token !== 'string') throw new Error('opre: a token is a string');
   return _opre_needs_quote(token) ? "'" + token.replace(/'/g, "''") + "'" : token;
 }
@@ -40,6 +43,11 @@ export function _opre_split(address) {
   const tokens = [];
   if (address === '') return tokens;
   let i = 0;
+  if (address[0] === ':') {
+    tokens.push(null);
+    if (address.length === 1) return tokens;
+    i = 1;
+  }
   for (;;) {
     let token;
     if (address[i] === "'") {
@@ -55,51 +63,48 @@ export function _opre_split(address) {
         token += address[j++];
       }
       if (!_opre_needs_quote(token)) throw new Error(`opre: token ${JSON.stringify(token)} is quoted but needn't be`);
-      if (j < address.length && address[j] !== ' ') throw new Error(`opre: text after a closing quote in ${JSON.stringify(address)}`);
+      if (j < address.length && address[j] !== ':') throw new Error(`opre: text after a closing quote in ${JSON.stringify(address)}`);
       i = j;
     } else {
-      const sp = address.indexOf(' ', i);
-      const end = sp === -1 ? address.length : sp;
+      const sep = address.indexOf(':', i);
+      const end = sep === -1 ? address.length : sep;
       token = address.slice(i, end);
       if (token === '') throw new Error(`opre: empty token in ${JSON.stringify(address)}`);
-      if (token === '.') {
-        if (i !== 0) throw new Error(`opre: self \`.\` is only an address's head token, in ${JSON.stringify(address)}`);
-        token = null;
-      }
       i = end;
     }
     tokens.push(token);
     if (i >= address.length) return tokens;
-    i++; // the separating space
+    i++; // the separating colon
     if (i >= address.length) throw new Error(`opre: empty token in ${JSON.stringify(address)}`);
   }
 }
 
 // The address of a list of tokens. Only the head may be self (`null`).
 export function _opre_join(tokens) {
-  if (tokens.indexOf(null, 1) !== -1) throw new Error("opre: self `.` is only an address's head token");
-  return tokens.map(_opre_quote).join(' ');
+  if (tokens.indexOf(null, 1) !== -1) throw new Error("opre: self is only an address's head token");
+  if (tokens[0] === null) return ':' + tokens.slice(1).map(_opre_quote).join(':');
+  return tokens.map(_opre_quote).join(':');
 }
 
-// Is the address relative to its sender: is its head token exactly `.`?
+// Is the address relative to its sender: does it start with `:`?
 export function _opre_is_relative(address) {
-  return typeof address === 'string' && (address === '.' || address.startsWith('. '));
+  return typeof address === 'string' && address.startsWith(':');
 }
 
 // A relative address as seen one hop up, by the parent of the child `name` (an
-// address of one or more tokens, already written): `. x` → `. name x`. Any
-// other address is unchanged.
+// address of one or more tokens, already written): `:x` → `:name:x`, `:` →
+// `:name`. Any other address is unchanged.
 export function _opre_under(address, name) {
   if (!_opre_is_relative(address)) return address;
-  return '. ' + name + address.slice(1);
+  return ':' + name + (address === ':' ? '' : address);
 }
 
 // A relative address made global by the node `self` (an address, already
-// written) at the global boundary: `. x` → `self x`. Any other address is
-// unchanged.
+// written) at the global boundary: `:x` → `self:x`, `:` → `self`. Any other
+// address is unchanged.
 export function _opre_resolve(address, self) {
   if (!_opre_is_relative(address)) return address;
-  return self + address.slice(1);
+  return address === ':' ? self : self + address;
 }
 
 // Rewrite every `#<…>` address in a string with `f`, which maps the address

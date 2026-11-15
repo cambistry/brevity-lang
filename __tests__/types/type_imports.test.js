@@ -180,6 +180,6 @@ describe('type imports — wire registry includes imported types', () => {
       @origin = -> p: P(0, 0)
     `);
     const code = compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
-    expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"geometry\.bv Point":\s*\{\s*key:\s*"geometry\.bv Point",\s*fields:\s*\["x",\s*"y"\]/);
+    expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"geometry\.bv:Point":\s*\{\s*key:\s*"geometry\.bv:Point",\s*fields:\s*\["x",\s*"y"\]/);
   });
 });

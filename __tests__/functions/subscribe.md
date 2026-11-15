@@ -57,14 +57,14 @@ Subscribing to a remote function posts `$subscribe` to a function-specific
 address:
 
 ```text
-to: "#<Pub pub>"
+to: "#<Pub:pub>"
 op: "$subscribe"
 ```
 
 Parameterized subscribe carries args:
 
 ```text
-to: "#<Pub pub_w_params>"
+to: "#<Pub:pub_w_params>"
 op: [{ p: 100 }, "$subscribe"]
 ```
 
@@ -75,4 +75,4 @@ Later `re` messages with the same id update subscriber state.
 - Use `.subscribe (v) { ... } ;` for local subscription blocks.
 - Keep subscription handlers silent.
 - Store subscription results in `*Type` cells.
-- For remote subscription examples, include the `#<Alias @member>` address shape.
+- For remote subscription examples, include the `#<Alias:@member>` address shape.

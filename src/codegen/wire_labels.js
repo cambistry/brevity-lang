@@ -58,7 +58,7 @@ export function addressToken(name) {
   return wireLabel(name);
 }
 
-// The relative address of one of this actor's own labels: `@a` is `. a`.
+// The relative address of one of this actor's own labels: `@a` is `:a`.
 export function selfAddress(name) {
-  return '. ' + quote(addressToken(name));
+  return ':' + quote(addressToken(name));
 }

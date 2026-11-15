@@ -1,8 +1,8 @@
 // Public classes across files. A doc's constructor entry (`W () -> *{ … }`) is
 // reached three ways, all sending `$new` with the class as the last token of `to`:
 //
-//   "svc.bv": (:W)    W()        to: `svc.bv W`
-//   "svc.bv": Svc     Svc.W()    to: `Svc W`
+//   "svc.bv": (:W)    W()        to: `svc.bv:W`
+//   "svc.bv": Svc     Svc.W()    to: `Svc:W`
 //   s = Svc()         s.W()      to: `<s's address> W`
 //
 // The caller's side lowers each to a dependency of its own, which every backend
@@ -56,7 +56,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     return [...inherited.filter(p => !own.some(o => o.name === p.name)), ...own];
   };
   // A class of a dependency is reached at the dependency's address and the
-  // class's token: `Svc Counter`.
+  // class's token: `Svc:Counter`.
   const addDependency = (name, dep, cls, type) => {
     if (synthetic.has(name)) return;
     synthetic.add(name);
@@ -258,7 +258,7 @@ export function addConstructHandlers(ast) {
   if (!file) return;
   const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   // A file whose `*` section is its `new` (src/singleton_classes.js): `$new` to the
-  // file builds one, published at `n` under it, its `ty` the file's own class, `.`.
+  // file builds one, published at `n` under it, its `ty` the file's own class, `:`.
   const fileClass = classes.get(FILE_CLASS);
   if (fileClass && !file.functions?.some(f => f.name === 'new')) {
     const params = (fileClass.initParams || []).map(p => ({ ...p, accessor: undefined }));

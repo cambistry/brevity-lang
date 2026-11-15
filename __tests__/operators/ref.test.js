@@ -390,7 +390,7 @@ describe('ref — public (@name *Type)', () => {
 
   it('set@val then @val reflects new value', async () => {
     await expectBehavior(script,
-      { input: { op: [[7], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[7], '$set'], to: ':val', 'ty': [['Integer']], from: 'c' } },
       { input: { id: '1', op: 'val', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
@@ -398,9 +398,9 @@ describe('ref — public (@name *Type)', () => {
 
   it('sequential set@val — last wins', async () => {
     await expectBehavior(script,
-      { input: { op: [[1], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
-      { input: { op: [[2], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
-      { input: { op: [[3], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[1], '$set'], to: ':val', 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[2], '$set'], to: ':val', 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[3], '$set'], to: ':val', 'ty': [['Integer']], from: 'c' } },
       { input: { id: '1', op: 'val', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [3], to: 'c' } },
     );
@@ -408,7 +408,7 @@ describe('ref — public (@name *Type)', () => {
 
   it('set@name on text ref', async () => {
     await expectBehavior(script,
-      { input: { op: [['bye'], '$set'], to: '. name', 'ty': [['Text']], from: 'c' } },
+      { input: { op: [['bye'], '$set'], to: ':name', 'ty': [['Text']], from: 'c' } },
       { input: { id: '1', op: 'name', from: 'c' } },
       { output: { id: '1', 'ty': ['Text'], re: ['bye'], to: 'c' } },
     );
@@ -538,7 +538,7 @@ describe('ref — bare and @ namespaces are independent', () => {
 
   it('mutating @val via set@val does not change bare val', async () => {
     await expectBehavior(script,
-      { input: { op: [[99], '$set'], to: '. val', 'ty': [['Integer']], from: 'c' } },
+      { input: { op: [[99], '$set'], to: ':val', 'ty': [['Integer']], from: 'c' } },
       { input: { id: '2', op: 'both', from: 'c' } },
       { output: { id: '2', 'ty': { p: 'Integer', q: 'Integer' }, re: { p: 11, q: 99 }, to: 'c' } },
     );
