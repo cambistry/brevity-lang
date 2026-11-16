@@ -1086,7 +1086,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         if (typeof opName !== 'string' || !isPublicOp(opName)) return;
         const accessorName = opName;
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         switch (accessorName) {
           case 'length': {
             Promise.resolve().then(() => route({ id, re: BigInt(el.classList.length), from: addr, to: from }));
@@ -1162,7 +1162,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       try {
         if (typeof opName !== 'string' || !isPublicOp(opName)) return;
         const accessorName = opName;
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         switch (accessorName) {
           case 'size': {
             Promise.resolve().then(() => route({ id, re: BigInt(Object.keys(el.dataset).length), from: addr, to: from }));
@@ -1307,7 +1307,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // so that mutator names don't collide with accessor names sharing
         // the same op surface.
         if (eopName.endsWith('!')) {
-          const payload = Array.isArray(eop) ? eop[0] : null;
+          const payload = argsOf(eop);
           if (handleElementMutator(tag, cls, el, eopName, payload)) {
             Promise.resolve().then(() => route({
               id: eid, ...selfReply(addr), from: addr, to: efrom,
@@ -1319,7 +1319,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // Generic-attribute readers carry a payload (the attribute name).
         // They live on the Element layer and apply to every classification.
         if (accessorName === 'get_attribute' || accessorName === 'has_attribute') {
-          const payload = Array.isArray(eop) ? eop[0] : null;
+          const payload = argsOf(eop);
           const name = extractSingle(payload, 'name');
           if (typeof name !== 'string') return;
           const value = accessorName === 'get_attribute'
@@ -1519,12 +1519,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return out;
       }
       case 'contains': {
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const other = extractSingle(payload, 'other');
         return other instanceof Node ? node.contains(other) : false;
       }
       case 'compare_document_position': {
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const other = extractSingle(payload, 'other');
         return other instanceof Node ? BigInt(node.compareDocumentPosition(other)) : null;
       }
@@ -1533,17 +1533,17 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // it on first lookup, so two consecutive clone_node() calls return
         // distinct addresses (not identity-preserving by design — clones
         // are different nodes).
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const deep = extractSingle(payload, 'deep');
         return tokenForNode(node.cloneNode(typeof deep === 'boolean' ? deep : false));
       }
       case 'is_equal_node': {
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const other = extractSingle(payload, 'other');
         return other instanceof Node ? node.isEqualNode(other) : false;
       }
       case 'is_same_node': {
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const other = extractSingle(payload, 'other');
         return other instanceof Node ? node.isSameNode(other) : false;
       }
@@ -1614,7 +1614,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // CAM is message-passing). Invalid selectors throw SyntaxError; the
   // caller's try/catch converts that to an ex-shaped reply.
   function readQueryAccessor(node, accessorName, op) {
-    const payload = Array.isArray(op) ? op[0] : null;
+    const payload = argsOf(op);
     switch (accessorName) {
       case 'query_selector': {
         const selector = extractSingle(payload, 'selector');
@@ -1694,6 +1694,19 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   // Single-arg helpers: positional (`[val]`) or named keyed by `key`.
+  // An op's arg list, as the readers here take it: a named-only list `[{k: v}]`
+  // is its fields, any other list itself; no arg list is null.
+  function argsOf(op) {
+    if (!Array.isArray(op) || op.length < 2) return null;
+    const a = op[0];
+    if (Array.isArray(a) && a.length === 1 && a[0] !== null && typeof a[0] === 'object' && !Array.isArray(a[0])) return a[0];
+    return a;
+  }
+  // An arg list is always a list: an object where one belongs is not one.
+  function badArgs(op) {
+    return Array.isArray(op) && op.length > 1 && op[0] !== null && typeof op[0] === 'object' && !Array.isArray(op[0]);
+  }
+
   function extractSingle(payload, key) {
     if (Array.isArray(payload)) return resolveWireItem(payload[0]);
     if (payload && typeof payload === 'object' && key in payload) return resolveWireItem(payload[key]);
@@ -2048,7 +2061,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
 
   function handleDomNew(tag, msg) {
     const { id, op, from } = msg;
-    const payload = Array.isArray(op) ? op[0] : {};
+    const payload = (argsOf(op) ?? {});
     const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
       id, re: '#<' + addr + '>', 'ty': 'HTML:' + tag, from: 'HTML', to: from,
@@ -2103,6 +2116,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
     }
     const to = msg.to;
+    if (badArgs(msg.op)) {
+      const name = msg.op[msg.op.length - 1];
+      if (msg.id !== undefined) Promise.resolve().then(() => route({ id: msg.id, ex: { [name]: 'bad_op' }, to: msg.from }));
+      return;
+    }
 
     // `HTML:tag` form resolves to the tag's element constructor.
     let domTag = null;
@@ -2172,7 +2190,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       if (opName === 'first') {
-        const payload = Array.isArray(op) ? op[0] : {};
+        const payload = (argsOf(op) ?? {});
         const selector = payload.selector;
         const el = document.querySelector(selector);
         if (el) {
@@ -2195,7 +2213,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         return;
       }
       if (opName === 'eval') {
-        const payload = Array.isArray(op) ? op[0] : null;
+        const payload = argsOf(op);
         const js = extractSingle(payload, 'js');
         // Indirect eval — runs at global scope, no access to runtime locals.
         const result = (0, eval)(typeof js === 'string' ? js : '');

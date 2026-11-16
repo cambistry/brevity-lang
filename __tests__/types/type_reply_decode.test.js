@@ -146,7 +146,7 @@ describe('a typed reply from a remote', () => {
 
   it('decodes by the tag, whatever authority it names', async () => {
     const actor = await createActor(source, {
-      expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) }],
+      expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) }],
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },

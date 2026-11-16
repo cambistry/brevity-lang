@@ -229,14 +229,14 @@ describe('overload — mixed forms — runtime', () => {
 
   it('text arg matches first clause', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ msg: 'hi' }, 'echo'], 'ty': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: '1', op: [[{ msg: 'hi' }], 'echo'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
   it('integer arg matches appended clause', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ msg: 42 }, 'echo'], 'ty': [{ msg: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ msg: 42 }], 'echo'], 'ty': [[{ msg: 'Integer' }]], from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'number' }, to: 'c' } },
     );
   });
@@ -462,21 +462,21 @@ describe('overload — optional named args', () => {
 
   it('name-only matches first handler, greeting defaults', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ name: 'world' }, 'greet'], 'ty': [{ name: 'Text' }], from: 'c' } },
+      { input: { id: '1', op: [[{ name: 'world' }], 'greet'], 'ty': [[{ name: 'Text' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
 
   it('name + greeting matches first handler', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ name: 'world', greeting: 'hey' }, 'greet'], 'ty': [{ name: 'Text', greeting: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ name: 'world', greeting: 'hey' }], 'greet'], 'ty': [[{ name: 'Text', greeting: 'Text' }]], from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hey world' }, to: 'c' } },
     );
   });
 
   it('all three named args matches second handler', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ name: 'world', greeting: 'hey', punctuation: '!' }, 'greet'], 'ty': [{ name: 'Text', greeting: 'Text', punctuation: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [[{ name: 'world', greeting: 'hey', punctuation: '!' }], 'greet'], 'ty': [[{ name: 'Text', greeting: 'Text', punctuation: 'Text' }]], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hey world!' }, to: 'c' } },
     );
   });

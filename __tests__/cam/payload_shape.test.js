@@ -1,10 +1,13 @@
 import { createActor, expectActorBehavior } from '../helpers.js';
 
-// The canonical wire shape of an Object payload, in `op` and in `re`:
+// The canonical wire shape of an Object payload. An arg list in `op` is always
+// a list, with any named fields in a trailing object:
+//   named only   → [{k: v}]
+//   mixed        → [p1, p2, {k: v}]
+// and an object in its place is refused (`bad_op`). In `re`:
 //   empty        → []
 //   named only   → {k: v}
 //   mixed        → [p1, p2, {k: v}]
-// `{}`, `[{}]` and `[{k: v}]` are consumable but never generated.
 
 const source = `
   **
@@ -26,11 +29,11 @@ const source = `
   @self = { :k Integer = @echo(k: 3); return :k }
 `;
 
-describe('payload shape — named only is {k: v}', () => {
+describe('payload shape — named-only args are [{k: v}]', () => {
   it('a construction', async () => {
     await createActor(source, {
       expects: [
-        { output: { id: '1', op: [{ a: 5 }, '$new'], ty: [{ a: 'Integer' }], to: 'Thing' } },
+        { output: { id: '1', op: [[{ a: 5 }], '$new'], ty: [[{ a: 'Integer' }]], to: 'Thing' } },
       ],
     });
   });
@@ -40,7 +43,7 @@ describe('payload shape — named only is {k: v}', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '90', op: 'go', from: 'c' } },
-      { output: { id: '2', op: [{ k: 1 }, 'put'], to: 'Thing/1' } },
+      { output: { id: '2', op: [[{ k: 1 }], 'put'], to: 'Thing/1' } },
       { input: { id: '2', re: { value: 42 } } },
       { output: { id: '90', re: { value: 42 }, 'ty': { value: 'Integer' }, to: 'c' } },
     );
@@ -51,10 +54,20 @@ describe('payload shape — named only is {k: v}', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
       { input: { id: '91', op: 'note.', from: 'c' } },
-      { output: expect.objectContaining({ op: [{ k: 2 }, 'ping.'], to: 'Thing/1' }) },
+      { output: expect.objectContaining({ op: [[{ k: 2 }], 'ping.'], to: 'Thing/1' }) },
     );
   });
 
+  it('an object in place of the arg list is refused', async () => {
+    const actor = await createActor(source);
+    await expectActorBehavior(actor,
+      { input: { id: '95', op: [{ k: 1 }, 'echo'], 'ty': [{ k: 'Integer' }], from: 'c' } },
+      { output: { id: '95', ex: { echo: 'bad_op' }, to: 'c' } },
+    );
+  });
+});
+
+describe('payload shape — a named-only reply is {k: v}', () => {
   it('a reply', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,

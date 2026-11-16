@@ -111,9 +111,9 @@ reply comes back as `re` with the same `id`.
 ```json
 {
   "id": "100",
-  "op": [{ "url": "https://example.com" }, "get"],
+  "op": [[{ "url": "https://example.com" }], "get"],
   "from": "Primary",
-  "ty": [{ "url": "Text" }]
+  "ty": [[{ "url": "Text" }]]
 }
 ```
 
@@ -146,7 +146,7 @@ intrinsic `$new`, aimed at the class by `to`, and the reply supplies an address
 that later messages can target:
 
 ```json
-{ "id": "1", "op": [{ "path": "/main" }, "$new"], "to": "WebView" }
+{ "id": "1", "op": [[{ "path": "/main" }], "$new"], "to": "WebView" }
 ```
 
 ```json

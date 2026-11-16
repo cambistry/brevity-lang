@@ -62,8 +62,8 @@ describe('test.op — with args', () => {
 
   it('passes args to op', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [{ n: 3 }, 'add!'] }, from: 't' } },
-      { input: { id: '2', test: { op: [{ n: 7 }, 'add!'] }, from: 't' } },
+      { input: { id: '1', test: { op: [[{ n: 3 }], 'add!'] }, from: 't' } },
+      { input: { id: '2', test: { op: [[{ n: 7 }], 'add!'] }, from: 't' } },
       { input: { id: '3', test: { get: '~x' }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { x: 3 } }) },
       { output: expect.objectContaining({ id: '2', re: { x: 10 } }) },
@@ -79,7 +79,7 @@ describe('test.op — bypasses schema validation', () => {
 
   it('no ty required', async () => {
     await expectBehavior(script,
-      { input: { id: '1', test: { op: [{ msg: 'hello' }, 'echo'] }, from: 't' } },
+      { input: { id: '1', test: { op: [[{ msg: 'hello' }], 'echo'] }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { msg: 'hello' } }) },
     );
   });

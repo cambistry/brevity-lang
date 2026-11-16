@@ -46,7 +46,7 @@ const reply = (id, value) => expect.objectContaining({ id, re: [value], to: 'c' 
 describe('a class reads its file\'s cells', () => {
   it('reads a cell', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: 'get', to: ':W:1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [4], 'ty': ['Integer'] }) },
@@ -55,7 +55,7 @@ describe('a class reads its file\'s cells', () => {
 
   it('sees a write the file makes after the class was constructed', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: '#<:>' }) },
@@ -68,7 +68,7 @@ describe('a class reads its file\'s cells', () => {
 
   it('reads in its constructor block, once', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: '#<:>' }) },
@@ -79,7 +79,7 @@ describe('a class reads its file\'s cells', () => {
 
   it('reads a published cell, a constant, and both in one expression', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: 'title', to: ':W:1', from: 'c' } },
       { output: reply('2', 'box') },
@@ -94,7 +94,7 @@ describe('a class reads its file\'s cells', () => {
 
   it('names the cell in a reply', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: 'named', to: ':W:1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: { total: 4 } }) },
@@ -103,7 +103,7 @@ describe('a class reads its file\'s cells', () => {
 
   it('a param of the same name means the param', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{}, '$new'], to: ':W', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: '#<:W:1>' }) },
       { input: { id: '2', op: [[7], 'param'], 'ty': [['Integer']], to: ':W:1', from: 'c' } },
       { output: reply('2', 7) },

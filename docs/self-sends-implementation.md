@@ -28,7 +28,7 @@ Self-sends use the same op format as external messages:
 { id, op: [[arg1, arg2], "functionName"], from: "__self" }
 
 // Named-only args
-{ id, op: [{ key: value }, "functionName"], from: "__self" }
+{ id, op: [[{ key: value }], "functionName"], from: "__self" }
 
 // Mixed positional + named
 { id, op: [[pos1, pos2, { key: value }], "functionName"], from: "__self" }
@@ -222,7 +222,7 @@ Erlang requires functions to be defined before they're referenced (or forward-de
 
 ### Key Challenge: Named-Only Payloads
 
-`greet(name: "world")` has no positional args, only a named arg. The payload must be `#{<<"name">> => <<"world">>}` (a map), not `[#{...}]` (a list containing a map). The codegen detects this case:
+`greet(name: "world")` has no positional args, only a named arg. The in-process payload handed to `handle_op` is `#{<<"name">> => <<"world">>}` (a map), not `[#{...}]` (a list containing a map). This is not the wire form: on the wire an arg list is always a list, so the same call's `op` is `[[#{...}], <<"greet">>]`. The codegen detects this case:
 
 ```javascript
 if (posArgs.length > 0) {

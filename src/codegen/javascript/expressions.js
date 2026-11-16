@@ -315,13 +315,13 @@ export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
 // For over/reduce fn args: wrap lambda labels in self-send closures for _List.mapAsync/foldAsync
 export function genLambdaAwareFnArg(ctx, fnExpr) {
   if (fnExpr.type === 'FnRef' && ctx.lambdaVarNames.has(fnExpr.name)) {
-    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${ssaResolve(ctx, fnExpr.name)}])))`;
+    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), ${ssaResolve(ctx, fnExpr.name)}])))`;
   }
   if (fnExpr.type === 'Function') {
     if (lambdaUsesOuterRefs(ctx, fnExpr)) return genExpr(ctx, fnExpr);
     // Register as lambda handler and wrap in self-send closure
     const label = genLambdaArgLabel(ctx, fnExpr);
-    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${label}])))`;
+    return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), ${label}])))`;
   }
   return genExpr(ctx, fnExpr);
 }
@@ -432,7 +432,7 @@ export function genExpr(ctx, expr) {
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
           if (attrsInner) fields.push(attrsInner);
-          entries.push({ str: `(await this.#send([{${fields.join(', ')}}, "$new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
+          entries.push({ str: `(await this.#send([[{${fields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -446,7 +446,7 @@ export function genExpr(ctx, expr) {
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
     if (attrsJs) topFields.push(attrsJs);
-    return `await this.#send([{${topFields.join(', ')}}, "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
+    return `await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
@@ -461,8 +461,8 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'NullLiteral')    return 'null';
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
-    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), "${wireLabel(expr.name)}"])))`;
-    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.splat(_s), ${ssaResolve(ctx, expr.name)}])))`;
+    if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), "${wireLabel(expr.name)}"])))`;
+    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), ${ssaResolve(ctx, expr.name)}])))`;
 
     return ssaResolve(ctx, expr.name);
   }
@@ -939,7 +939,7 @@ export function genExpr(ctx, expr) {
         const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
         if (namedBag) {
           const fields = Object.entries(namedBag.fields).map(([k, v]) => `${k}: ${wireArg(v)}`).join(', ');
-          return `this.#send([{${fields}}, ${method}], ${to})`;
+          return `this.#send([[{${fields}}], ${method}], ${to})`;
         }
         const vals = argExprs.map(a => wireArg(a)).join(', ');
         return `this.#send([[${vals}], ${method}], ${to})`;
@@ -1050,7 +1050,7 @@ export function genExpr(ctx, expr) {
       if (positional.length > 0 && named.length > 0) {
         return send(`[[${posVals}, {${namedFields}}], ${method}]`, `[[${posTy}, {${namedTy}}]]`);
       } else if (named.length > 0) {
-        return send(`[{${namedFields}}, ${method}]`, `[{${namedTy}}]`);
+        return send(`[[{${namedFields}}], ${method}]`, `[[{${namedTy}}]]`);
       }
       return send(`[[${posVals}], ${method}]`, `[[${posTy}]]`);
     }
@@ -1064,7 +1064,7 @@ export function genExpr(ctx, expr) {
       const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
       let op = method;
       if (positional.length > 0 && named.length > 0) op = `[[${posVals}, {${namedFields}}], ${method}]`;
-      else if (named.length > 0) op = `[{${namedFields}}, ${method}]`;
+      else if (named.length > 0) op = `[[{${namedFields}}], ${method}]`;
       else if (positional.length > 0) op = `[[${posVals}], ${method}]`;
       return `this.#childSendChain(${genExpr(ctx, expr.object)}, ${op})`;
     }
@@ -1092,7 +1092,7 @@ export function genExpr(ctx, expr) {
           const val = a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
           return `${a.name}: ${val}`;
         }).join(', ');
-        op = `[{${fields}}, ${JSON.stringify(wireMethod)}]`;
+        op = `[[{${fields}}], ${JSON.stringify(wireMethod)}]`;
       }
       // A silent function sends no reply, so a call to one can't wait for it.
       if (expr.method.endsWith('.') || expr.launched) return `this.#childFire(${target}, ${op})`;
@@ -1124,7 +1124,7 @@ export function genExpr(ctx, expr) {
         if (positional.length > 0 && named.length > 0) {
           op = `[[${posVals}, {${namedFields}}], ${JSON.stringify(method)}]`;
         } else if (named.length > 0) {
-          op = `[{${namedFields}}, ${JSON.stringify(method)}]`;
+          op = `[[{${namedFields}}], ${JSON.stringify(method)}]`;
         } else {
           op = `[[${posVals}], ${JSON.stringify(method)}]`;
         }
@@ -1151,7 +1151,7 @@ export function genExpr(ctx, expr) {
         if (positional.length > 0 && named.length > 0) {
           op = `[[${posVals}, {${namedFields}}], ${JSON.stringify(wireMethod)}]`;
         } else if (named.length > 0) {
-          op = `[{${namedFields}}, ${JSON.stringify(wireMethod)}]`;
+          op = `[[{${namedFields}}], ${JSON.stringify(wireMethod)}]`;
         } else {
           op = `[[${posVals}], ${JSON.stringify(wireMethod)}]`;
         }
@@ -1463,7 +1463,7 @@ export function genArgSlots(ctx, positional, named) {
 }
 
 // A #new's args as the wire carries them, and the ty that tells the receiver how to
-// read them, as for any other op: `[[t…]]`, `[{k: t}]` or `[[t…, {k: t}]]`. No args, no
+// read them, as for any other op: `[[t…]]`, `[[{k: t}]]` or `[[t…, {k: t}]]`. No args, no
 // payload and no ty: the op is bare `$new`.
 export function genNewArgs(ctx, args) {
   const positional = args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
@@ -1472,7 +1472,7 @@ export function genNewArgs(ctx, args) {
   if (positional.length === 0 && named.length === 0) return { payload: null, ty: null };
   const { posVals, namedFields, posTy, namedTy } = genArgSlots(ctx, positional, named);
   if (positional.length > 0 && named.length > 0) return { payload: `[${posVals}, {${namedFields}}]`, ty: `[[${posTy}, {${namedTy}}]]` };
-  if (named.length > 0) return { payload: `{${namedFields}}`, ty: `[{${namedTy}}]` };
+  if (named.length > 0) return { payload: `[{${namedFields}}]`, ty: `[[{${namedTy}}]]` };
   return { payload: `[${posVals}]`, ty: `[[${posTy}]]` };
 }
 

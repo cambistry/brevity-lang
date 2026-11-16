@@ -17,7 +17,7 @@ describe('...args rest binding', () => {
   `;
 
   it('named payload passes through — pack/splat roundtrip', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [{ a: 1, b: 2 }, 'pass'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } }, { output: { id: '1', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: [[{ a: 1, b: 2 }], 'pass'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
   });
 
   it('positional payload passes through — pack/splat roundtrip', async () => {
@@ -29,11 +29,11 @@ describe('...args rest binding', () => {
   });
 
   it('explicit Object type annotation is accepted', async () => {
-    await expectBehavior(script, { input: { id: '4', op: [{ x: 42 }, 'passTyped'], 'ty': [{ x: 'Integer' }], from: 'c' } }, { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: [[{ x: 42 }], 'passTyped'], 'ty': [[{ x: 'Integer' }]], from: 'c' } }, { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
   });
 
   it('lineal form with ...args Object', async () => {
-    await expectBehavior(script, { input: { id: '5', op: [{ a: 1, b: 2 }, 'passSpacious'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } }, { output: { id: '5', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: [[{ a: 1, b: 2 }], 'passSpacious'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '5', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
   });
 });
 
@@ -57,15 +57,15 @@ describe('Object destructuring', () => {
   `;
 
   it('named — :a, :b = args', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [{ a: 10, b: 20 }, 'namedTwo'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } }, { output: { id: '1', re: { result: 10 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: [[{ a: 10, b: 20 }], 'namedTwo'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', re: { result: 10 }, to: 'c' } });
   });
 
   it('named — :a = args (extra keys ignored)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [{ a: 99, b: 2, c: 3 }, 'namedOne'], 'ty': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' } }, { output: { id: '2', re: { result: 99 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: [[{ a: 99, b: 2, c: 3 }], 'namedOne'], 'ty': [[{ a: 'Integer', b: 'Integer', c: 'Integer' }]], from: 'c' } }, { output: { id: '2', re: { result: 99 }, to: 'c' } });
   });
 
   it('named — paren form', async () => {
-    await expectBehavior(script, { input: { id: '3', op: [{ a: 7, b: 8 }, 'namedParen'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } }, { output: { id: '3', re: { result: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: [[{ a: 7, b: 8 }], 'namedParen'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '3', re: { result: 7 }, to: 'c' } });
   });
 
   it('positional — a, b = args', async () => {
@@ -93,11 +93,11 @@ describe('Object destructuring', () => {
   });
 
   it('key-mapped — a: x = args', async () => {
-    await expectBehavior(script, { input: { id: '10', op: [{ a: 55 }, 'keyMap'], 'ty': [{ a: 'Integer' }], from: 'c' } }, { output: { id: '10', re: { result: 55 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '10', op: [[{ a: 55 }], 'keyMap'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '10', re: { result: 55 }, to: 'c' } });
   });
 
   it('key-mapped — paren form', async () => {
-    await expectBehavior(script, { input: { id: '11', op: [{ a: 77 }, 'keyMapParen'], 'ty': [{ a: 'Integer' }], from: 'c' } }, { output: { id: '11', re: { result: 77 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '11', op: [[{ a: 77 }], 'keyMapParen'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '11', re: { result: 77 }, to: 'c' } });
   });
 });
 
@@ -121,7 +121,7 @@ describe('Object accessors', () => {
   });
 
   it('args["a"] reads named field', async () => {
-    await expectBehavior(script, { input: { id: '3', op: [{ a: 'hello' }, 'accessNamed'], 'ty': [{ a: 'Text' }], from: 'c' } }, { output: { id: '3', re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: [[{ a: 'hello' }], 'accessNamed'], 'ty': [[{ a: 'Text' }]], from: 'c' } }, { output: { id: '3', re: { result: 'hello' }, to: 'c' } });
   });
 });
 
@@ -258,7 +258,7 @@ describe('Object destructuring — runtime errors (deferred)', () => {
         return result: a
     `;
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 1, b: 2 }, 'test'], from: 'caller' } },
+      { input: { id: '1', op: [[{ a: 1, b: 2 }], 'test'], from: 'caller' } },
       { output: { id: '1', ex: { 'test': 'destructure error' }, to: 'caller' } },
     );
   });

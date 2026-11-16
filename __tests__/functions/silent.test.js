@@ -36,14 +36,14 @@ describe('silent public functions + type matching', () => {
 
   it('replying function still works alongside silent function', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('overloaded — Text message gets reply', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ msg: 'hello' }, 'overloaded'], 'ty': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ msg: 'hello' }], 'overloaded'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
       { output: { id: '2', 'ty': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
     );
   });
@@ -57,7 +57,7 @@ describe('silent public functions + type matching', () => {
 
   it('type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ msg: 42 }, 'notify.'], 'ty': [{ msg: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ msg: 42 }], 'notify.'], 'ty': [[{ msg: 'Integer' }]], from: 'c' } },
       { output: { id: '4', ex: { 'notify.': 'unhandled' }, to: 'c' } },
     );
   });
@@ -125,7 +125,7 @@ describe('stateful silent functions + lambdas', () => {
 
   it('dot on same line — store is silent, state persists', async () => {
     await expectBehavior(script,
-      { input: { id: 's1', op: [{ msg: 'hello' }, 'store.'], 'ty': [{ msg: 'Text' }], from: 'c' } },
+      { input: { id: 's1', op: [[{ msg: 'hello' }], 'store.'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
       { input: { id: 'c1', op: 'check', from: 'c' } },
       { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) },
     );

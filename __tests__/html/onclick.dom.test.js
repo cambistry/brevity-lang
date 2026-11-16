@@ -50,7 +50,7 @@ describe('Q1: onclick wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], onclick: '#<main:@0>' }, '$new'],
+        op: [[{ children: [], onclick: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -67,7 +67,7 @@ describe('Q1: onclick wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['click me'], onclick: '#<main:@0>' }, '$new'],
+        op: [[{ children: ['click me'], onclick: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -84,7 +84,7 @@ describe('Q1: onclick wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['#<main:@0>'], onclick: '#<main:@1>' }, '$new'],
+        op: [[{ children: ['#<main:@0>'], onclick: '#<main:@1>' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -100,7 +100,7 @@ describe('Q1: onclick wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'] }, '$new'],
+        op: [[{ children: ['hello'] }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -117,7 +117,7 @@ describe('Q1: onclick wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], class: 'counter', onclick: '#<main:@0>' }, '$new'],
+        op: [[{ children: [], class: 'counter', onclick: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );

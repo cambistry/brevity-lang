@@ -677,6 +677,12 @@ export const OBJECT_PREAMBLE = `const BvObject = {
     // An empty Object's wire form is \`[]\`; \`{}\` and \`[{}]\` are read as the same.
     return hasNamed ? named : [];
   },
+  // An Object as an op's arg list: always a list, named fields trailing.
+  args(s) {
+    if (s.selfReturn) return ['#<:>'];
+    const { positional, named } = s;
+    return Object.keys(named).length > 0 ? [...positional, named] : positional;
+  },
 };
 function _matchTypes(types, named, positional, requiredPos) {
   if (types === null) return named.length === 0 && positional.length === 0;

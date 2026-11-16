@@ -65,7 +65,7 @@ Parameterized subscribe carries args:
 
 ```text
 to: "#<Pub:pub_w_params>"
-op: [{ p: 100 }, "$subscribe"]
+op: [[{ p: 100 }], "$subscribe"]
 ```
 
 Later `re` messages with the same id update subscriber state.

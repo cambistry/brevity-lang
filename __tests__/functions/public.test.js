@@ -35,14 +35,14 @@ describe('public function', () => {
 
   it('@echo — named param round-trip', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ text: 'abc' }, 'echo'], 'ty': [{ text: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [[{ text: 'abc' }], 'echo'], 'ty': [[{ text: 'Text' }]], from: 'c' } },
       { output: { id: '3', 'ty': { text: 'Text' }, re: { text: 'abc' }, to: 'c' } },
     );
   });
 
   it('whitespace-only blank line between params and body', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } },
     );
   });

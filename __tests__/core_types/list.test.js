@@ -147,11 +147,11 @@ describe('List type matching + Anything + BV-A', () => {
   `;
 
   it('List of Integers param — type match dispatches', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [{ nums: [3, 4] }, 'sum'], 'ty': [{ nums: 'List of Integers' }], from: 'c' } }, { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: [[{ nums: [3, 4] }], 'sum'], 'ty': [[{ nums: 'List of Integers' }]], from: 'c' } }, { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } });
   });
 
   it('List of Integers param — type mismatch → unhandled', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [{ nums: ['a'] }, 'sum'], 'ty': [{ nums: 'List of Texts' }], from: 'c' } }, { output: { id: '2', ex: { 'sum': 'unhandled' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: [[{ nums: ['a'] }], 'sum'], 'ty': [[{ nums: 'List of Texts' }]], from: 'c' } }, { output: { id: '2', ex: { 'sum': 'unhandled' }, to: 'c' } });
   });
 
   it('List of Anything — mixed elements, head destructure', async () => {
@@ -167,7 +167,7 @@ describe('List type matching + Anything + BV-A', () => {
   });
 
   it('List param accepts component ty from caller', async () => {
-    await expectBehavior(script, { input: { id: '6', op: [{ items: [42, 'hello'] }, 'run'], 'ty': [{ items: ['Integer', 'Text'] }], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Integer' }, re: { first: 42 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: [[{ items: [42, 'hello'] }], 'run'], 'ty': [[{ items: ['Integer', 'Text'] }]], from: 'c' } }, { output: { id: '6', 'ty': { first: 'Integer' }, re: { first: 42 }, to: 'c' } });
   });
 
   it('[a, b] = [1,2,3] — under-destructured without discard → runtime error', async () => {

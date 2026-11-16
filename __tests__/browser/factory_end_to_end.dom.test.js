@@ -83,8 +83,8 @@ describe('factory end-to-end', () => {
     // Mutate content via the public @bump setter.
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, 'bump.'],
-      'ty': [{ v: 'Text' }],
+      op: [[{ v: 'updated' }], 'bump.'],
+      'ty': [[{ v: 'Text' }]],
       from: 'caller',
     });
 
@@ -107,8 +107,8 @@ describe('factory end-to-end', () => {
     for (const [seq, value] of [['a', 'first'], ['b', 'second'], ['c', 'third']]) {
       await factory.sendAsync({
         id: seq,
-        op: [{ v: value }, 'bump.'],
-        'ty': [{ v: 'Text' }],
+        op: [[{ v: value }], 'bump.'],
+        'ty': [[{ v: 'Text' }]],
         from: 'caller',
       });
       await expectBehavior(el,

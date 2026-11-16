@@ -9,35 +9,35 @@ describe('type matching — named params', () => {
 
   it('exact named match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('named type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'x', b: 'y' }, 'add'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ a: 'x', b: 'y' }], 'add'], 'ty': [[{ a: 'Text', b: 'Text' }]], from: 'c' } },
       { output: { id: '2', ex: { 'add': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('required named param absent → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 3 }, 'add'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [[{ a: 3 }], 'add'], 'ty': [[{ a: 'Integer' }]], from: 'c' } },
       { output: { id: '3', ex: { 'add': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('extra named field still matches', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4, c: 99 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer', c: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 3, b: 4, c: 99 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer', c: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
 
   it('missing ty → schema_required', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [{ a: 3, b: 4 }, 'add'], from: 'c' } },
+      { input: { id: '5', op: [[{ a: 3, b: 4 }], 'add'], from: 'c' } },
       { output: { id: '5', ex: { 'add': 'schema_required' }, to: 'c' } },
     );
   });
@@ -112,14 +112,14 @@ describe('type matching — mixed params + ...args', () => {
 
   it('...args matches named payload with ty', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ x: 1 }, 'import'], 'ty': [{ x: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ x: 1 }], 'import'], 'ty': [[{ x: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
   it('...args without ty → schema_required', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [{ x: 1 }, 'import'], from: 'c' } },
+      { input: { id: '5', op: [[{ x: 1 }], 'import'], from: 'c' } },
       { output: { id: '5', ex: { 'import': 'schema_required' }, to: 'c' } },
     );
   });
@@ -137,21 +137,21 @@ describe('type matching — overloading', () => {
 
   it('Integer message routes to first overload', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ name: 42 }, 'greet'], 'ty': [{ name: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ name: 42 }], 'greet'], 'ty': [[{ name: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { msg: 'Text' }, re: { msg: 'number' }, to: 'c' } },
     );
   });
 
   it('Text message routes to second overload', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ name: 'Alice' }, 'greet'], 'ty': [{ name: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ name: 'Alice' }], 'greet'], 'ty': [[{ name: 'Text' }]], from: 'c' } },
       { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'text' }, to: 'c' } },
     );
   });
 
   it('Boolean message → unhandled (no matching overload)', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ name: true }, 'greet'], 'ty': [{ name: 'Boolean' }], from: 'c' } },
+      { input: { id: '3', op: [[{ name: true }], 'greet'], 'ty': [[{ name: 'Boolean' }]], from: 'c' } },
       { output: { id: '3', ex: { 'greet': 'unhandled' }, to: 'c' } },
     );
   });
@@ -170,21 +170,21 @@ describe('type matching — key-mapped params', () => {
 
   it('exact key-mapped match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 'hello', b: 42 }, 'lettersTwo'], 'ty': [{ a: 'Text', b: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 'hello', b: 42 }], 'lettersTwo'], 'ty': [[{ a: 'Text', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
   it('key-mapped type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'hello', b: 'nope' }, 'lettersTwo'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ a: 'hello', b: 'nope' }], 'lettersTwo'], 'ty': [[{ a: 'Text', b: 'Text' }]], from: 'c' } },
       { output: { id: '2', ex: { 'lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
 
   it('key-mapped missing key → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 'hello' }, 'lettersTwo'], 'ty': [{ a: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [[{ a: 'hello' }], 'lettersTwo'], 'ty': [[{ a: 'Text' }]], from: 'c' } },
       { output: { id: '3', ex: { 'lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
@@ -205,14 +205,14 @@ describe('type matching — key-mapped params', () => {
 
   it('key-mapped + sigil shorthand match dispatches', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ a: 'hi', c: 5 }, 'lettersSigil'], 'ty': [{ a: 'Text', c: 'Integer' }], from: 'c' } },
+      { input: { id: '6', op: [[{ a: 'hi', c: 5 }], 'lettersSigil'], 'ty': [[{ a: 'Text', c: 'Integer' }]], from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
   it('key-mapped + sigil — sigil type mismatch → unhandled', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: [{ a: 'hi', c: 'nope' }, 'lettersSigil'], 'ty': [{ a: 'Text', c: 'Text' }], from: 'c' } },
+      { input: { id: '7', op: [[{ a: 'hi', c: 'nope' }], 'lettersSigil'], 'ty': [[{ a: 'Text', c: 'Text' }]], from: 'c' } },
       { output: { id: '7', ex: { 'lettersSigil': 'unhandled' }, to: 'c' } },
     );
   });

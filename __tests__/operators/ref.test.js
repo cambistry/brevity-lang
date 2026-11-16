@@ -573,7 +573,7 @@ describe('ref — bare idents starting with __ are usable', () => {
 
   it('__foo is mutable via <-', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, 'setFoo.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 7 }], 'setFoo.'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { input: { id: '2', op: 'get', from: 'c' } },
       { output: { id: '2', 'ty': { __foo: 'Integer', __bar: 'Text' }, re: { __foo: 7, __bar: 'hi' }, to: 'c' } },
     );

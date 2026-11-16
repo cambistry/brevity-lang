@@ -1373,7 +1373,7 @@ describe('! function — return paths', () => {
 
   it('`untracked` works as a param key', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ untracked: 3 }, 'keyParam'], 'ty': [{ untracked: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ untracked: 3 }], 'keyParam'], 'ty': [[{ untracked: 'Integer' }]], from: 'c' } },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1751,7 +1751,7 @@ describe('chained calls through a remote', () => {
 
   it('the next call goes to the address in `ty`', async () => {
     const actor = await createActor(source, {
-      expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) }],
+      expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) }],
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
@@ -1836,7 +1836,7 @@ describe('a writing type field', () => {
 
   it('is invoked at the address it holds', async () => {
     await expectBehavior(script,
-      { input: { id: '50', op: [{ a: [200, '#<caller:cb>'] }, 'go!'], 'ty': [{ a: ':Act' }], from: 'caller' } },
+      { input: { id: '50', op: [[{ a: [200, '#<caller:cb>'] }], 'go!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller:cb>' }) },
       { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
       { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },

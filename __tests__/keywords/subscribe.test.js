@@ -136,7 +136,7 @@ describe('subscribe — call-site syntax', () => {
   it('handler re-runs when the subscribed cell is set', async () => {
     await expectBehavior(callSiteScript,
       { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 42 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '2', op: [[{ n: 42 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
     );
@@ -145,9 +145,9 @@ describe('subscribe — call-site syntax', () => {
   it('handler captures the latest value across multiple sets', async () => {
     await expectBehavior(callSiteScript,
       { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '3', op: [{ n: 10 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
-      { input: { id: '4', op: [{ n: 99 }, 'setVal.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '2', op: [[{ n: 5 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
+      { input: { id: '3', op: [[{ n: 10 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
+      { input: { id: '4', op: [[{ n: 99 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '5', op: 'readLast', from: 'caller' } },
       { output: { id: '5', 'ty': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
     );
@@ -273,7 +273,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@val(77) to pub.
-    await sub.sendAsync({ id: '2', op: [{ n: 77 }, 'setPub.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [[{ n: 77 }], 'setPub.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' });
     await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub mutates state, notifies sub with re:[77] on the subscription id.
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);

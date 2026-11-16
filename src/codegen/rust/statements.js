@@ -1114,7 +1114,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             const t = inferLiteralType(v) || inferExprType(v, typeEnv);
             return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
           }).join(' ');
-          opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
+          opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
         } else {
           const vals = callArgs.map(a => {
             const raw = genRustExpr(a, typeEnv);
@@ -1774,7 +1774,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
         opJson = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(vec![Value::Array(_arr), json!(${method})]) }`;
       } else if (named.length > 0) {
         const namedInserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${genArgValW(a)});`).join(' ');
-        opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Object(_nm), json!(${method})]) }`;
+        opJson = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
       } else {
         const posVals = positional.map(genArgValW);
         opJson = `Value::Array(vec![Value::Array(vec![${posVals.join(', ')}]), json!(${method})])`;
@@ -1816,7 +1816,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
           tyJson = `json!([[${posTy}, {${namedTy}}]])`;
         } else if (named.length > 0) {
           const namedTy = named.map(a => `"${a.name}": ${argTag(a)}`).join(', ');
-          tyJson = `json!([{${namedTy}}])`;
+          tyJson = `json!([[{${namedTy}}]])`;
         } else {
           const posTy = positional.map(argTag).join(', ');
           tyJson = `json!([[${posTy}]])`;
@@ -2557,7 +2557,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
           if (named.length > 0 && positional.length === 0) {
             const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
-            return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Object(_nm), json!(${JSON.stringify(opStr)})]) }`;
+            return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${JSON.stringify(opStr)})]) }`;
           }
           if (positional.length > 0 && named.length === 0) {
             const vals = positional.map(wrapArg).join(', ');
@@ -2565,7 +2565,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           }
           const vals = positional.map(wrapArg).join(', ');
           const inserts = named.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
-          return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![${vals}, Value::Object(_nm), json!(${JSON.stringify(opStr)})]) }`;
+          return `{ let mut _nm = Map::new(); ${inserts} Value::Array(vec![Value::Array(vec![${vals}, Value::Object(_nm)]), json!(${JSON.stringify(opStr)})]) }`;
         };
         const wireOpExpr = buildOpExpr(wireOp);
         const internalOpExpr = buildOpExpr(internalSelector);
@@ -2575,7 +2575,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const pInserts = named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ');
           payloadExpr = `{ let mut _pnm = Map::new(); ${pInserts} Value::Object(_pnm) }`;
           const tyInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
-          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![Value::Object(_bn)]) }`;
+          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![Value::Array(vec![Value::Object(_bn)])]) }`;
         } else if (positional.length > 0 && named.length === 0) {
           const vals = positional.map(wrapArg).join(', ');
           payloadExpr = `Value::Array(vec![${vals}])`;
@@ -2586,7 +2586,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           payloadExpr = `{ let mut _pnm = Map::new(); ${named.map(a => `_pnm.insert("${a.name}".to_string(), ${wrapArg(a)});`).join(' ')} Value::Array(vec![${vals}, Value::Object(_pnm)]) }`;
           const tyVals = positional.map(a => `json!(${JSON.stringify(typeOf(a))})`).join(', ');
           const tyInserts = named.map(a => `_bn.insert("${a.name}".to_string(), json!(${JSON.stringify(typeOf(a))}));`).join(' ');
-          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![${tyVals}, Value::Object(_bn)]) }`;
+          tyExpr = `{ let mut _bn = Map::new(); ${tyInserts} Value::Array(vec![Value::Array(vec![${tyVals}, Value::Object(_bn)])]) }`;
         }
 
         const isRemoteDep = !isSelfTarget &&
@@ -2606,7 +2606,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    sub_msg.insert("id".to_string(), json!(sub_id.clone()));`);
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${internalOpExpr});`);
           if (tyExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${tyExpr});`);
-          lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(internalSelector)}, &Value::Object(sub_msg), &${payloadExpr}, "__parent", &sub_id);`);
+          lines.push(`${I}    let (initial, _, _) = self.handle_op(${JSON.stringify(internalSelector)}, &bv_inbound(&Value::Object(sub_msg)), &${payloadExpr}, "__parent", &sub_id);`);
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
         } else if (isRemoteDep) {

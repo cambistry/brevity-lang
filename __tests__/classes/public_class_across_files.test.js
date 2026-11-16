@@ -425,7 +425,7 @@ describe('receiver side', () => {
 
   it('keeps the ! in the selector', async () => {
     await expectBehavior(SVC,
-      { input: { id: '1', op: [{}, '$new'], to: ':W!', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':W!', from: 'c' } },
       { output: expect.objectContaining({ op: 'note.', to: 'Log' }) },
       { output: { id: '1', re: '#<:W!:1>', 'ty': ':W!', to: 'c' } },
       { input: { id: '2', op: 'one', to: ':W!:1', from: 'c' } },
@@ -450,7 +450,7 @@ describe('receiver side', () => {
 
   it('a private class can\'t be constructed from outside', async () => {
     await expectBehavior(`Hidden = *{\n  @one = { return 1 }\n}\n@go = { return 1 }\n`,
-      { input: { id: '1', op: [{}, '$new'], to: ':Hidden', from: 'c' } },
+      { input: { id: '1', op: '$new', to: ':Hidden', from: 'c' } },
       { output: expect.objectContaining({ id: '1', ex: expect.anything() }) },
     );
   });

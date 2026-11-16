@@ -321,10 +321,10 @@ describe('function params — expression defaults', () => {
   it('a given arg wins', () => reads({ op: [[1, 5], 'sum'], 'ty': [['Integer', 'Integer']] }, 6));
   it('a default reads an earlier param', () => reads({ op: [[3], 'fromEarlier'], 'ty': [['Integer']] }, 9));
   it('a default reads a later param', () => reads({ op: 'fromLater' }, 21));
-  it('a default reads a later param given by name', () => reads({ op: [{ b: 4 }, 'fromLater'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('a default reads a later param given by name', () => reads({ op: [[{ b: 4 }], 'fromLater'], 'ty': [[{ b: 'Integer' }]] }, 9));
   it('a default calls a file-level function', () => reads({ op: [[3], 'fromFile'], 'ty': [['Integer']] }, 9));
   it('a negative literal default', () => reads({ op: 'negative' }, -1));
-  it('an omitted positional with a named arg given', () => reads({ op: [{ b: 4 }, 'literals'], 'ty': [{ b: 'Integer' }] }, 9));
+  it('an omitted positional with a named arg given', () => reads({ op: [[{ b: 4 }], 'literals'], 'ty': [[{ b: 'Integer' }]] }, 9));
   it('a private function takes one too', () => expectBehavior(script,
     { input: { id: '1', op: 'local', from: 'c' } },
     { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 106 }, to: 'c' } },

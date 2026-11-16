@@ -58,49 +58,49 @@ describe('public function return — same-line + delimited', () => {
 
   it('-> n : Integer — typed positional', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, 'typedPos'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 7 }], 'typedPos'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [7], to: 'c' } },
     );
   });
 
   it('-> x, y — two bare positionals', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ x: 3, y: 4 }, 'twoBarePos'], 'ty': [{ x: 'Integer', y: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ x: 3, y: 4 }], 'twoBarePos'], 'ty': [[{ x: 'Integer', y: 'Integer' }]], from: 'c' } },
       { output: { id: '2', 'ty': ['Integer', 'Integer'], re: [3, 4], to: 'c' } },
     );
   });
 
   it('-> :a, :b — sigil no-paren', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 10, b: 20 }, 'sigilReturn'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [[{ a: 10, b: 20 }], 'sigilReturn'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '3', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'c' } },
     );
   });
 
   it('-> result: (a + b) as Integer — key-value', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 5, b: 6 }, 'keyValueReturn'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 5, b: 6 }], 'keyValueReturn'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
     );
   });
 
   it('->(c: (a + b) as Integer) — delimited computed', async () => {
     await expectBehavior(script,
-      { input: { id: '5', op: [{ a: 3, b: 4 }, 'denseComputed'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '5', op: [[{ a: 3, b: 4 }], 'denseComputed'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '5', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
     );
   });
 
   it('->(a as Integer, b as Integer) — delimited multi-positional', async () => {
     await expectBehavior(script,
-      { input: { id: '6', op: [{ a: 8, b: 9 }, 'denseMultiPos'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '6', op: [[{ a: 8, b: 9 }], 'denseMultiPos'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '6', 'ty': ['Integer', 'Integer'], re: [8, 9], to: 'c' } },
     );
   });
 
   it('->(:a, :b) — delimited named paren', async () => {
     await expectBehavior(script,
-      { input: { id: '7', op: [{ a: 11, b: 22 }, 'denseNamedParen'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '7', op: [[{ a: 11, b: 22 }], 'denseNamedParen'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '7', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 11, b: 22 }, to: 'c' } },
     );
   });
@@ -217,14 +217,14 @@ describe('public function return — lineal form', () => {
 
   it('-> \\n :a — single named field on next line', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 7 }, 'spaciousSingle'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 7 }], 'spaciousSingle'], 'ty': [[{ a: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { a: 'Integer' }, re: { a: 7 }, to: 'c' } },
     );
   });
 
   it('-> \\n :a \\n :b — two named fields, blank-line terminated', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 3, b: 4 }, 'spaciousTwo'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ a: 3, b: 4 }], 'spaciousTwo'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '2', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 3, b: 4 }, to: 'c' } },
     );
   });
@@ -238,7 +238,7 @@ describe('public function return — lineal form', () => {
 
   it('lineal -> terminated by -- comment', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 21 }, 'spaciousDashTerm'], 'ty': [{ a: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 21 }], 'spaciousDashTerm'], 'ty': [[{ a: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { a: 'Integer' }, re: { a: 21 }, to: 'c' } },
     );
   });

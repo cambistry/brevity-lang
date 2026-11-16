@@ -230,7 +230,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSum.', from: 'c' } },
-        { output: expect.objectContaining({ op: [{ a: 2 }, '$subscribe'], to: '#<Remote:sum>' }) },
+        { output: expect.objectContaining({ op: [[{ a: 2 }], '$subscribe'], to: '#<Remote:sum>' }) },
       ],
     });
   });

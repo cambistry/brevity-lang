@@ -132,14 +132,21 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const buildOpExpr = (opStr) => erlOpExpr(positional.map(genArgVal),
     named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', '), `<<"${opStr}">>`);
   const wireOpExpr = buildOpExpr(wireOp);
-  const internalOpExpr = wireOpExpr;
+  // In process (self, child), a named-only call is its fields alone:
+  // `[#{k => v}, Sel]` with tags `[#{k => t}]`; the wire brackets them.
+  const namedOnly = named.length > 0 && positional.length === 0;
+  const internalOpExpr = namedOnly
+    ? `[#{${named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ')}}, <<"${wireOp}">>]`
+    : wireOpExpr;
   let payloadExpr = 'null';
   let tyExpr = null;
+  let internalTyExpr = null;
   if (named.length > 0 && positional.length === 0) {
     const fields = named.map(a => `${erlString(a.name)} => ${genArgVal(a)}`).join(', ');
     const tyFields = named.map(a => `${erlString(a.name)} => ${tagOf(a)}`).join(', ');
     payloadExpr = `#{${fields}}`;
-    tyExpr = `[#{${tyFields}}]`;
+    tyExpr = `[[#{${tyFields}}]]`;
+    internalTyExpr = `[#{${tyFields}}]`;
   } else if (positional.length > 0 && named.length === 0) {
     const vals = positional.map(genArgVal).join(', ');
     const tyVals = positional.map(a => tagOf(a)).join(', ');
@@ -165,7 +172,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
     // selector too so the prologue's args extraction (hd(op) when list) still
     // finds args at position 0.
-    const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
+    const tyField = (internalTyExpr ?? tyExpr) ? `, <<"ty">> => ${internalTyExpr ?? tyExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${tyField}},`);
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
@@ -179,7 +186,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // Instance process: subscribe there; its later notifications come back
     // as {bv_notify, ...} messages and run the fun stored here.
     const pid = genExpr(ctx, { type: _sCtx?.refVars?.has(objectName) ? 'RefRead' : 'Identifier', name: objectName }, _typeEnv, _sCtx);
-    const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
+    const tyField = (internalTyExpr ?? tyExpr) ? `, <<"ty">> => ${internalTyExpr ?? tyExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${tyField}},`);
     outLines.push(`${I}${V('Sub_init_re_')} = bv_inst_sub_(${pid}, ${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);

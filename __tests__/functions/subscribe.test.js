@@ -61,7 +61,7 @@ describe('subscribe — in-file fns', () => {
   it('set on captured ref replays to every subscription', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doSubs.', from: 'c' } },
-      { input: { id: '2', op: [{ n: 5 }, 'bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ n: 5 }], 'bump.'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { input: { id: '3', op: 'readAll', from: 'c' } },
       { output: {
         id: '3',
@@ -95,7 +95,7 @@ describe('subscribe — in-file fns', () => {
 
     await expectBehavior(twoSubsScript,
       { input: { id: '1', op: 'doSubs.', from: 'c' } },
-      { input: { id: '2', op: [{ n: 3 }, 'bump.'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ n: 3 }], 'bump.'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { input: { id: '3', op: 'readBoth', from: 'c' } },
       { output: {
         id: '3',
@@ -140,7 +140,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
   it('c.pub.subscribe — replays on set of captured body ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, 'bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 10 }, to: 'caller' } },
     );
@@ -157,7 +157,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
   it('c.pub_w_params.subscribe — replays with stored args on dep change', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
-      { input: { id: '2', op: [{ n: 5 }, 'bumpC.'], 'ty': [{ n: 'Integer' }], from: 'caller' } },
+      { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
     );
@@ -197,8 +197,8 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
       expects: [
         { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
         { output: expect.objectContaining({
-          op: [{ p: 100 }, '$subscribe'],
-          'ty': [{ p: 'Integer' }],
+          op: [[{ p: 100 }], '$subscribe'],
+          'ty': [[{ p: 'Integer' }]],
           to: '#<Pub:pub_w_params>',
         }) },
       ],
@@ -237,7 +237,7 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
         { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
         { output: expect.objectContaining({
           id: '1',
-          op: [{ p: 100 }, '$subscribe'],
+          op: [[{ p: 100 }], '$subscribe'],
           to: '#<Pub:pub_w_params>',
         }) },
         { input: { id: '1', re: [100] } },
@@ -303,7 +303,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@body(5) to Pub. body <- 5 -> @pub re-evaluates -> re:[10].
-    await sub.sendAsync({ id: '2', op: [{ n: 5 }, 'setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [[{ n: 5 }], 'setRemote.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
@@ -327,7 +327,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
-    await sub.sendAsync({ id: '2', op: [{ n: 5 }, 'setRemote.'], 'ty': [{ n: 'Integer' }], from: 'caller' });
+    await sub.sendAsync({ id: '2', op: [[{ n: 5 }], 'setRemote.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' });
     await routeNew(sub, subPrev, 'Pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;

@@ -80,7 +80,7 @@ describe('a failed as on a class instance', () => {
   `;
 
   const newBox = [
-    { input: { id: '1', op: [{}, '$new'], to: ':Box', from: 'c' } },
+    { input: { id: '1', op: '$new', to: ':Box', from: 'c' } },
     { output: { id: '1', re: '#<:Box:1>', 'ty': ':Box', to: 'c' } },
   ];
 
@@ -99,7 +99,7 @@ describe('a failed as on a class instance', () => {
     });
     it('names both types for a named param whose tag lies', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [{ i: 'x' }, 'typedNamed'], 'ty': [{ i: 'Integer' }], to: ':Box:1', from: 'c' } },
+        { input: { id: '2', op: [[{ i: 'x' }], 'typedNamed'], 'ty': [[{ i: 'Integer' }]], to: ':Box:1', from: 'c' } },
         { output: { id: '2', ex: { 'typedNamed': 'as Integer: got Text' }, to: 'c', from: ':Box:1' } },
       );
     });
@@ -117,7 +117,7 @@ describe('a failed as on a class instance', () => {
     });
     it('answers unhandled for a named param with an honest wrong tag', async () => {
       await expectBehavior(script, ...newBox,
-        { input: { id: '2', op: [{ i: 'x' }, 'typedNamed'], 'ty': [{ i: 'Text' }], to: ':Box:1', from: 'c' } },
+        { input: { id: '2', op: [[{ i: 'x' }], 'typedNamed'], 'ty': [[{ i: 'Text' }]], to: ':Box:1', from: 'c' } },
         { output: { id: '2', ex: { 'typedNamed': 'unhandled' }, to: 'c', from: ':Box:1' } },
       );
     });
@@ -143,7 +143,7 @@ describe('a failed as on a class instance', () => {
     });
     it('answers unhandled on a superclass handler and its own', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [{}, '$new'], to: ':SubBox', from: 'c' } },
+        { input: { id: '1', op: '$new', to: ':SubBox', from: 'c' } },
         { output: { id: '1', re: '#<:SubBox:1>', 'ty': ':SubBox', to: 'c' } },
         { input: { id: '2', op: [['x'], 'typed'], 'ty': [['Text']], to: ':SubBox:1', from: 'c' } },
         { output: { id: '2', ex: { 'typed': 'unhandled' }, to: 'c', from: ':SubBox:1' } },
@@ -220,7 +220,7 @@ describe('a failed as on a class instance', () => {
     });
     it('another instance', async () => {
       await expectBehavior(script,
-        { input: { id: '1', op: [{}, '$new'], to: ':Outer', from: 'c' } },
+        { input: { id: '1', op: '$new', to: ':Outer', from: 'c' } },
         { output: { id: '1', re: '#<:Outer:1>', 'ty': ':Outer', to: 'c' } },
         { input: { id: '2', op: 'viaInstance', to: ':Outer:1', from: 'c' } },
         { output: { id: '2', ex: { 'viaInstance': 'error' }, to: 'c', from: ':Outer:1' } },

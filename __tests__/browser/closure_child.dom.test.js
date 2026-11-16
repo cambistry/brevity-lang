@@ -68,7 +68,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['hello'] }, '$new'],
+          op: [[{ children: ['hello'] }], '$new'],
           to: 'HTML:div',
         }) },
       );
@@ -88,7 +88,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main:@0>'] }, '$new'],
+          op: [[{ children: ['#<main:@0>'] }], '$new'],
           to: 'HTML:div',
         }) },
       );
@@ -108,7 +108,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['pre ', '#<main:@0>', ' post'] }, '$new'],
+          op: [[{ children: ['pre ', '#<main:@0>', ' post'] }], '$new'],
           to: 'HTML:div',
         }) },
       );
@@ -129,7 +129,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main:@0>', '#<main:@1>'] }, '$new'],
+          op: [[{ children: ['#<main:@0>', '#<main:@1>'] }], '$new'],
           to: 'HTML:div',
         }) },
       );
@@ -147,7 +147,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main:@0>', ' middle ', '#<main:@1>'] }, '$new'],
+          op: [[{ children: ['#<main:@0>', ' middle ', '#<main:@1>'] }], '$new'],
           to: 'HTML:div',
         }) },
       );
@@ -174,7 +174,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['Title'] }, '$new'],
+          op: [[{ children: ['Title'] }], '$new'],
           to: 'HTML:h1',
         }) },
       );
@@ -200,7 +200,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main:@0>'] }, '$new'],
+          op: [[{ children: ['#<main:@0>'] }], '$new'],
           to: 'HTML:div',
           from: 'main',
         }) },
@@ -232,7 +232,7 @@ describe('template emission — structured children wire shape', () => {
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
         { output: expect.objectContaining({
-          op: [{ children: ['#<main:@0>'] }, '$new'],
+          op: [[{ children: ['#<main:@0>'] }], '$new'],
           to: 'HTML:div',
         }) },
         { input: { id: '2', op: '$subscribe', to: ':@0', from: 'c' } },

@@ -81,8 +81,8 @@ export function genSubscribeCall(ctx, expr) {
       opExpr = `[[${posVals}, {${namedFields}}], ${JSON.stringify(selector)}]`;
       tyField = `, 'ty': [[${posTy}, {${namedTy}}]]`;
     } else if (named.length > 0) {
-      opExpr = `[{${namedFields}}, ${JSON.stringify(selector)}]`;
-      tyField = `, 'ty': [{${namedTy}}]`;
+      opExpr = `[[{${namedFields}}], ${JSON.stringify(selector)}]`;
+      tyField = `, 'ty': [[{${namedTy}}]]`;
     } else {
       opExpr = `[[${posVals}], ${JSON.stringify(selector)}]`;
       tyField = `, 'ty': [[${posTy}]]`;
@@ -899,7 +899,7 @@ export function genLocals(ctx, body, outerEnv) {
         if (pos.length > 0) {
           payload = `[${pos.join(', ')}, {${obj}}]`;
         } else {
-          payload = `{${obj}}`;
+          payload = `[{${obj}}]`;
         }
       } else {
         payload = `[${pos.join(', ')}]`;

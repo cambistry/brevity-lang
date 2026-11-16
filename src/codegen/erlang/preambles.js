@@ -1739,11 +1739,10 @@ function erlStateKey(ctx, name) {
 }
 
 // An op carrying a payload, in canonical wire shape: no args is the bare
-// selector, named only \`[#{k => v}, Sel]\`, otherwise \`[[p…], Sel]\` with
-// any named slots in a trailing map: \`[[p…, #{k => v}], Sel]\`.
+// selector, otherwise \`[[p…], Sel]\` with any named slots in a trailing map:
+// \`[[p…, #{k => v}], Sel]\`, named only \`[[#{k => v}], Sel]\`.
 function erlOpExpr(vals, fields, method) {
   if (vals.length === 0 && !fields) return method;
-  if (vals.length === 0) return `[#{${fields}}, ${method}]`;
   return `[[${[...vals, ...(fields ? [`#{${fields}}`] : [])].join(', ')}], ${method}]`;
 }
 

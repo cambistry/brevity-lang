@@ -595,6 +595,13 @@ ${[...G.ctx.stateVarNames].map(n => {
             } else if let Some(arr) = op.as_array() {
                 let name = arr.last().and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let p = if arr.len() > 1 { arr[0].clone() } else { json!({}) };
+                if p.is_object() {
+                    let mut ex = Map::new(); ex.insert(name, json!("bad_op"));
+                    let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
+                    let _ = self.binding.send(Value::Object(resp));
+                    return;
+                }
+                let p = bv_named_only(&p).unwrap_or(p);
                 (name, p)
             } else { return; };
             // An intrinsic with a to names its target, as on the wire.
@@ -751,10 +758,11 @@ ${bodyLines}
         // the op, so its own arm produces the initial re. A prop isn't an address.
         if let Some(target) = op_name.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = match message.get("op") {
-                Some(Value::Array(arr)) if arr.len() > 1 => arr[0].clone(),
+                Some(Value::Array(arr)) if arr.len() > 1 => bv_named_only(&arr[0]).unwrap_or_else(|| arr[0].clone()),
                 _ => Value::Null,
             };
-            let sub_ty = message.get("ty").cloned().unwrap_or(Value::Null);
+            // Kept as in process, where a named-only call is its fields alone.
+            let sub_ty = bv_inbound(message).get("ty").cloned().unwrap_or(Value::Null);
             self.cell_subs
                 .entry(target.to_string())
                 .or_insert_with(Vec::new)
@@ -1941,6 +1949,21 @@ ${handleOpMethod}
         // Its arm is keyed by the pair, op then target: "$set val".
         let wire_op = op_name.clone();
         let op_name = bv_op_key(&op_name, message.get("to").and_then(|v| v.as_str()));
+        // An arg list is always a list: an object in \`op\` is not one.
+        if matches!(raw_payload, Some(Value::Object(_))) {
+            let mut ex = Map::new();
+            ex.insert(wire_op.clone(), json!("bad_op"));
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("ex".to_string(), Value::Object(ex));
+            resp.insert("to".to_string(), json!(from));
+            let _ = self.binding.send(Value::Object(resp));
+            return;
+        }
+        // In process, a named-only call is its fields alone.
+        let _inbound = bv_inbound(message);
+        let message = &_inbound;
+        let raw_payload = raw_payload.map(|p| bv_named_only(&p).unwrap_or(p));
         let has_payload = match &raw_payload {
             Some(Value::Object(m)) => !m.is_empty(),
             Some(Value::Array(a)) => !a.is_empty(),

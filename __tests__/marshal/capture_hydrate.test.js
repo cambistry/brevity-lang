@@ -67,8 +67,8 @@ describe('capture/hydrate round-trip — multiple types', () => {
     `;
 
     const original = await createActor(source);
-    await original.sendAsync({ id: '1', op: [{ val: 'player1' }, 'setLabel!'], 'ty': [{ val: 'Text' }], from: 'c' });
-    await original.sendAsync({ id: '2', op: [{ val: 42 }, 'setScore!'], 'ty': [{ val: 'Integer' }], from: 'c' });
+    await original.sendAsync({ id: '1', op: [[{ val: 'player1' }], 'setLabel!'], 'ty': [[{ val: 'Text' }]], from: 'c' });
+    await original.sendAsync({ id: '2', op: [[{ val: 42 }], 'setScore!'], 'ty': [[{ val: 'Integer' }]], from: 'c' });
     await original.sendAsync({ id: '3', cam: 'capture', from: 'p' });
     const snapshot = original.posts.find(o => o.id === '3').re;
 
@@ -151,7 +151,7 @@ describe('capture/hydrate round-trip — function reference', () => {
 
     const original = await createActor(source);
     await original.sendAsync({ id: '1', op: 'useDouble.', from: 'c' });
-    await original.sendAsync({ id: '2', op: [{ n: 7 }, 'apply'], 'ty': [{ n: 'Integer' }], from: 'c' });
+    await original.sendAsync({ id: '2', op: [[{ n: 7 }], 'apply'], 'ty': [[{ n: 'Integer' }]], from: 'c' });
     // Verify double is active (useDouble is silent, no output)
     expect(original.posts.find(o => o.id === '2')).toEqual(expect.objectContaining({ re: { result: 14 } }));
 
@@ -164,7 +164,7 @@ describe('capture/hydrate round-trip — function reference', () => {
 
   it('hydrated actor uses the captured behavior', async () => {
     await expectActorBehavior(restored,
-      { input: { id: '2', op: [{ n: 3 }, 'apply'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ n: 3 }], 'apply'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { output: expect.objectContaining({ re: { result: 6 } }) },
     );
   });

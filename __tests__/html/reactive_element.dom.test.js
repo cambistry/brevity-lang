@@ -48,7 +48,7 @@ describe('Q1: reactive element wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['click me'], style: '#<main:@0>' }, '$new'],
+        op: [[{ children: ['click me'], style: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -64,7 +64,7 @@ describe('Q1: reactive element wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['click me'], class: 'btn', style: '#<main:@0>' }, '$new'],
+        op: [[{ children: ['click me'], class: 'btn', style: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -80,7 +80,7 @@ describe('Q1: reactive element wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: ['hello'], class: 'plain' }, '$new'],
+        op: [[{ children: ['hello'], class: 'plain' }], '$new'],
         to: 'HTML:div',
       }) },
     );
@@ -96,7 +96,7 @@ describe('Q1: reactive element wire encoding', () => {
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
       { output: expect.objectContaining({
-        op: [{ children: [], style: '#<main:@0>' }, '$new'],
+        op: [[{ children: [], style: '#<main:@0>' }], '$new'],
         to: 'HTML:div',
       }) },
     );

@@ -99,7 +99,7 @@ describe('a protected function value is its ~label', () => {
 
   it('called through the value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 4 }, 'twice'], ty: [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 4 }], 'twice'], ty: [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '1', re: [8], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -123,7 +123,7 @@ describe('a function named after an intrinsic', () => {
     await expectBehavior(`
       @set = (n: Integer) -> n + 1
     `,
-      { input: { id: '1', op: [{ n: 2 }, 'set'], ty: [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 2 }], 'set'], ty: [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
     );
   });

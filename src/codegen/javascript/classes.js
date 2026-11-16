@@ -175,7 +175,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let tyLine = '';
   if (reply) {
     if (reply.fields.some(f => f.spread)) {
-      if (!reply.fields.some(f => f.localObject)) tyLine = `\n        _ty_re = _ty != null ? _ty[0] : undefined;`;
+      // The args' ty, reshaped as BvObject.splat reshapes the args: a named-only
+      // arg list \`[{k: t}]\` replies as \`{k: t}\`.
+      if (!reply.fields.some(f => f.localObject)) tyLine = `\n        _ty_re = _ty != null ? ((t) => (Array.isArray(t) && t.length === 1 && t[0] !== null && typeof t[0] === 'object' && !Array.isArray(t[0]) ? t[0] : t))(_ty[0]) : undefined;`;
     } else {
       const tyBody = genTyBody(ctx, reply.fields, typeEnv);
       if (tyBody !== null) {
@@ -975,7 +977,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
   async #emit(event, payload) {
     const subs = this.#_subscribers.get(event) || [];
     for (const cb of subs) {
-      const op = payload && Object.keys(payload).length > 0 ? [payload, event] : event;
+      const op = payload && Object.keys(payload).length > 0 ? [[payload], event] : event;
       await cb({ op, from: '__emit' });
     }
   }
@@ -985,7 +987,7 @@ ${fieldSection ? fieldSection + '\n' : ''}
     for (const cb of subs) {
       const id = String(++this.#nextId);
       const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
-      const op = payload && Object.keys(payload).length > 0 ? [payload, event] : event;
+      const op = payload && Object.keys(payload).length > 0 ? [[payload], event] : event;
       cb({ id, op, from: '__emit' });
       return p;
     }
@@ -1174,11 +1176,11 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       this.#binding.post(_post);
     } else if ('set' in t) {
       const _sv = t.set;
-      const payload = Array.isArray(_sv) ? _sv : (typeof _sv === 'object' && _sv !== null) ? _sv : [_sv];
+      const payload = Array.isArray(_sv) ? _sv : [_sv];
       this.#dispatch({ op: [payload, '$set'], from: '__self' });
     } else if ('update' in t) {
       const _uv = t.update;
-      const payload = Array.isArray(_uv) ? _uv : (typeof _uv === 'object' && _uv !== null) ? _uv : [_uv];
+      const payload = Array.isArray(_uv) ? _uv : [_uv];
       this.#dispatch({ op: [payload, '$update'], from: '__self' });
     } else if ('op' in t) {
       await this.#dispatch({ id: message.id, op: t.op, ...('to' in t ? { to: t.to } : {}), from: '__test', _replyTo: message.from });
@@ -1386,7 +1388,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
     const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
     if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
-      const _subArgs = Array.isArray(message.op) ? message.op[0] : null;
+      const _subArgs = Array.isArray(message.op) && message.op.length > 1 ? message.op[0] : null;
       // Keyed by the wire name: \`a\`, \`~a\` and \`#a\` are different cells.
       let _subs = this.#_cellSubs?.get(_target);
       if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_target, _subs); }
@@ -1407,7 +1409,12 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
         else { (message._route || ((msg) => this.#binding.post({ ...msg, to: _replyTo })))({ id, re: [_cell.read()] }); return; }
       }
     }` : ''}
-    const _rawPayload = Array.isArray(message.op) ? message.op[0] : null;
+    const _rawPayload = Array.isArray(message.op) && message.op.length > 1 ? message.op[0] : null;
+    // An arg list is always a list: an object in \`op\` is not one.
+    if (_rawPayload !== null && typeof _rawPayload === 'object' && !Array.isArray(_rawPayload)) {
+      (message._route || (from === '__self' ? (msg) => this.receive(msg) : (msg) => this.#binding.post(msg)))({ id, ex: { [opName]: 'bad_op' }, to: _replyTo });
+      return;
+    }
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
     if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__inner' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {

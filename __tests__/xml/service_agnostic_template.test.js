@@ -43,7 +43,7 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '$new'], to: 'Scene:node' } },
+      { output: { id: expect.any(String), op: [[{ children: ['hello'], x: '1' }], '$new'], to: 'Scene:node' } },
     );
   });
 
@@ -57,7 +57,7 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Canvas', service: HOST }] } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'build.', from: 'caller' } },
-      { output: { id: expect.any(String), op: [{ children: ['hello'], x: '1' }, '$new'], to: 'Canvas:node' } },
+      { output: { id: expect.any(String), op: [[{ children: ['hello'], x: '1' }], '$new'], to: 'Canvas:node' } },
     );
   });
 
@@ -79,7 +79,7 @@ describe('service-agnostic templating — `#new` routes to the imported service'
     // routes to the imported host (not a privileged `HTML`) is the point.
     const leafSend = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new' && p.to === 'Scene:leaf');
     expect(leafSend).toBeTruthy();
-    expect(leafSend.op[0]).toEqual({ children: ['deep'] });
+    expect(leafSend.op[0]).toEqual([{ children: ['deep'] }]);
   });
 });
 
@@ -100,14 +100,14 @@ describe('service-agnostic templating — reactive hole is a lambda ref invoked 
     await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new');
     expect(post.to).toBe('Scene:node');
-    expect(post.op[0].label).toMatch(/^#<:@\d+>$/);
+    expect(post.op[0][0].label).toMatch(/^#<:@\d+>$/);
   });
 
   it('runs the reactive lambda when the host invokes the reference through CAM', async () => {
     const actor = await (await compileActor(src, { compileOptions: { remotes } })).spawn();
     await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
     const post = actor.posts.find(p => Array.isArray(p.op) && p.op[1] === '$new');
-    const name = post.op[0].label.slice('#<:'.length, -1); // '#<:@0>' → '@0'
+    const name = post.op[0][0].label.slice('#<:'.length, -1); // '#<:@0>' → '@0'
 
     const before = actor.posts.length;
     // Host promoted our #<:@N> to a full address and now invokes the callback

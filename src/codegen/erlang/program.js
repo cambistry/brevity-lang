@@ -443,13 +443,14 @@ function genReadTable(actors) {
 // in-process path uses {pending_subscribe, Id} as before.
 function genSubscribePrologue(fnName) {
   const extractArgs = `case maps:get(<<"op">>, Message, null) of
-            List_ when is_list(List_), length(List_) > 1 -> hd(List_);
+            List_ when is_list(List_), length(List_) > 1 -> case hd(List_) of [M_] when is_map(M_) -> M_; A_ -> A_ end;
             _ -> null
         end`;
   return [
     `${fnName}({<<"$subscribe">>, Target_}, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
-    SubTy_ = maps:get(<<"ty">>, Message, null),
+    %% Kept as in process, where a named-only call is its fields alone.
+    SubTy_ = case maps:get(<<"ty">>, Message, null) of [[TM_] | TR_] when is_map(TM_) -> [TM_ | TR_]; T_ -> T_ end,
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
@@ -1944,10 +1945,15 @@ ${testTypeClauses || '                _ -> null'};
                 S when is_binary(S) -> {S, #{}};
                 L when is_list(L) -> {lists:last(L), if length(L) > 1 -> hd(L); true -> #{} end}
             end,
+            case is_map(Payload) andalso is_list(Op) of
+                true ->
+                    io:put_chars([json_encode(#{<<"id">> => Id, <<"ex">> => #{OpName0 => <<"bad_op">>}, <<"to">> => From}), $\n]);
+                false ->
             %% An intrinsic with a to names its target, as on the wire.
             OpName = bv_op_key_(OpName0, maps:get(<<"to">>, Test, null)),
-            Result3 = handle_op(OpName, #{}, Payload, Id, <<"__test">>),
-            handle_result(Result3, Id, From, OpName);
+            Result3 = handle_op(OpName, #{}, bv_named_only_(Payload), Id, <<"__test">>),
+            handle_result(Result3, Id, From, OpName)
+            end;
         error -> ok
     end end end end${targetRoutingEnd}.`;
 
@@ -1970,7 +1976,30 @@ ${testTypeClauses || '                _ -> null'};
             handle_result(Result, Id, From, OpName)
     end`;
 
-  const dispatchBody = `${opDispatchName}(Message) ->
+  const dispatchBody = `%% An arg list is always a list: a map in op is not one. In process, a
+%% named-only call is its fields alone: [#{k => v}] is #{k => v}, and its
+%% tags [[#{k => t}]] are [#{k => t}].
+${opDispatchName}(Message0) ->
+    case maps:get(<<"op">>, Message0, null) of
+        [Bad_ | [_ | _] = BadRest_] when is_map(Bad_) ->
+            io:put_chars([json_encode(#{<<"id">> => maps:get(<<"id">>, Message0, <<>>), <<"ex">> => #{lists:last(BadRest_) => <<"bad_op">>}, <<"to">> => maps:get(<<"from">>, Message0, <<>>)}), $\n]);
+        _ -> bv_dispatch_(bv_inbound_(Message0))
+    end.
+
+bv_named_only_([M]) when is_map(M) -> M;
+bv_named_only_(V) -> V.
+
+bv_inbound_(Message) ->
+    M1 = case maps:get(<<"op">>, Message, null) of
+        [A | [_ | _] = Rest] -> Message#{<<"op">> => [bv_named_only_(A) | Rest]};
+        _ -> Message
+    end,
+    case maps:get(<<"ty">>, M1, null) of
+        [T | TRest] -> M1#{<<"ty">> => [bv_named_only_(T) | TRest]};
+        _ -> M1
+    end.
+
+bv_dispatch_(Message) ->
     Id = maps:get(<<"id">>, Message, <<>>),
     From = maps:get(<<"from">>, Message, <<>>),
     OpVal = maps:get(<<"op">>, Message, null),

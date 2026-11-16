@@ -59,7 +59,7 @@ describe('type declarations + typed RHS', () => {
 
   it('x = (a + b) as Integer — typed RHS expression', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, 'typedExpr'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 3, b: 4 }], 'typedExpr'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });

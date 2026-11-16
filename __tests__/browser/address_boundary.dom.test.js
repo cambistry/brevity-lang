@@ -30,7 +30,7 @@ const source = `
 
 async function boundary() {
   const actor = await (await compileActor(source, { compileOptions: { selfAddr: 'app.bv' } })).spawn();
-  await actor.sendAsync({ id: '1', op: [{}, '$new'], to: ':Box', from: 'Tester' });
+  await actor.sendAsync({ id: '1', op: '$new', to: ':Box', from: 'Tester' });
   return actor;
 }
 
@@ -55,7 +55,7 @@ describe('global boundary', () => {
     const actor = await boundary();
     await actor.sendAsync({ id: '2', op: 'tell', to: ':Box:1:tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual(expect.objectContaining({
-      op: [{ r: '#<app.bv:Box:1:tally:x>' }, 'take'],
+      op: [[{ r: '#<app.bv:Box:1:tally:x>' }], 'take'],
       to: 'Svc',
     }));
   });

@@ -41,7 +41,7 @@ describe('remote actor — method calls after init', () => {
   it('`new` emits at init, then method calls route to actor address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '$new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [[{ path: '/my_view' }], '$new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -56,7 +56,7 @@ describe('remote actor — sequential calls to actor', () => {
   it('multiple method calls all route to same address', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '$new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [[{ path: '/my_view' }], '$new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -161,7 +161,7 @@ describe('remote actor — a reply nobody is waiting for', () => {
   it('is ignored, and the actor carries on', async () => {
     const actor = await createActor(singleViewSource, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/my_view' }, '$new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [[{ path: '/my_view' }], '$new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -195,8 +195,8 @@ describe('remote actor — multiple actors', () => {
         return :ok
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [{ path: '/a' }, '$new'], to: 'WebView' }) },
-        { output: expect.objectContaining({ op: [{ path: '/b' }, '$new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [[{ path: '/a' }], '$new'], to: 'WebView' }) },
+        { output: expect.objectContaining({ op: [[{ path: '/b' }], '$new'], to: 'WebView' }) },
       ],
     });
     await expectActorBehavior(actor,
@@ -235,7 +235,7 @@ describe('remote actor — named class args', () => {
     `, {
       expects: [
         { output: expect.objectContaining({
-          op: [{ host: 'localhost', port: 5432 }, '$new'],
+          op: [[{ host: 'localhost', port: 5432 }], '$new'],
           to: 'Database',
         }) },
       ],

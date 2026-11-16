@@ -53,7 +53,7 @@ describe('arguments', () => {
 
   it('key-mapped arg — outer: inner Text', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ outer: 'hello' }, 'keyMapped'], 'ty': [{ outer: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [[{ outer: 'hello' }], 'keyMapped'], 'ty': [[{ outer: 'Text' }]], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
@@ -184,28 +184,28 @@ describe('optional arguments — named', () => {
 
   it('typed — both named args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 'hey', b: 'there' }, 'namedTyped'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 'hey', b: 'there' }], 'namedTyped'], 'ty': [[{ a: 'Text', b: 'Text' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
     );
   });
 
   it('typed — optional named omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 'hello' }, 'namedTyped'], 'ty': [{ a: 'Text' }], from: 'c' } },
+      { input: { id: '2', op: [[{ a: 'hello' }], 'namedTyped'], 'ty': [[{ a: 'Text' }]], from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
     );
   });
 
   it('inferred — both named args provided', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 'hey', b: 'there' }, 'namedInferred'], 'ty': [{ a: 'Text', b: 'Text' }], from: 'c' } },
+      { input: { id: '3', op: [[{ a: 'hey', b: 'there' }], 'namedInferred'], 'ty': [[{ a: 'Text', b: 'Text' }]], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hey there' }, to: 'c' } },
     );
   });
 
   it('inferred — optional named omitted, default fills in', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 'hello' }, 'namedInferred'], 'ty': [{ a: 'Text' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 'hello' }], 'namedInferred'], 'ty': [[{ a: 'Text' }]], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello default' }, to: 'c' } },
     );
   });
@@ -359,7 +359,7 @@ describe('a call that leaves out every arg', () => {
     @Box = *{${bodies}}
   `;
   const newBox = [
-    { input: { id: '1', op: [{}, '$new'], to: ':Box', from: 'c' } },
+    { input: { id: '1', op: '$new', to: ':Box', from: 'c' } },
     { output: { id: '1', re: '#<:Box:1>', 'ty': ':Box', to: 'c' } },
   ];
   const atBox = { to: ':Box:1', from: 'c' };

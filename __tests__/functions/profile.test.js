@@ -78,21 +78,21 @@ describe('multi-param forms', () => {
 
   it('explicit inline with commas', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, 'inlineComma'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'inlineComma'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
     );
   });
 
   it('explicit same-line', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ a: 3, b: 4 }, 'sameLine'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ a: 3, b: 4 }], 'sameLine'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '2', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
     );
   });
 
   it('lineal form, no commas', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ a: 3, b: 4 }, 'openForm'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [[{ a: 3, b: 4 }], 'openForm'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '3', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
     );
   });

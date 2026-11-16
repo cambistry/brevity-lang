@@ -112,7 +112,7 @@ describe('single-expression — public function forms', () => {
 
   it('@op = (n: Integer) -> :n', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 7 }, 'echo'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 7 }], 'echo'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 7 }, to: 'c' } },
     );
   });

@@ -24,7 +24,7 @@ view = *WebView(path: "/my_view")
 Construction sends a `$new` message:
 
 ```json
-{ "op": [{ "path": "/my_view" }, "$new"], "to": "WebView" }
+{ "op": [[{ "path": "/my_view" }], "$new"], "to": "WebView" }
 ```
 
 The reply supplies the actor address:

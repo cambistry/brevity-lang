@@ -72,7 +72,7 @@ describe('a type declared in a class', () => {
 
   it('decodes a param annotated with the class\'s type', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ p: [5] }, 'read'], ty: [{ p: ':W:X' }], from: 'c' } },
+      { input: { id: '1', op: [[{ p: [5] }], 'read'], ty: [[{ p: ':W:X' }]], from: 'c' } },
       { output: { id: '1', re: { result: 5 }, ty: { result: 'Integer' }, to: 'c' } },
     );
   });
@@ -151,11 +151,11 @@ describe('types of one name in different actors', () => {
 
   it('a param takes its own type, and refuses the other', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ p: [5, 6] }, 'readV'], ty: [{ p: ':V:X' }], from: 'c' } },
+      { input: { id: '1', op: [[{ p: [5, 6] }], 'readV'], ty: [[{ p: ':V:X' }]], from: 'c' } },
       { output: { id: '1', ty: { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
-      { input: { id: '2', op: [{ p: [5] }, 'readW'], ty: [{ p: ':W:X' }], from: 'c' } },
+      { input: { id: '2', op: [[{ p: [5] }], 'readW'], ty: [[{ p: ':W:X' }]], from: 'c' } },
       { output: { id: '2', ty: { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
-      { input: { id: '3', op: [{ p: [5, 6] }, 'readW'], ty: [{ p: ':V:X' }], from: 'c' } },
+      { input: { id: '3', op: [[{ p: [5, 6] }], 'readW'], ty: [[{ p: ':V:X' }]], from: 'c' } },
       { output: expect.objectContaining({ id: '3', to: 'c', ex: expect.anything() }) },
     );
   });

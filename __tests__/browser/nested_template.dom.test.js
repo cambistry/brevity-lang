@@ -76,8 +76,8 @@ describe('nested template — recursive HTML.X dispatch', () => {
 
     await factory.sendAsync({
       id: '2',
-      op: [{ v: 'updated' }, 'bump.'],
-      'ty': [{ v: 'Text' }],
+      op: [[{ v: 'updated' }], 'bump.'],
+      'ty': [[{ v: 'Text' }]],
       from: 'caller',
     });
 

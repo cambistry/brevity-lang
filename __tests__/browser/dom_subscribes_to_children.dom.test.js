@@ -37,7 +37,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     const page = await loadPage(html);
     const dom = await page.connectActor('HTML:div');
 
-    await dom.sendAsync({ id: '1', op: [{ children: ['Hello'] }, '$new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [[{ children: ['Hello'] }], '$new'], from: 'caller' });
 
     expect(dom.posts.some(m => m.op === '$subscribe')).toBe(false);
     expect(dom.posts).toEqual(expect.arrayContaining([
@@ -52,7 +52,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML:div');
 
-    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub:@0>'] }, '$new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [[{ children: ['#<pub:@0>'] }], '$new'], from: 'caller' });
 
     // HTML should have routed a subscribe to pub (alias-stripped; `to` becomes
     // the address relative to the recipient).
@@ -77,7 +77,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML:div');
 
-    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub:@0>'] }, '$new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [[{ children: ['#<pub:@0>'] }], '$new'], from: 'caller' });
 
     const sub = pubPosts[0];
     expect(sub).toBeDefined();
@@ -103,7 +103,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     await page.register('pub', msg => pubPosts.push(msg));
     const dom = await page.connectActor('HTML:div');
 
-    await dom.sendAsync({ id: '1', op: [{ children: ['#<pub:@0>'] }, '$new'], from: 'caller' });
+    await dom.sendAsync({ id: '1', op: [[{ children: ['#<pub:@0>'] }], '$new'], from: 'caller' });
 
     const sub = pubPosts[0];
     const el = await page.connectActor('HTML:div:1');
@@ -130,7 +130,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ children: ['pre ', '#<pub:@0>', ' post'] }, '$new'],
+      op: [[{ children: ['pre ', '#<pub:@0>', ' post'] }], '$new'],
       from: 'caller',
     });
 
@@ -155,7 +155,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     await dom.sendAsync({
       id: '1',
-      op: [{ children: ['#<pub:@0>', ' — ', '#<pub:@1>'] }, '$new'],
+      op: [[{ children: ['#<pub:@0>', ' — ', '#<pub:@1>'] }], '$new'],
       from: 'caller',
     });
 
@@ -192,8 +192,8 @@ describe('HTML element — a subscribed element address fills the slot', () => {
     const span = await page.connectActor('HTML:span');
     const div = await page.connectActor('HTML:div');
 
-    await span.sendAsync({ id: '1', op: [{ children: ['inner'] }, '$new'], from: 'caller' });
-    await div.sendAsync({ id: '2', op: [{ children: ['[', '#<pub:@0>', ']'] }, '$new'], from: 'caller' });
+    await span.sendAsync({ id: '1', op: [[{ children: ['inner'] }], '$new'], from: 'caller' });
+    await div.sendAsync({ id: '2', op: [[{ children: ['[', '#<pub:@0>', ']'] }], '$new'], from: 'caller' });
     await page.send({ id: pubPosts[0].id, re: ['#<HTML:span:1>'], to: 'HTML:div:1', from: 'pub' });
 
     const el = await page.connectActor('HTML:div:1');
@@ -210,8 +210,8 @@ describe('HTML element — a subscribed element address fills the slot', () => {
     const span = await page.connectActor('HTML:span');
     const div = await page.connectActor('HTML:div');
 
-    await span.sendAsync({ id: '1', op: [{ children: ['inner'] }, '$new'], from: 'caller' });
-    await div.sendAsync({ id: '2', op: [{ children: ['[', '#<pub:@0>', ']'] }, '$new'], from: 'caller' });
+    await span.sendAsync({ id: '1', op: [[{ children: ['inner'] }], '$new'], from: 'caller' });
+    await div.sendAsync({ id: '2', op: [[{ children: ['[', '#<pub:@0>', ']'] }], '$new'], from: 'caller' });
     await page.send({ id: pubPosts[0].id, re: ['#<HTML:span:1>'], to: 'HTML:div:1', from: 'pub' });
     await page.send({ id: pubPosts[0].id, re: ['plain'], to: 'HTML:div:1', from: 'pub' });
 

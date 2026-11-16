@@ -42,7 +42,7 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
   // HTML.<tag>(#new) with the handler wired back to us (`#<t>`)
   await page.send({
     id: 'new',
-    op: [{ id: 'evtel', [on]: '#<t>', children: [] }, '$new'],
+    op: [[{ id: 'evtel', [on]: '#<t>', children: [] }], '$new'],
     to: `HTML:${tag}`,
     from: 't',
   });

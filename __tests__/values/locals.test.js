@@ -187,28 +187,28 @@ describe('locals — header arg access', () => {
 
   it('direct return of header arg', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ n: 42 }, 'echoNamed'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ n: 42 }], 'echoNamed'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 42 }, to: 'c' } },
     );
   });
 
   it('header arg used in expression', async () => {
     await expectBehavior(script,
-      { input: { id: '2', op: [{ n: 7 }, 'doubleArg'], 'ty': [{ n: 'Integer' }], from: 'c' } },
+      { input: { id: '2', op: [[{ n: 7 }], 'doubleArg'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
     );
   });
 
   it('header arg read from lambda', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [{ base: 100 }, 'argInLambda'], 'ty': [{ base: 'Integer' }], from: 'c' } },
+      { input: { id: '3', op: [[{ base: 100 }], 'argInLambda'], 'ty': [[{ base: 'Integer' }]], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 110 }, to: 'c' } },
     );
   });
 
   it('multiple header args in expression', async () => {
     await expectBehavior(script,
-      { input: { id: '4', op: [{ a: 3, b: 4 }, 'multiArg'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '4', op: [[{ a: 3, b: 4 }], 'multiArg'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });
@@ -234,7 +234,7 @@ describe('locals — nested lambda with header arg', () => {
 
   it('header arg read from nested lambda', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ seed: 50 }, 'argNested'], 'ty': [{ seed: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ seed: 50 }], 'argNested'], 'ty': [[{ seed: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 51 }, to: 'c' } },
     );
   });

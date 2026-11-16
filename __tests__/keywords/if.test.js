@@ -1040,7 +1040,7 @@ describe('a function param named like an outer name', () => {
   });
   it('a named handler param keeps its key', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [{ k: 7 }, 'handlerNamed'], 'ty': [{ k: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ k: 7 }], 'handlerNamed'], 'ty': [[{ k: 'Integer' }]], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
     );
   });

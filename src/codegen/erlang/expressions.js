@@ -79,7 +79,7 @@ function erlArgSlots(positional, named, method, { argVal, argTag }) {
   } else if (named.length > 0) {
     const namedFields = named.map(a => `${erlString(a.name)} => ${argVal(a)}`).join(', ');
     const namedTy = named.map(a => `${erlString(a.name)} => ${argTag(a)}`).join(', ');
-    return { opExpr: `[#{${namedFields}}, ${method}]`, tyExpr: `[#{${namedTy}}]` };
+    return { opExpr: `[[#{${namedFields}}], ${method}]`, tyExpr: `[[#{${namedTy}}]]` };
   }
   const posVals = positional.map(argVal).join(', ');
   const posTy = positional.map(argTag).join(', ');
@@ -282,7 +282,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `begin
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
-        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [#{${payloadPairs.join(', ')}}, ${erlString('$new')}], <<"to">> => ${to}},
+        ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [[#{${payloadPairs.join(', ')}}], ${erlString('$new')}], <<"to">> => ${to}},
         io:put_chars([json_encode(${v.msg}), $\\n]),
         null
     end`;

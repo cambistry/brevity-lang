@@ -17,7 +17,7 @@ const THING = `
 `;
 
 const constructed = (src) => createActor(src, {
-  expects: [{ output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) }],
+  expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) }],
 });
 
 const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } };
@@ -69,7 +69,7 @@ describe('remote actor (constructor-block construction)', () => {
 describe('remote actor (handler-local construction)', () => {
   const run = (src, reply) => createActor(src).then(actor => expectActorBehavior(actor,
     { input: { id: '99', op: 'go', from: 'caller' } },
-    { output: expect.objectContaining({ op: [{ a: 5 }, '$new'], to: 'Thing' }) },
+    { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) },
     NEW_REPLY,
     { output: expect.objectContaining({ to: 'Thing/1' }) },
     { input: { id: '2', ...reply } },
@@ -148,7 +148,7 @@ describe('reference-field callback — typed bind', () => {
     @go = (c: Call) { out Integer = c.fn(c.arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,
-    { input: { id: '50', op: [{ c: [200, '#<caller:cb>'] }, 'go'], 'ty': [{ c: ':Call' }], from: 'caller' } },
+    { input: { id: '50', op: [[{ c: [200, '#<caller:cb>'] }], 'go'], 'ty': [[{ c: ':Call' }]], from: 'caller' } },
     { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller:cb>' }) },
     { input: { id: '1', ...reply } },
     { output: expect.objectContaining({ id: '50', ...expected, to: 'caller' }) },

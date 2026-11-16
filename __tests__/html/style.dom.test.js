@@ -22,7 +22,7 @@ describe('<style> compile', () => {
       @t = -> <style>/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: "}"; } } p:hover{color:#f00}</style>
     `);
     expect(output).toContain(
-      `{children: ["/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: \\"}\\"; } } p:hover{color:#f00}"]}, "$new"], "HTML:style")`,
+      `[{children: ["/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: \\"}\\"; } } p:hover{color:#f00}"]}], "$new"], "HTML:style")`,
     );
   });
 

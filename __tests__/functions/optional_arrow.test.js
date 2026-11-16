@@ -67,7 +67,7 @@ describe('optional arrow — compiles and runs', () => {
     await expectBehavior(`
       @add = (a: Integer, b: Integer) -> { return sum: a + b }
     `,
-      { input: { id: '1', op: [{ a: 3, b: 4 }, 'add'], 'ty': [{ a: 'Integer', b: 'Integer' }], from: 'c' } },
+      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
     );
   });

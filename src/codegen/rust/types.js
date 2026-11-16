@@ -325,6 +325,28 @@ fn bv_addr_to(v: &str) -> String {
     v.strip_prefix("#<").and_then(|t| t.strip_suffix('>')).unwrap_or(v).to_string()
 }
 
+// A named-only arg list off the wire, \`[{k: v}]\`, and its tags \`[[{k: t}]]\`, in
+// the form a handler reads in process: the fields alone, \`{k: v}\` and \`[{k: t}]\`.
+#[allow(dead_code)]
+fn bv_named_only(v: &Value) -> Option<Value> {
+    match v.as_array() {
+        Some(a) if a.len() == 1 && a[0].is_object() => Some(a[0].clone()),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn bv_inbound(message: &Value) -> Value {
+    let mut m = message.clone();
+    if let Some(Value::Array(op)) = m.get_mut("op") {
+        if op.len() > 1 { if let Some(f) = bv_named_only(&op[0]) { op[0] = f; } }
+    }
+    if let Some(Value::Array(ty)) = m.get_mut("ty") {
+        if !ty.is_empty() { if let Some(f) = bv_named_only(&ty[0]) { ty[0] = f; } }
+    }
+    m
+}
+
 #[allow(dead_code)]
 fn bv_op_key(op: &str, to: Option<&str>) -> String {
     if !op.starts_with('$') { return op.to_string(); }

@@ -59,7 +59,7 @@ describe('type wire — inbound payload reconstruction', () => {
       type Point (x Integer, y Integer)
       @get_x = (p: Point) -> result: p.x as Integer
     `,
-      { input: { id: '1', op: [{ p: [1, 2] }, 'get_x'], 'ty': [{ p: ':Point' }], from: 'c' } },
+      { input: { id: '1', op: [[{ p: [1, 2] }], 'get_x'], 'ty': [[{ p: ':Point' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
@@ -69,7 +69,7 @@ describe('type wire — inbound payload reconstruction', () => {
       type Game (? started Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 0)
     `,
-      { input: { id: '2', op: [{ g: { turn: 7 } }, 'get_turn'], 'ty': [{ g: ':Game' }], from: 'c' } },
+      { input: { id: '2', op: [[{ g: { turn: 7 } }], 'get_turn'], 'ty': [[{ g: ':Game' }]], from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
@@ -79,7 +79,7 @@ describe('type wire — inbound payload reconstruction', () => {
       type Game (? started Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 99)
     `,
-      { input: { id: '3', op: [{ g: {} }, 'get_turn'], 'ty': [{ g: ':Game' }], from: 'c' } },
+      { input: { id: '3', op: [[{ g: {} }], 'get_turn'], 'ty': [[{ g: ':Game' }]], from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 99 }, to: 'c' } },
     );
   });
@@ -105,11 +105,11 @@ describe('type wire — outbound argument payload + ty', () => {
         Sink.take(:p)
         return ()
     `);
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: ':Point' }] });
+    await actor.sendAsync({ id: '1', op: [[{ p: [3, 4] }], 'fwd'], from: 'Tester', 'ty': [[{ p: ':Point' }]] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      op: [{ p: [3, 4] }, 'take'],
+      op: [[{ p: [3, 4] }], 'take'],
       to: 'Sink',
-      'ty': [{ p: ':Point' }],
+      'ty': [[{ p: ':Point' }]],
     }));
   });
 
@@ -128,11 +128,11 @@ describe('type wire — outbound argument payload + ty', () => {
         Sink.take(:g)
         return ()
     `);
-    await actor.sendAsync({ id: '1', op: [{ g: { turn: 5 } }, 'fwd'], from: 'Tester', 'ty': [{ g: ':Game' }] });
+    await actor.sendAsync({ id: '1', op: [[{ g: { turn: 5 } }], 'fwd'], from: 'Tester', 'ty': [[{ g: ':Game' }]] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      op: [{ g: { turn: 5 } }, 'take'],
+      op: [[{ g: { turn: 5 } }], 'take'],
       to: 'Sink',
-      'ty': [{ g: ':Game' }],
+      'ty': [[{ g: ':Game' }]],
     }));
   });
 
@@ -151,13 +151,13 @@ describe('type wire — outbound argument payload + ty', () => {
         Sink.take(n: 7, :p)
         return ()
     `);
-    await actor.sendAsync({ id: '1', op: [{ p: [3, 4] }, 'fwd'], from: 'Tester', 'ty': [{ p: ':Point' }] });
+    await actor.sendAsync({ id: '1', op: [[{ p: [3, 4] }], 'fwd'], from: 'Tester', 'ty': [[{ p: ':Point' }]] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({
-      op: [{ n: 7, p: [3, 4] }, 'take'],
+      op: [[{ n: 7, p: [3, 4] }], 'take'],
       to: 'Sink',
-      'ty': [{ n: 'Integer', p: ':Point' }],
+      'ty': [[{ n: 'Integer', p: ':Point' }]],
     }));
     // The primitive slot stays a bare tag; only the type slot is an address.
-    expect(actor.posts[0]['ty'][0].n).toBe('Integer');
+    expect(actor.posts[0]['ty'][0][0].n).toBe('Integer');
   });
 });
