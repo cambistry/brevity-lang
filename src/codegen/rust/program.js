@@ -49,6 +49,7 @@ import { fileOuterNames, hasOuterReads, readableNames, propNames } from '../../o
 import { withDeferredRuns } from '../../init_order.js';
 import { publicLabel, FILE_CLASS } from '../../singleton_classes.js';
 import { genRustLocals } from './statements.js';
+import { capturedRefs } from '../ref_captures.js';
 
 function genRustProgram(actor, allActors) {
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
@@ -128,15 +129,6 @@ ${sourceArms}
   // Ref-captured-by: for every non-silent @/# fn that reads a state ref,
   // record refName -> Set<fnFullName>. Consumed by SetStatement codegen
   // to emit fn replay blocks per subscriber.
-  const collectRefReads = (node, acc) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name);
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      collectRefReads(node[k], acc);
-    }
-  };
   const _silentFns = new Set();
   for (const fn of (actor.functions || [])) {
     if (!fn.name) continue;
@@ -152,9 +144,7 @@ ${sourceArms}
     const isPriv = fn.name.startsWith('#');
     if (!isPub && !isPriv) continue;
     if (_silentFns.has(fn.name)) continue;
-    const acc = new Set();
-    collectRefReads(fn.body, acc);
-    for (const refName of acc) {
+    for (const refName of capturedRefs(fn)) {
       if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
       refCapturedBy.get(refName).add(fn.name);
     }

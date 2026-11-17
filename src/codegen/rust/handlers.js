@@ -29,6 +29,7 @@ import {
 import {
   genRustLocals, genRustReBody, genRustTyBody,
 } from './statements.js';
+import { capturedRefs } from '../ref_captures.js';
 
 // The names a class reads from the actors it's declared in, with their types.
 function outerTypesOf(actor) {
@@ -1275,15 +1276,6 @@ function genRustChildMethods(allActors) {
     const savedCurrentActorName = G.ctx.currentActorName;
     G.ctx.currentActorName = actor.name || '';
     // Build ref-captured-by for this child's non-silent @/# fns.
-    const _collectRefReads = (node, acc) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { for (const n of node) _collectRefReads(n, acc); return; }
-      if (node.type === 'RefRead' && node.name) acc.add(node.name);
-      for (const k of Object.keys(node)) {
-        if (k === 'type') continue;
-        _collectRefReads(node[k], acc);
-      }
-    };
     const _childSilent = new Set();
     for (const fn of (mergedActor.functions || [])) {
       if (!fn.name) continue;
@@ -1300,9 +1292,7 @@ function genRustChildMethods(allActors) {
       const isPriv = fn.name.startsWith('#');
       if (!isPub && !isPriv) continue;
       if (_childSilent.has(fn.name)) continue;
-      const acc = new Set();
-      _collectRefReads(fn.body, acc);
-      for (const refName of acc) {
+      for (const refName of capturedRefs(fn)) {
         if (!_childRefCapturedBy.has(refName)) _childRefCapturedBy.set(refName, new Set());
         _childRefCapturedBy.get(refName).add(fn.name);
       }

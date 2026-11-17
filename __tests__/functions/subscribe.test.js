@@ -29,6 +29,13 @@ describe('subscribe — runtime', () => {
       =
       -> :lastPub as Integer, :lastPriv as Integer, :lastParam as Integer
 
+    // a fn's own ref isn't a capture: another fn's ref of the same name doesn't replay it
+    @ownRef = { held *Integer = 7; held }
+    @writeOwn = { held *Integer = 1; held <- 2; held }
+    replays *Integer = 0
+    @doOwnSub. = { @ownRef.subscribe (v) { replays <- replays + 1 } }
+    @readReplays = -> :replays as Integer
+
     // subscribe — in-script fns (local child actor)
     C = * {
       @body *Integer = 0
@@ -95,6 +102,16 @@ describe('subscribe — runtime', () => {
         re: { lastPub: 10, lastPriv: 6, lastParam: 105 },
         to: 'c',
       } },
+    );
+  });
+
+  it('subscribe — in-file fns — a write to another fn\'s own ref of the same name doesn\'t replay', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'doOwnSub.', from: 'c' } },
+      { input: { id: '2', op: 'writeOwn', from: 'c' } },
+      { output: { id: '2', re: [2], to: 'c' } },
+      { input: { id: '3', op: 'readReplays', from: 'c' } },
+      { output: { id: '3', 'ty': { replays: 'Integer' }, re: { replays: 1 }, to: 'c' } },
     );
   });
 

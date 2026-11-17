@@ -31,6 +31,7 @@ import {
   genReplyFieldVal,
   genTyBody,
 } from './statements.js';
+import { capturedRefs } from '../ref_captures.js';
 
 // ── Conditional return chain builder ────────────────────────────────────────
 
@@ -881,15 +882,6 @@ function genChildHandleOp(ctx, actor) {
   const childPrivateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
 
   // Ref-captured-by for this child's non-silent @/# fns (same as main actor).
-  const collectRefReads = (node, acc) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name);
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      collectRefReads(node[k], acc);
-    }
-  };
   const silentFnNames = new Set();
   for (const fn of [...childPublicFns, ...childPrivateFns]) {
     if (!fn.name) continue;
@@ -906,9 +898,7 @@ function genChildHandleOp(ctx, actor) {
     const isPriv = fn.name.startsWith('#');
     if (!isPub && !isPriv) continue;
     if (silentFnNames.has(fn.name)) continue;
-    const acc = new Set();
-    collectRefReads(fn.body, acc);
-    for (const refName of acc) {
+    for (const refName of capturedRefs(fn)) {
       if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
       refCapturedBy.get(refName).add(fn.name);
     }
@@ -1535,15 +1525,6 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // Ref-captured-by map: for every non-silent @/# fn that reads a state ref,
   // record refName -> Set<fnFullName>. Used by set sites (set@<cell> and raw
   // SetStatement on state refs) to re-evaluate derived fns per subscriber.
-  const collectRefReads = (node, acc) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name);
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      collectRefReads(node[k], acc);
-    }
-  };
   const silentFnNames = new Set();
   for (const fn of [...publicFns, ...privateFns]) {
     if (!fn.name) continue;
@@ -1559,9 +1540,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     const isPriv = fn.name.startsWith('#');
     if (!isPub && !isPriv) continue;
     if (silentFnNames.has(fn.name)) continue;
-    const acc = new Set();
-    collectRefReads(fn.body, acc);
-    for (const refName of acc) {
+    for (const refName of capturedRefs(fn)) {
       if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
       refCapturedBy.get(refName).add(fn.name);
     }

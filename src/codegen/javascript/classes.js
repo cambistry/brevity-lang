@@ -22,6 +22,7 @@ import {
 } from './statements.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { subscribedParams } from '../../call_args.js';
+import { capturedRefs } from '../ref_captures.js';
 
 // A silent name's trailing `.` (`log.`, `@go.`) becomes `$` and a writing name's
 // trailing `!` becomes `$w` — `$` is a JS identifier character no Brevity name
@@ -503,15 +504,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Ref-captured-by map: which non-silent public fns reference each ref in
   // their body. Set@<cell>'s notifyBlock uses this to fire re-evaluation
   // dispatches for subscribers of any fn that derives from the cell being set.
-  const collectRefReads = (node, acc) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) collectRefReads(n, acc); return; }
-    if (node.type === 'RefRead' && node.name) acc.add(node.name);
-    for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
-      collectRefReads(node[k], acc);
-    }
-  };
   const refCapturedBy = new Map();
   for (const fn of [...publicFns, ...privateFns]) {
     if (!fn.name) continue;
@@ -519,9 +511,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     const isPrivate = fn.name.startsWith('#');
     if (!isPublic && !isPrivate) continue;
     if (silentFnNames.has(fn.name)) continue;
-    const acc = new Set();
-    collectRefReads(fn.body, acc);
-    for (const refName of acc) {
+    for (const refName of capturedRefs(fn)) {
       if (!refCapturedBy.has(refName)) refCapturedBy.set(refName, new Set());
       // Store the full name (with @ or # sigil) so replay emits the right
       // dispatch op and storage key can be derived as name.slice(1).
