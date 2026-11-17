@@ -256,6 +256,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
               const callExpr = `self.self_send("${wireLabel(calleeName)}", &Value::Object(Map::new()))`;
               lines.push(`                let ${tmpVar} = BvObject::pack(&${callExpr}).one();`);
               expr._precomputed = tmpVar;
+              expr._precomputedValue = true;
             }
             return;
           }
@@ -267,6 +268,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             const convert = convertFromValue(callExpr, expectedType);
             lines.push(`                let ${tmpVar} = ${convert};`);
             expr._precomputed = tmpVar;
+            // Unconverted, it is the reply's Value.
+            if (convert === callExpr) expr._precomputedValue = true;
             return;
           }
         }
@@ -768,6 +771,8 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
           const convert = convertFromValue(callExpr, expectedType);
           lines.push(`                let ${tmpVar} = ${convert};`);
           expr._precomputed = tmpVar;
+          // Unconverted, it is the reply's Value.
+          if (convert === callExpr) expr._precomputedValue = true;
           return;
         }
       }
@@ -837,13 +842,7 @@ function genRustChildDispatch(actor) {
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
-  // Build eCtx with wrapped superclass bindings so DotAccessExpr on them resolves
-  const supertypeBindings = actor._supertypeBindings || [];
-  const childActorRefs = new Map();
-  for (const wb of supertypeBindings) {
-    childActorRefs.set(wb.name || wb.supertype, wb.supertype);
-  }
-  const eCtx = childActorRefs.size > 0 ? { childActorRefs } : undefined;
+  const eCtx = undefined;
   // Class param and state types, so handler bodies see e.g. Text params as Text.
   const classTypes = new Map();
   for (const p of (actor.initParams || [])) if (p.type) classTypes.set(p.name, p.type);
@@ -896,15 +895,6 @@ function genRustChildDispatch(actor) {
     const sk = stateKey(p.name);
     arms.push(`            ${JSON.stringify(wireLabel("@" + accessorName))} => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
-  // Generate delegation arms for inherited functions from wrapped superclasses
-  const delegatedFunctions = actor._delegatedFunctions || [];
-  for (const f of delegatedFunctions) {
-    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
-    if (wb) {
-      arms.push(`            "${wireLabel(f.name)}"${childTagGuard(f)} => {\n                re = Some(self.child_dispatch("${wb.supertype.toLowerCase()}", "${wireLabel(f.name)}", payload, "", "__parent"));\n            }`);
-    }
-  }
-
   // As-clause dispatch arms for child actor self-as type coercion
   for (const clause of (actor.asClauses || [])) {
     const val = genRustExpr(clause.expr, {});
@@ -977,10 +967,9 @@ function genRunDeferred(e, recv) {
 function genRustChildInit(actor) {
   const constructorParams = actor.initParams || [];
   const initBody = withDeferredRuns(actor.initBody || [], actor);
-  const supertypeBindings = actor._supertypeBindings || [];
   const inheritedIngests = actor._inheritedIngests || [];
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
-  if (constructorParams.length === 0 && initBody.length === 0 && supertypeBindings.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
+  if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
@@ -1134,29 +1123,6 @@ function genRustChildInit(actor) {
     }
   }
 
-  // Auto-create wrapped superclass actors
-  for (const wb of supertypeBindings) {
-    const superActor = G.ctx.actorNodes?.get(wb.supertype);
-    if (superActor) {
-      const mergedSuper = G.ctx.actorInfo.get(wb.supertype)?.actor || superActor;
-      const superParams = mergedSuper.initParams || [];
-      const superInitBody = mergedSuper.initBody || [];
-      const superHasOnHandlers = mergedSuper.functions.some(f => f.type === 'OnHandler');
-      const superHasBindings = (mergedSuper._supertypeBindings || []).length > 0;
-      const needsInit = superParams.length > 0 || superInitBody.length > 0 || superHasOnHandlers || superHasBindings;
-      if (needsInit) {
-        if (superParams.length > 0) {
-          const argExprs = superParams.map(p => p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`);
-          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&Value::Array(vec![${argExprs.join(', ')}]));`);
-        } else {
-          lines.push(`        self.child_${wb.supertype.toLowerCase()}_init(&json!([]));`);
-        }
-      }
-      // Store the wrapped binding name as a reference to the superclass's child dispatch name
-      lines.push(`        self.state.insert("${stateKey(wb.name)}".to_string(), json!("${wb.supertype.toLowerCase()}"));`);
-    }
-  }
-
   // `on <param>.<event>`: register this instance with the emitter instance
   // the param holds, so the emitter's emit reaches it.
   for (const f of (actor.functions || []).filter(f => f.type === 'OnHandler')) {
@@ -1185,7 +1151,7 @@ function genRustChildMethods(allActors) {
   const parts = [];
   for (const actor of childActors) {
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1196,28 +1162,10 @@ function genRustChildMethods(allActors) {
 
     // Merge inherited functions — subclass's own functions take precedence
     const ownFnNames = new Set(actor.functions.map(f => f.name));
-    const delegatedFunctions = [];
-    const inlinedInherited = [];
-
-    for (const f of inheritedFunctions) {
-      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
-      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
-        delegatedFunctions.push(f);
-      } else {
-        inlinedInherited.push(f);
-      }
-    }
     const mergedFunctions = [
       ...actor.functions,
-      ...inlinedInherited.map(f => deepCloneAst(f)),
+      ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')).map(f => deepCloneAst(f)),
     ];
-
-    // Build wrapped superclass bindings list
-    const supertypeBindings = [];
-    for (const wb of wrappedBindings) {
-      const superActor = G.ctx.actorNodes?.get(wb.supertype);
-      if (superActor) supertypeBindings.push(wb);
-    }
 
     // Subscribe-on-param transform was applied as a pre-pass in program.js
     // before genRustDispatch, so the file class's @run handler sees the
@@ -1228,8 +1176,6 @@ function genRustChildMethods(allActors) {
       ...actor,
       initParams: mergedParams,
       functions: mergedFunctions,
-      _delegatedFunctions: delegatedFunctions,
-      _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
     };
 
@@ -1260,14 +1206,12 @@ function genRustChildMethods(allActors) {
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
       ...childCoercions.map(s => s.name),
-      ...supertypeBindings.map(wb => wb.name),
     ]);
     savedDecls = G.ctx.stateVarDecls;
     G.ctx.stateVarDecls = [
       ...childStateDecls,
       ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
       ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
-      ...supertypeBindings.map(wb => ({ name: wb.name, typeName: 'Anything' })),
     ];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));

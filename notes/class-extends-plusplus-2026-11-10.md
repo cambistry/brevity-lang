@@ -5,6 +5,25 @@ class headers and service documents. `|` now means union only.
 
 ## Grammar
 
+**Superseded in part (2026-11-17):** the parents moved outside the params, and the wrapped
+forms are retired (see "Wrapped parents" below). The grammar is now:
+
+```
+D = C ++ (x: Integer, y Text) *{ … }   parent, then a regular param list
+D = A ++ B ++ (c: Integer) *{ … }      multiple parents; later parent wins
+D = C ++ *{ … }                        parent, no params
+D = A ++ B ++ *{ … }                   two parents, no params
+D = C++                                pure subclass: a new class, no changes
+D = A ++ B                             pure subclass of two parents
+Text Node ++ -> *{}                    service document
+C A ++ B ++ (c: Integer) -> *{ … }     service document
+```
+
+`(C ++ …)`, `(C++)`, `(A ++ B)` in a constructor's parens, and `(sup C ++)` /
+`(sa A ++ sb B ++)`, are errors that point at the new form.
+
+The original grammar, kept for the record:
+
 ```
 D = (C ++ x: Integer, y Text) *{ … }   parent, then a regular param list
 D = (A ++ B ++ c: Integer) *{ … }      multiple parents; later parent wins
@@ -36,6 +55,11 @@ is a new class with its own authority / `ty` tag.
 
 ## Parents vs params
 
+(Superseded 2026-11-17: with the parents before the parens, there is nothing to tell
+apart. `(x Integer ++ y Integer)` has the retired wrapped shape; validation says whether
+`Integer` is a class — the wrapped-parent error — or not, in which case params are
+separated with commas. The rest of this section is the original reasoning.)
+
 Read left to right. A segment is a parent while it is `B` or `sup B` (wrapped) and is
 followed by `++`, or is a bare `B` right before `)` (classes take no bare
 params, so a lone name there can only be a parent). The first segment that
@@ -57,10 +81,10 @@ diagnostic says to separate params with commas.
 
 ## Wrapped parents
 
-**Superseded (2026-11-16):** wrapped parents are being retired. The parent moves outside the
-params (`U = T ++ (u Text) *{ … }`), and the parent layer is reached with `super::h()` /
-`super[T]::h()`. As implemented, wrapping also made the parent a separate actor, which lost
-late binding. See `class-scope-and-inheritance-2026-11-16.md`.
+**Superseded (2026-11-16, retired 2026-11-17):** wrapped parents are retired. The parent
+moves outside the params (`U = T ++ (u Text) *{ … }`), and the parent layer is reached with
+`super::h()` / `super.a()` / `super[T]::h()`. As implemented, wrapping also made the parent a
+separate actor, which lost late binding. See `class-scope-and-inheritance-2026-11-16.md`.
 
 `sup B` replaces the `B *sup` wrap marker; the parent is still "wrapped". It has the shape of a positional
 param — "a local `sup`, typed `B`" — in line with Brevity args, destructuring

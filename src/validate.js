@@ -17,7 +17,7 @@ import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
-import { resolveSuperclassChain } from './subclass.js';
+import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain } from './subclass.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
 import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel, remoteMember } from './opre.js';
 
@@ -785,18 +785,23 @@ export function validate(ast, options = {}) {
   const subclassActors = [...ast.actors, ...(ast.functions || []).map(f => f.actorDef && { ...f.actorDef, name: f.name }).filter(Boolean)];
   for (const actor of subclassActors) {
     const shown = (actor.name || '').replace(/^@/, '');
+    // `(sup T ++ …)` (a retired wrapped parent) or `(x Integer ++ …)` (params joined by
+    // `++`): the parser can't tell them apart (src/parser.js, rejectParentsInParens).
+    const wrap = actor.supertypes?.retiredWrap;
+    if (wrap) {
+      // A public class's name was renamed in the AST, but not here.
+      const local = wrap.parent.replace(/^@(.*)$/, `$1${PUBLIC_CLASS_SUFFIX}`);
+      const isClass = actorByName.has(local) || isRemoteClass(wrap.parent.replace(/^@/, ''));
+      if (isClass) throw new Error(`In '${wrap.op}', the wrapped parent '${wrap.local} ${wrap.parent}' is retired — write '${shown} = ${wrap.parent} ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)`);
+      const what = localTypes.has(wrap.parent) || BUILTIN_TYPE_NAMES.has(wrap.parent) ? `'${wrap.parent}' is a type, not a class` : `'${wrap.parent}' is not a class in scope`;
+      throw new Error(`In '${shown}', ${what} — '++' doesn't join params, separate them with commas: '(${wrap.local} ${wrap.parent}, …)'`);
+    }
     for (const st of actor.supertypes || []) {
       const name = st.sourceName ?? st.supertype;
       if (actorByName.has(st.supertype) || isRemoteClass(name)) continue;
-      const hint = st.wrappedAs ? ` — after the last '++', separate params with commas: '(Parent ++ ${st.wrappedAs} ${name}, …)'` : '';
-      if (localTypes.has(name) || BUILTIN_TYPE_NAMES.has(name)) throw new Error(`In '${shown}', '${name}' is a type, not a class${hint}`);
-      throw new Error(`In '${shown}', '${name}' is not a class in scope${hint}`);
+      if (localTypes.has(name) || BUILTIN_TYPE_NAMES.has(name)) throw new Error(`In '${shown}', '${name}' is a type, not a class`);
+      throw new Error(`In '${shown}', '${name}' is not a class in scope`);
     }
-    // A wrapped parent (`sup B ++`) is a local for the body to use; with no body it is an error.
-    const wrapped = (actor.supertypes || []).find(st => st.wrappedAs);
-    const hasBody = actor.functions?.length || actor.constructorBody?.length || actor.stateVarDecls?.length
-      || actor.initBody?.length || actor.asClauses?.length || actor.declarationReturn;
-    if (wrapped && !hasBody) throw new Error(`In '${shown}', '${wrapped.sourceName ?? wrapped.supertype}' is wrapped as '${wrapped.wrappedAs}' with no body to use it — drop '${wrapped.wrappedAs}' or write a body`);
   }
 
   for (const actor of ast.actors) {

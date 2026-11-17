@@ -92,13 +92,11 @@ function formatPublicFnSig(fn, aliasMap, purported = null) {
 function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', singletonBlock = () => null, typeDecls = []) {
   const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
   const supertypes = (actor.supertypes || []).map(st => (st.sourceName ?? st.supertype).replace(/^@/, ''));
-  // Input: when subtyping, prefix with `Parent1 ++ Parent2 ++ ` and keep only
-  // the subtype's own params after the last `++` (inherited params are implied
-  // by the spread `...Parent` on the body side). No params: `(T++)`, `(A ++ B)`.
-  const input = !supertypes.length ? ownParams.join(', ')
-    : ownParams.length ? `${supertypes.join(' ++ ')} ++ ${ownParams.join(', ')}`
-    : supertypes.length === 1 ? `${supertypes[0]}++`
-    : supertypes.join(' ++ ');
+  // Input: when subtyping, the parents come first, `Parent1 ++ Parent2 ++ `, and the
+  // parens hold only the subtype's own params (inherited params are implied by the
+  // spread `...Parent` on the body side). No params: `T ++ -> *{…}`.
+  const parents = supertypes.length ? `${supertypes.join(' ++ ')} ++ ` : '';
+  const input = !supertypes.length || ownParams.length ? `${parents}(${ownParams.join(', ')})` : parents.trimEnd();
   // Published params (`@name Type`) read as read-only fields.
   const fieldLines = publishedParamLines(actor, aliasMap).map(l => `    ${l}`);
   const methods = (actor.functions || []).filter(f => f.name && f.name.startsWith('@'));
@@ -116,8 +114,8 @@ function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', s
   const spreadLines = supertypes.map(s => `    ...${s}`);
   const typeLines = typeDecls.map(d => `    ${formatTypeDecl(d)}`);
   const bodyLines = [...spreadLines, ...typeLines, ...fieldLines, ...methodLines];
-  if (bodyLines.length === 0) return `(${input}) ${arrow} *{}`;
-  return `(${input}) ${arrow} *{\n${bodyLines.join('\n')}\n  }`;
+  if (bodyLines.length === 0) return `${input} ${arrow} *{}`;
+  return `${input} ${arrow} *{\n${bodyLines.join('\n')}\n  }`;
 }
 
 const untrackedPrefix = (actor, name) =>

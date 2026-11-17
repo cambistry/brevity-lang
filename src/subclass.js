@@ -1,3 +1,5 @@
+import { renameHidden, settleSuperCells } from './super_layers.js';
+
 // Target-neutral helpers for the actor class system: subclass-chain resolution,
 // actor lookup, and (eventually) method/param table flattening for validation.
 
@@ -13,7 +15,6 @@ export function buildActorMap(ast) {
  * Walk an actor's superclass chain and return its flattened inheritance:
  *   - inheritedParams:    initParams from each ancestor (deduped by name)
  *   - inheritedFunctions: own functions from each ancestor (overrides win)
- *   - wrappedBindings:    `(name T ++)` wrapped-superclass (hook) declarations
  *   - inheritedIngests:   stateVarDecls flagged `ingest` from each ancestor
  *   - inheritedSetters:   manifest `set <name>: (Type)` entries from ancestors
  *
@@ -27,12 +28,11 @@ export function buildActorMap(ast) {
 export function resolveSuperclassChain(actorByName, actor) {
   const supertypes = actor.supertypes || [];
   if (supertypes.length === 0) {
-    return { inheritedParams: [], inheritedFunctions: [], wrappedBindings: [], inheritedIngests: [], inheritedSetters: [], inheritedState: [], inheritedInit: [] };
+    return { inheritedParams: [], inheritedFunctions: [], inheritedIngests: [], inheritedSetters: [], inheritedState: [], inheritedInit: [] };
   }
 
   const inheritedParams = [];
   const inheritedFunctions = [];
-  const wrappedBindings = [];
   const inheritedIngests = [];
   const inheritedSetters = [];
   const inheritedState = [];
@@ -69,20 +69,13 @@ export function resolveSuperclassChain(actorByName, actor) {
     addLayer(parentChain.inheritedFunctions);
     addLayer(superActor.functions);
 
-    if (st.wrappedAs) {
-      wrappedBindings.push({ name: st.wrappedAs, supertype: st.supertype });
+    for (const sv of [...parentChain.inheritedState, ...(superActor.stateVarDecls || []).filter(v => !v.ingest)]) {
+      const idx = inheritedState.findIndex(es => es.name === sv.name);
+      if (idx >= 0) inheritedState[idx] = sv;
+      else inheritedState.push(sv);
     }
-
-    // A wrapped superclass is its own actor, which keeps its own state.
-    if (!st.wrappedAs) {
-      for (const sv of [...parentChain.inheritedState, ...(superActor.stateVarDecls || []).filter(v => !v.ingest)]) {
-        const idx = inheritedState.findIndex(es => es.name === sv.name);
-        if (idx >= 0) inheritedState[idx] = sv;
-        else inheritedState.push(sv);
-      }
-      // An ingest slot is filled by the subclass's own tail.
-      inheritedInit.push(...parentChain.inheritedInit, ...(superActor.initBody || []).filter(s => s.value?.type !== 'IngestExpr'));
-    }
+    // An ingest slot is filled by the subclass's own tail.
+    inheritedInit.push(...parentChain.inheritedInit, ...(superActor.initBody || []).filter(s => s.value?.type !== 'IngestExpr'));
 
     for (const sv of (superActor.stateVarDecls || [])) {
       if (sv.ingest) {
@@ -102,27 +95,36 @@ export function resolveSuperclassChain(actorByName, actor) {
     }
   }
 
-  return { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedSetters, inheritedState, inheritedInit };
+  return { inheritedParams, inheritedFunctions, inheritedIngests, inheritedSetters, inheritedState, inheritedInit };
 }
 
 // A subclass actor has its own copy of the state its inherited methods use, and runs
 // its ancestors' constructor bodies before its own. A name it declares itself hides the
-// inherited one.
+// inherited one. A parent layer's cell reached with `super::` is settled here
+// (src/super_layers.js), so the functions come back too.
 export function withInheritedState(actor, { inheritedState, inheritedInit }) {
   const own = actor.stateVarDecls || [];
   const ownNames = new Set(own.map(v => v.name));
-  const stateVarDecls = [...inheritedState.filter(v => !ownNames.has(v.name)), ...own];
+  const declared = [...inheritedState.filter(v => !ownNames.has(v.name)), ...own];
+  const settled = settleSuperCells(declared, [...inheritedInit, ...(actor.initBody || [])]);
+  const { stateVarDecls, renames } = settled;
   const stateNames = new Set(stateVarDecls.map(v => v.name));
   // The nearest class's initial value for a name is its only one.
   const seen = new Set();
   // A write in a constructor block isn't an initial value.
-  const initBody = [...inheritedInit, ...(actor.initBody || [])].reverse().filter((s) => {
+  const initBody = settled.initBody.reverse().filter((s) => {
     if (s.type !== 'StateAssign' || !stateNames.has(s.name)) return true;
     if (seen.has(s.name)) return false;
     seen.add(s.name);
     return true;
   }).reverse();
-  return { stateVarDecls, initBody };
+  if (!renames.size) return { stateVarDecls, initBody };
+  return {
+    stateVarDecls,
+    initBody: renameHidden(initBody, renames),
+    functions: renameHidden(actor.functions || [], renames),
+    constructorBody: renameHidden(actor.constructorBody || [], renames),
+  };
 }
 
 // `@Box` and `Box` are different classes. Backends need an identifier, which `@Box` can't

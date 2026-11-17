@@ -96,8 +96,8 @@ export function parseFieldList(str) {
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
 //   Counter (start: Integer) -> *{ … }    constructor; body always written
-//   Text (Node++) -> *{}                  constructor with a supertype
-//   C (A ++ B ++ c: Integer) -> *{ … }    two supertypes, then params
+//   Text Node ++ -> *{}                   constructor with a supertype
+//   C A ++ B ++ (c: Integer) -> *{ … }    two supertypes, then params
 //   set name (Type)                       settable field
 //   cell *Type                            ref cell (readable and settable)
 //   name Type                             read-only field
@@ -138,31 +138,30 @@ function splitTopLevel(str, sep) {
   return out;
 }
 
-// Splits a constructor's `(...)` inner at its top-level `++` parent list
-// (notes/class-extends-plusplus-2026-11-10.md): every segment before a `++` is
-// a parent (`B` or wrapped `sup B`); the last segment is a parent too when it is a
-// bare name, else it is the param list. Null when there is no `++`.
-const PARENT_SEG_RE = /^(?:([A-Za-z_][A-Za-z0-9_]*)\s+)?(@?[A-Za-z_][A-Za-z0-9_]*!?)$/;
-const BARE_PARENT_RE = /^@?[A-Za-z_][A-Za-z0-9_]*!?$/;
-function trySplitSupertypes(name, inner) {
-  const segs = [];
-  let depth = 0, last = 0;
+// A constructor entry's parents come before its params, outside the parens
+// (notes/class-extends-plusplus-2026-11-10.md): `C A ++ B ++ (c: Integer) -> *{ … }`,
+// `Text Node ++ -> *{}`. Returns the parents and what follows them, or null.
+const PARENTS_RE = /^((?:@?[A-Za-z_][A-Za-z0-9_]*!?\s*\+\+\s*)+)/;
+function splitLeadingParents(rest) {
+  const m = rest.match(PARENTS_RE);
+  if (!m) return null;
+  const supertypes = m[1].split('++').map(p => p.trim()).filter(Boolean).map(supertype => ({ supertype }));
+  return { supertypes, after: rest.slice(m[0].length).trim() };
+}
+
+// `(T ++ …)` inside a constructor's parens is retired: the parents go first.
+function rejectParentsInParens(name, inner) {
+  let depth = 0;
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i];
     if ('-=~'.includes(ch) && inner[i + 1] === '>') { i++; continue; }
     if (isOpenBracket(ch)) depth++;
     else if (isCloseBracket(ch)) depth--;
-    else if (ch === '+' && inner[i + 1] === '+' && depth === 0) { segs.push(inner.slice(last, i)); last = i + 2; i++; }
+    else if (ch === '+' && inner[i + 1] === '+' && depth === 0) {
+      throw new Error(`Interface entry '${name}': parents go before the params, outside the parens — write '${name} Parent ++ (params) -> *{ … }'`);
+    }
   }
-  if (segs.length === 0) { rejectRetiredBar(name, inner); return null; }
-  const supertypes = segs.map(seg => {
-    const m = seg.trim().match(PARENT_SEG_RE);
-    if (!m) throw new Error(`Interface entry '${name}': '${seg.trim()}' is not a parent — write 'Parent ++' or 'sup Parent ++'`);
-    return { supertype: m[2], ...(m[1] && { wrappedAs: m[1] }) };
-  });
-  const rest = inner.slice(last).trim();
-  if (BARE_PARENT_RE.test(rest)) return { supertypes: [...supertypes, { supertype: rest }], paramStr: '' };
-  return { supertypes, paramStr: rest };
+  rejectRetiredBar(name, inner);
 }
 
 // The retired subclass bar: `(T |)`, `(T, U | …)`, `(T *sup | …)`. A bar after
@@ -327,14 +326,12 @@ function parseSignature(name, text) {
   throw new Error(`Interface entry '${name}': return must be parenthesized — write '-> (${rest})'`);
 }
 
-// `([A ++ B ++] params)` + constructor-body members → actor-shaped record:
+// `[A ++ B ++] (params)` + constructor-body members → actor-shaped record:
 //   { supertypes, initParams, functions, setters }
-// `supertypes` is an array of `{ supertype, wrappedAs? }` matching the AST.
-function parseConstructor(name, paramsInner, bodyInner) {
-  const split = trySplitSupertypes(name, paramsInner);
-  const supertypes = split ? split.supertypes : [];
-  const paramStr = split ? split.paramStr : paramsInner;
-  const initParams = paramStr ? parseFieldList(paramStr) : [];
+// `supertypes` is an array of `{ supertype }` matching the AST.
+function parseConstructor(name, supertypes, paramsInner, bodyInner) {
+  rejectParentsInParens(name, paramsInner);
+  const initParams = paramsInner ? parseFieldList(paramsInner) : [];
   const functions = [];
   const setters = [];
   const services = {};
@@ -395,12 +392,20 @@ function parseEntry(text) {
     if (groupEnd(rest, 0) !== rest.length) throw new Error(`Interface entry '${name}': a sub-service is '${name} { members }', with nothing after its '}'`);
     return { kind: 'service', name, service: parseInterface(rest) };
   }
+  const parents = splitLeadingParents(rest);
+  if (parents) {
+    // `C A ++ (params) -> *{ … }`, or with no params `C A ++ -> *{ … }`.
+    const sig = parseSignature(name, parents.after.startsWith('(') ? parents.after : `() ${parents.after}`);
+    if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': parents ('${parents.supertypes.map(s => s.supertype).join(' ++ ')} ++') belong to a constructor — write '-> *{ … }' after them`);
+    const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
+    return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, parents.supertypes, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
+  }
   if (rest.startsWith('(')) {
     const sig = parseSignature(name, rest);
     if (sig.kind === 'constructor') {
       // A class's own members read as a service document of their own.
       const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
-      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
+      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, [], sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
     }
     return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}) };
   }

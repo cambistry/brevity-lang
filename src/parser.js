@@ -4,6 +4,7 @@ import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { lowerSingletonClasses, CLASS_OF_SELF, CLASS_SELF } from './singleton_classes.js';
+import { lowerSuperLayers } from './super_layers.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
@@ -356,24 +357,24 @@ export function parse(tokensIn) {
   const retiredSupertypeMessage = (op) => {
     const parents = [];
     let look = pos;
+    let wrapped = false;
     while (tokens[look]?.type !== 'PIPE') {
       const t = tokens[look];
-      if (t.type === 'AT') parents.push({ name: '@' });
-      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'STAR') parents[parents.length - 1].wrap = t.value;
-      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'AT') parents[parents.length - 1].name += t.value;
-      else if (t.type === 'IDENT') parents.push({ name: t.value });
-      else if (t.type === 'STAR') parents[parents.length - 1].wrap ??= 'name';
+      if (t.type === 'AT') parents.push('@');
+      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'STAR') wrapped = true;
+      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'AT') parents[parents.length - 1] += t.value;
+      else if (t.type === 'IDENT') parents.push(t.value);
+      else if (t.type === 'STAR') wrapped = true;
       look++;
     }
     const hasParams = tokens[look + 1] && tokens[look + 1].type !== 'RPAREN';
-    const shown = parents.map(p => (p.wrap ? `${p.wrap} ` : '') + p.name).join(' ++ ');
-    const tail = hasParams ? ' ++ params' : parents.at(-1).wrap ? ' ++' : parents.length === 1 ? '++' : '';
-    return `In '${op}', the subclass bar '|' is retired — extend with '++': write '(${shown}${tail})'`;
+    const shown = `${op} = ${parents.join(' ++ ')} ++ ${hasParams ? '(…) ' : ''}*{ … }`;
+    const layer = wrapped ? ", and reach the parent layer with 'super::name' (protected) or 'super.name' (public)" : '';
+    return `In '${op}', the subclass bar '|' is retired — extend with '++': write '${shown}'${layer}`;
   };
 
-  // An extends parent at token `i`: `[@]B`, or `sup [@]B` (the parent wrapped as a
-  // local). A wrapped parent has the shape of a positional param (`b Box`); the caller
-  // decides between them by what follows.
+  // An extends parent at token `i`: `[@]B`, or the retired wrapped `sup [@]B`, which has
+  // the shape of a positional param (`b Box`); the caller decides by what follows.
   const parentSegmentAt = (i) => {
     const nameLen = (j) => tokens[j]?.type === 'AT' ? (tokens[j + 1]?.type === 'IDENT' ? 2 : 0) : (tokens[j]?.type === 'IDENT' ? 1 : 0);
     const n = nameLen(i);
@@ -392,34 +393,64 @@ export function parse(tokensIn) {
     return !!seg && tokens[i + seg.len]?.type === 'PLUSPLUS';
   };
 
-  // Parse the `++`-joined parents of a class (notes/class-extends-plusplus-2026-11-10.md).
-  // Left to right, a segment is a parent while it is `B` / `sup B` followed by
-  // `++`, or a bare `B` that ends the list (before `)` in parens, before the end
-  // of the definition otherwise). The first segment that isn't starts the params.
-  function parseExtendsParents(op, inParens) {
+  // Parse the `++`-joined parents of a class (notes/class-extends-plusplus-2026-11-10.md),
+  // which come before its params, outside the parens: `U = T ++ (u Text) *{ … }`,
+  // `D = A ++ B`. Left to right, a segment is a parent while it is `B` followed by `++`,
+  // or a bare `B` that ends the definition.
+  function parseExtendsParents(op) {
     const supertypes = [];
-    const skipNl = (i) => { while (inParens && tokens[i]?.type === 'NEWLINE') i++; return i; };
     while (true) {
-      const i = skipNl(pos);
-      const seg = parentSegmentAt(i);
+      const seg = parentSegmentAt(pos);
       if (!seg) break;
-      const after = skipNl(i + seg.len);
+      const after = pos + seg.len;
       const joined = tokens[after]?.type === 'PLUSPLUS';
-      const last = !seg.wrapped && supertypes.length > 0 && (inParens ? tokens[after]?.type === 'RPAREN' : isDefinitionEnd(after));
-      if (!joined && !last) break;
-      pos = i;
-      const wrap = seg.wrapped ? consume().value : undefined;
+      const last = !seg.wrapped && supertypes.length > 0 && isDefinitionEnd(after);
+      const wrappedLast = seg.wrapped && supertypes.length > 0 && isDefinitionEnd(after);
+      if (!joined && !last && !wrappedLast) break;
+      if (seg.wrapped) throw new Error(retiredWrapMessage(op, tokens[pos].value, tokens.slice(pos + 1, after).map(t => t.type === 'AT' ? '@' : t.value).join('')));
       const sigil = peek().type === 'AT' ? (consume(), '@') : '';
-      const name = sigil + expect('IDENT').value;
-      if (wrap && wrap === name.replace(/^@/, '')) {
-        throw new Error(`In '${op}', wrapped '${name}' needs a local name of its own — write '(sup ${name} ++ …)'`);
-      }
-      supertypes.push({ supertype: name, ...(wrap && { wrappedAs: wrap }) });
+      supertypes.push({ supertype: sigil + expect('IDENT').value });
       pos = after;
       if (!joined) break;
       consume(); // ++
     }
     return supertypes;
+  }
+
+  // A wrapped parent, `(sup T ++)`, bound the parent as a local. It's retired: the parent
+  // layer is reached with `super::name` / `super.name`.
+  const retiredWrapMessage = (op, local, parent) =>
+    `In '${op}', the wrapped parent '${local} ${parent}' is retired — write '${op} = ${parent} ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)`;
+
+  // `(T ++ …)` in a constructor's parens: the parents go before the parens now. Called
+  // with `pos` just past the `(`.
+  function rejectParentsInParens(op) {
+    let i = pos;
+    while (tokens[i]?.type === 'NEWLINE') i++;
+    const parents = [];
+    while (true) {
+      const seg = parentSegmentAt(i);
+      if (!seg) break;
+      let after = i + seg.len;
+      while (tokens[after]?.type === 'NEWLINE') after++;
+      const joined = tokens[after]?.type === 'PLUSPLUS';
+      const last = !seg.wrapped && parents.length > 0 && tokens[after]?.type === 'RPAREN';
+      if (!joined && !last) break;
+      const name = tokens.slice(seg.wrapped ? i + 1 : i, i + seg.len).map(t => t.type === 'AT' ? '@' : t.value).join('');
+      // `(sup T ++ …)` and `(x Integer ++ …)` have one shape: which it is depends on
+      // whether `T` is a class, which validation knows (src/validate.js).
+      if (seg.wrapped && !parents.length) return { local: tokens[i].value, parent: name };
+      if (seg.wrapped) throw new Error(retiredWrapMessage(op, tokens[i].value, name));
+      parents.push(name);
+      i = after;
+      if (!joined) { i = -1; break; }
+      i++;
+      while (tokens[i]?.type === 'NEWLINE') i++;
+    }
+    if (!parents.length) return;
+    const hasParams = i >= 0 && tokens[i]?.type !== 'RPAREN';
+    const shown = `${op} = ${parents.join(' ++ ')} ++ ${hasParams ? '(…) ' : ''}*{ … }`;
+    throw new Error(`In '${op}', parents go before the params, outside the parens — write '${shown}'`);
   }
 
   const makeNumLiteral = (tok) => {
@@ -2004,7 +2035,7 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'NEWLINE') { consume(); continue; }
       // Attribute: name="value" or name={expr}
-      if (atClass()) tokens[pos] = { ...tokens[pos], type: 'IDENT' };
+      if (atClass() || atSuper()) tokens[pos] = { ...tokens[pos], type: 'IDENT' };
       if (peek().type !== 'IDENT') {
         throw new Error(`Expected attribute name or '/>' in XML tag <${name}>, got ${peek().type} '${peek().value || ''}'`);
       }
@@ -2185,11 +2216,13 @@ export function parse(tokensIn) {
   // and the field. After `::` the field is a protected one.
   const atPublicName = () => peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT';
   const fieldSetAhead = () => {
+    if (atSuper()) return superSetAhead();
     const at = receiverEnd();
     return at >= 0 && (tokens[at]?.type === 'DOT' || tokens[at]?.type === 'DCOLON') && tokens[at + 1]?.type === 'IDENT'
       && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
   };
   function parseFieldSet() {
+    if (atSuper()) return parseSuperSet();
     const objName = consumeReceiver();
     const isProtected = consume().type === 'DCOLON';
     const fieldName = consume().value;
@@ -2207,6 +2240,68 @@ export function parse(tokensIn) {
     const at = atPublicName() ? pos + 2 : peek().type === 'IDENT' || atClass() ? pos + 1 : -1;
     return at >= 0 && tokens[at]?.type === 'DCOLON' && tokens[at + 1]?.type === 'IDENT';
   };
+
+  // `super::name`, `super.name`, `super[T]::name`: the parent layer's definition of a
+  // name, in the same actor. src/super_layers.js resolves it. `super` and `super[T]`
+  // are valid only before `::` or `.`.
+  const atSuper = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'super';
+  // Where a `super` / `super[T]` receiver ends, or -1.
+  const superEnd = (at = pos) => {
+    if (!atSuper(at)) return -1;
+    if (tokens[at + 1]?.type !== 'LBRACKET') return at + 1;
+    const n = tokens[at + 2]?.type === 'AT' ? at + 3 : at + 2;
+    return tokens[n]?.type === 'IDENT' && tokens[n + 1]?.type === 'RBRACKET' ? n + 2 : -1;
+  };
+  const SUPER_NOT_A_VALUE = "'super' names the parent layer, which isn't a value: write 'super::name' (protected) or 'super.name' (public), or 'super[Parent]::name'";
+  function parseSuperReceiver() {
+    const end = superEnd();
+    if (end < 0) throw new Error(SUPER_NOT_A_VALUE);
+    consume(); // super
+    let layer = null;
+    if (peek().type === 'LBRACKET') {
+      consume();
+      const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+      layer = sigil + expect('IDENT').value;
+      expect('RBRACKET');
+    }
+    const sep = peek().type;
+    if ((sep !== 'DCOLON' && sep !== 'DOT') || tokens[pos + 1]?.type !== 'IDENT') throw new Error(SUPER_NOT_A_VALUE);
+    consume();
+    return { layer, name: consume().value, isPublic: sep === 'DOT' };
+  }
+  function parseSuper() {
+    const { layer, name, isPublic } = parseSuperReceiver();
+    if (peek().type === 'LPAREN') return { type: 'SuperCall', layer, name, isPublic, args: parseCallArgs() };
+    return { type: 'SuperMember', layer, name, isPublic };
+  }
+  // `super::total <- v`, `super.count <| f`.
+  const superSetAhead = () => {
+    const at = superEnd();
+    return at >= 0 && (tokens[at]?.type === 'DOT' || tokens[at]?.type === 'DCOLON') && tokens[at + 1]?.type === 'IDENT'
+      && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
+  };
+  function parseSuperSet() {
+    const { layer, name, isPublic } = parseSuperReceiver();
+    const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+    return { type: 'SuperSet', layer, name, isPublic, value: parseExpr(), ...(updateOp && { updateOp }) };
+  }
+
+  // An element's attr block with Brevity in it (`<div class="a" @c *Text = "x" …>`),
+  // parsed as an actor body by swapping the token stream. An attribute may be named
+  // `class`, which is otherwise reserved.
+  function parseAttrBlock(source) {
+    const savedTokens = tokens;
+    const savedPos = pos;
+    tokens = tokenize(source).map((t, i, ts) => t.type === 'KEYWORD' && (t.value === 'class' || t.value === 'super')
+      && ts[i + 1]?.type === 'EQUALS' && ts[i - 1]?.type !== 'AT' ? { ...t, type: 'IDENT' } : t);
+    pos = 0;
+    try {
+      return parseActorBody(() => peek().type === 'EOF');
+    } finally {
+      tokens = savedTokens;
+      pos = savedPos;
+    }
+  }
 
   function parsePrimary() {
     // `new(args)` in a singleton constructs its class (src/singleton_classes.js).
@@ -2275,18 +2370,7 @@ export function parse(tokensIn) {
         // an actor body (token-stream swap) and return AnonymousHtmlActor.
         // liftReactiveElements will merge the inner refs/closures into the
         // parent actor and replace this node with a DomConstructor.
-        const savedTokens = tokens;
-        const savedPos = pos;
-        tokens = tokenize(tok.bvBlock);
-        pos = 0;
-        let actorBody;
-        try {
-          actorBody = parseActorBody(() => peek().type === 'EOF');
-        } finally {
-          tokens = savedTokens;
-          pos = savedPos;
-        }
-        return AST.anonymousHtmlActor(tok.tag, actorBody, parseDomChildren(tok.children));
+        return AST.anonymousHtmlActor(tok.tag, parseAttrBlock(tok.bvBlock), parseDomChildren(tok.children));
       }
       return AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
     }
@@ -2319,6 +2403,8 @@ export function parse(tokensIn) {
     } else if (atClass()) {
       consume();
       result = AST.identifier(CLASS_SELF);
+    } else if (atSuper()) {
+      result = parseSuper();
     } else if (atBareBuiltinCall()) {
       const methodName = consume().value;
       consume(); // LPAREN
@@ -2773,7 +2859,7 @@ export function parse(tokensIn) {
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
       } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() || atClassOf() ||
-                 atClass() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
+                 atClass() || atSuper() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -2908,18 +2994,7 @@ export function parse(tokensIn) {
         const tok = consume();
         let domExpr;
         if (tok.bvBlock !== undefined) {
-          const savedTokens = tokens;
-          const savedPos = pos;
-          tokens = tokenize(tok.bvBlock);
-          pos = 0;
-          let actorBody;
-          try {
-            actorBody = parseActorBody(() => peek().type === 'EOF');
-          } finally {
-            tokens = savedTokens;
-            pos = savedPos;
-          }
-          domExpr = AST.anonymousHtmlActor(tok.tag, actorBody, parseDomChildren(tok.children));
+          domExpr = AST.anonymousHtmlActor(tok.tag, parseAttrBlock(tok.bvBlock), parseDomChildren(tok.children));
         } else {
           domExpr = AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
         }
@@ -3983,6 +4058,7 @@ export function parse(tokensIn) {
         (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
         (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN') ||
         (atClass() && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) ||
+        atSuper() ||
         (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'DOT') ||
         (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'DOT')
       ) {
@@ -4264,7 +4340,7 @@ export function parse(tokensIn) {
       }
       const classNode = AST.actor('@' + op, { ...actorNode, overloadMode });
       // Trailing class members: `@C = (params) *{ … } ++ actor { members }`.
-      if (!isBare && isTrailingMembersStart('@' + op)) {
+      if (isTrailingMembersStart('@' + op)) {
         consume(); // ++
         const members = parseTrailingMembers('@' + op);
         classNode.membersClass = members.actor.name;
@@ -4515,13 +4591,24 @@ export function parse(tokensIn) {
 
   // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
   // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
-  // Handles the `++` parent list (`T ++`, `sup T ++`, `A ++ B`) and ref-param shortcuts.
+  // Parents go before the parens (`T ++ (params)`); one inside is an error. Handles
+  // ref-param shortcuts.
   function parseConstructorParenParams(op) {
     const cParams = [];
     skipNewlines();
     if (looksLikeRetiredSupertypePrefix()) throw new Error(retiredSupertypeMessage(op));
-    const supertypes = parseExtendsParents(op, true);
-    skipNewlines();
+    const supertypes = [];
+    const wrap = rejectParentsInParens(op);
+    if (wrap) {
+      // The error waits for validation; skip to the `)`.
+      for (let depth = 0; peek().type !== 'EOF'; consume()) {
+        if (peek().type === 'LPAREN') depth++;
+        else if (peek().type === 'RPAREN' && depth-- === 0) break;
+      }
+      expect('RPAREN');
+      supertypes.retiredWrap = { ...wrap, op };
+      return { params: [], supertypes };
+    }
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
@@ -4848,22 +4935,27 @@ export function parse(tokensIn) {
   }
 
   // Parse a bare extends definition (see isBareExtendStart):
-  //   A ++ B            parents only — a new class, no changes
-  //   C++               one parent
-  //   C ++ *{ body }    parents and a body, no params
+  //   A ++ B                    parents only — a new class, no changes
+  //   C++                       one parent
+  //   C ++ *{ body }            parents and a body, no params
+  //   C ++ (params) *{ body }   parents, then params
   function parseBareExtendClass(op) {
-    const supertypes = parseExtendsParents(op, false);
+    const supertypes = parseExtendsParents(op);
     let nested = null;
-    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE') {
+    let params = [];
+    if (peek().type === 'LPAREN') {
+      let inParens;
+      ({ nested, params, supertypes: inParens } = parseDelimitedClass(op));
+      if (inParens.retiredWrap) supertypes.retiredWrap = inParens.retiredWrap;
+    } else if ((peek().type === '->' && tokens[pos + 1]?.type === 'STAR') || (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE')) {
+      if (peek().type === '->') consume();
       consume(); // *
       nested = parseConstructorBody(op, false);
     } else if (!isDefinitionEnd(pos)) {
-      const seg = parentSegmentAt(pos);
-      if (seg?.wrapped) throw new Error(`In '${op}', a wrapped parent ('${peek().value} ${tokens[pos + 1].value}') needs a body to use it — write '${op} = ${peek().value} ${tokens[pos + 1].value} ++ *{ … }'`);
-      throw new Error(`In '${op}', expected a parent class, '*{ … }' or the end of the definition after '++' — params go in parens: '(Parent ++ params) *{ … }'`);
+      throw new Error(`In '${op}', expected a parent class, '(params)', '*{ … }' or the end of the definition after '++'`);
     }
     nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
-    return { params: [], supertypes, nested };
+    return { params, supertypes, nested };
   }
 
   const RETIRED_STAR_PAREN_MSG = (op) =>
@@ -5207,8 +5299,8 @@ export function parse(tokensIn) {
           const expr = parseExpr();
           constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
         }
-      } else if (atClass() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
-        // `class.bump!()`, `class::h!()`, `C::h!()`: a call made while constructing.
+      } else if (atClass() || atSuper() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
+        // `class.bump!()`, `class::h!()`, `C::h!()`, `super::h!()`: a call made while constructing.
         pushExprOrBang(constructorBody, parseExpr());
       } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
                  || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
@@ -5436,7 +5528,7 @@ export function parse(tokensIn) {
           }
           // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }
           //              name =\n*\n params\n*\n body (lineal)
-          // Subclass:    name = (T ++ params) *{ ... } | name = (sup T ++ params) *{ ... }
+          // Subclass:    name = T ++ (params) *{ ... } | name = A ++ B ++ (params) *{ ... }
           //              name = A ++ B | name = C++ | name = C ++ *{ ... }
           const _isDelimitedClass = isDelimitedClassStart();
           const _isBareExtend = !_isDelimitedClass && isBareExtendStart();
@@ -5456,7 +5548,7 @@ export function parse(tokensIn) {
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
               // Trailing class members: `C = (params) *{ … } ++ actor { members }`.
-              if (_isDelimitedClass && isTrailingMembersStart(op)) {
+              if ((_isDelimitedClass || _isBareExtend) && isTrailingMembersStart(op)) {
                 consume(); // ++
                 const members = parseTrailingMembers(op);
                 nestedActors.push(members.actor);
@@ -6284,7 +6376,14 @@ export function parse(tokensIn) {
   }
 
   actors.push(...hoistedClasses);
+  // `(sup T ++ …)` with `T` a class here is a retired wrapped parent; otherwise
+  // validation says what it is (src/validate.js).
+  for (const a of actors) {
+    const wrap = a.supertypes?.retiredWrap;
+    if (wrap && actors.some(c => c.name === wrap.parent)) throw new Error(retiredWrapMessage(wrap.op, wrap.local, wrap.parent));
+  }
   lowerSingletonClasses(actors, types);
+  lowerSuperLayers(actors);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

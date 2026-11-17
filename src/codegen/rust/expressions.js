@@ -334,17 +334,20 @@ function genRustExpr(expr, typeEnv, eCtx) {
       }
     }
     // Detect operands that return Value and need extraction for arithmetic/comparison
+    // A call to a function of this actor is a reply's value (`….one()`), as is one
+    // evaluated ahead into a temporary (`_precomputedValue`, src/codegen/rust/handlers.js).
+    const callYieldsValue = (code) => /\.one\(\)$/.test(code);
     const numOps = ['+', '-', '*', '/', '%', '>', '<', '>=', '<=', '==', '!='];
     const lIsValue = expr.left.type === 'StateVar' || expr.left.type === 'RefRead'
       || (expr.left.type === 'Identifier' && G.ctx.stateVarNames.has(expr.left.name))
       || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && !typeEnv.get(expr.left.name))
       || expr.left.type === 'DotAccessExpr'
-      || (expr.left.type === 'FunctionCallExpr' && (left.includes('self.call_fn(') || expr.left.outerFnCall));
+      || (expr.left.type === 'FunctionCallExpr' && (left.includes('self.call_fn(') || expr.left.outerFnCall || expr.left._precomputedValue || callYieldsValue(left)));
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name))
       || expr.right.type === 'DotAccessExpr'
-      || (expr.right.type === 'FunctionCallExpr' && (right.includes('self.call_fn(') || expr.right.outerFnCall));
+      || (expr.right.type === 'FunctionCallExpr' && (right.includes('self.call_fn(') || expr.right.outerFnCall || expr.right._precomputedValue || callYieldsValue(right)));
     // Slice 10: type field access (`coords.x` where `coords` is a *Point
     // state cell or a typed local) infers the field's declared type so
     // BinaryExpr can pick the right numeric coercion path.

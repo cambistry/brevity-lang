@@ -4,8 +4,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Wrapped child constructor — * syntax for actor references
 //
 // Forms:
-//   T = <super *> { body }        positional actor ref
-//   T = <super*> { body }         sugared (star attached to ident)
+//   T = <inner *> { body }        positional actor ref
+//   T = <inner*> { body }         sugared (star attached to ident)
 //   T = <:name *> { body }        keyed actor ref
 //   T = <name: alias *> { body} keyed with internal alias
 //   T = <name: alias*> { body }   keyed sugared
@@ -318,9 +318,9 @@ describe('wrapped child — independence', () => {
 describe('wrapped child — definition always compiles (generic)', () => {
   it('wrapper calling nonexistent method on * param compiles alone', () => {
     expect(() => compileSource(`
-      Wrapper = (super *) *{
+      Wrapper = (inner *) *{
         @try = {
-          :result Integer = super.no_such_method()
+          :result Integer = inner.no_such_method()
           return :result
         }
       }
@@ -376,9 +376,9 @@ describe('wrapped child — construction fails when method missing', () => {
         @meth = -> result: 1
       }
 
-      B = (super *) *{
+      B = (inner *) *{
         @try = {
-          :result Integer = super.not_a_meth()
+          :result Integer = inner.not_a_meth()
           return :result
         }
       }
@@ -397,9 +397,9 @@ describe('wrapped child — construction fails when method missing', () => {
         @meth = -> result: 1
       }
 
-      B = (super*) *{
+      B = (inner*) *{
         @try = {
-          :result Integer = super.not_a_meth()
+          :result Integer = inner.not_a_meth()
           return :result
         }
       }
@@ -481,10 +481,10 @@ describe('wrapped child — construction fails when method missing', () => {
         @meth = -> result: 1
       }
 
-      B = (super *) *{
+      B = (inner *) *{
         @try = {
-          :x Integer = super.foo()
-          :y Integer = super.bar()
+          :x Integer = inner.foo()
+          :y Integer = inner.bar()
           return result: (x + y)
         }
       }
@@ -504,10 +504,10 @@ describe('wrapped child — construction fails when method missing', () => {
         @other = -> result: 2
       }
 
-      B = (super *) *{
+      B = (inner *) *{
         @try = {
-          :x Integer = super.meth()
-          :y Integer = super.missing()
+          :x Integer = inner.meth()
+          :y Integer = inner.missing()
           return result: (x + y)
         }
       }
@@ -528,9 +528,9 @@ describe('wrapped child — construction succeeds when methods match', () => {
         @meth = -> result: 1
       }
 
-      B = (super *) *{
+      B = (inner *) *{
         @try = {
-          :result Integer = super.meth()
+          :result Integer = inner.meth()
           return :result
         }
       }
@@ -613,10 +613,10 @@ describe('wrapped child — construction succeeds when methods match', () => {
         @bar = -> result: 2
       }
 
-      B = (super *) *{
+      B = (inner *) *{
         @try = {
-          :x Integer = super.foo()
-          :y Integer = super.bar()
+          :x Integer = inner.foo()
+          :y Integer = inner.bar()
           return result: (x + y)
         }
       }

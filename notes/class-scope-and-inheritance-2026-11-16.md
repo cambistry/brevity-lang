@@ -105,7 +105,7 @@ in which `@x` never leaves its own actor, was rejected:
 - Private names don't take part: a subclass can't see the parent's `#x`, so a `#x` in the
   subclass is unrelated to it.
 
-## Parent outside the params; `super` — direction
+## Parent outside the params; `super` — decided 2026-11-17
 
 The wrapped `(sup T ++)` form is retired. Its local `sup` was the only reason the parent sat
 in the param list.
@@ -113,25 +113,57 @@ in the param list.
 ```brevity
 U = T ++ (u Text) *{ … }
 U = A ++ B ++ (u Text) *{ … }
+U = T ++ *{ … }                      // no params; `(T++) *{ … }` is retired too
 
 super::h()           // the parent layer's protected h
+super.a()            // the parent layer's public @a
 super[T]::h()        // parent T's layer
+super::total         // the parent layer's own cell (below)
 ```
 
 - `super::h()` is dispatch within the same actor to the parent layer's definition, not a
-  message.
-- An unqualified `super::h()` with more than one parent defining `h` is a compile error.
-  There is no method resolution order.
+  message. `.` takes public names and `::` bare (protected) ones, as for `C.` / `C::` /
+  `class.` / `class::`. `super.a` with no parens is a call, as `x.a` is a message.
+- After `::` or `.` the name is written bare: `super::@a` and `super::#c` are errors.
+- An unqualified `super::h()` with more than one parent defining `h` is a compile error
+  naming the candidates (`super[A]::h()` or `super[B]::h()`). There is no method
+  resolution order.
 - `super[S]` is restricted to direct parents for now.
-- `super` is reserved, and is valid only before `::` (or `.`, if adopted).
+- `super` is reserved, and is valid only before `::` or `.`: `x = super` is an error.
 - `T::h` names `T`'s class block, not a layer, which is why the layer needs `super[T]`.
+- Each retired form (`(sup T ++)`, `(sa A ++ sb B ++)`, `(T ++ u Text)`, `(T++)`,
+  `(A ++ B)`) is an error that names the new form. `(x Integer ++ …)` has the wrapped shape;
+  when `Integer` isn't a class, the error says to separate params with commas.
+- Service documents: `C A ++ B ++ (c: Integer) -> *{ … }`, `Text Node ++ -> *{}`.
+
+### `super::total` on a cell
+
+Valid anywhere in the child's scope, construction included, for reading and writing.
+
+- A redeclared cell is late-bound: the parent's own code uses the child's `total`. So when
+  a class at or below the child redeclares `total`, the parent layer keeps a cell of its
+  own behind it, initialized by the parent's initializer, where the parent's
+  initialization runs. `super::total` reads and writes that cell; the parent's code never
+  sees it.
+- When nothing below the parent redeclares `total`, there is one cell, and
+  `super::total` is it.
+- Which case applies depends on the actor's class, not on the code: `U`'s
+  `super::total` is a cell of its own in a `U` that redeclares `total`, and in a `V`
+  that extends `U`.
+
+```brevity
+T = *{ total *Integer = 5 }
+U = T ++ *{
+  total *Integer = super::total + 6        // 11; the parent layer's cell is 5
+  @bumpParent! = { super::total <- super::total + 100 }
+}
+```
 
 Open:
-- `super.a()` as the spelling for the parent layer's public `@a`.
-- `super::total` on a cell: proposed as valid only in the child's redeclaration of `total`,
-  where it means the parent's initializer (`total *Integer = super::total + 6`).
 - The type rules for a redeclared cell. Proposed: a `*` cell keeps its type exactly, a
   constant may narrow, and a redeclaration may omit the type. Being explored separately.
+- `super` in a class block (a class's members): an error for now, since a class block has
+  no parent layer of its own.
 
 ## Class blocks inherit by delegation — decided
 

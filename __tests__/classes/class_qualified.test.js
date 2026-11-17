@@ -255,7 +255,7 @@ const subclass = `
     protFn = -> 20
   }
 
-  @U = (@T ++ u Integer) *{
+  @U = @T ++ (u Integer) *{
     first Integer = @T::prot + class.pub + u
     @first = { return first }
     @uProt = { return @T::prot }
@@ -459,7 +459,7 @@ describe('class and :: — only within the class\'s family', () => {
   it('a subclass with a class block of its own isn\'t supported yet', () => {
     expect(() => compileSource(`
       T = (s Integer) *{ @r = -> 1 } ++ actor { prot *Integer = 1 }
-      U = (T ++ u Integer) *{ @r2 = { return T::prot } } ++ actor { other *Integer = 1 }
+      U = T ++ (u Integer) *{ @r2 = { return T::prot } } ++ actor { other *Integer = 1 }
     `)).toThrow(/^'T::prot' — 'U' has a class block of its own, and reaching a parent's protected members from it isn't supported yet$/);
   });
 });

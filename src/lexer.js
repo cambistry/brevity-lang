@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -566,7 +566,7 @@ export function tokenize(source) {
         // A keyword keeps its own token (`.reduce!` is a built-in method).
         tokens.push({ type: 'IDENT', value: value + '!' });
         i++;
-      } else if ((value === 'untracked' || value === 'class') && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
+      } else if ((value === 'untracked' || value === 'class' || value === 'super') && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
         // Reserved as a name of its own: a member or a key can have this name.
         tokens.push({ type: 'IDENT', value });
       } else {
@@ -577,6 +577,10 @@ export function tokenize(source) {
         const asMember = tokens[tokens.length - 1]?.type === 'AT' || /^=["{]/.test(source.slice(i));
         if (value === 'class' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
           throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+        }
+        // `super` names the parent layer, likewise: `super = …`, `(super Integer)`.
+        if (value === 'super' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
+          throw new Error(`'super' is reserved: it names the parent layer, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
         }
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }

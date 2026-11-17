@@ -335,7 +335,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
 
   // ── Resolve superclass inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
+  const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
   // Merge inherited params (prepend) — skip any that the subclass redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -345,23 +345,10 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
 
   // Merge inherited functions — subclass's own functions take precedence
-  // If there's a wrapped binding, inherited public functions delegate through the wrapped superclass
   const ownFnNames = new Set(actor.functions.map(f => f.name));
-  const delegatedFunctions = []; // functions to forward to wrapped superclass
-  const inlinedInherited = [];   // functions to inline directly
-
-  for (const f of inheritedFunctions) {
-    if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
-    // If there's a wrapped binding, delegate public functions through it
-    if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
-      delegatedFunctions.push(f);
-    } else {
-      inlinedInherited.push(f);
-    }
-  }
   const mergedFunctions = [
     ...actor.functions,
-    ...inlinedInherited,
+    ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')),
   ];
 
   // Build a modified actor with merged members
@@ -383,15 +370,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
           { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
         ];
       }
-    }
-  }
-
-  // Track wrapped superclass bindings — these are auto-created, not constructor params
-  const supertypeBindings = [];
-  for (const wb of wrappedBindings) {
-    const superActor = ctx.actorNodes?.get(wb.supertype);
-    if (superActor) {
-      supertypeBindings.push(wb);
     }
   }
 
@@ -432,7 +410,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
     ...serviceCoercions.map(s => s.name),
-    ...supertypeBindings.map(wb => wb.name),
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
@@ -483,10 +460,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Service coercion aliases are also wrapped child params
   for (const s of serviceCoercions) {
     ctx.wrappedChildParams.add(s.name);
-  }
-  // Superclass wrapped superclass bindings are child actors (auto-created)
-  for (const wb of supertypeBindings) {
-    ctx.wrappedChildParams.add(wb.name);
   }
   // Collect emit declarations
   const emitDecls = new Map();
@@ -729,16 +702,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     })
     .filter(Boolean);
 
-  // Generate delegation arms for inherited functions from wrapped superclasses
-  const delegationParts = delegatedFunctions.map(f => {
-    // Find the wrapped binding to delegate through
-    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
-    return {
-      condition: `opName === "${wireLabel(f.name)}"`,
-      block: `\n        re = await this.#childSend(this.#${stateKey(wb.name)}, "${wireLabel(f.name)}");\n        _handled = true;`,
-    };
-  });
-
   const asClauseParts = (mergedActor.asClauses || []).map(clause => {
     const val = genExpr(ctx, clause.expr);
     const typeCond = clause.negated
@@ -759,7 +722,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     });
   }
 
-  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...delegationParts, ...asClauseParts];
+  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...asClauseParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';
@@ -818,7 +781,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...stateVarDecls.map(v => v.name),
     ...constructorParams.map(p => p.name),
     ...serviceCoercions.map(s => s.name),
-    ...supertypeBindings.map(wb => wb.name),
   ]);
   if (hasReturnAs) allFieldNames.add('__returnAs');
   const stateFields = [...allFieldNames].map(n => `  #${stateKey(n)}`).join('\n');
@@ -880,22 +842,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   });
   if (onInitLines.length > 0) {
     allInitLines.push(...onInitLines);
-  }
-  // Auto-create wrapped superclass actors
-  for (const wb of supertypeBindings) {
-    const superActor = ctx.actorNodes?.get(wb.supertype);
-    if (superActor) {
-      // Pass inherited params from the superclass to its constructor
-      const superParams = (superActor.initParams || []).map(p => p.name);
-      const args = superParams.length > 0 ? `, ${superParams.join(', ')}` : '';
-      // Pass ingest value if the superclass uses ingest and this subclass has a declaration return
-      const superIngests = (superActor.stateVarDecls || []).filter(v => v.ingest);
-      let ingestArg = '';
-      if (superIngests.length > 0 && actor.declarationReturn) {
-        ingestArg = `, ${genExpr(ctx, actor.declarationReturn.expr)}`;
-      }
-      allInitLines.push(`    this.#${stateKey(wb.name)} = await ${wb.supertype}.create(${childBinding(ctx, wb.supertype)}${args}${ingestArg});`);
-    }
   }
   const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
   // Public singletons declared directly in this actor (`@s = actor { … }`). Each is

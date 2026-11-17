@@ -20,7 +20,7 @@ and then compile with the resolved context.
 - `constructor_interface.test.js`: public class signatures and the actor
   method surfaces they produce.
 - `subclass_interface.test.js`: subclass class surfaces, parent spreads,
-  multi-parent rendering, and wrapped parent marker hiding.
+  multi-parent rendering (`C A ++ B ++ (c: Integer) -> *{ … }`).
 - `dependency_injection.test.js`: file-level dependency declarations and
   outgoing CAM messages.
 - `interface_notation.test.js`: service-document entry forms, retired forms,
@@ -41,7 +41,7 @@ definition: no entry colon, no `=` on types.
   Counter (start: Integer) -> *{          constructor; body always written
     get () -> (value: Integer)
   }
-  Text (Node++) -> *{}                    supertype, no members of its own
+  Text Node ++ -> *{}                    supertype, no members of its own
   set label (Text)                        write-only cell ($set only)
   count *Integer                          writable cell ($get, $set, $subscribe)
   seen &Integer                           read-only cell ($get, $subscribe)

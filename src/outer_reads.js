@@ -85,7 +85,7 @@ export function homeOf(cls) {
 // The names a class declares itself, inherited ones included, with each one's type and
 // whether it's a class param.
 function classOwnNames(classes, actor) {
-  const { inheritedParams, inheritedState, wrappedBindings } = resolveSuperclassChain(classes, actor);
+  const { inheritedParams, inheritedState } = resolveSuperclassChain(classes, actor);
   const names = new Map();
   const add = (name, type, param, ref = false) => { if (typeof name === 'string' && !names.has(name)) names.set(name, { type: type || null, param, ref: !!ref }); };
   for (const p of actor.initParams || []) add(p.name, p.type, true, p.ref);
@@ -94,7 +94,6 @@ function classOwnNames(classes, actor) {
   for (const d of inheritedState || []) add(d.name, d.typeName, false, d.isRef);
   // A write in the constructor block (`total <- 1`) names a cell; it doesn't declare one.
   for (const s of actor.initBody || []) if (s.type !== 'SetStatement' && s.type !== 'ActorSetStatement') add(s.name, s.typeName, false, s.isRef);
-  for (const w of wrappedBindings) add(w.name, null, false);
   return names;
 }
 

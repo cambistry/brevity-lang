@@ -187,10 +187,10 @@ describe('class overload — runtime', () => {
       @get = -> result: a
     }
 
-    Sub = (Base ++ b Integer) *{
+    Sub = Base ++ (b Integer) *{
       @sum = -> result: (a + b)
     }
-    Sub << (Base ++ b Text) *{
+    Sub << Base ++ (b Text) *{
       @sum = -> result: a
     }
 

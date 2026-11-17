@@ -84,7 +84,7 @@ export function lowerSingletonClasses(actors, types = []) {
     if (!a || seen.has(a)) return null;
     seen.add(a);
     if (ownBlock(a)) return a;
-    const found = [...new Set((a.supertypes || []).filter(st => !st.wrappedAs)
+    const found = [...new Set((a.supertypes || [])
       .map(st => blockOf(byName.get(st.supertype), seen)).filter(Boolean))];
     if (found.length > 1) throw new Error(`'${shownName(a)}' has more than one parent with a class block ('${found.map(shownName).join("', '")}'), and which one it uses isn't settled yet`);
     return found[0] ?? null;

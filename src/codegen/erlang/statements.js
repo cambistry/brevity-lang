@@ -537,7 +537,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           continue;
         }
         if (sCtx.childActorRefs) sCtx.childActorRefs.set(s.name, actorName);
-        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._supertypeBindings?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
+        const hasInit = (childActor?.initParams?.length > 0) || (childActor?.initBody?.length > 0) || (childActor?._inheritedIngests?.length > 0) || s.value.args.length > 0;
         if (hasInit) {
           const namedBag = s.value.args.find(a => a.type === 'NamedArgsBag');
           if (namedBag) {

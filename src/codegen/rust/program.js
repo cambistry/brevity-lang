@@ -2291,7 +2291,7 @@ function codegenRust(ast, options = {}) {
   // Pre-merge superclass inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, a);
+    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, a);
     if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0 && inheritedState.length === 0 && inheritedInit.length === 0) continue;
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
@@ -2299,24 +2299,11 @@ function codegenRust(ast, options = {}) {
       ...(a.initParams || []),
     ];
     const ownFnNames = new Set(a.functions.map(f => f.name));
-    const delegatedFunctions = [];
-    const inlinedInherited = [];
-    for (const f of inheritedFunctions) {
-      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
-      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
-        delegatedFunctions.push(f);
-      } else {
-        inlinedInherited.push(f);
-      }
-    }
-    const mergedFunctions = [...a.functions, ...inlinedInherited];
-    const supertypeBindings = wrappedBindings.filter(wb => G.ctx.actorNodes?.get(wb.supertype));
+    const mergedFunctions = [...a.functions, ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#'))];
     const mergedActor = {
       ...a,
       initParams: mergedParams,
       functions: mergedFunctions,
-      _delegatedFunctions: delegatedFunctions,
-      _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
     };
     Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));

@@ -44,7 +44,7 @@ describe('public class in its own file', () => {
         @one = { return 1 }
       }
 
-      @Sub = (@Base++) *{
+      @Sub = @Base ++ *{
         @two = { return 2 }
       }
 
@@ -79,13 +79,14 @@ describe('public class in its own file', () => {
   });
 
   it('a bare name doesn\'t reach it as a superclass or a type', () => {
-    expect(() => compileSource('@Pub = *{}\n@Sub = (Pub++) *{}\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
+    expect(() => compileSource('@Pub = *{}\n@Sub = Pub ++ *{}\n@go = { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
     expect(() => compileSource('@Pub = *{}\n@go = {\n  p Pub = @Pub()\n  return 1\n}\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
     expect(() => compileSource('@Pub = *{}\n@go = (p Pub) { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
   });
 
-  it('a wrapped superclass has to be named', () => {
-    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow(/write '\(name @Pub \+\+\)'/);
+  it('a retired wrapped superclass reports the ++ form and super', () => {
+    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow("write '@Sub = @Pub ++ *{ … }', and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
+    expect(() => compileSource('@Pub = *{}\n@Sub = (inner @Pub ++) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow("In '@Sub', the wrapped parent 'inner @Pub' is retired — write '@Sub = @Pub ++ …'");
   });
 
   it('errors name it as it\'s written', () => {
@@ -107,17 +108,17 @@ describe('Box and @Box are different classes', () => {
       @get = { return n }
     }
 
-    @PubSub = (@Box++) *{
+    @PubSub = @Box ++ *{
       @own = { return "pubsub" }
     }
 
-    PrivSub = (Box++) *{
+    PrivSub = Box ++ *{
       @own = { return "privsub" }
     }
 
-    @Wrapper = (inner @Box ++) *{
+    @Wrapper = @Box ++ *{
       @viaInner = {
-        t Text = inner.who()
+        t Text = super.who()
         return t
       }
     }
@@ -198,13 +199,13 @@ describe('Box and @Box are different classes', () => {
   it('a file-level @Box() is held in a cell', () => reads('viaHeld', 'public'));
   it('@Box is a superclass', () => reads('pubSubWho', 'public'));
   it('Box is a separate superclass', () => reads('privSubWho', 'private'));
-  it('@Box can be wrapped', () => reads('wrapped', 'public'));
+  it("@Box's layer is reached through super", () => reads('wrapped', 'public'));
   it('a class\'s own @Box comes before the file\'s', () => reads('ownFunctionFirst', 'own function'));
 
   it('the doc names only the public class, without its @', () => {
     const { interface: doc } = compileSource(script);
     expect(doc.service).toContain('Box () -> *{\n    who () -> (Text)\n  }');
-    expect(doc.service).toContain('PubSub (Box++) -> *{');
+    expect(doc.service).toContain('PubSub Box ++ -> *{');
     expect(doc.service).not.toContain('@Box');
     expect(doc.service).not.toContain('PrivSub');
   });

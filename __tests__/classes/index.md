@@ -1,7 +1,7 @@
 # Classes
 
 LLM orientation: this directory covers actor construction — class headers,
-class params, subclassing, wrapped parents, optional args, accessors, ingest,
+class params, subclassing, the parent layer (`super`), optional args, accessors, ingest,
 and remote actor surfaces. The current vocabulary is **class** (the source
 artifact) constructing an **actor** (the runtime entity).
 
@@ -12,8 +12,8 @@ artifact) constructing an **actor** (the runtime entity).
 - `T = (x Integer, label: Text) *{ ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `label: Text = "hi"`.
 - Class params are private unless published with `@name`, which adds an accessor.
-- Subclasses use `(Parent ++ own params) *{ … }`; several parents join with `++`; `D = C++` is a subclass with no changes.
-- Hooked parent forms such as `(sup T ++) *{ … }` are tested.
+- Subclasses use `Parent ++ (own params) *{ … }`; several parents join with `++`; `D = C++` is a subclass with no changes.
+- `super::h()` / `super.a()` / `super[T]::h()` reach the parent layer (`super.test.js`); the wrapped `(sup T ++)` form is retired.
 - Remote classes use file-level DI and `*Name(...)`; see
   `../cam/remote_instance.md`.
 
@@ -28,7 +28,7 @@ Point = (x Integer, y Integer) *{
   @sum = -> total: (x + y)
 }
 
-Child = (Point ++ label: Text) *{
+Child = Point ++ (label: Text) *{
   @label = -> :label
 }
 ```

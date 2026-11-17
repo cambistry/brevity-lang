@@ -16,7 +16,7 @@ describe('ingest — keyword basics — compilation', () => {
       Base = * {
         label Text = ingest
       }
-      Child = (Base++) *{ "hello" }
+      Child = Base ++ *{ "hello" }
       @test = -> 1 as Integer
     `)).not.toThrow();
   });
@@ -49,7 +49,7 @@ describe('ingest — keyword basics — compilation', () => {
       Base = * {
         count Integer = ingest
       }
-      Child = (Base++) *{ "three" }
+      Child = Base ++ *{ "three" }
       @test = -> 1 as Integer
     `)).toThrow(/ingest/);
   });

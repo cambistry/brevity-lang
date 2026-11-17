@@ -1,0 +1,178 @@
+// `super::name`, `super.name`, `super[T]::name`: the parent layer's definition of a name,
+// reached within the same actor (notes/class-scope-and-inheritance-2026-11-16.md).
+//
+// Inheritance is merged and late-bound: a subclass and its parents are one actor, and a
+// bare name means the bottom-most definition. `super` is how a layer reaches the one
+// below the override.
+//
+// - A function: the parent layer's clauses are kept under a name nothing in source can
+//   spell, in the class that declares them, so they run with that class's scope. The
+//   call goes to that name. Calls inside them stay late-bound.
+// - A cell: the parent layer's own cell. It is a cell of its own only in an actor whose
+//   class (or a class between) redeclares the name; otherwise it is the one cell.
+//   That depends on the actor's class, so the parse leaves a hidden cell declared in the
+//   class whose code reaches it, and the merge (withInheritedState, src/subclass.js)
+//   keeps it, with the parent's initializer, or folds it back into the name.
+
+const SUPER_TYPES = new Set(['SuperCall', 'SuperMember', 'SuperSet']);
+
+const walk = (node, visit, parent = null, key = null) => {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { node.forEach((n, i) => walk(n, visit, node, i)); return; }
+  if (node.type === 'Actor') return;
+  visit(node, parent, key);
+  for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') walk(v, visit, node, k);
+};
+const bodies = (a) => [a.functions, a.initBody, a.constructorBody, a.initParams, a.declarationReturn, a.stateVarDecls];
+
+// A hidden name for layer `L`'s definition of `name`. `@` and a trailing `!`/`.` are
+// moved so the result is still a plain identifier with the same suffix.
+const classPart = (L) => L.name.replace(/^@/, 'P_').replace(/[!.]$/, '');
+export function hiddenName(name, L) {
+  const pub = name.startsWith('@');
+  const bare = name.replace(/^@/, '');
+  const suffix = /[!.]$/.test(bare) ? bare.slice(-1) : '';
+  return `${suffix ? bare.slice(0, -1) : bare}__super${pub ? '_pub' : ''}__${classPart(L)}${suffix}`;
+}
+
+const shown = (n) => {
+  const head = n.layer ? `super[${n.layer}]` : 'super';
+  return `${head}${n.isPublic ? '.' : '::'}${n.name}`;
+};
+
+export function lowerSuperLayers(actors) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
+  const where = (a) => a.membersOf ? `the class block of '${a.membersOf}'` : a.singletonOf ? 'a singleton'
+    : a.name ? `'${a.name}'` : 'this file';
+
+  // A name in class `C`'s view: `C`'s own declaration, else its parents', the later
+  // parent winning. Returns the class that declares it and what it is.
+  const declarer = (C, name, seen = new Set()) => {
+    if (!C || seen.has(C)) return null;
+    seen.add(C);
+    if ((C.functions || []).some(f => f.name === name && !f.actorDef)) return { L: C, kind: 'function' };
+    if ((C.stateVarDecls || []).some(d => d.name === name)) return { L: C, kind: 'cell' };
+    for (const st of [...(C.supertypes || [])].reverse()) {
+      const found = declarer(byName.get(st.supertype), name, seen);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const copied = new Set();
+  for (const U of actors) {
+    // A node can be reached twice: the constructor block and the init share values.
+    const refs = new Set();
+    for (const b of bodies(U)) walk(b, (n) => { if (SUPER_TYPES.has(n.type)) refs.add(n); });
+    if (!refs.size) continue;
+    const parents = (U.supertypes || []).map(st => st.supertype);
+    if (!isClass(U) || !parents.length) {
+      throw new Error(`'${shown([...refs][0])}' in ${where(U)}: 'super' names a parent layer, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
+    }
+    for (const n of refs) {
+      if (n.name.startsWith('@') || n.name.startsWith('#')) throw new Error(`'${shown(n)}': after '::' or '.' a name is written bare`);
+      const name = n.isPublic ? '@' + n.name : n.name;
+      if (n.layer && !parents.includes(n.layer)) {
+        throw new Error(`'${shown(n)}' in '${U.name}': '${n.layer}' isn't a direct parent of '${U.name}' — only a direct parent's layer can be named for now`);
+      }
+      const candidates = n.layer ? [n.layer] : parents;
+      const found = [];
+      for (const P of candidates) {
+        const d = declarer(byName.get(P), name);
+        if (d && !found.some(f => f.L === d.L)) found.push({ ...d, P });
+      }
+      if (!found.length) {
+        const what = `${n.isPublic ? 'public' : 'protected'} '${n.name}'`;
+        const whose = n.layer || parents.length === 1 ? `'${n.layer ?? parents[0]}' has no ${what}` : `no parent of '${U.name}' has a ${what}`;
+        throw new Error(`'${shown(n)}' in '${U.name}': ${whose}`);
+      }
+      if (found.length > 1) {
+        const sep = n.isPublic ? '.' : '::';
+        const call = n.type === 'SuperCall' ? '()' : '';
+        throw new Error(`'${shown(n)}' in '${U.name}' is ambiguous: ${found.map(f => `'${f.P}'`).join(' and ')} both define '${n.name}' — write ${found.map(f => `'super[${f.P}]${sep}${n.name}${call}'`).join(' or ')}`);
+      }
+      const { L, kind } = found[0];
+      const hidden = hiddenName(name, L);
+      if (kind === 'function') {
+        // `super.a` is a message, as `x.a` is: a call with no args. `super::h` isn't a value.
+        if (n.type === 'SuperSet') throw new Error(`'${shown(n)}' in '${U.name}' is a function, not a cell`);
+        if (n.type !== 'SuperCall' && !n.isPublic) throw new Error(`'${shown(n)}' in '${U.name}' is a function: call it, '${shown(n)}()'`);
+        if (!copied.has(hidden)) {
+          copied.add(hidden);
+          const clauses = L.functions.filter(f => f.name === name && !f.actorDef);
+          // A copy of a public function is protected: it isn't on the wire.
+          L.functions.push(...clauses.map(f => ({ ...structuredClone(f), name: hidden, superOf: name })));
+        }
+        const args = n.args ?? [];
+        for (const k of Object.keys(n)) delete n[k];
+        Object.assign(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name: hidden }, args });
+        continue;
+      }
+      // A cell.
+      if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in '${U.name}' is a cell, not a function`);
+      const decl = L.stateVarDecls.find(d => d.name === name);
+      Object.defineProperty(decl, 'declaredIn', { value: L.name, configurable: true });
+      for (const C of actors) for (const d of C.stateVarDecls || []) {
+        if (d.name === name && !d.declaredIn) Object.defineProperty(d, 'declaredIn', { value: C.name, configurable: true });
+      }
+      if (!(U.stateVarDecls || []).some(d => d.name === hidden)) {
+        const h = { ...decl, name: hidden };
+        delete h.ingest;
+        Object.defineProperty(h, 'superOf', { value: name });
+        Object.defineProperty(h, 'superLayer', { value: L.name });
+        Object.defineProperty(h, 'superInit', { value: (L.initBody || []).find(s => s.type === 'StateAssign' && s.name === name) ?? null });
+        (U.stateVarDecls ??= []).push(h);
+      }
+      if (n.type === 'SuperMember') {
+        const { layer, isPublic, name: _, type: __, ...rest } = n;
+        for (const k of Object.keys(n)) delete n[k];
+        Object.assign(n, { type: 'RefRead', name: hidden, ...rest });
+      } else {
+        const { value, updateOp } = n;
+        for (const k of Object.keys(n)) delete n[k];
+        Object.assign(n, { type: 'SetStatement', name: hidden, value, ...(updateOp && { updateOp }) });
+      }
+    }
+  }
+}
+
+// At the merge: for each hidden cell in an actor's state, whether the parent layer's cell
+// is its own (some class at or below the layer's child redeclares the name) or the
+// actor's one cell of that name. Returns the decls and init kept, and the renames.
+export function settleSuperCells(stateVarDecls, combinedInit) {
+  const renames = new Map();
+  const kept = [];
+  let init = combinedInit;
+  for (const d of stateVarDecls) {
+    if (!d.superOf) { kept.push(d); continue; }
+    const eff = stateVarDecls.find(e => e.name === d.superOf);
+    if (!eff || eff.declaredIn === d.superLayer) { renames.set(d.name, d.superOf); continue; }
+    kept.push(d);
+    if (d.superInit) {
+      const at = init.indexOf(d.superInit);
+      const copy = { ...structuredClone(d.superInit), name: d.name };
+      init = at < 0 ? [copy, ...init] : [...init.slice(0, at + 1), copy, ...init.slice(at + 1)];
+    }
+  }
+  return { stateVarDecls: kept, initBody: init, renames };
+}
+
+// A copy of `node` with every string equal to a renamed hidden name replaced.
+export function renameHidden(node, renames) {
+  if (!renames.size) return node;
+  const has = (n) => {
+    if (typeof n === 'string') return renames.has(n);
+    if (!n || typeof n !== 'object') return false;
+    return Array.isArray(n) ? n.some(has) : Object.values(n).some(has);
+  };
+  const copy = (n) => {
+    if (typeof n === 'string') return renames.get(n) ?? n;
+    if (!n || typeof n !== 'object' || !has(n)) return n;
+    if (Array.isArray(n)) return n.map(copy);
+    const out = {};
+    for (const [k, v] of Object.entries(n)) out[k] = copy(v);
+    return out;
+  };
+  return copy(node);
+}

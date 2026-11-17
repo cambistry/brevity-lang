@@ -996,17 +996,6 @@ function genChildHandleOp(ctx, actor) {
     clauses.push(`${prefix}_handle_op(${erlOp('@' + accessorName)}, _Message, _Payload, _Id, _From) ->\n    {ok, [get(${stateKey})], null}`);
   }
 
-  // Generate delegation clauses for inherited functions from wrapped superclasses
-  const delegatedFunctions = actor._delegatedFunctions || [];
-  const supertypeBindings = actor._supertypeBindings || [];
-  for (const f of delegatedFunctions) {
-    // Forward to the wrapped superclass's child dispatch
-    const wb = supertypeBindings[0]; // Use the first (primary) wrapped binding
-    if (wb) {
-      clauses.push(`${prefix}_handle_op(${erlOp(f.name)}, Message, Payload, Id, From) ->\n    child_dispatch(${erlString(wb.supertype.toLowerCase())}, ${erlOp(f.name)}, Message, Payload, Id, From)`);
-    }
-  }
-
   // As-clause dispatch arms for child actor self-as type coercion
   for (const clause of (actor.asClauses || [])) {
     const val = genExpr(ctx, clause.expr, {}, {});
@@ -1035,12 +1024,11 @@ function genChildInit(ctx, actor) {
   // Cells a class constructed here waits on (src/init_order.js).
   const pendingCells = actor.pendingCells || [];
   const initBody = withCellReady(actor.initBody || [], pendingCells);
-  const supertypeBindings = actor._supertypeBindings || [];
   const inheritedIngests = actor._inheritedIngests || [];
 
   const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
-  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && supertypeBindings.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
+  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const I = '    ';
   const lines = [];
@@ -1118,36 +1106,6 @@ function genChildInit(ctx, actor) {
     }
   }
 
-  // Auto-create wrapped superclass actors
-  for (const wb of supertypeBindings) {
-    const superActor = ctx.actorNodes?.get(wb.supertype);
-    if (superActor) {
-      // Use the merged actor from actorInfo if available (has merged params/bindings)
-      const mergedSuper = ctx.actorInfo.get(wb.supertype)?.actor || superActor;
-      const superParams = (mergedSuper.initParams || []);
-      const superInitBody = mergedSuper.initBody || [];
-      const superHasOnHandlers = mergedSuper.functions.some(f => f.type === 'OnHandler');
-      const superHasBindings = (mergedSuper._supertypeBindings || []).length > 0;
-      // Only call child_X_init if the superclass actually generates one
-      const needsInit = superParams.length > 0 || superInitBody.length > 0 || superHasOnHandlers || superHasBindings;
-      if (needsInit) {
-        if (superParams.length > 0) {
-          const hasNamed = superParams.some(p => !p.positional);
-          if (hasNamed) {
-            const fields = superParams.map(p => `${erlString(p.key || p.name)} => ${erlVarName(p.name)}`).join(', ');
-            lines.push(`${I}child_${wb.supertype.toLowerCase()}_init(#{${fields}}),`);
-          } else {
-            const args = superParams.map(p => erlVarName(p.name)).join(', ');
-            lines.push(`${I}child_${wb.supertype.toLowerCase()}_init([${args}]),`);
-          }
-        } else {
-          lines.push(`${I}child_${wb.supertype.toLowerCase()}_init(#{}),`);
-        }
-      }
-      // Store the wrapped binding name as a reference to the superclass's child dispatch name
-      lines.push(`${I}put(${erlStateKey(ctx, wb.name)}, ${erlString(wb.supertype.toLowerCase())}),`);
-    }
-  }
 
   // Subscribe to emits from wrapped children (on handlers)
   const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
@@ -1178,7 +1136,7 @@ function genChildActorCode(ctx, actors) {
     if (!actor) continue;
 
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, wrappedBindings, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1189,28 +1147,10 @@ function genChildActorCode(ctx, actors) {
 
     // Merge inherited functions — subclass's own functions take precedence
     const ownFnNames = new Set(actor.functions.map(f => f.name));
-    const delegatedFunctions = [];
-    const inlinedInherited = [];
-
-    for (const f of inheritedFunctions) {
-      if (ownFnNames.has(f.name) || f.name?.startsWith('#')) continue;
-      if (wrappedBindings.length > 0 && f.name?.startsWith('@')) {
-        delegatedFunctions.push(f);
-      } else {
-        inlinedInherited.push(f);
-      }
-    }
     const mergedFunctions = [
       ...actor.functions,
-      ...inlinedInherited,
+      ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')),
     ];
-
-    // Build wrapped superclass bindings list
-    const supertypeBindings = [];
-    for (const wb of wrappedBindings) {
-      const superActor = ctx.actorNodes?.get(wb.supertype);
-      if (superActor) supertypeBindings.push(wb);
-    }
 
     // Subscribe-on-param transform: SubscribeCall in init/constructor body
     // whose target is a constructor param ref-typed `*(...) Self!` (or Self-
@@ -1258,8 +1198,6 @@ function genChildActorCode(ctx, actors) {
       functions: mergedFunctions,
       constructorBody: transformedConstructorBody,
       initBody: transformedInitBody,
-      _delegatedFunctions: delegatedFunctions,
-      _supertypeBindings: supertypeBindings,
       _inheritedIngests: inheritedIngests,
       _paramSubscriptions: paramSubInfo,
     };
@@ -1291,7 +1229,6 @@ function genChildActorCode(ctx, actors) {
       ...childStateDecls.map(v => v.name),
       ...childParams.map(p => p.name),
       ...childCoercions.map(s => s.name),
-      ...supertypeBindings.map(wb => wb.name),
     ]);
     savedTypeEnv = ctx.stateVarTypeEnv;
     ctx.stateVarTypeEnv = new Map([
@@ -1300,7 +1237,6 @@ function genChildActorCode(ctx, actors) {
       ...childStateDecls.map(v => [v.name, v.typeName]),
       ...childParams.map(p => [p.name, p.type || 'Anything']),
       ...childCoercions.map(s => [s.name, 'Anything']),
-      ...supertypeBindings.map(wb => [wb.name, 'Anything']),
     ]);
     ctx.childStatePrefix = name.toLowerCase();
     ctx.childConstructorParams = new Set(childParams.map(p => p.name));

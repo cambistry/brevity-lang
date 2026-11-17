@@ -55,7 +55,7 @@ function handleTypedAssign_AsClause(s, typeEnv, I, lines) {
     const actorName = s.value.callee.name;
     const childActor = G.ctx.actorInfo.get(actorName)?.actor;
     const hasReturnAs = !!(childActor?.declarationReturn && childActor.declarationReturn.typeName);
-    const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || hasReturnAs;
+    const hasInitNeeded = s.value.args.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || hasReturnAs;
     if (hasInitNeeded) {
       const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
       if (s.value.args.length > 0) {
@@ -244,7 +244,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
 
   // Flattened path: existing behavior — single-instance, prefix-keyed state.
   sCtx.childActorRefs.set(s.name, actorName);
-  const hasInitNeeded = s.value.args.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0;
+  const hasInitNeeded = s.value.args.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0;
   if (hasInitNeeded) {
     lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${initArgsExpr});`);
   }
@@ -1370,7 +1370,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           }
           if (expr.object.type === 'FunctionCallExpr') {
             const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-            const hasInit = expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+            const hasInit = expr.object.args.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
             if (hasInit) {
               if (expr.object.args.length > 0) {
                 const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
@@ -1693,7 +1693,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         actorName = expr.object.callee.name;
         {
           const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-          const hasInit = expr.object.args.length > 0 || childActorObj?._supertypeBindings?.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+          const hasInit = expr.object.args.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
           if (hasInit) {
             if (expr.object.args.length > 0) {
               const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
@@ -2145,7 +2145,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const actorName = s.value.callee.name;
         {
           const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-          if (s.value.args.length > 0 || childActorObj?._supertypeBindings?.length > 0) {
+          if (s.value.args.length > 0) {
             const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
             lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
           }

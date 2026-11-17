@@ -1072,7 +1072,7 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
     } else {
       // No args — only call init if the actor has constructor params (for defaults) or init body
       const childActor = ctx.actorInfo.get(actorName)?.actor;
-      if (childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0 || childActor?._supertypeBindings?.length > 0 || childActor?._inheritedIngests?.length > 0) {
+      if (childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0 || childActor?._inheritedIngests?.length > 0) {
         initCall = `${prefix_eph}_init(#{}),\n        `;
       }
     }

@@ -3,9 +3,10 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Subclasses — `++` inheritance syntax
 //
-// (T++)              inherit from T (no wrapped superclass exposed)
-// (name T ++)        inherit from T, expose wrapped superclass as `name`
-// (T ++ arg: Type)   inherit from T, add class args
+// U = T ++ *{ … }            inherit from T
+// U = T ++ (arg: Type) *{ … } inherit from T, add class args
+// super.a() / super::h()      the parent layer's public `@a` / protected `h`
+// (super.test.js covers `super` in depth.)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation: positional args ─────────────────────────────────────────────
@@ -14,7 +15,7 @@ describe('subclasses — positional arg inheritance — compilation', () => {
   it('subclass inherits positional arg and adds its own', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b Integer) *{}
+      U = T ++ (b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -26,7 +27,7 @@ describe('subclasses — named arg inheritance — compilation', () => {
   it('subclass inherits named arg and adds its own', () => {
     expect(() => compileSource(`
       T = (a: Integer) *{}
-      U = (T ++ b: Integer) *{}
+      U = T ++ (b: Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -38,7 +39,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('positional super, named subclass arg', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b: Integer) *{}
+      U = T ++ (b: Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -46,7 +47,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('named super, positional subclass arg', () => {
     expect(() => compileSource(`
       T = (a: Integer) *{}
-      U = (T ++ b Integer) *{}
+      U = T ++ (b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -54,7 +55,7 @@ describe('subclasses — mixed positional/named arg inheritance — compilation'
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
       T = (a Integer, b: Text) *{}
-      U = (T ++ c: Integer, d Integer) *{}
+      U = T ++ (c: Integer, d Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -66,7 +67,7 @@ describe('subclasses — arg type override rejected — compilation', () => {
   it('changing inherited arg type is a compiler error', () => {
     expect(() => compileSource(`
       T = (a: Decimal) *{}
-      U = (T ++ a: Integer) *{}
+      U = T ++ (a: Integer) *{}
       @test = -> 1
     `)).toThrow();
   });
@@ -74,7 +75,7 @@ describe('subclasses — arg type override rejected — compilation', () => {
   it('re-aliasing inherited arg without changing type is ok', () => {
     expect(() => compileSource(`
       T = (a: Decimal) *{}
-      V = (T ++ a: b Decimal) *{
+      V = T ++ (a: b Decimal) *{
         @c = -> result: b
       }
       @test = -> 1
@@ -88,7 +89,7 @@ describe('subclasses — accessor type override rejected — compilation', () =>
   it('overriding a published param with a different type is a compiler error', () => {
     expect(() => compileSource(`
       T = (@b: Integer) *{}
-      U = (T++) *{ @b = { "b" } }
+      U = T ++ *{ @b = { "b" } }
       @test = -> 1
     `)).toThrow(/cannot change type of inherited accessor '@b'/);
   });
@@ -96,7 +97,7 @@ describe('subclasses — accessor type override rejected — compilation', () =>
   it('adding a handler named like an unpublished param is legal', () => {
     expect(() => compileSource(`
       T = (a: Integer) *{}
-      V = (T++) *{ @a = { "a" } }
+      V = T ++ *{ @a = { "a" } }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -108,7 +109,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
   it('< T | > with space before superclass', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b Integer) *{}
+      U = T ++ (b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
@@ -116,28 +117,28 @@ describe('subclasses — whitespace tolerance — compilation', () => {
   it('<\\nT |\\n> with newline before superclass', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b Integer) *{}
+      U = T ++ (b Integer) *{}
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('wrapped superclass reached through a short local name', () => {
+  it('the parent layer reached through super.', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
-      U = (t T ++) *{
+      U = T ++ *{
         @a = -> result: 2
-        @b = { :result = t.a(); return :result as Integer }
+        @b = { :result = super.a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('<\\nT *name |\\n> lineal with named wrapped superclass', () => {
+  it('the parent layer named with super[T]', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
-      U = (sup T ++) *{
+      U = T ++ *{
         @a = -> result: 2
-        @b = { :result = sup.a(); return :result as Integer }
+        @b = { :result = super[T].a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -146,7 +147,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
   it('<\\nT |\\nparams\\n> lineal with params after superclass', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b Integer
+      U = T ++ (b Integer
         c: Text) *{
         @sum = -> result: (a + b)
       }
@@ -161,7 +162,7 @@ describe('subclasses — public function type override rejected — compilation'
   it('overriding public function with different return type is a compiler error', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = (T++) *{ @a = { "one" } }
+      U = T ++ *{ @a = { "one" } }
       @test = -> 1
     `)).toThrow();
   });
@@ -180,29 +181,29 @@ describe('subclasses — private function access — compilation', () => {
   it('subclass cannot access superclass private function', () => {
     expect(() => compileSource(`
       T = * { #x = { 1 }; @a = { #x() } }
-      U = (T++) *{ @b = { #x() } }
+      U = T ++ *{ @b = { #x() } }
       @test = -> 1
     `)).toThrow();
   });
 });
 
-// ── Compilation: wrapped superclass forms ────────────────────────────────────
+// ── Compilation: the parent layer, and the retired wrapped forms ─────────────
 
-describe('subclasses — wrapped superclass — compilation', () => {
-  it('<T *name |> exposes wrapped superclass', () => {
+describe('subclasses — super and wrapped parents — compilation', () => {
+  it('super.a reaches the parent layer', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = (sup T ++) *{ @a = { 2 }; @b = { sup.a } }
+      U = T ++ *{ @a = { 2 }; @b = { super.a } }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('a wrapped parent cannot reuse the class name as its local', () => {
+  it('a wrapped parent named like its class is retired', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
       U = (T T ++) *{ @a = { 2 }; @b = { T.a } }
       @test = -> 1
-    `)).toThrow(/wrapped 'T' needs a local name of its own/);
+    `)).toThrow("In 'U', the wrapped parent 'T T' is retired — write 'U = T ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
   });
 
   it('the retired self-named wrap reports the ++ form', () => {
@@ -210,7 +211,7 @@ describe('subclasses — wrapped superclass — compilation', () => {
       T = * { @a = { 1 } }
       U = (T* |) *{ @b = { T.a } }
       @test = -> 1
-    `)).toThrow(/subclass bar '\|' is retired — extend with '\+\+': write '\(name T \+\+\)'/);
+    `)).toThrow("In 'U', the subclass bar '|' is retired — extend with '++': write 'U = T ++ *{ … }', and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
   });
 });
 
@@ -218,12 +219,12 @@ describe('subclasses — runtime', () => {
   const script = `
     // subclasses — arg inheritance — runtime
     T = (@a Integer) *{}
-    PosU = (T ++ @b Integer) *{
+    PosU = T ++ (@b Integer) *{
       @sum = -> result: (a + b)
     }
 
     NT = (a: Integer) *{}
-    NamedU = (NT ++ b: Integer) *{
+    NamedU = NT ++ (b: Integer) *{
       @sum = -> result: (a + b)
     }
 
@@ -253,19 +254,19 @@ describe('subclasses — runtime', () => {
 
     // subclasses — mixed positional/named args — runtime
     PosT = (a Integer) *{}
-    MixedA = (PosT ++ b: Text) *{
+    MixedA = PosT ++ (b: Text) *{
       @getA = -> result: a
       @getB = -> result: b
     }
 
     NamedT = (a: Text) *{}
-    MixedB = (NamedT ++ b Integer) *{
+    MixedB = NamedT ++ (b Integer) *{
       @getA = -> result: a
       @getB = -> result: b
     }
 
     MultiT = (a Integer, b: Text) *{}
-    MultiU = (MultiT ++ c: Integer, d Integer) *{
+    MultiU = MultiT ++ (c: Integer, d Integer) *{
       @sum = -> result: (a + c + d)
       @text = -> result: b
     }
@@ -308,7 +309,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — inherit/extend public functions — runtime
     T3 = * { @a = -> result: "a" }
-    U = (T3++) *{ @b = -> result: "b" }
+    U = T3 ++ *{ @b = -> result: "b" }
 
     @testInheritedA
       =
@@ -324,7 +325,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — override public functions — runtime
     T4 = * { @a = -> result: 1 }
-    U4 = (T4++) *{ @a = -> result: 2 }
+    U4 = T4 ++ *{ @a = -> result: 2 }
 
     @testSuper
       =
@@ -340,7 +341,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — invoke inherited functions — runtime
     T5 = * { a = { 1 }; b = { 2 } }
-    U5 = (T5++) *{
+    U5 = T5 ++ *{
       @c = -> result: (a() + b()) as Integer
     }
 
@@ -352,7 +353,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — inherit protected functions — runtime
     T6 = * { x = { "x" }; @a = -> result: (x() + "") as Text }
-    U6 = (T6++) *{ @b = -> result: (x() + "") as Text }
+    U6 = T6 ++ *{ @b = -> result: (x() + "") as Text }
 
     @testSuperProtected
       =
@@ -368,7 +369,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — override protected functions — runtime
     T7 = * { x = { 1 }; @a = -> result: (x() + 0) as Integer }
-    U7 = (T7++) *{ x = { 2 } }
+    U7 = T7 ++ *{ x = { 2 } }
 
     @testSuperProtected7
       =
@@ -382,12 +383,12 @@ describe('subclasses — runtime', () => {
       :result = u.a()
       return :result as Integer
 
-    // subclasses — wrapped superclass *name — runtime
+    // subclasses — the parent layer through super. — runtime
     T8 = * { @a = -> result: 1 }
-    U8 = (sup T8 ++) *{
+    U8 = T8 ++ *{
       @a = -> result: 2
       @b = {
-        :result = sup.a()
+        :result = super.a()
         return :result as Integer
       }
     }
@@ -404,12 +405,12 @@ describe('subclasses — runtime', () => {
       :result = u.b()
       return :result as Integer
 
-    // subclasses — wrapped superclass, short local name — runtime
+    // subclasses — the parent layer named with super[T] — runtime
     T9 = * { @a = -> result: 1 }
-    U9 = (t T9 ++) *{
+    U9 = T9 ++ *{
       @a = -> result: 2
       @b = {
-        :result = t.a()
+        :result = super[T9].a()
         return :result as Integer
       }
     }
@@ -428,10 +429,10 @@ describe('subclasses — runtime', () => {
 
     // subclasses — multi-level inheritance — runtime
     T10 = * { @a = -> result: 1 }
-    U10 = (T10++) *{
+    U10 = T10 ++ *{
       @b = -> result: 2
     }
-    V = (U10++) *{
+    V = U10 ++ *{
       @c = -> result: 3
     }
 
@@ -455,8 +456,8 @@ describe('subclasses — runtime', () => {
 
     // subclasses — multi-level override — runtime
     T11 = * { @a = -> result: 1 }
-    U11 = (T11++) *{ @a = -> result: 2 }
-    V11 = (U11++) *{ @a = -> result: 3 }
+    U11 = T11 ++ *{ @a = -> result: 2 }
+    V11 = U11 ++ *{ @a = -> result: 3 }
 
     @testT
       =
@@ -478,8 +479,8 @@ describe('subclasses — runtime', () => {
 
     // subclasses — multi-level protected override — runtime
     T12 = * { x = { 10 }; @a = -> result: (x() + 0) as Integer }
-    U12 = (T12++) *{ x = { 20 } }
-    V12 = (U12++) *{ x = { 30 } }
+    U12 = T12 ++ *{ x = { 20 } }
+    V12 = U12 ++ *{ x = { 30 } }
 
     @testT12
       =
@@ -501,8 +502,8 @@ describe('subclasses — runtime', () => {
 
     // subclasses — multi-level arg accumulation — runtime
     T13 = (@a: Integer) *{}
-    U13 = (T13 ++ b: Integer) *{}
-    V13 = (U13 ++ @c: Integer) *{
+    U13 = T13 ++ (b: Integer) *{}
+    V13 = U13 ++ (@c: Integer) *{
       @sum = -> result: (a + b + c)
     }
 
@@ -524,19 +525,19 @@ describe('subclasses — runtime', () => {
       c Integer = v.c()
       return result: c
 
-    // subclasses — multi-level wrapped superclass — runtime
+    // subclasses — multi-level parent layers — runtime
     T14 = * { @a = -> result: 1 }
-    U14 = (t T14 ++) *{
+    U14 = T14 ++ *{
       @a = -> result: 2
       @fromT = {
-        :result = t.a()
+        :result = super.a()
         return :result as Integer
       }
     }
-    V14 = (u U14 ++) *{
+    V14 = U14 ++ *{
       @a = -> result: 3
       @fromU = {
-        :result = u.a()
+        :result = super.a()
         return :result as Integer
       }
     }
@@ -561,7 +562,7 @@ describe('subclasses — runtime', () => {
 
     // subclasses — optional args — runtime
     T15 = (a Integer = 0) *{}
-    U15 = (T15 ++ b Integer = 10) *{
+    U15 = T15 ++ (b Integer = 10) *{
       @sum = -> result: (a + b)
     }
 
@@ -595,7 +596,7 @@ describe('subclasses — runtime', () => {
     Same = A++
     Both = A ++ B
     Added = A ++ *{ @extra = -> result: 3 }
-    Sized = (A ++ B ++ n Integer) *{ @size = -> result: n }
+    Sized = A ++ B ++ (n Integer) *{ @size = -> result: n }
 
     @testSame
       =
@@ -785,32 +786,32 @@ describe('subclasses — runtime', () => {
     );
   });
 
-  // ── Runtime: wrapped superclass access — named ───────────────────────────────
+  // ── Runtime: the parent layer through super. ──────────────────────────────────
 
-  it('subclasses — wrapped superclass *name — runtime — subclass override takes precedence', async () => {
+  it('subclasses — super. — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride8', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
-  it('subclasses — wrapped superclass *name — runtime — wrapped superclass accesses superclass implementation', async () => {
+  it('subclasses — super. — runtime — super.a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
     );
   });
 
-  // ── Runtime: wrapped superclass access — sugared ─────────────────────────────
+  // ── Runtime: the parent layer named with super[T] ─────────────────────────────
 
-  it('subclasses — wrapped superclass, short local name — runtime — subclass override takes precedence', async () => {
+  it('subclasses — super[T] — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride9', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
-  it('subclasses — wrapped superclass, short local name — runtime — the wrapped local reaches the superclass implementation', async () => {
+  it('subclasses — super[T] — runtime — super[T].a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess9', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -909,23 +910,23 @@ describe('subclasses — runtime', () => {
     );
   });
 
-  // ── R:untime V cannot expose wrapped T (only U is visible) ───────────────────
+  // ── Runtime: each layer's super. is its own parent's ──────────────────────────
 
-  it('subclasses — multi-level wrapped superclass — runtime — V returns own override', async () => {
+  it('subclasses — multi-level parent layers — runtime — V returns own override', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testV14', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
     );
   });
 
-  it('subclasses — multi-level wrapped superclass — runtime — V accesses U via wrapped superclass', async () => {
+  it("subclasses — multi-level parent layers — runtime — V's super.a is U's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromU', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
     );
   });
 
-  it('subclasses — multi-level wrapped superclass — runtime — V inherits U.fromT which accesses T', async () => {
+  it("subclasses — multi-level parent layers — runtime — V inherits U.fromT, whose super.a is T's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromT', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
@@ -1006,7 +1007,7 @@ describe('subclasses — optional args — compilation', () => {
   it('superclass with optional arg, subclass adds required', () => {
     expect(() => compileSource(`
       T = (a Integer = 0) *{}
-      U = (T ++ b Integer) *{
+      U = T ++ (b Integer) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -1016,7 +1017,7 @@ describe('subclasses — optional args — compilation', () => {
   it('subclass adds optional arg to inherited required', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
-      U = (T ++ b Integer = 10) *{
+      U = T ++ (b Integer = 10) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -1026,7 +1027,7 @@ describe('subclasses — optional args — compilation', () => {
   it('both levels have optional args', () => {
     expect(() => compileSource(`
       T = (a: Integer = 1) *{}
-      U = (T ++ b: Integer = 2) *{
+      U = T ++ (b: Integer = 2) *{
         @sum = -> result: (a + b)
       }
       @test = -> 1
@@ -1041,7 +1042,7 @@ describe('subclasses — ++ forms — compilation', () => {
       T = (a Integer) *{}
       U = (T | b Integer) *{}
       @test = -> 1
-    `)).toThrow(/In 'U', the subclass bar '\|' is retired — extend with '\+\+': write '\(T \+\+ params\)'/);
+    `)).toThrow("In 'U', the subclass bar '|' is retired — extend with '++': write 'U = T ++ (…) *{ … }'");
   });
 
   it('the retired parent list reports the ++ chain', () => {
@@ -1050,21 +1051,21 @@ describe('subclasses — ++ forms — compilation', () => {
       B = *{}
       C = (A, B |) *{}
       @test = -> 1
-    `)).toThrow(/write '\(A \+\+ B\)'/);
+    `)).toThrow("write 'C = A ++ B ++ *{ … }'");
   });
 
   it('params joined by ++ name the type that is not a class', () => {
     expect(() => compileSource(`
       T = *{}
-      U = (T ++ x Integer ++ y Integer) *{}
+      U = T ++ (x Integer ++ y Integer) *{}
       @test = -> 1
-    `)).toThrow(/In 'U', 'Integer' is a type, not a class — after the last '\+\+', separate params with commas: '\(Parent \+\+ x Integer, …\)'/);
+    `)).toThrow("In 'U', 'Integer' is a type, not a class — '++' doesn't join params, separate them with commas: '(x Integer, …)'");
   });
 
   it('a custom type is not a parent', () => {
     expect(() => compileSource(`
       type Point (x Integer, y Integer)
-      U = (Point++) *{}
+      U = Point ++ *{}
       @test = -> 1
     `)).toThrow(/In 'U', 'Point' is a type, not a class/);
   });
@@ -1073,42 +1074,42 @@ describe('subclasses — ++ forms — compilation', () => {
     expect(() => compileSource(`
       type Point (x Integer, y Integer)
       T = *{}
-      U = (T ++ p Point ++ q Point) *{}
+      U = T ++ (p Point ++ q Point) *{}
       @test = -> 1
-    `)).toThrow(/In 'U', 'Point' is a type, not a class — after the last '\+\+', separate params with commas: '\(Parent \+\+ p Point, …\)'/);
+    `)).toThrow("In 'U', 'Point' is a type, not a class — '++' doesn't join params, separate them with commas: '(p Point, …)'");
   });
 
   it('an unknown parent is an error', () => {
     expect(() => compileSource(`
-      U = (Nope++) *{}
+      U = Nope ++ *{}
       @test = -> 1
     `)).toThrow(/In 'U', 'Nope' is not a class in scope/);
   });
 
-  it('a wrapped parent with an empty body is an error', () => {
+  it('a wrapped parent with an empty body is retired', () => {
     expect(() => compileSource(`
       T = *{ @a = -> 1 }
       U = (sup T ++) *{}
       @test = -> 1
-    `)).toThrow(/In 'U', 'T' is wrapped as 'sup' with no body to use it/);
+    `)).toThrow("In 'U', the wrapped parent 'sup T' is retired — write 'U = T ++ …'");
   });
 
-  it('a wrapped parent in a bare definition is an error', () => {
+  it('a wrapped parent in a bare definition is retired', () => {
     expect(() => compileSource(`
       A = *{}
       B = *{}
       D = sup A ++ B
       @test = -> 1
-    `)).toThrow(/In 'D', 'A' is wrapped as 'sup' with no body to use it/);
+    `)).toThrow("In 'D', the wrapped parent 'sup A' is retired — write 'D = A ++ …'");
   });
 
-  it('a wrapped last parent in a bare definition needs a body', () => {
+  it('a wrapped last parent in a bare definition is retired', () => {
     expect(() => compileSource(`
       A = *{}
       B = *{}
       D = A ++ sup B
       @test = -> 1
-    `)).toThrow(/In 'D', a wrapped parent \('sup B'\) needs a body to use it/);
+    `)).toThrow("In 'D', the wrapped parent 'sup B' is retired — write 'D = B ++ …'");
   });
 
   it('params after a bare ++ go in parens', () => {
@@ -1116,7 +1117,7 @@ describe('subclasses — ++ forms — compilation', () => {
       A = *{}
       D = A ++ "x"
       @test = -> 1
-    `)).toThrow(/In 'D', expected a parent class, '\*\{ … \}' or the end of the definition after '\+\+'/);
+    `)).toThrow("In 'D', expected a parent class, '(params)', '*{ … }' or the end of the definition after '++'");
   });
 
   it('a public class extends with ++', () => {
