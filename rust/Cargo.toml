@@ -12,3 +12,6 @@ regex = "1"
 
 [profile.dev]
 strip = true
+# No debug info: strip drops it from the binary anyway, and on macOS it keeps each
+# build's object files in target/debug/deps, which are never cleaned up.
+debug = false
