@@ -1,11 +1,8 @@
 import { expectBehavior } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ...args rest binding
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('...args rest binding', () => {
+describe('structure — runtime', () => {
   const script = `
+    // ...args rest binding
     @pass = (...args) ->(...args)
     @passTyped = (...args Object) ->(...args as Object)
     @passSpacious
@@ -14,35 +11,8 @@ describe('...args rest binding', () => {
       =
       ->
         ...args as Object
-  `;
 
-  it('named payload passes through — pack/splat roundtrip', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [[{ a: 1, b: 2 }], 'pass'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
-  });
-
-  it('positional payload passes through — pack/splat roundtrip', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [[1, 2], 'pass'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '2', 'ty': ['Integer', 'Integer'], re: [1, 2], to: 'c' } });
-  });
-
-  it('mixed payload passes through — pack/splat roundtrip', async () => {
-    await expectBehavior(script, { input: { id: '3', op: [[1, 2, { c: 3 }], 'pass'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '3', 'ty': ['Integer', 'Integer', { c: 'Integer' }], re: [1, 2, { c: 3 }], to: 'c' } });
-  });
-
-  it('explicit Object type annotation is accepted', async () => {
-    await expectBehavior(script, { input: { id: '4', op: [[{ x: 42 }], 'passTyped'], 'ty': [[{ x: 'Integer' }]], from: 'c' } }, { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
-  });
-
-  it('lineal form with ...args Object', async () => {
-    await expectBehavior(script, { input: { id: '5', op: [[{ a: 1, b: 2 }], 'passSpacious'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '5', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Object destructuring
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Object destructuring', () => {
-  const script = `
+    // Object destructuring
     @namedTwo    = (...args) :a, :b = args    return result: a
     @namedOne    = (...args) :a = args         return result: a
     @namedParen  = (...args) (:a, :b) = args   return result: a
@@ -54,83 +24,13 @@ describe('Object destructuring', () => {
     @mixedParen  = (...args) (a, b, :c) = args return result: c
     @keyMap      = (...args) a: x = args       return result: x
     @keyMapParen = (...args) (a: x) = args     return result: x
-  `;
 
-  it('named — :a, :b = args', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [[{ a: 10, b: 20 }], 'namedTwo'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', re: { result: 10 }, to: 'c' } });
-  });
-
-  it('named — :a = args (extra keys ignored)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [[{ a: 99, b: 2, c: 3 }], 'namedOne'], 'ty': [[{ a: 'Integer', b: 'Integer', c: 'Integer' }]], from: 'c' } }, { output: { id: '2', re: { result: 99 }, to: 'c' } });
-  });
-
-  it('named — paren form', async () => {
-    await expectBehavior(script, { input: { id: '3', op: [[{ a: 7, b: 8 }], 'namedParen'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '3', re: { result: 7 }, to: 'c' } });
-  });
-
-  it('positional — a, b = args', async () => {
-    await expectBehavior(script, { input: { id: '4', op: [[3, 4], 'posTwo'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '4', re: { result: 3 }, to: 'c' } });
-  });
-
-  it('positional — a = args[0]', async () => {
-    await expectBehavior(script, { input: { id: '5', op: [[42, 99, 1], 'posIndex'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '5', re: { result: 42 }, to: 'c' } });
-  });
-
-  it('positional — paren form', async () => {
-    await expectBehavior(script, { input: { id: '6', op: [[5, 6], 'posParen'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '6', re: { result: 5 }, to: 'c' } });
-  });
-
-  it('positional — trailing-comma paren form', async () => {
-    await expectBehavior(script, { input: { id: '7', op: [[11, 22], 'posTrailing'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '7', re: { result: 11 }, to: 'c' } });
-  });
-
-  it('mixed — a, b, :c = args', async () => {
-    await expectBehavior(script, { input: { id: '8', op: [[1, 2, { c: 3 }], 'mixedThree'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '8', re: { result: 1 }, to: 'c' } });
-  });
-
-  it('mixed — paren form, uses named field', async () => {
-    await expectBehavior(script, { input: { id: '9', op: [[1, 2, { c: 99 }], 'mixedParen'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '9', re: { result: 99 }, to: 'c' } });
-  });
-
-  it('key-mapped — a: x = args', async () => {
-    await expectBehavior(script, { input: { id: '10', op: [[{ a: 55 }], 'keyMap'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '10', re: { result: 55 }, to: 'c' } });
-  });
-
-  it('key-mapped — paren form', async () => {
-    await expectBehavior(script, { input: { id: '11', op: [[{ a: 77 }], 'keyMapParen'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '11', re: { result: 77 }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Object accessors
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Object accessors', () => {
-  const script = `
+    // Object accessors
     @accessFirst  = (...args) x = args[0]   return result: x
     @accessSecond = (...args) x = args[1]   return result: x
     @accessNamed  = (...args) x = args["a"] return result: x
-  `;
 
-  it('args[0] reads first positional', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [[42, 99], 'accessFirst'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', re: { result: 42 }, to: 'c' } });
-  });
-
-  it('args[1] reads second positional', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [[10, 20], 'accessSecond'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '2', re: { result: 20 }, to: 'c' } });
-  });
-
-  it('args["a"] reads named field', async () => {
-    await expectBehavior(script, { input: { id: '3', op: [[{ a: 'hello' }], 'accessNamed'], 'ty': [[{ a: 'Text' }]], from: 'c' } }, { output: { id: '3', re: { result: 'hello' }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Object type call
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Object type call', () => {
-  const script = `
+    // Object type call
     @constructSingle
       =
       ...args
@@ -174,39 +74,8 @@ describe('Object type call', () => {
       =
       s Object = Object(1, 2, x: "extra")
       return (...s)
-  `;
 
-  it('Object(v as Type) assigns unwrapped value', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'constructSingle', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
-  });
-
-  it('function closure preserved through Object extraction', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'constructClosure', from: 'c' } }, { output: { id: '2', 'ty': ['Integer'], re: [10], to: 'c' } });
-  });
-
-  it('Object-stored function observes capture-time binding', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'constructLive', from: 'c' } }, { output: { id: '3', 'ty': ['Integer'], re: [10], to: 'c' } });
-  });
-
-  it('Object(a, b) from typed locals carries types through', async () => {
-    await expectBehavior(script, { input: { id: '4', op: [[3, 4], 'constructTyped'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '4', 'ty': ['Integer', 'Integer'], re: [3, 4], to: 'c' } });
-  });
-
-  it('Object(k: v as Type, ...) builds named object', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'constructNamed', from: 'c' } }, { output: { id: '5', re: { a: 'alpha', b: 'beta' }, to: 'c' } });
-  });
-
-  it('Object(v as Type, k: v as Type) builds mixed object', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'constructMixed', from: 'c' } }, { output: { id: '6', re: [1, 2, { x: 'extra' }], to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Object return — ty coercion
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Object return — ty coercion', () => {
-  const script = `
+    // Object return — ty coercion
     @rawStructureOneArity
       =
       s Object = Object(100)
@@ -218,12 +87,132 @@ describe('Object return — ty coercion', () => {
       return s
   `;
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ...args rest binding
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('...args rest binding — named payload passes through — pack/splat roundtrip', async () => {
+    await expectBehavior(script, { input: { id: '1', op: [[{ a: 1, b: 2 }], 'pass'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
+  });
+
+  it('...args rest binding — positional payload passes through — pack/splat roundtrip', async () => {
+    await expectBehavior(script, { input: { id: '2', op: [[1, 2], 'pass'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '2', 'ty': ['Integer', 'Integer'], re: [1, 2], to: 'c' } });
+  });
+
+  it('...args rest binding — mixed payload passes through — pack/splat roundtrip', async () => {
+    await expectBehavior(script, { input: { id: '3', op: [[1, 2, { c: 3 }], 'pass'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '3', 'ty': ['Integer', 'Integer', { c: 'Integer' }], re: [1, 2, { c: 3 }], to: 'c' } });
+  });
+
+  it('...args rest binding — explicit Object type annotation is accepted', async () => {
+    await expectBehavior(script, { input: { id: '4', op: [[{ x: 42 }], 'passTyped'], 'ty': [[{ x: 'Integer' }]], from: 'c' } }, { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+  });
+
+  it('...args rest binding — lineal form with ...args Object', async () => {
+    await expectBehavior(script, { input: { id: '5', op: [[{ a: 1, b: 2 }], 'passSpacious'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '5', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 1, b: 2 }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Object destructuring
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('Object destructuring — named — :a, :b = args', async () => {
+    await expectBehavior(script, { input: { id: '1', op: [[{ a: 10, b: 20 }], 'namedTwo'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '1', re: { result: 10 }, to: 'c' } });
+  });
+
+  it('Object destructuring — named — :a = args (extra keys ignored)', async () => {
+    await expectBehavior(script, { input: { id: '2', op: [[{ a: 99, b: 2, c: 3 }], 'namedOne'], 'ty': [[{ a: 'Integer', b: 'Integer', c: 'Integer' }]], from: 'c' } }, { output: { id: '2', re: { result: 99 }, to: 'c' } });
+  });
+
+  it('Object destructuring — named — paren form', async () => {
+    await expectBehavior(script, { input: { id: '3', op: [[{ a: 7, b: 8 }], 'namedParen'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } }, { output: { id: '3', re: { result: 7 }, to: 'c' } });
+  });
+
+  it('Object destructuring — positional — a, b = args', async () => {
+    await expectBehavior(script, { input: { id: '4', op: [[3, 4], 'posTwo'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '4', re: { result: 3 }, to: 'c' } });
+  });
+
+  it('Object destructuring — positional — a = args[0]', async () => {
+    await expectBehavior(script, { input: { id: '5', op: [[42, 99, 1], 'posIndex'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '5', re: { result: 42 }, to: 'c' } });
+  });
+
+  it('Object destructuring — positional — paren form', async () => {
+    await expectBehavior(script, { input: { id: '6', op: [[5, 6], 'posParen'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '6', re: { result: 5 }, to: 'c' } });
+  });
+
+  it('Object destructuring — positional — trailing-comma paren form', async () => {
+    await expectBehavior(script, { input: { id: '7', op: [[11, 22], 'posTrailing'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '7', re: { result: 11 }, to: 'c' } });
+  });
+
+  it('Object destructuring — mixed — a, b, :c = args', async () => {
+    await expectBehavior(script, { input: { id: '8', op: [[1, 2, { c: 3 }], 'mixedThree'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '8', re: { result: 1 }, to: 'c' } });
+  });
+
+  it('Object destructuring — mixed — paren form, uses named field', async () => {
+    await expectBehavior(script, { input: { id: '9', op: [[1, 2, { c: 99 }], 'mixedParen'], 'ty': [['Integer', 'Integer', { c: 'Integer' }]], from: 'c' } }, { output: { id: '9', re: { result: 99 }, to: 'c' } });
+  });
+
+  it('Object destructuring — key-mapped — a: x = args', async () => {
+    await expectBehavior(script, { input: { id: '10', op: [[{ a: 55 }], 'keyMap'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '10', re: { result: 55 }, to: 'c' } });
+  });
+
+  it('Object destructuring — key-mapped — paren form', async () => {
+    await expectBehavior(script, { input: { id: '11', op: [[{ a: 77 }], 'keyMapParen'], 'ty': [[{ a: 'Integer' }]], from: 'c' } }, { output: { id: '11', re: { result: 77 }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Object accessors
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('Object accessors — args[0] reads first positional', async () => {
+    await expectBehavior(script, { input: { id: '1', op: [[42, 99], 'accessFirst'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', re: { result: 42 }, to: 'c' } });
+  });
+
+  it('Object accessors — args[1] reads second positional', async () => {
+    await expectBehavior(script, { input: { id: '2', op: [[10, 20], 'accessSecond'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '2', re: { result: 20 }, to: 'c' } });
+  });
+
+  it('Object accessors — args["a"] reads named field', async () => {
+    await expectBehavior(script, { input: { id: '3', op: [[{ a: 'hello' }], 'accessNamed'], 'ty': [[{ a: 'Text' }]], from: 'c' } }, { output: { id: '3', re: { result: 'hello' }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Object type call
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('Object type call — Object(v as Type) assigns unwrapped value', async () => {
+    await expectBehavior(script, { input: { id: '1', op: 'constructSingle', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
+  });
+
+  it('Object type call — function closure preserved through Object extraction', async () => {
+    await expectBehavior(script, { input: { id: '2', op: 'constructClosure', from: 'c' } }, { output: { id: '2', 'ty': ['Integer'], re: [10], to: 'c' } });
+  });
+
+  it('Object type call — Object-stored function observes capture-time binding', async () => {
+    await expectBehavior(script, { input: { id: '3', op: 'constructLive', from: 'c' } }, { output: { id: '3', 'ty': ['Integer'], re: [10], to: 'c' } });
+  });
+
+  it('Object type call — Object(a, b) from typed locals carries types through', async () => {
+    await expectBehavior(script, { input: { id: '4', op: [[3, 4], 'constructTyped'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '4', 'ty': ['Integer', 'Integer'], re: [3, 4], to: 'c' } });
+  });
+
+  it('Object type call — Object(k: v as Type, ...) builds named object', async () => {
+    await expectBehavior(script, { input: { id: '5', op: 'constructNamed', from: 'c' } }, { output: { id: '5', re: { a: 'alpha', b: 'beta' }, to: 'c' } });
+  });
+
+  it('Object type call — Object(v as Type, k: v as Type) builds mixed object', async () => {
+    await expectBehavior(script, { input: { id: '6', op: 'constructMixed', from: 'c' } }, { output: { id: '6', re: [1, 2, { x: 'extra' }], to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Object return — ty coercion
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   // Returning a sole Object spreads it (see functions/return_object.test.js).
-  it('single-arity Object returns its positional', async () => {
+  it('Object return — ty coercion — single-arity Object returns its positional', async () => {
     await expectBehavior(script, { input: { id: '1', op: 'rawStructureOneArity', from: 'c' } }, { output: expect.objectContaining({ id: '1', re: [100], to: 'c' }) });
   });
 
-  it('two-arity Object returns its positionals', async () => {
+  it('Object return — ty coercion — two-arity Object returns its positionals', async () => {
     await expectBehavior(script, { input: { id: '2', op: 'rawStructureTwoArity', from: 'c' } }, { output: expect.objectContaining({ id: '2', re: [100, 200], to: 'c' }) });
   });
 });

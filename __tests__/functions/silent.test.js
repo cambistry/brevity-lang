@@ -1,11 +1,8 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Silent public functions + type matching
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('silent public functions + type matching', () => {
+describe('silent functions — runtime', () => {
   const script = `
+    // silent public functions + type matching
     --- silent public functions: inline and lineal forms ---
 
     @notify. = (msg: Text) {}
@@ -32,50 +29,8 @@ describe('silent public functions + type matching', () => {
       return answer: "ok"
 
     fire. = {}
-  `;
 
-  it('replying function still works alongside silent function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
-    );
-  });
-
-  it('overloaded — Text message gets reply', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: [[{ msg: 'hello' }], 'overloaded'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
-    );
-  });
-
-  it('spawn + silent private function — reply ok', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'spawnTest!', from: 'c' } },
-      { output: { id: '3', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
-    );
-  });
-
-  it('type mismatch → unhandled', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: [[{ msg: 42 }], 'notify.'], 'ty': [[{ msg: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', ex: { 'notify.': 'unhandled' }, to: 'c' } },
-    );
-  });
-
-  it('unhandled op is still distinguished from silent function', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: 'unknown', from: 'c' } },
-      { output: { id: '5', ex: { 'unknown': 'unhandled' }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Stateful silent functions + silent lambdas
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('stateful silent functions + lambdas', () => {
-  const script = `
+    // stateful silent functions + lambdas
     last *Text = ""
     lastInt *Integer = 0
     a *Integer = 0
@@ -121,9 +76,63 @@ describe('stateful silent functions + lambdas', () => {
       apply! = (x) { a <- x . }
       apply!(77)
       return a: a
+
+    // silent function — empty lineal body
+    @spaciousEmpty!
+      =
+      spawn fireEmpty.()
+      return answer: "ok"
+
+    fireEmpty.
+      =
+
+    @after = -> 1
   `;
 
-  it('dot on same line — store is silent, state persists', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Silent public functions + type matching
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('silent public functions + type matching — replying function still works alongside silent function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
+      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+    );
+  });
+
+  it('silent public functions + type matching — overloaded — Text message gets reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[{ msg: 'hello' }], 'overloaded'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
+      { output: { id: '2', 'ty': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
+    );
+  });
+
+  it('silent public functions + type matching — spawn + silent private function — reply ok', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'spawnTest!', from: 'c' } },
+      { output: { id: '3', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+    );
+  });
+
+  it('silent public functions + type matching — type mismatch → unhandled', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: [[{ msg: 42 }], 'notify.'], 'ty': [[{ msg: 'Integer' }]], from: 'c' } },
+      { output: { id: '4', ex: { 'notify.': 'unhandled' }, to: 'c' } },
+    );
+  });
+
+  it('silent public functions + type matching — unhandled op is still distinguished from silent function', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'unknown', from: 'c' } },
+      { output: { id: '5', ex: { 'unknown': 'unhandled' }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Stateful silent functions + silent lambdas
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('stateful silent functions + lambdas — dot on same line — store is silent, state persists', async () => {
     await expectBehavior(script,
       { input: { id: 's1', op: [[{ msg: 'hello' }], 'store.'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
       { input: { id: 'c1', op: 'check', from: 'c' } },
@@ -131,32 +140,52 @@ describe('stateful silent functions + lambdas', () => {
     );
   });
 
-  it('lambda — inline same line', async () => {
+  it('stateful silent functions + lambdas — lambda — inline same line', async () => {
     await expectBehavior(script,
       { input: { id: 'l1', op: 'lambdaInline!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l1', re: [42], to: 'c' }) },
     );
   });
 
-  it('lambda — inline next line', async () => {
+  it('stateful silent functions + lambdas — lambda — inline next line', async () => {
     await expectBehavior(script,
       { input: { id: 'l2', op: 'lambdaNextLine!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l2', re: [99], to: 'c' }) },
     );
   });
 
-  it('lambda — curly brace body', async () => {
+  it('stateful silent functions + lambdas — lambda — curly brace body', async () => {
     await expectBehavior(script,
       { input: { id: 'l3', op: 'lambdaCurly!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }) },
     );
   });
 
-  it('lambda — curly brace single line', async () => {
+  it('stateful silent functions + lambdas — lambda — curly brace single line', async () => {
     await expectBehavior(script,
       { input: { id: 'l4', op: 'lambdaCurlySingle!', from: 'c' } },
       { output: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }) },
     );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Empty lineal silent body: the blank line after `=` ends it
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('silent function — empty lineal body — lineal private function — empty body is silent', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'spaciousEmpty!', from: 'c' } },
+      { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+    );
+  });
+
+  it('silent function — empty lineal body — `-> .` in a named function is an error naming the fix', () => {
+    expect(() => compileSource(`
+      fireArrow
+        =
+        -> .
+      @go = -> 1
+    `)).toThrow(/name it 'fireArrow\.' and drop the '\.'/);
   });
 });
 
@@ -184,41 +213,6 @@ describe('silent private — side-effect spawn with __tick__', () => {
     );
   });
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Empty lineal silent body: the blank line after `=` ends it
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('silent function — empty lineal body', () => {
-  const script = `
-    @spaciousEmpty!
-      =
-      spawn fireEmpty.()
-      return answer: "ok"
-
-    fireEmpty.
-      =
-
-    @after = -> 1
-  `;
-
-  it('lineal private function — empty body is silent', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'spaciousEmpty!', from: 'c' } },
-      { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
-    );
-  });
-
-  it('`-> .` in a named function is an error naming the fix', () => {
-    expect(() => compileSource(`
-      fireArrow
-        =
-        -> .
-      @go = -> 1
-    `)).toThrow(/name it 'fireArrow\.' and drop the '\.'/);
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Compile errors
 // ═══════════════════════════════════════════════════════════════════════════════

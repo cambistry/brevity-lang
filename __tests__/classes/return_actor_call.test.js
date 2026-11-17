@@ -1,9 +1,12 @@
 import { expectBehavior } from '../helpers.js';
 
-// Returning a call on an actor waits for its reply, as a bind does.
-
-describe('returning a call on an instance', () => {
+describe('returning an actor call — runtime', () => {
   const script = `
+    **
+      "svc": Svc { t () -> (Integer) }
+    **
+
+    // returning a call on an instance
     @Box = *{
       n *Integer = 5
       @one = { return 1 }
@@ -67,84 +70,100 @@ describe('returning a call on an instance', () => {
       b = @Box()
       return b.one() as Integer
     }
+
+    // returning a call on a remote
+    @go = {
+      return Svc.t()
+    }
   `;
 
-  it('replies with its value', async () => {
+  // Returning a call on an actor waits for its reply, as a bind does.
+
+  it('returning a call on an instance — replies with its value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'sole', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('on an instance constructed in place', async () => {
+  it('returning a call on an instance — on an instance constructed in place', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'constructed', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('keeps several positionals', async () => {
+  it('returning a call on an instance — keeps several positionals', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'several', from: 'c' } },
       { output: { id: '1', re: [1, 2], to: 'c' } },
     );
   });
-  it('keeps a named reply', async () => {
+  it('returning a call on an instance — keeps a named reply', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'wholeNamed', from: 'c' } },
       { output: { id: '1', re: { a: 1 }, to: 'c' } },
     );
   });
-  it('passes args', async () => {
+  it('returning a call on an instance — passes args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'withArg', from: 'c' } },
       { output: { id: '1', re: [5], to: 'c' } },
     );
   });
-  it('tags the reply with nothing from the request', async () => {
+  it('returning a call on an instance — tags the reply with nothing from the request', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [['x'], 'withParam'], 'ty': [['Text']], from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('follows a chain', async () => {
+  it('returning a call on an instance — follows a chain', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'chained', from: 'c' } },
       { output: { id: '1', re: [6], to: 'c' } },
     );
   });
-  it('takes the sole value beside another field', async () => {
+  it('returning a call on an instance — takes the sole value beside another field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'oneOfTwo', from: 'c' } },
       { output: { id: '1', re: [1, 2], to: 'c' } },
     );
   });
-  it('takes the sole value in a named field', async () => {
+  it('returning a call on an instance — takes the sole value in a named field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'namedField', from: 'c' } },
       { output: { id: '1', re: { z: 1 }, to: 'c' } },
     );
   });
-  it('as a tail expression', async () => {
+  it('returning a call on an instance — as a tail expression', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'tail', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('bound as Object first', async () => {
+  it('returning a call on an instance — bound as Object first', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'object', from: 'c' } },
       { output: { id: '1', re: [1], to: 'c' } },
     );
   });
-  it('bound as Object first, named', async () => {
+  it('returning a call on an instance — bound as Object first, named', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'objectNamed', from: 'c' } },
       { output: { id: '1', re: { a: 1 }, to: 'c' } },
     );
   });
-  it('with an as', async () => {
+  it('returning a call on an instance — with an as', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'typed', from: 'c' } },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('returning a call on a remote — waits for the reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '99', op: 'go', from: 'c' } },
+      { output: expect.objectContaining({ op: 't', to: 'Svc' }) },
+      { input: { id: '1', re: [7], 'ty': ['Integer'] } },
+      { output: expect.objectContaining({ id: '99', re: [7], to: 'c' }) },
     );
   });
 });
@@ -267,26 +286,6 @@ describe('a call on an instance inside a branch', () => {
     await expectBehavior(failing,
       { input: { id: '1', op: [[true], 'go'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', ex: { 'go': 'error' }, to: 'c' } },
-    );
-  });
-});
-
-describe('returning a call on a remote', () => {
-  const script = `
-    **
-      "svc": Svc { t () -> (Integer) }
-    **
-    @go = {
-      return Svc.t()
-    }
-  `;
-
-  it('waits for the reply', async () => {
-    await expectBehavior(script,
-      { input: { id: '99', op: 'go', from: 'c' } },
-      { output: expect.objectContaining({ op: 't', to: 'Svc' }) },
-      { input: { id: '1', re: [7], 'ty': ['Integer'] } },
-      { output: expect.objectContaining({ id: '99', re: [7], to: 'c' }) },
     );
   });
 });

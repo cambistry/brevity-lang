@@ -84,6 +84,9 @@ export function checkEffects(ast, remotesParsed = {}) {
     const untrackedNames = new Set(
       [...(actor.stateVarDecls || []), ...(actor.functions || [])].filter(d => d.untracked).map(d => d.name.replace(/^@/, '')),
     );
+    // A cell is named exactly: `log` and `@log` are different cells, so an untracked
+    // `@log` doesn't make a write to `log` untracked.
+    const untrackedCells = new Set((actor.stateVarDecls || []).filter(d => d.untracked).map(d => d.name));
     const stateNames = new Set((actor.stateVarDecls || []).map(d => d.name.replace(/^@/, '')));
     const functions = functionsOf(actor);
     const claimed = claimedByActor.get(actor);
@@ -169,7 +172,7 @@ export function checkEffects(ast, remotesParsed = {}) {
         }
         case 'SetStatement':
         case 'ActorSetStatement':
-          if (!scope.locals.has(node.name) && !untrackedNames.has(node.name.replace(/^@/, ''))) {
+          if (!scope.locals.has(node.name) && !untrackedCells.has(node.name)) {
             scope.write(`${node.name} ${node.updateOp || '<-'} …`);
           }
           escapeNames(node.value ?? node.args, scope);

@@ -79,138 +79,133 @@ describe('type matching — positional params', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Mixed params + ...args
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('type matching — mixed params + ...args', () => {
+describe('type matching — runtime', () => {
   const script = `
+    // type matching — mixed params + ...args
     @mash = (a Integer, b Integer, label: Text) -> result: a + b
     @import = (...args) ->(...args)
+
+    // type matching — overloading
+    @greet = (name: Integer) -> msg: "number"
+    @greet << (name: Text) -> msg: "text"
+
+    // type matching — key-mapped params
+    @lettersTwo = (a: alpha Text, b: beta Integer) -> result: alpha
+    @mashKeyed = (x Integer, a: alpha Text) -> result: x
+    @lettersSigil = (a: alpha Text, c: Integer) -> result: alpha
   `;
 
-  it('mixed positional + named match dispatches', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Mixed params + ...args
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('type matching — mixed params + ...args — mixed positional + named match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3, 4, { label: 'hi' }], 'mash'], 'ty': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
-  it('mixed — positional type mismatch → unhandled', async () => {
+  it('type matching — mixed params + ...args — mixed — positional type mismatch → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [['x', 'y', { label: 'hi' }], 'mash'], 'ty': [['Text', 'Text', { label: 'Text' }]], from: 'c' } },
       { output: { id: '2', ex: { 'mash': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('mixed — named type mismatch → unhandled', async () => {
+  it('type matching — mixed params + ...args — mixed — named type mismatch → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[3, 4, { label: 42 }], 'mash'], 'ty': [['Integer', 'Integer', { label: 'Integer' }]], from: 'c' } },
       { output: { id: '3', ex: { 'mash': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('...args matches named payload with ty', async () => {
+  it('type matching — mixed params + ...args — ...args matches named payload with ty', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ x: 1 }], 'import'], 'ty': [[{ x: 'Integer' }]], from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
     );
   });
 
-  it('...args without ty → schema_required', async () => {
+  it('type matching — mixed params + ...args — ...args without ty → schema_required', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: [[{ x: 1 }], 'import'], from: 'c' } },
       { output: { id: '5', ex: { 'import': 'schema_required' }, to: 'c' } },
     );
   });
-});
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Overloading (same op, different types)
-// ═══════════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Overloading (same op, different types)
+  // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('type matching — overloading', () => {
-  const script = `
-    @greet = (name: Integer) -> msg: "number"
-    @greet << (name: Text) -> msg: "text"
-  `;
-
-  it('Integer message routes to first overload', async () => {
+  it('type matching — overloading — Integer message routes to first overload', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ name: 42 }], 'greet'], 'ty': [[{ name: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { msg: 'Text' }, re: { msg: 'number' }, to: 'c' } },
     );
   });
 
-  it('Text message routes to second overload', async () => {
+  it('type matching — overloading — Text message routes to second overload', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ name: 'Alice' }], 'greet'], 'ty': [[{ name: 'Text' }]], from: 'c' } },
       { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'text' }, to: 'c' } },
     );
   });
 
-  it('Boolean message → unhandled (no matching overload)', async () => {
+  it('type matching — overloading — Boolean message → unhandled (no matching overload)', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[{ name: true }], 'greet'], 'ty': [[{ name: 'Boolean' }]], from: 'c' } },
       { output: { id: '3', ex: { 'greet': 'unhandled' }, to: 'c' } },
     );
   });
-});
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Key-mapped (longhand) named params
-// ═══════════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Key-mapped (longhand) named params
+  // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('type matching — key-mapped params', () => {
-  const script = `
-    @lettersTwo = (a: alpha Text, b: beta Integer) -> result: alpha
-    @mashKeyed = (x Integer, a: alpha Text) -> result: x
-    @lettersSigil = (a: alpha Text, c: Integer) -> result: alpha
-  `;
-
-  it('exact key-mapped match dispatches', async () => {
+  it('type matching — key-mapped params — exact key-mapped match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ a: 'hello', b: 42 }], 'lettersTwo'], 'ty': [[{ a: 'Text', b: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
     );
   });
 
-  it('key-mapped type mismatch → unhandled', async () => {
+  it('type matching — key-mapped params — key-mapped type mismatch → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ a: 'hello', b: 'nope' }], 'lettersTwo'], 'ty': [[{ a: 'Text', b: 'Text' }]], from: 'c' } },
       { output: { id: '2', ex: { 'lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('key-mapped missing key → unhandled', async () => {
+  it('type matching — key-mapped params — key-mapped missing key → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[{ a: 'hello' }], 'lettersTwo'], 'ty': [[{ a: 'Text' }]], from: 'c' } },
       { output: { id: '3', ex: { 'lettersTwo': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('key-mapped + positional match dispatches', async () => {
+  it('type matching — key-mapped params — key-mapped + positional match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[7, { a: 'hi' }], 'mashKeyed'], 'ty': [['Integer', { a: 'Text' }]], from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
     );
   });
 
-  it('key-mapped + positional — positional type mismatch → unhandled', async () => {
+  it('type matching — key-mapped params — key-mapped + positional — positional type mismatch → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: [['nope', { a: 'hi' }], 'mashKeyed'], 'ty': [['Text', { a: 'Text' }]], from: 'c' } },
       { output: { id: '5', ex: { 'mashKeyed': 'unhandled' }, to: 'c' } },
     );
   });
 
-  it('key-mapped + sigil shorthand match dispatches', async () => {
+  it('type matching — key-mapped params — key-mapped + sigil shorthand match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: [[{ a: 'hi', c: 5 }], 'lettersSigil'], 'ty': [[{ a: 'Text', c: 'Integer' }]], from: 'c' } },
       { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
     );
   });
 
-  it('key-mapped + sigil — sigil type mismatch → unhandled', async () => {
+  it('type matching — key-mapped params — key-mapped + sigil — sigil type mismatch → unhandled', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: [[{ a: 'hi', c: 'nope' }], 'lettersSigil'], 'ty': [[{ a: 'Text', c: 'Text' }]], from: 'c' } },
       { output: { id: '7', ex: { 'lettersSigil': 'unhandled' }, to: 'c' } },

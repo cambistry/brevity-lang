@@ -33,10 +33,9 @@ describe('private functions — compilation', () => {
   });
 });
 
-// ── Runtime: file-level actor ────────────────────────────────────────────────
-
-describe('private functions — file-level actor — runtime', () => {
+describe('private functions — runtime', () => {
   const script = `
+    // private functions — file-level actor — runtime
     #secret = -> result: 42
     #greeting = -> result: "hello"
 
@@ -54,34 +53,8 @@ describe('private functions — file-level actor — runtime', () => {
       result: Integer = #secret()
       return result: (result + 8)
     }
-  `;
 
-  it('file-level private returns value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'testSecret', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
-
-  it('file-level private returns text', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'testGreeting', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
-    );
-  });
-
-  it('file-level private used in expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'testCompose', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 50 }, to: 'c' } },
-    );
-  });
-});
-
-// ── Runtime: named class ─────────────────────────────────────────────────────
-
-describe('private functions — named class — runtime', () => {
-  const script = `
+    // private functions — named class — runtime
     T = * {
       #x = { 10 }
       #y = { 20 }
@@ -93,12 +66,65 @@ describe('private functions — named class — runtime', () => {
       t = T()
       :result Integer = t.sum()
       return :result
+
+    // private functions — inside function — runtime
+    @testLocal = {
+      #value = { "ten" }
+      return result: (#value() + "") as Text
+    }
+
+    @testLocalCompose = {
+      #a = { 3 }
+      #b = { 7 }
+      return result: (#a() + #b()) as Integer
+    }
   `;
 
-  it('private functions within type are callable by public functions', async () => {
+  // ── Runtime: file-level actor ────────────────────────────────────────────────
+
+  it('private functions — file-level actor — runtime — file-level private returns value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'testSecret', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('private functions — file-level actor — runtime — file-level private returns text', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'testGreeting', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+    );
+  });
+
+  it('private functions — file-level actor — runtime — file-level private used in expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'testCompose', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 50 }, to: 'c' } },
+    );
+  });
+
+  // ── Runtime: named class ─────────────────────────────────────────────────────
+
+  it('private functions — named class — runtime — private functions within type are callable by public functions', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'test', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
+    );
+  });
+
+  // ── Runtime: inside non-class function ───────────────────────────────────────
+
+  it('private functions — inside function — runtime — private function scoped inside handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'testLocal', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'ten' }, to: 'c' } },
+    );
+  });
+
+  it('private functions — inside function — runtime — multiple private functions compose inside handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'testLocalCompose', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
     );
   });
 });
@@ -148,38 +174,6 @@ describe('private functions — forward references', () => {
     );
   });
 });
-
-// ── Runtime: inside non-class function ───────────────────────────────────────
-
-describe('private functions — inside function — runtime', () => {
-  const script = `
-    @testLocal = {
-      #value = { "ten" }
-      return result: (#value() + "") as Text
-    }
-
-    @testLocalCompose = {
-      #a = { 3 }
-      #b = { 7 }
-      return result: (#a() + #b()) as Integer
-    }
-  `;
-
-  it('private function scoped inside handler', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'testLocal', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'ten' }, to: 'c' } },
-    );
-  });
-
-  it('multiple private functions compose inside handler', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'testLocalCompose', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-});
-
 // ── Lineal forms ─────────────────────────────────────────────────────────────
 
 describe('private functions — lineal forms', () => {

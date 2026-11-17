@@ -1,15 +1,8 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Void-returning public functions — wire form is `re: []` (empty positional reply).
-// Two surface forms produce it:
-//   (a) empty body block        `{}`
-//   (b) empty object value   `()`     (with or without explicit `->`)
-// Both yield the unassignable type `()`.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('void return — public functions, empty body {}', () => {
+describe('void return — runtime', () => {
   const script = `
+    // void return — public functions, empty body {}
     --- delimited inline ---
 
     @inlineEmpty = () { }
@@ -19,25 +12,8 @@ describe('void return — public functions, empty body {}', () => {
     @linealHeaderEmpty
       =
       { }
-  `;
 
-  it('inline delimited empty body — () { } replies re: []', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'inlineEmpty', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
-    );
-  });
-
-  it('lineal header, empty {} body replies re: []', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'linealHeaderEmpty', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
-    );
-  });
-});
-
-describe('void return — public functions, () as tail value', () => {
-  const script = `
+    // void return — public functions, () as tail value
     --- delimited body, implicit () tail ---
 
     @delimImplicit = () { () }
@@ -71,66 +47,8 @@ describe('void return — public functions, () as tail value', () => {
     @linealTight
       =
       ->()
-  `;
 
-  it('delimited body, implicit () tail', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'delimImplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
-    );
-  });
-
-  it('delimited body, explicit -> ()', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'delimExplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
-    );
-  });
-
-  it('delimited body, ->() no space', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'delimTight', from: 'c' } },
-      { output: expect.objectContaining({ id: '3', re: [], to: 'c' }) },
-    );
-  });
-
-  it('single-line inline -> ()', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'inlineArrow', from: 'c' } },
-      { output: expect.objectContaining({ id: '4', re: [], to: 'c' }) },
-    );
-  });
-
-  it('lineal body, implicit () tail', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: 'linealImplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '5', re: [], to: 'c' }) },
-    );
-  });
-
-  it('lineal body, explicit -> ()', async () => {
-    await expectBehavior(script,
-      { input: { id: '6', op: 'linealExplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '6', re: [], to: 'c' }) },
-    );
-  });
-
-  it('lineal body, ->() no space', async () => {
-    await expectBehavior(script,
-      { input: { id: '7', op: 'linealTight', from: 'c' } },
-      { output: expect.objectContaining({ id: '7', re: [], to: 'c' }) },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Private (lambda / lineal) functions — same forms, called from a wrapper handler.
-// The wrapper discards the void result (you cannot bind it) and replies with "ok"
-// so we can assert the call completed cleanly.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('void return — private functions, empty body {}', () => {
-  const script = `
+    // void return — private functions, empty body {}
     @callEmptyLambda
       =
       fn = () { }
@@ -138,7 +56,84 @@ describe('void return — private functions, empty body {}', () => {
       return ack: "ok"
   `;
 
-  it('private lambda with empty body — call completes', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Void-returning public functions — wire form is `re: []` (empty positional reply).
+  // Two surface forms produce it:
+  //   (a) empty body block        `{}`
+  //   (b) empty object value   `()`     (with or without explicit `->`)
+  // Both yield the unassignable type `()`.
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('void return — public functions, empty body {} — inline delimited empty body — () { } replies re: []', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'inlineEmpty', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, empty body {} — lineal header, empty {} body replies re: []', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'linealHeaderEmpty', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — delimited body, implicit () tail', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'delimImplicit', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — delimited body, explicit -> ()', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'delimExplicit', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — delimited body, ->() no space', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'delimTight', from: 'c' } },
+      { output: expect.objectContaining({ id: '3', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — single-line inline -> ()', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'inlineArrow', from: 'c' } },
+      { output: expect.objectContaining({ id: '4', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — lineal body, implicit () tail', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'linealImplicit', from: 'c' } },
+      { output: expect.objectContaining({ id: '5', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — lineal body, explicit -> ()', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: 'linealExplicit', from: 'c' } },
+      { output: expect.objectContaining({ id: '6', re: [], to: 'c' }) },
+    );
+  });
+
+  it('void return — public functions, () as tail value — lineal body, ->() no space', async () => {
+    await expectBehavior(script,
+      { input: { id: '7', op: 'linealTight', from: 'c' } },
+      { output: expect.objectContaining({ id: '7', re: [], to: 'c' }) },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Private (lambda / lineal) functions — same forms, called from a wrapper handler.
+  // The wrapper discards the void result (you cannot bind it) and replies with "ok"
+  // so we can assert the call completed cleanly.
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('void return — private functions, empty body {} — private lambda with empty body — call completes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'callEmptyLambda', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'c' }) },

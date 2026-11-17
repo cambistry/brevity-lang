@@ -1,7 +1,8 @@
 import { expectBehavior } from '../helpers.js';
 
-describe('test.op — public function', () => {
+describe('test.op — runtime', () => {
   const script = `
+    // test.op — public function
     x *Integer = 0
 
     @inc!
@@ -10,22 +11,8 @@ describe('test.op — public function', () => {
       return :x
 
     @get = -> :x
-  `;
 
-  it('dispatches public function', async () => {
-    await expectBehavior(script,
-      { input:  { id: '1', test: { op: 'inc!' }, from: 't' } },
-      { input:  { id: '2', test: { op: 'inc!' }, from: 't' } },
-      { input:  { id: '3', test: { op: 'get' }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
-      { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
-      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },
-    );
-  });
-});
-
-describe('test.op — private function', () => {
-  const script = `
+    // test.op — private function
     double
       =
       n Integer
@@ -38,29 +25,38 @@ describe('test.op — private function', () => {
       =
       result Integer = double(n)
       return :result
-  `;
 
-  it('dispatches private function directly', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', test: { op: [[5], '~double'] }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', re: [10] }) },
-    );
-  });
-});
-
-describe('test.op — with args', () => {
-  const script = `
-    x *Integer = 0
-
+    // test.op — with args (shares x)
     @add!
       =
       n: Integer
       =
       x <- x + n
       return :x
+
+    // test.op — bypasses schema validation
+    @echo = (msg: Text) -> :msg
   `;
 
-  it('passes args to op', async () => {
+  it('test.op — public function — dispatches public function', async () => {
+    await expectBehavior(script,
+      { input:  { id: '1', test: { op: 'inc!' }, from: 't' } },
+      { input:  { id: '2', test: { op: 'inc!' }, from: 't' } },
+      { input:  { id: '3', test: { op: 'get' }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
+      { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
+      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },
+    );
+  });
+
+  it('test.op — private function — dispatches private function directly', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { op: [[5], '~double'] }, from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: [10] }) },
+    );
+  });
+
+  it('test.op — with args — passes args to op', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: [[{ n: 3 }], 'add!'] }, from: 't' } },
       { input: { id: '2', test: { op: [[{ n: 7 }], 'add!'] }, from: 't' } },
@@ -70,14 +66,8 @@ describe('test.op — with args', () => {
       { output: { id: '3', 'ty': 'Integer', re: 10, to: 't' } },
     );
   });
-});
 
-describe('test.op — bypasses schema validation', () => {
-  const script = `
-    @echo = (msg: Text) -> :msg
-  `;
-
-  it('no ty required', async () => {
+  it('test.op — bypasses schema validation — no ty required', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: [[{ msg: 'hello' }], 'echo'] }, from: 't' } },
       { output: expect.objectContaining({ id: '1', re: { msg: 'hello' } }) },

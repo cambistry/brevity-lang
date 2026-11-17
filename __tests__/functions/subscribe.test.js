@@ -1,27 +1,12 @@
 import { expectBehavior, createActor } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Subscribe on functions and closures — same multi-re protocol as cells.
-//
-// Public (@), private (#), and parameterized functions are auto-provisioned
-// with @subscribe. Subscribers receive an initial `re` (current computed
-// value) and subsequent `re`s whenever any `*` ref captured by the body
-// changes. Parameterized fns carry the caller's args on the subscribe; each
-// (subscriber, args) tuple is its own subscription on the publisher side.
-//
-// Type disambiguator on the wire (`subscribe@pub<Type>`) only appears when the
-// publisher casts as multiple types and the caller must pick one. In the
-// single-projection cases exercised here, the service interface resolves the
-// shape on both ends and no inlined <Type> is emitted.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── Section 1 ─────────────────────────────────────────────────────────────────
-// In-file: single actor subscribes to its own @-public, #-private, and
-// parameterized fns. Behavior-only — no wire assertions.
-// ───────────────────────────────────────────────────────────────────────────────
-
-describe('subscribe — in-file fns', () => {
+describe('subscribe — runtime', () => {
   const script = `
+    **
+      "Pub": Pub { pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
+    **
+
+    // subscribe — in-file fns
     body *Integer = 0
 
     @pub = { body * 2 }
@@ -43,9 +28,50 @@ describe('subscribe — in-file fns', () => {
     @readAll
       =
       -> :lastPub as Integer, :lastPriv as Integer, :lastParam as Integer
+
+    // subscribe — in-script fns (local child actor)
+    C = * {
+      @body *Integer = 0
+      @pub = { @body * 2 }
+      @pub_w_params = (p: Integer) { @body + p }
+    }
+
+    c = C()
+    last *Integer = 0
+
+    @doPubSub.   = { c.pub.subscribe (v) { last <- v } }
+    @doParamSub. = { c.pub_w_params.subscribe(p: 100) (v) { last <- v } }
+    @bumpC.      = (n: Integer) { c.body <- n }
+    @readLast   = -> :last as Integer
+
+    // subscribe — remote fn (stubbed publisher)
+
+    @doPubSub3.   = { Pub.pub.subscribe (v) { last <- v } }
+    @doParamSub3. = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } }
+
   `;
 
-  it('initial subscribe captures each fn\'s current projected value', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Subscribe on functions and closures — same multi-re protocol as cells.
+  //
+  // Public (@), private (#), and parameterized functions are auto-provisioned
+  // with @subscribe. Subscribers receive an initial `re` (current computed
+  // value) and subsequent `re`s whenever any `*` ref captured by the body
+  // changes. Parameterized fns carry the caller's args on the subscribe; each
+  // (subscriber, args) tuple is its own subscription on the publisher side.
+  //
+  // Type disambiguator on the wire (`subscribe@pub<Type>`) only appears when the
+  // publisher casts as multiple types and the caller must pick one. In the
+  // single-projection cases exercised here, the service interface resolves the
+  // shape on both ends and no inlined <Type> is emitted.
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // ─── Section 1 ─────────────────────────────────────────────────────────────────
+  // In-file: single actor subscribes to its own @-public, #-private, and
+  // parameterized fns. Behavior-only — no wire assertions.
+  // ───────────────────────────────────────────────────────────────────────────────
+
+  it('subscribe — in-file fns — initial subscribe captures each fn\'s current projected value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doSubs.', from: 'c' } },
       { input: { id: '2', op: 'readAll', from: 'c' } },
@@ -58,7 +84,7 @@ describe('subscribe — in-file fns', () => {
     );
   });
 
-  it('set on captured ref replays to every subscription', async () => {
+  it('subscribe — in-file fns — set on captured ref replays to every subscription', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doSubs.', from: 'c' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bump.'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
@@ -72,7 +98,7 @@ describe('subscribe — in-file fns', () => {
     );
   });
 
-  it('parameterized subscription uses its own captured args on each re', async () => {
+  it('subscribe — in-file fns — parameterized subscription uses its own captured args on each re', async () => {
     // Two subscriptions to the same parameterized fn with different prefixes.
     // Each must re-evaluate against its own args on dep change.
     const twoSubsScript = `
@@ -105,31 +131,13 @@ describe('subscribe — in-file fns', () => {
       } },
     );
   });
-});
 
-// ─── Section 2 ─────────────────────────────────────────────────────────────────
-// In-script: parent actor subscribes to a locally-declared child's public fns.
-// Behavior-only; matches the existing cell call-site test style.
-// ───────────────────────────────────────────────────────────────────────────────
+  // ─── Section 2 ─────────────────────────────────────────────────────────────────
+  // In-script: parent actor subscribes to a locally-declared child's public fns.
+  // Behavior-only; matches the existing cell call-site test style.
+  // ───────────────────────────────────────────────────────────────────────────────
 
-describe('subscribe — in-script fns (local child actor)', () => {
-  const script = `
-    C = * {
-      @body *Integer = 0
-      @pub = { @body * 2 }
-      @pub_w_params = (p: Integer) { @body + p }
-    }
-
-    c = C()
-    last *Integer = 0
-
-    @doPubSub.   = { c.pub.subscribe (v) { last <- v } }
-    @doParamSub. = { c.pub_w_params.subscribe(p: 100) (v) { last <- v } }
-    @bumpC.      = (n: Integer) { c.body <- n }
-    @readLast   = -> :last as Integer
-  `;
-
-  it('c.pub.subscribe — initial value after subscribe', async () => {
+  it('subscribe — in-script fns (local child actor) — c.pub.subscribe — initial value after subscribe', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
@@ -137,7 +145,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
     );
   });
 
-  it('c.pub.subscribe — replays on set of captured body ref', async () => {
+  it('subscribe — in-script fns (local child actor) — c.pub.subscribe — replays on set of captured body ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
@@ -146,7 +154,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
     );
   });
 
-  it('c.pub_w_params.subscribe(p: 100) — initial evaluation uses caller args', async () => {
+  it('subscribe — in-script fns (local child actor) — c.pub_w_params.subscribe(p: 100) — initial evaluation uses caller args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
@@ -154,7 +162,7 @@ describe('subscribe — in-script fns (local child actor)', () => {
     );
   });
 
-  it('c.pub_w_params.subscribe — replays with stored args on dep change', async () => {
+  it('subscribe — in-script fns (local child actor) — c.pub_w_params.subscribe — replays with stored args on dep change', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
@@ -162,40 +170,26 @@ describe('subscribe — in-script fns (local child actor)', () => {
       { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
     );
   });
-});
 
-// ─── Section 3 ─────────────────────────────────────────────────────────────────
-// Remote with stubbed publisher — subscriber imports via DI alias. Tests capture
-// the outbound `subscribe@<field>` on the wire, inject stubbed `re` replies,
-// and verify subscriber state.
-// ───────────────────────────────────────────────────────────────────────────────
+  // ─── Section 3 ─────────────────────────────────────────────────────────────────
+  // Remote with stubbed publisher — subscriber imports via DI alias. Tests capture
+  // the outbound `subscribe@<field>` on the wire, inject stubbed `re` replies,
+  // and verify subscriber state.
+  // ───────────────────────────────────────────────────────────────────────────────
 
-describe('subscribe — remote fn (stubbed publisher)', () => {
-  const script = `
-    **
-      "Pub": Pub { pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
-    **
-
-    last *Integer = 0
-
-    @doPubSub.   = { Pub.pub.subscribe (v) { last <- v } }
-    @doParamSub. = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } }
-    @readLast   = -> :last as Integer
-  `;
-
-  it('subscribe@pub posted to Pub alias, no inline <Type> for single projection', async () => {
+  it('subscribe — remote fn (stubbed publisher) — subscribe@pub posted to Pub alias, no inline <Type> for single projection', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
         { output: expect.objectContaining({ op: '$subscribe', to: '#<Pub:pub>' }) },
       ],
     });
   });
 
-  it('parameterized subscribe carries args in op prefix', async () => {
+  it('subscribe — remote fn (stubbed publisher) — parameterized subscribe carries args in op prefix', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doParamSub3.', from: 'caller' } },
         { output: expect.objectContaining({
           op: [[{ p: 100 }], '$subscribe'],
           'ty': [[{ p: 'Integer' }]],
@@ -205,10 +199,10 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     });
   });
 
-  it('stubbed initial re drives subscriber state', async () => {
+  it('subscribe — remote fn (stubbed publisher) — stubbed initial re drives subscriber state', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
         { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub:pub>' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
@@ -217,10 +211,10 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     });
   });
 
-  it('stubbed later re replays to subscriber handler', async () => {
+  it('subscribe — remote fn (stubbed publisher) — stubbed later re replays to subscriber handler', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
         { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub:pub>' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [10] } },
@@ -231,10 +225,10 @@ describe('subscribe — remote fn (stubbed publisher)', () => {
     });
   });
 
-  it('parameterized: stubbed re propagates through handler', async () => {
+  it('subscribe — remote fn (stubbed publisher) — parameterized: stubbed re propagates through handler', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
+        { input: { id: '1', op: 'doParamSub3.', from: 'caller' } },
         { output: expect.objectContaining({
           id: '1',
           op: [[{ p: 100 }], '$subscribe'],

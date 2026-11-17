@@ -1,14 +1,8 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Phase 1 — bare void catch
-//
-// Spec: kanban/2 - features/CATCH.md §§1–8 (excluding §9 label references).
-// Void exits only; value-carrying form lands in Phase 2.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('catch — Phase 1: bare void exit', () => {
+describe('catch — runtime', () => {
   const script = `
+    // catch — Phase 1: bare void exit
     @simpleExit
       =
       x *Integer = 0
@@ -64,47 +58,8 @@ describe('catch — Phase 1: bare void exit', () => {
         }
       }
       return :x, :y
-  `;
 
-  it('exits a catch block from a single-line if', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'simpleExit', from: 'c' } },
-      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
-  });
-
-  it('exits from inside a repeat while loop', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'whileExit', from: 'c' } },
-      { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
-  });
-
-  it('accepts the empty-paren form #label()', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'parenForm', from: 'c' } },
-      { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } });
-  });
-
-  it('bare label invocation as a statement exits catch', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'bareInvocation', from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
-  });
-
-  it('exits both inner and outer loops when label targets the outer catch', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: 'nestedExit', from: 'c' } },
-      { output: { id: '5', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 3, y: 10 }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Phase 2 — value-carrying catch
-//
-// Spec §2.2, §3 (type safety), §7 (catch as expression).
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('catch — Phase 2: value-carrying exit', () => {
-  const script = `
+    // catch — Phase 2: value-carrying exit
     @found
       =
       result Integer = catch #f {
@@ -139,44 +94,8 @@ describe('catch — Phase 2: value-carrying exit', () => {
         if true #f(123)
         0
       }
-  `;
 
-  it('exits with a value via #label(expr)', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'found', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
-  });
-
-  it('falls through to the tail expression when label is not invoked', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'fallThrough', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
-  });
-
-  it('exits a repeat-while loop carrying the current value', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'inWhile', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
-  });
-
-  it('catch as the function-tail expression returns the value directly', async () => {
-    // Body's tail is `catch ... { ... }` with no `->`. ImplicitReturn(CatchExpr)
-    // routes through the value-carrying-catch return path.
-    await expectBehavior(script,
-      { input: { id: '4', op: 'directReturn', from: 'c' } },
-      { output: { id: '4', re: [123], to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Phase 3 — nested catch + multi-level exit
-//
-// Spec §4 (nested catch), §8 (scoping rules — strict shadowing already in
-// place from Phase 1).
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('catch — Phase 3: nested catch and multi-level exit', () => {
-  const script = `
+    // catch — Phase 3: nested catch and multi-level exit
     @innerExits
       =
       x *Integer = 0
@@ -226,42 +145,8 @@ describe('catch — Phase 3: nested catch and multi-level exit', () => {
         }
       }
       return :x
-  `;
 
-  it('inner exit returns to inner catch, then outer continues', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'innerExits', from: 'c' } },
-      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 11 }, to: 'c' } });
-  });
-
-  it('outer label fires from inside inner catch — skips inner cleanup', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'outerSkipsInner', from: 'c' } },
-      { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
-  });
-
-  it('value carries from inner-scope #outer through both catches', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'valueThroughNesting', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
-  });
-
-  it('inner catch with non-matching label lets outer throw bubble past', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'outerCatchesNoMatchInner', from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Phase 4 — block-label loop integration
-//
-// Spec §5: `#label <construct>` is sugar for `catch #label { construct }`.
-// Optional `end#label` validates the closing label name.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('catch — Phase 4: block-label syntax', () => {
-  const script = `
+    // catch — Phase 4: block-label syntax
     @blockRepeat
       =
       x *Integer = 0
@@ -314,31 +199,138 @@ describe('catch — Phase 4: block-label syntax', () => {
       return :x, :y
   `;
 
-  it('block label on repeat exits the loop', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Phase 1 — bare void catch
+  //
+  // Spec: kanban/2 - features/CATCH.md §§1–8 (excluding §9 label references).
+  // Void exits only; value-carrying form lands in Phase 2.
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('catch — Phase 1: bare void exit — exits a catch block from a single-line if', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'simpleExit', from: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
+  });
+
+  it('catch — Phase 1: bare void exit — exits from inside a repeat while loop', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'whileExit', from: 'c' } },
+      { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
+  });
+
+  it('catch — Phase 1: bare void exit — accepts the empty-paren form #label()', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'parenForm', from: 'c' } },
+      { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 7 }, to: 'c' } });
+  });
+
+  it('catch — Phase 1: bare void exit — bare label invocation as a statement exits catch', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'bareInvocation', from: 'c' } },
+      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
+  });
+
+  it('catch — Phase 1: bare void exit — exits both inner and outer loops when label targets the outer catch', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'nestedExit', from: 'c' } },
+      { output: { id: '5', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 3, y: 10 }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Phase 2 — value-carrying catch
+  //
+  // Spec §2.2, §3 (type safety), §7 (catch as expression).
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('catch — Phase 2: value-carrying exit — exits with a value via #label(expr)', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'found', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
+  });
+
+  it('catch — Phase 2: value-carrying exit — falls through to the tail expression when label is not invoked', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'fallThrough', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+  });
+
+  it('catch — Phase 2: value-carrying exit — exits a repeat-while loop carrying the current value', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'inWhile', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+  });
+
+  it('catch — Phase 2: value-carrying exit — catch as the function-tail expression returns the value directly', async () => {
+    // Body's tail is `catch ... { ... }` with no `->`. ImplicitReturn(CatchExpr)
+    // routes through the value-carrying-catch return path.
+    await expectBehavior(script,
+      { input: { id: '4', op: 'directReturn', from: 'c' } },
+      { output: { id: '4', re: [123], to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Phase 3 — nested catch + multi-level exit
+  //
+  // Spec §4 (nested catch), §8 (scoping rules — strict shadowing already in
+  // place from Phase 1).
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('catch — Phase 3: nested catch and multi-level exit — inner exit returns to inner catch, then outer continues', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'innerExits', from: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 11 }, to: 'c' } });
+  });
+
+  it('catch — Phase 3: nested catch and multi-level exit — outer label fires from inside inner catch — skips inner cleanup', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'outerSkipsInner', from: 'c' } },
+      { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } });
+  });
+
+  it('catch — Phase 3: nested catch and multi-level exit — value carries from inner-scope #outer through both catches', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'valueThroughNesting', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+  });
+
+  it('catch — Phase 3: nested catch and multi-level exit — inner catch with non-matching label lets outer throw bubble past', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'outerCatchesNoMatchInner', from: 'c' } },
+      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 0 }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Phase 4 — block-label loop integration
+  //
+  // Spec §5: `#label <construct>` is sugar for `catch #label { construct }`.
+  // Optional `end#label` validates the closing label name.
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('catch — Phase 4: block-label syntax — block label on repeat exits the loop', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'blockRepeat', from: 'c' } },
       { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 4 }, to: 'c' } });
   });
 
-  it('block label on a brace block acts like catch', async () => {
+  it('catch — Phase 4: block-label syntax — block label on a brace block acts like catch', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'blockBrace', from: 'c' } },
       { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } });
   });
 
-  it('matching end#label is consumed silently', async () => {
+  it('catch — Phase 4: block-label syntax — matching end#label is consumed silently', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'endLabelOk', from: 'c' } },
       { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 2 }, to: 'c' } });
   });
 
-  it('block-label brace form supports value-carrying exit', async () => {
+  it('catch — Phase 4: block-label syntax — block-label brace form supports value-carrying exit', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'blockValueCarrying', from: 'c' } },
       { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
-  it('nested block labels support multi-level exit', async () => {
+  it('catch — Phase 4: block-label syntax — nested block labels support multi-level exit', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'nestedBlockLabels', from: 'c' } },
       { output: { id: '6', 'ty': { x: 'Integer', y: 'Integer' }, re: { x: 3, y: 1 }, to: 'c' } });

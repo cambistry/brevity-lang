@@ -1,11 +1,8 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Boolean literals (truthiness)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Boolean literals', () => {
+describe('if — runtime', () => {
   const script = `
+    // Boolean literals
       @boolTrue = { result Integer = if true 1 else 0; return :result }
       @boolFalse = { result Integer = if false 1 else 0; return :result }
       @nullFalsy
@@ -17,43 +14,8 @@ describe('Boolean literals', () => {
         =
         result Integer = if 0 1 else 99
         return :result
-  `;
 
-  it('true literal is truthy', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'boolTrue', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('false literal is falsy', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'boolFalse', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
-    );
-  });
-
-  it('null is falsy', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'nullFalsy', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
-    );
-  });
-
-  it('0 (integer zero) is truthy', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'zeroTruthy', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Comparison operators
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('Comparison operators', () => {
-  const script = `
+    // Comparison operators
       @eqTrue
         =
         x Integer = 5
@@ -89,57 +51,8 @@ describe('Comparison operators', () => {
         x Integer = 5
         result Integer = if x <= 5 1 else 0
         return :result
-  `;
 
-  it('== true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'eqTrue', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('!= true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'neqTrue', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('> true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'gtTrue', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('< true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'ltTrue', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('>= true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: 'gteTrue', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-
-  it('<= true case', async () => {
-    await expectBehavior(script,
-      { input: { id: '6', op: 'lteTrue', from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// if/else expression forms
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('if/else expression', () => {
-  const script = `
+    // if/else expression
       @singleLine
         =
         cond Boolean = true
@@ -181,50 +94,8 @@ describe('if/else expression', () => {
           0
         }
         return :result
-  `;
 
-  it('single-line with type annotation on both branches', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'singleLine', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-
-  it('block form — last expression is the value', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'blockForm', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'abc' }, to: 'c' } },
-    );
-  });
-
-  it('else if chain', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'elseIf', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
-    );
-  });
-
-  it('a new name in a block leaves the outer name unchanged', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'newName', from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
-    );
-  });
-
-  it('block reads outer scope variables', async () => {
-    await expectBehavior(script,
-      { input: { id: '5', op: 'readOuter', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// if without else + function call in branch
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('if without else + function call', () => {
-  const script = `
+    // if without else + function call
       @noElseFalse
         =
         result Integer | null = if false 42
@@ -252,36 +123,8 @@ describe('if without else + function call', () => {
         =
         sq Integer = num * num
         return (result: sq)
-  `;
 
-  it('no-else if with false condition → result is null', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'noElseFalse', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
-    );
-  });
-
-  it('no-else if with true condition → result is value', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'noElseTrue', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
-
-  it('function call inside if block branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'fnCallInIf', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Shadowing a name inside a branch
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('a new name inside a branch', () => {
-  const script = `
+    // a new name inside a branch
     @Box = *{
       @one = { return 1 }
       @rebound = (c Boolean) {
@@ -345,7 +188,7 @@ describe('a new name inside a branch', () => {
         return s
       }
     }
-    @elseIf = (c Boolean) {
+    @elseIf5 = (c Boolean) {
       r = 5
       if c {
         return r
@@ -434,132 +277,8 @@ describe('a new name inside a branch', () => {
       }
       return :r
     }
-  `;
 
-  it('returns a new name holding a plain value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'plain'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': ['Integer'], re: [2], to: 'c' } },
-    );
-  });
-  it('a new name leaves the path that skips the branch alone', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'plain'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('returns a new name bound from an instance call', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'instance'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
-    );
-  });
-  it('an instance call leaves the path that skips the branch alone', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'instance'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('reads the outer name on the right of a new name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'fromItself'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
-    );
-  });
-  it('rebinds a new name within its branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'twice'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
-    );
-  });
-  it('reads the new name inside an expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'inExpression'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [12], to: 'c' }) },
-    );
-  });
-  it('binds a new name in an else branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'elseBranch'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('the then branch still reads the outer value when else binds a new name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'elseBranch'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('binds a new name in an else-if branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'elseIf'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('binds a new name in a nested branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'nested'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
-    );
-  });
-  it('a nested branch that is skipped leaves the enclosing name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'nestedOuter'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('a new name stays inside its branch', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'fallsThrough'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('works in a handler on an instance', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'onInstance'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('works in a private function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'viaFunction'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('works with an instance call in a private function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'viaFunctionCall'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
-    );
-  });
-  it('a bind in the enclosing body reads the old value too', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'outerFromItself', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
-    );
-  });
-  it('claims no type for an untyped bind from an instance call', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'instanceTag'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: [1], to: 'c' } },
-    );
-  });
-  it('returns the new name by name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'byName'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': { s: 'Integer' }, re: { s: 2 }, to: 'c' } },
-    );
-  });
-  it('the path that skips the branch returns the outer value by name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'byName'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { r: 5 }, to: 'c' }) },
-    );
-  });
-});
-
-describe('a new name inside a branch of a lambda', () => {
-  const script = `
+    // a new name inside a branch of a lambda
     @inLambda = (c Boolean) {
       f = (d Boolean) {
         r = 5
@@ -607,36 +326,8 @@ describe('a new name inside a branch of a lambda', () => {
       }
       return f(c)
     }
-  `;
 
-  it('works in a lambda', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'inLambda'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('works in a lambda whose result is bound', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'inLambdaBound'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('works in a lambda returned from a private function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'lambdaInFunction'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('a returned lambda call with a branch and no new name', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'lambdaGuardNoRebind'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-});
-
-describe('a new name in a loop', () => {
-  const script = `
+    // a new name in a loop
     @inLoop = (c Boolean) {
       r = 5
       repeat while c {
@@ -670,48 +361,8 @@ describe('a new name in a loop', () => {
       }
       return 5
     }
-  `;
 
-  it('works directly in a loop body', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'inLoopBody'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('a loop body that never runs leaves the outer value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'inLoopBody'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('reads the outer name on the right of a new name in a loop body', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'fromOuterInLoopBody'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
-    );
-  });
-  it('binds a new name in a loop body', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'freshInLoopBody'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('works in a branch inside a loop', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'inLoop'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('a loop that never runs leaves the outer value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'inLoop'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-});
-
-describe('a bind after a branch', () => {
-  const script = `
+    // a bind after a branch
     n *Integer = 0
 
     bump! = {
@@ -770,124 +421,16 @@ describe('a bind after a branch', () => {
     @read = {
       return n
     }
-  `;
 
-  it('a statement call after a branch that returns does not run', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'statement!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
-    );
-  });
-  it('a statement call after a branch runs on the path past it', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'statement!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5, 1], to: 'c' }) },
-    );
-  });
-  it('a write after a branch that returns does not run', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'written!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
-    );
-  });
-  it('a function reads a cell', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'reader', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) },
-    );
-  });
-  it('the branch reads the value from before it', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'rebound'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-    );
-  });
-  it('the path past the branch reads the later value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'rebound'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
-    );
-  });
-  it('the branch reads the earlier value inside an expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'reboundInExpression'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [15], to: 'c' }) },
-    );
-  });
-  it('the first of two branches', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true, false], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
-    );
-  });
-  it('the second of two branches', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false, true], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
-    );
-  });
-  it('past both branches', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false, false], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
-    );
-  });
-  it('a call after a branch that returns does not run', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'effect!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
-    );
-  });
-  it('a call after a branch runs on the path past it', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'effect!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [1], to: 'c' }) },
-    );
-  });
-  it('a call after a branch that reads an earlier bind does not run', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'effectAfterBind!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
-    );
-  });
-});
-
-describe('a literal return in a branch', () => {
-  const script = `
+    // a literal return in a branch
     @mixed = (c Boolean) {
       if c {
         return "x"
       }
       return 9
     }
-  `;
 
-  it('is tagged for that path', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'mixed'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': ['Text'], re: ['x'], to: 'c' } },
-    );
-  });
-  it('leaves the other path its own tag', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'mixed'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': ['Integer'], re: [9], to: 'c' } },
-    );
-  });
-});
-
-describe('a new name of another type inside a branch', () => {
-  const script = `
+    // a new name of another type inside a branch
     @otherType = (c Boolean) {
       r = 5
       if c {
@@ -908,30 +451,8 @@ describe('a new name of another type inside a branch', () => {
       }
       return r
     }
-  `;
 
-  it('returns a new name of another type', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'otherType'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': ['Text'], re: ['x'], to: 'c' } },
-    );
-  });
-  it('the path that skips the branch returns the outer value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'otherType'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': ['Integer'], re: [5], to: 'c' } },
-    );
-  });
-  it('binds another type in a private function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'otherTypeInFunction'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: ['x'], to: 'c' }) },
-    );
-  });
-});
-
-describe('a function param named like an outer name', () => {
-  const script = `
+    // a function param named like an outer name
     @positional = {
       r = 5
       f = (r Integer) { return r + 1 }
@@ -968,7 +489,7 @@ describe('a function param named like an outer name', () => {
       x Integer = f(label: 10)
       return r, x
     }
-    @rebound = {
+    @rebound11 = {
       r = 5
       f = (r Integer) {
         r = r + 1
@@ -1004,52 +525,14 @@ describe('a function param named like an outer name', () => {
       }
       return 0
     }
-  `;
+    held *Integer = 0
+    type Holder (count Integer)
+    @refShadowed = (held: Holder) {
+      got Integer = held.count
+      return got
+    }
 
-  for (const op of ['positional', 'untyped', 'arrow', 'named', 'namedTyped', 'keyMapped', 'rebound', 'boundAfter']) {
-    it(`${op}: the param inside the function, the outer value after it`, async () => {
-      await expectBehavior(script,
-        { input: { id: '1', op, from: 'c' } },
-        { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
-      );
-    });
-  }
-  it('a private function param can reuse a name from the file', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'fromFile', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
-    );
-  });
-  it('a handler param can reuse a name from the file', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[7], 'handlerParam'], 'ty': [['Integer']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
-    );
-  });
-  it('keeps its name in a reply', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[7], 'handlerParamByName'], 'ty': [['Integer']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { k: 7 }, to: 'c' }) },
-    );
-  });
-  it('is the param inside a branch too', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[7], 'handlerParamInBranch'], 'ty': [['Integer']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
-    );
-  });
-  it('a named handler param keeps its key', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[{ k: 7 }], 'handlerNamed'], 'ty': [[{ k: 'Integer' }]], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
-    );
-  });
-});
-
-describe('a function bound in a branch', () => {
-  const script = `
-    n *Integer = 0
-
+    // a function bound in a branch
     @inBranch = (c Boolean) {
       r = 5
       if c {
@@ -1066,7 +549,7 @@ describe('a function bound in a branch', () => {
       }
       return 0
     }
-    @untyped = (c Boolean) {
+    @untyped12 = (c Boolean) {
       if c {
         f = (a) { a + 1 }
         x = f(10)
@@ -1074,7 +557,7 @@ describe('a function bound in a branch', () => {
       }
       return 0
     }
-    @arrow = (c Boolean) {
+    @arrow12 = (c Boolean) {
       if c {
         f = (a) -> a + 1
         return f(10)
@@ -1118,7 +601,7 @@ describe('a function bound in a branch', () => {
       }
       return 1
     }
-    @inLoop = (c Boolean) {
+    @inLoop12 = (c Boolean) {
       repeat while c {
         f = (a Integer) { return a + 1 }
         return f(10)
@@ -1127,41 +610,592 @@ describe('a function bound in a branch', () => {
     }
     @writes! = (c Boolean) {
       if c {
-        bump! = {
+        bumpHere! = {
           n <- n + 1
           return n
         }
-        x Integer = bump!()
+        x Integer = bumpHere!()
         return x
       }
       return n
     }
-    @read = {
+    @read12 = {
       return n
     }
   `;
-  const call = (op, c, re) => expectBehavior(script,
-    { input: { id: '1', op: [[c], op], 'ty': [['Boolean']], from: 'c' } },
-    { output: expect.objectContaining({ id: '1', re, to: 'c' }) },
-  );
 
-  it('runs, with a param named like an outer name', () => call('inBranch', true, [5, 11]));
-  it('the path that skips it', () => call('inBranch', false, [5]));
-  it('returns its call', () => call('returned', true, [11]));
-  it('returns past it', () => call('returned', false, [0]));
-  it('binds its call untyped', () => call('untyped', true, [11]));
-  it('works in arrow form', () => call('arrow', true, [11]));
-  it('captures outer and branch names', () => call('captures', true, [17]));
-  it('works in an else branch', () => call('inElse', false, [11]));
-  it('separate branches keep their own: then', () => call('siblings', true, [11]));
-  it('separate branches keep their own: else', () => call('siblings', false, [12]));
-  it('can be called from a nested branch', () => call('calledInNested', true, [11]));
-  it('works in a loop body', () => call('inLoop', true, [11]));
-  it('can write a cell', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Boolean literals (truthiness)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('Boolean literals — true literal is truthy', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'boolTrue', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Boolean literals — false literal is falsy', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'boolFalse', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+    );
+  });
+
+  it('Boolean literals — null is falsy', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'nullFalsy', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+    );
+  });
+
+  it('Boolean literals — 0 (integer zero) is truthy', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'zeroTruthy', from: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Comparison operators
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('Comparison operators — == true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'eqTrue', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Comparison operators — != true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'neqTrue', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Comparison operators — > true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'gtTrue', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Comparison operators — < true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'ltTrue', from: 'c' } },
+      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Comparison operators — >= true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'gteTrue', from: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  it('Comparison operators — <= true case', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: 'lteTrue', from: 'c' } },
+      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // if/else expression forms
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('if/else expression — single-line with type annotation on both branches', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'singleLine', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  it('if/else expression — block form — last expression is the value', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'blockForm', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'abc' }, to: 'c' } },
+    );
+  });
+
+  it('if/else expression — else if chain', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'elseIf', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+    );
+  });
+
+  it('if/else expression — a new name in a block leaves the outer name unchanged', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'newName', from: 'c' } },
+      { output: { id: '4', 'ty': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
+    );
+  });
+
+  it('if/else expression — block reads outer scope variables', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'readOuter', from: 'c' } },
+      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // if without else + function call in branch
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('if without else + function call — no-else if with false condition → result is null', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'noElseFalse', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
+    );
+  });
+
+  it('if without else + function call — no-else if with true condition → result is value', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'noElseTrue', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  it('if without else + function call — function call inside if block branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'fnCallInIf', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Shadowing a name inside a branch
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('a new name inside a branch — returns a new name holding a plain value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'plain'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [2], to: 'c' } },
+    );
+  });
+  it('a new name inside a branch — a new name leaves the path that skips the branch alone', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'plain'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — returns a new name bound from an instance call', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'instance'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — an instance call leaves the path that skips the branch alone', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'instance'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — reads the outer name on the right of a new name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'fromItself'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — rebinds a new name within its branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'twice'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — reads the new name inside an expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inExpression'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [12], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — binds a new name in an else branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'elseBranch'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — the then branch still reads the outer value when else binds a new name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'elseBranch'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — binds a new name in an else-if branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'elseIf5'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — binds a new name in a nested branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'nested'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — a nested branch that is skipped leaves the enclosing name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'nestedOuter'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — a new name stays inside its branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'fallsThrough'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — works in a handler on an instance', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'onInstance'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — works in a private function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'viaFunction'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — works with an instance call in a private function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'viaFunctionCall'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — a bind in the enclosing body reads the old value too', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'outerFromItself', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch — claims no type for an untyped bind from an instance call', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'instanceTag'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [1], to: 'c' } },
+    );
+  });
+  it('a new name inside a branch — returns the new name by name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'byName'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': { s: 'Integer' }, re: { s: 2 }, to: 'c' } },
+    );
+  });
+  it('a new name inside a branch — the path that skips the branch returns the outer value by name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'byName'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: { r: 5 }, to: 'c' }) },
+    );
+  });
+
+  it('a new name inside a branch of a lambda — works in a lambda', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inLambda'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch of a lambda — works in a lambda whose result is bound', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inLambdaBound'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch of a lambda — works in a lambda returned from a private function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'lambdaInFunction'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name inside a branch of a lambda — a returned lambda call with a branch and no new name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'lambdaGuardNoRebind'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+
+  it('a new name in a loop — works directly in a loop body', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inLoopBody'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name in a loop — a loop body that never runs leaves the outer value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'inLoopBody'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a new name in a loop — reads the outer name on the right of a new name in a loop body', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'fromOuterInLoopBody'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+  it('a new name in a loop — binds a new name in a loop body', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'freshInLoopBody'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name in a loop — works in a branch inside a loop', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inLoop'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a new name in a loop — a loop that never runs leaves the outer value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'inLoop'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+
+  it('a bind after a branch — a statement call after a branch that returns does not run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'statement!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a statement call after a branch runs on the path past it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'statement!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5, 1], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a write after a branch that returns does not run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'written!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a function reads a cell', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'reader', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — the branch reads the value from before it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'rebound'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — the path past the branch reads the later value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'rebound'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — the branch reads the earlier value inside an expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'reboundInExpression'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [15], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — the first of two branches', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true, false], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — the second of two branches', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false, true], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [2], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — past both branches', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false, false], 'twoBranches'], 'ty': [['Boolean', 'Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a call after a branch that returns does not run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'effect!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a call after a branch runs on the path past it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'effect!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [1], to: 'c' }) },
+    );
+  });
+  it('a bind after a branch — a call after a branch that reads an earlier bind does not run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'effectAfterBind!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: [0], to: 'c' }) },
+    );
+  });
+
+  it('a literal return in a branch — is tagged for that path', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'mixed'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['x'], to: 'c' } },
+    );
+  });
+  it('a literal return in a branch — leaves the other path its own tag', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'mixed'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [9], to: 'c' } },
+    );
+  });
+
+  it('a new name of another type inside a branch — returns a new name of another type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'otherType'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Text'], re: ['x'], to: 'c' } },
+    );
+  });
+  it('a new name of another type inside a branch — the path that skips the branch returns the outer value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'otherType'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', 'ty': ['Integer'], re: [5], to: 'c' } },
+    );
+  });
+  it('a new name of another type inside a branch — binds another type in a private function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'otherTypeInFunction'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['x'], to: 'c' }) },
+    );
+  });
+
+  for (const op of ['positional', 'untyped', 'arrow', 'named', 'namedTyped', 'keyMapped', 'rebound11', 'boundAfter']) {
+    it(`${op}: the param inside the function, the outer value after it`, async () => {
+      await expectBehavior(script,
+        { input: { id: '1', op, from: 'c' } },
+        { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
+      );
+    });
+  }
+  it('a function param named like an outer name — a private function param can reuse a name from the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'fromFile', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
+    );
+  });
+  it('a function param named like an outer name — a handler param can reuse a name from the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], 'handlerParam'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+  it('a function param named like an outer name — keeps its name in a reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], 'handlerParamByName'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: { k: 7 }, to: 'c' }) },
+    );
+  });
+  it('a function param named like an outer name — is the param inside a branch too', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], 'handlerParamInBranch'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+  it('a function param named like an outer name — a named handler param keeps its key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[{ k: 7 }], 'handlerNamed'], 'ty': [[{ k: 'Integer' }]], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+  it('a function param named like an outer name — a param shadowing a ref cell reads as a value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[{ held: [7] }], 'refShadowed'], 'ty': [[{ held: ':Holder' }]], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [7], to: 'c' }) },
+    );
+  });
+
+  it('a function bound in a branch — runs, with a param named like an outer name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inBranch'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5, 11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — the path that skips it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'inBranch'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [5], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — returns its call', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'returned'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — returns past it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'returned'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [0], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — binds its call untyped', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'untyped12'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — works in arrow form', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'arrow12'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — captures outer and branch names', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'captures'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [17], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — works in an else branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'inElse'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — separate branches keep their own: then', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'siblings'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — separate branches keep their own: else', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'siblings'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [12], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — can be called from a nested branch', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'calledInNested'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — works in a loop body', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inLoop12'], 'ty': [['Boolean']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [11], to: 'c' }) },
+    );
+  });
+  it('a function bound in a branch — can write a cell', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], 'writes!'], 'ty': [['Boolean']], from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
-      { input: { id: '2', op: 'read', from: 'c' } },
+      { input: { id: '2', op: 'read12', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [1], to: 'c' }) },
     );
   });

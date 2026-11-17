@@ -10,63 +10,224 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // the generic-Object unpacker (`p.positional[i]`). Validation in
 // src/validate.js rejects over-arity and undeclared-field references.
 
-describe('type destructure — positional', () => {
-  it('(x, y) = p — paren positional pulls all fields', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        (x, y) = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '1', op: 'go', from: 'c' } },
+describe('type destructure — runtime', () => {
+  const script = `
+    type Point (x Integer, y Integer)
+    type Pair (x: Integer, y: Integer)
+    type Mixed (count Integer, label: Text)
+    type Game (? started Boolean, ? turn: Integer)
+
+    @parenPositional = {
+      p = Point(1, 2)
+      (x, y) = p
+      return rx: x, ry: y
+    }
+
+    @barePositional = {
+      p = Point(1, 2)
+      x, y = p
+      return rx: x, ry: y
+    }
+
+    @singlePositional = {
+      p = Point(7, 8)
+      (x) = p
+      return rx: x
+    }
+
+    @renamedPositional = {
+      p = Point(1, 2)
+      (a, b) = p
+      return ra: a, rb: b
+    }
+
+    @fullNamed = {
+      p = Point(1, 2)
+      :x, :y = p
+      return rx: x, ry: y
+    }
+
+    @selectiveNamed = {
+      p = Point(7, 8)
+      :x = p
+      return rx: x
+    }
+
+    @aliasNamed = {
+      p = Point(7, 8)
+      x: alias_x = p
+      return rx: alias_x
+    }
+
+    @reorderedNamed = {
+      p = Point(1, 2)
+      :y, :x = p
+      return rx: x, ry: y
+    }
+
+    @namedDeclaredNamed = {
+      p = Pair(1, 2)
+      :x, :y = p
+      return rx: x, ry: y
+    }
+
+    @namedDeclaredPositional = {
+      p = Pair(1, 2)
+      (a, b) = p
+      return ra: a, rb: b
+    }
+
+    @mixedDeclared = {
+      m = Mixed(3, "hi")
+      :count, :label = m
+      return rc: count, rl: label
+    }
+
+    @optionalPresent = {
+      g = Game(true, 5)
+      :turn = g
+      return rt: turn as Integer
+    }
+
+    @optionalFallback = {
+      g = Game(true)
+      :turn = g
+      return rt: (turn ?? 99)
+    }
+
+    @optionalPresence = {
+      g = Game(true)
+      :turn = g
+      return rp: (turn)?
+    }
+  `;
+
+  // ── positional ──
+
+  it('positional — (x, y) = p — paren positional pulls all fields', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'parenPositional', from: 'c' } },
       { output: { id: '1', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
 
-  it('x, y = p — bare positional (no parens) pulls all fields', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        x, y = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '2', op: 'go', from: 'c' } },
+  it('positional — x, y = p — bare positional (no parens) pulls all fields', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'barePositional', from: 'c' } },
       { output: { id: '2', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
     );
   });
 
-  it('(x) = p — single positional drops trailing fields', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(7, 8)
-        (x) = p
-        return rx: x
-      }
-    `,
-      { input: { id: '3', op: 'go', from: 'c' } },
+  it('positional — (x) = p — single positional drops trailing fields', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'singlePositional', from: 'c' } },
       { output: { id: '3', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
     );
   });
 
-  it('(a, b) = p — locals named freely (renamed positions)', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        (a, b) = p
-        return ra: a, rb: b
-      }
-    `,
-      { input: { id: '4', op: 'go', from: 'c' } },
+  it('positional — (a, b) = p — locals named freely (renamed positions)', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'renamedPositional', from: 'c' } },
       { output: { id: '4', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
     );
   });
 
+  // ── named ──
+
+  it('named — :x, :y = p — full named destructure', async () => {
+    await expectBehavior(script,
+      { input: { id: '5', op: 'fullNamed', from: 'c' } },
+      { output: { id: '5', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+    );
+  });
+
+  it('named — :x = p — selective single-field destructure', async () => {
+    await expectBehavior(script,
+      { input: { id: '6', op: 'selectiveNamed', from: 'c' } },
+      { output: { id: '6', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
+    );
+  });
+
+  it('named — x: alias_x = p — rename on extraction', async () => {
+    await expectBehavior(script,
+      { input: { id: '7', op: 'aliasNamed', from: 'c' } },
+      { output: { id: '7', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
+    );
+  });
+
+  it('named — :y, :x = p — order-insensitive', async () => {
+    await expectBehavior(script,
+      { input: { id: '8', op: 'reorderedNamed', from: 'c' } },
+      { output: { id: '8', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+    );
+  });
+
+  // ── mixed-form types ──
+  // Field-name identity is what matters at the destructure boundary
+  // (spec lines 244-257); declaration form is implementation detail.
+
+  it('mixed-form — positional-declared fields are reachable by named destructure', async () => {
+    await expectBehavior(script,
+      { input: { id: '9', op: 'fullNamed', from: 'c' } },
+      { output: { id: '9', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+    );
+  });
+
+  it('mixed-form — named-declared fields are reachable by named destructure', async () => {
+    await expectBehavior(script,
+      { input: { id: '10', op: 'namedDeclaredNamed', from: 'c' } },
+      { output: { id: '10', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+    );
+  });
+
+  it('mixed-form — named-declared fields are reachable by positional destructure', async () => {
+    // Spec line 203: "Pulls field values by position." — applies regardless
+    // of declaration form. Declaration order is the position.
+    await expectBehavior(script,
+      { input: { id: '11', op: 'namedDeclaredPositional', from: 'c' } },
+      { output: { id: '11', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
+    );
+  });
+
+  it('mixed-form — mixed positional/named declaration: both forms reach both fields', async () => {
+    await expectBehavior(script,
+      { input: { id: '12', op: 'mixedDeclared', from: 'c' } },
+      { output: { id: '12', 'ty': { rc: 'Integer', rl: 'Text' }, re: { rc: 3, rl: 'hi' }, to: 'c' } },
+    );
+  });
+
+  // ── optional fields ──
+
+  it('optional — field present: destructures to its value', async () => {
+    // Required-field destructure propagates the field type to the local.
+    // Optional fields deliberately do NOT propagate — the local stays
+    // polymorphic so `??` and `(expr)?` can still see absence. A caller
+    // who wants to use the value as a typed value supplies an explicit
+    // `as` cast (or an annotation on the destructure pattern).
+    await expectBehavior(script,
+      { input: { id: '13', op: 'optionalPresent', from: 'c' } },
+      { output: { id: '13', 'ty': { rt: 'Integer' }, re: { rt: 5 }, to: 'c' } },
+    );
+  });
+
+  it('optional — field absent: destructure with ?? fallback yields the fallback', async () => {
+    // Mirrors type_optionality's `?? falls back when omitted` but applied
+    // after destructuring a typed value.
+    await expectBehavior(script,
+      { input: { id: '14', op: 'optionalFallback', from: 'c' } },
+      { output: { id: '14', 'ty': { rt: 'Integer' }, re: { rt: 99 }, to: 'c' } },
+    );
+  });
+
+  it('optional — field absent: presence check on destructured local is false', async () => {
+    await expectBehavior(script,
+      { input: { id: '15', op: 'optionalPresence', from: 'c' } },
+      { output: { id: '15', 'ty': { rp: 'Boolean' }, re: { rp: false }, to: 'c' } },
+    );
+  });
+});
+
+describe('type destructure — compile errors', () => {
   it('rejects positional destructure with more locals than fields', () => {
     expect(() => compileSource(`
       type Point (x Integer, y Integer)
@@ -76,64 +237,6 @@ describe('type destructure — positional', () => {
         return result: 1
       }
     `)).toThrow();
-  });
-});
-
-describe('type destructure — named', () => {
-  it(':x, :y = p — full named destructure', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        :x, :y = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '5', op: 'go', from: 'c' } },
-      { output: { id: '5', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
-    );
-  });
-
-  it(':x = p — selective single-field destructure', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(7, 8)
-        :x = p
-        return rx: x
-      }
-    `,
-      { input: { id: '6', op: 'go', from: 'c' } },
-      { output: { id: '6', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
-    );
-  });
-
-  it('x: alias_x = p — rename on extraction', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(7, 8)
-        x: alias_x = p
-        return rx: alias_x
-      }
-    `,
-      { input: { id: '7', op: 'go', from: 'c' } },
-      { output: { id: '7', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
-    );
-  });
-
-  it(':y, :x = p — order-insensitive', async () => {
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        :y, :x = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '8', op: 'go', from: 'c' } },
-      { output: { id: '8', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
-    );
   });
 
   it('rejects named destructure of an undeclared field', () => {
@@ -145,124 +248,5 @@ describe('type destructure — named', () => {
         return result: 1
       }
     `)).toThrow();
-  });
-});
-
-describe('type destructure — mixed-form types', () => {
-  it('positional-declared fields are reachable by named destructure', async () => {
-    // From spec lines 244-257: field-name identity is what matters at the
-    // destructure boundary. A type declared positionally (`x Integer`) is
-    // still named-destructurable as `:x`.
-    await expectBehavior(`
-      type Point (x Integer, y Integer)
-      @go = {
-        p = Point(1, 2)
-        :x, :y = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '9', op: 'go', from: 'c' } },
-      { output: { id: '9', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
-    );
-  });
-
-  it('named-declared fields are reachable by named destructure', async () => {
-    // The reverse of the above: a type declared with the named-field form
-    // (`x: Integer`) is named-destructurable. Field-name identity is the
-    // contract; declaration form is implementation detail.
-    await expectBehavior(`
-      type Pair (x: Integer, y: Integer)
-      @go = {
-        p = Pair(1, 2)
-        :x, :y = p
-        return rx: x, ry: y
-      }
-    `,
-      { input: { id: '10', op: 'go', from: 'c' } },
-      { output: { id: '10', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
-    );
-  });
-
-  it('named-declared fields are reachable by positional destructure', async () => {
-    // Spec line 203: "Pulls field values by position." — applies regardless
-    // of declaration form. Declaration order is the position.
-    await expectBehavior(`
-      type Pair (x: Integer, y: Integer)
-      @go = {
-        p = Pair(1, 2)
-        (a, b) = p
-        return ra: a, rb: b
-      }
-    `,
-      { input: { id: '11', op: 'go', from: 'c' } },
-      { output: { id: '11', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
-    );
-  });
-
-  it('mixed positional/named declaration: both forms reach both fields', async () => {
-    // Mixed has one positional-declared field and one named-declared field.
-    // Field-name identity dominates: each can be reached either way.
-    await expectBehavior(`
-      type Mixed (count Integer, label: Text)
-      @go = {
-        m = Mixed(3, "hi")
-        :count, :label = m
-        return rc: count, rl: label
-      }
-    `,
-      { input: { id: '12', op: 'go', from: 'c' } },
-      { output: { id: '12', 'ty': { rc: 'Integer', rl: 'Text' }, re: { rc: 3, rl: 'hi' }, to: 'c' } },
-    );
-  });
-});
-
-describe('type destructure — optional fields', () => {
-  it('optional field present: destructures to its value', async () => {
-    // Required-field destructure propagates the field type to the local.
-    // Optional fields deliberately do NOT propagate — the local stays
-    // polymorphic so `??` and `(expr)?` can still see absence. A caller
-    // who wants to use the value as a typed value supplies an explicit
-    // `as` cast (or an annotation on the destructure pattern).
-    await expectBehavior(`
-      type Game (? started Boolean, ? turn: Integer)
-      @go = {
-        g = Game(true, 5)
-        :turn = g
-        return rt: turn as Integer
-      }
-    `,
-      { input: { id: '13', op: 'go', from: 'c' } },
-      { output: { id: '13', 'ty': { rt: 'Integer' }, re: { rt: 5 }, to: 'c' } },
-    );
-  });
-
-  it('optional field absent: destructure with ?? fallback yields the fallback', async () => {
-    // Mirrors type_optionality's `?? falls back when omitted` but applied
-    // after destructuring a typed value.
-    await expectBehavior(`
-      type Game (? started Boolean, ? turn: Integer)
-      @go = {
-        g = Game(true)
-        :turn = g
-        return rt: (turn ?? 99)
-      }
-    `,
-      { input: { id: '14', op: 'go', from: 'c' } },
-      { output: { id: '14', 'ty': { rt: 'Integer' }, re: { rt: 99 }, to: 'c' } },
-    );
-  });
-
-  it('optional field absent: presence check on destructured local is false', async () => {
-    await expectBehavior(`
-      type Game (? started Boolean, ? turn: Integer)
-      @go = {
-        g = Game(true)
-        :turn = g
-        return rp: (turn)?
-      }
-    `,
-      { input: { id: '15', op: 'go', from: 'c' } },
-      { output: { id: '15', 'ty': { rp: 'Boolean' }, re: { rp: false }, to: 'c' } },
-    );
   });
 });

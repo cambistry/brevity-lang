@@ -1,6 +1,6 @@
 export { codegenErlang } from './program.js';
 import { codegenErlang } from './program.js';
-import { writeFileSync, mkdirSync, existsSync, statSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, statSync, readdirSync, rmSync } from 'fs';
 import { execSync, spawn as spawnChild } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -42,6 +42,13 @@ export default {
     async setup({ workerId, baseDir, extract, compile }) {
       const erlDir = join(baseDir, 'erlang', `w${workerId}`);
       mkdirSync(erlDir, { recursive: true });
+
+      // Each test file numbers its modules from 1, so a previous file's fixture
+      // dirs (`comp<n>`, `inst<n>`) are stale here. The worker owns `w<id>`, and runs
+      // its files one at a time, so clearing them is safe. The router stays compiled.
+      for (const entry of readdirSync(erlDir)) {
+        if (/^(comp|inst)\d+$/.test(entry)) rmSync(join(erlDir, entry), { recursive: true, force: true });
+      }
 
       // Compile the router if it isn't compiled, or its source has changed since
       const routerBeam = join(erlDir, 'brevity_router.beam');

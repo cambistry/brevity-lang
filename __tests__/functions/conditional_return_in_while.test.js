@@ -1,11 +1,8 @@
 import { expectBehavior } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Conditional return inside `repeat while` — public handler bodies
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('conditional return inside repeat while — public handler', () => {
+describe('conditional return in while — runtime', () => {
   const script = `
+    // conditional return inside repeat while — public handler
     @blockGuard
       =
       x *Integer = 0
@@ -42,40 +39,9 @@ describe('conditional return inside repeat while — public handler', () => {
         else { return "impossible" }
       }
       return "unreachable"
-  `;
 
-  it('block-body guard short-circuits enclosing handler', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'blockGuard', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: ['early'], to: 'c' }) });
-  });
-
-  it('guard never triggers — falls through to post-loop reply', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'noTrigger', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: ['after-loop'], to: 'c' }) });
-  });
-
-  it('single-line guard inside while — short-circuits', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'singleLineGuard', from: 'c' } },
-      { output: expect.objectContaining({ id: '3', re: ['early-sl'], to: 'c' }) });
-  });
-
-  it('if/else inside while — if branch fires on first iteration', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'ifElseInWhile', from: 'c' } },
-      { output: expect.objectContaining({ id: '4', re: ['got it'], to: 'c' }) });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Conditional return inside `repeat until`
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('conditional return inside repeat until — public handler', () => {
-  const script = `
-    @blockGuard
+    // conditional return inside repeat until — public handler
+    @blockGuard2
       =
       x *Integer = 0
       repeat until x >= 100 {
@@ -84,7 +50,7 @@ describe('conditional return inside repeat until — public handler', () => {
       }
       return "fallthrough"
 
-    @noTrigger
+    @noTrigger2
       =
       x *Integer = 0
       repeat until x >= 3 {
@@ -101,33 +67,8 @@ describe('conditional return inside repeat until — public handler', () => {
         if (x > 6) -> "sl-early"
       }
       return "fallthrough"
-  `;
 
-  it('block-body guard inside repeat until short-circuits', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'blockGuard', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: ['early'], to: 'c' }) });
-  });
-
-  it('guard never triggers — falls through after loop', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'noTrigger', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: ['after-loop'], to: 'c' }) });
-  });
-
-  it('single-line guard inside repeat until — short-circuits', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'singleLine', from: 'c' } },
-      { output: expect.objectContaining({ id: '3', re: ['sl-early'], to: 'c' }) });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Conditional return inside `repeat while` — lambda functions
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('conditional return inside repeat while — lambda', () => {
-  const script = `
+    // conditional return inside repeat while — lambda
     @check
       =
       fn = (limit Integer) {
@@ -155,27 +96,8 @@ describe('conditional return inside repeat while — lambda', () => {
       hit Text = fn(10)
       miss Text = fn(2)
       return :hit, :miss
-  `;
 
-  it('block-body guard inside lambda + while', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'check', from: 'c' } },
-      { output: { id: '1', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
-  });
-
-  it('single-line guard inside lambda + while', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'checkSingleLine', from: 'c' } },
-      { output: { id: '2', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Conditional return inside `repeat while` — lineal private functions
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('conditional return inside repeat while — lineal', () => {
-  const script = `
+    // conditional return inside repeat while — lineal
     @hitTest
       =
       result Text = scan(10)
@@ -219,25 +141,95 @@ describe('conditional return inside repeat while — lineal', () => {
       return "none"
   `;
 
-  it('lineal — repeat while guard fires', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Conditional return inside `repeat while` — public handler bodies
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('conditional return inside repeat while — public handler — block-body guard short-circuits enclosing handler', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'blockGuard', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['early'], to: 'c' }) });
+  });
+
+  it('conditional return inside repeat while — public handler — guard never triggers — falls through to post-loop reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'noTrigger', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['after-loop'], to: 'c' }) });
+  });
+
+  it('conditional return inside repeat while — public handler — single-line guard inside while — short-circuits', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'singleLineGuard', from: 'c' } },
+      { output: expect.objectContaining({ id: '3', re: ['early-sl'], to: 'c' }) });
+  });
+
+  it('conditional return inside repeat while — public handler — if/else inside while — if branch fires on first iteration', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'ifElseInWhile', from: 'c' } },
+      { output: expect.objectContaining({ id: '4', re: ['got it'], to: 'c' }) });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Conditional return inside `repeat until`
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('conditional return inside repeat until — public handler — block-body guard inside repeat until short-circuits', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'blockGuard2', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['early'], to: 'c' }) });
+  });
+
+  it('conditional return inside repeat until — public handler — guard never triggers — falls through after loop', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'noTrigger2', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['after-loop'], to: 'c' }) });
+  });
+
+  it('conditional return inside repeat until — public handler — single-line guard inside repeat until — short-circuits', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'singleLine', from: 'c' } },
+      { output: expect.objectContaining({ id: '3', re: ['sl-early'], to: 'c' }) });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Conditional return inside `repeat while` — lambda functions
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('conditional return inside repeat while — lambda — block-body guard inside lambda + while', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'check', from: 'c' } },
+      { output: { id: '1', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
+  });
+
+  it('conditional return inside repeat while — lambda — single-line guard inside lambda + while', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'checkSingleLine', from: 'c' } },
+      { output: { id: '2', 'ty': { hit: 'Text', miss: 'Text' }, re: { hit: 'found', miss: 'none' }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Conditional return inside `repeat while` — lineal private functions
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('conditional return inside repeat while — lineal — lineal — repeat while guard fires', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'hitTest', from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
   });
 
-  it('lineal — repeat while guard never fires, falls through', async () => {
+  it('conditional return inside repeat while — lineal — lineal — repeat while guard never fires, falls through', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'missTest', from: 'c' } },
       { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });
   });
 
-  it('lineal — repeat until guard fires', async () => {
+  it('conditional return inside repeat while — lineal — lineal — repeat until guard fires', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'untilHit', from: 'c' } },
       { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'found' }, to: 'c' } });
   });
 
-  it('lineal — repeat until guard never fires, falls through', async () => {
+  it('conditional return inside repeat while — lineal — lineal — repeat until guard never fires, falls through', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'untilMiss', from: 'c' } },
       { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'none' }, to: 'c' } });

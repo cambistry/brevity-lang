@@ -27,8 +27,9 @@ describe('top-scope locals — compilation', () => {
   });
 });
 
-describe('locals — declaration and binding', () => {
+describe('locals — runtime', () => {
   const script = `
+    // locals — declaration and binding
       @typedInt = { x Integer = 42; return :x }
       @typedText = { msg Text = "hello"; return :msg }
 
@@ -45,43 +46,8 @@ describe('locals — declaration and binding', () => {
         b Integer = 4
         c Integer = a + b
         return :c
-  `;
 
-  it('typed integer declaration', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'typedInt', from: 'c' } },
-      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } },
-    );
-  });
-
-  it('typed text declaration', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'typedText', from: 'c' } },
-      { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' } },
-    );
-  });
-
-  it('rebinding within same scope', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'rebind', from: 'c' } },
-      { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 3 }, to: 'c' } },
-    );
-  });
-
-  it('expression binding from other locals', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'exprBind', from: 'c' } },
-      { output: { id: '4', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Read access from child scopes
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('locals — child scope read access', () => {
-  const script = `
+    // locals — child scope read access
       @lambdaRead
         =
         x Integer = 10
@@ -101,36 +67,8 @@ describe('locals — child scope read access', () => {
         x Integer = 42
         result Integer = if true x else 0
         return :result
-  `;
 
-  it('lambda reads outer local', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'lambdaRead', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-
-  it('lambda reads outer local and adds param', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: 'lambdaReadParam', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
-    );
-  });
-
-  it('if-branch reads outer local', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'ifRead', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Nested lambda (grandparent scope capture)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('locals — nested lambda', () => {
-  const script = `
+    // locals — nested lambda
       @nestedRead
         =
         x Integer = 7
@@ -140,22 +78,8 @@ describe('locals — nested lambda', () => {
         }
         result Integer = outer(3)
         return :result
-  `;
 
-  it('nested lambda reads grandparent scope', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'nestedRead', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Header arg access
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('locals — header arg access', () => {
-  const script = `
+    // locals — header arg access
       @echoNamed
         =
         n: Integer
@@ -183,43 +107,8 @@ describe('locals — header arg access', () => {
         b: Integer
         =
         -> sum: a + b
-  `;
 
-  it('direct return of header arg', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[{ n: 42 }], 'echoNamed'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 42 }, to: 'c' } },
-    );
-  });
-
-  it('header arg used in expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '2', op: [[{ n: 7 }], 'doubleArg'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
-    );
-  });
-
-  it('header arg read from lambda', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: [[{ base: 100 }], 'argInLambda'], 'ty': [[{ base: 'Integer' }]], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 110 }, to: 'c' } },
-    );
-  });
-
-  it('multiple header args in expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: [[{ a: 3, b: 4 }], 'multiArg'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Nested lambda with header arg capture
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('locals — nested lambda with header arg', () => {
-  const script = `
+    // locals — nested lambda with header arg
       @argNested
         =
         seed: Integer
@@ -232,7 +121,107 @@ describe('locals — nested lambda with header arg', () => {
         return :result
   `;
 
-  it('header arg read from nested lambda', async () => {
+  it('locals — declaration and binding — typed integer declaration', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'typedInt', from: 'c' } },
+      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } },
+    );
+  });
+
+  it('locals — declaration and binding — typed text declaration', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'typedText', from: 'c' } },
+      { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' } },
+    );
+  });
+
+  it('locals — declaration and binding — rebinding within same scope', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'rebind', from: 'c' } },
+      { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 3 }, to: 'c' } },
+    );
+  });
+
+  it('locals — declaration and binding — expression binding from other locals', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'exprBind', from: 'c' } },
+      { output: { id: '4', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Read access from child scopes
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('locals — child scope read access — lambda reads outer local', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'lambdaRead', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  it('locals — child scope read access — lambda reads outer local and adds param', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: 'lambdaReadParam', from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 105 }, to: 'c' } },
+    );
+  });
+
+  it('locals — child scope read access — if-branch reads outer local', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'ifRead', from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Nested lambda (grandparent scope capture)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('locals — nested lambda — nested lambda reads grandparent scope', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'nestedRead', from: 'c' } },
+      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Header arg access
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('locals — header arg access — direct return of header arg', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[{ n: 42 }], 'echoNamed'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
+      { output: { id: '1', 'ty': { n: 'Integer' }, re: { n: 42 }, to: 'c' } },
+    );
+  });
+
+  it('locals — header arg access — header arg used in expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '2', op: [[{ n: 7 }], 'doubleArg'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
+      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 14 }, to: 'c' } },
+    );
+  });
+
+  it('locals — header arg access — header arg read from lambda', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: [[{ base: 100 }], 'argInLambda'], 'ty': [[{ base: 'Integer' }]], from: 'c' } },
+      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 110 }, to: 'c' } },
+    );
+  });
+
+  it('locals — header arg access — multiple header args in expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: [[{ a: 3, b: 4 }], 'multiArg'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
+      { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Nested lambda with header arg capture
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('locals — nested lambda with header arg — header arg read from nested lambda', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ seed: 50 }], 'argNested'], 'ty': [[{ seed: 'Integer' }]], from: 'c' } },
       { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 51 }, to: 'c' } },

@@ -130,6 +130,17 @@ describe('a class reaches only the actors it is declared in', () => {
     `)).toThrow(/'x' is a name of 'A', which 'B' isn't declared in/);
   });
 
+  it('its own inherited function wins over a sibling\'s name', () => {
+    expect(() => compileSource(`
+      A = (a Integer) *{}
+
+      T = *{ a = { 1 } }
+      U = (T++) *{
+        @c = -> result: a() as Integer
+      }
+    `)).not.toThrow();
+  });
+
   it('a cell of a class nested in a sibling is a compile error', () => {
     expect(() => compileSource(`
       A = *{

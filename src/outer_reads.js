@@ -261,7 +261,10 @@ export function markOuterReads(program) {
     const binders = actor.name ? boundAnywhere(actor) : new Set();
     const checkReach = (node, bound) => {
       if (!actor.name || typeof node.name !== 'string' || own.has(node.name) || bound.has(node.name) || binders.has(node.name)) return;
-      if (chain.some(l => !l.opaque && l.names.has(node.name)) || classes.has(node.name) || dependencies.has(node.name)) return;
+      // Its own functions (inherited ones too) and an enclosing actor's are in reach,
+      // as a callee or as a value.
+      if (ownFunctions.has(node.name) || chain.some(l => !l.opaque && (l.names.has(node.name) || l.functions.has(node.name)))) return;
+      if (classes.has(node.name) || dependencies.has(node.name)) return;
       const members = opaqueOwner(node.name, 'names');
       if (members) throw notClosedOver(node.name, members);
       const other = elsewhere(node.name);

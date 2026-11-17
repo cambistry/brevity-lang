@@ -17,6 +17,9 @@ function renameIn(node, from, to, isRef) {
   }
   if (node.name === from) {
     node.name = to;
+    // The parser reads a name as a ref when the file declares a ref of that name;
+    // the param that shadows it is a plain value unless it is a ref itself.
+    if (node.type === 'RefRead' && !isRef) node.type = 'Identifier';
     if (node.named) {
       delete node.named;
       node.key = from;

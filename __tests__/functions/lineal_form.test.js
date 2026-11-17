@@ -1,11 +1,8 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Param styles
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('lineal function — param styles', () => {
+describe('lineal function — runtime', () => {
   const script = `
+    // lineal function — param styles
     @noArgSingle
       =
       result: x Integer = getFortyTwo()
@@ -81,43 +78,8 @@ describe('lineal function — param styles', () => {
       tag: t Text
       =
       -> result: t
-  `;
 
-  it('no-arg — single =', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'noArgSingle', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
-  });
-
-  it('no-arg — double =', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'noArgDouble', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
-  });
-
-  it('single positional param', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'singlePos', from: 'c' } }, { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
-  });
-
-  it('multiple positional params', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'multiPos', from: 'c' } }, { output: { id: '4', 'ty': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
-  });
-
-  it('named param (sigil)', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'named', from: 'c' } }, { output: { id: '5', 'ty': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
-  });
-
-  it('mixed positional + named', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'mixed', from: 'c' } }, { output: { id: '6', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
-  });
-
-  it('key-mapped param', async () => {
-    await expectBehavior(script, { input: { id: '7', op: 'keyed', from: 'c' } }, { output: { id: '7', 'ty': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Body and return forms
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('lineal function — body and return forms', () => {
-  const script = `
+    // lineal function — body and return forms
     @multiStmt
       =
       result: x Integer = compute(5)
@@ -172,37 +134,8 @@ describe('lineal function — body and return forms', () => {
         :doubled,
         label: "done"
       )
-  `;
 
-  it('multi-statement body', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'multiStmt', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
-  });
-
-  it('lineal return (-> on own line, fields below)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'spaciousReturn', from: 'c' } }, { output: { id: '2', 'ty': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
-  });
-
-  it('delimited return — single-line ->(…)', async () => {
-    await expectBehavior(script,
-      { input: { id: '3', op: 'denseInline', from: 'c' } },
-      { output: { id: '3', 'ty': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' } },
-    );
-  });
-
-  it('delimited return — multiline ->(…)', async () => {
-    await expectBehavior(script,
-      { input: { id: '4', op: 'denseMulti', from: 'c' } },
-      { output: { id: '4', 'ty': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' } },
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Composition
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('lineal function — composition', () => {
-  const script = `
+    // lineal function — composition
     @multiFn
       =
       result: a Integer = double(5)
@@ -220,12 +153,6 @@ describe('lineal function — composition', () => {
       result: base Integer = square(5)
       extra Integer = fn(base)
       return :extra
-
-    double
-      =
-      n Integer
-      =
-      -> result: (n * 2)
 
     triple
       =
@@ -245,27 +172,8 @@ describe('lineal function — composition', () => {
       n Integer
       =
       -> result: (n * n)
-  `;
 
-  it('multiple lineal functions in same actor', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'multiFn', from: 'c' } }, { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
-  });
-
-  it('lineal function calls another lineal function', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'crossCall', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
-  });
-
-  it('lineal top-level + delimited lambda in public function', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'denseSpacious', from: 'c' } }, { output: { id: '3', 'ty': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Lineal function — optional params
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('lineal function — optional params', () => {
-  const script = `
+    // lineal function — optional params
     @testTypedBoth
       =
       result: r Integer = addTyped(3, 7)
@@ -318,27 +226,105 @@ describe('lineal function — optional params', () => {
       -> result: (a + b)
   `;
 
-  it('typed default — both provided', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Param styles
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('lineal function — param styles — no-arg — single =', async () => {
+    await expectBehavior(script, { input: { id: '1', op: 'noArgSingle', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — no-arg — double =', async () => {
+    await expectBehavior(script, { input: { id: '2', op: 'noArgDouble', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — single positional param', async () => {
+    await expectBehavior(script, { input: { id: '3', op: 'singlePos', from: 'c' } }, { output: { id: '3', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — multiple positional params', async () => {
+    await expectBehavior(script, { input: { id: '4', op: 'multiPos', from: 'c' } }, { output: { id: '4', 'ty': { s: 'Integer' }, re: { s: 7 }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — named param (sigil)', async () => {
+    await expectBehavior(script, { input: { id: '5', op: 'named', from: 'c' } }, { output: { id: '5', 'ty': { msg: 'Text' }, re: { msg: 'world' }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — mixed positional + named', async () => {
+    await expectBehavior(script, { input: { id: '6', op: 'mixed', from: 'c' } }, { output: { id: '6', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+  });
+
+  it('lineal function — param styles — key-mapped param', async () => {
+    await expectBehavior(script, { input: { id: '7', op: 'keyed', from: 'c' } }, { output: { id: '7', 'ty': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Body and return forms
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('lineal function — body and return forms — multi-statement body', async () => {
+    await expectBehavior(script, { input: { id: '1', op: 'multiStmt', from: 'c' } }, { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 10 }, to: 'c' } });
+  });
+
+  it('lineal function — body and return forms — lineal return (-> on own line, fields below)', async () => {
+    await expectBehavior(script, { input: { id: '2', op: 'spaciousReturn', from: 'c' } }, { output: { id: '2', 'ty': { a: 'Integer', b: 'Text' }, re: { a: 10, b: 'hello' }, to: 'c' } });
+  });
+
+  it('lineal function — body and return forms — delimited return — single-line ->(…)', async () => {
+    await expectBehavior(script,
+      { input: { id: '3', op: 'denseInline', from: 'c' } },
+      { output: { id: '3', 'ty': { p: 'Integer', q: 'Integer', sum: 'Integer', prod: 'Integer' }, re: { p: 3, q: 4, sum: 7, prod: 12 }, to: 'c' } },
+    );
+  });
+
+  it('lineal function — body and return forms — delimited return — multiline ->(…)', async () => {
+    await expectBehavior(script,
+      { input: { id: '4', op: 'denseMulti', from: 'c' } },
+      { output: { id: '4', 'ty': { v: 'Integer', doubled: 'Integer', lbl: 'Text' }, re: { v: 5, doubled: 10, lbl: 'done' }, to: 'c' } },
+    );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Composition
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('lineal function — composition — multiple lineal functions in same actor', async () => {
+    await expectBehavior(script, { input: { id: '1', op: 'multiFn', from: 'c' } }, { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 25 }, to: 'c' } });
+  });
+
+  it('lineal function — composition — lineal function calls another lineal function', async () => {
+    await expectBehavior(script, { input: { id: '2', op: 'crossCall', from: 'c' } }, { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 20 }, to: 'c' } });
+  });
+
+  it('lineal function — composition — lineal top-level + delimited lambda in public function', async () => {
+    await expectBehavior(script, { input: { id: '3', op: 'denseSpacious', from: 'c' } }, { output: { id: '3', 'ty': { extra: 'Integer' }, re: { extra: 26 }, to: 'c' } });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Lineal function — optional params
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  it('lineal function — optional params — typed default — both provided', async () => {
     await expectBehavior(script, { input: { id: '1', op: 'testTypedBoth', from: 'c' } }, { output: { id: '1', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
-  it('typed default — omitted uses 0', async () => {
+  it('lineal function — optional params — typed default — omitted uses 0', async () => {
     await expectBehavior(script, { input: { id: '2', op: 'testTypedDefault', from: 'c' } }, { output: { id: '2', 'ty': { r: 'Integer' }, re: { r: 3 }, to: 'c' } });
   });
 
-  it('inferred default — both provided', async () => {
+  it('lineal function — optional params — inferred default — both provided', async () => {
     await expectBehavior(script, { input: { id: '3', op: 'testInferredBoth', from: 'c' } }, { output: { id: '3', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
-  it('inferred default — omitted uses 1000', async () => {
+  it('lineal function — optional params — inferred default — omitted uses 1000', async () => {
     await expectBehavior(script, { input: { id: '4', op: 'testInferredDefault', from: 'c' } }, { output: { id: '4', 'ty': { r: 'Integer' }, re: { r: 1003 }, to: 'c' } });
   });
 
-  it('named default — both provided', async () => {
+  it('lineal function — optional params — named default — both provided', async () => {
     await expectBehavior(script, { input: { id: '5', op: 'testNamedBoth', from: 'c' } }, { output: { id: '5', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } });
   });
 
-  it('named default — omitted uses 50', async () => {
+  it('lineal function — optional params — named default — omitted uses 50', async () => {
     await expectBehavior(script, { input: { id: '6', op: 'testNamedDefault', from: 'c' } }, { output: { id: '6', 'ty': { r: 'Integer' }, re: { r: 53 }, to: 'c' } });
   });
 });

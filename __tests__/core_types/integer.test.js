@@ -13,20 +13,60 @@ const script = `
     @div = (a Integer, b Integer) -> result: a / b
     @rem = (a Integer, b Integer) -> result: a % b
     @exp = (a Integer, b Integer) -> result: a ^ b
+
+    // identity
+    @identity
+      =
+      a Integer
+      b Integer
+      =
+      quotient Integer = a / b
+      remainder Integer = a % b
+      reconstructed Integer = quotient * b + remainder
+      return matches: reconstructed == a
+
+    // precedence
+    @mulBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b * c
+    @mulBeforeSub = (a Integer, b Integer, c Integer) -> result: a - b * c
+    @divBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b / c
+    @remBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b % c
+    @parenAdd = (a Integer, b Integer, c Integer) -> result: (a + b) * c
+    @parenSub = (a Integer, b Integer, c Integer) -> result: a * (b - c)
+    @parenDiv = (a Integer, b Integer, c Integer) -> result: (a + b) / c
+    @parenRem = (a Integer, b Integer, c Integer) -> result: (a + b) % c
+    @nested = (a Integer, b Integer, c Integer, d Integer) -> result: (a + b) * (c - d)
+    @deepNest = (a Integer, b Integer, c Integer, d Integer) -> result: ((a + b) * c) / d
+    @expBeforeMul = (a Integer, b Integer, c Integer) -> result: a * b ^ c
+    @parenBeforeExp = (a Integer, b Integer, c Integer) -> result: (a * b) ^ c
+    @leftAssocSub = (a Integer, b Integer, c Integer) -> result: a - b - c
+    @leftAssocDiv = (a Integer, b Integer, c Integer) -> result: a / b / c
+    @rightAssocExp = (a Integer, b Integer, c Integer) -> result: a ^ b ^ c
+    @mixedChain = (a Integer, b Integer, c Integer, d Integer) -> result: a + b * c - d
+
+    // identity
+    @bigDivIdentity
+      =
+      a Integer
+      b Integer
+      =
+      quotient Integer = a / b
+      remainder Integer = a % b
+      reconstructed Integer = quotient * b + remainder
+      return matches: reconstructed == a
+
+    // compound
+    @compute = (a Integer, b Integer) -> result: (a + b) * 3 - a
+
+    // conv
+    @toFloat = (x Integer) -> result: Integer.to_float(x)
+    @toDecimal = (x Integer) -> result: Integer.to_decimal(x)
+    @toSelf = (x Integer) -> result: Integer.to_integer(x)
+
+    // ref
+    @refToFloat = { x *Integer = 42; return result: x.to_float }
+    @refToDecimal = { x *Integer = 10; return result: x.to_decimal }
 `;
 
-function inp2(op, a, b) {
-  return { input: { id: '1', op: [[a, b], op], 'ty': [['Integer', 'Integer']], from: 'c' } };
-}
-function inp3(op, a, b, c) {
-  return { input: { id: '1', op: [[a, b, c], op], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } };
-}
-function inp4(op, a, b, c, d) {
-  return { input: { id: '1', op: [[a, b, c, d], op], 'ty': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } };
-}
-function out(result, type = 'Integer') {
-  return { output: { id: '1', 'ty': { result: type }, re: { result }, to: 'c' } };
-}
 async function expectN(script, input, expected) {
   // For tests where BigInt inputs produce results that fit in safe integer range.
   // JS returns BigInt (because inputs are BigInt), Rust returns Number (JSON layer normalizes).
@@ -37,37 +77,34 @@ async function expectN(script, input, expected) {
   expect(post['ty']).toEqual({ result: 'Integer' });
   expect(Number(post.re.result)).toBe(expected);
 }
-function outBool(matches) {
-  return { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches }, to: 'c' } };
-}
 
 // ─── Addition ────────────────────────────────────────────────────────────────
 
 describe('Integer addition', () => {
   it('adds two positive integers', async () => {
-    await expectBehavior(script, inp2('add', 3, 4), out(7));
+    await expectBehavior(script, { input: { id: '1', op: [[3, 4], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('adds zero', async () => {
-    await expectBehavior(script, inp2('add', 0, 5), out(5));
+    await expectBehavior(script, { input: { id: '1', op: [[0, 5], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
   it('adds negative integers', async () => {
-    await expectBehavior(script, inp2('add', -3, -7), out(-10));
+    await expectBehavior(script, { input: { id: '1', op: [[-3, -7], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -10 }, to: 'c' } });
   });
 
   it('adds mixed sign', async () => {
-    await expectBehavior(script, inp2('add', 10, -3), out(7));
+    await expectBehavior(script, { input: { id: '1', op: [[10, -3], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('adds beyond 64-bit range', async () => {
     // 2^53 + 1 — exceeds JS Number.MAX_SAFE_INTEGER
-    await expectBehavior(script, inp2('add', 9007199254740992n, 1n), out(9007199254740993n));
+    await expectBehavior(script, { input: { id: '1', op: [[9007199254740992n, 1n], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9007199254740993n }, to: 'c' } });
   });
 
   it('adds very large integers', async () => {
     // 10^20 + 10^20 = 2 * 10^20
-    await expectBehavior(script, inp2('add', 100000000000000000000n, 100000000000000000000n), out(200000000000000000000n));
+    await expectBehavior(script, { input: { id: '1', op: [[100000000000000000000n, 100000000000000000000n], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 200000000000000000000n }, to: 'c' } });
   });
 });
 
@@ -75,23 +112,23 @@ describe('Integer addition', () => {
 
 describe('Integer subtraction', () => {
   it('subtracts two positive integers', async () => {
-    await expectBehavior(script, inp2('sub', 10, 3), out(7));
+    await expectBehavior(script, { input: { id: '1', op: [[10, 3], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('subtracts to negative', async () => {
-    await expectBehavior(script, inp2('sub', 3, 10), out(-7));
+    await expectBehavior(script, { input: { id: '1', op: [[3, 10], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -7 }, to: 'c' } });
   });
 
   it('subtracts zero', async () => {
-    await expectBehavior(script, inp2('sub', 42, 0), out(42));
+    await expectBehavior(script, { input: { id: '1', op: [[42, 0], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('subtracts negative from negative', async () => {
-    await expectBehavior(script, inp2('sub', -5, -3), out(-2));
+    await expectBehavior(script, { input: { id: '1', op: [[-5, -3], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -2 }, to: 'c' } });
   });
 
   it('subtracts beyond 64-bit range', async () => {
-    await expectBehavior(script, inp2('sub', -9007199254740992n, 1n), out(-9007199254740993n));
+    await expectBehavior(script, { input: { id: '1', op: [[-9007199254740992n, 1n], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -9007199254740993n }, to: 'c' } });
   });
 });
 
@@ -99,33 +136,33 @@ describe('Integer subtraction', () => {
 
 describe('Integer multiplication', () => {
   it('multiplies two positive integers', async () => {
-    await expectBehavior(script, inp2('mul', 6, 7), out(42));
+    await expectBehavior(script, { input: { id: '1', op: [[6, 7], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('multiplies by zero', async () => {
-    await expectBehavior(script, inp2('mul', 999, 0), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[999, 0], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('multiplies by one', async () => {
-    await expectBehavior(script, inp2('mul', 42, 1), out(42));
+    await expectBehavior(script, { input: { id: '1', op: [[42, 1], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('multiplies negative by positive', async () => {
-    await expectBehavior(script, inp2('mul', -3, 7), out(-21));
+    await expectBehavior(script, { input: { id: '1', op: [[-3, 7], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -21 }, to: 'c' } });
   });
 
   it('multiplies negative by negative', async () => {
-    await expectBehavior(script, inp2('mul', -4, -5), out(20));
+    await expectBehavior(script, { input: { id: '1', op: [[-4, -5], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } });
   });
 
   it('multiplies large integers without overflow', async () => {
     // 10^10 * 10^10 = 10^20
-    await expectBehavior(script, inp2('mul', 10000000000n, 10000000000n), out(100000000000000000000n));
+    await expectBehavior(script, { input: { id: '1', op: [[10000000000n, 10000000000n], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 100000000000000000000n }, to: 'c' } });
   });
 
   it('multiplies beyond 64-bit range', async () => {
     // 2^40 * 2^40 = 2^80
-    await expectBehavior(script, inp2('mul', 1099511627776n, 1099511627776n), out(1208925819614629174706176n));
+    await expectBehavior(script, { input: { id: '1', op: [[1099511627776n, 1099511627776n], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1208925819614629174706176n }, to: 'c' } });
   });
 });
 
@@ -133,36 +170,36 @@ describe('Integer multiplication', () => {
 
 describe('Integer division', () => {
   it('divides evenly', async () => {
-    await expectBehavior(script, inp2('div', 12, 4), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[12, 4], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('truncates toward zero (positive)', async () => {
-    await expectBehavior(script, inp2('div', 7, 2), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[7, 2], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('truncates toward zero (negative dividend)', async () => {
-    await expectBehavior(script, inp2('div', -7, 2), out(-3));
+    await expectBehavior(script, { input: { id: '1', op: [[-7, 2], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -3 }, to: 'c' } });
   });
 
   it('truncates toward zero (negative divisor)', async () => {
-    await expectBehavior(script, inp2('div', 7, -2), out(-3));
+    await expectBehavior(script, { input: { id: '1', op: [[7, -2], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -3 }, to: 'c' } });
   });
 
   it('truncates toward zero (both negative)', async () => {
-    await expectBehavior(script, inp2('div', -7, -2), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[-7, -2], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('divides by one', async () => {
-    await expectBehavior(script, inp2('div', 42, 1), out(42));
+    await expectBehavior(script, { input: { id: '1', op: [[42, 1], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('zero divided by anything is zero', async () => {
-    await expectBehavior(script, inp2('div', 0, 7), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[0, 7], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('divides large integers', async () => {
     // 10^20 / 10^10 = 10^10
-    await expectN(script, inp2('div', 100000000000000000000n, 10000000000n), 10000000000);
+    await expectN(script, { input: { id: '1', op: [[100000000000000000000n, 10000000000n], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, 10000000000);
   });
 });
 
@@ -170,36 +207,36 @@ describe('Integer division', () => {
 
 describe('Integer remainder', () => {
   it('basic remainder', async () => {
-    await expectBehavior(script, inp2('rem', 7, 3), out(1));
+    await expectBehavior(script, { input: { id: '1', op: [[7, 3], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('even division has zero remainder', async () => {
-    await expectBehavior(script, inp2('rem', 9, 3), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[9, 3], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('negative dividend — remainder is negative', async () => {
-    await expectBehavior(script, inp2('rem', -7, 3), out(-1));
+    await expectBehavior(script, { input: { id: '1', op: [[-7, 3], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -1 }, to: 'c' } });
   });
 
   it('negative divisor — remainder sign follows dividend (positive)', async () => {
-    await expectBehavior(script, inp2('rem', 7, -3), out(1));
+    await expectBehavior(script, { input: { id: '1', op: [[7, -3], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('both negative — remainder is negative', async () => {
-    await expectBehavior(script, inp2('rem', -7, -3), out(-1));
+    await expectBehavior(script, { input: { id: '1', op: [[-7, -3], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -1 }, to: 'c' } });
   });
 
   it('zero remainder of anything is zero', async () => {
-    await expectBehavior(script, inp2('rem', 0, 5), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[0, 5], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('remainder by one is always zero', async () => {
-    await expectBehavior(script, inp2('rem', 42, 1), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[42, 1], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('remainder with large integers', async () => {
     // 10^20 + 7 mod 10^10 = 7
-    await expectN(script, inp2('rem', 100000000000000000007n, 10000000000n), 7);
+    await expectN(script, { input: { id: '1', op: [[100000000000000000007n, 10000000000n], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, 7);
   });
 });
 
@@ -207,43 +244,43 @@ describe('Integer remainder', () => {
 
 describe('Integer exponentiation', () => {
   it('basic power: 2 ^ 3 = 8', async () => {
-    await expectBehavior(script, inp2('exp', 2, 3), out(8));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } });
   });
 
   it('power of zero: 5 ^ 0 = 1', async () => {
-    await expectBehavior(script, inp2('exp', 5, 0), out(1));
+    await expectBehavior(script, { input: { id: '1', op: [[5, 0], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('zero to the zero: 0 ^ 0 = 1', async () => {
-    await expectBehavior(script, inp2('exp', 0, 0), out(1));
+    await expectBehavior(script, { input: { id: '1', op: [[0, 0], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('power of one: 7 ^ 1 = 7', async () => {
-    await expectBehavior(script, inp2('exp', 7, 1), out(7));
+    await expectBehavior(script, { input: { id: '1', op: [[7, 1], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
   });
 
   it('zero raised to positive: 0 ^ 5 = 0', async () => {
-    await expectBehavior(script, inp2('exp', 0, 5), out(0));
+    await expectBehavior(script, { input: { id: '1', op: [[0, 5], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('one raised to anything: 1 ^ 100 = 1', async () => {
-    await expectBehavior(script, inp2('exp', 1, 100), out(1));
+    await expectBehavior(script, { input: { id: '1', op: [[1, 100], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   it('negative base even exponent: (-3) ^ 4 = 81', async () => {
-    await expectBehavior(script, inp2('exp', -3, 4), out(81));
+    await expectBehavior(script, { input: { id: '1', op: [[-3, 4], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 81 }, to: 'c' } });
   });
 
   it('negative base odd exponent: (-3) ^ 3 = -27', async () => {
-    await expectBehavior(script, inp2('exp', -3, 3), out(-27));
+    await expectBehavior(script, { input: { id: '1', op: [[-3, 3], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: -27 }, to: 'c' } });
   });
 
   it('large exponent produces arbitrary-precision result: 2 ^ 64', async () => {
-    await expectBehavior(script, inp2('exp', 2n, 64n), out(18446744073709551616n));
+    await expectBehavior(script, { input: { id: '1', op: [[2n, 64n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 18446744073709551616n }, to: 'c' } });
   });
 
   it('large base and exponent: 10 ^ 20', async () => {
-    await expectBehavior(script, inp2('exp', 10n, 20n), out(100000000000000000000n));
+    await expectBehavior(script, { input: { id: '1', op: [[10n, 20n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 100000000000000000000n }, to: 'c' } });
   });
 });
 
@@ -251,36 +288,24 @@ describe('Integer exponentiation', () => {
 // For all a, b (b ≠ 0): a == (a / b) * b + (a % b)
 
 describe('Integer division/remainder identity', () => {
-  const identityScript = `
-      @identity
-        =
-        a Integer
-        b Integer
-        =
-        quotient Integer = a / b
-        remainder Integer = a % b
-        reconstructed Integer = quotient * b + remainder
-        return matches: reconstructed == a
-  `;
-
   it('identity holds for positive values', async () => {
-    await expectBehavior(identityScript, inp2('identity', 17, 5), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[17, 5], 'identity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 
   it('identity holds for negative dividend', async () => {
-    await expectBehavior(identityScript, inp2('identity', -17, 5), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[-17, 5], 'identity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 
   it('identity holds for negative divisor', async () => {
-    await expectBehavior(identityScript, inp2('identity', 17, -5), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[17, -5], 'identity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 
   it('identity holds for both negative', async () => {
-    await expectBehavior(identityScript, inp2('identity', -17, -5), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[-17, -5], 'identity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 
   it('identity holds for large integers', async () => {
-    await expectBehavior(identityScript, inp2('identity', 123456789012345678901n, 987654321n), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[123456789012345678901n, 987654321n], 'identity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 });
 
@@ -291,100 +316,81 @@ describe('Integer division/remainder identity', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Integer order of operations', () => {
-  const precedenceScript = `
-      @mulBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b * c
-      @mulBeforeSub = (a Integer, b Integer, c Integer) -> result: a - b * c
-      @divBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b / c
-      @remBeforeAdd = (a Integer, b Integer, c Integer) -> result: a + b % c
-      @parenAdd = (a Integer, b Integer, c Integer) -> result: (a + b) * c
-      @parenSub = (a Integer, b Integer, c Integer) -> result: a * (b - c)
-      @parenDiv = (a Integer, b Integer, c Integer) -> result: (a + b) / c
-      @parenRem = (a Integer, b Integer, c Integer) -> result: (a + b) % c
-      @nested = (a Integer, b Integer, c Integer, d Integer) -> result: (a + b) * (c - d)
-      @deepNest = (a Integer, b Integer, c Integer, d Integer) -> result: ((a + b) * c) / d
-      @expBeforeMul = (a Integer, b Integer, c Integer) -> result: a * b ^ c
-      @parenBeforeExp = (a Integer, b Integer, c Integer) -> result: (a * b) ^ c
-      @leftAssocSub = (a Integer, b Integer, c Integer) -> result: a - b - c
-      @leftAssocDiv = (a Integer, b Integer, c Integer) -> result: a / b / c
-      @rightAssocExp = (a Integer, b Integer, c Integer) -> result: a ^ b ^ c
-      @mixedChain = (a Integer, b Integer, c Integer, d Integer) -> result: a + b * c - d
-  `;
-
   // ─── Precedence ──────────────────────────────────────────────────────────
 
   it('multiplication before addition: 2 + 3 * 4 = 14', async () => {
-    await expectBehavior(precedenceScript, inp3('mulBeforeAdd', 2, 3, 4), out(14));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 4], 'mulBeforeAdd'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 14 }, to: 'c' } });
   });
 
   it('multiplication before subtraction: 10 - 2 * 3 = 4', async () => {
-    await expectBehavior(precedenceScript, inp3('mulBeforeSub', 10, 2, 3), out(4));
+    await expectBehavior(script, { input: { id: '1', op: [[10, 2, 3], 'mulBeforeSub'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 4 }, to: 'c' } });
   });
 
   it('division before addition: 1 + 8 / 4 = 3', async () => {
-    await expectBehavior(precedenceScript, inp3('divBeforeAdd', 1, 8, 4), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[1, 8, 4], 'divBeforeAdd'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('remainder before addition: 1 + 7 % 3 = 2', async () => {
-    await expectBehavior(precedenceScript, inp3('remBeforeAdd', 1, 7, 3), out(2));
+    await expectBehavior(script, { input: { id: '1', op: [[1, 7, 3], 'remBeforeAdd'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
   });
 
   // ─── Parentheses ─────────────────────────────────────────────────────────
 
   it('parentheses override: (2 + 3) * 4 = 20', async () => {
-    await expectBehavior(precedenceScript, inp3('parenAdd', 2, 3, 4), out(20));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 4], 'parenAdd'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } });
   });
 
   it('parentheses on right: 3 * (5 - 2) = 9', async () => {
-    await expectBehavior(precedenceScript, inp3('parenSub', 3, 5, 2), out(9));
+    await expectBehavior(script, { input: { id: '1', op: [[3, 5, 2], 'parenSub'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9 }, to: 'c' } });
   });
 
   it('parentheses with division: (10 + 2) / 4 = 3', async () => {
-    await expectBehavior(precedenceScript, inp3('parenDiv', 10, 2, 4), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[10, 2, 4], 'parenDiv'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('parentheses with remainder: (10 + 1) % 4 = 3', async () => {
-    await expectBehavior(precedenceScript, inp3('parenRem', 10, 1, 4), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[10, 1, 4], 'parenRem'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   // ─── Nested parentheses ──────────────────────────────────────────────────
 
   it('nested: (2 + 3) * (7 - 4) = 15', async () => {
-    await expectBehavior(precedenceScript, inp4('nested', 2, 3, 7, 4), out(15));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 7, 4], 'nested'], 'ty': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } });
   });
 
   it('deep nest: ((2 + 3) * 4) / 5 = 4', async () => {
-    await expectBehavior(precedenceScript, inp4('deepNest', 2, 3, 4, 5), out(4));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 4, 5], 'deepNest'], 'ty': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 4 }, to: 'c' } });
   });
 
   // ─── Exponentiation precedence ─────────────────────────────────────────────
 
   it('^ binds tighter than *: 2 * 3 ^ 2 = 18 (not 36)', async () => {
-    await expectBehavior(precedenceScript, inp3('expBeforeMul', 2, 3, 2), out(18));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 2], 'expBeforeMul'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 18 }, to: 'c' } });
   });
 
   it('parens override ^: (2 * 3) ^ 2 = 36', async () => {
-    await expectBehavior(precedenceScript, inp3('parenBeforeExp', 2, 3, 2), out(36));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 2], 'parenBeforeExp'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 36 }, to: 'c' } });
   });
 
   // ─── Left-to-right associativity ─────────────────────────────────────────
 
   it('subtraction is left-associative: 10 - 3 - 2 = 5 (not 9)', async () => {
-    await expectBehavior(precedenceScript, inp3('leftAssocSub', 10, 3, 2), out(5));
+    await expectBehavior(script, { input: { id: '1', op: [[10, 3, 2], 'leftAssocSub'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 
   it('division is left-associative: 24 / 4 / 2 = 3 (not 12)', async () => {
-    await expectBehavior(precedenceScript, inp3('leftAssocDiv', 24, 4, 2), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[24, 4, 2], 'leftAssocDiv'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 
   it('^ is right-associative: 2 ^ 3 ^ 2 = 512 (not 64)', async () => {
     // 2 ^ (3 ^ 2) = 2 ^ 9 = 512, not (2 ^ 3) ^ 2 = 8 ^ 2 = 64
-    await expectBehavior(precedenceScript, inp3('rightAssocExp', 2, 3, 2), out(512));
+    await expectBehavior(script, { input: { id: '1', op: [[2, 3, 2], 'rightAssocExp'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 512 }, to: 'c' } });
   });
 
   // ─── Mixed precedence chain ──────────────────────────────────────────────
 
   it('mixed: 1 + 2 * 3 - 4 = 3', async () => {
-    await expectBehavior(precedenceScript, inp4('mixedChain', 1, 2, 3, 4), out(3));
+    await expectBehavior(script, { input: { id: '1', op: [[1, 2, 3, 4], 'mixedChain'], 'ty': [['Integer', 'Integer', 'Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
   });
 });
 
@@ -400,17 +406,17 @@ describe('Arbitrary-precision integers', () => {
   // f64 cannot distinguish 9007199254740992 from 9007199254740993
 
   it('MAX_SAFE_INTEGER + 1 is exact', async () => {
-    await expectBehavior(script, inp2('add', 9007199254740991n, 1n), out(9007199254740992n));
+    await expectBehavior(script, { input: { id: '1', op: [[9007199254740991n, 1n], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9007199254740992n }, to: 'c' } });
   });
 
   it('MAX_SAFE_INTEGER + 2 is exact (f64 would round)', async () => {
-    await expectBehavior(script, inp2('add', 9007199254740991n, 2n), out(9007199254740993n));
+    await expectBehavior(script, { input: { id: '1', op: [[9007199254740991n, 2n], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9007199254740993n }, to: 'c' } });
   });
 
   it('consecutive large integers are distinguishable', async () => {
     // f64 maps both 9007199254740993 and 9007199254740992 to the same value
     await expectBehavior(script,
-      inp2('sub', 9007199254740993n, 9007199254740992n), out(1));
+      { input: { id: '1', op: [[9007199254740993n, 9007199254740992n], 'sub'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } });
   });
 
   // ─── Multiplication precision ──────────────────────────────────────────────
@@ -422,18 +428,18 @@ describe('Arbitrary-precision integers', () => {
     const a = 999999999999999877n;
     const b = 999999999999999613n;
     const expected = a * b; // 999999999999999490000000000000195601n (36 digits)
-    await expectBehavior(script, inp2('mul', a, b), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[a, b], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   it('2^100 is exact', async () => {
     // 2^100 = 1267650600228229401496703205376 (31 digits)
     const expected = 2n ** 100n;
-    await expectBehavior(script, inp2('exp', 2n, 100n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[2n, 100n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   it('2^200 is exact', async () => {
     const expected = 2n ** 200n;
-    await expectBehavior(script, inp2('exp', 2n, 200n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[2n, 200n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   // ─── Division precision ────────────────────────────────────────────────────
@@ -443,20 +449,20 @@ describe('Arbitrary-precision integers', () => {
     // 10^30 / 7 — truncated integer division
     const a = 10n ** 30n;
     const expected = a / 7n; // 142857142857142857142857142857n
-    await expectBehavior(script, inp2('div', a, 7n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[a, 7n], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   it('division of very large numbers', async () => {
     const a = 2n ** 128n;
     const b = 2n ** 64n;
-    await expectBehavior(script, inp2('div', a, b), out(2n ** 64n));
+    await expectBehavior(script, { input: { id: '1', op: [[a, b], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2n ** 64n }, to: 'c' } });
   });
 
   // ─── Remainder precision ───────────────────────────────────────────────────
 
   it('remainder of large number is exact', async () => {
     const a = 10n ** 30n + 42n;
-    await expectBehavior(script, inp2('rem', a, 100n), out(42));
+    await expectBehavior(script, { input: { id: '1', op: [[a, 100n], 'rem'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } });
   });
 
   // ─── Exponentiation producing huge numbers ─────────────────────────────────
@@ -464,32 +470,21 @@ describe('Arbitrary-precision integers', () => {
   it('3^100 is exact (48 digits)', async () => {
     const expected = 3n ** 100n;
     // 515377520732011331036461129765621272702107522001
-    await expectBehavior(script, inp2('exp', 3n, 100n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[3n, 100n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   it('10^50 is exact', async () => {
     const expected = 10n ** 50n;
-    await expectBehavior(script, inp2('exp', 10n, 50n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[10n, 50n], 'exp'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   // ─── Chain of operations at scale ──────────────────────────────────────────
 
   it('division-remainder identity at large scale', async () => {
     // a = (a / b) * b + (a % b) for 100+ digit numbers
-    const identityScript = `
-        @identity
-          =
-          a Integer
-          b Integer
-          =
-          quotient Integer = a / b
-          remainder Integer = a % b
-          reconstructed Integer = quotient * b + remainder
-          return matches: reconstructed == a
-    `;
     const a = 123456789012345678901234567890123456789n;
     const b = 9876543210987654321n;
-    await expectBehavior(identityScript, inp2('identity', a, b), outBool(true));
+    await expectBehavior(script, { input: { id: '1', op: [[a, b], 'bigDivIdentity'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { matches: 'Boolean' }, re: { matches: true }, to: 'c' } });
   });
 
   // ─── Negative large numbers ────────────────────────────────────────────────
@@ -498,27 +493,24 @@ describe('Arbitrary-precision integers', () => {
     const a = -(10n ** 20n);
     const b = 10n ** 20n;
     const expected = -(10n ** 40n);
-    await expectBehavior(script, inp2('mul', a, b), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[a, b], 'mul'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   it('negative large division truncates toward zero', async () => {
     const a = -(10n ** 30n + 1n);
     // -1000000000000000000000000000001 / 3 = -333333333333333333333333333333 (truncated)
     const expected = a / 3n;
-    await expectBehavior(script, inp2('div', a, 3n), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[a, 3n], 'div'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 
   // ─── Fibonacci-scale test (compound operations) ───────────────────────────
 
   it('compound arithmetic with huge intermediates', async () => {
     // (2^128 + 2^64) * 3 - 2^128 = 2^128 * 2 + 2^64 * 3
-    const compoundScript = `
-        @compute = (a Integer, b Integer) -> result: (a + b) * 3 - a
-    `;
     const a = 2n ** 128n;
     const b = 2n ** 64n;
     const expected = (a + b) * 3n - a; // = 2a + 3b
-    await expectBehavior(compoundScript, inp2('compute', a, b), out(expected));
+    await expectBehavior(script, { input: { id: '1', op: [[a, b], 'compute'], 'ty': [['Integer', 'Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: expected }, to: 'c' } });
   });
 });
 
@@ -530,70 +522,42 @@ describe('Arbitrary-precision integers', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Integer type conversions', () => {
-  const convScript = `
-      @toFloat = (x Integer) -> result: Integer.to_float(x)
-      @toDecimal = (x Integer) -> result: Integer.to_decimal(x)
-      @toSelf = (x Integer) -> result: Integer.to_integer(x)
-  `;
-
-  function inpI(op, a) {
-    return { input: { id: '1', op: [[a], op], 'ty': [['Integer']], from: 'c' } };
-  }
-  function outFloat(result) {
-    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
-  }
-  function outDecimal(result) {
-    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
-  }
-
   it('to_float(42) = 42.0', async () => {
-    await expectBehavior(convScript, inpI('toFloat', 42), outFloat(42));
+    await expectBehavior(script, { input: { id: '1', op: [[42], 'toFloat'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Float' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('to_float(0) = 0.0', async () => {
-    await expectBehavior(convScript, inpI('toFloat', 0), outFloat(0));
+    await expectBehavior(script, { input: { id: '1', op: [[0], 'toFloat'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Float' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('to_float(-7) = -7.0', async () => {
-    await expectBehavior(convScript, inpI('toFloat', -7), outFloat(-7));
+    await expectBehavior(script, { input: { id: '1', op: [[-7], 'toFloat'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Float' }, re: { result: -7 }, to: 'c' } });
   });
 
   it('to_decimal(42) = 42.0', async () => {
-    await expectBehavior(convScript, inpI('toDecimal', 42), outDecimal(42));
+    await expectBehavior(script, { input: { id: '1', op: [[42], 'toDecimal'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('to_decimal(0) = 0.0', async () => {
-    await expectBehavior(convScript, inpI('toDecimal', 0), outDecimal(0));
+    await expectBehavior(script, { input: { id: '1', op: [[0], 'toDecimal'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result: 0 }, to: 'c' } });
   });
 
   it('to_decimal(-7) = -7.0', async () => {
-    await expectBehavior(convScript, inpI('toDecimal', -7), outDecimal(-7));
+    await expectBehavior(script, { input: { id: '1', op: [[-7], 'toDecimal'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result: -7 }, to: 'c' } });
   });
 
   it('to_integer(5) = 5 (identity)', async () => {
-    await expectBehavior(convScript, inpI('toSelf', 5), out(5));
+    await expectBehavior(script, { input: { id: '1', op: [[5], 'toSelf'], 'ty': [['Integer']], from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
   });
 });
 
 describe('Integer conversion via ref cell dot method', () => {
-  const refScript = `
-      @toFloat = { x *Integer = 42; return result: x.to_float }
-      @toDecimal = { x *Integer = 10; return result: x.to_decimal }
-  `;
-
-  function outFloat(result) {
-    return { output: { id: '1', 'ty': { result: 'Float' }, re: { result }, to: 'c' } };
-  }
-  function outDecimal(result) {
-    return { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result }, to: 'c' } };
-  }
-
   it('x.to_float on *Integer ref', async () => {
-    await expectBehavior(refScript, { input: { id: '1', op: 'toFloat', from: 'c' } }, outFloat(42));
+    await expectBehavior(script, { input: { id: '1', op: 'refToFloat', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Float' }, re: { result: 42 }, to: 'c' } });
   });
 
   it('x.to_decimal on *Integer ref', async () => {
-    await expectBehavior(refScript, { input: { id: '1', op: 'toDecimal', from: 'c' } }, outDecimal(10));
+    await expectBehavior(script, { input: { id: '1', op: 'refToDecimal', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Decimal' }, re: { result: 10 }, to: 'c' } });
   });
 });
 

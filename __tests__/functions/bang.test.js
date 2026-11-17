@@ -78,8 +78,9 @@ describe('<- as an expression — validation', () => {
   });
 });
 
-describe('<- as a value', () => {
+describe('! functions — runtime', () => {
   const script = `
+    // <- as a value
     a *Integer = 0
     b *Integer = 0
     @p *Integer = 0
@@ -104,6 +105,243 @@ describe('<- as a value', () => {
       x Integer = if c -> a <- 8 else -> 0
       return (x, a)
     }
+
+    // an anonymous function in a '=> (Integer)' slot
+    run! = (f () => (Integer)) { return f() }
+    @go! = {
+      n Integer = run!(() -> {
+        a <- 5
+        v Integer = a + 1
+        return v
+      })
+      return (n, a)
+    }
+
+    // an untracked published cell, logged from a read-only function
+    untracked @log *Text = ""
+    untracked @write. = (m Text) { @log <- @log + m }
+    @get = {
+      @write("x")...
+      return 1
+    }
+    @read = { return @log }
+
+    // ! function — return paths
+    type Flag (untracked: Boolean)
+
+    acc *Integer = 0
+    held *Integer = 5
+    log *Integer = 0
+
+    bump! = (i Integer) { acc <- acc + i }
+
+    next! = (v Integer) {
+      log <- log * 10 + v
+      return v
+    }
+
+    @inc! = (i Integer) { acc <- acc + i }
+
+    @explicit! = (i Integer) {
+      acc <- acc + i
+      return self
+    }
+
+    @take! = {
+      v Integer = acc
+      acc <- 0
+      return v
+    }
+
+    @guarded! = (i Integer) {
+      if i == 0 { return }
+      acc <- acc + i
+    }
+
+    @every! = (c Boolean) {
+      if c {
+        acc <- 1
+        return self
+      }
+      return self
+    }
+
+    @either! = (c Boolean) {
+      acc <- 1
+      if c { return acc }
+      return self
+    }
+
+    @tailIf! = (c Boolean) {
+      if c {
+        acc <- 1
+        bump!(2)
+      }
+    }
+
+    @branches! = (c Integer) {
+      if c == 1 {
+        acc <- 10
+      } else if c == 2 {
+        acc <- 20
+      } else {
+        acc <- 30
+      }
+    }
+
+    @arrow! = (i Integer) -> acc <- acc + i
+
+    @lineal!
+      =
+      acc <- acc + 1
+
+    @valueBranch! = (c Boolean) {
+      if c {
+        acc <- 1
+        return acc
+      }
+      return 0
+    }
+
+    @total = { return acc }
+
+    @viaPrivate! = {
+      bump!(1)
+      bump!(2)
+      return acc
+    }
+
+    @me = { self }
+    @meExplicit = { return self }
+
+    @same = { return 1 }
+    @same! = { acc <- 2 }
+
+    @notEqual = (n Integer) {
+      r Boolean = n!=1
+      return r
+    }
+
+    @keyReply = { return untracked: 1 }
+
+    @keyParam = (untracked: u Integer) { return u }
+
+    keyed = (untracked: u Integer) { return u }
+
+    @keyArg = {
+      v Integer = keyed(untracked: 2)
+      return v
+    }
+
+    @keyField = {
+      f Flag = Flag(untracked: true)
+      v Boolean = f.untracked
+      return v
+    }
+
+    @stays! = {
+      a <- held <- 9
+      return a, held
+    }
+
+    @ordered! = {
+      a <- next!(1) <- next!(2)
+      return log
+    }
+
+    @whole! = {
+      a <- a + 1 * 3
+      return a
+    }
+
+    runEach! = (f (Integer) => ()) { f(2) }
+
+    @passes! = {
+      runEach!(&bump!)
+      return acc
+    }
+
+    @localCell = {
+      m *Integer = 0
+      m <- 2
+      return m
+    }
+
+    @passesToOver! = {
+      r List of Integers = over([1, 2], &next!)
+      return r, log
+    }
+
+    @selfCalls! = {
+      @inc!(1)
+      @inc!(2)
+      return acc as Integer
+    }
+
+    @selfCallValue! = {
+      @inc!(4)
+      v Integer = @take!()
+      return v, acc
+    }
+
+    @selfCallRead = {
+      v Integer = @total()
+      return v
+    }
+
+    @selfCallReturned = { return @total() as Integer }
+
+    #hit! = (i Integer) { acc <- acc + i }
+
+    @hashCall! = {
+      #hit!(2)
+      #hit!(3)
+      return acc
+    }
+
+    #plain = { return 8 }
+
+    @hashReturned = { return #plain() as Integer }
+
+    @builtinReturned = { return upper("hi") as Text }
+
+    @selfChain! = {
+      @inc!(1).explicit!(2)
+      return acc
+    }
+
+    @privateChain! = {
+      bump!(1).inc!(2)
+      return acc
+    }
+
+    @chainValue! = {
+      v Integer = bump!(4).total()
+      return v
+    }
+
+    @chainMember! = {
+      v Integer = bump!(5).total
+      return v
+    }
+
+    @chainReturned! = { return @inc!(1).inc!(2).total() as Integer }
+
+    @chainTail! = { @inc!(1).inc!(2) }
+
+    @shadowsEarly = { return first(1) as Integer }
+
+    first = (i Integer) { return i + 10 }
+
+    @shadowsLate = { return first(2) as Integer }
+
+    // a writing type field
+    type Act (arg Integer, run!: (value: Integer) => (out: Integer))
+
+    @go5! = (a: Act) {
+      out: Integer = a.run!(a.arg)
+      return result: out
+    }
   `;
 
   it.each([
@@ -121,12 +359,336 @@ describe('<- as a value', () => {
     );
   });
 
-  it('a write in an `if` branch runs only on that branch', async () => {
+  it('<- as a value — a write in an `if` branch runs only on that branch', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], 'branch!'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '1', re: [8, 8], 'ty': ['Integer', 'Integer'], to: 'c' } },
       { input: { id: '2', op: [[false], 'branch!'], 'ty': [['Boolean']], from: 'c' } },
       { output: { id: '2', re: [0, 8], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  // ── Runtime ──────────────────────────────────────────────────────────────────
+
+  it('an anonymous function in a `=> (Integer)` slot — writes, and returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'go!', from: 'c' } },
+      { output: { id: '1', re: [6, 5], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('an untracked published cell, logged from a read-only function — takes the write', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'get', from: 'c' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'read', from: 'c' } },
+      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — falling off the end returns self', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5], 'inc!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — the write takes effect', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5], 'inc!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: [[2], 'inc!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '2', re: '#<:>', to: 'c' } },
+      { input: { id: '3', op: 'total', from: 'c' } },
+      { output: { id: '3', re: [7], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return self` returns self, even when it is the only path', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5], 'explicit!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return v` returns v', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], 'inc!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'take!', from: 'c' } },
+      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a bare `return` exits as falling off the end does', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[0], 'guarded!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [0], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — every path may return self explicitly, and a write in a returning branch takes effect', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'every!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — value on one path, explicit self on another', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'either!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[false], 'either!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a write and a call in a tail `if` take effect', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'tailIf!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a tail `if` not taken returns self', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'tailIf!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [0], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it.each([[1, 10], [2, 20], [3, 30]])('a tail `if`/`else if`/`else` takes one branch: %i', async (c, expected) => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[c], 'branches!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [expected], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a final write in arrow form is a statement', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2], 'arrow!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [2], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a lineal `!` function returns self', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'lineal!', from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a write in a value-returning branch takes effect', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'valueBranch!'], 'ty': [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a private `!` function runs, called with its bang', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'viaPrivate!', from: 'c' } },
+      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a bare tail `self` in a read-only function is an ordinary tail return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'me', from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return self` in a read-only function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'meExplicit', from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `foo` and `foo!` are distinct', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'same', from: 'c' } },
+      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'same!', from: 'c' } },
+      { output: { id: '2', re: '#<:>', to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `!=` is still not-equal', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2], 'notEqual'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: [true], 'ty': ['Boolean'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `untracked` works as a reply key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'keyReply', from: 'c' } },
+      { output: { id: '1', re: { untracked: 1 }, 'ty': { untracked: 'Integer' }, to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `untracked` works as a param key', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[{ untracked: 3 }], 'keyParam'], 'ty': [[{ untracked: 'Integer' }]], from: 'c' } },
+      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `untracked` works as a named argument', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'keyArg', from: 'c' } },
+      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `untracked` works as a type field', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'keyField', from: 'c' } },
+      { output: { id: '1', re: [true], 'ty': ['Boolean'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a `<-` chain stays on its target: a ends up holding c, b is only read', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'stays!', from: 'c' } },
+      { output: { id: '1', re: [9, 5], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — every link of a `<-` chain runs, in order', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'ordered!', from: 'c' } },
+      { output: { id: '1', re: [12], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — the right side of `<-` takes a whole expression', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'whole!', from: 'c' } },
+      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `&name!` passes a `!` function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'passes!', from: 'c' } },
+      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return` on a local cell returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'localCell', from: 'c' } },
+      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `&name!` works with `over`', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'passesToOver!', from: 'c' } },
+      { output: { id: '1', re: [[1, 2], 12], 'ty': ['List of Integers', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `#x!(…)` self-calls run', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'hashCall!', from: 'c' } },
+      { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return #x()` returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'hashReturned', from: 'c' } },
+      { output: { id: '1', re: [8], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `return` takes a bare builtin', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'builtinReturned', from: 'c' } },
+      { output: { id: '1', re: ['HI'], 'ty': ['Text'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — `@x(…)` self-calls run in order', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'selfCalls!', from: 'c' } },
+      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a `@x!(…)` self-call yields its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'selfCallValue!', from: 'c' } },
+      { output: { id: '1', re: [4, 0], 'ty': ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a `@x(…)` self-call reads', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], 'inc!'], 'ty': [['Integer']], from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'selfCallRead', from: 'c' } },
+      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '3', op: 'selfCallReturned', from: 'c' } },
+      { output: { id: '3', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it.each([
+    ['selfChain!', 3],
+    ['privateChain!', 3],
+    ['chainValue!', 4],
+    ['chainMember!', 5],
+    ['chainReturned!', 3],
+  ])('a chain from a call on this actor: %s', async (op, expected) => {
+    await expectBehavior(script,
+      { input: { id: '1', op, from: 'c' } },
+      { output: { id: '1', re: [expected], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a chain in tail position returns self', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'chainTail!', from: 'c' } },
+      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { input: { id: '2', op: 'total', from: 'c' } },
+      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('! function — return paths — a function named like a builtin shadows it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'shadowsEarly', from: 'c' } },
+      { output: { id: '1', re: [11], 'ty': ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'shadowsLate', from: 'c' } },
+      { output: { id: '2', re: [12], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a writing type field — is invoked at the address it holds', async () => {
+    await expectBehavior(script,
+      { input: { id: '50', op: [[{ a: [200, '#<caller:cb>'] }], 'go5!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
+      { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller:cb>' }) },
+      { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
+      { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },
     );
   });
 });
@@ -956,562 +1518,6 @@ describe('untracked', () => {
     expect(() => compileSource('untracked 1\n')).toThrow(/must come before a declaration/);
   });
 });
-
-// ── Runtime ──────────────────────────────────────────────────────────────────
-
-describe('an anonymous function in a `=> (Integer)` slot', () => {
-  const script = `
-    a *Integer = 0
-    run! = (f () => (Integer)) { return f() }
-    @go! = {
-      n Integer = run!(() -> {
-        a <- 5
-        v Integer = a + 1
-        return v
-      })
-      return (n, a)
-    }
-  `;
-
-  it('writes, and returns its value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'go!', from: 'c' } },
-      { output: { id: '1', re: [6, 5], 'ty': ['Integer', 'Integer'], to: 'c' } },
-    );
-  });
-});
-
-describe('an untracked published cell, logged from a read-only function', () => {
-  const script = `
-    untracked @log *Text = ""
-    untracked @write. = (m Text) { @log <- @log + m }
-    @get = {
-      @write("x")...
-      return 1
-    }
-    @read = { return @log }
-  `;
-
-  it('takes the write', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'get', from: 'c' } },
-      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '2', op: 'read', from: 'c' } },
-      { output: { id: '2', re: ['x'], 'ty': ['Text'], to: 'c' } },
-    );
-  });
-});
-
-describe('! function — return paths', () => {
-  const script = `
-    type Flag (untracked: Boolean)
-
-    acc *Integer = 0
-    a *Integer = 0
-    b *Integer = 5
-    log *Integer = 0
-
-    bump! = (i Integer) { acc <- acc + i }
-
-    next! = (v Integer) {
-      log <- log * 10 + v
-      return v
-    }
-
-    @inc! = (i Integer) { acc <- acc + i }
-
-    @explicit! = (i Integer) {
-      acc <- acc + i
-      return self
-    }
-
-    @take! = {
-      v Integer = acc
-      acc <- 0
-      return v
-    }
-
-    @guarded! = (i Integer) {
-      if i == 0 { return }
-      acc <- acc + i
-    }
-
-    @every! = (c Boolean) {
-      if c {
-        acc <- 1
-        return self
-      }
-      return self
-    }
-
-    @either! = (c Boolean) {
-      acc <- 1
-      if c { return acc }
-      return self
-    }
-
-    @tailIf! = (c Boolean) {
-      if c {
-        acc <- 1
-        bump!(2)
-      }
-    }
-
-    @branches! = (c Integer) {
-      if c == 1 {
-        acc <- 10
-      } else if c == 2 {
-        acc <- 20
-      } else {
-        acc <- 30
-      }
-    }
-
-    @arrow! = (i Integer) -> acc <- acc + i
-
-    @lineal!
-      =
-      acc <- acc + 1
-
-    @valueBranch! = (c Boolean) {
-      if c {
-        acc <- 1
-        return acc
-      }
-      return 0
-    }
-
-    @total = { return acc }
-
-    @viaPrivate! = {
-      bump!(1)
-      bump!(2)
-      return acc
-    }
-
-    @me = { self }
-    @meExplicit = { return self }
-
-    @same = { return 1 }
-    @same! = { acc <- 2 }
-
-    @notEqual = (n Integer) {
-      r Boolean = n!=1
-      return r
-    }
-
-    @keyReply = { return untracked: 1 }
-
-    @keyParam = (untracked: u Integer) { return u }
-
-    keyed = (untracked: u Integer) { return u }
-
-    @keyArg = {
-      v Integer = keyed(untracked: 2)
-      return v
-    }
-
-    @keyField = {
-      f Flag = Flag(untracked: true)
-      v Boolean = f.untracked
-      return v
-    }
-
-    @stays! = {
-      a <- b <- 9
-      return a, b
-    }
-
-    @ordered! = {
-      a <- next!(1) <- next!(2)
-      return log
-    }
-
-    @whole! = {
-      a <- a + 1 * 3
-      return a
-    }
-
-    run! = (f (Integer) => ()) { f(2) }
-
-    @passes! = {
-      run!(&bump!)
-      return acc
-    }
-
-    @localCell = {
-      m *Integer = 0
-      m <- 2
-      return m
-    }
-
-    @passesToOver! = {
-      r List of Integers = over([1, 2], &next!)
-      return r, log
-    }
-
-    @selfCalls! = {
-      @inc!(1)
-      @inc!(2)
-      return acc as Integer
-    }
-
-    @selfCallValue! = {
-      @inc!(4)
-      v Integer = @take!()
-      return v, acc
-    }
-
-    @selfCallRead = {
-      v Integer = @total()
-      return v
-    }
-
-    @selfCallReturned = { return @total() as Integer }
-
-    #hit! = (i Integer) { acc <- acc + i }
-
-    @hashCall! = {
-      #hit!(2)
-      #hit!(3)
-      return acc
-    }
-
-    #plain = { return 8 }
-
-    @hashReturned = { return #plain() as Integer }
-
-    @builtinReturned = { return upper("hi") as Text }
-
-    @selfChain! = {
-      @inc!(1).explicit!(2)
-      return acc
-    }
-
-    @privateChain! = {
-      bump!(1).inc!(2)
-      return acc
-    }
-
-    @chainValue! = {
-      v Integer = bump!(4).total()
-      return v
-    }
-
-    @chainMember! = {
-      v Integer = bump!(5).total
-      return v
-    }
-
-    @chainReturned! = { return @inc!(1).inc!(2).total() as Integer }
-
-    @chainTail! = { @inc!(1).inc!(2) }
-
-    @shadowsEarly = { return first(1) as Integer }
-
-    first = (i Integer) { return i + 10 }
-
-    @shadowsLate = { return first(2) as Integer }
-  `;
-
-  it('falling off the end returns self', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[5], 'inc!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('the write takes effect', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[5], 'inc!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: [[2], 'inc!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '2', re: '#<:>', to: 'c' } },
-      { input: { id: '3', op: 'total', from: 'c' } },
-      { output: { id: '3', re: [7], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`return self` returns self, even when it is the only path', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[5], 'explicit!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('`return v` returns v', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[3], 'inc!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'take!', from: 'c' } },
-      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a bare `return` exits as falling off the end does', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[0], 'guarded!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [0], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('every path may return self explicitly, and a write in a returning branch takes effect', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'every!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('value on one path, explicit self on another', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'either!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '2', op: [[false], 'either!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '2', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('a write and a call in a tail `if` take effect', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'tailIf!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a tail `if` not taken returns self', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[false], 'tailIf!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [0], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it.each([[1, 10], [2, 20], [3, 30]])('a tail `if`/`else if`/`else` takes one branch: %i', async (c, expected) => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[c], 'branches!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [expected], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a final write in arrow form is a statement', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[2], 'arrow!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [2], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a lineal `!` function returns self', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'lineal!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('a write in a value-returning branch takes effect', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[true], 'valueBranch!'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [1], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a private `!` function runs, called with its bang', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'viaPrivate!', from: 'c' } },
-      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a bare tail `self` in a read-only function is an ordinary tail return', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'me', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('`return self` in a read-only function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'meExplicit', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('`foo` and `foo!` are distinct', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'same', from: 'c' } },
-      { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '2', op: 'same!', from: 'c' } },
-      { output: { id: '2', re: '#<:>', to: 'c' } },
-    );
-  });
-
-  it('`!=` is still not-equal', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[2], 'notEqual'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: [true], 'ty': ['Boolean'], to: 'c' } },
-    );
-  });
-
-  it('`untracked` works as a reply key', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'keyReply', from: 'c' } },
-      { output: { id: '1', re: { untracked: 1 }, 'ty': { untracked: 'Integer' }, to: 'c' } },
-    );
-  });
-
-  it('`untracked` works as a param key', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[{ untracked: 3 }], 'keyParam'], 'ty': [[{ untracked: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`untracked` works as a named argument', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'keyArg', from: 'c' } },
-      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`untracked` works as a type field', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'keyField', from: 'c' } },
-      { output: { id: '1', re: [true], 'ty': ['Boolean'], to: 'c' } },
-    );
-  });
-
-  it('a `<-` chain stays on its target: a ends up holding c, b is only read', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'stays!', from: 'c' } },
-      { output: { id: '1', re: [9, 5], 'ty': ['Integer', 'Integer'], to: 'c' } },
-    );
-  });
-
-  it('every link of a `<-` chain runs, in order', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'ordered!', from: 'c' } },
-      { output: { id: '1', re: [12], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('the right side of `<-` takes a whole expression', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'whole!', from: 'c' } },
-      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`&name!` passes a `!` function', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'passes!', from: 'c' } },
-      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`return` on a local cell returns its value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'localCell', from: 'c' } },
-      { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`&name!` works with `over`', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'passesToOver!', from: 'c' } },
-      { output: { id: '1', re: [[1, 2], 12], 'ty': ['List of Integers', 'Integer'], to: 'c' } },
-    );
-  });
-
-  it('`#x!(…)` self-calls run', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'hashCall!', from: 'c' } },
-      { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`return #x()` returns its value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'hashReturned', from: 'c' } },
-      { output: { id: '1', re: [8], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('`return` takes a bare builtin', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'builtinReturned', from: 'c' } },
-      { output: { id: '1', re: ['HI'], 'ty': ['Text'], to: 'c' } },
-    );
-  });
-
-  it('`@x(…)` self-calls run in order', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'selfCalls!', from: 'c' } },
-      { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a `@x!(…)` self-call yields its value', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'selfCallValue!', from: 'c' } },
-      { output: { id: '1', re: [4, 0], 'ty': ['Integer', 'Integer'], to: 'c' } },
-    );
-  });
-
-  it('a `@x(…)` self-call reads', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[3], 'inc!'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'selfCallRead', from: 'c' } },
-      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '3', op: 'selfCallReturned', from: 'c' } },
-      { output: { id: '3', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it.each([
-    ['selfChain!', 3],
-    ['privateChain!', 3],
-    ['chainValue!', 4],
-    ['chainMember!', 5],
-    ['chainReturned!', 3],
-  ])('a chain from a call on this actor: %s', async (op, expected) => {
-    await expectBehavior(script,
-      { input: { id: '1', op, from: 'c' } },
-      { output: { id: '1', re: [expected], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a chain in tail position returns self', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'chainTail!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
-      { input: { id: '2', op: 'total', from: 'c' } },
-      { output: { id: '2', re: [3], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-
-  it('a function named like a builtin shadows it', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: 'shadowsEarly', from: 'c' } },
-      { output: { id: '1', re: [11], 'ty': ['Integer'], to: 'c' } },
-      { input: { id: '2', op: 'shadowsLate', from: 'c' } },
-      { output: { id: '2', re: [12], 'ty': ['Integer'], to: 'c' } },
-    );
-  });
-});
-
 describe('chained calls', () => {
   // A class named with `!` writes while constructing: here it tells `Svc`.
   const script = `
@@ -1821,25 +1827,5 @@ describe('a type field\'s name matches its arrow — validation', () => {
   it('calling a writing field is a write', () => {
     expect(() => compileSource('type T (run!: () => (Integer))\n@go = (t T) { return t.run!() }\n')).toThrow(/'@go' writes \(t\.run!\(…\)\)/);
     expect(() => compileSource('type T (run!: () => (Integer))\n@go! = (t T) { return t.run!() }\n')).not.toThrow();
-  });
-});
-
-describe('a writing type field', () => {
-  const script = `
-    type Act (arg Integer, run!: (value: Integer) => (out: Integer))
-
-    @go! = (a: Act) {
-      out: Integer = a.run!(a.arg)
-      return result: out
-    }
-  `;
-
-  it('is invoked at the address it holds', async () => {
-    await expectBehavior(script,
-      { input: { id: '50', op: [[{ a: [200, '#<caller:cb>'] }], 'go!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: '#<caller:cb>' }) },
-      { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
-      { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },
-    );
   });
 });
