@@ -16,8 +16,8 @@ const NO_CACHE = { 'Cache-Control': 'no-store' };
 
 const server = http.createServer((req, res) => {
   const { pathname } = new URL(req.url, 'http://localhost');
-  if (pathname.startsWith('/src/')) serveStatic(res, REPO, pathname, NO_CACHE);
-  else serveStatic(res, DOCS, pathname, NO_CACHE);
+  if (pathname.startsWith('/src/')) serveStatic(res, REPO, pathname, NO_CACHE, { compress: true });
+  else serveStatic(res, DOCS, pathname, NO_CACHE, { compress: true });
 });
 
 const port = Number(process.argv[2]) || 8000;
