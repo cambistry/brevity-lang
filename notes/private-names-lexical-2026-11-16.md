@@ -15,7 +15,7 @@ A `#` name is visible in the scope that declares it and in every scope lexically
 It is never visible:
 
 - to a subclass;
-- through an address: `x.#y` and `class_of(self).#y` are compile errors, inside the class too;
+- through an address: `x.#y` and `class.#y` are compile errors, inside the class too;
 - to the trailing constructor of a class block (`(p) *{ } ++ actor { #x … }`), which isn't inside the
   block's braces.
 
@@ -76,6 +76,6 @@ there is no access check to get wrong.
 ## Not changed
 
 - The trailing class form's constructor reaches the class's members by address only
-  (`class_of(self).count`). Private members are never addressable, so it never reaches them.
+  (`class.count`). Private members are never addressable, so it never reaches them.
   Whether it gets public and protected members bare is the separate A/B question.
 - `new` stays reserved; `#new` is not a spelling of it.

@@ -3,7 +3,7 @@ import * as AST from './ast.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses, CLASS_OF_SELF, CLASS_SELF } from './singleton_classes.js';
+import { lowerSingletonClasses, CLASS_SELF } from './singleton_classes.js';
 import { lowerSuperLayers } from './super_layers.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
@@ -64,9 +64,36 @@ function joinOwnCellWrites(tokensIn) {
   return { tokens: out, written };
 }
 
+// `x::class` is the class of actor `x`, and `class` is `self::class`: an actor's class is
+// a fact about its reference, so `::` (a name in its scope, as declared), not `.` (a
+// message it answers). `class` is reserved, so `x::class` can't be a member or a type.
+// Only `self::class` is supported for now; it folds to `class`. `class_of(x)` is retired.
+// See notes/class-scope-and-inheritance-2026-11-16.md.
+function foldSelfClass(tokens) {
+  const line = (i) => tokens.slice(0, i).filter(t => t.type === 'NEWLINE').length + 1;
+  const out = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.type === 'IDENT' && t.value === 'class_of' && tokens[i + 1]?.type === 'LPAREN') {
+      throw new Error(`'class_of(…)' is retired: an actor's class is 'x::class', and 'class' is 'self::class' (line ${line(i)})`);
+    }
+    if (tokens[i + 1]?.type === 'DCOLON' && tokens[i + 2]?.type === 'KEYWORD' && tokens[i + 2].value === 'class' && tokens[i - 1]?.type !== 'DCOLON') {
+      if (t.type === 'KEYWORD' && t.value === 'self') {
+        out.push(tokens[i + 2]);
+        i += 2;
+        continue;
+      }
+      const shown = t.type === 'IDENT' || t.type === 'KEYWORD' ? `${tokens[i - 1]?.type === 'AT' ? '@' : ''}${t.value}` : 'x';
+      throw new Error(`'${shown}::class' isn't supported yet: only 'self::class' (or 'class'), the class of the running actor (line ${line(i)})`);
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 export function parse(tokensIn) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
-  let tokens = joined;
+  let tokens = foldSelfClass(joined);
   let pos = 0;
   const functionNames = new Set();
   const fileFunctionNames = fileLevelFunctionNames(tokensIn);
@@ -2188,31 +2215,20 @@ export function parse(tokensIn) {
     return out;
   }
 
-  // `class_of(self)`: the class of the actor running this code. For now only `self`
-  // is taken, and only as a receiver (`class_of(self).count`); src/singleton_classes.js
-  // resolves it to the class. See notes/class-singleton-forms-2026-11-13.md.
-  const atClassOf = () => peek().type === 'IDENT' && peek().value === 'class_of' && tokens[pos + 1]?.type === 'LPAREN';
-  const atClassOfSelf = () => atClassOf() && tokens[pos + 2]?.type === 'KEYWORD' && tokens[pos + 2].value === 'self'
-    && tokens[pos + 3]?.type === 'RPAREN';
-  function parseClassOf() {
-    if (!atClassOfSelf()) throw new Error("'class_of' takes only 'self' for now: 'class_of(self)'");
-    pos += 4;
-    return AST.identifier(CLASS_OF_SELF);
-  }
   // `class`: the class of the running actor, as a receiver (`class.count`,
-  // `class::total`), a constructor (`class(args)`) or a value. src/singleton_classes.js
+  // `class::total`), a constructor (`class(args)`) or a value. `self::class` is the
+  // same (the token stream folds it, see foldSelfClass). src/singleton_classes.js
   // resolves it. See notes/class-scope-and-inheritance-2026-11-16.md.
   const atClass = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'class';
-  // A receiver for `.` or `::`: a name, a public class's `@C`, `class` or `class_of(self)`.
-  const receiverEnd = () => atClassOfSelf() ? pos + 4 : atPublicName() ? pos + 2
+  // A receiver for `.` or `::`: a name, a public class's `@C`, or `class`.
+  const receiverEnd = () => atPublicName() ? pos + 2
     : peek().type === 'IDENT' || atClass() ? pos + 1 : -1;
   function consumeReceiver() {
-    if (atClassOfSelf()) { pos += 4; return CLASS_OF_SELF; }
     if (atPublicName()) { consume(); return '@' + consume().value; }
     if (atClass()) { consume(); return CLASS_SELF; }
     return consume().value;
   }
-  // `class_of(self).field <- v`, `C.field <- v`, `C::field <- v`: the receiver's name
+  // `class.field <- v`, `C.field <- v`, `C::field <- v`: the receiver's name
   // and the field. After `::` the field is a protected one.
   const atPublicName = () => peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT';
   const fieldSetAhead = () => {
@@ -2398,9 +2414,7 @@ export function parse(tokensIn) {
     }
 
     let result;
-    if (atClassOf()) {
-      result = parseClassOf();
-    } else if (atClass()) {
+    if (atClass()) {
       consume();
       result = AST.identifier(CLASS_SELF);
     } else if (atSuper()) {
@@ -2527,11 +2541,6 @@ export function parse(tokensIn) {
     const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value) || LIST_METHODS.has(tokens[pos + 1]?.value));
     const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
     // `x.#name` / `x.@name` after a call (the lexer catches them after a name).
-    if (peek().type === 'DOT' && result?.type === 'Identifier' && result.name === CLASS_OF_SELF) {
-      const next = tokens[pos + 1];
-      if (next?.type === 'HASH_IDENT') throw new Error(`'class_of(self).#${next.value}' — a private name is never reached through an address, only by name in its own scope`);
-      if (next?.type === 'AT') throw new Error(`'class_of(self).@${tokens[pos + 2]?.value}' — a public member takes no '@' after a dot: write 'class_of(self).${tokens[pos + 2]?.value}'`);
-    }
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
       // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
       // `args` are forwarded to the publisher's fn body per subscription;
@@ -2858,7 +2867,7 @@ export function parse(tokensIn) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
-      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() || atClassOf() ||
+      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
                  atClass() || atSuper() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
         const expr = parseExpr();
         let typeName = null;

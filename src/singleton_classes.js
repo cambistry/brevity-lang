@@ -21,10 +21,6 @@
 // only that, so it is reserved everywhere else.
 // See notes/class-singleton-forms-2026-11-13.md.
 
-// `class_of(self)` as the parser leaves it: an Identifier no source name can spell,
-// resolved here to the class of the actor it's in.
-export const CLASS_OF_SELF = 'class_of(self)';
-
 // `class` as the parser leaves it: `class` is reserved, so no other name is spelled so.
 // Resolved here to the class of the actor it's in.
 export const CLASS_SELF = 'class';
@@ -111,7 +107,7 @@ export function lowerSingletonClasses(actors, types = []) {
     return (a.supertypes || []).some(st => st.supertype === cls.name || extendsClass(byName.get(st.supertype), cls, seen));
   };
 
-  // `class_of(self)` and `class` name the class of the actor they're in.
+  // `class` (and `self::class`) names the class of the actor it's in.
   for (const a of actors) resolveClassOf(a, blockClassOf);
 
   for (const cls of actors.filter(a => a.membersClass && !a.membersInherited)) {
@@ -225,20 +221,13 @@ function isInside(actor, name, byName) {
   return false;
 }
 
-// `class_of(self)` is the class of the actor it's in, so `class_of(self).count` is
-// `C.count` in `C`. Only `self`, and only as a receiver, for now.
-//
-// `class` is too, as a receiver (`class.count`, `class::total`): the class whose block
+// `class` (and `self::class`, which the parser folds into it) is the class of the actor
+// it's in: as a receiver (`class.count`, `class::total`): the class whose block
 // the code reaches, its own or its nearest parent's. Anywhere else it is the class
 // itself: `class(args)` builds one, as `C(args)` does, and `k = class` is its address.
 function resolveClassOf(actor, blockClassOf) {
   const where = () => actor.membersOf ? 'a class block' : actor.singletonOf ? 'a singleton' : 'this file';
   const isClass = actor.name && !actor.singletonOf && !actor.membersOf && actor.name !== FILE_CLASS;
-  const resolve = () => {
-    if (!isClass) throw new Error(`'class_of(self)' in ${where()} isn't supported yet: it names the class of an actor built by a class`);
-    if (!actor.membersClass) throw new Error(`'class_of(self)': '${actor.name}' has no class block, so there are no class members to reach`);
-    return actor.name;
-  };
   const notAClass = () => new Error(`'class' in ${where()}: it names the class of an actor built by a class, and this one isn't`);
   const receiver = () => {
     if (!isClass) throw notAClass();
@@ -248,8 +237,6 @@ function resolveClassOf(actor, blockClassOf) {
   };
   const isClassId = (o) => o?.type === 'Identifier' && o.name === CLASS_SELF;
   for (const b of bodies(actor)) walk(b, (n) => {
-    if (n.type === 'ActorFieldSet' && n.objectName === CLASS_OF_SELF) n.objectName = resolve();
-    if (n.object?.type === 'Identifier' && n.object.name === CLASS_OF_SELF) n.object = { ...n.object, name: resolve() };
     if (n.type === 'ActorFieldSet' && n.objectName === CLASS_SELF) { n.objectName = receiver(); n.objectWritten = 'class'; }
     if (isClassId(n.object) && !(n.type === 'DotCallExpr' && n.method === 'new')) n.object = { ...n.object, name: receiver(), written: 'class' };
     if (n.type === 'TypeConstruction' && n.qualifier?.[0] === CLASS_SELF) {
@@ -258,9 +245,6 @@ function resolveClassOf(actor, blockClassOf) {
     }
   });
   for (const b of bodies(actor)) walk(b, (n) => {
-    if (n.type === 'Identifier' && n.name === CLASS_OF_SELF) {
-      throw new Error("'class_of(self)' is only a receiver for now: 'class_of(self).count', 'class_of(self).bump!()'");
-    }
     if (isClassId(n)) {
       if (!isClass) throw notAClass();
       n.name = actor.name;

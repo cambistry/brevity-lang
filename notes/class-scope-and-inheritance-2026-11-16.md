@@ -63,11 +63,29 @@ k = class              // the class itself, as `k = C` (a class as a value isn't
 - **Elsewhere, `class` is the running class itself** (`class(args)` builds a `U` in `U`).
 - **Where no class built the running actor** (a class block, a singleton, the file), `class`
   is an error.
-- `class_of(self)` and `Self` are unchanged for now.
+- `Self` is unchanged for now.
 
 Open:
-- whether `class_of(self)` stays as the long form;
 - how `class` relates to the existing `Self` (the file's class).
+
+## `x::class` — decided 2026-11-17
+
+`x::class` is the class of actor `x`, and `class` is shorthand for `self::class`, so the
+bare word reads as `self` does: an implicit receiver, not a separate concept. `class_of` is
+retired outright (`class_of(…)` is an error naming `x::class`).
+
+- **Unambiguous:** `class` is reserved, so no member or type can be named `class`, and
+  `x::class` can't collide with `x::name` — the reasoning that keeps `X::name` unambiguous
+  for types.
+- **`::`, not `.`:** `.` sends a message by wire name, so `x.class` would ask `x` and let
+  the actor answer for itself. `::` is a name in that actor's scope, as declared; an
+  actor's class is a fact about its reference (its `ty`), not something it decides.
+- **It chains:** `x::class::total`, `x::class.count`, `x::class::Point`, read left to right.
+- Precedent: Kotlin's `x::class` / `String::class`, PHP's `Foo::class`.
+
+Implemented: `self::class`, everywhere `class` is valid (it is the same thing). `x::class`
+for any other `x` is an error, "not supported yet": it needs the class from the actor's
+`ty` at run time (see "`x::class` on another actor" under open questions).
 
 ## The class block and its actors — decided
 
@@ -231,7 +249,8 @@ Open:
 - **Atomic read-modify-write** on another actor's cell (`class::total <- class::total + 1`
   is two messages). Being explored separately; related to Opre op chains and call-scoped
   turns.
-- **`class_of(other)`:** the class of an actor other than self, presumably from its `ty`.
+- **`x::class` on another actor:** the class of an actor other than self, presumably from
+  its `ty` at run time; then `x::class.count` reaches that class's block.
 - **Development order:** whether the remote-superclass message model should be settled
   first, since class-block delegation is already cross-actor inside one process. Discuss
   before drafting a spec.

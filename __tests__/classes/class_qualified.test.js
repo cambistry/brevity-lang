@@ -513,3 +513,61 @@ describe('class — where it names a class', () => {
     `)).toThrow(/^'class' is reserved: it names the class of the running actor, so it can't be declared or set \(line 2\)$/);
   });
 });
+
+// `x::class` is an actor's class; `class` is `self::class`. Only `self::class` for now.
+const selfClass = `
+  @S = (seed Integer) *{
+    built Integer = self::class.pub + self::class::prot + seed
+    @built = { return built }
+    @write! = {
+      self::class.pub <- 5
+      self::class::prot <- 6
+    }
+    @read = {
+      x Integer = self::class.pub + class::prot
+      return x
+    }
+    @again = {
+      n = self::class(seed + 1)
+      x Integer = n.built()
+      return x
+    }
+  } ++ actor {
+    @pub *Integer = 1
+    prot *Integer = 2
+  }
+`;
+
+describe('self::class — the same as class', () => {
+  it('reads, writes and constructs through self::class', async () => {
+    await expectBehavior(selfClass,
+      { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: ':S', from: 'c' } },
+      { output: { id: '1', re: '#<:S:1>', ty: ':S', to: 'c' } },
+      { input: { id: '2', op: 'built', to: ':S:1', from: 'c' } },
+      { output: { id: '2', re: [13], ty: ['Integer'], to: 'c', from: ':S:1' } },
+      { input: { id: '3', op: 'write!', to: ':S:1', from: 'c' } },
+      { output: { id: '3', re: '#<:S:1>', ty: ':S', to: 'c', from: ':S:1' } },
+      { input: { id: '4', op: 'read', to: ':S:1', from: 'c' } },
+      { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: ':S:1' } },
+      { input: { id: '5', op: 'again', to: ':S:1', from: 'c' } },
+      { output: { id: '5', re: [22], ty: ['Integer'], to: 'c', from: ':S:1' } },
+    );
+  });
+
+  it('class_of is retired', () => {
+    expect(() => compileSource(`
+      C = *{ @r = { return class_of(self).a } } ++ actor { @a *Integer = 1 }
+    `)).toThrow(/^'class_of\(…\)' is retired: an actor's class is 'x::class', and 'class' is 'self::class' \(line 2\)$/);
+  });
+
+  it("another actor's class isn't supported yet", () => {
+    expect(() => compileSource(`
+      C = *{} ++ actor { @a *Integer = 1 }
+      @go = {
+        c = C()
+        x Integer = c::class.a
+        return x
+      }
+    `)).toThrow(/^'c::class' isn't supported yet: only 'self::class' \(or 'class'\), the class of the running actor \(line 5\)$/);
+  });
+});

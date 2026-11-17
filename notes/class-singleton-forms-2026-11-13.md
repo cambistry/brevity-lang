@@ -155,8 +155,8 @@ singleton, `new = (params) *{ … }` makes it a class.
 
 ## Open
 
-- ~~**"My class" in source.**~~ Direction: `class`, a synonym for `class_of(self)`. See
-  `class-scope-and-inheritance-2026-11-16.md`.
+- ~~**"My class" in source.**~~ Decided: `class`, shorthand for `self::class` (`class_of` is
+  retired). See `class-scope-and-inheritance-2026-11-16.md`.
 
 - **"My class" in source.** In the trailing form `C.count` goes through the name `C` in the
   enclosing actor. That breaks if the class is unnamed, renamed or private, and reads oddly when a
