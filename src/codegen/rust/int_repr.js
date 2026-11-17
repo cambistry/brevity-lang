@@ -57,6 +57,8 @@ export function valueArray(elemExprs) {
   if (filtered.length === 0) return 'json!([])';
   const wrapped = filtered.map(e => {
     if (e.startsWith('json!(') || e.startsWith('bv_bigint_to_value(') || e.startsWith('bv_val(') || e === 'Value::Null' || e.startsWith('Value::')) return e;
+    // Arithmetic (`intArithOp`) is a BigInt, though its operands may read Values.
+    if (e.startsWith('(&')) return `bv_val(${e})`;
     if (e.includes('.cloned()') || e.includes('.unwrap_or(')) return e; // already Value
     // Clone simple variables to avoid move issues when used multiple times
     const isSimpleVar = /^[a-z_]\w*$/i.test(e);

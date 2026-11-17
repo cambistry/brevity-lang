@@ -3,7 +3,7 @@ import * as AST from './ast.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses, CLASS_OF_SELF } from './singleton_classes.js';
+import { lowerSingletonClasses, CLASS_OF_SELF, CLASS_SELF } from './singleton_classes.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
@@ -1485,6 +1485,9 @@ export function parse(tokensIn) {
         consume(); consume();
         body.push(AST.returnNode([]));
         break;
+      } else if (fieldSetAhead()) {
+        // `c.n <- v`, `C.count <- v`, `class::total <- v`
+        body.push(parseFieldSet());
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
@@ -2001,6 +2004,7 @@ export function parse(tokensIn) {
       }
       if (peek().type === 'NEWLINE') { consume(); continue; }
       // Attribute: name="value" or name={expr}
+      if (atClass()) tokens[pos] = { ...tokens[pos], type: 'IDENT' };
       if (peek().type !== 'IDENT') {
         throw new Error(`Expected attribute name or '/>' in XML tag <${name}>, got ${peek().type} '${peek().value || ''}'`);
       }
@@ -2164,25 +2168,45 @@ export function parse(tokensIn) {
     pos += 4;
     return AST.identifier(CLASS_OF_SELF);
   }
-  // `class_of(self).field <- v`, `C.field <- v`: the receiver's name and the field.
-  // The receiver is a name, a public class's `@C`, or `class_of(self)`.
+  // `class`: the class of the running actor, as a receiver (`class.count`,
+  // `class::total`), a constructor (`class(args)`) or a value. src/singleton_classes.js
+  // resolves it. See notes/class-scope-and-inheritance-2026-11-16.md.
+  const atClass = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'class';
+  // A receiver for `.` or `::`: a name, a public class's `@C`, `class` or `class_of(self)`.
+  const receiverEnd = () => atClassOfSelf() ? pos + 4 : atPublicName() ? pos + 2
+    : peek().type === 'IDENT' || atClass() ? pos + 1 : -1;
+  function consumeReceiver() {
+    if (atClassOfSelf()) { pos += 4; return CLASS_OF_SELF; }
+    if (atPublicName()) { consume(); return '@' + consume().value; }
+    if (atClass()) { consume(); return CLASS_SELF; }
+    return consume().value;
+  }
+  // `class_of(self).field <- v`, `C.field <- v`, `C::field <- v`: the receiver's name
+  // and the field. After `::` the field is a protected one.
   const atPublicName = () => peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT';
   const fieldSetAhead = () => {
-    const at = atClassOfSelf() ? pos + 4 : atPublicName() ? pos + 2 : peek().type === 'IDENT' ? pos + 1 : -1;
-    return at >= 0 && tokens[at]?.type === 'DOT' && tokens[at + 1]?.type === 'IDENT'
+    const at = receiverEnd();
+    return at >= 0 && (tokens[at]?.type === 'DOT' || tokens[at]?.type === 'DCOLON') && tokens[at + 1]?.type === 'IDENT'
       && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
   };
   function parseFieldSet() {
-    const objName = atClassOfSelf() ? (pos += 4, CLASS_OF_SELF)
-      : atPublicName() ? (consume(), '@' + consume().value)
-      : consume().value;
-    consume(); // DOT
+    const objName = consumeReceiver();
+    const isProtected = consume().type === 'DCOLON';
     const fieldName = consume().value;
     const isUpdate = peek().type === 'UPDATE';
     consume(); // SET (<-) or UPDATE (<|)
     const value = parseExpr();
-    return AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined });
+    const set = AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined });
+    if (isProtected) set.protected = true;
+    return set;
   }
+  // `C::name`, `@C::name`, `class::name` with no call after it: a protected member,
+  // which src/singleton_classes.js resolves. (`C::X(…)` may be a type's construction or
+  // a protected function's call, so it's settled there too.)
+  const qualifiedAhead = () => {
+    const at = atPublicName() ? pos + 2 : peek().type === 'IDENT' || atClass() ? pos + 1 : -1;
+    return at >= 0 && tokens[at]?.type === 'DCOLON' && tokens[at + 1]?.type === 'IDENT';
+  };
 
   function parsePrimary() {
     // `new(args)` in a singleton constructs its class (src/singleton_classes.js).
@@ -2274,10 +2298,13 @@ export function parse(tokensIn) {
 
     // A type reached through an actor: `A::X(…)`, `A::B::X(…)`. A type is not
     // a value, so the path must be followed by its construction.
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON' && tokens[pos + 2]?.type === 'IDENT') {
-      const path = [consume().value];
+    if (qualifiedAhead()) {
+      const path = [consumeReceiver()];
       while (peek().type === 'DCOLON' && tokens[pos + 1]?.type === 'IDENT') { consume(); path.push(consume().value); }
-      if (peek().type !== 'LPAREN') throw new Error(`'${path.join('::')}' is a type, not a value`);
+      if (peek().type !== 'LPAREN') {
+        if (path.length === 2) return { type: 'QualifiedMember', object: AST.identifier(path[0]), name: path[1] };
+        throw new Error(`'${path.join('::')}' is a type, not a value`);
+      }
       const args = parseCallArgs();
       return { type: 'TypeConstruction', typeName: path[path.length - 1], qualifier: path.slice(0, -1), args };
     }
@@ -2289,6 +2316,9 @@ export function parse(tokensIn) {
     let result;
     if (atClassOf()) {
       result = parseClassOf();
+    } else if (atClass()) {
+      consume();
+      result = AST.identifier(CLASS_SELF);
     } else if (atBareBuiltinCall()) {
       const methodName = consume().value;
       consume(); // LPAREN
@@ -2743,7 +2773,7 @@ export function parse(tokensIn) {
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
       } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() || atClassOf() ||
-                 (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
+                 atClass() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -3951,6 +3981,8 @@ export function parse(tokensIn) {
         body.push(AST.spawnStatement(expr ));
       } else if (
         (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
+        (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN') ||
+        (atClass() && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) ||
         (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'DOT') ||
         (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'DOT')
       ) {
@@ -5175,6 +5207,9 @@ export function parse(tokensIn) {
           const expr = parseExpr();
           constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
         }
+      } else if (atClass() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
+        // `class.bump!()`, `class::h!()`, `C::h!()`: a call made while constructing.
+        pushExprOrBang(constructorBody, parseExpr());
       } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
                  || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
                  || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN'
@@ -6249,7 +6284,7 @@ export function parse(tokensIn) {
   }
 
   actors.push(...hoistedClasses);
-  lowerSingletonClasses(actors);
+  lowerSingletonClasses(actors, types);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

@@ -41,20 +41,33 @@ name is written where it's in scope. After a dot or `::`, no sigil is written.
 This replaces two earlier ideas: `.~name` for protected access, and letting `C.x` fall back
 to a protected `x`.
 
-## `class` — direction
+## `class` — decided 2026-11-17
 
-`class` is the class of the running actor, a synonym for `class_of(self)`.
+`class` is the class of the running actor.
 
 ```brevity
 class.count            // public member of my class's class block
 class::total           // protected member of my class's class block
+class.count <- 1       // `$set` of a public `*` cell; `class::total <- 1` of a protected one
 class(args)            // construct, as C(args) does
+k = class              // the class itself, as `k = C` (a class as a value isn't supported yet)
 ```
+
+- **Reserved**, not contextual as `actor` is: `class = …`, `class *Integer = …` and a param
+  named `class` are errors. A member may have the name (`@class`, `k.class()`), and so may an
+  XML attribute (`<Box class="a" />`).
+- **As a receiver, `class` is the class whose block the code reaches:** its own, or, for a
+  subclass with no block of its own, its nearest parent's (the delegated rule below). It's
+  resolved statically from the text, so `T`'s code run by a `U` actor still means `T`. The
+  late-bound reading (`T`'s code using `U`'s redeclared cell) waits for class-block delegation.
+- **Elsewhere, `class` is the running class itself** (`class(args)` builds a `U` in `U`).
+- **Where no class built the running actor** (a class block, a singleton, the file), `class`
+  is an error.
+- `class_of(self)` and `Self` are unchanged for now.
 
 Open:
 - whether `class_of(self)` stays as the long form;
-- how `class` relates to the existing `Self` (the file's class);
-- what `class` means inside a class block, where the running actor is the block itself.
+- how `class` relates to the existing `Self` (the file's class).
 
 ## The class block and its actors — decided
 

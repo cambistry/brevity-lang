@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -512,10 +512,21 @@ export function tokenize(source) {
       continue;
     }
 
-    // Double colon — reaches a type through an actor: `Svc::Point`,
-    // `Class::X`. Distinct from the
+    // Double colon — reaches a type, or a protected member, through an actor:
+    // `Svc::Point`, `C::total`. Distinct from the
     // `:name` named-param sigil and the bare `COLON` separator below.
     if (source[i] === ':' && source[i + 1] === ':') {
+      // After `::` a name is written bare, as declared.
+      const sigil = source[i + 2];
+      const member = (source.slice(i + 3).match(/^[a-zA-Z_][a-zA-Z0-9_]*[!.]?/) ?? [''])[0];
+      if ((sigil === '@' || sigil === '#') && member) {
+        const line = tokens.filter(t => t.type === 'NEWLINE').length + 1;
+        const prev = tokens[tokens.length - 1];
+        const at = tokens[tokens.length - 2]?.type === 'AT' ? '@' : '';
+        const name = prev?.type === 'IDENT' || prev?.type === 'KEYWORD' ? at + prev.value : '';
+        if (sigil === '#') throw new Error(`'${name}::#${member}' — a private name is never reached through an address, only by name in its own scope (line ${line})`);
+        throw new Error(`'${name}::@${member}' — a public member is reached through a dot: write '${name}.${member}' (line ${line})`);
+      }
       tokens.push({ type: 'DCOLON' });
       i += 2;
       continue;
@@ -555,10 +566,18 @@ export function tokenize(source) {
         // A keyword keeps its own token (`.reduce!` is a built-in method).
         tokens.push({ type: 'IDENT', value: value + '!' });
         i++;
-      } else if (value === 'untracked' && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
-        // Reserved for locals only: a member or a key can have this name.
+      } else if ((value === 'untracked' || value === 'class') && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
+        // Reserved as a name of its own: a member or a key can have this name.
         tokens.push({ type: 'IDENT', value });
       } else {
+        // `class` names the running actor's class, so nothing can be declared or set
+        // under it: `class = …`, `class <- …`, `class *Integer = …`, `(class Integer)`.
+        // A member may have the name (`@class`, `k.class()`), and so may an attribute
+        // (`<Box class="a" />`).
+        const asMember = tokens[tokens.length - 1]?.type === 'AT' || /^=["{]/.test(source.slice(i));
+        if (value === 'class' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
+          throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+        }
         tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
       continue;

@@ -25,6 +25,10 @@
 // resolved here to the class of the actor it's in.
 export const CLASS_OF_SELF = 'class_of(self)';
 
+// `class` as the parser leaves it: `class` is reserved, so no other name is spelled so.
+// Resolved here to the class of the actor it's in.
+export const CLASS_SELF = 'class';
+
 // The class of a file whose `*` section is its `new`. Nothing in source can name it.
 export const FILE_CLASS = 'new__file';
 
@@ -38,7 +42,9 @@ export function publicLabel(actor) {
 
 const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = (params) *{ … } }'";
 
-export function lowerSingletonClasses(actors) {
+export function lowerSingletonClasses(actors, types = []) {
+  // Whether `X::name` names a type declared in actor `X` (no member shares its name).
+  const isType = (owners, name) => types.some(t => t.name === name && owners.includes(t.ownerClass));
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const declarer = (name) => actors.find(a => (a.name ?? null) === (name ?? null));
 
@@ -69,10 +75,46 @@ export function lowerSingletonClasses(actors) {
     renameCalls(members, 'new', className);
   }
 
-  // `class_of(self)` names the class of the actor it's in.
-  for (const a of actors) resolveClassOf(a);
+  // A subclass with no class block of its own uses its nearest parent's (the
+  // delegated rule, notes/class-scope-and-inheritance-2026-11-16.md): its actors have
+  // that block first in their chain, as the parent's do, and reach it as the
+  // parent's trailing constructor does, through `T.` and `T::`.
+  const ownBlock = (a) => a?.membersClass && !a.membersInherited ? a : null;
+  const blockOf = (a, seen = new Set()) => {
+    if (!a || seen.has(a)) return null;
+    seen.add(a);
+    if (ownBlock(a)) return a;
+    const found = [...new Set((a.supertypes || []).filter(st => !st.wrappedAs)
+      .map(st => blockOf(byName.get(st.supertype), seen)).filter(Boolean))];
+    if (found.length > 1) throw new Error(`'${shownName(a)}' has more than one parent with a class block ('${found.map(shownName).join("', '")}'), and which one it uses isn't settled yet`);
+    return found[0] ?? null;
+  };
+  for (const a of actors.filter(a => a.name && (a.supertypes || []).length && !a.membersClass)) {
+    const parent = blockOf(a);
+    if (!parent) continue;
+    const parentHome = 'home' in parent ? parent.home : parent.enclosing ?? null;
+    if ((a.enclosing ?? null) !== (parentHome ?? null)) {
+      throw new Error(`'${shownName(a)}' extends '${shownName(parent)}', which has a class block, and is declared somewhere else than it — that isn't supported yet`);
+    }
+    a.membersClass = parent.membersClass;
+    a.membersInherited = parent.name;
+    a.home = a.enclosing ?? null;
+    a.enclosing = parent.membersClass;
+    a.membersOpaque = true;
+  }
+  // The class whose block code in `a` reaches: its own, or its nearest parent's.
+  const blockClassOf = (a) => ownBlock(a) ?? (a.membersInherited ? byName.get(a.membersInherited) : null);
+  // Whether `a` is in `cls`'s family: a subclass of it, at any depth.
+  const extendsClass = (a, cls, seen = new Set()) => {
+    if (!a || seen.has(a)) return false;
+    seen.add(a);
+    return (a.supertypes || []).some(st => st.supertype === cls.name || extendsClass(byName.get(st.supertype), cls, seen));
+  };
 
-  for (const cls of actors.filter(a => a.membersClass)) {
+  // `class_of(self)` and `class` name the class of the actor they're in.
+  for (const a of actors) resolveClassOf(a, blockClassOf);
+
+  for (const cls of actors.filter(a => a.membersClass && !a.membersInherited)) {
     const members = byName.get(cls.membersClass);
     // Trailing: its actors still have the members first in their chain, so they can
     // message them as from inside the class, but no bare name reaches them.
@@ -86,7 +128,12 @@ export function lowerSingletonClasses(actors) {
     // the class's actors and the classes declared in them.
     // A class named `C!` is referred to as `C` (src/parser.js, settleBangDecls, runs later).
     const spellings = [...new Set([cls.name, cls.name.replace(/[!.]$/, '')])];
-    for (const a of actors) if (a === cls || isInside(a, cls.name, byName)) for (const n of spellings) lowerMemberAccess(a, n, members);
+    // Its family: the class, its subclasses that use its block, and the classes
+    // declared in either. (A subclass with a block of its own reaches this one's public
+    // members as anyone does; its `::` is the error below.)
+    const family = (a) => a === cls || (extendsClass(a, cls) && a.membersInherited) || [...actors].some(f => f !== a
+      && (f === cls || (extendsClass(f, cls) && f.membersInherited)) && isInside(a, f.name, byName));
+    for (const a of actors) if (family(a)) for (const n of spellings) lowerMemberAccess(a, n, members, isType);
     // `C.count` reads the members; `C(…)` still builds a `C`.
     for (const a of actors) for (const n of spellings) renameReceivers(a, n, members.singletonOf);
   }
@@ -111,6 +158,10 @@ export function lowerSingletonClasses(actors) {
       if (n.type === 'SetStatement' && n.deferredError) throw memberCell(n.name) ? notClosedOver(n.name) : new Error(n.deferredError);
     });
   }
+
+  // A protected member reached from outside its class's family, or `::` on something
+  // that has no class block.
+  for (const a of actors) checkQualified(a, byName, extendsClass, isType);
 
   // What's left of `new(args)` builds the file's class.
   if (fileNew) for (const a of actors) renameCalls(a, 'new', FILE_CLASS);
@@ -152,7 +203,7 @@ function renameCalls(actor, from, to) {
 function renameReceivers(actor, from, to) {
   for (const b of bodies(actor)) walk(b, (n) => {
     if (n.type === 'FunctionCallExpr' && n.callee?.type === 'RefRead' && n.callee.name === from) n.callee = { type: 'Identifier', name: from };
-    const obj = n.object;
+    const obj = n.type === 'QualifiedMember' ? null : n.object;
     if (obj && (obj.type === 'Identifier' || obj.type === 'RefRead') && obj.name === from) {
       n.object = { ...obj, name: to };
       // A member read is a call to the member's published getter: `C.count` asks
@@ -164,7 +215,7 @@ function renameReceivers(actor, from, to) {
         delete n.property;
       }
     }
-    if (n.objectName === from) n.objectName = to;
+    if (n.objectName === from && !n.protected) n.objectName = to;
   });
 }
 
@@ -176,21 +227,78 @@ function isInside(actor, name, byName) {
 
 // `class_of(self)` is the class of the actor it's in, so `class_of(self).count` is
 // `C.count` in `C`. Only `self`, and only as a receiver, for now.
-function resolveClassOf(actor) {
-  const where = () => actor.singletonOf || actor.membersOf ? 'a class block' : 'this file';
+//
+// `class` is too, as a receiver (`class.count`, `class::total`): the class whose block
+// the code reaches, its own or its nearest parent's. Anywhere else it is the class
+// itself: `class(args)` builds one, as `C(args)` does, and `k = class` is its address.
+function resolveClassOf(actor, blockClassOf) {
+  const where = () => actor.membersOf ? 'a class block' : actor.singletonOf ? 'a singleton' : 'this file';
   const isClass = actor.name && !actor.singletonOf && !actor.membersOf && actor.name !== FILE_CLASS;
   const resolve = () => {
     if (!isClass) throw new Error(`'class_of(self)' in ${where()} isn't supported yet: it names the class of an actor built by a class`);
     if (!actor.membersClass) throw new Error(`'class_of(self)': '${actor.name}' has no class block, so there are no class members to reach`);
     return actor.name;
   };
+  const notAClass = () => new Error(`'class' in ${where()}: it names the class of an actor built by a class, and this one isn't`);
+  const receiver = () => {
+    if (!isClass) throw notAClass();
+    const cls = blockClassOf(actor);
+    if (!cls) throw new Error(`'class': '${shownName(actor)}' has no class block, and nor do its parents, so there are no class members to reach`);
+    return cls.name;
+  };
+  const isClassId = (o) => o?.type === 'Identifier' && o.name === CLASS_SELF;
   for (const b of bodies(actor)) walk(b, (n) => {
     if (n.type === 'ActorFieldSet' && n.objectName === CLASS_OF_SELF) n.objectName = resolve();
     if (n.object?.type === 'Identifier' && n.object.name === CLASS_OF_SELF) n.object = { ...n.object, name: resolve() };
+    if (n.type === 'ActorFieldSet' && n.objectName === CLASS_SELF) { n.objectName = receiver(); n.objectWritten = 'class'; }
+    if (isClassId(n.object) && !(n.type === 'DotCallExpr' && n.method === 'new')) n.object = { ...n.object, name: receiver(), written: 'class' };
+    if (n.type === 'TypeConstruction' && n.qualifier?.[0] === CLASS_SELF) {
+      n.qualifier = [receiver(), ...n.qualifier.slice(1)];
+      n.qualifierWritten = 'class';
+    }
   });
   for (const b of bodies(actor)) walk(b, (n) => {
     if (n.type === 'Identifier' && n.name === CLASS_OF_SELF) {
       throw new Error("'class_of(self)' is only a receiver for now: 'class_of(self).count', 'class_of(self).bump!()'");
+    }
+    if (isClassId(n)) {
+      if (!isClass) throw notAClass();
+      n.name = actor.name;
+    }
+  });
+}
+
+const shownName = (a) => (a.sourceName ?? a.name ?? '').replace(/^@/, '').replace(/__pub$/, '').replace(/[!.]$/, '');
+
+// `C::x` left once every class's family is lowered: `C` has a class block and this
+// isn't its family, or `C` has none.
+function checkQualified(actor, byName, extendsClass, isType) {
+  const classOf = (name) => {
+    const c = byName.get(name);
+    return c && !c.singletonOf && !c.membersOf ? c : null;
+  };
+  const fail = (recv, name, call = '') => {
+    const c = classOf(recv);
+    const shown = c ? shownName(c) : recv;
+    if (c?.membersClass && extendsClass(actor, c)) {
+      return new Error(`'${shown}::${name}${call}' — '${shownName(actor)}' has a class block of its own, and reaching a parent's protected members from it isn't supported yet`);
+    }
+    if (c?.membersClass) return new Error(`'${shown}::${name}${call}' — a protected member of '${shown}' is reached only from its family: its actors and its subclasses' actors`);
+    if (c) return new Error(`'${shown}::${name}${call}' — '${shown}' has no class block, so it has no protected members to reach`);
+    return null;
+  };
+  for (const b of bodies(actor)) walk(b, (n) => {
+    if (n.type === 'QualifiedMember') {
+      if (isType([n.object.name], n.name)) throw new Error(`'${n.object.name}::${n.name}' is a type, not a value`);
+      throw fail(n.object.name, n.name) ?? new Error(`'${n.object.name}::${n.name}' is a type, not a value`);
+    }
+    if (n.type === 'ActorFieldSet' && n.protected) {
+      throw fail(n.objectName, n.fieldName, ' <- …') ?? new Error(`'${n.objectName}::${n.fieldName}' — only a class's protected cell is written through '::'`);
+    }
+    if (n.type === 'TypeConstruction' && n.qualifier?.length === 1) {
+      const c = classOf(n.qualifier[0]);
+      const members = c?.membersClass ? byName.get(c.membersClass) : null;
+      if (members && memberNames(members).fns.has(n.typeName)) throw fail(n.qualifier[0], n.typeName, '()');
     }
   });
 }
@@ -210,15 +318,34 @@ function memberNames(members) {
 // the nested form is; a function stays a message to the class. Anything else after the
 // dot (a protected or private member, or nothing) is an error.
 // See notes/class-scope-and-inheritance-2026-11-16.md.
-function lowerMemberAccess(actor, from, members) {
+function lowerMemberAccess(actor, from, members, isType) {
   const { cells, fns } = memberNames(members);
   const isC = (o) => o && (o.type === 'Identifier' || o.type === 'RefRead') && o.name === from;
   const shown = from.replace(/^@/, '').replace(/[!.]$/, '');
   const noPublic = (x) => new Error(`No public member '${x}' in '${shown}'`);
   const replace = (n, next) => { for (const k of Object.keys(n)) if (k !== 'loc') delete n[k]; Object.assign(n, next); };
   const via = members.name;
+  // After `::`, a name is bare: a protected member.
+  const isPublic = (x) => cells.has('@' + x) || fns.has('@' + x);
+  const protectedError = (written, x, call = '') => isPublic(x)
+    ? new Error(`'${x}' is public: write '${written ?? shown}.${x}${call}'`)
+    : new Error(`No protected member '${x}' in '${shown}'`);
   for (const b of bodies(actor)) walk(b, (n) => {
-    if (n.type === 'ActorFieldSet' && n.objectName === from) {
+    if (n.type === 'ActorFieldSet' && n.objectName === from && n.protected) {
+      if (!cells.has(n.fieldName)) throw protectedError(n.objectWritten, n.fieldName);
+      replace(n, { type: 'SetStatement', name: n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: via });
+    } else if (n.type === 'QualifiedMember' && isC(n.object)) {
+      if (isType([from, members.name, members.membersOf], n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a type, not a value`);
+      if (fns.has(n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a function: call it, '${n.object.written ?? shown}::${n.name}()'`);
+      if (!cells.has(n.name)) throw protectedError(n.object.written, n.name);
+      replace(n, { type: 'Identifier', name: n.name, viaClass: via });
+    } else if (n.type === 'TypeConstruction' && n.qualifier?.length === 1 && n.qualifier[0] === from
+               && (fns.has(n.typeName) || isPublic(n.typeName) || cells.has(n.typeName))) {
+      // A type of the class keeps its construction: a type name is reserved, so no
+      // member shares it.
+      if (!fns.has(n.typeName)) throw protectedError(n.qualifierWritten, n.typeName, '()');
+      replace(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name: n.typeName }, args: n.args, viaClass: via });
+    } else if (n.type === 'ActorFieldSet' && n.objectName === from) {
       if (!cells.has('@' + n.fieldName)) throw noPublic(n.fieldName);
       replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: via });
     } else if (n.type === 'DotAccessExpr' && isC(n.object)) {
