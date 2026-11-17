@@ -27,6 +27,10 @@ C = **{
   its own instances.
 - **Nested closes over the class.** `new`'s constructor block is inside the singleton, so it
   sees every member, private cells included.
+- **Superseded in part (2026-11-16):** with `++` composition (`**{ } ++ (params) *{ }`), order
+  sets override precedence, never visibility, so the leading order becomes a valid
+  arrangement. Juxtaposition without `++` is still not a class. See
+  `class-scope-and-inheritance-2026-11-16.md`.
 - **The leading form (`**{ } (params) *{ }`) is not supported.** It looks like a call on the
   singleton, and if order changed what an instance can see, it would be a third set of rules.
 - `C = (params) *{ }` is unchanged: a class with no class block.
@@ -40,6 +44,10 @@ name), while its owner is `C`. The implementation has to keep the two apart: the
 the lexical environment is not the code that sets the owner.
 
 ## The class's members from outside and from its actors
+
+**Superseded in part by `class-scope-and-inheritance-2026-11-16.md`:** protected members are
+reached through `::`, not a dot (`C::count`, `class::count`). The dot takes public names only.
+Writes and calls through `::` are covered as well as reads.
 
 - **Public members are messageable.** A public class's public members answer at the class's own
   address: `count` to `. C`. `$new` to `. C` still builds a `C`, and `C 1` is still its first actor.
@@ -144,6 +152,9 @@ count <- count + 1
 singleton, `new = (params) *{ … }` makes it a class.
 
 ## Open
+
+- ~~**"My class" in source.**~~ Direction: `class`, a synonym for `class_of(self)`. See
+  `class-scope-and-inheritance-2026-11-16.md`.
 
 - **"My class" in source.** In the trailing form `C.count` goes through the name `C` in the
   enclosing actor. That breaks if the class is unnamed, renamed or private, and reads oddly when a

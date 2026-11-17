@@ -124,7 +124,8 @@ C = **{
 }
 ```
 
-- `C = (seed Integer) *{ … } **{ … }` is sugar for this.
+- `C = (seed Integer) *{ … } **{ … }` is sugar for this. **Superseded:** it isn't sugar. The trailing constructor doesn't close over the class block
+  (`class-singleton-forms-2026-11-13.md`, `class-scope-and-inheritance-2026-11-16.md`).
 - `C = (seed Integer) *{ … }` is sugar for a singleton whose only member is `new`.
 - Overloaded constructors use the overload model; other factory members (`@from_text`) sit beside
   `new`.

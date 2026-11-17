@@ -57,6 +57,11 @@ diagnostic says to separate params with commas.
 
 ## Wrapped parents
 
+**Superseded (2026-11-16):** wrapped parents are being retired. The parent moves outside the
+params (`U = T ++ (u Text) *{ … }`), and the parent layer is reached with `super::h()` /
+`super[T]::h()`. As implemented, wrapping also made the parent a separate actor, which lost
+late binding. See `class-scope-and-inheritance-2026-11-16.md`.
+
 `sup B` replaces the `B *sup` wrap marker; the parent is still "wrapped". It has the shape of a positional
 param — "a local `sup`, typed `B`" — in line with Brevity args, destructuring
 and DI. There is no shorthand that binds the parent under its own name: the
