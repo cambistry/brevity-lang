@@ -13,7 +13,9 @@ const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answe
 // class waiting on it, or is kept for the file actor's own loop.
 const asideLine = (loop) => `{io_reply, LRef_, LData_} -> bv_line_aside_(LRef_, LData_), ${loop}`;
 
-const PREAMBLE = `
+// The runtime every module shares: functions that don't call back into an actor's
+// module. Compiled once as brevity_rt; each generated module imports them.
+const RUNTIME = `
 %% ── Slice 12+13 wire format helpers ──────────────────────────────────────
 %% Outbound: strip __type from a tagged object and reshape to wire form.
 %% Inbound: reconstruct a tagged object from a positional list or named
@@ -35,36 +37,6 @@ bv_to_wire(V, Fields, AllRequired) ->
                     end, #{}, Fields)
             end
     end.
-
-%% A type's wire tag is its address: its authority, the classes that own it,
-%% and its bare name (:Point, :W:X, svc.bv:Point). bv_type_name/1, emitted
-%% with the program's registry, gives the key of the type a tag names, under
-%% its key or the alias spelling of its authority (Svc:Point), or undefined.
-
-bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
-    case bv_type_name(Tag) of
-        undefined -> Payload;
-        Name ->
-            PLen = length(Payload),
-            FLen = length(Fields),
-            N = if PLen < FLen -> PLen; true -> FLen end,
-            Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
-            Base = #{<<"__type">> => Name},
-            lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs)
-    end;
-bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
-    case bv_type_name(Tag) of
-        undefined -> Payload;
-        Name ->
-            Base = #{<<"__type">> => Name},
-            lists:foldl(fun(F, Acc) ->
-                case maps:get(F, Payload, undefined) of
-                    undefined -> Acc;
-                    V -> Acc#{F => V}
-                end
-            end, Base, Fields)
-    end;
-bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 
 %% ── Reference-field invocation: op selector for a held address ──────────────
 %% An address <<"#<alias member>">> names its member by its last token, and the
@@ -721,13 +693,6 @@ bv_inst_get_(Pid, Key) when is_pid(Pid) ->
     Pid ! {bv_get, self(), Key, Ref_},
     receive {bv_reply, Ref_, V_} -> V_ after 5000 -> null end;
 bv_inst_get_(_, _) -> null.
-bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->
-    Id_ = integer_to_binary(erlang:unique_integer([positive])),
-    Pid ! {bv_dispatch, self(), Op, Payload, Id_},
-    R_ = bv_await_(Id_),
-    bv_drain_notify_(),
-    R_;
-bv_inst_call_(_, _, _) -> null.
 %% Run a handler in an instance's loop. A failure is reported to the caller and
 %% the instance lives on: a failed \`as\` keeps its message.
 bv_guard_(F) ->
@@ -740,11 +705,6 @@ bv_call_self_(F) ->
     try F()
     catch error:{bv_as, _} -> error(bv_call_failed)
     end.
-%% The reply to a call on an instance. A call that receives a failure fails in turn.
-bv_await_(Id) ->
-    receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id, _} -> error(bv_call_failed);
-        ${serveClasses('bv_await_(Id)')};
-        ${asideLine('bv_await_(Id)')} end.
 %% The file actor a class reads cells from (see src/outer_reads.js): a class has it
 %% from whoever spawned it, and the file actor is its own.
 bv_outer_() -> case get(bv_outer_) of undefined -> self(); O_ -> O_ end.
@@ -759,107 +719,15 @@ bv_my_class_() -> case get(bv_self_class_) of undefined -> <<>>; C_ -> C_ end.
 %% What a class constructed here starts with. Its chain is this actor and the ones it's
 %% declared in, from the one of class Enclosing out.
 bv_outer_ctx_(Enclosing) -> {bv_outer_(), bv_seq_ref_(), bv_chain_from_(Enclosing, [{bv_my_class_(), self()} | bv_chain_()])}.
-%% The same for a class whose constructor closes over its members: built in their
-%% actor, it is any class's; built in its home (or a class inside it), the members'
-%% actor, from the home's cell Token, comes first.
-bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
-    case bv_my_class_() of
-        Enclosing -> bv_outer_ctx_(Enclosing);
-        _ ->
-            {Outer_, Ref_, Chain_} = bv_outer_ctx_(Home),
-            [{HomeClass_, HomePid_} | _] = Chain_,
-            Members_ = case HomePid_ =:= self() of
-                true -> bv_read_(HomeClass_, Token);
-                false ->
-                    MRef_ = make_ref(),
-                    HomePid_ ! {bv_outer_get, self(), Token, MRef_},
-                    receive {bv_reply, MRef_, V_} -> V_ end
-            end,
-            {Outer_, Ref_, [{Enclosing, Members_} | Chain_]}
-    end.
 bv_chain_from_(_, [Last_]) -> [Last_];
 bv_chain_from_(E_, [{E_, _} | _] = C_) -> C_;
 bv_chain_from_(E_, [_ | T_]) -> bv_chain_from_(E_, T_).
 bv_adopt_outer_({Pid, Ref, Chain}) -> put(bv_outer_, Pid), put(bv_seq_ref_, Ref), put(bv_chain_, Chain).
-%% A class reading a cell of an actor it's declared in, Level actors up the chain:
-%% \`$get\` to that actor's Token (\`~total\`), from a class declared in it. Each of
-%% them answers in every wait, its idle one included, so a read is answered at the
-%% owner's next wait or once its turn ends.
-bv_outer_get_(Level, Token) ->
-    Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
-    case Owner_ of
-        Self_ when Self_ =:= self() -> bv_read_(bv_my_class_(), Token);
-        _ ->
-            Ref_ = make_ref(),
-            Owner_ ! {bv_outer_get, self(), Token, Ref_},
-            receive {bv_reply, Ref_, V_} -> V_ end
-    end.
-%% A write or a call from a class to an actor it's declared in, Level actors up the
-%% chain (src/outer_reads.js): Op (\`{<<"$set">>, <<"~total">>}\`, \`<<"~helper">>\`) sent to
-%% it as from inside it. It's served wherever a read is, so a class reads its own
-%% writes. The result is an Object, as a self_send's is; a silent call doesn't wait.
-outer_self_send(Level, Op, Payload, Silent) ->
-    {Class_, Owner_} = case bv_chain_() of [] -> {<<>>, bv_outer_()}; C_ -> lists:nth(Level, C_) end,
-    Ref_ = make_ref(),
-    case Owner_ of
-        Self_ when Self_ =:= self() -> bv_answer_outer_op_(self(), Class_, Op, Payload, Ref_);
-        _ -> Owner_ ! {bv_outer_op, self(), Class_, Op, Payload, Ref_}
-    end,
-    case Silent of
-        true -> bv_object_pack([]);
-        false -> receive {bv_reply, Ref_, V_} -> bv_object_pack(V_); {bv_error, Ref_, _} -> error(bv_call_failed) end
-    end.
-bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
-    case bv_guard_(fun() -> bv_run_as_(Class, Op, Payload) end) of
-        {ok, Re_, Ty_} -> From ! {bv_reply, Ref, bv_unwire_reply(Re_, Ty_)};
-        {bv_failed, Fail_} -> From ! {bv_error, Ref, Fail_};
-        _ -> From ! {bv_error, Ref, <<"error">>}
-    end.
-%% \`$get\` from a class declared in us, answered from the table \`$get\` reads
-%% (bv_read_). A cell that a class's construction waits on isn't declared yet: the
-%% read is held until its line runs (src/init_order.js).
-bv_answer_outer_(From, Token, Ref) ->
-    case get({bv_pending_, Token}) of
-        undefined -> From ! {bv_reply, Ref, bv_read_(bv_my_class_(), Token)};
-        Waiting_ -> put({bv_pending_, Token}, [{From, Ref} | Waiting_])
-    end.
 bv_pending_cells_(Tokens) -> [put({bv_pending_, T_}, []) || T_ <- Tokens], ok.
-bv_cell_ready_(Token) ->
-    Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
-    [From_ ! {bv_reply, Ref_, bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
-    ok.
 %% A class constructed without waiting for it; the end of the block waits.
 bv_join_(Pid) ->
     put(bv_joins_, [Pid | case get(bv_joins_) of undefined -> []; J_ -> J_ end]),
     Pid.
-bv_join_all_() ->
-    Joins_ = case erase(bv_joins_) of undefined -> []; J_ -> J_ end,
-    [bv_spawn_sync_(P_) || P_ <- lists:reverse(Joins_)],
-    ok.
-%% A class calling one of its file's dependencies: the dependency is the file
-%% actor's, so the file actor makes the call, under an id of its own, and passes the
-%% reply back. It answers in every wait, as for a read.
-bv_outer_call_(Msg, Silent) ->
-    case bv_outer_() of
-        Self_ when Self_ =:= self() -> bv_outer_send_(Msg, Silent);
-        Outer_ ->
-            Ref_ = make_ref(),
-            Outer_ ! {bv_outer_call, self(), Msg, Silent, Ref_},
-            receive {bv_reply, Ref_, V_} -> V_ end
-    end.
-%% A class's call goes out as ours, so its relative addresses and tags are
-%% translated as we translate what it replies: under its address, when we
-%% published it.
-bv_lift_(Pid, Msg) ->
-    case get({bv_addr_of, Pid}) of
-        undefined -> Msg;
-        A_ -> maps:map(fun(<<"to">>, V_) -> V_; (<<"ty">>, V_) -> bv_local_tag_(V_, A_); (_, V_) -> bv_under_payload_(V_, A_) end, Msg)
-    end.
-bv_outer_send_(Msg, Silent) ->
-    Seq_ = bv_next_seq_(),
-    Id_ = integer_to_binary(Seq_),
-    io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
-    case Silent of true -> null; false -> await_response_(Id_) end.
 
 %% ── Stdin ───────────────────────────────────────────────────────────────
 %% The file actor is stdin's one reader. It asks for a line without blocking (the io
@@ -919,74 +787,8 @@ bv_line_aside_(Ref, Data) ->
     end,
     case bv_line_waiters_() > 0 of true -> bv_want_line_(); false -> ok end.
 bv_line_q_() -> case get(bv_line_q_) of undefined -> []; Q_ -> Q_ end.
-%% The reply to a message this actor sent on the wire: {re, Message}, {ex, Message}
-%% or eof. Anything else that comes meanwhile is handled as it comes.
-bv_await_line_(Id) ->
-    case bv_outer_() of
-        Self_ when Self_ =:= self() ->
-            case lists:partition(fun({line, M_}) -> maps:get(<<"id">>, M_, <<>>) =:= Id andalso bv_is_reply_(M_); (_) -> false end, bv_line_q_()) of
-                {[{line, M_} | _], Rest_} -> put(bv_line_q_, Rest_), bv_reply_kind_(M_);
-                _ -> bv_want_line_(), bv_await_line_loop_(Id)
-            end;
-        Outer_ ->
-            Outer_ ! {bv_await_line, self(), Id},
-            bv_await_line_from_(Id)
-    end.
-%% A class waiting on its file actor for a reply still answers the classes declared in it.
-bv_await_line_from_(Id) ->
-    receive
-        {bv_line, Id, eof} -> eof;
-        {bv_line, Id, M_} -> bv_reply_kind_(M_);
-        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id);
-        {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), bv_await_line_from_(Id)
-    end.
 bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
 bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.
-bv_await_line_loop_(Id) ->
-    receive
-        {io_reply, LRef_, LData_} ->
-            case bv_take_line_(LRef_, LData_) of
-                eof -> eof;
-                taken -> bv_want_line_(), bv_await_line_loop_(Id);
-                {line, M_} ->
-                    MsgId_ = maps:get(<<"id">>, M_, <<>>),
-                    case maps:is_key(<<"re">>, M_) of
-                        true when MsgId_ =:= Id -> {re, M_};
-                        %% Another reply: it isn't this wait's, and no one else waits on it.
-                        true -> bv_want_line_(), bv_await_line_loop_(Id);
-                        false ->
-                            case maps:is_key(<<"ex">>, M_) of
-                                true when MsgId_ =:= Id -> {ex, M_};
-                                _ -> dispatch(M_), bv_want_line_(), bv_await_line_loop_(Id)
-                            end
-                    end
-            end;
-        ${serveClasses('bv_await_line_loop_(Id)')}
-    end.
-%% The file actor's next message of its own. Before it asks for one, what it launched
-%% into its classes has finished, unless one of them is waiting on the wire too.
-bv_next_line_() ->
-    case bv_line_q_() of
-        [L_ | Rest_] -> put(bv_line_q_, Rest_), L_;
-        [] ->
-            case bv_launched_() of [] -> bv_want_line_(); _ -> ok end,
-            receive
-                {io_reply, LRef_, LData_} ->
-                    case bv_take_line_(LRef_, LData_) of
-                        taken -> bv_next_line_();
-                        L_ -> L_
-                    end;
-                {bv_reply, LId_, _} -> bv_landed_(LId_), bv_next_line_();
-                {bv_error, LId_, _} -> bv_landed_(LId_), bv_next_line_();
-                {bv_notify, SubId_, Re_} ->
-                    case get({pending_subscribe, SubId_}) of
-                        F_ when is_function(F_) -> F_(Re_);
-                        _ -> ok
-                    end,
-                    bv_next_line_();
-                ${serveClasses('bv_next_line_()')}
-            end
-    end.
 %% A call into a class that nothing waits on, such as a subscription callback.
 bv_launch_(Pid, Op, Payload) ->
     Id_ = integer_to_binary(erlang:unique_integer([positive])),
@@ -1068,37 +870,6 @@ bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A
 bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
 bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
 bv_wire_own_(V) -> V.
-%% A tag from an actor we published, relative to it: a bare : is its class;
-%% any other relative tag goes under its address. A type's tag names its
-%% authority from the file actor (:Point, :W:X), so it stays as it is. A
-%% global tag passes.
-bv_local_tag_(<<":">>, Addr) -> bv_addr_class_(Addr);
-bv_local_tag_(<<":", _/binary>> = T, Addr) ->
-    case bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
-bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
-bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
-bv_local_tag_(T, _) -> T.
-%% A call from outside: its tags are checked, and its reply keeps its tag.
-bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
-    Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
-    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
-        true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => <<"schema_required">>}}), $\n]);
-        false ->
-            Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
-            R_ = bv_await_wire_(Id),
-            bv_drain_notify_(),
-            case R_ of
-                {ok, null, _} -> ok;
-                %% A self-return: we made this actor, so we name it and its class, as for #new.
-                {ok, <<"#<:>"/utf8>>, _} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<:", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
-                %% Its relative addresses, "me" among them, go under it.
-                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
-                {ok, V_, Tag_} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
-                {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => F_}}), $\n])
-            end
-    end.
 %% A child's "me" (#<:>) as one slot of several: its parent swaps in what it knows
 %% the child as, at any depth. The matching ty slot holds a bare :, "my class".
 bv_swap_self_(<<"#<:>">>, With) -> With;
@@ -1109,38 +880,9 @@ bv_swap_tag_(<<":">>, Class) -> Class;
 bv_swap_tag_(L, Class) when is_list(L) -> [bv_swap_tag_(X, Class) || X <- L];
 bv_swap_tag_(M, Class) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_tag_(X, Class) end, M);
 bv_swap_tag_(T, _) -> T.
-%% A subscribe carries its whole message (op args, ty) and its id.
-bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
-    Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
-    R_ = bv_await_(Id),
-    bv_drain_notify_(),
-    R_;
-bv_inst_sub_(_, _, _, _, _) -> null.
-%% Wait for a freshly spawned instance to finish its init (it handles the
-%% sync only once in its loop).
-bv_spawn_sync_(Pid) ->
-    Pid ! {bv_init_sync, self()},
-    bv_await_ready_(Pid).
-bv_await_ready_(Pid) ->
-    receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed);
-        ${serveClasses('bv_await_ready_(Pid)')};
-        ${asideLine('bv_await_ready_(Pid)')} end.
-bv_await_wire_(Id) ->
-    receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
-        ${serveClasses('bv_await_wire_(Id)')};
-        ${asideLine('bv_await_wire_(Id)')} end.
 %% A constructor block failed: there's no actor, and whoever is constructing it is told.
 bv_init_failed_() ->
     receive {bv_init_sync, From_} -> From_ ! {bv_init_failed, self()} end.
-%% Deliver an emitted event to a subscriber instance and await its handler.
-bv_inst_emit_(Pid, Ev, Payload) ->
-    Id_ = integer_to_binary(erlang:unique_integer([positive])),
-    Pid ! {bv_emit, self(), Ev, Payload, Id_},
-    bv_await_emit_(Id_).
-bv_await_emit_(Id_) ->
-    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null;
-        ${serveClasses('bv_await_emit_(Id_)')};
-        ${asideLine('bv_await_emit_(Id_)')} end.
 %% Register this process for an emitter instance's event.
 bv_on_(Pid, Ev) when is_pid(Pid) ->
     Ref_ = make_ref(),
@@ -1188,29 +930,6 @@ structure_splat_ty(TyFirst) when is_list(TyFirst) ->
 structure_splat_ty(M) when is_map(M) -> M;
 structure_splat_ty(_) -> null.
 
-%% ── Type matching ───────────────────────────────────────────────────────────
-%% A type value's tag is its address (or the alias spelling of its authority);
-%% the parameter spells the type as the source does (Point, Svc::Point). Both
-%% come to the type's key.
-type_member_of(Actual, Expected) when Actual =:= Expected -> true;
-type_member_of(Actual, Expected) when is_binary(Expected) ->
-    An = bv_type_name(Actual),
-    case (An =/= undefined) andalso (An =:= bv_source_key(Expected)) of
-        true -> true;
-        false ->
-            case binary:match(Expected, <<"|">>) of
-                nomatch -> false;
-                _ ->
-                    Parts = binary:split(Expected, <<"|">>, [global]),
-                    lists:any(fun(P) ->
-                        T = string:trim(P),
-                        T =:= Actual orelse
-                            ((An =/= undefined) andalso (An =:= bv_source_key(T)))
-                    end, Parts)
-            end
-    end;
-type_member_of(_, _) -> false.
-
 %% Whether an in-process arg value (no tag travels with it) can be a param of
 %% type T. Only a scalar member can contradict a value's kind; any other type is
 %% not judged here. An absent (optional) arg fits.
@@ -1230,71 +949,6 @@ bv_values_fit(Pos, Named, PosTypes, NamedTypes) ->
     Nth = fun(I) -> case I =< length(Pos) of true -> lists:nth(I, Pos); false -> '__bv_absent' end end,
     lists:all(fun({I, T}) -> bv_value_fits(Nth(I), T) end, lists:zip(lists:seq(1, length(PosTypes)), PosTypes))
         andalso lists:all(fun({K, T}) -> bv_value_fits(maps:get(K, Named, '__bv_absent'), T) end, NamedTypes).
-
-match_types(Message, Pairs) ->
-    case maps:find(<<"ty">>, Message) of
-        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
-            TypesObj = hd(Ty),
-            lists:all(fun({Name, TypeName}) ->
-                case maps:find(Name, TypesObj) of
-                    {ok, _} when TypeName =:= <<"Anything">> -> true;
-                    {ok, V} when is_binary(V) -> type_member_of(V, TypeName);
-                    {ok, V} when is_list(V) ->
-                        TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
-                    _ -> false
-                end
-            end, Pairs);
-        _ -> Pairs =:= []
-    end.
-
-match_types_positional(Message, PosTypes, NamedTypes) ->
-    match_types_positional(Message, PosTypes, NamedTypes, length(PosTypes)).
-
-match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
-    case maps:find(<<"ty">>, Message) of
-        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
-            %% An all-named call's tags are the named map alone: no positionals.
-            TypesArr = case hd(Ty) of M0 when is_map(M0) -> [M0]; T0 -> T0 end,
-            case is_list(TypesArr) of
-                true ->
-                    PosCount = length([X || X <- TypesArr, not is_map(X)]),
-                    PosOk = PosCount >= MinPos andalso PosCount =< length(PosTypes) andalso match_pos_types(TypesArr, lists:sublist(PosTypes, PosCount), 0),
-                    NamedOk = case NamedTypes of
-                        [] -> true;
-                        _ ->
-                            case lists:last(TypesArr) of
-                                M when is_map(M) ->
-                                    lists:all(fun({N, T}) ->
-                                        case maps:find(N, M) of
-                                            {ok, _} when T =:= <<"Anything">> -> true;
-                                            {ok, V} when is_binary(V) -> type_member_of(V, T);
-                                            error -> true;
-                                            _ -> false
-                                        end
-                                    end, NamedTypes);
-                                _ -> true
-                            end
-                    end,
-                    PosOk andalso NamedOk;
-                false -> false
-            end;
-        _ -> PosTypes =:= [] andalso NamedTypes =:= []
-    end.
-
-match_pos_types(_, [], _) -> true;
-match_pos_types(Arr, [T|Rest], I) ->
-    case I < length(Arr) of
-        true ->
-            Actual = lists:nth(I+1, Arr),
-            Ok = T =:= <<"Anything">>
-                orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List of Anything">>))
-                orelse (is_binary(Actual) andalso type_member_of(Actual, T)),
-            case Ok of
-                true -> match_pos_types(Arr, Rest, I+1);
-                false -> false
-            end;
-        false -> false
-    end.
 
 %% ── Truthiness ──────────────────────────────────────────────────────────────
 is_truthy(false) -> false;
@@ -1520,42 +1174,6 @@ brevity_re_after(Bin, Re) ->
         nomatch -> <<>>
     end.
 
-%% A reply whose whole value is one actor: its address is in re, and ty, if
-%% any, is that address without its trailing number (C:N, or an opaque C/N),
-%% its class.
-bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary_part(Re, byte_size(Re), -1) =:= <<">">> ->
-    Addr_ = binary:part(Re, 2, byte_size(Re) - 3),
-    Class_ = case re:run(Addr_, <<"[:/][0-9]+$">>) of
-        {match, [{P_, _}]} -> binary:part(Addr_, 0, P_);
-        nomatch -> Addr_
-    end,
-    case maps:find(<<"ty">>, Message) of
-        error -> [Re];
-        {ok, Class_} -> [Re];
-        _ -> Re
-    end;
-bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
-
-await_response_(Id) ->
-    case bv_await_line_(Id) of
-        {re, Message} -> bv_self_reply_(maps:get(<<"re">>, Message), Message);
-        {ex, Message} -> error({ex_response, Message});
-        eof -> null
-    end.
-
-await_new_response_(Id) ->
-    case bv_await_line_(Id) of
-        {re, Message} ->
-            case maps:get(<<"re">>, Message) of
-                <<"#<", Rest/binary>> ->
-                    Len = byte_size(Rest) - 1,
-                    <<Addr:Len/binary, ">">> = Rest,
-                    Addr;
-                _ -> maps:get(<<"from">>, Message, null)
-            end;
-        _ -> null
-    end.
-
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
 %% Given a to-field binary, the wire name its last token names on us (val,
 %% ~val, #x, @N). The to is relative to us (:x, x, or #<alias:x>). Returns the
@@ -1696,6 +1314,396 @@ brevity_list_unique([H|T], Acc) ->
         true -> brevity_list_unique(T, Acc);
         false -> brevity_list_unique(T, [H|Acc])
     end.
+
+`;
+
+// The runtime that calls into the actor's own module (its dispatch, read table,
+// type registry), so it is emitted into each module.
+const PREAMBLE = `
+
+%% A type's wire tag is its address: its authority, the classes that own it,
+%% and its bare name (:Point, :W:X, svc.bv:Point). bv_type_name/1, emitted
+%% with the program's registry, gives the key of the type a tag names, under
+%% its key or the alias spelling of its authority (Svc:Point), or undefined.
+
+bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
+    case bv_type_name(Tag) of
+        undefined -> Payload;
+        Name ->
+            PLen = length(Payload),
+            FLen = length(Fields),
+            N = if PLen < FLen -> PLen; true -> FLen end,
+            Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
+            Base = #{<<"__type">> => Name},
+            lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs)
+    end;
+bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
+    case bv_type_name(Tag) of
+        undefined -> Payload;
+        Name ->
+            Base = #{<<"__type">> => Name},
+            lists:foldl(fun(F, Acc) ->
+                case maps:get(F, Payload, undefined) of
+                    undefined -> Acc;
+                    V -> Acc#{F => V}
+                end
+            end, Base, Fields)
+    end;
+bv_from_wire(_Tag, Payload, _Fields) -> Payload.
+bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->
+    Id_ = integer_to_binary(erlang:unique_integer([positive])),
+    Pid ! {bv_dispatch, self(), Op, Payload, Id_},
+    R_ = bv_await_(Id_),
+    bv_drain_notify_(),
+    R_;
+bv_inst_call_(_, _, _) -> null.
+%% The reply to a call on an instance. A call that receives a failure fails in turn.
+bv_await_(Id) ->
+    receive {bv_reply, Id, Re_} -> Re_; {bv_error, Id, _} -> error(bv_call_failed);
+        ${serveClasses('bv_await_(Id)')};
+        ${asideLine('bv_await_(Id)')} end.
+%% The same for a class whose constructor closes over its members: built in their
+%% actor, it is any class's; built in its home (or a class inside it), the members'
+%% actor, from the home's cell Token, comes first.
+bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
+    case bv_my_class_() of
+        Enclosing -> bv_outer_ctx_(Enclosing);
+        _ ->
+            {Outer_, Ref_, Chain_} = bv_outer_ctx_(Home),
+            [{HomeClass_, HomePid_} | _] = Chain_,
+            Members_ = case HomePid_ =:= self() of
+                true -> bv_read_(HomeClass_, Token);
+                false ->
+                    MRef_ = make_ref(),
+                    HomePid_ ! {bv_outer_get, self(), Token, MRef_},
+                    receive {bv_reply, MRef_, V_} -> V_ end
+            end,
+            {Outer_, Ref_, [{Enclosing, Members_} | Chain_]}
+    end.
+%% A class reading a cell of an actor it's declared in, Level actors up the chain:
+%% \`$get\` to that actor's Token (\`~total\`), from a class declared in it. Each of
+%% them answers in every wait, its idle one included, so a read is answered at the
+%% owner's next wait or once its turn ends.
+bv_outer_get_(Level, Token) ->
+    Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
+    case Owner_ of
+        Self_ when Self_ =:= self() -> bv_read_(bv_my_class_(), Token);
+        _ ->
+            Ref_ = make_ref(),
+            Owner_ ! {bv_outer_get, self(), Token, Ref_},
+            receive {bv_reply, Ref_, V_} -> V_ end
+    end.
+%% A write or a call from a class to an actor it's declared in, Level actors up the
+%% chain (src/outer_reads.js): Op (\`{<<"$set">>, <<"~total">>}\`, \`<<"~helper">>\`) sent to
+%% it as from inside it. It's served wherever a read is, so a class reads its own
+%% writes. The result is an Object, as a self_send's is; a silent call doesn't wait.
+outer_self_send(Level, Op, Payload, Silent) ->
+    {Class_, Owner_} = case bv_chain_() of [] -> {<<>>, bv_outer_()}; C_ -> lists:nth(Level, C_) end,
+    Ref_ = make_ref(),
+    case Owner_ of
+        Self_ when Self_ =:= self() -> bv_answer_outer_op_(self(), Class_, Op, Payload, Ref_);
+        _ -> Owner_ ! {bv_outer_op, self(), Class_, Op, Payload, Ref_}
+    end,
+    case Silent of
+        true -> bv_object_pack([]);
+        false -> receive {bv_reply, Ref_, V_} -> bv_object_pack(V_); {bv_error, Ref_, _} -> error(bv_call_failed) end
+    end.
+bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
+    case bv_guard_(fun() -> bv_run_as_(Class, Op, Payload) end) of
+        {ok, Re_, Ty_} -> From ! {bv_reply, Ref, bv_unwire_reply(Re_, Ty_)};
+        {bv_failed, Fail_} -> From ! {bv_error, Ref, Fail_};
+        _ -> From ! {bv_error, Ref, <<"error">>}
+    end.
+%% \`$get\` from a class declared in us, answered from the table \`$get\` reads
+%% (bv_read_). A cell that a class's construction waits on isn't declared yet: the
+%% read is held until its line runs (src/init_order.js).
+bv_answer_outer_(From, Token, Ref) ->
+    case get({bv_pending_, Token}) of
+        undefined -> From ! {bv_reply, Ref, bv_read_(bv_my_class_(), Token)};
+        Waiting_ -> put({bv_pending_, Token}, [{From, Ref} | Waiting_])
+    end.
+bv_cell_ready_(Token) ->
+    Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
+    [From_ ! {bv_reply, Ref_, bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
+    ok.
+bv_join_all_() ->
+    Joins_ = case erase(bv_joins_) of undefined -> []; J_ -> J_ end,
+    [bv_spawn_sync_(P_) || P_ <- lists:reverse(Joins_)],
+    ok.
+%% A class calling one of its file's dependencies: the dependency is the file
+%% actor's, so the file actor makes the call, under an id of its own, and passes the
+%% reply back. It answers in every wait, as for a read.
+bv_outer_call_(Msg, Silent) ->
+    case bv_outer_() of
+        Self_ when Self_ =:= self() -> bv_outer_send_(Msg, Silent);
+        Outer_ ->
+            Ref_ = make_ref(),
+            Outer_ ! {bv_outer_call, self(), Msg, Silent, Ref_},
+            receive {bv_reply, Ref_, V_} -> V_ end
+    end.
+%% A class's call goes out as ours, so its relative addresses and tags are
+%% translated as we translate what it replies: under its address, when we
+%% published it.
+bv_lift_(Pid, Msg) ->
+    case get({bv_addr_of, Pid}) of
+        undefined -> Msg;
+        A_ -> maps:map(fun(<<"to">>, V_) -> V_; (<<"ty">>, V_) -> bv_local_tag_(V_, A_); (_, V_) -> bv_under_payload_(V_, A_) end, Msg)
+    end.
+bv_outer_send_(Msg, Silent) ->
+    Seq_ = bv_next_seq_(),
+    Id_ = integer_to_binary(Seq_),
+    io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
+    case Silent of true -> null; false -> await_response_(Id_) end.
+%% The reply to a message this actor sent on the wire: {re, Message}, {ex, Message}
+%% or eof. Anything else that comes meanwhile is handled as it comes.
+bv_await_line_(Id) ->
+    case bv_outer_() of
+        Self_ when Self_ =:= self() ->
+            case lists:partition(fun({line, M_}) -> maps:get(<<"id">>, M_, <<>>) =:= Id andalso bv_is_reply_(M_); (_) -> false end, bv_line_q_()) of
+                {[{line, M_} | _], Rest_} -> put(bv_line_q_, Rest_), bv_reply_kind_(M_);
+                _ -> bv_want_line_(), bv_await_line_loop_(Id)
+            end;
+        Outer_ ->
+            Outer_ ! {bv_await_line, self(), Id},
+            bv_await_line_from_(Id)
+    end.
+%% A class waiting on its file actor for a reply still answers the classes declared in it.
+bv_await_line_from_(Id) ->
+    receive
+        {bv_line, Id, eof} -> eof;
+        {bv_line, Id, M_} -> bv_reply_kind_(M_);
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id);
+        {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), bv_await_line_from_(Id)
+    end.
+bv_await_line_loop_(Id) ->
+    receive
+        {io_reply, LRef_, LData_} ->
+            case bv_take_line_(LRef_, LData_) of
+                eof -> eof;
+                taken -> bv_want_line_(), bv_await_line_loop_(Id);
+                {line, M_} ->
+                    MsgId_ = maps:get(<<"id">>, M_, <<>>),
+                    case maps:is_key(<<"re">>, M_) of
+                        true when MsgId_ =:= Id -> {re, M_};
+                        %% Another reply: it isn't this wait's, and no one else waits on it.
+                        true -> bv_want_line_(), bv_await_line_loop_(Id);
+                        false ->
+                            case maps:is_key(<<"ex">>, M_) of
+                                true when MsgId_ =:= Id -> {ex, M_};
+                                _ -> dispatch(M_), bv_want_line_(), bv_await_line_loop_(Id)
+                            end
+                    end
+            end;
+        ${serveClasses('bv_await_line_loop_(Id)')}
+    end.
+%% The file actor's next message of its own. Before it asks for one, what it launched
+%% into its classes has finished, unless one of them is waiting on the wire too.
+bv_next_line_() ->
+    case bv_line_q_() of
+        [L_ | Rest_] -> put(bv_line_q_, Rest_), L_;
+        [] ->
+            case bv_launched_() of [] -> bv_want_line_(); _ -> ok end,
+            receive
+                {io_reply, LRef_, LData_} ->
+                    case bv_take_line_(LRef_, LData_) of
+                        taken -> bv_next_line_();
+                        L_ -> L_
+                    end;
+                {bv_reply, LId_, _} -> bv_landed_(LId_), bv_next_line_();
+                {bv_error, LId_, _} -> bv_landed_(LId_), bv_next_line_();
+                {bv_notify, SubId_, Re_} ->
+                    case get({pending_subscribe, SubId_}) of
+                        F_ when is_function(F_) -> F_(Re_);
+                        _ -> ok
+                    end,
+                    bv_next_line_();
+                ${serveClasses('bv_next_line_()')}
+            end
+    end.
+%% A tag from an actor we published, relative to it: a bare : is its class;
+%% any other relative tag goes under its address. A type's tag names its
+%% authority from the file actor (:Point, :W:X), so it stays as it is. A
+%% global tag passes.
+bv_local_tag_(<<":">>, Addr) -> bv_addr_class_(Addr);
+bv_local_tag_(<<":", _/binary>> = T, Addr) ->
+    case bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
+bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
+bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
+bv_local_tag_(T, _) -> T.
+%% A call from outside: its tags are checked, and its reply keeps its tag.
+bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
+    Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
+    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
+        true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => <<"schema_required">>}}), $\n]);
+        false ->
+            Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
+            R_ = bv_await_wire_(Id),
+            bv_drain_notify_(),
+            case R_ of
+                {ok, null, _} -> ok;
+                %% A self-return: we made this actor, so we name it and its class, as for #new.
+                {ok, <<"#<:>"/utf8>>, _} ->
+                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<:", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
+                %% Its relative addresses, "me" among them, go under it.
+                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
+                {ok, V_, Tag_} ->
+                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
+                {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => F_}}), $\n])
+            end
+    end.
+%% A subscribe carries its whole message (op args, ty) and its id.
+bv_inst_sub_(Pid, Op, Msg, Payload, Id) when is_pid(Pid) ->
+    Pid ! {bv_dispatch_msg, self(), Op, Msg, Payload, Id},
+    R_ = bv_await_(Id),
+    bv_drain_notify_(),
+    R_;
+bv_inst_sub_(_, _, _, _, _) -> null.
+%% Wait for a freshly spawned instance to finish its init (it handles the
+%% sync only once in its loop).
+bv_spawn_sync_(Pid) ->
+    Pid ! {bv_init_sync, self()},
+    bv_await_ready_(Pid).
+bv_await_ready_(Pid) ->
+    receive {bv_ready, Pid} -> Pid; {bv_init_failed, Pid} -> error(bv_call_failed);
+        ${serveClasses('bv_await_ready_(Pid)')};
+        ${asideLine('bv_await_ready_(Pid)')} end.
+bv_await_wire_(Id) ->
+    receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
+        ${serveClasses('bv_await_wire_(Id)')};
+        ${asideLine('bv_await_wire_(Id)')} end.
+%% Deliver an emitted event to a subscriber instance and await its handler.
+bv_inst_emit_(Pid, Ev, Payload) ->
+    Id_ = integer_to_binary(erlang:unique_integer([positive])),
+    Pid ! {bv_emit, self(), Ev, Payload, Id_},
+    bv_await_emit_(Id_).
+bv_await_emit_(Id_) ->
+    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null;
+        ${serveClasses('bv_await_emit_(Id_)')};
+        ${asideLine('bv_await_emit_(Id_)')} end.
+
+%% ── Type matching ───────────────────────────────────────────────────────────
+%% A type value's tag is its address (or the alias spelling of its authority);
+%% the parameter spells the type as the source does (Point, Svc::Point). Both
+%% come to the type's key.
+type_member_of(Actual, Expected) when Actual =:= Expected -> true;
+type_member_of(Actual, Expected) when is_binary(Expected) ->
+    An = bv_type_name(Actual),
+    case (An =/= undefined) andalso (An =:= bv_source_key(Expected)) of
+        true -> true;
+        false ->
+            case binary:match(Expected, <<"|">>) of
+                nomatch -> false;
+                _ ->
+                    Parts = binary:split(Expected, <<"|">>, [global]),
+                    lists:any(fun(P) ->
+                        T = string:trim(P),
+                        T =:= Actual orelse
+                            ((An =/= undefined) andalso (An =:= bv_source_key(T)))
+                    end, Parts)
+            end
+    end;
+type_member_of(_, _) -> false.
+
+match_types(Message, Pairs) ->
+    case maps:find(<<"ty">>, Message) of
+        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
+            TypesObj = hd(Ty),
+            lists:all(fun({Name, TypeName}) ->
+                case maps:find(Name, TypesObj) of
+                    {ok, _} when TypeName =:= <<"Anything">> -> true;
+                    {ok, V} when is_binary(V) -> type_member_of(V, TypeName);
+                    {ok, V} when is_list(V) ->
+                        TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
+                    _ -> false
+                end
+            end, Pairs);
+        _ -> Pairs =:= []
+    end.
+
+match_types_positional(Message, PosTypes, NamedTypes) ->
+    match_types_positional(Message, PosTypes, NamedTypes, length(PosTypes)).
+
+match_types_positional(Message, PosTypes, NamedTypes, MinPos) ->
+    case maps:find(<<"ty">>, Message) of
+        {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
+            %% An all-named call's tags are the named map alone: no positionals.
+            TypesArr = case hd(Ty) of M0 when is_map(M0) -> [M0]; T0 -> T0 end,
+            case is_list(TypesArr) of
+                true ->
+                    PosCount = length([X || X <- TypesArr, not is_map(X)]),
+                    PosOk = PosCount >= MinPos andalso PosCount =< length(PosTypes) andalso match_pos_types(TypesArr, lists:sublist(PosTypes, PosCount), 0),
+                    NamedOk = case NamedTypes of
+                        [] -> true;
+                        _ ->
+                            case lists:last(TypesArr) of
+                                M when is_map(M) ->
+                                    lists:all(fun({N, T}) ->
+                                        case maps:find(N, M) of
+                                            {ok, _} when T =:= <<"Anything">> -> true;
+                                            {ok, V} when is_binary(V) -> type_member_of(V, T);
+                                            error -> true;
+                                            _ -> false
+                                        end
+                                    end, NamedTypes);
+                                _ -> true
+                            end
+                    end,
+                    PosOk andalso NamedOk;
+                false -> false
+            end;
+        _ -> PosTypes =:= [] andalso NamedTypes =:= []
+    end.
+
+match_pos_types(_, [], _) -> true;
+match_pos_types(Arr, [T|Rest], I) ->
+    case I < length(Arr) of
+        true ->
+            Actual = lists:nth(I+1, Arr),
+            Ok = T =:= <<"Anything">>
+                orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List of Anything">>))
+                orelse (is_binary(Actual) andalso type_member_of(Actual, T)),
+            case Ok of
+                true -> match_pos_types(Arr, Rest, I+1);
+                false -> false
+            end;
+        false -> false
+    end.
+
+%% A reply whose whole value is one actor: its address is in re, and ty, if
+%% any, is that address without its trailing number (C:N, or an opaque C/N),
+%% its class.
+bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary_part(Re, byte_size(Re), -1) =:= <<">">> ->
+    Addr_ = binary:part(Re, 2, byte_size(Re) - 3),
+    Class_ = case re:run(Addr_, <<"[:/][0-9]+$">>) of
+        {match, [{P_, _}]} -> binary:part(Addr_, 0, P_);
+        nomatch -> Addr_
+    end,
+    case maps:find(<<"ty">>, Message) of
+        error -> [Re];
+        {ok, Class_} -> [Re];
+        _ -> Re
+    end;
+bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
+
+await_response_(Id) ->
+    case bv_await_line_(Id) of
+        {re, Message} -> bv_self_reply_(maps:get(<<"re">>, Message), Message);
+        {ex, Message} -> error({ex_response, Message});
+        eof -> null
+    end.
+
+await_new_response_(Id) ->
+    case bv_await_line_(Id) of
+        {re, Message} ->
+            case maps:get(<<"re">>, Message) of
+                <<"#<", Rest/binary>> ->
+                    Len = byte_size(Rest) - 1,
+                    <<Addr:Len/binary, ">">> = Rest,
+                    Addr;
+                _ -> maps:get(<<"from">>, Message, null)
+            end;
+        _ -> null
+    end.
 `;
 
 // Reserved names used in generated Erlang dispatch code — user vars must not collide
@@ -1762,4 +1770,37 @@ function erlExKey(name) {
   return erlString(arm ? arm.op : wireLabel(name));
 }
 
-export { PREAMBLE, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };
+// The name/arity of every function an Erlang source text defines: the heads that
+// start a line, with commas counted at the head's top level.
+function erlFunctions(text) {
+  const found = [];
+  const head = /^([a-z][a-zA-Z0-9_]*)\(/gm;
+  let m;
+  while ((m = head.exec(text))) {
+    let depth = 1, arity = 0, any = false;
+    let i = head.lastIndex;
+    for (; depth > 0; i++) {
+      const c = text[i];
+      if (c === '$') { i += text[i + 1] === '\\' ? 2 : 1; any = true; continue; }
+      if (c === '"') { while (text[++i] !== '"') if (text[i] === '\\') i++; any = true; continue; }
+      if (c === '(' || c === '[' || c === '{' || (c === '<' && text[i + 1] === '<')) { if (c === '<') i++; depth++; any = true; continue; }
+      if (c === ')' || c === ']' || c === '}' || (c === '>' && text[i + 1] === '>')) { if (c === '>') i++; depth--; continue; }
+      if (c === ',' && depth === 1) arity++;
+      else if (!/\s/.test(c)) any = true;
+    }
+    const fn = `${m[1]}/${any ? arity + 1 : 0}`;
+    if (!found.includes(fn)) found.push(fn);
+  }
+  return found;
+}
+
+const RUNTIME_FUNCTIONS = erlFunctions(RUNTIME);
+
+// The shared runtime as a module of its own, and the import each generated module
+// makes of it.
+const RUNTIME_MODULE = `-module(brevity_rt).
+-export([${RUNTIME_FUNCTIONS.join(', ')}]).
+${RUNTIME}`;
+const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
+
+export { PREAMBLE, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

@@ -165,10 +165,17 @@ actor.receive({ id: '1', op: 'ping', from: 'caller' });
 ## Erlang target
 
 The Erlang target emits a `brevity_actor.erl` module that reads newline-delimited
-JSON from stdin and writes newline-delimited JSON to stdout.
+JSON from stdin and writes newline-delimited JSON to stdout. The module imports the
+shared runtime `brevity_rt`, whose source `erlangRuntime()` returns; write it to
+`brevity_rt.erl` and compile it beside the actor.
+
+```js
+import { erlangRuntime } from 'brevity-lang';
+writeFileSync('brevity_rt.erl', erlangRuntime());
+```
 
 ```bash
-erlc brevity_actor.erl
+erlc brevity_rt.erl brevity_actor.erl
 echo '{"id":"1","op":"ping","from":"caller"}' | erl -noshell -pa . -eval 'brevity_actor:main()' -s init stop
 ```
 

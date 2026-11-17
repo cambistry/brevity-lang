@@ -7,6 +7,7 @@ import { renamePublicClasses, validateWithSourceNames } from './src/subclass.js'
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
 import { returnShapes, unionMembers } from './src/return_shapes.js';
 import { runExtractPasses } from './src/extract_passes.js';
+import { RUNTIME_MODULE } from './src/codegen/erlang/preambles.js';
 
 await loadTargets();
 
@@ -371,6 +372,12 @@ export function extract(source) {
       service: buildServiceDocument(ast),
     },
   };
+}
+
+// The Erlang target's shared runtime, brevity_rt.erl. Every module the Erlang
+// target emits imports it, so it is compiled and loaded beside them.
+export function erlangRuntime() {
+  return RUNTIME_MODULE;
 }
 
 export function compile(ast, options = {}) {

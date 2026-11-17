@@ -1,6 +1,7 @@
 export { codegenErlang } from './program.js';
 import { codegenErlang } from './program.js';
-import { writeFileSync, mkdirSync, existsSync, statSync, readdirSync, rmSync } from 'fs';
+import { RUNTIME_MODULE } from './preambles.js';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, statSync, readdirSync, rmSync } from 'fs';
 import { execSync, spawn as spawnChild } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -45,7 +46,7 @@ export default {
 
       // Each test file numbers its modules from 1, so a previous file's fixture
       // dirs (`comp<n>`, `inst<n>`) are stale here. The worker owns `w<id>`, and runs
-      // its files one at a time, so clearing them is safe. The router stays compiled.
+      // its files one at a time, so clearing them is safe. The router and runtime stay compiled.
       for (const entry of readdirSync(erlDir)) {
         if (/^(comp|inst)\d+$/.test(entry)) rmSync(join(erlDir, entry), { recursive: true, force: true });
       }
@@ -54,6 +55,17 @@ export default {
       const routerBeam = join(erlDir, 'brevity_router.beam');
       if (!existsSync(routerBeam) || statSync(routerBeam).mtimeMs < statSync(ROUTER_ERL).mtimeMs) {
         execSync(`erlc -o ${erlDir} ${ROUTER_ERL}`, { stdio: 'pipe' });
+      }
+
+      // The shared runtime every fixture module imports. Its source is written only
+      // when it differs, so the .beam is rebuilt only when the runtime changes.
+      const runtimeErl = join(erlDir, 'brevity_rt.erl');
+      const runtimeBeam = join(erlDir, 'brevity_rt.beam');
+      if (!existsSync(runtimeErl) || readFileSync(runtimeErl, 'utf8') !== RUNTIME_MODULE) {
+        writeFileSync(runtimeErl, RUNTIME_MODULE);
+      }
+      if (!existsSync(runtimeBeam) || statSync(runtimeBeam).mtimeMs < statSync(runtimeErl).mtimeMs) {
+        execSync(`erlc -o ${erlDir} ${runtimeErl}`, { stdio: 'pipe' });
       }
 
       // Start persistent Erlang VM with the router

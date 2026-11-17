@@ -10,7 +10,7 @@ import { lowerChains } from '../../chains.js';
 import { outerNamesFor, readableNames, propNames } from '../../outer_reads.js';
 import { withCellReady } from '../../init_order.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
-import { PREAMBLE, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
+import { PREAMBLE, RUNTIME_IMPORT, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../inference.js';
 import {
@@ -2308,6 +2308,7 @@ bv_unwire_payload(Message, Payload) ->
   }
   return `-module(${moduleName}).
 -export([${exportList.join(', ')}]).
+${RUNTIME_IMPORT}
 ${PREAMBLE}
 ${bvTypeFieldsBlock}
 ${fnSection}${childActorSection}${helperSection}
