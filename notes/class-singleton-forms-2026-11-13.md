@@ -2,17 +2,19 @@
 
 Follows `classes-as-singletons-2026-11-09.md` and `file-singleton-header-2026-11-13.md`.
 
+**2026-11-17:** the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`. The trailing form takes `++`.
+
 ## Two forms, two meanings
 
 ```brevity
 // Trailing: instances are clients of the class
-C = (seed Integer) *{ C.count } **{
+C = (seed Integer) *{ C.count } ++ actor {
   count *Integer = 0
   @count = -> count
 }
 
 // Nested: instances are part of the class
-C = **{
+C = actor {
   count *Integer = 0
   new = (seed Integer) *{
     count <- count + 1
@@ -27,11 +29,11 @@ C = **{
   its own instances.
 - **Nested closes over the class.** `new`'s constructor block is inside the singleton, so it
   sees every member, private cells included.
-- **Superseded in part (2026-11-16):** with `++` composition (`**{ } ++ (params) *{ }`), order
+- **Superseded in part (2026-11-16):** with `++` composition (`actor { } ++ (params) *{ }`), order
   sets override precedence, never visibility, so the leading order becomes a valid
   arrangement. Juxtaposition without `++` is still not a class. See
   `class-scope-and-inheritance-2026-11-16.md`.
-- **The leading form (`**{ } (params) *{ }`) is not supported.** It looks like a call on the
+- **The leading form (`actor { } (params) *{ }`) is not supported.** It looks like a call on the
   singleton, and if order changed what an instance can see, it would be a third set of rules.
 - `C = (params) *{ }` is unchanged: a class with no class block.
 
@@ -76,7 +78,7 @@ forward-reads rule (text order; an actor's own read before its init is a compile
 actors' reads wait):
 
 ```brevity
-C = **{
+C = actor {
   origin = new(0)
   count *Integer = 0
   new = (seed Integer) *{ n = count + seed }
@@ -86,7 +88,7 @@ C = **{
 The instance's read of `count` waits on `C`, and `C` is waiting for `new(0)` to reply, so the two
 block each other. It is all one declaration, so it can be a compile error: the class calls `new`
 (or `C()`) before a member the constructor reads is initialized. The trailing form can hit the
-same thing (`origin = C()` in its `**{ }`), and its instance reads are messages, but it's still
+same thing (`origin = C()` in its `actor { }`), and its instance reads are messages, but it's still
 one declaration and still detectable.
 
 ## Lineal: nested only (for now)
@@ -140,11 +142,11 @@ count <- count + 1
 - Unchanged: a `*` header with no `**` above it is a factory whose class has only `new`. A `**`
   header or no header is a singleton.
 
-| Where       | Form                                    | Constructor sees               |
-|-------------|-----------------------------------------|--------------------------------|
-| Inline      | `(params) *{ } **{ }` (delimited only)  | the class's interface: `C.count` |
-| Inline      | `C = **{ … new = (params) *{ } }`       | the closure                    |
-| File        | `** DI **` members, then a `*` section  | the closure (the file's `new`) |
+| Where       | Form                                          | Constructor sees                 |
+|-------------|-----------------------------------------------|----------------------------------|
+| Inline      | `(params) *{ } ++ actor { }` (delimited only) | the class's interface: `C.count` |
+| Inline      | `C = actor { … new = (params) *{ } }`         | the closure                      |
+| File        | `** DI **` members, then a `*` section        | the closure (the file's `new`)   |
 
 ## `new`
 

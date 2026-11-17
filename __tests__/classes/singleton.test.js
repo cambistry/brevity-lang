@@ -2,22 +2,31 @@ import { compileSource, expectBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
 
-// `name = **{ … }` defines an actor and creates it once, when its enclosing
+// `name = actor { … }` defines an actor and creates it once, when its enclosing
 // actor is constructed; `name` holds it. `*{ … }` is run once per new actor;
-// `**{ … }` is "define and instantiate". A singleton takes no params: it reads
+// `actor { … }` is "define and instantiate". A singleton takes no params: it reads
 // the actors it's declared in, as a nested class does.
 // See notes/classes-as-singletons-2026-11-09.md.
 
 const script = `
   base *Integer = 100
 
-  counter = **{
+  counter = actor {
     n *Integer = 0
     @bump! = { n <- n + 1 }
     @get = { return n + base }
   }
 
+  // One statement, to the end of its line.
+  seven = actor -> @get = -> 7
+  @pubSeven = actor -> @get = -> 7
+
   @bump! = { counter.bump!() }
+
+  @getSeven = {
+    x Integer = seven.get()
+    return x
+  }
 
   @get = {
     x Integer = counter.get()
@@ -25,7 +34,7 @@ const script = `
   }
 
   @Box = (seed Integer) *{
-    tally = **{
+    tally = actor {
       n *Integer = 0
       @bump! = { n <- n + 1 }
       @get = { return n + seed }
@@ -69,6 +78,13 @@ describe('inline singletons', () => {
     );
   });
 
+  it('a one-line actor, \'actor -> statement\'', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'getSeven', from: 'c' } },
+      { output: { id: '1', re: [7], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
   it('in a class, each actor gets its own, which reads the class\'s params', async () => {
     await expectBehavior(script,
       ...made('1', 10),
@@ -103,7 +119,7 @@ describe('a class keeps a nested class\'s actor in a cell', () => {
 // `@s` in the file is `main @s`, its function `main @s @get`. Its class is
 // itself, so its tag is its label too.
 const published = `
-  @s = **{
+  @s = actor {
     n *Integer = 0
     @get = { return n }
     @bump! = { n <- n + 1 }
@@ -117,7 +133,7 @@ const published = `
   }
 
   @Box = (seed Integer) *{
-    @tally = **{
+    @tally = actor {
       n *Integer = 0
       @get = { return n + seed }
       @bump! = { n <- n + 1 }
@@ -182,14 +198,14 @@ describe('public singletons', () => {
 describe('a public singleton in the service document', () => {
   it('is a sub-service, with its members, nested ones included', () => {
     expect(extract(`
-      @s = **{
+      @s = actor {
         @n *Integer = 0
         @get = -> 1
-        @inner = **{
+        @inner = actor {
           @ping = -> 2
         }
       }
-      @empty = **{
+      @empty = actor {
       }
     `).interface.service).toBe('{\n  s {\n    n *Integer\n    get () -> (Integer)\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  empty {}\n}');
   });
@@ -197,7 +213,7 @@ describe('a public singleton in the service document', () => {
   it('is a sub-service inside a class', () => {
     expect(extract(`
       @Box = (seed Integer) *{
-        @tally = **{
+        @tally = actor {
           @get = -> 1
         }
         @read = -> 2
@@ -207,7 +223,7 @@ describe('a public singleton in the service document', () => {
 
   it('a private singleton is not in it', () => {
     expect(extract(`
-      s = **{
+      s = actor {
         @get = -> 1
       }
       @go = -> 2
@@ -229,7 +245,7 @@ describe('a public singleton in the service document', () => {
 const ordered = `
   base *Integer = 100
 
-  counter = **{
+  counter = actor {
     seen Integer = base
     @seen = { return seen }
     @now = { return base }
@@ -237,7 +253,7 @@ const ordered = `
 
   base <- 200
 
-  @pub = **{
+  @pub = actor {
     seen Integer = base
     @seen = { return seen }
   }
@@ -256,7 +272,7 @@ const ordered = `
 
   @Box = (seed Integer) *{
     start *Integer = seed * 2
-    tally = **{
+    tally = actor {
       t Integer = start + seed
       @get = { return t }
     }
@@ -303,34 +319,34 @@ describe('a singleton runs its block in program order', () => {
 
 describe('a singleton reading a cell declared below it — validation', () => {
   it('is an error', () => {
-    expect(() => compileSource('counter = **{\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
+    expect(() => compileSource('counter = actor {\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
       .toThrow(/'base' is read before its declaration \(by 'counter'\) — declare 'base' above it/);
   });
 
   it('for a public singleton too', () => {
-    expect(() => compileSource('@counter = **{\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
+    expect(() => compileSource('@counter = actor {\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
       .toThrow(/'base' is read before its declaration \(by '@counter'\)/);
   });
 
   it('in a class', () => {
-    expect(() => compileSource('Box = (seed Integer) *{\n  tally = **{\n    t Integer = late + seed\n    @get = { return t }\n  }\n  late *Integer = 1\n  @get = { return 1 }\n}\n@go = { return 1 }\n'))
+    expect(() => compileSource('Box = (seed Integer) *{\n  tally = actor {\n    t Integer = late + seed\n    @get = { return t }\n  }\n  late *Integer = 1\n  @get = { return 1 }\n}\n@go = { return 1 }\n'))
       .toThrow(/'late' is read before its declaration \(by 'tally'\)/);
   });
 
   it('a singleton calling one declared below it', () => {
-    expect(() => compileSource('b = **{\n  w Integer = a.v()\n  @w = { return w }\n}\na = **{\n  @v = { return 1 }\n}\n@go = { return 1 }\n'))
+    expect(() => compileSource('b = actor {\n  w Integer = a.v()\n  @w = { return w }\n}\na = actor {\n  @v = { return 1 }\n}\n@go = { return 1 }\n'))
       .toThrow(/'a' is read before its declaration \(by 'b'\)/);
   });
 
   it('its functions may refer to a cell below it', () => {
-    expect(() => compileSource('counter = **{\n  @get = { return base }\n}\nbase *Integer = 100\n@go = { return 1 }\n')).not.toThrow();
+    expect(() => compileSource('counter = actor {\n  @get = { return base }\n}\nbase *Integer = 100\n@go = { return 1 }\n')).not.toThrow();
   });
 });
 
 describe('inline singleton compile errors', () => {
   it('a singleton takes no params', () => {
     expect(() => compileSource(`
-      s = (x Integer) **{
+      s = (x Integer) actor {
         @get = { return x }
       }
     `)).toThrow("Singleton 's' takes no params");
@@ -338,15 +354,57 @@ describe('inline singleton compile errors', () => {
 
   it('a public singleton takes no params', () => {
     expect(() => compileSource(`
-      @s = (x Integer) **{
+      @s = (x Integer) actor {
         @get = { return x }
       }
     `)).toThrow("Singleton '@s' takes no params");
   });
 
+  it('\'**{ … }\' is retired', () => {
+    expect(() => compileSource(`
+      s = **{
+        @get = { return 1 }
+      }
+    `)).toThrow("'**{ … }' is now 'actor { … }'");
+  });
+
+  it('\'**{ … }\' is retired for a public singleton too', () => {
+    expect(() => compileSource(`
+      @s = **{
+        @get = { return 1 }
+      }
+    `)).toThrow("'**{ … }' is now 'actor { … }'");
+  });
+
+  it('a one-line actor needs its statement on the same line', () => {
+    expect(() => compileSource(`
+      s = actor ->
+        @get = { return 1 }
+    `)).toThrow("'actor ->' takes a statement on the same line");
+  });
+
+  it('an unnamed actor literal is an error', () => {
+    expect(() => compileSource(`
+      @go = -> 1
+      C = *{
+        actor {
+          @get = { return 1 }
+        }
+      }
+    `)).toThrow("An inline singleton is named: 'name = actor { … }'");
+  });
+
+  it('\'actor\' is an ordinary name elsewhere', () => {
+    expect(() => compileSource(`
+      actor *Integer = 1
+      @get = { return actor }
+      @inc = (actor Integer) -> actor + 1
+    `)).not.toThrow();
+  });
+
   it('a singleton is not an overload clause', () => {
     expect(() => compileSource(`
-      s << **{
+      s << actor {
         @get = { return 1 }
       }
     `)).toThrow("Singleton 's' can't be an overload clause");

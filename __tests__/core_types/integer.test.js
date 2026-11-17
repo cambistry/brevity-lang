@@ -562,7 +562,7 @@ describe('Integer conversion via ref cell dot method', () => {
 });
 
 // ─── `**` is not the exponent ─────────────────────────────────────────────────
-// `^` is the exponent; `**` is reserved for define-and-instantiate (`**{ }`).
+// `^` is the exponent; `**` is reserved for lineal singletons and `**` file headers.
 
 describe('Exponent operator spelling', () => {
   it('a ** b is a compile error pointing at ^', () => {

@@ -12,7 +12,7 @@ describe('a type declared in a class', () => {
       type X (n Integer)
       @make = -> X(1)
     }
-    S = **{
+    S = actor {
       type Widget (a Text, b Text)
     }
     A = *{
@@ -84,7 +84,7 @@ describe('a type declared in a class', () => {
         type X (n Integer)
         @get = -> X(1)
       }
-      @S = **{
+      @S = actor {
         type Widget (a Text, b Text)
       }
       Q = *{

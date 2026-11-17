@@ -22,7 +22,7 @@ const script = `
     }
   **
   @Box = *{
-    @tally = **{
+    @tally = actor {
       @me = { return self }
       @refs = { return near: "#<:x>", hidden: "#<.hidden.file:x>", foreign: "#<@foreign:y>", global: "#<main:x>" }
       @heads = { return tag: "#<#tag:x>", prot: "#<~x:y>", intr: "#<$x:y>", at: "#<@:xyz>", inner: "#<main:@foreign:~x:#tag:$x>" }

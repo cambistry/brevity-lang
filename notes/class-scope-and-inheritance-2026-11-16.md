@@ -58,7 +58,7 @@ Open:
 
 ## The class block and its actors — decided
 
-- **Nested form** (`C = **{ … new = (p) *{ … } }`): the constructor is lexically inside the
+- **Nested form** (`C = actor { … new = (p) *{ … } }`): the constructor is lexically inside the
   block, so it closes over every block name, private ones included.
 - **Trailing form, and any `++` composition:** the constructor isn't inside the block, so no
   bare name reaches it. Instances use `class.pub` / `class::prot` (or `C.` / `C::`). This
@@ -150,22 +150,24 @@ delegate.
 ## `++` composes class pieces — direction
 
 `++` joins pieces in any order: named classes, anonymous constructors (`(p) *{ }`) and
-class blocks (`**{ }`).
+class blocks (`actor { }`).
 
 ```brevity
-U = T ++ (u Text) *{ … } ++ **{ … }
-U = T ++ **{ … } ++ (u Text) *{ … }
+U = T ++ (u Text) *{ … } ++ actor { … }
+U = T ++ actor { … } ++ (u Text) *{ … }
 ```
 
 - **Order never changes visibility.** No piece is inside another, so every arrangement has
   trailing-form scope. The nested form stays the only one that closes over a class block.
 - **Order sets override precedence,** left to right, with later pieces winning.
-- A class's own `**{ }` pieces merge into its one class block. A parent's block is a parent
+- A class's own `actor { }` pieces merge into its one class block. A parent's block is a parent
   layer under the delegated rule.
 
+- **`++` is required between a constructor and a class block** (decided 2026-11-17): the
+  trailing form is `(p) *{ } ++ actor { }`, and the bare `} **{` juxtaposition is retired.
+  See `actor-literal-2026-11-17.md`.
+
 Open:
-- whether `++` is required between a constructor and a class block, retiring the bare
-  `} **{` juxtaposition;
 - whether a class may have more than one constructor piece;
 - the param list a composed class takes;
 - a lineal form.

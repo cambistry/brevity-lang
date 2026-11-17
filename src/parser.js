@@ -8,6 +8,8 @@ import { lowerSingletonClasses, CLASS_OF_SELF } from './singleton_classes.js';
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
 // `new` names only a singleton's constructor (notes/class-singleton-forms-2026-11-13.md).
+const RETIRED_SINGLETON_MSG = "'**{ … }' is now 'actor { … }'";
+const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -91,6 +93,9 @@ export function parse(tokensIn) {
   // Inside a lineal singleton (`C = **` then members), a blank line ends the whole
   // singleton, so the lineal bodies inside it stop there too, without eating it.
   let stopAtBlankLine = false;
+  // Inside a one-line actor (`actor -> statement`): the actor-body depth whose
+  // body ends at the end of its first statement's line, or 0.
+  let stopAtLineEnd = 0;
   // How many lineal class bodies we're in: a `**` there would be the lineal
   // trailing form, which isn't supported.
   let linealClassDepth = 0;
@@ -4028,14 +4033,15 @@ export function parse(tokensIn) {
     }
     declCtx = declFor('@' + op);
 
-    // ── Public singleton: @name = **{ body } ────────────────────────────
+    // ── Public singleton: @name = actor { body } ────────────────────────────
     // The private-singleton desugar (a hidden class, constructed once into the
     // cell) plus the published cell's getter. The actor is addressed by its
     // label: `@name` in its enclosing actor (`main @name`), not `@C/N`.
+    if (tokens[pos]?.type === 'EQUALS') refuseRetiredSingleton(pos + 1);
     if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1) || isParamSingletonStart(pos + 1))) {
       consume(); // =
       if (!isSingletonStart() && !isLinealSingletonStart()) {
-        throw new Error(`Singleton '@${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '@${op} = **{ … }'`);
+        throw new Error(`Singleton '@${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '@${op} = actor { … }'`);
       }
       const cls = `${op}_singleton`;
       const nested = parseSingletonMembers(cls);
@@ -4225,8 +4231,9 @@ export function parse(tokensIn) {
         return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
       }
       const classNode = AST.actor('@' + op, { ...actorNode, overloadMode });
-      // Trailing class members: `@C = (params) *{ … } **{ members }`.
-      if (!isBare && isSingletonStart()) {
+      // Trailing class members: `@C = (params) *{ … } ++ actor { members }`.
+      if (!isBare && isTrailingMembersStart('@' + op)) {
+        consume(); // ++
         const members = parseTrailingMembers('@' + op);
         classNode.membersClass = members.actor.name;
         if (constructorBody) constructorBody.push(AST.typedAssign(members.cell, null, AST.functionCallExpr(AST.identifier(members.actor.name), [])));
@@ -4667,18 +4674,37 @@ export function parse(tokensIn) {
     if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') consume();
   }
 
-  // `**{` at token index `i`: an inline singleton (define and instantiate).
-  function isSingletonStart(i = pos) { return tokens[i]?.type === 'STARSTAR' && tokens[i + 1]?.type === 'LBRACE'; }
+  // `actor { … }` or `actor -> statement` at token index `i`: an actor literal
+  // (define and instantiate). `actor` is a keyword only there.
+  function isSingletonStart(i = pos) { return isActorKw(tokens[i]) && (tokens[i + 1]?.type === 'LBRACE' || tokens[i + 1]?.type === '->'); }
+
+  // `**{` at token index `i`: the retired spelling of `actor {`.
+  function isRetiredSingletonAt(i = pos) { return tokens[i]?.type === 'STARSTAR' && tokens[i + 1]?.type === 'LBRACE'; }
+  function refuseRetiredSingleton(i = pos) { if (isRetiredSingletonAt(i)) throw new Error(RETIRED_SINGLETON_MSG); }
 
   // `**` then a line break: a lineal inline singleton, whose members run to the
   // first blank line.
   function isLinealSingletonStart(i = pos) { return tokens[i]?.type === 'STARSTAR' && tokens[i + 1]?.type === 'NEWLINE'; }
 
-  // The members of an inline singleton, after its `**`: `{ … }`, or lineal, to the
-  // first blank line. `cls` is its hidden class.
+  // The members of an inline singleton: `actor { … }`, `actor -> statement` (one
+  // statement, to the end of its line), or lineal after `**`, to the first blank
+  // line. `cls` is its hidden class.
   function parseSingletonMembers(cls) {
+    if (isActorKw(peek())) {
+      consume(); // actor
+      if (peek().type === 'LBRACE') return parseConstructorBody(cls, false);
+      consume(); // ->
+      if (['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'].includes(peek().type)) {
+        throw new Error(`'actor ->' takes a statement on the same line — or write 'actor { … }'`);
+      }
+      const savedLineEnd = stopAtLineEnd;
+      stopAtLineEnd = actorBodyDepth + 1;
+      const nested = parseActorBody(() => false);
+      stopAtLineEnd = savedLineEnd;
+      hoistNested(nested, cls);
+      return nested;
+    }
     consume(); // **
-    if (peek().type === 'LBRACE') return parseConstructorBody(cls, false);
     const savedStop = stopAtBlankLine;
     stopAtBlankLine = true;
     const nested = parseActorBody(() => false);
@@ -4687,7 +4713,20 @@ export function parse(tokensIn) {
     return nested;
   }
 
-  // A class's trailing members, `**{ … }` right after its constructor: a singleton
+  // `++ actor {` right after a delimited constructor: its trailing class block.
+  // Juxtaposed (no `++`), or spelled `**{`, it is refused with the fix.
+  function isTrailingMembersStart(name) {
+    if (peek().type === 'PLUSPLUS') {
+      refuseRetiredSingleton(pos + 1);
+      return isSingletonStart(pos + 1);
+    }
+    if (isRetiredSingletonAt() || isSingletonStart()) {
+      throw new Error(`A class block joins its constructor with '++': '${name} = (params) *{ … } ++ actor { … }'`);
+    }
+    return false;
+  }
+
+  // A class's trailing members, `++ actor { … }` right after its constructor: a singleton
   // the class's actors reach through its published interface (`C.count`), not by
   // closing over it. Its actor is kept in the declaring actor's cell `C__class`.
   function parseTrailingMembers(className) {
@@ -4706,11 +4745,11 @@ export function parse(tokensIn) {
   // isn't a class (it reads as a call on the singleton).
   function refuseLeadingClassForm(name) {
     if (isDelimitedClassStart() || peek().type === 'LPAREN') {
-      throw new Error(`'${name} = **{ … } (params) *{ … }' isn't a class — write the constructor first, '${name} = (params) *{ … } **{ … }', or put it inside: '${name} = **{ … new = (params) *{ … } }'`);
+      throw new Error(`'${name} = actor { … } (params) *{ … }' isn't a class — write the constructor first, '${name} = (params) *{ … } ++ actor { … }', or put it inside: '${name} = actor { … new = (params) *{ … } }'`);
     }
   }
 
-  // `(params) **{` at token index `i`: a singleton given params, which nobody
+  // `(params) actor {` at token index `i`: a singleton given params, which nobody
   // could pass, since it is built when its enclosing actor is.
   function isParamSingletonStart(i = pos) {
     if (tokens[i]?.type !== 'LPAREN') return false;
@@ -4718,13 +4757,13 @@ export function parse(tokensIn) {
     for (let j = i; j < tokens.length; j++) {
       const t = tokens[j].type;
       if (t === 'LPAREN') depth++;
-      else if (t === 'RPAREN' && --depth === 0) return isSingletonStart(j + 1);
+      else if (t === 'RPAREN' && --depth === 0) return isSingletonStart(j + 1) || isRetiredSingletonAt(j + 1);
       else if (t === 'EOF') return false;
     }
     return false;
   }
 
-  // `( entries ) [->] **{` at token index `i`: a file singleton's delimited
+  // `( entries ) [->] actor {` at token index `i`: a file singleton's delimited
   // header (at the head of a file only).
   function isFileSingletonStart(i = pos) {
     if (tokens[i]?.type !== 'LPAREN') return false;
@@ -4734,7 +4773,8 @@ export function parse(tokensIn) {
       if (t === 'LPAREN') depth++;
       else if (t === 'RPAREN' && --depth === 0) {
         const k = tokens[j + 1]?.type === '->' ? j + 2 : j + 1;
-        return isSingletonStart(k);
+        refuseRetiredSingleton(k);
+        return isActorKw(tokens[k]) && tokens[k + 1]?.type === 'LBRACE';
       }
       else if (t === 'EOF') return false;
     }
@@ -4835,11 +4875,26 @@ export function parse(tokensIn) {
     const outerDecl = declCtx;
     refVarScopes.push(new Map()); // actor-level ref scope
     const untrackedDecls = new Set();
+    const lineBodyStart = pos;
+    const endsAtLine = stopAtLineEnd === actorBodyDepth;
     while (peek().type !== 'EOF') {
       declCtx = null;
       if (stopAtBlankLine && peek().type === 'BLOCK_SEP') break;
+      if (endsAtLine && pos > lineBodyStart) {
+        // The one statement is read. Leave its line break to the enclosing body.
+        if (tokens[pos - 1]?.type === 'NEWLINE' || tokens[pos - 1]?.type === 'BLOCK_SEP') pos--;
+        break;
+      }
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
+      // An actor literal standing alone: a file header if it opens the file, else
+      // it needs a name.
+      if (isSingletonStart() || isRetiredSingletonAt()) {
+        refuseRetiredSingleton();
+        throw new Error(actorBodyDepth === 1
+          ? `a file header must open the file — an inline singleton is named: 'name = actor { … }'`
+          : `An inline singleton is named: 'name = actor { … }'`);
+      }
       // A file with a `**` header and then a `*` section is a class: the section is
       // the file's `new`, its params between the `*`s, and everything below it is
       // its constructor body (src/singleton_classes.js).
@@ -5109,7 +5164,7 @@ export function parse(tokensIn) {
         const name = peek().value;
         if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
-          // A trailing class block (`*{ … } **{ … }`) hasn't been parsed yet, so the error
+          // A trailing class block (`*{ … } ++ actor { … }`) hasn't been parsed yet, so the error
           // waits until it is: src/singleton_classes.js says which it is.
           consume();
           const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
@@ -5326,15 +5381,16 @@ export function parse(tokensIn) {
             functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
             continue;
           }
-          // Inline singleton: name = **{ body }. Defines a hidden class nested
+          // Inline singleton: name = actor { body }. Defines a hidden class nested
           // here and constructs it once, when this actor is constructed; `name`
           // holds the actor. It takes no params and reaches what it needs
           // through the actors it's declared in.
+          refuseRetiredSingleton();
           if (isParamSingletonStart()) {
-            throw new Error(`Singleton '${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '${op} = **{ … }'`);
+            throw new Error(`Singleton '${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '${op} = actor { … }'`);
           }
           if (isSingletonStart() || isLinealSingletonStart()) {
-            if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = **{ … }'`);
+            if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = actor { … }'`);
             const cls = `${op.replace(/^[@#]/, '')}_singleton`;
             const nested = parseSingletonMembers(cls);
             refuseLeadingClassForm(op);
@@ -5364,8 +5420,9 @@ export function parse(tokensIn) {
               functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
-              // Trailing class members: `C = (params) *{ … } **{ members }`.
-              if (_isDelimitedClass && isSingletonStart()) {
+              // Trailing class members: `C = (params) *{ … } ++ actor { members }`.
+              if (_isDelimitedClass && isTrailingMembersStart(op)) {
+                consume(); // ++
                 const members = parseTrailingMembers(op);
                 nestedActors.push(members.actor);
                 nestedActors[nestedActors.length - 2].membersClass = members.actor.name;
@@ -5543,10 +5600,11 @@ export function parse(tokensIn) {
         constructorBody.push(AST.implicitReturn(expr, typeName));
       } else {
         if (peek().type === 'STARSTAR' && linealClassDepth > 0) {
-          throw new Error(`A lineal class can't take trailing members ('*' params '*' constructor, then '**') — write 'C = **' with 'new =' inside it, or the delimited form 'C = (params) *{ … } **{ … }'`);
+          throw new Error(`A lineal class can't take trailing members ('*' params '*' constructor, then '**') — write 'C = **' with 'new =' inside it, or the delimited form 'C = (params) *{ … } ++ actor { … }'`);
         }
-        if (peek().type === 'STARSTAR' && (peek().alone || tokens[pos + 1]?.type === 'LBRACE')) {
-          throw new Error(`a '**' file header must open the file — an inline singleton is named: 'name = **{ … }'`);
+        refuseRetiredSingleton();
+        if (peek().type === 'STARSTAR' && peek().alone || isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') {
+          throw new Error(`a file header must open the file — an inline singleton is named: 'name = actor { … }'`);
         }
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
@@ -6025,16 +6083,18 @@ export function parse(tokensIn) {
     //   **\n entries\n **\n body     — lineal: entries one per line, closed
     //   **\n entries\n ** { body }     by `**` alone on its line
     //   **\n body                      — lineal, no DI
-    //   ( entries ) [->] **{ body }    — delimited
-    //   **{ body }                     — delimited, no DI
+    //   ( entries ) [->] actor { body } — delimited
+    //   actor { body }                  — delimited, no DI
     // The entries are the file's DI, filled in once by its host at load. Only
     // the head of a file takes one: an inline singleton has nobody to fill it.
-    if (peek().type === 'STARSTAR' && (peek().alone || tokens[pos + 1]?.type === 'LBRACE') ||
+    refuseRetiredSingleton();
+    if (peek().type === 'STARSTAR' && peek().alone ||
+        isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE' ||
         peek().type === 'LPAREN' && isFileSingletonStart()) {
       if (headerSeen || actors.length || types.length) {
         throw new Error(headerSeen
           ? `Multiple file headers are not allowed — combine all dependencies into a single header`
-          : `a '**' file header must open the file`);
+          : `a file header must open the file`);
       }
       headerSeen = true;
       if (peek().type === 'LPAREN') {
@@ -6043,15 +6103,16 @@ export function parse(tokensIn) {
         parseFileHeaderEntries(() => peek().type === 'RPAREN');
         expect('RPAREN');
         if (peek().type === '->') consume();
-        expect('STARSTAR');
+        consume(); // actor
         parseFileHeaderBody(false);
         continue;
       }
-      const star = consume(); // **
-      if (!star.alone) {
+      if (isActorKw(peek())) {
+        consume(); // actor
         parseFileHeaderBody(false);
         continue;
       }
+      consume(); // **
       const savedPos = pos;
       const savedDeps = dependencies.length;
       let closed = false;
@@ -6072,7 +6133,7 @@ export function parse(tokensIn) {
       continue;
     }
     if (peek().type === 'STARSTAR') {
-      throw new Error(`a '**' file header is '**' alone on its line, '**{ … }', or '( … ) **{ … }'`);
+      throw new Error(`a '**' file header is '**' alone on its line — a delimited one is 'actor { … }' or '( … ) actor { … }'`);
     }
 
     // ── File-level constructor header — delimited ─────────────────────────

@@ -7,10 +7,10 @@ import { extract } from '../../index.js';
 // A file is a singleton, built once by its host at load. Its header is its DI:
 //   **\n entries\n **\n body          — lineal (each `**` alone on its line)
 //   **\n entries\n ** { body }         — lineal header, delimited body
-//   ( entries ) **{ body }            — delimited
-//   **\n body  |  **{ body }          — no DI
+//   ( entries ) actor { body }            — delimited
+//   **\n body  |  actor { body }          — no DI
 // Entries use the same grammar as the `*` header. Only the head of a file
-// takes one: an inline singleton (`name = **{ … }`) has nobody to fill it.
+// takes one: an inline singleton (`name = actor { … }`) has nobody to fill it.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
@@ -37,9 +37,9 @@ describe('file singleton header — forms', () => {
     `)).not.toThrow();
   });
 
-  it('delimited: ( entries ) **{ body }', () => {
+  it('delimited: ( entries ) actor { body }', () => {
     expect(() => compileSource(`
-      ( value: Integer ) **{
+      ( value: Integer ) actor {
         @get = -> value
       }
     `)).not.toThrow();
@@ -52,9 +52,9 @@ describe('file singleton header — forms', () => {
     `)).not.toThrow();
   });
 
-  it('no DI, delimited: **{ body }', () => {
+  it('no DI, delimited: actor { body }', () => {
     expect(() => compileSource(`
-      **{
+      actor {
         @hello = -> greeting: "hi"
       }
     `)).not.toThrow();
@@ -63,7 +63,7 @@ describe('file singleton header — forms', () => {
   it('lineal and delimited headers yield identical dependencies', () => {
     const lineal = extract(script);
     const delimited = extract(`
-      ( "Remote": Remote { get () -> (Integer) }, name: Text, n Integer ) **{
+      ( "Remote": Remote { get () -> (Integer) }, name: Text, n Integer ) actor {
         @get = -> name
       }
     `);
@@ -146,14 +146,32 @@ describe('factory header — no DI', () => {
   });
 });
 
-describe('file singleton header — only at the head of a file', () => {
-  it('after a declaration, ** { body } is an error', () => {
+describe('file singleton header — the retired \'**{\'', () => {
+  it('no DI', () => {
     expect(() => compileSource(`
-      x = 1
       **{
         @get = -> 1
       }
-    `)).toThrow(/a '\*\*' file header must open the file/);
+    `)).toThrow("'**{ … }' is now 'actor { … }'");
+  });
+
+  it('delimited entries', () => {
+    expect(() => compileSource(`
+      ( value: Integer ) **{
+        @get = -> value
+      }
+    `)).toThrow("'**{ … }' is now 'actor { … }'");
+  });
+});
+
+describe('file singleton header — only at the head of a file', () => {
+  it('after a declaration, actor { body } is an error', () => {
+    expect(() => compileSource(`
+      x = 1
+      actor {
+        @get = -> 1
+      }
+    `)).toThrow(/a file header must open the file/);
   });
 
   it('after a type, a lineal ** header is an error', () => {
@@ -163,7 +181,7 @@ describe('file singleton header — only at the head of a file', () => {
         value Integer
       **
       @get = -> value
-    `)).toThrow(/a '\*\*' file header must open the file/);
+    `)).toThrow(/a file header must open the file/);
   });
 
   it('a second header is an error', () => {
@@ -171,7 +189,7 @@ describe('file singleton header — only at the head of a file', () => {
       **
         value Integer
       **
-      **{
+      actor {
         @get = -> value
       }
     `)).toThrow(/Multiple file headers|must open the file/);

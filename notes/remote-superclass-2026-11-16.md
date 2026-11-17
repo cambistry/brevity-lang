@@ -7,7 +7,7 @@ and what's left to decide.
 
 ```brevity
 // Svc.bv
-T = **{
+T = actor {
   total *Integer = 0
   timeout = 30
   @connect = { … uses timeout … }
@@ -17,8 +17,8 @@ T = **{
 **
 "Svc.bv": :T
 **
-U = T ++ **{ @fix_total = { total <- total + 1 } }
-V = T ++ **{ timeout = 5 }
+U = T ++ actor { @fix_total = { total <- total + 1 } }
+V = T ++ actor { timeout = 5 }
 ```
 
 The goal is that inheritance works the same whether the parent is in this file or in another
@@ -41,7 +41,7 @@ Settled in discussion on 2026-11-16 (to be written up separately):
   subclass's block that doesn't redeclare `total` uses the parent's cell (one cell, shared). One
   that redeclares it has its own, and the parent's code running for that subclass uses the
   subclass's cell. Writes never create a cell; only a declaration does.
-- **Spelling:** the parent goes outside the params (`U = T ++ (u Text) *{ } ++ **{ }`). After a
+- **Spelling:** the parent goes outside the params (`U = T ++ (u Text) *{ } ++ actor { }`). After a
   dot, a public name. After `::`, a bare declared name: a type or a protected member (`class::x`,
   `T::x`). `super.a()` and `super::h()` reach the parent layer. `super[T]` selects a direct parent.
 

@@ -61,7 +61,7 @@ For generated examples, prefer inline constraints unless the point is testing
 
 ## LLM Rules
 
-- Use a lineal `**` … `**` header (or `( ... ) **{ ... }`) at file top for
+- Use a lineal `**` … `**` header (or `( ... ) actor { ... }`) at file top for
   dependencies.
 - Use `(name: Type)` in service signatures for named args.
 - Silent service methods are named with a glued `.` and typed `=> .` (`ping. () => .`); call them with `...`.

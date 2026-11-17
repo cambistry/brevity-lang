@@ -1,7 +1,7 @@
 // Class singletons: a class whose class block holds members of its own.
 //
-//   Nested:   C = **{ count *Integer = 0; new = (seed Integer) *{ … } }
-//   Trailing: C = (seed Integer) *{ … } **{ count *Integer = 0 }
+//   Nested:   C = actor { count *Integer = 0; new = (seed Integer) *{ … } }
+//   Trailing: C = (seed Integer) *{ … } ++ actor { count *Integer = 0 }
 //
 // Either way the members are a singleton, kept in the declaring actor's cell
 // `C__class`, and `C` is an ordinary class of the declaring actor: `C()` builds
@@ -36,7 +36,7 @@ export function publicLabel(actor) {
   return actor?.publishedAs ? '@' + actor.publishedAs : null;
 }
 
-const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = **{ … new = (params) *{ … } }'";
+const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = (params) *{ … } }'";
 
 export function lowerSingletonClasses(actors) {
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));

@@ -245,7 +245,7 @@ function retiredEntryColon(name) {
 }
 
 // Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`. A
-// class with members of its own has them after: `*{ … } **{ members }`.
+// class with members of its own has them after: `*{ … } ++ actor { members }`.
 function parseSignature(name, text) {
   const pEnd = groupEnd(text, 0);
   if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
@@ -261,11 +261,13 @@ function parseSignature(name, text) {
     if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
     const after = rest.slice(bEnd).trim();
     let membersInner = null;
-    if (after.startsWith('**{')) {
-      const mEnd = groupEnd(after, 2);
+    const block = /^\+\+\s*actor\s*\{/.exec(after);
+    if (block) {
+      const open = block[0].length - 1;
+      const mEnd = groupEnd(after, open);
       if (mEnd === -1) throw new Error(`Interface entry '${name}': unbalanced class members`);
       if (after.slice(mEnd).trim()) throw new Error(`Interface entry '${name}': unexpected text after class members: '${after.slice(mEnd).trim()}'`);
-      membersInner = after.slice(3, mEnd - 1);
+      membersInner = after.slice(open + 1, mEnd - 1);
     } else if (after) {
       throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${after}'`);
     }
@@ -436,7 +438,7 @@ export function parseInterface(manifestStr) {
   //                                `returns` it's `=> (Type) | self`
   //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`,
   //                                and `members`, a document of their own, for a class
-  //                                with members (`*{ … } **{ … }`)
+  //                                with members (`*{ … } ++ actor { … }`)
   //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
   //   result.__fields[name]      — `{ type, cell, readOnly }`: a prop `name Type`
   //                                (cell false), a cell `name &Type` / `name *Type`;

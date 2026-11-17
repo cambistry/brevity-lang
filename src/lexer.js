@@ -461,8 +461,8 @@ export function tokenize(source) {
     if (source[i] === '+' && source[i + 1] === '+') { tokens.push({ type: 'PLUSPLUS', value: '++' }); i += 2; continue; }
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
-    // `^` is the exponent. `**` is reserved for define-and-instantiate (`**{ }`
-    // singletons, `**` file headers); the parser rejects it as an operator.
+    // `^` is the exponent. `**` is reserved for lineal singletons and `**` file
+    // headers (the braced form is `actor { }`); the parser rejects it as an operator.
     if (source[i] === '^') { tokens.push({ type: 'POWER', value: '^' }); i++; continue; }
     if (source[i] === '*') {
       // Lineal headers require `*` (a constructor) or `**` (a file singleton)

@@ -2,10 +2,12 @@
 
 Follows `classes-as-singletons-2026-11-09.md` ("Files: the header declares the file's kind").
 
+**2026-11-17:** the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`. The lineal `**` header is unchanged.
+
 ## Forms
 
 ```
-**                         ( DI ) **{
+**                         ( DI ) actor {
   :document                  body
   HTML: (:div)             }
 **
@@ -14,15 +16,15 @@ body
 
 - Lineal: `**` alone on its line opens, `**` alone on its line closes. The closing `**` may be
   followed by `{ body }`.
-- Delimited: `( DI ) **{ body }` (an optional `->` before `**`, as with `*`).
-- No DI: `**\nbody` or `**{ body }`.
+- Delimited: `( DI ) actor { body }` (an optional `->` before `actor`, as with `*`).
+- No DI: `**\nbody` or `actor { body }`.
 - Entries have the same grammar as the `*` header.
-- Remote DI doesn't change: `"/lib.bv": Lib` consumes a `**{ … }` file.
+- Remote DI doesn't change: `"/lib.bv": Lib` consumes an `actor { … }` file.
 
 ## Rules
 
 - **Head of the file only.** DI is the host filling the file in at load. An inline singleton has
-  nobody to fill it, so `**` anywhere else in a file is an error (`a '**' file header must open the
+  nobody to fill it, so `**` anywhere else in a file is an error (`a file header must open the
   file`). This includes after a `type` declaration: a type that sat above a `*` header goes below the
   `**` header.
 - **Kind on the AST:** `ast.fileKind` is `'singleton'` for a `**` header or no header, and

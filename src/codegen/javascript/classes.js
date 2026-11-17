@@ -898,7 +898,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
   }
   const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
-  // Public singletons declared directly in this actor (`@s = **{ … }`). Each is
+  // Public singletons declared directly in this actor (`@s = actor { … }`). Each is
   // published at `:s`, as an actor made by `#new` is at `:C:N`.
   // A public class's members are published at the class's label (`:C`).
   const publicSingletons = (ctx.program?.actors || [])

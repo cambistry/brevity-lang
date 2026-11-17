@@ -16,7 +16,7 @@
 //
 // Passing a cell to a child counts as a read: the child is constructed on the spot.
 //
-// An inline singleton (`s = **{ … }`) runs its block where it's written, in program
+// An inline singleton (`s = actor { … }`) runs its block where it's written, in program
 // order: a read in it of a cell declared below is an error, as one in our own block.
 //
 // One exception: a class declared in this actor whose construction reads cells of
@@ -196,7 +196,7 @@ export function checkInitOrder(ast) {
       // reads wait for those cells' lines, and we join it at the end of the block.
       const call = constructionCall(s);
       const cls = call && ctx.nestedClass(actor, call.callee.name);
-      // A singleton (`s = **{ … }`) is constructed where it's written: its block runs
+      // A singleton (`s = actor { … }`) is constructed where it's written: its block runs
       // in program order, between our lines, so it's waited for like any statement.
       if (cls && !cls.singletonOf) {
         const waitsOn = [...ctx.constructionReads(cls).own.keys()].filter(early);

@@ -27,7 +27,7 @@ const output = compile(ast, { target: 'js' });
 
 A file is a singleton: its host builds it once, at load. It can declare its
 DI in a header at the head of the file, lineal (`**` … `**`, each `**` alone on
-its line) or delimited (`( … ) **{ body }`):
+its line) or delimited (`( … ) actor { body }`):
 
 ```
 **

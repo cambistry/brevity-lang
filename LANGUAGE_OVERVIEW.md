@@ -204,7 +204,7 @@ the class header — the params accepted at construction. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
 The file actor is a singleton, built once at load. It can declare its DI in a
-header at the head of the file (`**` … `**`, or `( … ) **{ body }`):
+header at the head of the file (`**` … `**`, or `( … ) actor { body }`):
 
 ```brevity
 **

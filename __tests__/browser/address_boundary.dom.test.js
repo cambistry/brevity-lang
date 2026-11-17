@@ -20,7 +20,7 @@ const source = `
     }
   **
   @Box = *{
-    @tally = **{
+    @tally = actor {
       @me = { return self }
       @refs = { return near: "#<:x>", hidden: "#<.hidden.file:x>", foreign: "#<@foreign:y>" }
       @tell = { Svc.take(r: "#<:x>") }

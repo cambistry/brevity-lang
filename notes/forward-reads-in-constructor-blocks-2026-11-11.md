@@ -130,7 +130,7 @@ Outer = *{
 - **The held read is answered when the owner gets to it.** That's at the cell's line, or
   later if the read arrives later. So a child can see a later write than the initializer.
   Any value from the line on is a value the cell had.
-- **Not a singleton.** `s = **{ … }` (and `@s = **{ … }`) is declared and constructed
+- **Not a singleton.** `s = actor { … }` (and `@s = actor { … }`) is declared and constructed
   where it's written, so its block runs there, in program order between its enclosing
   actor's lines. It sees the cells above it as they are at that line; a read in it of a
   cell below is an error, as in the enclosing block itself. Its functions, called later,

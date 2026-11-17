@@ -273,9 +273,9 @@ function buildServiceDocument(ast) {
         return cls ? formatSingletonBlock(ast, cls, aliasMap, purportedByActor, 4) : null;
       };
       // A class with members of its own (src/singleton_classes.js) has them after
-      // its constructor: `C (…) -> *{ … } **{ members }`.
+      // its constructor: `C (…) -> *{ … } ++ actor { members }`.
       const members = actor.membersClass ? ast.actors.find(a => a.name === actor.membersClass) : null;
-      const membersBlock = members ? ` **${formatSingletonBlock(ast, members, aliasMap, purportedByActor, 2)}` : '';
+      const membersBlock = members ? ` ++ actor ${formatSingletonBlock(ast, members, aliasMap, purportedByActor, 2)}` : '';
       lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock, ownTypes(ast, actor))}${membersBlock}`);
       continue;
     }

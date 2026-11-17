@@ -5,7 +5,7 @@ functions that make DOM elements, instead of being managed in a global `style.cs
 notes:
 
 - `ctor-provenance-2026-11-09.md`: how an element records which member made it.
-- `classes-as-singletons-2026-11-09.md`: `**{ }` singletons, `new`, and `**` file headers.
+- `classes-as-singletons-2026-11-09.md`: `**{ }` singletons (now `actor { }`), `new`, and `**` file headers.
 
 ## Principles
 
@@ -323,7 +323,7 @@ With classes as singletons (`classes-as-singletons-2026-11-09.md`), a class's st
 its class block:
 
 ```brevity
-@Widget = **{
+@Widget = actor {
   <style>…</style>
 }
 ```
@@ -347,7 +347,7 @@ its class block:
 
 ## Recommendation, as it stands
 
-- **Shared styles:** in the class singleton block (`**{ <style>… }`), or `<style for={ @maker }>`
+- **Shared styles:** in the class singleton block (`actor { <style>… }`), or `<style for={ @maker }>`
   for function makers. One adopted sheet per maker, scoped by the maker's address.
 - **Shared reactive styling:** the `for=` / class-block sheet reacts to its enclosing actor's state.
 - **Per-instance values:** custom properties on each root.

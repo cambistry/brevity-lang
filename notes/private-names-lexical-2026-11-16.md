@@ -16,7 +16,7 @@ It is never visible:
 
 - to a subclass;
 - through an address: `x.#y` and `class_of(self).#y` are compile errors, inside the class too;
-- to the trailing constructor of a class block (`(p) *{ } **{ #x … }`), which isn't inside the
+- to the trailing constructor of a class block (`(p) *{ } ++ actor { #x … }`), which isn't inside the
   block's braces.
 
 A `#g` declared inside a function is scoped to that function and what's lexically inside it.

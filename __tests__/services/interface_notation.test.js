@@ -309,7 +309,7 @@ describe('constructor profiles in source', () => {
   });
 
   it('header dependency in a delimited ( … ) *{ … } header', () => {
-    expect(() => compileSrc(`( "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) } ) **{
+    expect(() => compileSrc(`( "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) } ) actor {
   t = Thing(a: 1)
   @go = { :value Integer = t.get(); return :value }
 }

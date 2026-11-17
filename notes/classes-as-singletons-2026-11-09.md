@@ -1,5 +1,7 @@
 # Classes as singletons; `**` file headers — 2026-11-09
 
+**2026-11-17:** the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`. This note is kept as written.
+
 Design discussion, not implemented. Starts from "is `C()` shorthand for `C.#new`?" and ends at a
 change to the standard file header.
 
