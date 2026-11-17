@@ -253,7 +253,7 @@ function checkMembersOrder(actor, s, call, ctx, early, actors) {
     }
   } else if (actor === members) {
     const ctor = JSON.stringify([cls.constructorBody, cls.initParams]);
-    if (ctor.includes(JSON.stringify(members.singletonOf)) || ctor.includes('"viaClass":true')) {
+    if (ctor.includes(JSON.stringify(members.singletonOf)) || ctor.includes(`"viaClass":${JSON.stringify(members.name)}`)) {
       throw new Error(`'${shown}' is built in its class block (by ${by}), and its constructor reaches the class, which isn't built until its block ends — build it outside the class block`);
     }
   } else if ((actor.name ?? null) === (members.enclosing ?? null) && early(members.singletonOf)) {

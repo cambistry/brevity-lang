@@ -916,6 +916,7 @@ function genChildHandleOp(ctx, actor) {
   ctx._refCapturedBy = refCapturedBy;
 
   // Set child self_send prefix so actorFnNames calls route to child dispatch
+  const lambdaStart = ctx.lambdaHandlers.length;
   const savedSelfSendPrefix = ctx.selfSendPrefix;
   if (childPrivateFns.length > 0 || childPublicFns.length > 0) {
     ctx.selfSendPrefix = prefix;
@@ -945,6 +946,18 @@ function genChildHandleOp(ctx, actor) {
     if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlExKey(h.name)}}`);
     const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
     clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  }
+  // A lambda made in this class's functions is called through its dispatch, as its
+  // functions are, and runs as the class's actor. (One with overloads of the same
+  // label stays in the file's dispatch, which tries each by arity.)
+  const lambdaKey = (lh) => lh.selector || wireLabel(lh.name);
+  for (let li = lambdaStart; li < ctx.lambdaHandlers.length; li++) {
+    const lh = ctx.lambdaHandlers[li];
+    if (lh.fn.emptyOverload || lh.emitted) continue;
+    if (ctx.lambdaHandlers.some((o, j) => j !== li && lambdaKey(o) === lambdaKey(lh))) continue;
+    lh.emitted = true;
+    const inner = genLambdaHandlerInner(ctx, lh.name, lh.varName, lh.fn, lh.captures);
+    clauses.push(`${prefix}_handle_op(<<"${lambdaKey(lh)}">>, _Message, Payload, _Id, _From) ->\n${inner}`);
   }
 
   ctx.selfSendPrefix = savedSelfSendPrefix;
@@ -1368,6 +1381,10 @@ function genChildActorCode(ctx, actors) {
   return sections.length > 0 ? '\n' + sections.join('\n\n') + '\n' : '';
 }
 
+// A call's result is a packed reply; a lambda's tail yields its one value, as an
+// assignment from a call does (`X = bv_object_one(…)`).
+const oneOfCall = (expr, code) => expr?.type === 'FunctionCallExpr' ? `bv_object_one(${code})` : code;
+
 function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
   const params = fnNode.params || [];
   const I = '    ';
@@ -1457,7 +1474,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     } else if (implicitReturn) {
       const retCtx = { ...sCtx, stmtIdx: body.length };
       const retExpr = genExpr(ctx, implicitReturn.expr, typeEnv, retCtx);
-      lines.push(`${I}{ok, [${retExpr}], null}`);
+      lines.push(`${I}{ok, [${oneOfCall(implicitReturn.expr, retExpr)}], null}`);
     } else if (fnNode.returnType === '.') {
       lines.push(`${I}{ok, null, null}`);
     } else {
@@ -1492,7 +1509,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
       lines.push(`${I}${retExpr},`);
       lines.push(`${I}{ok, null, null}`);
     } else {
-      lines.push(`${I}{ok, [${retExpr}], null}`);
+      lines.push(`${I}{ok, [${oneOfCall(fnNode.expr, retExpr)}], null}`);
     }
   } else {
     lines.push(`${I}{ok, null, null}`);
@@ -1615,7 +1632,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const lambdaEntries = []; // { name, inner, params }
   for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
     const lh = ctx.lambdaHandlers[li];
-    if (lh.fn.emptyOverload) continue;
+    if (lh.fn.emptyOverload || lh.emitted) continue;
     const inner = genLambdaHandlerInner(ctx, lh.name, lh.varName, lh.fn, lh.captures);
     // A wire lambda is dispatched by its `@N` selector (locally via ref-field
     // self-dispatch, or on the wire after perspective translation); a local

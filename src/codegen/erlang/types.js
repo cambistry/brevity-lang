@@ -205,9 +205,12 @@ function erlCollectFreeVars(ctx, funcNode) {
 
   function walkExpr(expr) {
     if (!expr) return;
+    // A name of an enclosing actor (src/outer_reads.js) is a message to that actor,
+    // not a binding the function captures.
+    if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return;
     if (expr.type === 'Identifier' || expr.type === 'FnRef' || expr.type === 'RefRead' || expr.type === 'RefArg') { ids.add(expr.name); return; }
     if (expr.type === 'BinaryExpr') { walkExpr(expr.left); walkExpr(expr.right); return; }
-    if (expr.type === 'FunctionCallExpr') { walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
+    if (expr.type === 'FunctionCallExpr') { if (!expr.outerFnCall) walkExpr(expr.callee); expr.args.forEach(walkExpr); return; }
     if (expr.type === 'IndexExpr') { walkExpr(expr.object); return; }
     if (expr.type === 'ObjectConstructor' || expr.type === 'ObjectLiteral') {
       expr.args.forEach(a => { if (a.expr) walkExpr(a.expr); });
@@ -291,7 +294,8 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
   }
   function hasRefRead(expr) {
     if (!expr) return false;
-    if (expr.type === 'RefRead' && !localRefs.has(expr.name) && !ctx.stateVarNames.has(expr.name)) return true;
+    // An enclosing actor's cell (src/outer_reads.js) is read by message, not captured.
+    if (expr.type === 'RefRead' && !expr.outer && !localRefs.has(expr.name) && !ctx.stateVarNames.has(expr.name)) return true;
     if (expr.type === 'RefArg') return true;
     if (expr.type === 'BinaryExpr') return hasRefRead(expr.left) || hasRefRead(expr.right);
     if (expr.type === 'FunctionCallExpr') {

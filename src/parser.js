@@ -3,7 +3,7 @@ import * as AST from './ast.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses } from './singleton_classes.js';
+import { lowerSingletonClasses, CLASS_OF_SELF } from './singleton_classes.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
@@ -2148,6 +2148,37 @@ export function parse(tokensIn) {
     return out;
   }
 
+  // `class_of(self)`: the class of the actor running this code. For now only `self`
+  // is taken, and only as a receiver (`class_of(self).count`); src/singleton_classes.js
+  // resolves it to the class. See notes/class-singleton-forms-2026-11-13.md.
+  const atClassOf = () => peek().type === 'IDENT' && peek().value === 'class_of' && tokens[pos + 1]?.type === 'LPAREN';
+  const atClassOfSelf = () => atClassOf() && tokens[pos + 2]?.type === 'KEYWORD' && tokens[pos + 2].value === 'self'
+    && tokens[pos + 3]?.type === 'RPAREN';
+  function parseClassOf() {
+    if (!atClassOfSelf()) throw new Error("'class_of' takes only 'self' for now: 'class_of(self)'");
+    pos += 4;
+    return AST.identifier(CLASS_OF_SELF);
+  }
+  // `class_of(self).field <- v`, `C.field <- v`: the receiver's name and the field.
+  // The receiver is a name, a public class's `@C`, or `class_of(self)`.
+  const atPublicName = () => peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT';
+  const fieldSetAhead = () => {
+    const at = atClassOfSelf() ? pos + 4 : atPublicName() ? pos + 2 : peek().type === 'IDENT' ? pos + 1 : -1;
+    return at >= 0 && tokens[at]?.type === 'DOT' && tokens[at + 1]?.type === 'IDENT'
+      && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
+  };
+  function parseFieldSet() {
+    const objName = atClassOfSelf() ? (pos += 4, CLASS_OF_SELF)
+      : atPublicName() ? (consume(), '@' + consume().value)
+      : consume().value;
+    consume(); // DOT
+    const fieldName = consume().value;
+    const isUpdate = peek().type === 'UPDATE';
+    consume(); // SET (<-) or UPDATE (<|)
+    const value = parseExpr();
+    return AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined });
+  }
+
   function parsePrimary() {
     // `new(args)` in a singleton constructs its class (src/singleton_classes.js).
     if (peek().type === 'KEYWORD' && peek().value === 'new' && tokens[pos + 1]?.type === 'LPAREN') {
@@ -2251,7 +2282,9 @@ export function parse(tokensIn) {
     }
 
     let result;
-    if (atBareBuiltinCall()) {
+    if (atClassOf()) {
+      result = parseClassOf();
+    } else if (atBareBuiltinCall()) {
       const methodName = consume().value;
       consume(); // LPAREN
       const args = [parseExpr()];
@@ -2372,6 +2405,12 @@ export function parse(tokensIn) {
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
     const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value) || LIST_METHODS.has(tokens[pos + 1]?.value));
     const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
+    // `x.#name` / `x.@name` after a call (the lexer catches them after a name).
+    if (peek().type === 'DOT' && result?.type === 'Identifier' && result.name === CLASS_OF_SELF) {
+      const next = tokens[pos + 1];
+      if (next?.type === 'HASH_IDENT') throw new Error(`'class_of(self).#${next.value}' — a private name is never reached through an address, only by name in its own scope`);
+      if (next?.type === 'AT') throw new Error(`'class_of(self).@${tokens[pos + 2]?.value}' — a public member takes no '@' after a dot: write 'class_of(self).${tokens[pos + 2]?.value}'`);
+    }
     while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
       // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
       // `args` are forwarded to the publisher's fn body per subscription;
@@ -2698,7 +2737,7 @@ export function parse(tokensIn) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
-      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
+      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() || atClassOf() ||
                  (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
         const expr = parseExpr();
         let typeName = null;
@@ -3709,16 +3748,8 @@ export function parse(tokensIn) {
       }
 
       // c.field <- v — silent public-field set on a child actor
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&
-          tokens[pos + 2]?.type === 'IDENT' &&
-          (tokens[pos + 3]?.type === 'SET' || tokens[pos + 3]?.type === 'UPDATE')) {
-        const objName = consume().value;
-        consume(); // DOT
-        const fieldName = consume().value;
-        const isUpdate = peek().type === 'UPDATE';
-        consume(); // SET (<-) or UPDATE (<|)
-        const value = parseExpr();
-        body.push(AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined }));
+      if (fieldSetAhead()) {
+        body.push(parseFieldSet());
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = consume().value;
@@ -4660,7 +4691,9 @@ export function parse(tokensIn) {
   // the class's actors reach through its published interface (`C.count`), not by
   // closing over it. Its actor is kept in the declaring actor's cell `C__class`.
   function parseTrailingMembers(className) {
-    const base = className.replace(/^[@#]/, '');
+    // A class named `C!` (it writes while constructing) is `C`; the `!` isn't part of
+    // the hidden names.
+    const base = className.replace(/^[@#]/, '').replace(/[!.]$/, '');
     const cls = `${base}_singleton`;
     const nested = parseSingletonMembers(cls);
     const actor = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
@@ -5068,15 +5101,25 @@ export function parse(tokensIn) {
           body = parseBody();
         }
         functions.push(AST.onHandler(source, eventName, params, body));
+      } else if (fieldSetAhead()) {
+        // A write to an actor's field in the constructor block: `c.n <- 1`, `C.count <- 1`.
+        constructorBody.push(parseFieldSet());
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         // A write in the constructor block: `n <- n + 1`, `@a <- 1`, `log <| x`.
         const name = peek().value;
         if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
-          throw new Error(`Cannot set '${name}' — only '*Type' variables support '<-'`);
+          // A trailing class block (`*{ … } **{ … }`) hasn't been parsed yet, so the error
+          // waits until it is: src/singleton_classes.js says which it is.
+          consume();
+          const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+          const set = AST.setStatement(name, parseExpr(), { updateOp });
+          set.deferredError = `Cannot set '${name}' — only '*Type' variables support '<-'`;
+          constructorBody.push(set);
+        } else {
+          const expr = parseExpr();
+          constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
         }
-        const expr = parseExpr();
-        constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
       } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
                  || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
                  || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN'
@@ -5547,7 +5590,7 @@ export function parse(tokensIn) {
           if (inferred && isCall(stmt.expr)) stmt.typeFromCallee = true;
         }
         declarationReturn = stmt;
-      } else if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement') {
+      } else if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement' || stmt.type === 'ActorFieldSet') {
         initBody.push(stmt);
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
         const isIngest = stmt.value?.type === 'IngestExpr';

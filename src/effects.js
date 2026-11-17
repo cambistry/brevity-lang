@@ -139,6 +139,11 @@ export function checkEffects(ast, remotesParsed = {}) {
           scope.locals.add(node.name);
           walk(node.value, scope);
           return;
+        // A constructor block building its own child: writing its fields is setup.
+        case 'StateAssign':
+          walk(node.value, scope);
+          if (isConstruction(receiverRoot(node.value))) scope.fresh.add(node.name);
+          return;
         case 'Assign':
         case 'TypedAssign': {
           if (node.value?.type === 'Function') {

@@ -159,7 +159,16 @@ function parseDomChildren(source, startIdx, parentTag) {
 function silentSuffixAt(source, i, name, line) {
   let n = 0;
   while (source[i + n] === '.') n++;
-  if (n === 1) return /[a-zA-Z_]/.test(source[i + 1] ?? '') ? 0 : 1;
+  if (n === 1) {
+    const next = source[i + 1] ?? '';
+    const member = (source.slice(i + 2).match(/^[a-zA-Z_][a-zA-Z0-9_]*[!.]?/) ?? [''])[0];
+    if (member) {
+      // A member is named after a dot as on the wire: a public one bare.
+      if (next === '#') throw new Error(`'${name}.#${member}' — a private name is never reached through an address, only by name in its own scope (line ${line})`);
+      if (next === '@') throw new Error(`'${name}.@${member}' — a public member takes no '@' after a dot: write '${name}.${member}' (line ${line})`);
+    }
+    return /[a-zA-Z_]/.test(next) ? 0 : 1;
+  }
   if (n === 2) throw new Error(`Unexpected '..' after '${name}' (line ${line})`);
   if (n >= 4) throw new Error(`'${name}${'.'.repeat(n)}' — the ellipsis absorbs a silent name's dot: write '${name}...' (line ${line})`);
   return 0;
@@ -393,6 +402,9 @@ export function tokenize(source) {
     // The effect arrows of a signature: `=>` writes, `~>` purports to read. They
     // lex as arrows; the parser only accepts them in signatures.
     if ((source[i] === '=' || source[i] === '~') && source[i+1] === '>') { tokens.push({ type: '->', value: source[i] + '>' }); i += 2; continue; }
+    // `~` is only ever part of `~>`. (On the wire it marks a protected name; in source a
+    // protected name is bare.)
+    if (source[i] === '~') throw new Error(`Unexpected '~' (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
     if (source[i] === '=' && source[i+1] === '=') { tokens.push({ type: 'EQ' }); i += 2; continue; }
     if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
     if (source[i] === '!') { tokens.push({ type: 'BANG' }); i++; continue; }

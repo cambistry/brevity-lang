@@ -657,14 +657,22 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         // Void lambda — reply with empty `re: []` after running the body
         block += `\n        await (${fnCode})(_s);\n        re = [];`;
       } else {
-        // fnCode is `async (_s) => {...}` — we invoke it inline to get the result
-        block += `\n        re = BvObject.splat(await (${fnCode})(_s));`;
+        // fnCode is `async (_s) => {...}` — we invoke it inline to get the result. A `!`
+        // lambda that falls off its end returns self, as a `!` function does.
+        block += lVarName?.endsWith('!')
+          ? `\n        { const _r = await (${fnCode})(_s); re = _r === undefined ? "#<:>" : BvObject.splat(_r); }`
+          : `\n        re = BvObject.splat(await (${fnCode})(_s));`;
       }
     } else if (fnNode.expr) {
       if (fnNode.returnType === '.') {
         block += `\n        ${genExpr(ctx, fnNode.expr)};`;
       } else {
-        block += `\n        re = [${genExpr(ctx, fnNode.expr)}];`;
+        // A call's result is already a reply (`BvObject.pack(…)`): pass it on, don't
+        // wrap it as one value.
+        const code = genExpr(ctx, fnNode.expr);
+        block += code.startsWith('BvObject.pack(')
+          ? `\n        re = BvObject.splat(${code});`
+          : `\n        re = [${code}];`;
       }
     }
     block += '\n        _handled = true;';

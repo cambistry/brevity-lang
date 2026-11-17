@@ -21,6 +21,10 @@
 // only that, so it is reserved everywhere else.
 // See notes/class-singleton-forms-2026-11-13.md.
 
+// `class_of(self)` as the parser leaves it: an Identifier no source name can spell,
+// resolved here to the class of the actor it's in.
+export const CLASS_OF_SELF = 'class_of(self)';
+
 // The class of a file whose `*` section is its `new`. Nothing in source can name it.
 export const FILE_CLASS = 'new__file';
 
@@ -65,6 +69,9 @@ export function lowerSingletonClasses(actors) {
     renameCalls(members, 'new', className);
   }
 
+  // `class_of(self)` names the class of the actor it's in.
+  for (const a of actors) resolveClassOf(a);
+
   for (const cls of actors.filter(a => a.membersClass)) {
     const members = byName.get(cls.membersClass);
     // Trailing: its actors still have the members first in their chain, so they can
@@ -75,11 +82,34 @@ export function lowerSingletonClasses(actors) {
       cls.membersOpaque = true;
     }
     if (cls.name.startsWith('@')) members.publishedAs = cls.name.slice(1);
-    // In the class itself, `C.count` on a protected member (bare `count`) reads it
-    // from inside the class (`$get` of `~count`), which a client can't.
-    if (cls.membersOpaque) renameProtectedReads(cls, cls.name, protectedCells(members));
+    // Inside the class, in either form, `C.count` reaches the members from inside:
+    // the class's actors and the classes declared in them.
+    // A class named `C!` is referred to as `C` (src/parser.js, settleBangDecls, runs later).
+    const spellings = [...new Set([cls.name, cls.name.replace(/[!.]$/, '')])];
+    for (const a of actors) if (a === cls || isInside(a, cls.name, byName)) for (const n of spellings) lowerMemberAccess(a, n, members);
     // `C.count` reads the members; `C(…)` still builds a `C`.
-    for (const a of actors) renameReceivers(a, cls.name, members.singletonOf);
+    for (const a of actors) for (const n of spellings) renameReceivers(a, n, members.singletonOf);
+  }
+
+  // A write in a constructor block to a name that isn't a `*` cell in scope. The
+  // parser couldn't tell yet whether it names a member of a trailing class block.
+  // A trailing constructor block's bare write to a class-block member is the same
+  // scope error, reported before anything else can complain about the write.
+  for (const a of actors) {
+    const members = a.membersOpaque ? byName.get(a.membersClass) : null;
+    const own = new Set([...(a.stateVarDecls || []), ...(a.initParams || [])].map(d => d.name));
+    const memberCell = (name) => members && !own.has(name) && memberNames(members).cells.has(name);
+    const notClosedOver = (name) => {
+      const cls = a.name.replace(/^@/, '').replace(/[!.]$/, '');
+      const reach = name.startsWith('@') ? `: reach it as '${cls}.${name.slice(1)}'` : '';
+      return new Error(`'${name}' is a member of the class '${cls}', and a trailing constructor doesn't close over its class block${reach}`);
+    };
+    for (const b of [a.initBody, a.constructorBody]) walk(b, (n) => {
+      if (n.type === 'SetStatement' && !n.viaClass && memberCell(n.name)) throw notClosedOver(n.name);
+    });
+    for (const b of bodies(a)) walk(b, (n) => {
+      if (n.type === 'SetStatement' && n.deferredError) throw memberCell(n.name) ? notClosedOver(n.name) : new Error(n.deferredError);
+    });
   }
 
   // What's left of `new(args)` builds the file's class.
@@ -138,20 +168,65 @@ function renameReceivers(actor, from, to) {
   });
 }
 
-// The members' protected cells: bare names, not published.
-function protectedCells(members) {
-  return new Set([...(members.stateVarDecls || []).map(d => d.name)].filter(n => typeof n === 'string' && !/^[@#]/.test(n)));
+// Whether `actor` is declared, at any depth, inside class `name`'s constructor.
+function isInside(actor, name, byName) {
+  for (let at = byName.get(actor.enclosing); at; at = byName.get(at.enclosing)) if (at.name === name) return true;
+  return false;
 }
 
-// `C.count`, for a protected `count`, becomes a read of it at the members' level
-// of the chain (src/outer_reads.js, `viaClass`).
-function renameProtectedReads(actor, from, cells) {
+// `class_of(self)` is the class of the actor it's in, so `class_of(self).count` is
+// `C.count` in `C`. Only `self`, and only as a receiver, for now.
+function resolveClassOf(actor) {
+  const where = () => actor.singletonOf || actor.membersOf ? 'a class block' : 'this file';
+  const isClass = actor.name && !actor.singletonOf && !actor.membersOf && actor.name !== FILE_CLASS;
+  const resolve = () => {
+    if (!isClass) throw new Error(`'class_of(self)' in ${where()} isn't supported yet: it names the class of an actor built by a class`);
+    if (!actor.membersClass) throw new Error(`'class_of(self)': '${actor.name}' has no class block, so there are no class members to reach`);
+    return actor.name;
+  };
   for (const b of bodies(actor)) walk(b, (n) => {
-    const obj = n.object;
-    if (n.type !== 'DotAccessExpr' || !obj || (obj.type !== 'Identifier' && obj.type !== 'RefRead') || obj.name !== from || !cells.has(n.property)) return;
-    const name = n.property;
-    for (const k of Object.keys(n)) if (k !== 'loc') delete n[k];
-    Object.assign(n, { type: 'Identifier', name, viaClass: true });
+    if (n.type === 'ActorFieldSet' && n.objectName === CLASS_OF_SELF) n.objectName = resolve();
+    if (n.object?.type === 'Identifier' && n.object.name === CLASS_OF_SELF) n.object = { ...n.object, name: resolve() };
+  });
+  for (const b of bodies(actor)) walk(b, (n) => {
+    if (n.type === 'Identifier' && n.name === CLASS_OF_SELF) {
+      throw new Error("'class_of(self)' is only a receiver for now: 'class_of(self).count', 'class_of(self).bump!()'");
+    }
+  });
+}
+
+// What the members declare, by source name: cells and functions, public (`@x`),
+// protected (bare) and private (`#x`). A published cell's getter is the cell.
+function memberNames(members) {
+  const cells = new Set((members.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string'));
+  const fns = new Set((members.functions || []).filter(f => !f.cellGetter && !cells.has(f.name)).map(f => f.name)
+    .filter(n => typeof n === 'string' && !/^(set|update|new|subscribe)@/.test(n)));
+  return { cells, fns };
+}
+
+// `C.x` in the class, or in a class inside it, reaches the members' public names:
+// after a dot a name is public, written without its `@`. A cell is read or written at
+// the members' level of the chain (src/outer_reads.js, `viaClass`), as a bare `@x` in
+// the nested form is; a function stays a message to the class. Anything else after the
+// dot (a protected or private member, or nothing) is an error.
+// See notes/class-scope-and-inheritance-2026-11-16.md.
+function lowerMemberAccess(actor, from, members) {
+  const { cells, fns } = memberNames(members);
+  const isC = (o) => o && (o.type === 'Identifier' || o.type === 'RefRead') && o.name === from;
+  const shown = from.replace(/^@/, '').replace(/[!.]$/, '');
+  const noPublic = (x) => new Error(`No public member '${x}' in '${shown}'`);
+  const replace = (n, next) => { for (const k of Object.keys(n)) if (k !== 'loc') delete n[k]; Object.assign(n, next); };
+  const via = members.name;
+  for (const b of bodies(actor)) walk(b, (n) => {
+    if (n.type === 'ActorFieldSet' && n.objectName === from) {
+      if (!cells.has('@' + n.fieldName)) throw noPublic(n.fieldName);
+      replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: via });
+    } else if (n.type === 'DotAccessExpr' && isC(n.object)) {
+      if (cells.has('@' + n.property)) replace(n, { type: 'Identifier', name: '@' + n.property, viaClass: via });
+      else if (!fns.has('@' + n.property)) throw noPublic(n.property);
+    } else if (n.type === 'DotCallExpr' && isC(n.object) && n.method !== 'new') {
+      if (!fns.has('@' + n.method) && !cells.has('@' + n.method)) throw noPublic(n.method);
+    }
   });
 }
 

@@ -24,6 +24,8 @@
 
 import { resolveSuperclassChain } from './subclass.js';
 
+const SCALAR_TYPES = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float']);
+
 // What the file actor holds, by name, with its type: cells, constants, file params.
 export function fileOuterNames(program) {
   const file = program.actors.find(a => !a.name);
@@ -174,6 +176,24 @@ export function markOuterReads(program) {
     const elsewhere = (name) => [...classes.values()].find(c => c !== actor && !chain.some(l => !l.opaque && l.owner === c.name)
       && levels.get(c.name).names.has(name));
 
+    // `C.count` inside the class (src/singleton_classes.js): the members' own level,
+    // whatever the actor or the levels between declare.
+    const viaClassAt = (node) => {
+      const at = chain.findIndex(l => l.owner === node.viaClass);
+      return at < 0 ? null : { level: at + 1, ...chain[at] };
+    };
+    // A name of a trailing class's members, which a bare name doesn't reach.
+    const opaqueOwner = (name, kind) => {
+      const l = chain.find(l => l.opaque && l[kind].has(name));
+      return l ? classes.get(l.owner) : null;
+    };
+    const notClosedOver = (name, members) => {
+      const cls = members.membersOf.replace(/^@/, '');
+      if (name.startsWith('#')) return new Error(`'${name}' is private to the class block of '${cls}', and a trailing constructor doesn't close over it`);
+      const reach = name.startsWith('@') ? `: reach it as '${cls}.${name.slice(1)}'` : '';
+      return new Error(`'${name}' is a member of the class '${cls}', and a trailing constructor doesn't close over its class block${reach}`);
+    };
+
     const ownerOf = (name, bound) => {
       if (typeof name !== 'string' || own.has(name) || bound.has(name)) return null;
       const at = chain.findIndex(l => !l.opaque && l.names.has(name));
@@ -198,26 +218,43 @@ export function markOuterReads(program) {
         }
         return;
       }
-      if (!actor.name || ownFunctions.has(name)) return;
+      if (!actor.name) return;
+      if (node.viaClass) {
+        const found = viaClassAt(node);
+        if (found) { node.outerFnCall = true; node.outerLevel = found.level; node.outerClass = found.owner; }
+        return;
+      }
+      if (ownFunctions.has(name)) return;
       // A function of an enclosing actor: a message to that actor.
       const at = chain.findIndex(l => !l.opaque && l.functions.has(name));
       if (at >= 0) {
         node.outerFnCall = true;
         node.outerLevel = at + 1;
         node.outerClass = chain[at].owner;
+        return;
       }
+      const members = opaqueOwner(name, 'functions');
+      if (members) throw notClosedOver(name, members);
     };
     // `x <- v` on an enclosing actor's cell: a `$set` (or `$update`) sent to it.
     const markSet = (node, bound) => {
       if (!actor.name) return;
-      const found = ownerOf(node.name, bound);
-      if (!found) return;
+      const found = node.viaClass ? viaClassAt(node) : ownerOf(node.name, bound);
+      if (!found) {
+        const members = !own.has(node.name) && !bound.has(node.name) && opaqueOwner(node.name, 'names');
+        if (members) throw notClosedOver(node.name, members);
+        return;
+      }
       const { type, ref } = found.names.get(node.name);
       if (!ref) throw new Error(`Cannot set '${node.name}' — it's a cell of ${shown(found.owner)} that isn't '*', so it can't be set`);
       const { name, value, updateOp } = node;
       for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
       node.type = 'ExprStatement';
-      node.expr = { type: 'OuterSet', name, value, updateOp: updateOp ?? null, outerLevel: found.level, outerClass: found.owner, outerType: type };
+      // `<|` on a scalar replaces it, as on an actor's own cell, so it's a `$set`. (An
+      // owner has no `$update` for a cell yet, so a structured `<|` across actors isn't
+      // supported.)
+      const scalar = SCALAR_TYPES.has(type);
+      node.expr = { type: 'OuterSet', name, value, updateOp: scalar ? null : updateOp ?? null, outerLevel: found.level, outerClass: found.owner, outerType: type };
     };
     // A name that a class outside the chain declares is out of reach. Anything the
     // class binds anywhere (a destructure, a catch, a lambda) is its own.
@@ -225,6 +262,8 @@ export function markOuterReads(program) {
     const checkReach = (node, bound) => {
       if (!actor.name || typeof node.name !== 'string' || own.has(node.name) || bound.has(node.name) || binders.has(node.name)) return;
       if (chain.some(l => !l.opaque && l.names.has(node.name)) || classes.has(node.name) || dependencies.has(node.name)) return;
+      const members = opaqueOwner(node.name, 'names');
+      if (members) throw notClosedOver(node.name, members);
       const other = elsewhere(node.name);
       if (other) throw new Error(`'${node.name}' is a name of '${other.name}', which '${actor.name}' isn't declared in`);
     };
@@ -250,8 +289,8 @@ export function markOuterReads(program) {
         node.outerCall = true;
       }
       if (actor.name && node.type === 'Identifier' && node.viaClass) {
-        const at = chain.findIndex(l => l.opaque && l.names.has(node.name));
-        if (at >= 0) { mark(node, { level: at + 1, ...chain[at] }); return; }
+        const found = viaClassAt(node);
+        if (found) { mark(node, found); return; }
       }
       if (actor.name && (node.type === 'Identifier' || node.type === 'RefRead')) {
         const found = ownerOf(node.name, bound);

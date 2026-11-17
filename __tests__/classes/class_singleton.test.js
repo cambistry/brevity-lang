@@ -10,11 +10,12 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 //
 // In the nested form the constructor is inside the singleton, so it closes over it,
 // private cells included. In the trailing form it isn't, so it reaches the members
-// through their published interface (`C.count`), as any client does, and, being
-// inside the class, through its protected cells too (read only). Either way an
+// through their public names (`C.count`); after a dot a name is public. Either way an
 // actor of the class is `C n` on the wire, under the actor declaring `C`, and its
 // `ty` names `C`. A public class's public members are messageable at `C` itself:
-// `count` to `. C`. See notes/class-singleton-forms-2026-11-13.md.
+// `count` to `. C`. See notes/class-singleton-forms-2026-11-13.md and
+// notes/class-scope-and-inheritance-2026-11-16.md (scope in detail:
+// __tests__/classes/class_scope.test.js).
 
 const script = `
   @Nested = **{
@@ -40,9 +41,7 @@ const script = `
 
   @Trailing = (seed Integer) *{
     n Integer = @Trailing.count
-    hidden Integer = @Trailing.hidden
     @n = { return n + seed }
-    @hidden = { return hidden }
     @bump! = { @Trailing.bump!() }
   } **{
     @count *Integer = 3
@@ -160,13 +159,10 @@ describe('trailing class members', () => {
     );
   });
 
-  it('the constructor reads a protected cell through the class', async () => {
-    await expectBehavior(script,
-      { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
-      { input: { id: '2', op: 'hidden', to: ':Trailing:1', from: 'c' } },
-      { output: { id: '2', re: [40], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
-    );
+  it('a protected cell isn\'t reached through the class', () => {
+    expect(() => compileSource(`
+      C = (seed Integer) *{ n Integer = C.hidden } **{ hidden *Integer = 40 }
+    `)).toThrow(/^No public member 'hidden' in 'C'$/);
   });
 });
 
@@ -251,7 +247,7 @@ describe('class members — scope errors', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ n Integer = count } **{ count *Integer = 3 }
       @go = -> 1
-    `)).toThrow(/'count' is a name of 'C_singleton', which 'C' isn't declared in/);
+    `)).toThrow(/^'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 });
 
