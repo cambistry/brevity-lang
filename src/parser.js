@@ -11,6 +11,8 @@ const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'D
 // `new` names only a singleton's constructor (notes/class-singleton-forms-2026-11-13.md).
 const RETIRED_SINGLETON_MSG = "'**{ … }' is now 'actor { … }'";
 const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
+const FILE_STAR_SECTION_MSG = "a singleton's constructor is declared with 'new =': write 'new =', then '*' alone on its line, params one per line, and a closing '*'";
+const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) — declare it with 'use'`;
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -127,9 +129,7 @@ export function parse(tokensIn) {
   // How many lineal class bodies we're in: a `**` there would be the lineal
   // trailing form, which isn't supported.
   let linealClassDepth = 0;
-  // Set once a lineal `**` file header is read: a `*` alone at the file's top level
-  // then opens the file's `new` section. `actorBodyDepth` tells the top level apart.
-  let fileNewSectionOk = false;
+  // How many actor bodies we're in: 1 is the file's own.
   let actorBodyDepth = 0;
 
   const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
@@ -4994,6 +4994,30 @@ export function parse(tokensIn) {
     return { params: [], supertypes: [], nested };
   }
 
+  // The params of the constructor at token `i` (`new =`'s), lineal `*`…`*` or
+  // `( … ) *{`, refused if any is a DI entry: read as header entries, nothing kept.
+  function refuseCtorDI(i) {
+    while (tokens[i]?.type === 'NEWLINE' || tokens[i]?.type === 'BLOCK_SEP') i++;
+    let isEnd;
+    if (tokens[i]?.type === 'STAR' && tokens[i].alone) isEnd = () => peek().type === 'STAR' && peek().alone;
+    else if (tokens[i]?.type === 'LPAREN' && isDelimitedClassStart(i)) isEnd = () => peek().type === 'RPAREN';
+    else return;
+    const saved = pos;
+    const savedDeps = dependencies.length;
+    let dep;
+    try {
+      pos = i + 1;
+      parseFileHeaderEntries(isEnd);
+    } catch {
+      // not an entry run — the params parser says what's wrong
+    } finally {
+      dep = dependencies.slice(savedDeps).find(d => d.type === 'Dependency');
+      dependencies.length = savedDeps;
+      pos = saved;
+    }
+    if (dep) throw new Error(CTOR_DI_MSG(/^\w+$/.test(dep.path) ? `'${dep.path}'` : `'"${dep.path}"'`));
+  }
+
   function parseActorBody(isEnd) {
     actorBodyDepth++;
     try { return parseActorBodyIn(isEnd); } finally { actorBodyDepth--; }
@@ -5010,8 +5034,13 @@ export function parse(tokensIn) {
     const untrackedDecls = new Set();
     const lineBodyStart = pos;
     const endsAtLine = stopAtLineEnd === actorBodyDepth;
+    // The file's own body, when the file is a singleton: `new =` here makes it a class.
+    const isFileTop = actorBodyDepth === 1 && fileKind !== 'factory';
+    // While the file's `new =` is read: what `stopAtBlankLine` was before it.
+    let fileNewStop = null;
     while (peek().type !== 'EOF') {
       declCtx = null;
+      if (fileNewStop !== null) { stopAtBlankLine = fileNewStop; fileNewStop = null; }
       if (stopAtBlankLine && peek().type === 'BLOCK_SEP') break;
       if (endsAtLine && pos > lineBodyStart) {
         // The one statement is read. Leave its line break to the enclosing body.
@@ -5028,19 +5057,10 @@ export function parse(tokensIn) {
           ? `a file header must open the file — an inline singleton is named: 'name = actor { … }'`
           : `An inline singleton is named: 'name = actor { … }'`);
       }
-      // A file with a `**` header and then a `*` section is a class: the section is
-      // the file's `new`, its params between the `*`s, and everything below it is
-      // its constructor body (src/singleton_classes.js).
-      if (fileNewSectionOk && actorBodyDepth === 1 && peek().type === 'STAR' && peek().alone) {
-        consume(); // *
-        const { params, nested } = parseConstructorAfterStar('new');
-        const cls = AST.actor('new', { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
-        cls.fileNew = true;
-        nestedActors.push(cls);
-        fileKind = 'class';
-        skipBlanks();
-        if (peek().type !== 'EOF') throw new Error("The '*' section is the last of the file: everything below it is the constructor body");
-        break;
+      // The retired trailing `*` section (singleton lines, then a lone `*` as the
+      // file's `new`). A `*` at the head of a file is a factory header, read before here.
+      if (isFileTop && peek().type === 'STAR' && peek().alone) {
+        throw new Error(FILE_STAR_SECTION_MSG);
       }
       // `new = (params) *{ … }` in a singleton makes it a class; `new` is reserved
       // for that (src/singleton_classes.js).
@@ -5049,6 +5069,13 @@ export function parse(tokensIn) {
         while (tokens[k]?.type === 'NEWLINE') k++;
         if (tokens[k]?.type !== 'EQUALS') throw new Error(NEW_RESERVED_MSG);
         tokens[pos] = { ...tokens[pos], type: 'IDENT' };
+        // In the file, it makes the file a class. Its lineal body ends at the first
+        // blank line, as a lineal singleton's members do.
+        if (isFileTop) {
+          refuseCtorDI(k + 1);
+          fileNewStop = stopAtBlankLine;
+          stopAtBlankLine = true;
+        }
       }
       // `untracked` marks the declaration that follows: its writes don't count.
       if (peek().type === 'KEYWORD' && peek().value === 'untracked') {
@@ -5745,6 +5772,14 @@ export function parse(tokensIn) {
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
+    if (fileNewStop !== null) stopAtBlankLine = fileNewStop;
+    // The file's `new`: the file is the singleton, so its class is a class of the
+    // file (src/singleton_classes.js).
+    if (isFileTop) {
+      const made = nestedActors.filter(a => a.name === 'new');
+      if (made.length > 1) throw new Error("A file declares 'new' once");
+      if (made[0]) { made[0].fileNew = true; fileKind = 'class'; }
+    }
     // Back-compat: produce stateVarDecls/initBody/initParams from constructorBody for codegen
     function inferType(value) {
       if (!value) return null;
@@ -6264,7 +6299,6 @@ export function parse(tokensIn) {
         dependencies.length = savedDeps;
       }
       skipBlanks();
-      fileNewSectionOk = true;
       parseFileHeaderBody(true);
       continue;
     }

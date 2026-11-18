@@ -148,7 +148,7 @@ count <- count + 1
 |-------------|-----------------------------------------------|----------------------------------|
 | Inline      | `(params) *{ } ++ actor { }` (delimited only) | the class's interface: `C.count` |
 | Inline      | `C = actor { … new = (params) *{ } }`         | the closure                      |
-| File        | `** DI **` members, then a `*` section        | the closure (the file's `new`)   |
+| File        | members, then `new =` (the `*` section is retired) | the closure (the file's `new`) |
 
 ## `new`
 

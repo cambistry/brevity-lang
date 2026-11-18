@@ -347,7 +347,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     lines.push(`                re = Some(Value::String(format!("#<:{}>", _addr)));`);
     lines.push(`                ty_re = Some(json!(${JSON.stringify(selfAddress('@' + selector))}));`);
   }
-  // new: the file's own class (a `*` section): its actor is `N` under us, of class `:`.
+  // new: the file's own class (it declares `new`): its actor is `N` under us, of class `:`.
   if (name === 'new') {
     lines.push(`                let _addr = format!("{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);

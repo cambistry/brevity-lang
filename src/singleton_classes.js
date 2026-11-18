@@ -25,7 +25,7 @@
 // Resolved here to the class of the actor it's in.
 export const CLASS_SELF = 'class';
 
-// The class of a file whose `*` section is its `new`. Nothing in source can name it.
+// The class of a file that declares `new =`. Nothing in source can name it.
 export const FILE_CLASS = 'new__file';
 
 // The label an actor is published at in the actor that builds it, sigil and all
@@ -44,7 +44,7 @@ export function lowerSingletonClasses(actors, types = []) {
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const declarer = (name) => actors.find(a => (a.name ?? null) === (name ?? null));
 
-  // A file's `*` section: the file is the singleton, so its class is a class of
+  // A file's `new =`: the file is the singleton, so its class is a class of
   // the file, closing over the file's members as any of its classes does.
   const fileNew = actors.find(a => a.name === 'new' && a.fileNew);
   if (fileNew) {

@@ -257,7 +257,7 @@ export function addConstructHandlers(ast) {
   const file = ast.actors.find(a => !a.name);
   if (!file) return;
   const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
-  // A file whose `*` section is its `new` (src/singleton_classes.js): `$new` to the
+  // A file that declares `new` (src/singleton_classes.js): `$new` to the
   // file builds one, published at `n` under it, its `ty` the file's own class, `:`.
   const fileClass = classes.get(FILE_CLASS);
   if (fileClass && !file.functions?.some(f => f.name === 'new')) {

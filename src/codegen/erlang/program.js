@@ -712,7 +712,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
     replyBlock = `${I}{ok, bv_publish_(${erlString(quoteToken(selector))}, ${inst}), ${erlString(selfAddress('@' + selector))}}`;
   } else if (fn.name === 'new') {
-    // The file's own class (a `*` section): its actor is `N` under us, of class `:`.
+    // The file's own class (it declares `new`): its actor is `N` under us, of class `:`.
     const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
     replyBlock = `${I}{ok, bv_publish_own_(${inst}), <<":">>}`;
   } else if (erlGuards.length > 0) {

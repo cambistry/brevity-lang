@@ -196,13 +196,11 @@ describe('file singleton header — only at the head of a file', () => {
   });
 });
 
-// A `**` header, the file's members, then a `*` section: the file is a class. The
-// section is the file's `new` (params between the `*`s), the nested form with
-// `new =` left unwritten, so it closes over the file's members. It is the last
-// section: everything below it is the constructor body.
-// See notes/class-singleton-forms-2026-11-13.md.
+// A singleton file that declares `new` is a class, as any singleton is. Its `new =`
+// closes over the file's members. Its lineal body is an ordinary one: it ends at the
+// first blank line, unless a `--` holds it open.
+// See notes/use-di-2026-11-17.md and notes/class-singleton-forms-2026-11-13.md.
 const classFile = `
-  **
   count *Integer = 10
   @total = -> count
 
@@ -218,28 +216,35 @@ const classFile = `
     return x
   }
 
+  new =
   *
     seed Integer
   *
   n Integer = count + seed
   @n = { return n }
-
+  --
   @late = { return seed }
+
+  @after = -> count
 `;
 
-describe('file with a `*` section', () => {
+describe('file with `new =`', () => {
   it('is a class', () => {
     expect(extract(classFile).ast.fileKind).toBe('class');
   });
 
-  it('its actor sees the file\'s members', async () => {
+  it('is a class after a `**` header too', () => {
+    expect(extract(`**\n${classFile}`).ast.fileKind).toBe('class');
+  });
+
+  it('its actor closes over the file\'s members', async () => {
     await expectBehavior(classFile,
       { input: { id: '1', op: 'make', from: 'c' } },
       { output: { id: '1', re: [15], ty: ['Integer'], to: 'c' } },
     );
   });
 
-  it('`$new` to the file builds one, at `n` under it, of class `.`', async () => {
+  it('`$new` to the file builds one, at `n` under it, of class `:`', async () => {
     await expectBehavior(classFile,
       { input: { id: '1', op: [[5], '$new'], ty: [['Integer']], from: 'c' } },
       { output: { id: '1', re: '#<:1>', ty: ':', to: 'c' } },
@@ -250,20 +255,103 @@ describe('file with a `*` section', () => {
     );
   });
 
-  it('runs to the end of the file, past a blank line', async () => {
+  it('a `--` holds its body open', async () => {
     await expectBehavior(classFile,
       { input: { id: '1', op: 'viaLate', from: 'c' } },
       { output: { id: '1', re: [1], ty: ['Integer'], to: 'c' } },
     );
   });
 
-  it('the file keeps its own members', () => {
+  it('a blank line ends its body', async () => {
     const file = extract(classFile).ast.actors.find(a => !a.name);
-    expect(file.functions.map(f => f.name)).toEqual(expect.arrayContaining(['@total', '@make', '@viaLate']));
+    expect(file.functions.map(f => f.name)).toEqual(expect.arrayContaining(['@total', '@make', '@viaLate', '@after']));
     expect(file.functions.map(f => f.name)).not.toContain('@late');
+    await expectBehavior(classFile,
+      { input: { id: '1', op: 'after', from: 'c' } },
+      { output: { id: '1', re: [10], ty: ['Integer'], to: 'c' } },
+    );
   });
 
-  it('a file with only a `*` header is still a factory', () => {
-    expect(extract('*\n  n Integer\n*\n@get = -> n\n').ast.fileKind).toBe('factory');
+  it('delimited: `new = (params) *{ … }`', async () => {
+    await expectBehavior(`
+      count *Integer = 10
+      new = (seed Integer) *{
+        @n = -> count + seed
+
+        @seed = -> seed
+      }
+      @make = {
+        c = new(2)
+        x Integer = c.n()
+        return x
+      }
+    `,
+      { input: { id: '1', op: 'make', from: 'c' } },
+      { output: { id: '1', re: [12], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a file declares `new` once', () => {
+    expect(() => extract('new = (a Integer) *{\n  @a = -> a\n}\nnew = (b Integer) *{\n  @b = -> b\n}\n'))
+      .toThrow("A file declares 'new' once");
+  });
+});
+
+describe('factory files are unchanged', () => {
+  const forms = {
+    'lineal `*` header': '*\n  n Integer\n*\n@get = -> n\n',
+    '`*{ … }`': '*{\n  @get = -> 1\n}\n',
+    '`( params ) *{ … }`': '( n Integer ) *{\n  @get = -> n\n}\n',
+    '`( params ) -> *{ … }`': '( n Integer ) -> *{\n  @get = -> n\n}\n',
+  };
+  for (const [label, src] of Object.entries(forms)) {
+    it(`${label} is a factory`, () => {
+      expect(extract(src).ast.fileKind).toBe('factory');
+      expect(() => compileSource(src)).not.toThrow();
+    });
+  }
+});
+
+describe('file with `new =` — errors', () => {
+  const section = /a singleton's constructor is declared with 'new ='/;
+
+  it('the retired trailing `*` section', () => {
+    expect(() => extract('count *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
+  });
+
+  it('the retired trailing `*` section, after a `**` header', () => {
+    expect(() => extract('**\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
+  });
+
+  const di = /a constructor's params take no DI \(.*\) — declare it with 'use'/;
+  const entries = {
+    'a path': '"svc.bv": Svc',
+    'a service': '"svc.bv": Svc { get () -> (Integer) }',
+    'a constructor (#)': '"svc.bv": Svc #',
+    'a path shorthand': ':document',
+    'a destructure': 'HTML: (:div)',
+  };
+  for (const [label, entry] of Object.entries(entries)) {
+    it(`refuses ${label} in its params`, () => {
+      expect(() => extract(`count *Integer = 0\nnew =\n*\n  seed Integer\n  ${entry}\n*\n@n = -> seed\n`)).toThrow(di);
+    });
+  }
+
+  it('refuses DI in delimited params', () => {
+    expect(() => extract('new = ( "svc.bv": Svc, n Integer ) *{\n  @n = -> n\n}\n'))
+      .toThrow(`a constructor's params take no DI ('"svc.bv"') — declare it with 'use'`);
+  });
+
+  it('accepts params of every kind', () => {
+    expect(() => compileSource(`
+      new =
+      *
+        n Integer
+        name: Text
+        port: p Integer
+        limit: Integer = 5
+      *
+      @get = -> name
+    `)).not.toThrow();
   });
 });

@@ -41,7 +41,7 @@ function methodNameFor(name) {
 function opMatch(name) {
   const arm = intrinsicArm(name);
   if (arm) return `opName === ${JSON.stringify(arm.op)} && _target === ${JSON.stringify(arm.target)}`;
-  // `new` is the file's own: `$new` to the file itself (a file with a `*` section).
+  // `new` is the file's own: `$new` to the file itself (a file that declares `new`).
   if (name === 'set' || name === 'update' || name === 'new') return `opName === ${JSON.stringify(wireLabel(name))} && _target === null`;
   return `opName === ${JSON.stringify(wireLabel(name))}`;
 }
@@ -1190,7 +1190,7 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 
 ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
   // and we translate what it sends, as a parent does.
-  // \`cls\` null is our own class (a file with a \`*\` section): \`N\`, tagged \`:\`.
+  // \`cls\` null is our own class (a file that declares \`new\`): \`N\`, tagged \`:\`.
   #_publishInstance(cls, inst) {
     const n = (this.#_instanceSeq.get(cls) || 0) + 1;
     this.#_instanceSeq.set(cls, n);
