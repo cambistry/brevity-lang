@@ -1,48 +1,54 @@
 import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// A header entry is `key: binding [type]`. The key is a path; the binding is a
-// local name, one member (`:div`), or a destructure group (`(:div, :span)`).
-// No parens around a single name: `"thing.bv": Thing #`, not `(Thing)`.
+// A `use` entry is a binding, `target = source`: the target is a local name
+// (typed, or `#`), or a destructure (`:div`, `key: local`); the source is a
+// `::` path the host resolves, its shape claimed with `as`. A lone source binds
+// its last segment. See notes/use-as-binding-2026-11-18.md.
 //
-// An inline definition (`{ … }` or `( … ) -> *{ … }`) is the file's statement
-// of what it needs: the compiler checks calls against it and never consults
-// the remote's document. A mismatch with the real service fails at runtime.
+// An inline definition (`as { … }` or `as ( … ) -> *{ … }`) is the file's
+// statement of what it needs: the compiler checks calls against it and never
+// consults the remote's document. A mismatch with the real service fails at runtime.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const deps = (header) => extract(`use ${header}\n@go = -> 1\n`).ast.dependencies
+const deps = (entry) => extract(`use ${entry}\n@go = -> 1\n`).ast.dependencies
   .map(({ name, path, generic, destructures, constructorParams, interface: iface }) =>
     ({ name, path, generic, destructures, constructorParams, iface }));
 
-describe('header bindings — forms', () => {
-  it('"path": Name # — class dependency bound as Name', () => {
-    expect(deps('"thing.bv": Thing #')).toEqual([
+describe('use bindings — forms', () => {
+  it('Name = "path" as # — class dependency bound as Name', () => {
+    expect(deps('Thing = "thing.bv" as #')).toEqual([
       expect.objectContaining({ name: 'Thing', path: 'thing.bv', generic: true }),
     ]);
   });
 
-  it('"path": Name — service dependency bound as Name', () => {
-    expect(deps('"svc.bv": Svc')).toEqual([expect.objectContaining({ name: 'Svc', path: 'svc.bv' })]);
+  it('Name # = "path" — the same claim on the target', () => {
+    expect(deps('Thing # = "thing.bv"')).toEqual(deps('Thing = "thing.bv" as #'));
   });
 
-  it('"path": Name { iface } and a constructor profile', () => {
-    expect(deps('"/db": DB { get (key: Text) -> (value: Text) }')[0])
+  it('Name = "path" — service dependency bound as Name', () => {
+    expect(deps('Svc = "svc.bv"')).toEqual([expect.objectContaining({ name: 'Svc', path: 'svc.bv' })]);
+  });
+
+  it('Name = "path" as { iface }, and as a constructor profile', () => {
+    expect(deps('DB = "/db" as { get (key: Text) -> (value: Text) }')[0])
       .toEqual(expect.objectContaining({ name: 'DB', iface: '{\n  get (key: Text) -> (value: Text)\n}' }));
-    expect(deps('"lib.bv": Lib (a: Integer) -> *{ ping. () => . }')[0])
+    expect(deps('Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }')[0])
       .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', type: 'Integer' }] }));
   });
 
-  it('Key: :member — one member, no parens', () => {
-    expect(deps('HTML: :div')).toEqual(deps('HTML: (:div)'));
-    expect(deps('"dom.bv": :div')).toEqual(deps('"dom.bv": (:div)'));
+  it(':member = Source, Source::member and member = Source::member are one binding', () => {
+    expect(deps('HTML::div')).toEqual(deps(':div = HTML'));
+    expect(deps('div = HTML::div')).toEqual(deps(':div = HTML'));
+    expect(deps(':div = "dom.bv"')).toEqual(deps('(:div) = "dom.bv"'));
   });
 
-  it('Key: Name # — a bare key with a binding', () => {
-    expect(deps('Shapes: S #')).toEqual([expect.objectContaining({ name: 'S', path: 'Shapes', generic: true })]);
+  it('S = Shapes as # — a bare source with a binding', () => {
+    expect(deps('S = Shapes as #')).toEqual([expect.objectContaining({ name: 'S', path: 'Shapes', generic: true })]);
   });
 
-  it('a typed keyed entry is a param supplied at construction', () => {
-    const { ast } = extract('use :limit Integer\nuse size: n Integer\n@go = -> limit\n');
+  it('a typed binding is a value supplied at construction', () => {
+    const { ast } = extract('use limit Integer = limit\nuse n Integer = size\n@go = -> limit\n');
     expect(ast.dependencies).toEqual([
       expect.objectContaining({ type: 'FileParam', name: 'limit', paramType: 'Integer' }),
       expect.objectContaining({ type: 'FileParam', key: 'size', name: 'n', paramType: 'Integer' }),
@@ -50,41 +56,41 @@ describe('header bindings — forms', () => {
   });
 
   it.each([
-    ['HTML: Html', { name: 'Html', path: 'HTML' }],
-    ['"svc.bv": Svc', { name: 'Svc', path: 'svc.bv' }],
-    ['limit: n', { name: 'n', path: 'limit' }],
-    ['limit:', { name: 'limit', path: 'limit' }],
-  ])('an untyped keyed entry is a dependency resolved by its key: %s', (header, dep) => {
-    expect(deps(header)).toEqual([expect.objectContaining({ ...dep, generic: false })]);
+    ['Html = HTML', { name: 'Html', path: 'HTML' }],
+    ['Svc = "svc.bv"', { name: 'Svc', path: 'svc.bv' }],
+    ['n = limit', { name: 'n', path: 'limit' }],
+    ['limit', { name: 'limit', path: 'limit' }],
+  ])('an untyped binding is a dependency resolved by its source: %s', (entry, dep) => {
+    expect(deps(entry)).toEqual([expect.objectContaining({ ...dep, generic: false })]);
   });
 
-  it('an untyped keyed entry with no remote document is a compile error', () => {
-    expect(() => compile(extract('use HTML: Html\n@go = -> 1\n').ast))
+  it('an untyped binding with no remote document is a compile error', () => {
+    expect(() => compile(extract('use Html = HTML\n@go = -> 1\n').ast))
       .toThrow(/'HTML' \(bound as 'Html'\) has no type/);
   });
 
-  it('an untyped keyed entry takes its type from the remote document', () => {
-    const src = 'use Store: S\n@go. = { S.ping... }\n';
+  it('an untyped binding takes its type from the remote document', () => {
+    const src = 'use S = Store\n@go. = { S.ping... }\n';
     expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () => .\n}' }] }))
       .not.toThrow();
   });
 
-  it(':Key — the whole thing under its own name', () => {
-    expect(deps(':HTML')).toEqual([expect.objectContaining({ name: 'HTML', path: 'HTML' })]);
+  it('a lone name — the whole thing under its own name', () => {
+    expect(deps('HTML')).toEqual([expect.objectContaining({ name: 'HTML', path: 'HTML' })]);
   });
 
   it.each([
-    ['"thing.bv": (Thing) #', `'"thing.bv": (Thing)' is retired — write '"thing.bv": Thing #'`],
-    ['"/db": (DB) { get () -> (Text) }', `'"/db": (DB)' is retired — write '"/db": DB { … }'`],
-    ['Lib: (L) #', `'Lib: (L)' is retired — write 'Lib: L #'`],
-    ['limit: (n) Integer', `'limit: (n)' is retired — write 'limit: n Integer'`],
-  ])('single name in parens is retired: %s', (header, message) => {
-    expect(() => deps(header)).toThrow(message);
+    ['"thing.bv": (Thing) #', `'"thing.bv": (Thing) #' is a retired header entry — write 'use Thing = "thing.bv" as #'`],
+    ['"/db": DB { get () -> (Text) }', `'"/db": DB { get () -> (Text) }' is a retired header entry — write 'use DB = "/db" as { … }'`],
+    ['Lib: L #', `'Lib: L #' is a retired header entry — write 'use L # = Lib'`],
+    ['limit: n Integer', `'limit: n Integer' is a retired header entry — write 'use n Integer = limit'`],
+  ])('a header entry is retired: %s', (entry, message) => {
+    expect(() => deps(entry)).toThrow(message);
   });
 });
 
 describe('inline definition wins over the remote document', () => {
-  const header = 'use "/db": DB { get (key: Text) -> (value: Text) }\n';
+  const header = 'use DB = "/db" as { get (key: Text) -> (value: Text) }\n';
   const remotes = [{ path: '/db', service: '{\n  put. (key: Text, value: Text) => .\n}' }];
   const compileWith = (body) => compile(extract(header + body).ast, { remotes });
 
@@ -97,13 +103,13 @@ describe('inline definition wins over the remote document', () => {
   });
 
   it('an inline constructor profile wins too', () => {
-    const src = 'use "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
+    const src = 'use Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
     const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () => .\n}' }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });
 
   it('with no inline definition, the remote document is used', () => {
-    const src = 'use "/db": DB\n@go. = { DB.put(key: "a", value: "b")... }\n';
+    const src = 'use DB = "/db"\n@go. = { DB.put(key: "a", value: "b")... }\n';
     expect(() => compile(extract(src).ast, { remotes })).not.toThrow();
   });
 });

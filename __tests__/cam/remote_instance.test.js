@@ -17,7 +17,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const singleViewSource = `
-  use "WebView": WebView (path: Text) -> *{
+  use WebView = "WebView" as (path: Text) -> *{
     open. () => .
     getTitle () -> (title: Text)
     close. () => .
@@ -74,7 +74,7 @@ describe('remote actor — sequential calls to actor', () => {
 // other messages, so a bump that arrives first is seen by the waiting handler.
 describe('a call used as a statement waits for its reply', () => {
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       ping! () => self
     }
     n *Integer = 0
@@ -100,7 +100,7 @@ describe('a call used as a statement waits for its reply', () => {
 
 describe('a call that doesn\'t wait for a reply', () => {
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       log (Text) => .
       note. (Text) => .
       ping! () => self
@@ -136,7 +136,7 @@ describe('a call that doesn\'t wait for a reply', () => {
   });
 
   it('a doc\'s silent function needs its `...`, as one named with a dot does', () => {
-    const src = (call) => `use "svc.bv": Svc {\n  log (Text) => .\n  note. (Text) => .\n}\n@go! = {\n  ${call}\n  return 1\n}\n`;
+    const src = (call) => `use Svc = "svc.bv" as {\n  log (Text) => .\n  note. (Text) => .\n}\n@go! = {\n  ${call}\n  return 1\n}\n`;
     expect(() => compileSource(src('Svc.log("x")'))).toThrow(/'Svc\.log' is silent — call it 'Svc\.log\(…\)\.\.\.'/);
     expect(() => compileSource(src('Svc.note.("x")'))).toThrow(/'Svc\.note\.' is silent/);
   });
@@ -170,7 +170,7 @@ describe('remote actor — a reply nobody is waiting for', () => {
 describe('remote actor — multiple actors', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
-      use "WebView": WebView (path: Text) -> *{
+      use WebView = "WebView" as (path: Text) -> *{
         open () -> (ok: Text)
       }
 
@@ -212,7 +212,7 @@ describe('remote actor — multiple actors', () => {
 describe('remote actor — named class args', () => {
   it('named class args appear in `new` and routed calls reach the actor', async () => {
     const actor = await createActor(`
-      use "Database": Database (host: Text, port: Integer) -> *{
+      use Database = "Database" as (host: Text, port: Integer) -> *{
         ping () -> (ok: Text)
       }
 

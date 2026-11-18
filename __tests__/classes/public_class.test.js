@@ -216,7 +216,7 @@ describe('Box and @Box are different classes', () => {
 describe('a self-return from an actor made by #new', () => {
   // A class named with `!` writes while constructing: here it tells `Svc`.
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       note. () => .
     }
 
@@ -505,7 +505,7 @@ describe('passing an actor to a function', () => {
 
 describe('W and @W! are different classes', () => {
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       note. () => .
     }
 

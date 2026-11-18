@@ -7,13 +7,13 @@ import { compileSource, createActor, expectActorBehavior } from "../helpers.js";
 // declare plain scalar params (lineal `*` … `*`, or delimited `( ... ) *{ }`).
 // These are parameters the parent actor supplies at construction time (not DI
 // in the service/ctor sense). A file that also takes DI is a singleton: it
-// declares named params with `use :name Type` beside its dependencies.
+// declares named params with `use name Type = name` beside its dependencies.
 //
 // Forms:
 //   name: Type                  named scalar
 //   t Type                      positional scalar
 //   t Type, opts: List          mixed with other entries in declaration order
-//   use :name Type              named scalar beside `use` DI (singleton)
+//   use name Type = name        named scalar beside `use` DI (singleton)
 //
 // Inside the file, params bind to the names declared in the header
 // (same as inline constructor params). Positional params must be written
@@ -78,8 +78,8 @@ describe("file scalar params — compilation", () => {
   it("scalar params mixed with service DI in same header compile", () => {
     expect(() =>
       compileSource(`
-      use "/db": DB { lookup (key: Text) -> (value: Text) }
-      use :prefix Text
+      use DB = "/db" as { lookup (key: Text) -> (value: Text) }
+      use prefix Text = prefix
 
       @get = (key: Text) {
         :value Text = DB.lookup(:key)
@@ -92,8 +92,8 @@ describe("file scalar params — compilation", () => {
   it("scalar params mixed with constructor DI in same header compile", () => {
     expect(() =>
       compileSource(`
-      use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
-      use :base Integer
+      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use base Integer = base
 
       t = Thing(a: base)
 

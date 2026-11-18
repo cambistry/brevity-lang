@@ -44,7 +44,7 @@ const ALL_TAGS = [
 describe('HTML tag smoke — no-arg construction', () => {
   it.each(ALL_TAGS)('%s() compiles', (tag) => {
     expect(() => compileWithHTML(`
-      use HTML: (:${tag})
+      use :${tag} = HTML
       @test. = { e = ${tag}() }
     `)).not.toThrow();
   });
@@ -62,7 +62,7 @@ describe('HTML tag smoke — no-arg construction', () => {
 describe('HTML tag smoke — inherits Element attributes', () => {
   it.each(ALL_TAGS)('%s(id: ...) compiles', (tag) => {
     expect(() => compileWithHTML(`
-      use HTML: (:${tag})
+      use :${tag} = HTML
       @test. = { e = ${tag}(id: "x") }
     `)).not.toThrow();
   });
@@ -75,7 +75,7 @@ describe('HTML tag smoke — inherits Element attributes', () => {
 describe('HTML tag smoke — unknown attribute rejected', () => {
   it.each(ALL_TAGS)('%s(nope: ...) rejected', (tag) => {
     expect(() => compileWithHTML(`
-      use HTML: (:${tag})
+      use :${tag} = HTML
       @test. = { e = ${tag}(nope: "x") }
     `)).toThrow(/Got named: nope/);
   });
@@ -92,126 +92,126 @@ describe('HTML tag smoke — unknown attribute rejected', () => {
 describe('HTML tag own attributes — happy paths', () => {
   it('a — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:a)
+      use :a = HTML
       @test. = { e = a(href: "/x", target: "_blank", rel: "noopener", download: "file.pdf", type: "application/pdf", hreflang: "en", ping: "https://example.com/p", referrerpolicy: "no-referrer") }
     `)).not.toThrow();
   });
 
   it('blockquote(cite: Text)', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:blockquote)
+      use :blockquote = HTML
       @test. = { e = blockquote(cite: "https://example.com") }
     `)).not.toThrow();
   });
 
   it('ol — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:ol)
+      use :ol = HTML
       @test. = { e = ol(type: "1", start: 5, reversed: true) }
     `)).not.toThrow();
   });
 
   it('li(value: Integer)', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:li)
+      use :li = HTML
       @test. = { e = li(value: 3) }
     `)).not.toThrow();
   });
 
   it('td — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:td)
+      use :td = HTML
       @test. = { e = td(colspan: 2, rowspan: 1, headers: "h1") }
     `)).not.toThrow();
   });
 
   it('th — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:th)
+      use :th = HTML
       @test. = { e = th(colspan: 2, rowspan: 1, headers: "h1", scope: "row", abbr: "abbr") }
     `)).not.toThrow();
   });
 
   it('form — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:form)
+      use :form = HTML
       @test. = { e = form(action: "/submit", method: "post", target: "_self", enctype: "multipart/form-data", autocomplete: "on", novalidate: true, name: "main") }
     `)).not.toThrow();
   });
 
   it('input — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(type: "text", name: "q", value: "hello", placeholder: "search", required: true, disabled: false, readonly: false, min: 0, max: 100, step: 1, minlength: 1, maxlength: 64, pattern: "[a-z]+", accept: "image/*", multiple: false, checked: false, autocomplete: "off", list: "options", src: "/img.png", alt: "alt text", form: "main", height: 16, width: 24, size: 32) }
     `)).not.toThrow();
   });
 
   it('button — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:button)
+      use :button = HTML
       @test. = { e = button(type: "submit", name: "go", value: "yes", disabled: false, form: "main", formaction: "/x", formmethod: "post", formnovalidate: true, formtarget: "_self") }
     `)).not.toThrow();
   });
 
   it('select — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:select)
+      use :select = HTML
       @test. = { e = select(name: "x", multiple: true, required: true, disabled: false, size: 4, autocomplete: "on", form: "main") }
     `)).not.toThrow();
   });
 
   it('option — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:option)
+      use :option = HTML
       @test. = { e = option(value: "a", selected: true, disabled: false, label: "Apple") }
     `)).not.toThrow();
   });
 
   it('textarea — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:textarea)
+      use :textarea = HTML
       @test. = { e = textarea(name: "msg", rows: 4, cols: 40, placeholder: "Type", required: true, disabled: false, readonly: false, minlength: 1, maxlength: 1000, wrap: "soft", autocomplete: "off", form: "main") }
     `)).not.toThrow();
   });
 
   it('label — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:label)
+      use :label = HTML
       @test. = { e = label(for: "x", form: "main") }
     `)).not.toThrow();
   });
 
   it('img — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:img)
+      use :img = HTML
       @test. = { e = img(src: "/i.png", srcset: "/i.png 1x, /i2.png 2x", alt: "x", width: 100, height: 80, sizes: "100vw", loading: "lazy", decoding: "async", fetchpriority: "high", crossorigin: "anonymous", referrerpolicy: "no-referrer", usemap: "#m", ismap: false) }
     `)).not.toThrow();
   });
 
   it('canvas — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:canvas)
+      use :canvas = HTML
       @test. = { e = canvas(width: 320, height: 240) }
     `)).not.toThrow();
   });
 
   it('iframe — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:iframe)
+      use :iframe = HTML
       @test. = { e = iframe(src: "/x", srcdoc: "<p>x</p>", name: "f1", sandbox: "allow-scripts", allow: "camera", allowfullscreen: true, loading: "lazy", referrerpolicy: "no-referrer", width: 640, height: 480) }
     `)).not.toThrow();
   });
 
   it('details — every own attribute', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:details)
+      use :details = HTML
       @test. = { e = details(open: true, name: "g1") }
     `)).not.toThrow();
   });
 
   it('dialog(open: Boolean)', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:dialog)
+      use :dialog = HTML
       @test. = { e = dialog(open: true) }
     `)).not.toThrow();
   });
@@ -241,21 +241,21 @@ describe('HTML tag own attributes — happy paths', () => {
 describe('HTML tag union overloads — happy variants', () => {
   it('a(download: Boolean) accepted', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:a)
+      use :a = HTML
       @test. = { e = a(download: true) }
     `)).not.toThrow();
   });
 
   it('a(download: Text) accepted', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:a)
+      use :a = HTML
       @test. = { e = a(download: "file.pdf") }
     `)).not.toThrow();
   });
 
   it('a(download: Integer) rejected', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:a)
+      use :a = HTML
       @test. = { e = a(download: 1) }
     `)).toThrow(/named arg 'download'.*'Integer' is not assignable to 'Boolean \| Text'/);
   });
@@ -266,14 +266,14 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Decimal', '3.14'],
   ])('input(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(value: ${val}) }
     `)).not.toThrow();
   });
 
   it('input(value: Boolean) rejected', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(value: true) }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer \| Decimal'/);
   });
@@ -284,7 +284,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"2026-01-01"'],
   ])('input(:min %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(min: ${val}) }
     `)).not.toThrow();
   });
@@ -295,7 +295,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"2026-12-31"'],
   ])('input(:max %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(max: ${val}) }
     `)).not.toThrow();
   });
@@ -306,7 +306,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Text',    '"any"'],
   ])('input(:step %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:input)
+      use :input = HTML
       @test. = { e = input(step: ${val}) }
     `)).not.toThrow();
   });
@@ -316,14 +316,14 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Integer', '7'],
   ])('button(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:button)
+      use :button = HTML
       @test. = { e = button(value: ${val}) }
     `)).not.toThrow();
   });
 
   it('button(value: Boolean) rejected', () => {
     expect(() => compileWithHTML(`
-      use HTML: (:button)
+      use :button = HTML
       @test. = { e = button(value: true) }
     `)).toThrow(/named arg 'value'.*'Boolean' is not assignable to 'Text \| Integer'/);
   });
@@ -334,7 +334,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['Decimal', '1.5'],
   ])('option(:value %s) accepted', (_label, val) => {
     expect(() => compileWithHTML(`
-      use HTML: (:option)
+      use :option = HTML
       @test. = { e = option(value: ${val}) }
     `)).not.toThrow();
   });
@@ -346,7 +346,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['input',  '24',   '"auto"'],
   ])('%s(width: Integer / Text) accepted', (tag, intVal, textVal) => {
     expect(() => compileWithHTML(`
-      use HTML: (:${tag})
+      use :${tag} = HTML
       @test. = {
         e1 = ${tag}(width: ${intVal})
         e2 = ${tag}(width: ${textVal})
@@ -361,7 +361,7 @@ describe('HTML tag union overloads — happy variants', () => {
     ['input',  '16'],
   ])('%s(height: Boolean) rejected — not in Integer | Text', (tag, _intVal) => {
     expect(() => compileWithHTML(`
-      use HTML: (:${tag})
+      use :${tag} = HTML
       @test. = { e = ${tag}(height: true) }
     `)).toThrow(/named arg 'height'.*'Boolean' is not assignable to 'Integer \| Text'/);
   });

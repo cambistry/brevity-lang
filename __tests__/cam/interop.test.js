@@ -19,7 +19,7 @@ describe('interop — two-actor request-reply', () => {
 
   it('primary sends get to Remote and forwards response', async () => {
     const actor = await createActor(`
-      use "Remote": Remote {
+      use Remote = "Remote" as {
         get (url: Text) -> (response: Text)
       }
 
@@ -42,7 +42,7 @@ describe('interop — two-actor request-reply', () => {
 describe('interop — cross-call to silent public function', () => {
   it('caller spawns notify and replies ack', async () => {
     const actor = await createActor(`
-      use "Store": Store {
+      use Store = "Store" as {
         notify. (msg: Text) => .
       }
 
@@ -99,7 +99,7 @@ describe('interop — three-actor chain', () => {
 
   it('middle sends compute to Backend and adds one', async () => {
     const actor = await createActor(`
-      use "Backend": Backend {
+      use Backend = "Backend" as {
         compute (n: Integer) -> (result: Integer)
       }
 
@@ -118,7 +118,7 @@ describe('interop — three-actor chain', () => {
 
   it('front sends process to Middle and replies answer', async () => {
     const actor = await createActor(`
-      use "Middle": Middle {
+      use Middle = "Middle" as {
         process (n: Integer) -> (result: Integer)
       }
 
@@ -141,7 +141,7 @@ describe('interop — three-actor chain', () => {
 describe('interop — callback', () => {
   it('worker calls back Boss for secret and replies', async () => {
     const actor = await createActor(`
-      use "Boss": Boss {
+      use Boss = "Boss" as {
         get_secret () -> (secret: Text)
       }
 
@@ -158,7 +158,7 @@ describe('interop — callback', () => {
 
   it('boss sends process to Worker, handles callback, replies', async () => {
     const actor = await createActor(`
-      use "Worker": Worker {
+      use Worker = "Worker" as {
         process () -> (result: Text)
       }
 

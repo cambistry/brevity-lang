@@ -110,7 +110,7 @@ describe('type names are reserved', () => {
 
   it('a header binding is a type in scope', () => {
     expect(() => compileSource(`
-      use "thing.bv": Thing #
+      use Thing = "thing.bv" as #
       f = (Thing Integer) { 1 }
       @test = -> 1
     `)).toThrow(/Param 'Thing' has the name of a type in scope/);

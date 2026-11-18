@@ -117,7 +117,7 @@ in `...` (fire-and-forget), and the ellipsis stands for the dot, so a call never
 writes it (`fire...`, `Log.write(:message)...`):
 
 ```brevity
-use "/services/log": Log {
+use Log = "/services/log" as {
   write. (message: Text) => .
 }
 
@@ -205,7 +205,7 @@ The file actor is a singleton, built once at load. It needs no header: it
 declares its DI with `use`, anywhere in its own scope:
 
 ```brevity
-use "Remote": Remote {
+use Remote = "Remote" as {
   get (url: Text) -> (response: Text)
 }
 
@@ -256,7 +256,7 @@ A remote actor binding uses `*Name(...)`. Construction calls the remote class
 the actor's address:
 
 ```brevity
-use "WebView": WebView (path: Text) -> *{
+use WebView = "WebView" as (path: Text) -> *{
   open. () => .
 }
 

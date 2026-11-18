@@ -35,7 +35,7 @@ describe('extract — basic', () => {
 describe('extract — params rendering', () => {
   it('service DI with inline iface renders as compact form', () => {
     const { interface: iface } = extract(`
-      use "/db": DB { lookup (key: Text) -> (value: Text) }
+      use DB = "/db" as { lookup (key: Text) -> (value: Text) }
 
       @go = (key: Text) {
         :value Text = DB.lookup(:key)
@@ -47,7 +47,7 @@ describe('extract — params rendering', () => {
 
   it('bare service DI renders as key: with no type', () => {
     const { interface: iface } = extract(`
-      use "/db": DB
+      use DB = "/db"
       @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "/db":\n)');
@@ -55,7 +55,7 @@ describe('extract — params rendering', () => {
 
   it('class DI with an inline profile renders the profile', () => {
     const { interface: iface } = extract(`
-      use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
 
       t = Thing(a: 5)
 
@@ -66,7 +66,7 @@ describe('extract — params rendering', () => {
 
   it('bare class DI renders as #', () => {
     const { interface: iface } = extract(`
-      use "thing.bv": Thing #
+      use Thing = "thing.bv" as #
       @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "thing.bv": #\n)');
@@ -117,7 +117,7 @@ describe('extract — params rendering', () => {
 
   it('a dependency key is always quoted', () => {
     const { interface: iface } = extract(`
-      use "my-app.bv": App #
+      use App = "my-app.bv" as #
       @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "my-app.bv": #\n)');
@@ -125,9 +125,9 @@ describe('extract — params rendering', () => {
 
   it('dependencies and named params mixed, declaration order preserved', () => {
     const { interface: iface } = extract(`
-      use "/db": DB
-      use :value Integer
-      use "thing.bv": Thing #
+      use DB = "/db"
+      use value Integer = value
+      use Thing = "thing.bv" as #
       @noop. = {}
     `);
     expect(iface.params).toBe(
@@ -137,7 +137,7 @@ describe('extract — params rendering', () => {
 
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
-      use "/db": DB
+      use DB = "/db"
       @noop. = {}
     `);
     expect(iface.params).not.toContain('DB');
@@ -155,8 +155,8 @@ describe('extract — params rendering', () => {
 
   it('a bare-identifier key is quoted too; its destructure is not surfaced', () => {
     const { interface: iface } = extract(`
-      use HTML: (:div, :span)
-      use Shapes: :Box #
+      use :div, :span = HTML
+      use :Box = Shapes as #
       @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "HTML":\n  "Shapes": #\n)');
@@ -189,7 +189,7 @@ describe('extract — basic (continued)', () => {
 describe('extract — no validation', () => {
   it('succeeds without remote interfaces (compile would need them)', () => {
     expect(() => extract(`
-      use "Remote": Remote
+      use Remote
       @fetch
         =
         url: Text
@@ -213,7 +213,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      use "Remote": Remote
+      use Remote
 
       @fetch
         =
@@ -232,7 +232,7 @@ describe('extract + compile — round-trip', () => {
     `);
 
     const { ast } = extract(`
-      use "Store": Store
+      use Store
       @go. = { Store.get() }
     `);
 
@@ -257,7 +257,7 @@ describe('extract + compile — optional args round-trip', () => {
     expect(ifaceA.service).toContain('? greeting: Text');
 
     const { ast } = extract(`
-      use "Greeter": Greeter
+      use Greeter
 
       @go
         =
@@ -280,7 +280,7 @@ describe('extract + compile — optional args round-trip', () => {
     `);
 
     const { ast } = extract(`
-      use "Math": Math
+      use Math
 
       @go
         =
@@ -313,7 +313,7 @@ describe('params document — read back as constructor params', () => {
     @noop. = {}
   `).interface;
   const consumer = (call) => extract(`
-    use "svc.bv": Svc #
+    use Svc = "svc.bv" as #
     s = ${call}
     @noop. = {}
   `).ast;
@@ -329,9 +329,9 @@ describe('params document — read back as constructor params', () => {
 
   it('reads past multi-line dependency entries', () => {
     const typed = extract(`
-      use "/db": DB { get (key: Text) -> (value: Text) }
-      use "lib.bv": Lib (a: Integer, b: Text) -> *{ ping. () => . }
-      use limit: lim Integer
+      use DB = "/db" as { get (key: Text) -> (value: Text) }
+      use Lib = "lib.bv" as (a: Integer, b: Text) -> *{ ping. () => . }
+      use lim Integer = limit
       @noop. = {}
     `).interface;
     expect(typed.params).toBe(

@@ -2,7 +2,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('returning an actor call — runtime', () => {
   const script = `
-    use "svc": Svc { t () -> (Integer) }
+    use Svc = "svc" as { t () -> (Integer) }
 
     // returning a call on an instance
     @Box = *{

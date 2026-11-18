@@ -85,7 +85,7 @@ Pick = A ++ B ++ *{ @get = -> super[A].get() }     // parent A's public @get
 ## Dependencies (`use`)
 
 ```brevity
-use "/services/db": DB {
+use DB = "/services/db" as {
   lookup (key: Text) -> (value: Text)
 }
 
@@ -98,7 +98,7 @@ use "/services/db": DB {
 ## Silent Dependency Call
 
 ```brevity
-use "/services/log": Log {
+use Log = "/services/log" as {
   write. (message: Text) => .
 }
 
@@ -110,7 +110,7 @@ use "/services/log": Log {
 ## Remote Actor
 
 ```brevity
-use "WebView": WebView (path: Text) -> *{
+use WebView = "WebView" as (path: Text) -> *{
   open. () => .
 }
 
@@ -148,8 +148,8 @@ A file's public class (`@W = *{ … }`) is constructed through the file, or impo
 Bind it before use. A class named with `!` keeps the `!` at the call, and its type doesn't.
 
 ```brevity
-use "svc.bv": Svc
-use "other.bv": (:Item, :Widget!)
+use Svc = "svc.bv"
+use :Item, :Widget! = "other.bv"
 
 @go! = {
   c = Svc.Counter(5)             // the shared Svc actor makes it
@@ -282,7 +282,7 @@ fields. A body's arrow is always `->`, so `(i Integer) => i` is an error. The co
 never reads an effect from a name in a doc.
 
 ```brevity
-use "Store": Store {
+use Store = "Store" as {
   get (key: Text) -> (value: Text)                    // reads
   peek (key: Text) ~> (value: Text)                   // claims to read, unchecked
   me () -> self                                       // identity
@@ -336,7 +336,7 @@ nested actors, and crosses into docs. An `untracked` function may only write `un
 state.
 
 ```brevity
-use "logger.js": Log {
+use Log = "logger.js" as {
   untracked write. (Text) => .         // stated by the importer
 }
 

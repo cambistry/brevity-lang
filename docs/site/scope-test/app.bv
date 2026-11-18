@@ -1,5 +1,5 @@
-use :document
-use HTML: (:div, :p, :style)
+use document
+use :div, :p, :style = HTML
 @color *Text = "rgb(0, 0, 0)"
 
 el = <div>

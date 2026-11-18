@@ -261,7 +261,7 @@ describe('class interface — optional params', () => {
 describe('class interface — imported type address resolution', () => {
   it('class param of imported type renders as backtick address', () => {
     const { interface: iface } = extract(`
-      use "/models/item": Item
+      use Item = "/models/item"
 
       @Wrapper = (item: Item) *{
         @get = -> item as Item
@@ -274,7 +274,7 @@ describe('class interface — imported type address resolution', () => {
 
   it('actor method returning imported type', () => {
     const { interface: iface } = extract(`
-      use "/models/pair": Pair
+      use Pair = "/models/pair"
 
       @Factory = * {
         @make = -> Pair(key: "a", value: "b") as Pair
@@ -287,7 +287,7 @@ describe('class interface — imported type address resolution', () => {
 
   it('actor method accepting imported type as parameter', () => {
     const { interface: iface } = extract(`
-      use "/models/item": Item
+      use Item = "/models/item"
 
       @Processor = * {
         @handle. = (item: Item) {}
@@ -305,7 +305,7 @@ const docOf = (source) => extract(source).interface.service;
 
 describe('class interface — a class named with `!`', () => {
   const source = `
-    use "Svc": Svc
+    use Svc
     @W! = *{
       Svc.ping!()
       @get = { return 1 }
@@ -350,7 +350,7 @@ describe('class interface — a class named with `!`', () => {
   });
 
   // A class named with `!` has to write while constructing.
-  const SVC = 'use "svc.bv": Svc {\n  note. () => .\n}\n';
+  const SVC = 'use Svc = "svc.bv" as {\n  note. () => .\n}\n';
 
   it('the annotation is the class name without `!`', () => {
     const body = (type) => `${SVC}W! = *{\n  Svc.note...\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
@@ -398,13 +398,13 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('a subclass may be purer than a foreign parent\'s `!` member', () => {
-    const header = 'use "Svc": Svc\n';
+    const header = 'use Svc\n';
     const docs = { remotes: [{ path: 'Svc', service: '{ Base () -> *{ g! () => self } }' }] };
     expect(() => compileSource(`${header}C = Base ++ *{\n  @g! = { return self }\n}\n@go = { return 1 }\n`, docs)).not.toThrow();
   });
 
   it('a doc\'s writing constructor passes its effect too', () => {
-    const header = 'use "Svc": Svc\n';
+    const header = 'use Svc\n';
     const docs = (entry) => ({ remotes: [{ path: 'Svc', service: `{ ${entry} }` }] });
     expect(() => compileSource(`${header}S = Base ++ *{}\n@go = { return 1 }\n`, docs('Base () => *{}'))).toThrow(/Class 'S' inherits from 'Base'/);
     expect(() => compileSource(`${header}S = Base ++ *{}\n@go = { return 1 }\n`, docs('Base () -> *{}'))).not.toThrow();
@@ -499,7 +499,7 @@ describe('class interface — a read-only tail `if`', () => {
 });
 
 describe('class interface — chaining on a mixed return', () => {
-  const REMOTE = 'use "Svc": Svc\n';
+  const REMOTE = 'use Svc\n';
   const docs = (service) => ({ remotes: [{ path: 'Svc', service }] });
   const MIXED = docs('{ go! () => (Integer) | self\n next! () => self }');
 

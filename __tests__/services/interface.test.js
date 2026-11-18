@@ -350,7 +350,7 @@ describe('service interface — mixed field and handler decls', () => {
 describe('service interface — imported type address resolution', () => {
   it('return type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      use "/services/pair": Pair
+      use Pair = "/services/pair"
 
       @get
         =
@@ -361,7 +361,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('parameter type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      use "/services/pair": Pair
+      use Pair = "/services/pair"
 
       @accept. = (p Pair) {}
     `);
@@ -370,7 +370,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('named parameter type from dependency renders as backtick address', () => {
     const { interface: iface } = extract(`
-      use "/services/pair": Pair
+      use Pair = "/services/pair"
 
       @accept. = (item: Pair) {}
     `);
@@ -379,7 +379,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('built-in types remain unqualified alongside imported types', () => {
     const { interface: iface } = extract(`
-      use "/services/pair": Pair
+      use Pair = "/services/pair"
 
       @process
         =
@@ -393,7 +393,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('List of imported type resolves inner type', () => {
     const { interface: iface } = extract(`
-      use "/models/item": Item
+      use Item = "/models/item"
 
       @list
         =
@@ -404,7 +404,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('imported type with | null suffix', () => {
     const { interface: iface } = extract(`
-      use "/models/item": Item
+      use Item = "/models/item"
 
       @find
         =
@@ -417,8 +417,8 @@ describe('service interface — imported type address resolution', () => {
 
   it('multiple dependencies resolve independently', () => {
     const { interface: iface } = extract(`
-      use "/models/user": User
-      use "/models/session": Session
+      use User = "/models/user"
+      use Session = "/models/session"
 
       @login
         =
@@ -431,7 +431,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('dependency with inline constraint resolves type in interface', () => {
     const { interface: iface } = extract(`
-      use "/services/db": DB { lookup (key: Text) -> (value: Text) }
+      use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
 
       @query
         =
@@ -444,7 +444,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type via :: resolves as path::Member', () => {
     const { interface: iface } = extract(`
-      use "geometry.bv": Geo
+      use Geo = "geometry.bv"
 
       @assign. = (p Geo::Point) {}
     `);
@@ -453,7 +453,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type in return position resolves as path::Member', () => {
     const { interface: iface } = extract(`
-      use "geometry.bv": Geo
+      use Geo = "geometry.bv"
 
       @make
         =
@@ -464,7 +464,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('member type with named param resolves as path::Member', () => {
     const { interface: iface } = extract(`
-      use "geometry.bv": Geo
+      use Geo = "geometry.bv"
 
       @move. = (point: Geo::Point, dx: Integer) {}
     `);
@@ -473,7 +473,7 @@ describe('service interface — imported type address resolution', () => {
 
   it('constant of imported type resolves in getter', () => {
     const { interface: iface } = extract(`
-      use "/models/config": Config
+      use Config = "/models/config"
 
       @current = Config()
     `);
@@ -531,7 +531,7 @@ describe('service interface — self-as declarations', () => {
 
   it('self-as with imported type resolves to backtick address', () => {
     const { interface: iface } = extract(`
-      use "/models/token": Token
+      use Token = "/models/token"
 
       self as Token = -> Token()
       @get

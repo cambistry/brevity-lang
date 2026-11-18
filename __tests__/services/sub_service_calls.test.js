@@ -6,7 +6,7 @@ import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 
 const DOC = '{\n  s {\n    n *Integer\n    get () -> (Integer)\n    add (Integer, by: Integer) -> (Integer)\n    note. () => .\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  Box (Integer) -> *{\n    tally {\n      get () -> (Integer)\n    }\n  }\n  top () -> (Integer)\n}';
 const remotes = [{ path: 'svc.bv', service: DOC }];
-const header = 'use "svc.bv": Svc\n';
+const header = 'use Svc = "svc.bv"\n';
 
 const script = `${header}
 @one = {

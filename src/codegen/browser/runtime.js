@@ -10,7 +10,7 @@
 
 import { _opre_split as split, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 
-const documentDI = 'use "document": document\n';
+const documentDI = 'use document\n';
 // A file that declares its own DI or shape: a constructor form (delimited
 // `( ... ) [->] *{`, `*{`, a lineal `*` alone on the first line), a whole-file
 // `actor {`, or a `use` statement.
@@ -51,7 +51,7 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
 
     // Inline scripts in <head> get document DI auto-prepended, unless the
     // script declares its own DI or opens with a constructor form or `actor {`
-    // (then it declares `use :document` itself if it needs it).
+    // (then it declares `use document` itself if it needs it).
     if (implicitDI && !isExternal && script.closest('head') && !hasHeader(source)) {
       source = documentDI + source;
     }

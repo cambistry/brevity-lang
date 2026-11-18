@@ -34,9 +34,9 @@ type. Bindings are private and not surfaced — a dependency's local name or
 destructure, a positional param's name, a renamed param's local:
 
 ```brevity
-use "/db": DB
-use HTML: (:div, :span)
-use limit: n Integer
+use DB = "/db"
+use :div, :span = HTML
+use n Integer = limit
 ```
 
 renders params as:

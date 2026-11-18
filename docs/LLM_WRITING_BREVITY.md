@@ -109,7 +109,7 @@ through "Chains".
 Declare dependencies with `use`:
 
 ```brevity
-use "/services/store": Store {
+use Store = "/services/store" as {
   get (key: Text) -> (value: Text)
   put. (key: Text, value: Text) => .
 }
@@ -132,7 +132,7 @@ trailing `...` (fire-and-forget). Replying methods bind their named reply fields
 `*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote-declared class:
 
 ```brevity
-use "WebView": WebView (path: Text) -> *{
+use WebView = "WebView" as (path: Text) -> *{
   open. () => .
   close. () => .
 }

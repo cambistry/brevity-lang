@@ -11,7 +11,9 @@ import { extract } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-  use "Remote": Remote { get () -> (Integer) }, :name Text, size: n Integer
+  use Remote = "Remote" as { get () -> (Integer) }
+  use name Text = name
+  use n Integer = size
   @get = -> name
 `;
 
@@ -32,7 +34,9 @@ describe('file actor — forms', () => {
     const bare = extract(script);
     const delimited = extract(`
       actor {
-        use "Remote": Remote { get () -> (Integer) }, :name Text, size: n Integer
+        use Remote = "Remote" as { get () -> (Integer) }
+        use name Text = name
+        use n Integer = size
         @get = -> name
       }
     `);
@@ -41,7 +45,7 @@ describe('file actor — forms', () => {
   });
 
   it('a named param in `use` is the same entry as in a `*` header', () => {
-    expect(extract('use :name Text, size: n Integer\n@get = -> name\n').ast.dependencies)
+    expect(extract('use name Text = name\nuse n Integer = size\n@get = -> name\n').ast.dependencies)
       .toEqual(extract('*\n  name: Text\n  size: n Integer\n*\n@get = -> name\n').ast.dependencies);
   });
 });
@@ -103,7 +107,16 @@ describe('factory header — no DI', () => {
   });
 
   it('the same DI is fine in a `use`', () => {
-    for (const entry of Object.values(entries)) {
+    const bindings = [
+      'Svc = "svc.bv" as { get () -> (Integer) }',
+      'Svc = "svc.bv"',
+      'Svc = "svc.bv" as #',
+      'Svc = "svc.bv" as (a: Integer) -> *{ get () -> (Integer) }',
+      ':div = HTML',
+      'document',
+      'Html = HTML',
+    ];
+    for (const entry of bindings) {
       expect(() => extract(`use ${entry}\n@get = -> 1\n`)).not.toThrow();
     }
   });
@@ -240,7 +253,7 @@ describe('file with `new =`', () => {
   });
 
   it('is a class with a `use` too', () => {
-    expect(extract(`use :document\n${classFile}`).ast.fileKind).toBe('class');
+    expect(extract(`use document\n${classFile}`).ast.fileKind).toBe('class');
   });
 
   it('its actor closes over the file\'s members', async () => {
@@ -326,7 +339,7 @@ describe('file with `new =` — errors', () => {
   });
 
   it('the retired trailing `*` section, after a `use`', () => {
-    expect(() => extract('use :document\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
+    expect(() => extract('use document\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
   });
 
   const di = /a constructor's params take no DI \(.*\) — declare it with 'use'/;

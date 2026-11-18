@@ -46,7 +46,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('primitive value stringification', () => {
     it('Text ref value is spliced as-is', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         content *Text = "hello"
         @create = -> <div>#{ content }</div>
       `;
@@ -61,7 +61,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('Integer ref value is spliced in decimal', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         count *Integer = 42
         @create = -> <div>#{ count }</div>
       `;
@@ -76,7 +76,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('Boolean ref value is spliced as "true"/"false"', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         flag *Boolean = true
         @create = -> <div>#{ flag }</div>
       `;
@@ -91,7 +91,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('Float ref value is spliced in JSON-compatible e-notation', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         ratio *Float = 1.0e-1
         @create = -> <div>#{ ratio }</div>
       `;
@@ -110,7 +110,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('non-reactive — no closure is synthesized', () => {
     it('`#{x}` emits no `#<main:@N>` address for its expression', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         content *Text = "hello"
         @create = -> <div>#{ content }</div>
       `;
@@ -124,7 +124,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('`{{x}}` and `#{x}` coexist — `{{}}` breaks a run; adjacent text + `#{}` merges', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         a *Text = "dynamic"
         b *Text = "static"
         @create = -> <div>{{ a }} / #{ b }</div>
@@ -148,7 +148,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('mixed static text and interpolation merges into one text child', () => {
     it('literal text surrounding `#{expr}` concatenates into one child', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         name *Text = "world"
         @create = -> <div>hello #{ name }!</div>
       `;
@@ -162,7 +162,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('two adjacent `#{}` concatenate into one child', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         a *Text = "x"
         b *Text = "y"
         @create = -> <div>#{ a }#{ b }</div>
@@ -177,7 +177,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('a reactive `{{}}` DOES break a run; text either side is merged with any adjacent `#{}`', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         pre_val *Text = "p"
         reactive *Text = "r"
         post_val *Text = "q"
@@ -197,7 +197,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('nested elements', () => {
     it('`#{}` inside a nested tag merges with surrounding text into one child', async () => {
       const script = `
-        use HTML: (:div, :p)
+        use :div, :p = HTML
         name *Text = "Chris"
         @create = -> <div><p>hi #{ name }</p></div>
       `;
@@ -216,7 +216,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('escape sequences in XML text', () => {
     it('`\\\\` emits a single backslash', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         @create = -> <div>a \\\\ b</div>
       `;
       await expectEmission(script,
@@ -229,7 +229,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('`\\{` emits a literal `{` (not a closure)', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         @create = -> <div>\\{ not a closure }</div>
       `;
       await expectEmission(script,
@@ -242,7 +242,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('`\\#{` emits a literal `#{` (not an interpolation)', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         @create = -> <div>\\#{ not an interp }</div>
       `;
       await expectEmission(script,
@@ -255,7 +255,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('bare `#` without `{` stays literal', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         @create = -> <div>price: #5</div>
       `;
       await expectEmission(script,
@@ -268,7 +268,7 @@ describe('XML text interpolation `#{expr}`', () => {
 
     it('escapes and live interpolation coexist, merged into one text child', async () => {
       const script = `
-        use HTML: (:div)
+        use :div = HTML
         x *Text = "ok"
         @create = -> <div>\\\\ \\{ \\#{ #{ x }</div>
       `;
@@ -286,7 +286,7 @@ describe('XML text interpolation `#{expr}`', () => {
   describe('invalid escapes are compile errors', () => {
     const mustFail = (body) => {
       expect(() => compileSource(`
-        use HTML: (:div)
+        use :div = HTML
         @create = -> <div>${body}</div>
       `, {
         remotes: [{ path: 'HTML', service: HTML_MANIFEST }],
@@ -316,7 +316,7 @@ describe('XML text interpolation `#{expr}`', () => {
 describe('non-reactive { expr } collapses to inline text', () => {
   it('plain Text binding inlines as text (no closure address)', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       label Text = "hello"
       @create = -> <div>{{ label }}</div>
     `;
@@ -331,7 +331,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
 
   it('non-reactive Text binding with surrounding text merges into one child', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       name Text = "world"
       @create = -> <div>hello {{ name }}!</div>
     `;
@@ -346,7 +346,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
 
   it('reactive Text ref still emits a closure address', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       label *Text = "hello"
       @create = -> <div>{{ label }}</div>
     `;
@@ -361,7 +361,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
 
   it('reactive and non-reactive Text slots coexist: address + inlined text', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       reactive *Text = "r"
       constant Text = "c"
       @create = -> <div>{{ reactive }} / {{ constant }}</div>
@@ -382,7 +382,7 @@ describe('non-reactive {{ expr }} — pure thunk inlining', () => {
     // DomConstructor. The <p> is pre-dispatched first; once we stub its reply
     // the actor continues and sends <div> with the <p> address in children.
     const script = `
-      use HTML: (:div, :p)
+      use :div, :p = HTML
       para = -> <p>Inner</p>
       @create = -> <div>{{ para }}</div>
     `;

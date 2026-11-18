@@ -163,7 +163,7 @@ describe('subscribe — call-site syntax', () => {
 
 describe('subscribe — remote (unit test with stubbed publisher)', () => {
   const remoteScript = `
-    use "Remote": Remote { val *Integer }
+    use Remote = "Remote" as { val *Integer }
 
     last *Integer = 0
 
@@ -246,7 +246,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
   it('subscriber receives initial value then replay on set from publisher', async () => {
     const publisher = `@val *Integer = 0`;
     const subscriber = `
-      use "pub": pub { val *Integer }
+      use pub = "pub" as { val *Integer }
 
       last *Integer = 0
 

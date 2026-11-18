@@ -225,8 +225,8 @@ describe('HTML element — a subscribed element address fills the slot', () => {
 
 describe('template — a function returning an element, interpolated as a child', () => {
   const factorySource = `
-    use :document
-    use HTML: (:div, :span)
+    use document
+    use :div, :span = HTML
     #badge = -> <span>new</span>
     el = <div>[{{ #badge() }}]</div>
     body = document.body()

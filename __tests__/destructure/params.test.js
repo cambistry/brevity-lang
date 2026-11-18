@@ -27,7 +27,7 @@ describe('destructure params — single function', () => {
 
   it('single destructured function compiles', () => {
     expect(() => compileSource(`
-      use "geometry.bv": (:Point)
+      use :Point = "geometry.bv"
 
       @go
         =
@@ -38,7 +38,7 @@ describe('destructure params — single function', () => {
 
   it('compact single-line form compiles', () => {
     expect(() => compileSource(`
-      use "geometry.bv": (:Point)
+      use :Point = "geometry.bv"
 
       @go
         =
@@ -53,7 +53,7 @@ describe('destructure params — single constant', () => {
 
   it('destructured constant compiles', () => {
     expect(() => compileSource(`
-      use "config.bv": (:MAGIC)
+      use :MAGIC = "config.bv"
 
       @go = -> value: MAGIC as Text
     `, { remotes: [{ path: 'config.bv', service: manifest }] })).not.toThrow();
@@ -65,7 +65,7 @@ describe('destructure params — single cell', () => {
 
   it('destructured cell read compiles', () => {
     expect(() => compileSource(`
-      use "counter.bv": (:count)
+      use :count = "counter.bv"
 
       @go
         =
@@ -83,7 +83,7 @@ describe('destructure params — multiple members', () => {
 
   it('multiple destructured functions compile', () => {
     expect(() => compileSource(`
-      use "dom.bv": (:Element, :div, :p)
+      use :Element, :div, :p = "dom.bv"
 
       @render
         =
@@ -95,7 +95,7 @@ describe('destructure params — multiple members', () => {
 
   it('mixed function, constant, and cell destructures compile', () => {
     expect(() => compileSource(`
-      use "service.bv": (:greet, :VERSION, :count)
+      use :greet, :VERSION, :count = "service.bv"
 
       @go
         =
@@ -112,7 +112,7 @@ describe('destructure params — aliasing', () => {
 
   it('aliased destructure compiles', () => {
     expect(() => compileSource(`
-      use "service.bv": (create: fn)
+      use create: fn = "service.bv"
 
       @go
         =
@@ -123,7 +123,7 @@ describe('destructure params — aliasing', () => {
 
   it('aliased destructure with type annotation compiles', () => {
     expect(() => compileSource(`
-      use "service.bv": (CONFIG: cfg Text)
+      use CONFIG: cfg Text = "service.bv"
 
       @go = -> value: cfg
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
@@ -131,7 +131,7 @@ describe('destructure params — aliasing', () => {
 
   it('multiple aliased destructures compile', () => {
     expect(() => compileSource(`
-      use "service.bv": (Func: fn, CONFIG: cfg Text)
+      use Func: fn, CONFIG: cfg Text = "service.bv"
 
       @go
         =
@@ -142,7 +142,7 @@ describe('destructure params — aliasing', () => {
 
   it('mixed bare and aliased destructures compile', () => {
     expect(() => compileSource(`
-      use "service.bv": (:Point, Scale: scale Integer)
+      use :Point, Scale: scale Integer = "service.bv"
 
       @go
         =
@@ -158,7 +158,7 @@ describe('destructure params — class (#) form', () => {
   it('# form with manifest compiles (no construction)', () => {
     const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
     expect(() => compileSource(`
-      use "service.bv": (:greet) #
+      use :greet = "service.bv" as #
 
       @go = -> 1
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
@@ -166,7 +166,7 @@ describe('destructure params — class (#) form', () => {
 
   it('# form without manifest throws', () => {
     expect(() => compileSource(`
-      use "geometry.bv": (:Point) #
+      use :Point = "geometry.bv" as #
 
       @go = -> 1
     `)).toThrow(/has no type/);
@@ -178,7 +178,7 @@ describe('destructure params — class (#) form', () => {
 describe('destructure params — requires interface', () => {
   it('bare * without remotes throws', () => {
     expect(() => compileSource(`
-      use "geometry.bv": (:Point)
+      use :Point = "geometry.bv"
 
       @go
         =
@@ -189,7 +189,7 @@ describe('destructure params — requires interface', () => {
 
   it('multiple destructures without remotes throws', () => {
     expect(() => compileSource(`
-      use "service.bv": (:greet, :VERSION)
+      use :greet, :VERSION = "service.bv"
 
       @go = -> 1
     `)).toThrow(/has no type/);
@@ -197,7 +197,7 @@ describe('destructure params — requires interface', () => {
 
   it('aliased destructure without remotes throws', () => {
     expect(() => compileSource(`
-      use "service.bv": (Func: fn)
+      use Func: fn = "service.bv"
 
       @go = -> 1
     `)).toThrow(/has no type/);
@@ -209,7 +209,7 @@ describe('destructure params — requires interface', () => {
 describe('destructure params — inline interface', () => {
   it('destructure with explicit inline interface compiles', () => {
     expect(() => compileSource(`
-      use "greeter.bv": (:greet) {
+      use :greet = "greeter.bv" as {
         greet (name: Text) -> (greeting: Text)
       }
 
@@ -228,7 +228,7 @@ describe('destructure params — inline interface', () => {
 describe('destructure params — extraction', () => {
   it('single destructure renders in iface.params (key only; the destructure is a binding)', () => {
     const { interface: iface } = extract(`
-      use "geometry.bv": (:Point)
+      use :Point = "geometry.bv"
       @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "geometry.bv":\n)');
@@ -236,7 +236,7 @@ describe('destructure params — extraction', () => {
 
   it('multiple destructures render in iface.params', () => {
     const { interface: iface } = extract(`
-      use "dom.bv": (:Element, :div, :p)
+      use :Element, :div, :p = "dom.bv"
       @noop. = {}
     `);
     expect(iface.params).toContain('dom.bv');
@@ -244,7 +244,7 @@ describe('destructure params — extraction', () => {
 
   it('aliased destructure renders in iface.params', () => {
     const { interface: iface } = extract(`
-      use "service.bv": (Func: fn, CONFIG: cfg Text)
+      use Func: fn, CONFIG: cfg Text = "service.bv"
       @noop. = {}
     `);
     expect(iface.params).toContain('service.bv');
@@ -252,7 +252,7 @@ describe('destructure params — extraction', () => {
 
   it('destructured member appears in constructor block with qualified path', () => {
     const { interface: iface } = extract(`
-      use "geometry.bv": (:Point)
+      use :Point = "geometry.bv"
 
       @go = (p Point) -> p
     `);
@@ -267,7 +267,7 @@ describe('destructure params — outgoing messages', () => {
 
   it('destructured function call sends message to source service', async () => {
     const compiled = await compileActor(`
-      use "greeter.bv": (:greet)
+      use :greet = "greeter.bv"
 
       @go
         =
@@ -289,7 +289,7 @@ describe('destructure params — outgoing messages', () => {
 
   it('destructured silent call sends message to source service', async () => {
     const compiled = await compileActor(`
-      use "greeter.bv": (:ping.)
+      use :ping. = "greeter.bv"
 
       @go. = { ping... }
     `, { compileOptions: { remotes: [{ path: 'greeter.bv', service: manifest }] } });
@@ -309,7 +309,7 @@ describe('destructure params — full roundtrip', () => {
 
   it('destructured function: call out, mock response, return to caller', async () => {
     const compiled = await compileActor(`
-      use "greeter.bv": (:greet)
+      use :greet = "greeter.bv"
 
       @hello
         =
@@ -348,8 +348,8 @@ describe('destructure params — full roundtrip', () => {
 describe('destructure params — validation', () => {
   it('rejects duplicate destructure names across deps', () => {
     expect(() => compileSource(`
-      use "a.bv": (:foo) *
-      use "b.bv": (:foo)
+      use :foo = "a.bv"
+      use :foo = "b.bv"
 
       @go = -> 1
     `)).toThrow();
@@ -357,14 +357,14 @@ describe('destructure params — validation', () => {
 
   it('bare * without remotes rejects even with destructures', () => {
     expect(() => compileSource(`
-      use "service.bv": (:greet)
+      use :greet = "service.bv"
       @go = -> 1
     `)).toThrow(/has no type/);
   });
 
   it('# form without remotes rejects with destructures', () => {
     expect(() => compileSource(`
-      use "service.bv": (:greet) #
+      use :greet = "service.bv" as #
       @go = -> 1
     `)).toThrow(/has no type/);
   });
@@ -377,7 +377,7 @@ describe('destructure params — uniform addressable ops', () => {
 
   it('function, constant, and cell are all callable as ops', async () => {
     const compiled = await compileActor(`
-      use "service.bv": (:greet, :VERSION, :count)
+      use :greet, :VERSION, :count = "service.bv"
 
       @useFunction
         =

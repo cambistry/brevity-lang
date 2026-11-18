@@ -1,5 +1,5 @@
-use :document
-use HTML: (:main, :h1, :p, :button)
+use document
+use :main, :h1, :p, :button = HTML
 count *Integer = 0
 
 page = <main>

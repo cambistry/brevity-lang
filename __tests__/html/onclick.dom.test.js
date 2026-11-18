@@ -41,7 +41,7 @@ async function expectEmission(script, ...steps) {
 describe('Q1: onclick wire encoding', () => {
   it('onclick on empty element emits onclick closure address', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }></div>
     `;
@@ -56,7 +56,7 @@ describe('Q1: onclick wire encoding', () => {
 
   it('onclick with static text child', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }>click me</div>
     `;
@@ -71,7 +71,7 @@ describe('Q1: onclick wire encoding', () => {
 
   it('onclick with reactive child — child gets @0, onclick gets @1', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       count *Integer = 0
       @create = -> <div onclick={ count <- count + 1 }>{{ count }}</div>
     `;
@@ -86,7 +86,7 @@ describe('Q1: onclick wire encoding', () => {
 
   it('element without onclick has no onclick field', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div>hello</div>
     `;
     await expectEmission(script,
@@ -100,7 +100,7 @@ describe('Q1: onclick wire encoding', () => {
 
   it('onclick alongside a literal attr', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       count *Integer = 0
       @create = -> <div class="counter" onclick={ count <- count + 1 }></div>
     `;
@@ -118,8 +118,8 @@ describe('Q1: onclick wire encoding', () => {
 
 describe('Q2: click in real DOM', () => {
   const factorySource = `
-    use :document
-    use HTML: (:div)
+    use document
+    use :div = HTML
     count *Integer = 0
     el = <div onclick={ count <- count + 1 }>{{ count }}</div>
     body = document.body()
@@ -170,8 +170,8 @@ describe('Q2: click in real DOM', () => {
 
 describe('Q3: external set on host ref cell', () => {
   const constructorSource = `
-    use :document
-    use HTML: (:div)
+    use document
+    use :div = HTML
     @count *Integer = 0
     el = <div>{{ @count }}</div>
     body = document.body()

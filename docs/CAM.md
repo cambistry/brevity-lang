@@ -70,7 +70,7 @@ interfaces, browser facilities, or parent-child routing. Brevity exposes that
 context with a top-level class/dependency boundary:
 
 ```brevity
-use "/services/store": Store {
+use Store = "/services/store" as {
   get (key: Text) -> (value: Text)
 }
 

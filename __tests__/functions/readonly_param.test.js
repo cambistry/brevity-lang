@@ -39,7 +39,7 @@ describe('readonly param — &Type permits reads', () => {
 // picked out of the posts.
 describe('readonly param — &Type is live', () => {
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       note. (Integer) => .
     }
     @n *Integer = 0

@@ -130,7 +130,7 @@ describe('a class reads its file\'s cells', () => {
 // What the class sends and what the file actor replies can come in either order.
 describe('a class reaches its file actor while the file actor is idle', () => {
   const script = `
-    use "svc.bv": Svc {
+    use Svc = "svc.bv" as {
       note. (Integer) => .
       Log (Integer) -> *{}
     }

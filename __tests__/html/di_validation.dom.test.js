@@ -23,7 +23,7 @@ function compileWithHTML(source) {
 describe('HTML DI validation — tag must be in destructure list', () => {
   it('tag present in destructure list → compiles cleanly', () => {
     const source = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div>hello</div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -31,7 +31,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('multiple tags all present → compiles cleanly', () => {
     const source = `
-      use HTML: (:div, :h1, :p)
+      use :div, :h1, :p = HTML
       @create = -> <div><h1>Title</h1><p>body</p></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -39,7 +39,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('tag missing from destructure list → compile error names the tag', () => {
     const source = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <h1>Title</h1>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<h1>.*:h1.*HTML/);
@@ -47,7 +47,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('nested tag missing from destructure list → compile error', () => {
     const source = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div><p>nested</p></div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<p>.*:p.*HTML/);
@@ -55,7 +55,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 
   it('deeply nested tag missing → compile error catches it', () => {
     const source = `
-      use HTML: (:div, :p)
+      use :div, :p = HTML
       @create = -> <div><p><span>inner</span></p></div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<span>.*:span.*HTML/);
@@ -66,7 +66,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
     // destructures continue to compile; the check only fires when a
     // destructure list is present.
     const source = `
-      use :HTML
+      use HTML
       @create = -> <div>legacy</div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -86,7 +86,7 @@ describe('HTML DI validation — tag must be in destructure list', () => {
 describe('HTML DI validation — destructured tag must be in the manifest', () => {
   it('a tag the manifest declares → compiles cleanly', () => {
     const source = `
-      use HTML: (:div, :style)
+      use :div, :style = HTML
       @create = -> <div><style>p { color: red; }</style></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
@@ -94,7 +94,7 @@ describe('HTML DI validation — destructured tag must be in the manifest', () =
 
   it('a misspelled tag → compile error, even when the template matches it', () => {
     const source = `
-      use HTML: (:div, :sytle)
+      use :div, :sytle = HTML
       @create = -> <div><sytle>p { color: red; }</sytle></div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/'sytle' is not exported by 'HTML'/);

@@ -63,7 +63,7 @@ named params and fields.
 The same constructor profile appears in source:
 
 ```brevity
-use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
+use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
 Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
 ```
 

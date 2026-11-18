@@ -77,7 +77,7 @@ rather than a plain Integer value.
 ## Boundary Example
 
 ```brevity
-use "/services/store": Store {
+use Store = "/services/store" as {
   get (key: Text) -> (value: Text)
 }
 

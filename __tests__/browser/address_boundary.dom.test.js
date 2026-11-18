@@ -14,7 +14,7 @@ import { compileActor } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const source = `
-  use "svc.bv": Svc {
+  use Svc = "svc.bv" as {
     take (r: Text) -> ()
   }
   @Box = *{

@@ -234,7 +234,7 @@ describe('service document — emitted form', () => {
 });
 
 describe('props and cells — validation', () => {
-  const remote = (iface, body) => compileSrc(`use "remote.bv": Remote ${iface}\n${body}\n`);
+  const remote = (iface, body) => compileSrc(`use Remote = "remote.bv" as ${iface}\n${body}\n`);
 
   it('a prop can be read', () => {
     expect(() => remote('{ count Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
@@ -279,7 +279,7 @@ describe('props and cells — validation', () => {
       set label (Text)
     }
   }`;
-  const withBox = (body) => compileSrc(`use Shapes: (:Box)\n${body}\n`, {
+  const withBox = (body) => compileSrc(`use :Box = Shapes\n${body}\n`, {
     remotes: [{ path: 'Shapes', service: shapes }],
   });
 
@@ -301,7 +301,7 @@ describe('props and cells — validation', () => {
 describe('constructor profiles in source', () => {
   it('header dependency: (Alias) (params) -> *{ iface }, arrow optional', () => {
     for (const arrow of ['-> ', '']) {
-      const { ast } = extract(`use "thing.bv": Thing (a: Integer) ${arrow}*{ get () -> (value: Integer) }\n@go = -> 1\n`);
+      const { ast } = extract(`use Thing = "thing.bv" as (a: Integer) ${arrow} *{ get () -> (value: Integer) }\n@go = -> 1\n`);
       const dep = ast.dependencies[0];
       expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', type: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
@@ -310,7 +310,7 @@ describe('constructor profiles in source', () => {
 
   it('header dependency in a whole-file actor { … }', () => {
     expect(() => compileSrc(`actor {
-  use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
+  use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
   t = Thing(a: 1)
   @go = { :value Integer = t.get(); return :value }
 }
@@ -318,7 +318,7 @@ describe('constructor profiles in source', () => {
   });
 
   it('header dependency: multi-line iface with a nested constructor body', () => {
-    const { ast } = extract(`use "lib.bv": Lib {
+    const { ast } = extract(`use Lib = "lib.bv" as {
   type Point (x Integer, y Integer)
   Counter (start: Integer) -> *{
     get () -> (value: Integer)
@@ -335,26 +335,26 @@ describe('constructor profiles in source', () => {
   });
 
   it('retired: Alias *( … ) -> { … }', () => {
-    expect(() => extract('use "thing.bv": Thing *(a: Integer) -> { get: () -> (value: Integer) }\n@go = -> 1\n'))
+    expect(() => extract('use Thing = "thing.bv" as *(a: Integer) -> { get: () -> (value: Integer) }\n@go = -> 1\n'))
       .toThrow(/retired/);
   });
 
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
-    expect(() => compileSrc(`use "thing.bv": Thing #
+    expect(() => compileSrc(`use Thing = "thing.bv" as #
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 @go = -> 1
 `)).not.toThrow();
   });
 
   it('retired: as *( … ) -> { … }', () => {
-    expect(() => extract(`use "thing.bv": Thing #
+    expect(() => extract(`use Thing = "thing.bv" as #
 Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 @go = -> 1
 `)).toThrow(/retired/);
   });
 
   it('service constraint entries drop the colon', () => {
-    expect(() => extract(`use "store.bv": Store { get (key: Text) -> (value: Text) }
+    expect(() => extract(`use Store = "store.bv" as { get (key: Text) -> (value: Text) }
 db = Store as { @get: (key: Text) -> (value: Text) }
 @go = -> 1
 `)).toThrow(/entry colon is retired/);

@@ -16,7 +16,7 @@ import { expectBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-  use "svc.bv": Svc {
+  use Svc = "svc.bv" as {
     take (r: Text) -> ()
   }
   @Box = *{

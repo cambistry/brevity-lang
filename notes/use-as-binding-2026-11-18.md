@@ -1,6 +1,6 @@
 # `use` entries are bindings — 2026-11-18
 
-Direction, not implemented. Replaces the entry grammar of `use-di-2026-11-17.md` (the header
+Decided 2026-11-18 (backticks and `use` in value position stay open). Replaces the entry grammar of `use-di-2026-11-17.md` (the header
 entries carried over from `**`: `"svc.bv": Svc`, `HTML: (:div)`). What `use` does is unchanged:
 static, hoisted into the file manifest, bound by the host, lexically scoped.
 
@@ -51,6 +51,26 @@ use "/service" as { send! () => self }   // binds nothing: types and declares th
   side of the binding, and `as` on the source claims its shape. An inline interface, `#`, and a
   constructor profile become ordinary coercions on the source, so the entry grammar comes down to
   `target [Type] = source [as Shape]`.
+
+## Details settled in the implementation
+
+- **A short claim can type the target.** `use Lib # = "lib.bv"` is `use Lib = "lib.bv" as #`,
+  as `x Integer = f()` is `x = f() as Integer`. Claiming on both sides is an error.
+- **A typed name is a value.** `use n Integer = size` (or `use n = size as Integer`) is the
+  load-time value `size`, bound as `n`; its source must be a name. Untyped, `use limit` is a
+  dependency on `limit`, and with no interface it's the usual "has no type" error.
+- **One statement, one kind.** A list of shorthands (`use HTML, document`) or one binding,
+  never both. A comma before the `=` makes the left side a destructure, so
+  `use HTML, d = x` is refused rather than read as a positional destructure.
+- **A destructure is by name.** `:x`, `key: local [Type]`, `key: _`, `...`. Positional names and
+  a bare `_` aren't supported: a dependency's members have no order.
+- **Destructures of one source gather.** `use :div = HTML` and `use HTML::span` are one manifest
+  entry for `HTML`. The same source under two names is two bindings.
+- **Not yet:** a source of three or more segments, a destructure from a member
+  (`use :a = A::b`), and `as` on a member (`use d = HTML::div as …`).
+- **The old entries are errors** that name their binding form: `"svc.bv": Svc` →
+  `use Svc = "svc.bv"`, `HTML: (:div)` → `use :div = HTML`, `:limit Integer` →
+  `use limit Integer = limit`, a lone `:HTML` → `use HTML`.
 
 ## Why not a postfix rename
 

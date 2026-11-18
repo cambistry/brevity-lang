@@ -92,7 +92,7 @@ const WIDGET = `{
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
 const withPanel = (body) => `
-  use "Widget": (:Panel)
+  use :Panel = "Widget"
   ${body}
 `;
 
@@ -140,7 +140,7 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
 
   it('accepts a bare annotation when the type IS explicitly imported', () => {
     expect(() => compileSource(`
-      use "Widget": (:Panel, :Signal)
+      use :Panel, :Signal = "Widget"
       @make = -> p: Panel(onpress.: (s: Signal) { s.dismiss... }, label: "x")
     `, { remotes })).not.toThrow();
   });
@@ -164,7 +164,7 @@ const WIDGET_M = `{
 const remotesM = [{ path: 'Widget', service: WIDGET_M }];
 
 const withDep = (body) => `
-  use "Widget": Widget
+  use Widget
   ${body}
 `;
 

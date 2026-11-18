@@ -16,9 +16,8 @@ const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) —
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
 const USE_INNER_MSG = "'use' in inner scopes is not supported yet";
 const USE_FACTORY_MSG = "'use' in a factory file is not supported yet";
-const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use :HTML, \"svc.bv\": Svc'): a file with no header is an actor";
+const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use HTML', 'use Svc = \"svc.bv\"'): a file with no header is an actor";
 const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
-const USE_NAMED_TYPE_MSG = (name, type) => `In 'use', '${name}: ${type}' reads as a rename (key: local), not a type — a typed entry is ':${name} ${type}'`;
 const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file — an inline singleton is named: 'name = actor { … }'";
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
@@ -5877,30 +5876,338 @@ export function parse(tokensIn) {
   // 'class' when it declares `new`. Its DI is its `use` statements.
   let fileKind = 'singleton';
 
-  // `use entries`: the entries a `**` header took, comma-separated, to the end of
-  // the line (a trailing comma carries on to the next). They accumulate into the
-  // file's manifest; the same entry twice is one.
-  function parseUse() {
-    consume(); // use
-    const atEnd = () => ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'].includes(peek().type);
-    if (atEnd()) throw new Error("'use' takes one or more entries: 'use :HTML, \"svc.bv\": Svc'");
-    const start = dependencies.length;
-    // An entry may read past its line break (an inline interface does); the line
-    // still ended the `use` unless a comma came before it.
-    const isBreak = (t) => t?.type === 'NEWLINE' || t?.type === 'BLOCK_SEP';
-    const lineEnded = () => {
-      let k = pos - 1;
-      if (!isBreak(tokens[k])) return false;
-      while (isBreak(tokens[k])) k--;
-      return tokens[k]?.type !== 'COMMA';
-    };
-    parseFileHeaderEntries(() => (atEnd() && tokens[pos - 1]?.type !== 'COMMA') || lineEnded(), true);
-    const seen = new Set(dependencies.slice(0, start).map(d => JSON.stringify(d)));
-    const added = dependencies.splice(start);
-    for (const d of added) {
-      const key = JSON.stringify(d);
-      if (!seen.has(key)) { seen.add(key); dependencies.push(d); }
+  // ── `use` ──────────────────────────────────────────────────────────────
+  // A `use` entry is a declaration with `use` in front: `target = source`, where
+  // the source is a `::` path the host resolves (notes/use-as-binding-2026-11-18.md).
+  //   use d = HTML::div            use :div, p: para = HTML
+  //   use n Integer = size         use Svc = "svc.bv" as { … }
+  // A lone source is shorthand, binding its last segment: `use HTML, HTML::div`.
+  // One statement is a list of shorthands or one binding. Each lowers to the
+  // Dependency / FileParam a header entry made; the same one twice is one.
+  const USE_END = ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'];
+  const isBreakTok = (t) => t?.type === 'NEWLINE' || t?.type === 'BLOCK_SEP';
+  // A segment that reads as a name is shown bare, any other quoted.
+  const isBvName = (s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s);
+  const showSeg = (s) => (isBvName(s) ? s : JSON.stringify(s));
+  const showSource = (segs) => segs.map(showSeg).join('::');
+  const nameFor = (seg) => {
+    const camel = seg.replace(/[^A-Za-z0-9_]+(.)?/g, (_, c) => (c ? c.toUpperCase() : '')).replace(/^[^A-Za-z_]+/, '');
+    return isBvName(camel) ? camel : 'name';
+  };
+  // The `use` statement from token `k`: where it ends (its line, carried on by a
+  // trailing comma or an open bracket), and its `=`, if it has one at the top.
+  function scanUse(k) {
+    let depth = 0;
+    let eq = null;
+    for (;; k++) {
+      const t = tokens[k];
+      if (!t || t.type === 'EOF') return { eq, end: k };
+      if (t.type === 'LPAREN' || t.type === 'LBRACE' || t.type === 'LBRACKET') depth++;
+      else if (t.type === 'RPAREN' || t.type === 'RBRACE' || t.type === 'RBRACKET') {
+        if (depth === 0) return { eq, end: k };
+        depth--;
+      } else if (depth === 0 && isBreakTok(t) && tokens[k - 1]?.type !== 'COMMA') return { eq, end: k };
+      else if (depth === 0 && t.type === 'EQUALS' && eq === null) eq = k;
     }
+  }
+  const skipUseBreaks = () => { while (isBreakTok(peek())) consume(); };
+  // Tokens `a`..`b` (exclusive) shown as source text, for a message.
+  const showTokens = (a, b) => {
+    let out = '';
+    for (let k = a; k < b; k++) {
+      const t = tokens[k];
+      if (isBreakTok(t)) continue;
+      const text = t.type === 'STRING' ? JSON.stringify(t.value) : t.type === 'EQUALS' ? '=' : tokText(t);
+      const glue = !out || out.endsWith('(') || out.endsWith('*') || out.endsWith('::') || ['COMMA', 'RPAREN', 'COLON', 'DCOLON'].includes(t.type);
+      out += (glue ? '' : ' ') + text;
+    }
+    return out;
+  };
+
+  function parseUse() {
+    const useTok = pos;
+    consume(); // use
+    if (USE_END.includes(peek().type)) throw new Error(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
+    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+      const name = tokens[pos + 1].value;
+      throw new Error(`'use' can't declare an accessor ('@${name}') — write 'use ${name} Type = ${name}', and publish it with a handler: '@${name} = -> ${name}'`);
+    }
+    const { eq, end } = scanUse(pos);
+    const shown = () => `use ${showTokens(useTok + 1, end)}`;
+    if (eq === null) {
+      parseUseShorthands(end);
+      return;
+    }
+    const target = parseUseTarget(eq, shown);
+    expect('EQUALS');
+    skipUseBreaks();
+    const segs = parseUseSource();
+    const shape = parseUseShape();
+    if (pos < end && peek().type === 'COMMA') {
+      throw new Error(`'${shown()}': a statement is either names ('use HTML, document') or one binding ('use … = source'), not both`);
+    }
+    if (pos < end) throw new Error(`Unexpected ${peek().type} '${peek().value ?? tokText(peek())}' after the source in '${shown()}'`);
+    addUse(lowerUse(target, segs, shape, shown));
+  }
+
+  // `use HTML, HTML::div, "/service"::Widget` — each binds its last segment.
+  function parseUseShorthands(end) {
+    while (pos < end) {
+      if (peek().type === 'COMMA') { consume(); skipUseBreaks(); continue; }
+      refuseRetiredUse(end);
+      const segs = parseUseSource();
+      const last = segs[segs.length - 1];
+      if (!isBvName(last)) {
+        throw new Error(`'use ${showSource(segs)}' has nothing to bind: its last segment isn't a name — write 'use ${nameFor(last)} = ${showSource(segs)}'`);
+      }
+      const shape = parseUseShape();
+      addUse(lowerUse({ kind: 'name', name: last }, segs, shape, () => `use ${showSource(segs)}`));
+      if (pos < end && peek().type !== 'COMMA') {
+        throw new Error(`Unexpected ${peek().type} '${peek().value ?? tokText(peek())}' after 'use ${showSource(segs)}'`);
+      }
+    }
+  }
+
+  // A source: `::`-joined segments, each a name or a quoted string.
+  function parseUseSource() {
+    const segs = [];
+    for (;;) {
+      const t = peek();
+      if (t.type === 'IDENT') segs.push(consume().value);
+      else if (t.type === 'STRING') segs.push(consume().value);
+      else if (t.type === 'INTERP_STRING') throw new Error(`A 'use' source is static: it takes no interpolation`);
+      else throw new Error(`Expected a source (a name or a quoted string) in 'use', got ${t.type}${t.value != null ? ` '${t.value}'` : ''}`);
+      if (peek().type !== 'DCOLON') return segs;
+      consume(); // ::
+    }
+  }
+
+  // `as` on a source claims its shape: `#`, `{ iface }`, `(params) -> *{ iface }`,
+  // or a value's type.
+  function parseUseShape() {
+    if (!(peek().type === 'KEYWORD' && peek().value === 'as')) return null;
+    consume(); // as
+    if (peek().type === 'HASH') { consume(); return { generic: true }; }
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
+      throw Object.assign(new Error(`'as *( ... ) -> { ... }' is retired — write 'as ( ... ) -> *{ ... }'`), { fatal: true });
+    }
+    if (peek().type === 'LBRACE') return { interface: parseAsTypeSuffix(parseInlineIface()) };
+    if (peek().type === 'LPAREN' && isCtorProfileAt(pos)) {
+      ctorArrow = '->';
+      const constructorParams = parseCtorProfileParams(`in 'use'`);
+      const iface = parseAsTypeSuffix(parseInlineIface());
+      return { interface: iface, constructorArrow: ctorArrow, constructorParams };
+    }
+    return { valueType: parseUseType() };
+  }
+
+  // `(params) [->] *{` — a constructor profile, not a function type.
+  function isCtorProfileAt(k) {
+    let depth = 0;
+    for (; k < tokens.length; k++) {
+      const t = tokens[k].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN' && --depth === 0) break;
+      else if (t === 'EOF') return false;
+    }
+    let j = k + 1;
+    while (tokens[j]?.type === 'NEWLINE') j++;
+    if (tokens[j]?.type === '->') { j++; while (tokens[j]?.type === 'NEWLINE') j++; }
+    return tokens[j]?.type === 'STAR';
+  }
+  // A value's type: `Integer`, `*Integer`, `&Integer` (a cell's capability is
+  // the host's to grant; the binding keeps the type).
+  function parseUseType() {
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') { consume(); return parseType(); }
+    if (peek().type === 'AMPERSAND_IDENT') return consumeAmpersandTypeForParam();
+    return parseType();
+  }
+
+  // The left side, up to the `=` at `eq`: a name, a name and a type (or `#`), or a
+  // destructure by name (`:x`, `key: local [Type]`, `key: _`, `...`), parens optional.
+  function hasTopComma(a, b) {
+    let depth = 0;
+    for (let k = a; k < b; k++) {
+      const x = tokens[k].type;
+      if (x === 'LPAREN' || x === 'LBRACE' || x === 'LBRACKET') depth++;
+      else if (x === 'RPAREN' || x === 'RBRACE' || x === 'RBRACKET') depth--;
+      else if (x === 'COMMA' && depth === 0) return true;
+    }
+    return false;
+  }
+  function parseUseTarget(eq, shown) {
+    const t = peek();
+    const isDestructure = t.type === 'SIGIL' || t.type === 'LPAREN' || t.type === 'ELLIPSIS' || t.type === 'DISCARD' ||
+      (t.type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') ||
+      hasTopComma(pos, eq);
+    if (isDestructure) {
+      const parens = t.type === 'LPAREN';
+      if (parens) consume();
+      const entries = parseUseDestructure(parens ? () => peek().type === 'RPAREN' : () => pos >= eq, shown);
+      if (parens) expect('RPAREN');
+      if (pos !== eq) throw new Error(`Unexpected ${peek().type} before '=' in '${shown()}'`);
+      return { kind: 'destructure', entries };
+    }
+    if (t.type !== 'IDENT') throw new Error(`Expected a name or a destructure before '=' in '${shown()}', got ${t.type}`);
+    const name = consume().value;
+    if (pos === eq) return { kind: 'name', name };
+    if (peek().type === 'HASH' && pos + 1 === eq) { consume(); return { kind: 'name', name, generic: true }; }
+    if (peek().type === 'LBRACE' || peek().type === 'LPAREN') {
+      throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '(…) -> *{ … }'}'`);
+    }
+    const type = parseUseType();
+    if (pos !== eq) throw new Error(`Unexpected ${peek().type} before '=' in '${shown()}'`);
+    return { kind: 'name', name, type };
+  }
+
+  function parseUseDestructure(isEnd, shown) {
+    const entries = [];
+    const readType = () => (isEnd() || ['COMMA', 'RPAREN', 'EQUALS'].includes(peek().type) || isBreakTok(peek()) ? null : parseUseType());
+    while (!isEnd() && peek().type !== 'EOF') {
+      if (peek().type === 'COMMA' || isBreakTok(peek())) { consume(); continue; }
+      const t = peek();
+      if (t.type === 'ELLIPSIS') { consume(); entries.push({ spread: true }); continue; }
+      if (t.type === 'SIGIL') {
+        const name = consume().value;
+        const type = readType();
+        entries.push({ local: name, remote: name, ...(type && { type }) });
+        continue;
+      }
+      if (t.type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+        const remote = consume().value;
+        consume(); // :
+        if (peek().type === 'DISCARD') { consume(); entries.push({ remote, discard: true }); continue; }
+        if (peek().type !== 'IDENT') throw new Error(`Expected a local name after '${remote}:' in '${shown()}'`);
+        const local = consume().value;
+        const type = readType();
+        entries.push({ local, remote, ...(type && { type }) });
+        continue;
+      }
+      if (t.type === 'IDENT' || t.type === 'DISCARD') {
+        throw new Error(`'${shown()}': a statement is either names ('use HTML, document') or one binding ('use … = source') — and a 'use' destructure is by name: ':x', 'key: local', 'key: _', '...'`);
+      }
+      throw new Error(`Expected ':name', 'key: local', 'key: _', or '...' in '${shown()}', got ${t.type}`);
+    }
+    return entries;
+  }
+
+  // The Dependency or FileParam for one binding.
+  function lowerUse(target, segs, shape, shown) {
+    if (segs.length > 2) throw new Error(`'${shown()}': a source of more than two segments isn't supported yet`);
+    const claim = (s) => ({
+      ...(s?.generic && { generic: true }),
+      ...(s?.interface && { interface: s.interface }),
+      ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
+    });
+    const [head, member] = segs;
+    if (target.kind === 'destructure') {
+      if (member !== undefined) throw new Error(`'${shown()}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
+      if (shape?.valueType) throw new Error(`'${shown()}': a destructure's source is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      return AST.dependency(head, { path: head, destructures: target.entries, ...claim(shape) });
+    }
+    if ((target.generic || target.type) && shape) {
+      throw new Error(`'${shown()}' claims its shape twice — type the name or follow the source with 'as', not both`);
+    }
+    if (member !== undefined) {
+      if (shape || target.generic) throw new Error(`'${shown()}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
+      const type = target.type;
+      return AST.dependency(head, { path: head, destructures: [{ local: target.name, remote: member, ...(type && { type }) }] });
+    }
+    const valueType = target.type || shape?.valueType;
+    if (valueType) {
+      if (!isBvName(head)) throw new Error(`'${shown()}': a value's source is a name, not '${showSeg(head)}'`);
+      return AST.fileParam(target.name, { type: valueType, key: head !== target.name ? head : null });
+    }
+    return AST.dependency(target.name, { path: head, ...claim(target.generic ? { generic: true } : shape) });
+  }
+
+  // Into the manifest: the same entry twice is one, and destructures of one
+  // source under one claim gather into one entry.
+  function addUse(node) {
+    const key = (d) => JSON.stringify({ ...d, destructures: undefined });
+    if (node.type === 'Dependency' && node.destructures) {
+      const into = dependencies.find(d => d.type === 'Dependency' && d.destructures && key(d) === key(node));
+      if (into) {
+        const have = new Set(into.destructures.map(e => JSON.stringify(e)));
+        for (const e of node.destructures) if (!have.has(JSON.stringify(e))) into.destructures.push(e);
+        return;
+      }
+    }
+    const json = JSON.stringify(node);
+    if (!dependencies.some(d => JSON.stringify(d) === json)) dependencies.push(node);
+  }
+
+  // A header entry of the retired grammar, with no `=`: say what it is now.
+  function refuseRetiredUse(end) {
+    const t = peek();
+    const t1 = tokens[pos + 1];
+    const entryEnd = (x) => !x || x.type === 'COMMA' || USE_END.includes(x.type);
+    const entry = () => {
+      let k = pos;
+      let depth = 0;
+      while (k < end && !(depth === 0 && tokens[k].type === 'COMMA')) {
+        if (['LPAREN', 'LBRACE'].includes(tokens[k].type)) depth++;
+        else if (['RPAREN', 'RBRACE'].includes(tokens[k].type)) depth--;
+        k++;
+      }
+      return showTokens(pos, k);
+    };
+    const retired = (now) => new Error(`'${entry()}' is a retired header entry — write '${now}'`);
+    // After `Key:` (a quoted path or a name): the binding it made.
+    const afterKey = (src, k) => {
+      const a = tokens[k];
+      const b = tokens[k + 1];
+      if (a?.type === 'IDENT' && entryEnd(b)) return `use ${a.value} = ${src}`;
+      if (a?.type === 'IDENT' && b?.type === 'HASH') return `use ${a.value} # = ${src}`;
+      if (a?.type === 'IDENT' && b?.type === 'LBRACE') return `use ${a.value} = ${src} as { … }`;
+      if (a?.type === 'IDENT' && b?.type === 'LPAREN') return `use ${a.value} = ${src} as (…) -> *{ … }`;
+      if (a?.type === 'SIGIL') return `use :${a.value} = ${src}`;
+      if (a?.type === 'LPAREN') {
+        let j = k;
+        let depth = 0;
+        do {
+          if (tokens[j].type === 'LPAREN') depth++;
+          else if (tokens[j].type === 'RPAREN') depth--;
+          j++;
+        } while (depth > 0 && j < end);
+        const hash = tokens[j]?.type === 'HASH' ? ' as #' : '';
+        return `use ${showTokens(k + 1, j - 1)} = ${src}${hash}`;
+      }
+      return null;
+    };
+    if (t.type === 'SIGIL' && entryEnd(t1)) throw new Error(`'use :${t.value}': a lone ':${t.value}' destructures nothing — write 'use ${t.value}'`);
+    if (t.type === 'SIGIL') throw retired(`use ${t.value} ${showTokens(pos + 1, scanEntryEnd(pos + 1, end))} = ${t.value}`);
+    if (t.type === 'STRING' && t1?.type === 'COLON') {
+      const now = afterKey(JSON.stringify(t.value), pos + 2);
+      if (now) throw retired(now);
+    }
+    if (t.type === 'IDENT' && t1?.type === 'COLON') {
+      const a = tokens[pos + 2];
+      const b = tokens[pos + 3];
+      // `size: n Integer` → a renamed value; `value: Integer` → a value or a rename.
+      if (a?.type === 'IDENT' && !entryEnd(b) && b?.type !== 'HASH' && b?.type !== 'LBRACE' && b?.type !== 'LPAREN') {
+        throw retired(`use ${a.value} ${showTokens(pos + 3, scanEntryEnd(pos + 3, end))} = ${t.value}`);
+      }
+      if (a?.type === 'IDENT' && entryEnd(b)) {
+        throw new Error(`'${entry()}' is a retired header entry — a typed value is 'use ${t.value} ${a.value} = ${t.value}', a rename 'use ${a.value} = ${t.value}'`);
+      }
+      if (a?.type === 'STAR' || a?.type === 'AMPERSAND_IDENT') {
+        throw retired(`use ${t.value} ${showTokens(pos + 2, scanEntryEnd(pos + 2, end))} = ${t.value}`);
+      }
+      const now = afterKey(t.value, pos + 2);
+      if (now) throw retired(now);
+    }
+    if (t.type === 'IDENT' && t1?.type === 'HASH') throw retired(`use ${t.value} # = ${t.value}`);
+    if (t.type === 'IDENT' && t1?.type === 'LBRACE') throw retired(`use ${t.value} = ${t.value} as { … }`);
+    if (t.type === 'IDENT' && t1?.type === 'LPAREN') throw retired(`use ${t.value} = ${t.value} as (…) -> *{ … }`);
+    if (t.type === 'IDENT' && !entryEnd(t1) && t1?.type !== 'DCOLON' && !(t1?.type === 'KEYWORD' && t1.value === 'as')) {
+      throw new Error(`'use ${entry()}' has no source — write 'use ${entry()} = ${t.value}'`);
+    }
+  }
+  // The end of a type after a header entry's name: the next comma, or the statement's end.
+  function scanEntryEnd(k, end) {
+    while (k < end && tokens[k].type !== 'COMMA') k++;
+    return k;
   }
 
   // Parse one type field declaration:
@@ -6082,18 +6389,6 @@ export function parse(tokensIn) {
     }
     return false;
   }
-  // In a `use`: an accessor (`@name …`) or a positional entry (`name Type`).
-  function refuseUseParam() {
-    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
-      const name = tokens[pos + 1].value;
-      throw new Error(`'use' can't declare an accessor ('@${name}') — write ':${name} Type', and publish it with a handler: '@${name} = -> ${name}'`);
-    }
-    if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
-      const name = peek().value;
-      if (ENTRY_END.includes(tokens[pos + 1]?.type)) throw new Error(`'use ${name}': a dependency is ':${name}' (or '"${name}": ${name}')`);
-      throw new Error(`'use' takes no positional entry ('${name} …') — write ':${name} Type'`);
-    }
-  }
   function fileParamFrom(p, positional) {
     return AST.fileParam(p.name, {
       type: p.type, positional, defaultValue: p.defaultValue, accessor: p.accessor,
@@ -6102,22 +6397,10 @@ export function parse(tokensIn) {
   }
   // What ends a header entry: the next one, or the end of its list or `use` line.
   const ENTRY_END = ['RPAREN', 'COMMA', 'NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'];
-  // `inUse`: the entries of a `use`, which binds names from the host and so takes
-  // no accessor (`@name`) and no positional entry. A typed one is the destructure
-  // `:name Type`; `name: Type` would bind a local named for the type.
-  function parseFileHeaderEntries(isEnd, inUse = false) {
+  function parseFileHeaderEntries(isEnd) {
     while (!isEnd() && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
       let path, alias, destructures = null;
-      if (inUse) refuseUseParam();
-      if (inUse && peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'HASH' && !ENTRY_END.includes(tokens[pos + 1]?.type)) {
-        // `:name Type`: read as the param `name Type`, by its key.
-        tokens[pos] = { ...tokens[pos], type: 'IDENT' };
-        const p = parseOneParam();
-        if (p === null) throw new Error(`Expected a type after ':${tokens[pos - 1]?.value}' in 'use'`);
-        dependencies.push(fileParamFrom(p, false));
-        continue;
-      }
       if (peek().type === 'SIGIL') {
         // Two disambiguated cases:
         //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
@@ -6153,10 +6436,7 @@ export function parse(tokensIn) {
         // Named scalar file-param: `name: Type`, `name: local Type`
         const p = parseOneParam();
         if (p === null) throw new Error(`Expected scalar param in file-level header`);
-        if (inUse && !p.key && !p.typeOrLocal && p.type) throw new Error(USE_NAMED_TYPE_MSG(p.name, `${p.ref ? '*' : p.readonly ? '&' : ''}${typeof p.type === 'string' ? p.type : 'Type'}`));
-        const fp = fileParamFrom(p, false);
-        if (inUse && p.typeOrLocal) fp.inUse = true;
-        dependencies.push(fp);
+        dependencies.push(fileParamFrom(p, false));
         continue;
       } else if (peek().type === 'IDENT') {
         // Positional scalar file-param: `name Type`
@@ -6779,8 +7059,6 @@ export function parse(tokensIn) {
       if (p.typeOrLocal) {
         delete p.typeOrLocal;
         const lone = p[typeField];
-        if (p.inUse && typeNames.has(lone)) throw new Error(USE_NAMED_TYPE_MSG(p.name, lone));
-        delete p.inUse;
         if (!typeNames.has(lone)) {
           p.key = p.name;
           p.name = lone;

@@ -6,7 +6,7 @@ dependencies. Prefer explicit inline constraints in examples.
 ## Canonical Form
 
 ```brevity
-use "/services/db": DB {
+use DB = "/services/db" as {
   lookup (key: Text) -> (value: Text)
 }
 
@@ -41,7 +41,7 @@ Meaning:
 This parses:
 
 ```brevity
-use "Remote": Remote
+use Remote
 ```
 
 But compilation needs a remote interface:
@@ -57,7 +57,7 @@ For generated examples, prefer inline constraints unless the point is testing
 
 ## LLM Rules
 
-- Declare dependencies with `use` (`use "Remote": Remote { … }`).
+- Declare dependencies with `use` (`use Remote = "Remote" as { … }`).
 - Use `(name: Type)` in service signatures for named args.
 - Silent service methods are named with a glued `.` and typed `=> .` (`ping. () => .`); call them with `...`.
 - Do not claim dependency discovery is automatic inside this repository; the

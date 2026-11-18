@@ -165,7 +165,7 @@ describe('a type of another file, reached through the service', () => {
   const DOC = '{\n  type Point (x Integer, y Integer)\n  W () -> *{\n    type X (n Integer)\n    get () -> (X)\n  }\n}';
   const remotes = [{ path: 'svc.bv', service: DOC }];
   const script = `
-    use "svc.bv": Svc
+    use Svc = "svc.bv"
     @point = -> result: Svc::Point(1, 2)
     @classType = -> result: Svc::W::X(4)
     @got = {
@@ -212,8 +212,8 @@ describe('types of one name in two services', () => {
     { path: 'geo.bv', service: '{\n  type Point (lat Integer, lon Integer, alt Integer)\n  origin () -> (Point)\n}' },
   ];
   const script = `
-    use "svc.bv": Svc
-    use "geo.bv": Geo
+    use Svc = "svc.bv"
+    use Geo = "geo.bv"
     @svc = -> result: Svc::Point(1, 2)
     @geo = -> result: Geo::Point(1, 2, 3)
     @fromSvc = {

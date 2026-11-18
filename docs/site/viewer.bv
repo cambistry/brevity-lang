@@ -1,5 +1,5 @@
-use :document
-use HTML: (:div, :section, :details, :summary, :pre, :iframe)
+use document
+use :div, :section, :details, :summary, :pre, :iframe = HTML
 // HOLE: no fetch. document.eval is synchronous, so this borrows a
 // synchronous XHR to read an example's source file.
 #source = (path Text) -> document.eval("(() => { const r = new XMLHttpRequest(); r.open('GET', '" + path + "', false); r.send(); return r.responseText })()")

@@ -30,8 +30,8 @@ with `use` statements, which can appear anywhere in the file's own scope; the
 host binds them all at load:
 
 ```
-use "/services/db": DB { lookup (key: Text) -> (value: Text) }
-use "/services/cache": Cache { get (key: Text) -> (value: Text) }
+use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
+use Cache = "/services/cache" as { get (key: Text) -> (value: Text) }
 
 @fetch = (key: Text) {
   :value Text = DB.lookup(:key)
@@ -39,29 +39,30 @@ use "/services/cache": Cache { get (key: Text) -> (value: Text) }
 }
 ```
 
-`use` can mix service injections and ordinary scalar params. Every
-entry is `key: binding [type]`: service entries map a path to a local name, and
-the local name is what you use in code (`DB.lookup(...)`). Two service forms
-are supported:
+`use` can mix service injections and ordinary scalar params. Every entry is a
+binding, `target = source`, with `use` in front. The source is a name or a
+quoted path the host resolves (`HTML`, `"/services/db"`, `HTML::div`); the
+target is the local name you use in code (`DB.lookup(...)`), or a destructure.
+A lone source binds its last segment: `use HTML` is `use HTML = HTML`, and
+`use HTML::div` is `use div = HTML::div`. Two service forms are supported:
 
-- **Inline constraint**: `"/path": Alias { method sig, ... }` — the service
-  interface is declared inline. The compiler checks calls against it and never
-  consults `options.remotes` for that path; a mismatch with the real service
-  fails at runtime.
-- **Bare dependency**: `"/path": Alias` — no type in the entry, so it
-  is resolved by its key: the interface must be supplied at compile time via
-  `options.remotes` (a compile error otherwise). Any keyed entry with no type
-  is a dependency this way — `HTML: Html`, `limit: n`, `limit:`.
+- **Inline constraint**: `use Alias = "/path" as { method sig, ... }` — the
+  service interface is claimed inline. The compiler checks calls against it and
+  never consults `options.remotes` for that path; a mismatch with the real
+  service fails at runtime. `as #` claims a class, and
+  `as (params) -> *{ … }` a constructor profile; `use Alias # = "/path"` is
+  the same as `as #`.
+- **Bare dependency**: `use Alias = "/path"` — no claim, so it is resolved by
+  its source: the interface must be supplied at compile time via
+  `options.remotes` (a compile error otherwise).
 
-A single name is never parenthesized (`"/path": (Alias)` is retired). Parens
-are for destructuring several members: `HTML: (:div, :span)`; one member needs
-none: `HTML: :div`.
+A destructure takes members by name, parens optional:
+`use :div, :span, p: para = HTML`.
 
-Typed scalar params live in the same header, supplied by the host at load:
+Typed scalar params are bindings with a type, supplied by the host at load:
 
-- Named scalar: `port: Integer`
-- Named, renamed locally: `port: p Integer` (callers pass `port`; the file sees `p`)
-- Positional scalar: `root Text`
+- Named scalar: `use port Integer = port`
+- Named, renamed locally: `use p Integer = port` (callers pass `port`; the file sees `p`)
 
 Inside the file, all of these entries behave like class params to the
 anonymous file actor. From the host side, its `use` entries are surfaced as the params
@@ -86,17 +87,16 @@ const { interface: iface } = extract(source);
 //   )
 ```
 
-A dependency's type is what its entry declares: an interface, a constructor
-profile, `#`, or nothing (`"key":`), when the type comes from
-`options.remotes`.
+A dependency's type is what its entry claims: an interface, a constructor
+profile, `#`, or nothing, when the type comes from `options.remotes`.
 
 For example, a file's mixed `use` entries might come back as:
 
 ```javascript
 const { interface: iface } = extract(`
-  use :root Text
-  use "/services/db": DB
-  use :cache_size Integer
+  use root Text = root
+  use DB = "/services/db"
+  use cache_size Integer = cache_size
   @noop. = {}
 `);
 

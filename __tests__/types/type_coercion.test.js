@@ -2,16 +2,16 @@ import { createActor, expectActorBehavior, expectBehavior, compileSource } from 
 
 describe('type coercion — runtime', () => {
   const script = `
-    use "/services/counter": Counter {
+    use Counter = "/services/counter" as {
       get () -> (count: Integer)
     } | Integer
-    use "/services/store": Store {
+    use Store = "/services/store" as {
       ping. () => .
     } | Integer | Text
-    use "service.bv": Service () -> *{
+    use Service = "service.bv" as () -> *{
       ping. () => .
     } | Integer | Text
-    use "/s": Svc {
+    use Svc = "/s" as {
       text () -> (Text)
       int () -> (Integer)
       float () -> (Float)
@@ -573,9 +573,9 @@ describe('type coercion — runtime', () => {
 
 describe('type coercion — documents supplied through options.remotes', () => {
   const script = `
-    use "/services/counter": Counter
-    use "/services/store": Store
-    use "service.bv": Service #
+    use Counter = "/services/counter"
+    use Store = "/services/store"
+    use Service = "service.bv" as #
 
     @counterInt
       =
@@ -654,7 +654,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
 describe('type coercion — class ref constructed at the top level', () => {
   it('declared in the header', async () => {
     const actor = await createActor(`
-      use "service.bv": Service () -> *{
+      use Service = "service.bv" as () -> *{
         ping. () => .
       } | Integer
 
@@ -676,7 +676,7 @@ describe('type coercion — class ref constructed at the top level', () => {
 
   it('document supplied through options.remotes', async () => {
     const actor = await createActor(`
-      use "service.bv": Service #
+      use Service = "service.bv" as #
 
       s = Service()
 
@@ -714,7 +714,7 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('service ref, declared in the header', () => {
     expect(() => compileSource(`
-      use "/services/counter": Counter {
+      use Counter = "/services/counter" as {
         get () -> (count: Integer)
       }
       ${counter}
@@ -723,7 +723,7 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('class ref, declared in the header', () => {
     expect(() => compileSource(`
-      use "service.bv": Service () -> *{
+      use Service = "service.bv" as () -> *{
         ping. () => .
       }
       ${service}
@@ -732,14 +732,14 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('service ref, through options.remotes', () => {
     expect(() => compileSource(`
-      use "/services/counter": Counter
+      use Counter = "/services/counter"
       ${counter}
     `, { remotes: [{ path: '/services/counter', service: '{\n  get () -> (count: Integer)\n}' }] })).toThrow();
   });
 
   it('class ref, through options.remotes', () => {
     expect(() => compileSource(`
-      use "service.bv": Service #
+      use Service = "service.bv" as #
       ${service}
     `, { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n}' }] })).toThrow();
   });

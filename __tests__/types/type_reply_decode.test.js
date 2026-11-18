@@ -130,7 +130,7 @@ describe('a typed reply from a class in the same file', () => {
 
 describe('a typed reply from a remote', () => {
   const source = `
-    use "thing.bv": Thing (a: Integer) -> *{
+    use Thing = "thing.bv" as (a: Integer) -> *{
       pop () -> (Item)
     }
     type Item (name: Text)

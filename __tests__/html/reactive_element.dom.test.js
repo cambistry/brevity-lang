@@ -40,7 +40,7 @@ async function expectEmission(script, ...steps) {
 describe('Q1: reactive element wire encoding', () => {
   it('reactive attr sends closure ref', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
@@ -54,7 +54,7 @@ describe('Q1: reactive element wire encoding', () => {
 
   it('static text attr alongside reactive attr', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div class="btn" @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
@@ -68,7 +68,7 @@ describe('Q1: reactive element wire encoding', () => {
 
   it('no reactive attrs — element without @decl is a plain DomConstructor', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div class="plain">hello</div>
     `;
     await expectEmission(script,
@@ -82,7 +82,7 @@ describe('Q1: reactive element wire encoding', () => {
 
   it('element with only @decl — no static attrs', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div @color *Text = "red" style={ 'color: ' + @color }></div>
     `;
     await expectEmission(script,
@@ -96,7 +96,7 @@ describe('Q1: reactive element wire encoding', () => {
 
   it('@decl creates a public ref on the parent actor', async () => {
     const script = `
-      use HTML: (:div)
+      use :div = HTML
       @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>text</div>
     `;
     const compiled = await compileActor(script, {
@@ -118,8 +118,8 @@ describe('Q1: reactive element wire encoding', () => {
 
 describe('Q2: reactive element renders initial state', () => {
   const factorySource = `
-    use :document
-    use HTML: (:div)
+    use document
+    use :div = HTML
     el = <div @color *Text = "black" style={ 'color: ' + @color }>I change color!</div>
     body = document.body()
     body.append!(el)
@@ -152,8 +152,8 @@ describe('Q2: reactive element renders initial state', () => {
 
 describe('Q3: external set on lifted ref cell', () => {
   const factorySource = `
-    use :document
-    use HTML: (:div)
+    use document
+    use :div = HTML
     el = <div @color *Text = "black" style={ 'color: ' + @color }>I change color!</div>
     body = document.body()
     body.append!(el)

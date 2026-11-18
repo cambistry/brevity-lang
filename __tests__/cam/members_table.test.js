@@ -162,7 +162,7 @@ describe('a protected cell', () => {
 // picks the wire form from the service document.
 describe('a caller reads, subscribes to and sets what the document declares', () => {
   const script = `
-    use "remote.bv": Remote {
+    use Remote = "remote.bv" as {
       count Integer
       seen &Integer
       slot *Integer

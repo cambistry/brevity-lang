@@ -6,7 +6,7 @@ construction, callback flow, and outgoing wire messages.
 
 ## Current Tested Model
 
-- Dependencies are declared with `use`: `use "Remote": Remote`.
+- Dependencies are declared with `use`: `use Remote`.
 - A dependency entry binds a path or name to a local alias: `"Remote": Remote`.
 - Inline service constraints are the safest examples:
   `"Remote": Remote { get (url: Text) -> (response: Text) }`.
