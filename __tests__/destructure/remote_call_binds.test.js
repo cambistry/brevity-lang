@@ -15,10 +15,10 @@ const THING = `
 `;
 
 const constructed = (src) => createActor(src, {
-  expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) }],
+  expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) }],
 });
 
-const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } };
+const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } };
 
 describe('remote actor (constructor-block construction)', () => {
   it('x T = r.m() binds a one-element positional reply', async () => {
@@ -67,7 +67,7 @@ describe('remote actor (constructor-block construction)', () => {
 describe('remote actor (handler-local construction)', () => {
   const run = (src, reply) => createActor(src).then(actor => expectActorBehavior(actor,
     { input: { id: '99', op: 'go', from: 'caller' } },
-    { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) },
+    { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) },
     NEW_REPLY,
     { output: expect.objectContaining({ to: 'Thing/1' }) },
     { input: { id: '2', ...reply } },

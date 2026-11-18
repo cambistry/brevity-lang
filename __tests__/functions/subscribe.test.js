@@ -196,7 +196,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: '#<Pub:pub>' }) },
+        { output: expect.objectContaining({ op: '$subscribe', to: 'Pub:pub' }) },
       ],
     });
   });
@@ -208,7 +208,7 @@ describe('subscribe — runtime', () => {
         { output: expect.objectContaining({
           op: [[{ p: 100 }], '$subscribe'],
           'ty': [[{ p: 'Integer' }]],
-          to: '#<Pub:pub_w_params>',
+          to: 'Pub:pub_w_params',
         }) },
       ],
     });
@@ -218,7 +218,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub:pub>' }) },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Pub:pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
@@ -230,7 +230,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Pub:pub>' }) },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Pub:pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
@@ -247,7 +247,7 @@ describe('subscribe — runtime', () => {
         { output: expect.objectContaining({
           id: '1',
           op: [[{ p: 100 }], '$subscribe'],
-          to: '#<Pub:pub_w_params>',
+          to: 'Pub:pub_w_params',
         }) },
         { input: { id: '1', re: [100] } },
         { input: { id: '1', re: [105] } },
@@ -304,14 +304,14 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
 
     // 1. Subscribe: caller -> sub. sub posts subscribe@pub to Pub.
     await sub.sendAsync({ id: '1', op: 'doPubSub.', from: 'caller' });
-    await routeNew(sub, subPrev, 'Pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     //    pub replies with re:[0] addressed back to sub.
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
     // 2. Set: caller -> sub. sub posts set@body(5) to Pub. body <- 5 -> @pub re-evaluates -> re:[10].
     await sub.sendAsync({ id: '2', op: [[{ n: 5 }], 'setRemote.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' });
-    await routeNew(sub, subPrev, 'Pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
@@ -330,12 +330,12 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     let subPrev = sub.posts.length;
 
     await sub.sendAsync({ id: '1', op: 'doParamSub.', from: 'caller' });
-    await routeNew(sub, subPrev, 'Pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     pubPrev = await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 
     await sub.sendAsync({ id: '2', op: [[{ n: 5 }], 'setRemote.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' });
-    await routeNew(sub, subPrev, 'Pub', 'sub', pub);
+    await routeNew(sub, subPrev, 'pub', 'sub', pub);
     await routeNew(pub, pubPrev, 'sub', 'pub', sub);
     subPrev = sub.posts.length;
 

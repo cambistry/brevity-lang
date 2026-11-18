@@ -183,15 +183,15 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'read', from: 'c' });
     const [log] = made(actor);
-    expect(log).toEqual(expect.objectContaining({ op: [[4], '$new'], to: 'Svc:Log' }));
-    await actor.sendAsync({ id: log.id, re: '#<Svc:Log:1>', 'ty': 'Svc:Log', from: 'Svc' });
+    expect(log).toEqual(expect.objectContaining({ op: [[4], '$new'], to: 'svc.bv:Log' }));
+    await actor.sendAsync({ id: log.id, re: '#<Svc:Log:1>', 'ty': 'Svc:Log', from: 'svc.bv' });
     expect(replies(actor)).toEqual([{ id: '1', re: [1], 'ty': ['Integer'], to: 'c' }]);
   });
 
   it('a launched call calls a file dependency', async () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'call!', from: 'c' });
-    expect(notes(actor)).toEqual([expect.objectContaining({ op: [[4], 'note.'], to: 'Svc' })]);
+    expect(notes(actor)).toEqual([expect.objectContaining({ op: [[4], 'note.'], to: 'svc.bv' })]);
     expect(replies(actor)).toEqual([{ id: '1', re: [1], 'ty': ['Integer'], to: 'c' }]);
   });
 
@@ -199,12 +199,12 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'watchRead', from: 'c' });
     const [first] = made(actor);
-    expect(first).toEqual(expect.objectContaining({ op: [[4], '$new'], to: 'Svc:Log' }));
-    await actor.sendAsync({ id: first.id, re: '#<Svc:Log:1>', 'ty': 'Svc:Log', from: 'Svc' });
+    expect(first).toEqual(expect.objectContaining({ op: [[4], '$new'], to: 'svc.bv:Log' }));
+    await actor.sendAsync({ id: first.id, re: '#<Svc:Log:1>', 'ty': 'Svc:Log', from: 'svc.bv' });
     await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
     const [, second] = made(actor);
-    expect(second).toEqual(expect.objectContaining({ op: [[5], '$new'], to: 'Svc:Log' }));
-    await actor.sendAsync({ id: second.id, re: '#<Svc:Log:2>', 'ty': 'Svc:Log', from: 'Svc' });
+    expect(second).toEqual(expect.objectContaining({ op: [[5], '$new'], to: 'svc.bv:Log' }));
+    await actor.sendAsync({ id: second.id, re: '#<Svc:Log:2>', 'ty': 'Svc:Log', from: 'svc.bv' });
     expect(replies(actor)).toEqual([
       { id: '1', re: [1], 'ty': ['Integer'], to: 'c' },
       expect.objectContaining({ id: '2', re: '#<:>', to: 'c' }),
@@ -216,8 +216,8 @@ describe('a class reaches its file actor while the file actor is idle', () => {
     await actor.sendAsync({ id: '1', op: 'watchCall', from: 'c' });
     await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
     expect(notes(actor)).toEqual([
-      expect.objectContaining({ op: [[4], 'note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[5], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[4], 'note.'], to: 'svc.bv' }),
+      expect.objectContaining({ op: [[5], 'note.'], to: 'svc.bv' }),
     ]);
   });
 });

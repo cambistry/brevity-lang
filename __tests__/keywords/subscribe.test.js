@@ -176,7 +176,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: '#<Remote:val>' }) },
+        { output: expect.objectContaining({ op: '$subscribe', to: 'Remote:val' }) },
       ],
     });
   });
@@ -185,7 +185,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Remote:val>' }) },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Remote:val' }) },
         { input: { id: '1', re: [7] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 7 }, to: 'caller' } },
@@ -197,7 +197,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
     await createActor(remoteScript, {
       expects: [
         { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: '#<Remote:val>' }) },
+        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Remote:val' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [5] } },
         { input: { id: '1', re: [10] } },

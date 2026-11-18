@@ -159,7 +159,7 @@ describe('a class calling its file\'s dependency', () => {
   it('is made by its file actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'made!', from: 'c' } },
-      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'note.', to: 'svc.bv' }) },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -170,9 +170,9 @@ describe('a class calling its file\'s dependency', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'called!', from: 'c' });
     const call = actor.posts.find(p => p.op === 'ping!');
-    expect(call).toEqual(expect.objectContaining({ to: 'Svc' }));
+    expect(call).toEqual(expect.objectContaining({ to: 'svc.bv' }));
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([]);
-    await actor.sendAsync({ id: call.id, re: '#<Svc>', from: 'Svc' });
+    await actor.sendAsync({ id: call.id, re: '#<Svc>', from: 'svc.bv' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 
@@ -182,11 +182,11 @@ describe('a class calling its file\'s dependency', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'both!', from: 'c' });
     const first = actor.posts.find(p => p.op === 'ping!');
-    await actor.sendAsync({ id: first.id, re: '#<Svc>', from: 'Svc' });
+    await actor.sendAsync({ id: first.id, re: '#<Svc>', from: 'svc.bv' });
     const second = actor.posts.filter(p => p.op === 'ping!')[1];
-    expect(second).toEqual(expect.objectContaining({ to: 'Svc' }));
+    expect(second).toEqual(expect.objectContaining({ to: 'svc.bv' }));
     expect(second.id).not.toEqual(first.id);
-    await actor.sendAsync({ id: second.id, re: '#<Svc>', from: 'Svc' });
+    await actor.sendAsync({ id: second.id, re: '#<Svc>', from: 'svc.bv' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 });
@@ -218,14 +218,14 @@ describe('a class using an actor it got from a dependency', () => {
     const actor = await (await compileActor(script)).spawn();
     await actor.sendAsync({ id: '1', op: 'run!', from: 'c' });
     const ping = actor.posts.find(p => p.op === 'ping!');
-    await actor.sendAsync({ id: ping.id, re: '#<Svc>', from: 'Svc' });
+    await actor.sendAsync({ id: ping.id, re: '#<Svc>', from: 'svc.bv' });
     const made = actor.posts.find(p => p.op === '$new');
-    expect(made).toEqual(expect.objectContaining({ op: '$new', to: 'Svc:Thing' }));
-    await actor.sendAsync({ id: made.id, re: '#<Svc:Thing:1>', 'ty': 'Svc:Thing', from: 'Svc' });
+    expect(made).toEqual(expect.objectContaining({ op: '$new', to: 'svc.bv:Thing' }));
+    await actor.sendAsync({ id: made.id, re: '#<svc.bv:Thing:1>', 'ty': 'Svc:Thing', from: 'svc.bv' });
     const poke = actor.posts.find(p => p.op === 'poke!');
-    expect(poke).toEqual(expect.objectContaining({ to: 'Svc:Thing:1' }));
+    expect(poke).toEqual(expect.objectContaining({ to: 'svc.bv:Thing:1' }));
     expect(new Set([ping.id, made.id, poke.id]).size).toBe(3);
-    await actor.sendAsync({ id: poke.id, re: '#<Svc:Thing:1>', from: 'Svc:Thing:1' });
+    await actor.sendAsync({ id: poke.id, re: '#<svc.bv:Thing:1>', from: 'svc.bv:Thing:1' });
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 });

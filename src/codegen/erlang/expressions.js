@@ -1,5 +1,6 @@
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
+import { isDependencyValue } from '../dep_address.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { selfAddress, addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
@@ -310,6 +311,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // an Erlang binary. fileName is enforced by validate() whenever the AST
     // uses Self as a value.
     if (name === 'Self') return erlString('#<' + quoteToken(ctx.fileName) + '>');
+    // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
+    if (isDependencyValue(ctx, name, typeEnv)) return erlString('#<' + ctx.depAddress(name) + '>');
     // Resolve SSA if context has ssaEnv
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));

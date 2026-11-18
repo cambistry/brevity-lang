@@ -55,12 +55,13 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     const own = type.initParams || [];
     return [...inherited.filter(p => !own.some(o => o.name === p.name)), ...own];
   };
-  // A class of a dependency is reached at the dependency's address and the
-  // class's token: `Svc:Counter`.
+  // A class of a dependency is reached at the dependency's address (its source)
+  // and the class's token: `svc.bv:Counter`.
   const addDependency = (name, dep, cls, type) => {
     if (synthetic.has(name)) return;
     synthetic.add(name);
-    const target = joinAddress([dep, cls]);
+    const source = ast.dependencies.find(d => d.name === dep && !d.wireTarget)?.path ?? dep;
+    const target = joinAddress([source, cls]);
     ast.dependencies.push({
       ...AST.dependency(name, { path: target, constructorArrow: type.effect === 'write' ? '=>' : '->', constructorParams: paramsOf(type) }),
       wireTarget: target,

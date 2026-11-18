@@ -54,7 +54,7 @@ describe('global boundary', () => {
     await actor.sendAsync({ id: '2', op: 'tell', to: ':Box:1:tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual(expect.objectContaining({
       op: [[{ r: '#<app.bv:Box:1:tally:x>' }], 'take'],
-      to: 'Svc',
+      to: 'svc.bv',
     }));
   });
 });

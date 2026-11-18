@@ -82,8 +82,17 @@ export function walkServices(doc, members) {
   return { doc: at, failedAt: -1 };
 }
 
+// A dependency's wire address is its source, never its local name: `use Svc =
+// "svc.bv"` is addressed as `svc.bv`. Name → source, for each dependency.
+export function dependencyAddresses(ast) {
+  const out = new Map();
+  for (const d of ast.dependencies || []) if (d.type === 'Dependency') out.set(d.name, d.path ?? d.name);
+  return out;
+}
+
 export function lowerRemoteCalls(ast, remotesParsed = {}) {
   const dependencies = new Set((ast.dependencies || []).map(d => d.name));
+  const sourceOf = dependencyAddresses(ast);
   // Names a header destructure binds (`(:Counter)`) aren't the alias.
   for (const d of ast.dependencies || []) for (const e of d.destructures || []) dependencies.delete(e.local);
 
@@ -110,14 +119,15 @@ export function lowerRemoteCalls(ast, remotesParsed = {}) {
         foldable: (name) => counts.get(name) === 1,
         constructed,
         cellInstance: (name) => (counts.has(name) ? null : cellInstances.get(name) || null),
+        sourceOf,
       });
     }
   }
   // Whatever no function scope reached: no locals to fold there.
-  lowerScope(ast, { remotesParsed, isDep: (name) => dependencies.has(name), foldable: () => false, onlyNew: true });
+  lowerScope(ast, { remotesParsed, isDep: (name) => dependencies.has(name), foldable: () => false, onlyNew: true, sourceOf });
 }
 
-function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => null, cellInstance = () => null, onlyNew = false }) {
+function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => null, cellInstance = () => null, onlyNew = false, sourceOf = new Map() }) {
   // Locals bound once to a static address: name → { tokens, doc, label, dep }.
   const statics = new Map();
   // Locals bound once to an actor of a dependency's class: name → its document.
@@ -130,7 +140,8 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
     if (root?.type !== 'Identifier') return null;
     if (isDep(root.name)) {
       const doc = remotesParsed[root.name] || null;
-      return { tokens: [root.name], doc, label: root.name, dep: root.name };
+      // The first token is the dependency's source; `label` and `dep` stay its name.
+      return { tokens: [sourceOf.get(root.name) ?? root.name], doc, label: root.name, dep: root.name };
     }
     return statics.get(root.name) || null;
   };

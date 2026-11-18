@@ -1693,7 +1693,7 @@ describe('chained calls', () => {
   it('an actor of a class named with `!` is annotated without the `!`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bangClassAnnotated!', from: 'c' } },
-      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'note.', to: 'svc.bv' }) },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1701,7 +1701,7 @@ describe('chained calls', () => {
   it('a subclass inherits from a class named with `!`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bangSuper!', from: 'c' } },
-      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'note.', to: 'svc.bv' }) },
       { output: { id: '1', re: [11], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1709,7 +1709,7 @@ describe('chained calls', () => {
   it('a class named with `!` is constructed and chains on the new actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bangClass!', from: 'c' } },
-      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'note.', to: 'svc.bv' }) },
       { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -1749,10 +1749,10 @@ describe('chained calls through a remote', () => {
 
   it('the next call goes to the address in `ty`', async () => {
     const actor = await createActor(source, {
-      expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'Thing' }) }],
+      expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) }],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'Thing' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
       { input: { id: '99', op: 'go!', from: 'caller' } },
       { output: expect.objectContaining({ op: [[2], 'inc!'], to: 'Thing/1' }) },
       { input: { id: '2', re: '#<Thing/9>', 'ty': 'Thing' } },
@@ -1782,7 +1782,7 @@ describe('a public class named with `!`', () => {
       }
     `,
       { input: { id: '1', op: 'go!', from: 'c' } },
-      { output: expect.objectContaining({ op: 'note.', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'note.', to: 'svc.bv' }) },
       { output: { id: '1', re: [5], 'ty': ['Integer'], to: 'c' } },
     );
   });

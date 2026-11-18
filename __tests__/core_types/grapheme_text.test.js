@@ -54,12 +54,12 @@ describe('GraphemeText via DI — # class', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GraphemeText' }) },
       ],
     });
 
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GT' } },
+      { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GraphemeText' } },
       { input: { id: '99', op: 'getSize', from: 'caller' } },
       { output: expect.objectContaining({ op: 'size', to: 'GT/1' }) },
       { input: { id: '2', re: { result: 1 } } },
@@ -71,12 +71,12 @@ describe('GraphemeText via DI — # class', () => {
     const actor = await createActor(source, {
       compileOptions: { remotes: { GT: GT_MANIFEST } },
       expects: [
-        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GT' }) },
+        { output: expect.objectContaining({ op: expect.arrayContaining(['$new']), to: 'GraphemeText' }) },
       ],
     });
 
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GT' } },
+      { input: { id: '1', re: '#<GT/1>', 'ty': 'GT', from: 'GraphemeText' } },
       { input: { id: '99', op: 'getFirst', from: 'caller' } },
       { output: expect.objectContaining({ op: 'first', to: 'GT/1' }) },
       { input: { id: '2', re: { result: 'e\u{0301}' } } },

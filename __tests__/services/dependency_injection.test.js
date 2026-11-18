@@ -103,7 +103,7 @@ describe('file-level DI — outgoing CAM messages', () => {
   it('silent call sends correct outgoing message', async () => {
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: 'ping.', from: 'c' });
-    const outgoing = actor.posts.find(p => p.to === 'Remote');
+    const outgoing = actor.posts.find(p => p.to === '/services/remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toBe('ping.');
   });
@@ -111,7 +111,7 @@ describe('file-level DI — outgoing CAM messages', () => {
   it('call with args sends correct outgoing message', async () => {
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '1', op: [[{ name: 'Alice' }], 'greet'], from: 'c', 'ty': [[{ name: 'Text' }]] });
-    const outgoing = actor.posts.find(p => p.to === 'Remote');
+    const outgoing = actor.posts.find(p => p.to === '/services/remote');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([[{ name: 'Alice' }], 'greet']);
   });
@@ -150,7 +150,7 @@ describe('file-level DI — full roundtrip', () => {
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '42', op: [[{ key: 'color' }], 'fetch'], from: 'caller', 'ty': [[{ key: 'Text' }]] });
 
-    const outgoing = actor.posts.find(p => p.to === 'DB');
+    const outgoing = actor.posts.find(p => p.to === '/services/db');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([[{ key: 'color' }], 'lookup']);
 
@@ -166,7 +166,7 @@ describe('file-level DI — full roundtrip', () => {
     const actor = await compiled.spawn();
     await actor.sendAsync({ id: '7', op: [[{ n: 5 }], 'compute'], from: 'tester', 'ty': [[{ n: 'Integer' }]] });
 
-    const outgoing = actor.posts.find(p => p.to === 'Math');
+    const outgoing = actor.posts.find(p => p.to === '/services/math');
     expect(outgoing.op).toEqual([[{ n: 5 }], 'double']);
 
     await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });

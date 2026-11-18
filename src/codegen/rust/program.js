@@ -21,6 +21,7 @@ ${arms.join('\n')}
 }
 
 // program.js — Program assembly and entry for Rust codegen
+import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import { addressToken, wireLabel } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
@@ -161,13 +162,13 @@ ${sourceArms}
     ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
   ];
   G.ctx.remoteInstanceVars = new Set();
-  // Constructor coercions: alias name → underlying dep name. Treat the alias
+  // Constructor coercions: alias name → the underlying dep's wire address. Treat the alias
   // as a dep so `t = Coerced(args)` enters the construction path; substitute
   // the underlying dep for `new` addressing.
   G.ctx.constructorCoercions = new Map(G.ctx.depWireTargets || []);
   for (const c of constructorCoercions) {
     const underlying = c.ref?.name || c.ref;
-    G.ctx.constructorCoercions.set(c.name, underlying);
+    G.ctx.constructorCoercions.set(c.name, G.ctx.depAddress(underlying));
     G.ctx.dependencyNames.add(c.name);
   }
   // Module-level state var -> child actor class, so ActorFieldSet /
@@ -398,7 +399,7 @@ ${sourceArms}
         // Remote construction: send `new`, await reply, extract from
         const calleeName = s.value.callee.name;
         // Constructor coercions resolve to the underlying dep name for `new`
-        const callee = G.ctx.constructorCoercions.get(calleeName) || calleeName;
+        const callee = G.ctx.constructorCoercions.get(calleeName) || G.ctx.depAddress(calleeName);
         stateInitLines.push(`    {`);
         stateInitLines.push(`        let seq = actor.send_seq.get();`);
         stateInitLines.push(`        actor.send_seq.set(seq + 1);`);
@@ -2180,6 +2181,13 @@ function codegenRust(ast, options = {}) {
   }
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   G.ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
+  // A dependency's wire address is its source (src/codegen/dep_address.js).
+  {
+    const addressing = dependencyAddressing(ast);
+    G.ctx.depAddress = addressing.address;
+    G.ctx.depSource = addressing.source;
+    G.ctx.depIsDependency = addressing.isDependency;
+  }
   G.ctx.remoteClassNames = ast.remoteClassNames;
   // Map dep alias -> interface (as declared in the constructor block). Used by
   // SubscribeCall to infer the target field's type so the re callback's
@@ -2199,13 +2207,13 @@ function codegenRust(ast, options = {}) {
     if (d.destructures) {
       for (const entry of d.destructures) {
         if (entry.spread) {
-          if (!G.ctx.templateSpreadHost) G.ctx.templateSpreadHost = d.name;
+          if (!G.ctx.templateSpreadHost) G.ctx.templateSpreadHost = G.ctx.depSource(d.name);
           continue;
         }
-        if (!entry.isClass) G.ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) G.ctx.destructuredMembers.set(entry.local, { service: G.ctx.depAddress(d.name), remote: entry.remote });
         G.ctx.dependencyNames.add(entry.local);
         if (entry.remote && !G.ctx.templateTagHost.has(entry.remote)) {
-          G.ctx.templateTagHost.set(entry.remote, d.name);
+          G.ctx.templateTagHost.set(entry.remote, G.ctx.depSource(d.name));
         }
       }
     }

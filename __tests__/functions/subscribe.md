@@ -57,14 +57,14 @@ Subscribing to a remote function posts `$subscribe` to a function-specific
 address:
 
 ```text
-to: "#<Pub:pub>"
+to: "Pub:pub"
 op: "$subscribe"
 ```
 
 Parameterized subscribe carries args:
 
 ```text
-to: "#<Pub:pub_w_params>"
+to: "Pub:pub_w_params"
 op: [[{ p: 100 }], "$subscribe"]
 ```
 

@@ -2076,8 +2076,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     let candidate = to;
     if (to.startsWith('#<') && to.endsWith('>')) candidate = to.slice(2, -1);
     if (candidate === '' || isRelative(candidate)) return null;
-    const sp = candidate.indexOf(':');
-    return sp === -1 ? candidate : candidate.slice(0, sp);
+    // The head token as it is written: a quoted source (`'a:b.bv':x`) holds a `:`.
+    let head;
+    try { [head] = split(candidate); } catch { return null; }
+    return head == null ? null : quote(head);
   }
 
   // Strip the destination's alias from embedded `#<ALIAS:sel>` tokens in

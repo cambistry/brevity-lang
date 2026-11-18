@@ -49,8 +49,8 @@ describe('use', () => {
   it('a name declared below is visible above it', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'early', from: 'c' } },
-      { output: { id: '1', op: 'n', to: 'Svc' } },
-      { input: { id: '1', re: [7], ty: ['Integer'], from: 'Svc' } },
+      { output: { id: '1', op: 'n', to: 'svc.bv' } },
+      { input: { id: '1', re: [7], ty: ['Integer'], from: 'svc.bv' } },
       { output: { id: '1', re: [7], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -58,7 +58,7 @@ describe('use', () => {
   it('a second binding', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'logged.', from: 'c' } },
-      { output: { id: '1', op: [['hi'], 'note.'], ty: [['Text']], to: 'Log' } },
+      { output: { id: '1', op: [['hi'], 'note.'], ty: [['Text']], to: 'log.bv' } },
     );
   });
 

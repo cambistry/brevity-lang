@@ -183,7 +183,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'readProp', from: 'c' } },
-        { output: expect.objectContaining({ op: 'count', to: 'Remote' }) },
+        { output: expect.objectContaining({ op: 'count', to: 'remote.bv' }) },
       ],
     });
   });
@@ -192,7 +192,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'readSeen', from: 'c' } },
-        { output: expect.objectContaining({ op: '$get', to: 'Remote:seen' }) },
+        { output: expect.objectContaining({ op: '$get', to: 'remote.bv:seen' }) },
       ],
     });
   });
@@ -201,7 +201,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'readSlot', from: 'c' } },
-        { output: expect.objectContaining({ op: '$get', to: 'Remote:slot' }) },
+        { output: expect.objectContaining({ op: '$get', to: 'remote.bv:slot' }) },
       ],
     });
   });
@@ -210,7 +210,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSeen.', from: 'c' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: '#<Remote:seen>' }) },
+        { output: expect.objectContaining({ op: '$subscribe', to: 'remote.bv:seen' }) },
       ],
     });
   });
@@ -219,7 +219,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSlot.', from: 'c' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: '#<Remote:slot>' }) },
+        { output: expect.objectContaining({ op: '$subscribe', to: 'remote.bv:slot' }) },
       ],
     });
   });
@@ -228,7 +228,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSum.', from: 'c' } },
-        { output: expect.objectContaining({ op: [[{ a: 2 }], '$subscribe'], to: '#<Remote:sum>' }) },
+        { output: expect.objectContaining({ op: [[{ a: 2 }], '$subscribe'], to: 'remote.bv:sum' }) },
       ],
     });
   });
@@ -237,7 +237,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'setSlot.', from: 'c' } },
-        { output: expect.objectContaining({ op: [[5], '$set'], to: '#<Remote:slot>' }) },
+        { output: expect.objectContaining({ op: [[5], '$set'], to: 'remote.bv:slot' }) },
       ],
     });
   });

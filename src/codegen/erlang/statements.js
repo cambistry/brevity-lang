@@ -177,9 +177,9 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
-    // Remote wire: bare verb in op, full address as "#<alias selector>".
+    // Remote wire: bare verb in op, the dependency's source and the selector as `to`.
     const tyField = tyExpr ? `, <<"ty">> => ${tyExpr}` : '';
-    const toBin = erlString('#<' + joinAddress([objectName, toSelector]) + '>');
+    const toBin = erlString(joinAddress([ctx.depSource(objectName), toSelector]));
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${wireOpExpr}, <<"to">> => ${toBin}${tyField}},`);
     outLines.push(`${I}io:put_chars([json_encode(${V('Sub_msg_')}), $\\n]),`);
   } else if (childActorType || _sCtx?.selfSpawnedRefs?.has(objectName)) {
@@ -202,7 +202,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
 // this body route to that address.
 function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
   const calleeName = s.value.callee.name;
-  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || ctx.depAddress(calleeName);
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
     ? `<<(${genExpr(ctx, { type: 'Identifier', name: s.value.viaInstance }, typeEnv, stmtCtx)})/binary, ":${s.value.viaSelector}"/utf8>>`
@@ -228,7 +228,7 @@ function genErlAsSend(ctx, varName, typeName, target, I, lines) {
 
 function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines) {
   const calleeName = s.value.callee.name;
-  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || ctx.depAddress(calleeName);
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
@@ -414,7 +414,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}${varName} = bv_object_one(bv_object_pack(await_response_(${v.id}))),`);
           continue;
         }
-        genErlAsSend(ctx, varName, s.typeName, erlString(s.value.name), I, lines);
+        genErlAsSend(ctx, varName, s.typeName, erlString(ctx.depAddress(s.value.name)), I, lines);
         continue;
       }
 
@@ -852,7 +852,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const tyField = hintTag
           ? `, <<"ty">> => [[${hintTag}]]`
           : '';
-        const toBin = erlString('#<' + joinAddress([s.objectName, toSelector]) + '>');
+        const toBin = erlString(joinAddress([ctx.depSource(s.objectName), toSelector]));
         lines.push(`${I}Set_msg_ = #{<<"op">> => [[${val}], <<"$set">>], <<"to">> => ${toBin}${tyField}},`);
         lines.push(`${I}io:put_chars([json_encode(Set_msg_), $\\n]),`);
       }

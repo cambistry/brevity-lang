@@ -151,7 +151,7 @@ describe('grandchild to child to parent', () => {
       { input: { id: '1', op: '$new', to: ':Box', from: 'c' } },
       { output: { id: '1', re: '#<:Box:1>', ty: ':Box', to: 'c' } },
       { input: { id: '2', op: 'tell', to: ':Box:1:tally', from: 'c' } },
-      { output: expect.objectContaining({ op: [[{ r: '#<:Box:1:tally:x>' }], 'take'], ty: [[{ r: 'Text' }]], to: 'Svc' }) },
+      { output: expect.objectContaining({ op: [[{ r: '#<:Box:1:tally:x>' }], 'take'], ty: [[{ r: 'Text' }]], to: 'svc.bv' }) },
     );
   });
 });

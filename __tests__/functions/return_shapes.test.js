@@ -250,7 +250,7 @@ describe('at runtime', () => {
     const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) }' }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
-      { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'f', to: 's.bv' }) },
       { input: { id: '1', re: [4], 'ty': ['Integer'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: [5] }) },
     );
@@ -260,7 +260,7 @@ describe('at runtime', () => {
     const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) | (Text) }' }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
-      { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 'f', to: 's.bv' }) },
       { input: { id: '1', re: ['y'], 'ty': ['Text'], from: 'Svc' } },
       { output: expect.objectContaining({ id: 'x', re: ['y'] }) },
     );

@@ -196,10 +196,10 @@ describe('a type of another file, reached through the service', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'got', from: 'c' } },
-      { output: expect.objectContaining({ op: '$new', to: 'Svc:W' }) },
-      { input: { id: '1', re: '#<Svc:W:1>', ty: 'Svc:W', from: 'Svc' } },
-      { output: expect.objectContaining({ op: 'get', to: 'Svc:W:1' }) },
-      { input: { id: '2', re: [[7]], ty: ['Svc:W:X'], from: 'Svc:W:1' } },
+      { output: expect.objectContaining({ op: '$new', to: 'svc.bv:W' }) },
+      { input: { id: '1', re: '#<svc.bv:W:1>', ty: 'Svc:W', from: 'svc.bv' } },
+      { output: expect.objectContaining({ op: 'get', to: 'svc.bv:W:1' }) },
+      { input: { id: '2', re: [[7]], ty: ['Svc:W:X'], from: 'svc.bv:W:1' } },
       { output: { id: 'x', re: { result: 7 }, ty: { result: 'Integer' }, to: 'c' } },
     );
   });
@@ -241,12 +241,12 @@ describe('types of one name in two services', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'a', op: 'fromGeo', from: 'c' } },
-      { output: expect.objectContaining({ op: 'origin', to: 'Geo' }) },
-      { input: { id: '1', re: [[7, 8, 9]], ty: ['Geo:Point'], from: 'Geo' } },
+      { output: expect.objectContaining({ op: 'origin', to: 'geo.bv' }) },
+      { input: { id: '1', re: [[7, 8, 9]], ty: ['Geo:Point'], from: 'geo.bv' } },
       { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
       { input: { id: 'b', op: 'fromSvc', from: 'c' } },
-      { output: expect.objectContaining({ op: 'origin', to: 'Svc' }) },
-      { input: { id: '2', re: [[5, 6]], ty: ['Svc:Point'], from: 'Svc' } },
+      { output: expect.objectContaining({ op: 'origin', to: 'svc.bv' }) },
+      { input: { id: '2', re: [[5, 6]], ty: ['Svc:Point'], from: 'svc.bv' } },
       { output: { id: 'b', re: { result: 6 }, ty: { result: 'Integer' }, to: 'c' } },
     );
   });

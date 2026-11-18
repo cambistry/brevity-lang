@@ -81,9 +81,9 @@ describe('readonly param — &Type is live', () => {
     await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
     await actor.sendAsync({ id: '3', op: 'bump!', from: 'c' });
     expect(notes(actor)).toEqual([
-      expect.objectContaining({ op: [[0], 'note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[1], 'note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[2], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[0], 'note.'], to: 'svc.bv' }),
+      expect.objectContaining({ op: [[1], 'note.'], to: 'svc.bv' }),
+      expect.objectContaining({ op: [[2], 'note.'], to: 'svc.bv' }),
     ]);
   });
 
@@ -92,8 +92,8 @@ describe('readonly param — &Type is live', () => {
     await actor.sendAsync({ id: '1', op: 'watchNamed', from: 'c' });
     await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
     expect(notes(actor)).toEqual([
-      expect.objectContaining({ op: [[0], 'note.'], to: 'Svc' }),
-      expect.objectContaining({ op: [[1], 'note.'], to: 'Svc' }),
+      expect.objectContaining({ op: [[0], 'note.'], to: 'svc.bv' }),
+      expect.objectContaining({ op: [[1], 'note.'], to: 'svc.bv' }),
     ]);
   });
 

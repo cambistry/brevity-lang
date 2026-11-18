@@ -1,3 +1,4 @@
+import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
@@ -13,7 +14,7 @@ import { buildTypeEnv, parseInterface } from './types.js';
 export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
-  genTypeCondition, genValueCondition, genDefaultValue, stateKey, childBinding,
+  genTypeCondition, genValueCondition, genDefaultValue, stateKey,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
   genSendNew,
 } from './expressions.js';
@@ -413,14 +414,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ];
   ctx.stateVarNames = new Set(allStateNames);
   ctx.remoteInstanceVars = new Set();
-  // Constructor coercions: alias name → underlying dep name. The alias is
+  // Constructor coercions: alias name → the underlying dep's wire address. The alias is
   // treated as a dep at codegen time so `t = Coerced(args)` enters the same
   // construction path as `t = Thing(args)`, but `new` is addressed to the
   // underlying dep.
   ctx.constructorCoercions = new Map(ctx.depWireTargets || []);
   for (const c of constructorCoercions) {
     const underlying = c.ref?.name || c.ref;
-    ctx.constructorCoercions.set(c.name, underlying);
+    ctx.constructorCoercions.set(c.name, ctx.depAddress(underlying));
     ctx.dependencyNames.add(c.name);
   }
   const VALUE_TYPES = new Set(['Text', 'Integer', 'Decimal', 'Float', 'Boolean', 'Anything']);
@@ -535,7 +536,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (s.value?.deferredConstruct) return `    this.#${stateKey(s.name)} = ${spawned(genExpr(ctx, s.value))};`;
     if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name)) {
       const calleeName = s.value.callee.name;
-      const targetName = ctx.constructorCoercions.get(calleeName) || calleeName;
+      const targetName = ctx.constructorCoercions.get(calleeName) || ctx.depAddress(calleeName);
       ctx.remoteInstanceVars.add(s.name);
       return `    ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))}.then(addr => { this.#${stateKey(s.name)} = addr; });`;
     }
@@ -1572,7 +1573,14 @@ export function codegen(ast, options = {}) {
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
-  // destructuredMembers: localName → { service: depName, remote: remoteName }
+  // A dependency's wire address is its source (src/codegen/dep_address.js).
+  {
+    const addressing = dependencyAddressing(ast);
+    ctx.depAddress = addressing.address;
+    ctx.depSource = addressing.source;
+    ctx.depIsDependency = addressing.isDependency;
+  }
+  // destructuredMembers: localName → { service: the dependency's wire address, remote: remoteName }
   ctx.destructuredMembers = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
   // factory address of whichever service the tag was destructured from. Keyed by
@@ -1585,13 +1593,13 @@ export function codegen(ast, options = {}) {
     if (d.destructures) {
       for (const entry of d.destructures) {
         if (entry.spread) {
-          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
+          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = ctx.depSource(d.name);
           continue;
         }
-        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: ctx.depAddress(d.name), remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
         if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
-          ctx.templateTagHost.set(entry.remote, d.name);
+          ctx.templateTagHost.set(entry.remote, ctx.depSource(d.name));
         }
       }
     }

@@ -96,7 +96,7 @@ function handleTypedAssign_DepServiceRef(s, I, lines) {
     G.ctx.needsAwaitNew = true;
     return true;
   }
-  genRustAsSend(mintRustSsa(s.name), s.typeName, `self.state.get("${stateKey(s.value.name)}").and_then(|v| v.as_str()).unwrap_or("${s.value.name}")`, I, lines);
+  genRustAsSend(mintRustSsa(s.name), s.typeName, `self.state.get("${stateKey(s.value.name)}").and_then(|v| v.as_str()).unwrap_or(${JSON.stringify(G.ctx.depAddress(s.value.name))})`, I, lines);
   G.ctx.needsAwaitNew = true;
   return true;
 }
@@ -1510,7 +1510,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
 // body route to that address.
 function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   const calleeName = s.value.callee.name;
-  const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = G.ctx.constructorCoercions?.get(calleeName) || G.ctx.depAddress(calleeName);
   G.ctx.needsAwaitNew = true;
   G.ctx.needsAwaitNew = true;
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = {`);
@@ -1520,7 +1520,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let mut new_msg = Map::new();`);
   lines.push(`${I}    new_msg.insert("id".to_string(), json!(new_id.clone()));`);
   lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv, undefined, 'new_msg')}`);
-  lines.push(`${I}    new_msg.insert("to".to_string(), json!("${targetName}"));`);
+  lines.push(`${I}    new_msg.insert("to".to_string(), json!(${JSON.stringify(targetName)}));`);
   lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(new_msg)));`);
   lines.push(`${I}    let addr = self.await_new_response(&new_id);`);
   lines.push(`${I}    let seq2 = self.send_seq.get();`);
@@ -1539,7 +1539,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
 
 function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   const calleeName = s.value.callee.name;
-  const targetName = G.ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = G.ctx.constructorCoercions?.get(calleeName) || G.ctx.depAddress(calleeName);
   G.ctx.localInstanceVars.add(s.name);
   G.ctx.needsAwaitNew = true;
   lines.push(`${I}let ${mintRustSsa(s.name)}: Value = {`);
@@ -1551,7 +1551,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv)}`);
   const toJson = s.value.viaInstance
     ? `json!(format!("{}:${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
-    : `json!("${targetName}")`;
+    : `json!(${JSON.stringify(targetName)})`;
   lines.push(`${I}    send_msg.insert("to".to_string(), ${toJson});`);
   lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
   lines.push(`${I}    self.await_new_response(&new_id)`);
@@ -2343,7 +2343,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'ActorFieldSet') {
       // c.field <- v — dispatch the synthesized setter. In process the arm key
       // is the pair "$set field"; on the wire the op is "$set", the field the
-      // last token of the address, "#<alias field>".
+      // last token of the address (`svc.bv:field`).
       const internalSetSelector = '$set ' + wireLabel('@' + s.fieldName);
       const toSelector = s.fieldName;
       const val = genRustExpr(s.value, typeEnv);
@@ -2372,7 +2372,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       } else if (G.ctx.dependencyNames?.has(s.objectName) && !G.ctx.stateVarNames?.has(s.objectName)) {
         // Remote dep declared via `( "Alias": Alias { ... } ) *{ }`: post the
         // set message via binding.send with bare "set" op and the full
-        // address as "#<alias selector>" (hash-angle delimited).
+        // address: the dependency's source and the selector, bare.
         // Include ty with the value's type so the remote's schema/type
         // check passes. Route val through toJsonValue so typed RHS (e.g.
         // BigInt) lands as a serializable Value in the op payload.
@@ -2387,7 +2387,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const tyPart = hintTag
           ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${hintTag}]]));`
           : '';
-        const toFieldStr = '#<' + joinAddress([s.objectName, toSelector]) + '>';
+        const toFieldStr = joinAddress([G.ctx.depSource(s.objectName), toSelector]);
         lines.push(`${I}{`);
         lines.push(`${I}    let mut set_msg = Map::new();`);
         lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("$set")]));`);
@@ -2621,8 +2621,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    if let Some(re_val) = initial { self.dispatch_sub(${slot}, &re_val); }`);
           lines.push(`${I}}`);
         } else if (isRemoteDep) {
-          // Remote wire: bare "subscribe" op, full address as "#<alias selector>".
-          const toFieldStr = '#<' + joinAddress([objectName, toSelector]) + '>';
+          // Remote wire: bare "subscribe" op, the dependency's source and the selector as `to`.
+          const toFieldStr = joinAddress([G.ctx.depSource(objectName), toSelector]);
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);
           lines.push(`${I}    self.send_seq.set(seq + 1);`);

@@ -41,8 +41,8 @@ describe('use("…") — calls reach the dependency', () => {
   it('through a destructure in a function body', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'viaDestructure', from: 'c' } },
-      { output: { id: '1', op: 'n', to: 'Svc' } },
-      { input: { id: '1', re: [7], ty: ['Integer'], from: 'Svc' } },
+      { output: { id: '1', op: 'n', to: 'svc.bv' } },
+      { input: { id: '1', re: [7], ty: ['Integer'], from: 'svc.bv' } },
       { output: { id: '1', re: [7], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -50,8 +50,8 @@ describe('use("…") — calls reach the dependency', () => {
   it('through an alias in a function body', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'viaAlias', from: 'c' } },
-      { output: { id: '1', op: 'n', to: 'Svc' } },
-      { input: { id: '1', re: [8], ty: ['Integer'], from: 'Svc' } },
+      { output: { id: '1', op: 'n', to: 'svc.bv' } },
+      { input: { id: '1', re: [8], ty: ['Integer'], from: 'svc.bv' } },
       { output: { id: '1', re: [8], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -59,8 +59,8 @@ describe('use("…") — calls reach the dependency', () => {
   it('used directly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'direct', from: 'c' } },
-      { output: { id: '1', op: 'n', to: 'Svc' } },
-      { input: { id: '1', re: [9], ty: ['Integer'], from: 'Svc' } },
+      { output: { id: '1', op: 'n', to: 'svc.bv' } },
+      { input: { id: '1', re: [9], ty: ['Integer'], from: 'svc.bv' } },
       { output: { id: '1', re: [9], ty: ['Integer'], to: 'c' } },
     );
   });
@@ -74,11 +74,11 @@ describe('use("…") — in a constructor block', () => {
       @go = { :value Integer = t.get(); return :value }
     `, {
       expects: [
-        { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: '__use_thingBv' }) },
+        { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) },
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', ty: 'Thing', from: '__use_thingBv' } },
+      { input: { id: '1', re: '#<Thing/1>', ty: 'Thing', from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: { value: 42 } } },

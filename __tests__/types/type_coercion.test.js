@@ -208,7 +208,7 @@ describe('type coercion — runtime', () => {
   it('type coercion — declared in the header — service ref — sends [Integer, as] and replies with the value', async () => {
     await expectBehavior(script,
       { input: { id: '99', op: 'counterInt', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: ['Integer', '$as'], to: 'Counter' }) },
+      { output: expect.objectContaining({ id: '1', op: ['Integer', '$as'], to: '/services/counter' }) },
       { input: { id: '1', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
     );
@@ -217,19 +217,19 @@ describe('type coercion — runtime', () => {
   it('type coercion — declared in the header — service ref with several as types — sends the bound type', async () => {
     await expectBehavior(script,
       { input: { id: '99', op: 'storeInt', from: 'caller' } },
-      { output: expect.objectContaining({ op: ['Integer', '$as'], to: 'Store' }) },
+      { output: expect.objectContaining({ op: ['Integer', '$as'], to: '/services/store' }) },
     );
     await expectBehavior(script,
       { input: { id: '99', op: 'storeText', from: 'caller' } },
-      { output: expect.objectContaining({ op: ['Text', '$as'], to: 'Store' }) },
+      { output: expect.objectContaining({ op: ['Text', '$as'], to: '/services/store' }) },
     );
   });
 
   it('type coercion — declared in the header — class ref, one step — new, then [Integer, as]', async () => {
     await expectBehavior(script,
       { input: { id: '99', op: 'serviceInt', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: '$new', to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { output: expect.objectContaining({ id: '1', op: '$new', to: 'service.bv' }) },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { output: expect.objectContaining({ id: '2', op: ['Integer', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
@@ -239,8 +239,8 @@ describe('type coercion — runtime', () => {
   it('type coercion — declared in the header — class ref, one step — new, then [Text, as]', async () => {
     await expectBehavior(script,
       { input: { id: '99', op: 'serviceText', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: '$new', to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { output: expect.objectContaining({ id: '1', op: '$new', to: 'service.bv' }) },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { output: expect.objectContaining({ id: '2', op: ['Text', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: ['hello'], 'ty': ['Text'] } },
       { output: { id: '99', re: ['hello'], 'ty': ['Text'], to: 'caller' } },
@@ -434,7 +434,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a reply of the document type fails', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'overDoc', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'text', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'text', to: '/s' }) },
         { input: { id: '1', re: ['x'], 'ty': ['Text'] } },
         { output: { id: '99', ex: { 'overDoc': 'as Integer: got Text' }, to: 'c' } },
       );
@@ -442,7 +442,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a reply of the claimed type passes', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'overDoc', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'text', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'text', to: '/s' }) },
         { input: { id: '1', re: [41], 'ty': ['Integer'] } },
         { output: { id: '99', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -453,7 +453,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — the reply matches', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'bare', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'int', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'int', to: '/s' }) },
         { input: { id: '1', re: [41], 'ty': ['Integer'] } },
         { output: { id: '99', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -461,7 +461,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — the document is wrong', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'bare', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'int', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'int', to: '/s' }) },
         { input: { id: '1', re: ['x'], 'ty': ['Text'] } },
         { output: { id: '99', ex: { 'bare': 'as Integer: got Text' }, to: 'c' } },
       );
@@ -469,7 +469,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — the tag lies', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'bare', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'int', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'int', to: '/s' }) },
         { input: { id: '1', re: ['x'], 'ty': ['Integer'] } },
         { output: { id: '99', ex: { 'bare': 'as Integer: got Text' }, to: 'c' } },
       );
@@ -477,7 +477,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a destructured field is wrong', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'destructured', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'field', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'field', to: '/s' }) },
         { input: { id: '1', re: { a: 'x' }, 'ty': { a: 'Integer' } } },
         { output: { id: '99', ex: { 'destructured': 'as Integer: got Text' }, to: 'c' } },
       );
@@ -488,7 +488,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — as Object keeps a one-entry reply', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'whole', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'text', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'text', to: '/s' }) },
         { input: { id: '1', re: ['x'], 'ty': ['Text'] } },
         { output: expect.objectContaining({ id: '99', re: ['x'], to: 'c' }) },
       );
@@ -496,7 +496,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a Float that arrives as a whole number', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'floatBare', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'float', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'float', to: '/s' }) },
         { input: { id: '1', re: [3], 'ty': ['Float'] } },
         { output: { id: '99', re: { r: 1.5 }, 'ty': { r: 'Float' }, to: 'c' } },
       );
@@ -504,7 +504,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a whole Float as Integer', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'floatAsInteger', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'float', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'float', to: '/s' }) },
         { input: { id: '1', re: [3], 'ty': ['Float'] } },
         { output: { id: '99', re: { r: 4 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -512,7 +512,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a fractional Float as Integer', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'floatAsInteger', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'float', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'float', to: '/s' }) },
         { input: { id: '1', re: [1.5], 'ty': ['Float'] } },
         { output: { id: '99', ex: { 'floatAsInteger': 'as Integer: got Float' }, to: 'c' } },
       );
@@ -523,7 +523,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a named reply with the fields passes', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: { x: 1, y: 2 }, 'ty': { x: 'Integer', y: 'Integer' } } },
         { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -531,7 +531,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — extra fields are dropped', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: { x: 1, y: 2, z: 3 }, 'ty': { x: 'Integer', y: 'Integer', z: 'Integer' } } },
         { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -539,7 +539,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a tagged positional passes', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: [[1, 2]], 'ty': [':Point'] } },
         { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
       );
@@ -547,7 +547,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a missing field fails', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: { x: 1 }, 'ty': { x: 'Integer' } } },
         { output: { id: '99', ex: { 'point': 'as Point: got Object' }, to: 'c' } },
       );
@@ -555,7 +555,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a wrong field fails', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: { x: 1, y: 'no' }, 'ty': { x: 'Integer', y: 'Text' } } },
         { output: { id: '99', ex: { 'point': 'as Point: got Object' }, to: 'c' } },
       );
@@ -563,7 +563,7 @@ describe('type coercion — runtime', () => {
     it('as — remote replies — a scalar fails', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', op: 'any', to: 'Svc' }) },
+        { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: ['x'], 'ty': ['Text'] } },
         { output: { id: '99', ex: { 'point': 'as Point: got Text' }, to: 'c' } },
       );
@@ -611,7 +611,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
   it('service ref — sends [Integer, as] and replies with the value', async () => {
     await expectActorBehavior(await createActor(script, { compileOptions: { remotes } }),
       { input: { id: '99', op: 'counterInt', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: ['Integer', '$as'], to: 'Counter' }) },
+      { output: expect.objectContaining({ id: '1', op: ['Integer', '$as'], to: '/services/counter' }) },
       { input: { id: '1', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
     );
@@ -620,19 +620,19 @@ describe('type coercion — documents supplied through options.remotes', () => {
   it('service ref with several as types — sends the bound type', async () => {
     await expectActorBehavior(await createActor(script, { compileOptions: { remotes } }),
       { input: { id: '99', op: 'storeInt', from: 'caller' } },
-      { output: expect.objectContaining({ op: ['Integer', '$as'], to: 'Store' }) },
+      { output: expect.objectContaining({ op: ['Integer', '$as'], to: '/services/store' }) },
     );
     await expectActorBehavior(await createActor(script, { compileOptions: { remotes } }),
       { input: { id: '99', op: 'storeText', from: 'caller' } },
-      { output: expect.objectContaining({ op: ['Text', '$as'], to: 'Store' }) },
+      { output: expect.objectContaining({ op: ['Text', '$as'], to: '/services/store' }) },
     );
   });
 
   it('class ref, one step — new, then [Integer, as]', async () => {
     await expectActorBehavior(await createActor(script, { compileOptions: { remotes } }),
       { input: { id: '99', op: 'serviceInt', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: '$new', to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { output: expect.objectContaining({ id: '1', op: '$new', to: 'service.bv' }) },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { output: expect.objectContaining({ id: '2', op: ['Integer', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },
       { output: { id: '99', re: [42], 'ty': ['Integer'], to: 'caller' } },
@@ -642,8 +642,8 @@ describe('type coercion — documents supplied through options.remotes', () => {
   it('class ref, one step — new, then [Text, as]', async () => {
     await expectActorBehavior(await createActor(script, { compileOptions: { remotes } }),
       { input: { id: '99', op: 'serviceText', from: 'caller' } },
-      { output: expect.objectContaining({ id: '1', op: '$new', to: 'Service' }) },
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { output: expect.objectContaining({ id: '1', op: '$new', to: 'service.bv' }) },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { output: expect.objectContaining({ id: '2', op: ['Text', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: ['hello'], 'ty': ['Text'] } },
       { output: { id: '99', re: ['hello'], 'ty': ['Text'], to: 'caller' } },
@@ -664,9 +664,9 @@ describe('type coercion — class ref constructed at the top level', () => {
         =
         n Integer = s
         return n as Integer
-    `, { expects: [{ output: expect.objectContaining({ op: '$new', to: 'Service' }) }] });
+    `, { expects: [{ output: expect.objectContaining({ op: '$new', to: 'service.bv' }) }] });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { input: { id: '99', op: 'asInt', from: 'caller' } },
       { output: expect.objectContaining({ op: ['Integer', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },
@@ -686,10 +686,10 @@ describe('type coercion — class ref constructed at the top level', () => {
         return n as Integer
     `, {
       compileOptions: { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n} | Integer' }] },
-      expects: [{ output: expect.objectContaining({ op: '$new', to: 'Service' }) }],
+      expects: [{ output: expect.objectContaining({ op: '$new', to: 'service.bv' }) }],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'Service' } },
+      { input: { id: '1', re: '#<Service/1>', 'ty': 'Service', from: 'service.bv' } },
       { input: { id: '99', op: 'asInt', from: 'caller' } },
       { output: expect.objectContaining({ op: ['Integer', '$as'], to: 'Service/1' }) },
       { input: { id: '2', re: [42], 'ty': ['Integer'] } },

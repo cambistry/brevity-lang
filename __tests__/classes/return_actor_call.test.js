@@ -159,7 +159,7 @@ describe('returning an actor call — runtime', () => {
   it('returning a call on a remote — waits for the reply', async () => {
     await expectBehavior(script,
       { input: { id: '99', op: 'go', from: 'c' } },
-      { output: expect.objectContaining({ op: 't', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: 't', to: 'svc' }) },
       { input: { id: '1', re: [7], 'ty': ['Integer'] } },
       { output: expect.objectContaining({ id: '99', re: [7], to: 'c' }) },
     );

@@ -1,5 +1,6 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
+import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
@@ -1503,14 +1504,14 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // codegen time so DotAccessExpr can resolve a `*Point` cell to its decl.
   ctx.stateVarDecls = stateVarDecls;
   ctx.remoteInstanceVars = new Set();
-  // Constructor coercions: alias name → underlying dep name. Add the alias
+  // Constructor coercions: alias name → the underlying dep's wire address. Add the alias
   // to dependencyNames so `t = Coerced(args)` enters the construction path;
   // substitute the underlying dep at `new` emission.
   ctx.constructorCoercions = new Map(ctx.depWireTargets || []);
   for (const s of (actor.constructorBody || [])) {
     if (s.type === 'ServiceCoercion' && s.constructorParams) {
       const underlying = s.ref?.name || s.ref;
-      ctx.constructorCoercions.set(s.name, underlying);
+      ctx.constructorCoercions.set(s.name, ctx.depAddress(underlying));
       ctx.dependencyNames.add(s.name);
     }
   }
@@ -1685,7 +1686,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
       // Remote construction: send `new`, read reply, extract from
       const calleeName = s.value.callee.name;
       // Constructor coercions resolve to the underlying dep name for `new`
-      const callee = ctx.constructorCoercions.get(calleeName) || calleeName;
+      const callee = ctx.constructorCoercions.get(calleeName) || ctx.depAddress(calleeName);
       blockLines.push(`    New_seq_${v.name} = bv_next_seq_()`);
       blockLines.push(`    New_id_${v.name} = integer_to_binary(New_seq_${v.name})`);
       blockLines.push(`    New_msg_${v.name} = #{<<"id">> => New_id_${v.name}, ${erlNewOpEntries(ctx, s.value.args, new Map(), {})}, <<"to">> => ${erlString(callee)}}`);
@@ -2347,6 +2348,13 @@ export function codegenErlang(ast, options = {}) {
 
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
+  // A dependency's wire address is its source (src/codegen/dep_address.js).
+  {
+    const addressing = dependencyAddressing(ast);
+    ctx.depAddress = addressing.address;
+    ctx.depSource = addressing.source;
+    ctx.depIsDependency = addressing.isDependency;
+  }
   ctx.destructuredMembers = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
   // factory address of whichever service the tag was destructured from. Keyed by
@@ -2358,13 +2366,13 @@ export function codegenErlang(ast, options = {}) {
     if (d.destructures) {
       for (const entry of d.destructures) {
         if (entry.spread) {
-          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = d.name;
+          if (!ctx.templateSpreadHost) ctx.templateSpreadHost = ctx.depSource(d.name);
           continue;
         }
-        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: d.name, remote: entry.remote });
+        if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: ctx.depAddress(d.name), remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
         if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
-          ctx.templateTagHost.set(entry.remote, d.name);
+          ctx.templateTagHost.set(entry.remote, ctx.depSource(d.name));
         }
       }
     }

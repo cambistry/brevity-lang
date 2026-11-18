@@ -1,4 +1,5 @@
 // expressions.js — Expression generation for Rust codegen
+import { isDependencyValue } from '../dep_address.js';
 import { addressToken, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
@@ -283,6 +284,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // `Self` in expression position resolves to the class wire address.
     // fileName is enforced by validate() whenever the AST uses Self as a value.
     if (expr.name === 'Self') return `Value::String(${JSON.stringify('#<' + quoteToken(G.ctx.fileName) + '>')}.to_string())`;
+    // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
+    if (isDependencyValue(G.ctx, expr.name, typeEnv)) return `Value::String(${JSON.stringify('#<' + G.ctx.depAddress(expr.name) + '>')}.to_string())`;
     return rustSsaResolve(expr.name);
   }
   if (expr.type === 'BinaryExpr') {

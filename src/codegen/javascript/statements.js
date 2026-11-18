@@ -12,11 +12,9 @@ import {
 } from './expressions.js';
 
 // Escape a string for use inside a #<...> wire address.
-const encAddr = (s) => s.replace(/\\/g, '\\\\').replace(/>/g, '\\>');
-
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
 // op:"$subscribe" to c's address, with the member `x` appended to the `to`
-// field as its last token (`#<c:x>` for a remote, `:x` for a child).
+// field as its last token (`svc.bv:x` for a remote, `:x` for a child).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
 // payload. The statement produces no value and is not assignable.
@@ -111,9 +109,9 @@ export function genSubscribeCall(ctx, expr) {
         }`;
   }
   // Remote dep (declared via `( "Alias": Alias { ... } ) *{ }`): post through
-  // binding addressed to "#<alias member>" — hash-angle delimited.
+  // binding addressed to the dependency's source and the member: `svc.bv:member`.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
-    const toExpr = JSON.stringify('#<' + encAddr(joinAddress([objectName, toSelector])) + '>');
+    const toExpr = JSON.stringify(joinAddress([ctx.depSource(objectName), toSelector]));
     return `
         {${pendingSetup}
           this.#binding.post({ id: _sub_id, op: ${opExpr}, to: ${toExpr}${tyField} });
@@ -604,7 +602,7 @@ function isDepConstructorCall(ctx, s) {
 // body route via `this.#send(op, t)` instead of `this.#send(op, this.#t)`.
 function genDepConstructorAssign(ctx, s, emitBinding) {
   const calleeName = s.value.callee.name;
-  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || ctx.depAddress(calleeName);
   ctx.localInstanceVars.add(s.name);
   const toExpr = s.value.viaInstance
     ? `${genExpr(ctx, AST.identifier(s.value.viaInstance))} + ${JSON.stringify(':' + s.value.viaSelector)}`
@@ -614,7 +612,7 @@ function genDepConstructorAssign(ctx, s, emitBinding) {
 
 function genDepConstructorAsAssign(ctx, s, emitBinding) {
   const calleeName = s.value.callee.name;
-  const targetName = ctx.constructorCoercions?.get(calleeName) || calleeName;
+  const targetName = ctx.constructorCoercions?.get(calleeName) || ctx.depAddress(calleeName);
   const tmpRef = `_ref_${s.name}`;
   const newLine = `const ${tmpRef} = await ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))};`;
   const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${tmpRef}))[0]`);
@@ -656,7 +654,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       const { service, remote } = ctx.destructuredMembers.get(s.value.name);
       return emitBinding(s.name, `BvObject.one(BvObject.pack(await this.#send(${JSON.stringify(memberOp(remote))}, ${JSON.stringify(service)})), ${JSON.stringify(s.name)})`);
     }
-    const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(s.value.name);
+    const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(ctx.depAddress(s.value.name));
     return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${target}))[0]`);
   }
   // Typed assign from child actor ref: n Integer = c → childSend [Type, as]
@@ -861,8 +859,8 @@ export function genLocals(ctx, body, outerEnv) {
       const toSelector = s.fieldName;
       const v = genExpr(ctx, s.value);
       // Remote dep (imported via *( "Alias": Alias { ... } )): post via
-      // binding addressed to "#<alias field>" — the whole address is one
-      // hash-angle delimited address. Include `ty` so the
+      // binding addressed to the dependency's source and the field
+      // (`svc.bv:field`), bare as `to` always is. Include `ty` so the
       // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
@@ -873,7 +871,7 @@ export function genLocals(ctx, body, outerEnv) {
           : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
           : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
         const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
-        const toExpr = JSON.stringify('#<' + encAddr(joinAddress([s.objectName, toSelector])) + '>');
+        const toExpr = JSON.stringify(joinAddress([ctx.depSource(s.objectName), toSelector]));
         return `\n        this.#binding.post({ op: [[${v}], "$set"], to: ${toExpr}${tyField} });`;
       }
       let target;

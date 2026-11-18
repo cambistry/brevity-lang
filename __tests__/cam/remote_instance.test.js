@@ -89,10 +89,10 @@ describe('a call used as a statement waits for its reply', () => {
     const actor = await createActor(script);
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'go!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', op: 'ping!', to: 'Svc' }) },
+      { output: expect.objectContaining({ id: '1', op: 'ping!', to: 'svc.bv' }) },
       { input: { id: '2', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', to: 'c' }) },
-      { input: { id: '1', re: '#<Svc>', from: 'Svc' } },
+      { input: { id: '1', re: '#<Svc>', from: 'svc.bv' } },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -128,9 +128,9 @@ describe('a call that doesn\'t wait for a reply', () => {
     const actor = await createActor(script);
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'go!', from: 'c' } },
-      { output: expect.objectContaining({ op: [['x'], 'log'], to: 'Svc' }) },
-      { output: expect.objectContaining({ op: [['z'], 'note.'], to: 'Svc' }) },
-      { output: expect.objectContaining({ op: 'ping!', to: 'Svc' }) },
+      { output: expect.objectContaining({ op: [['x'], 'log'], to: 'svc.bv' }) },
+      { output: expect.objectContaining({ op: [['z'], 'note.'], to: 'svc.bv' }) },
+      { output: expect.objectContaining({ op: 'ping!', to: 'svc.bv' }) },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -145,7 +145,7 @@ describe('a call that doesn\'t wait for a reply', () => {
     const actor = await createActor(script);
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'inClass!', from: 'c' } },
-      { output: expect.objectContaining({ op: [['y'], 'log'], to: 'Svc' }) },
+      { output: expect.objectContaining({ op: [['y'], 'log'], to: 'svc.bv' }) },
       { output: { id: '1', re: [2], 'ty': ['Integer'], to: 'c' } },
     );
   });

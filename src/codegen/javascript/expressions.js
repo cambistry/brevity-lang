@@ -1,3 +1,4 @@
+import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
@@ -452,6 +453,8 @@ export function genExpr(ctx, expr) {
     return `await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
   }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
+  // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
+  if (expr.type === 'Identifier' && isDependencyValue(ctx, expr.name, ctx.currentTypeEnv)) return JSON.stringify('#<' + ctx.depAddress(expr.name) + '>');
   if (expr.type === 'Identifier')     return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : ssaResolve(ctx, expr.name);
   if (expr.type === 'RefRead')        return ctx.stateVarNames.has(expr.name) ? `this.#${stateKey(expr.name)}` : `${jsIdent(expr.name)}.value`;
   if (expr.type === 'RefArg')        return expr.name;
