@@ -201,13 +201,13 @@ box = Svc.Box(5)
       compileOptions: { remotes },
       expects: [
         { output: expect.objectContaining({ op: [[5], '$new'], to: 'svc.bv:Box' }) },
-        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'Svc:Box', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'svc.bv:Box', from: 'svc.bv' } },
       ],
     });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'local', from: 'c' } },
       { output: expect.objectContaining({ op: [[1], '$new'], to: 'svc.bv:Box' }) },
-      { input: { id: '2', re: '#<svc.bv:Box:2>', ty: 'Svc:Box', from: 'svc.bv' } },
+      { input: { id: '2', re: '#<svc.bv:Box:2>', ty: 'svc.bv:Box', from: 'svc.bv' } },
       { output: { id: '3', op: 'get', to: 'svc.bv:Box:2:tally' } },
       { input: { id: '3', re: [4], ty: ['Integer'], from: 'svc.bv:Box:2:tally' } },
       { output: { id: 'x', re: [4], ty: ['Integer'], to: 'c' } },
@@ -219,7 +219,7 @@ box = Svc.Box(5)
       compileOptions: { remotes },
       expects: [
         { output: expect.objectContaining({ op: [[5], '$new'], to: 'svc.bv:Box' }) },
-        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'Svc:Box', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'svc.bv:Box', from: 'svc.bv' } },
       ],
     });
     await expectActorBehavior(actor,

@@ -397,6 +397,9 @@ export function rustTypeTag(t) {
   const node = typeof t === 'string' && G.ctx.actorNodes?.get(t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
+  // An actor of a dependency's class is tagged with the class's address
+  // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
+  if (typeof t === 'string' && !G.ctx.typeDecls?.has(t) && G.ctx.depIsDependency?.(t)) return G.ctx.depAddress(t);
   if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
   // A type's tag is its address (src/codegen/type_table.js).
   return G.ctx.typeDecls.get(t).key;

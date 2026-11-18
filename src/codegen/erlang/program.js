@@ -19,6 +19,7 @@ import {
   buildSSAEnv,
   branchSSAEnv,
   resolveSSAName,
+  erlTypeTag,
 } from './types.js';
 import {
   genExpr,
@@ -1766,7 +1767,7 @@ ${putLines},
     `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
-    `        ${erlOp(n)} -> ${erlString(stateTypeMap.get(n) || 'Anything')}`,
+    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, stateTypeMap.get(n) || 'Anything'))}`,
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];

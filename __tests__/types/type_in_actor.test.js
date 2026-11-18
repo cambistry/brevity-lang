@@ -197,9 +197,9 @@ describe('a type of another file, reached through the service', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'got', from: 'c' } },
       { output: expect.objectContaining({ op: '$new', to: 'svc.bv:W' }) },
-      { input: { id: '1', re: '#<svc.bv:W:1>', ty: 'Svc:W', from: 'svc.bv' } },
+      { input: { id: '1', re: '#<svc.bv:W:1>', ty: 'svc.bv:W', from: 'svc.bv' } },
       { output: expect.objectContaining({ op: 'get', to: 'svc.bv:W:1' }) },
-      { input: { id: '2', re: [[7]], ty: ['Svc:W:X'], from: 'svc.bv:W:1' } },
+      { input: { id: '2', re: [[7]], ty: ['svc.bv:W:X'], from: 'svc.bv:W:1' } },
       { output: { id: 'x', re: { result: 7 }, ty: { result: 'Integer' }, to: 'c' } },
     );
   });
@@ -237,17 +237,30 @@ describe('types of one name in two services', () => {
     );
   });
 
-  it('each decodes with its own fields, from the alias spelling of its authority', async () => {
+  it('each decodes with its own fields, from its source tag', async () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: 'a', op: 'fromGeo', from: 'c' } },
       { output: expect.objectContaining({ op: 'origin', to: 'geo.bv' }) },
-      { input: { id: '1', re: [[7, 8, 9]], ty: ['Geo:Point'], from: 'geo.bv' } },
+      { input: { id: '1', re: [[7, 8, 9]], ty: ['geo.bv:Point'], from: 'geo.bv' } },
       { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
       { input: { id: 'b', op: 'fromSvc', from: 'c' } },
       { output: expect.objectContaining({ op: 'origin', to: 'svc.bv' }) },
-      { input: { id: '2', re: [[5, 6]], ty: ['Svc:Point'], from: 'svc.bv' } },
+      { input: { id: '2', re: [[5, 6]], ty: ['svc.bv:Point'], from: 'svc.bv' } },
       { output: { id: 'b', re: { result: 6 }, ty: { result: 'Integer' }, to: 'c' } },
+    );
+  });
+
+  // A dependency's local name is the file's own: on the wire, a tag spelled with it
+  // names no type, so it is read as any unknown tag is (here: by the binding's
+  // declared type).
+  it.each([['the local alias', 'Geo:Point'], ['an unknown authority', 'nope.bv:Nothing']])('a tag spelled with %s is unknown', async (_, tag) => {
+    const actor = await createActor(script, { compileOptions });
+    await expectActorBehavior(actor,
+      { input: { id: 'a', op: 'fromGeo', from: 'c' } },
+      { output: expect.objectContaining({ op: 'origin', to: 'geo.bv' }) },
+      { input: { id: '1', re: [[7, 8, 9]], ty: [tag], from: 'geo.bv' } },
+      { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
     );
   });
 });

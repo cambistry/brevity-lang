@@ -36,26 +36,13 @@ export function buildTypeTable(ast) {
   return table;
 }
 
-// The wire registry: one entry per type, under its key, and under the alias
-// spelling a reply's tag arrives in (`Svc:Point` for `svc.bv:Point`): a parent
-// names a service by the alias its child gave it. Each entry is
-// [lookup, key, fields].
-export function registryEntries(ast, table) {
-  const out = [];
-  const seen = new Set();
-  const add = (lookup, entry) => {
-    if (seen.has(lookup)) return;
-    seen.add(lookup);
-    out.push([lookup, entry.key, entry.fields || []]);
-  };
-  const entries = [...table.values()];
-  for (const e of entries) add(e.key, e);
-  for (const d of ast.dependencies || []) {
-    if (!d.path || d.name === d.path) continue;
-    const head = `${quoteToken(d.path)}:`;
-    for (const e of entries) {
-      if (e.key.startsWith(head)) add(`${quoteToken(d.name)}:${e.key.slice(head.length)}`, e);
-    }
-  }
-  return out;
+// The wire registry: one entry per type, under its key. A tag reached through a
+// dependency names it by its source (`svc.bv:Point`), never by its local alias:
+// dependencies are addressed by source, so no parent spells it otherwise. Each
+// entry is [lookup, key, fields].
+// Two local names for one type (`Point`, `Svc::Point`) are one entry.
+export function registryEntries(_ast, table) {
+  const byKey = new Map();
+  for (const e of table.values()) if (!byKey.has(e.key)) byKey.set(e.key, [e.key, e.key, e.fields || []]);
+  return [...byKey.values()];
 }

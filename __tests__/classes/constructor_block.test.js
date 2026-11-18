@@ -221,7 +221,7 @@ describe('a class using an actor it got from a dependency', () => {
     await actor.sendAsync({ id: ping.id, re: '#<Svc>', from: 'svc.bv' });
     const made = actor.posts.find(p => p.op === '$new');
     expect(made).toEqual(expect.objectContaining({ op: '$new', to: 'svc.bv:Thing' }));
-    await actor.sendAsync({ id: made.id, re: '#<svc.bv:Thing:1>', 'ty': 'Svc:Thing', from: 'svc.bv' });
+    await actor.sendAsync({ id: made.id, re: '#<svc.bv:Thing:1>', 'ty': 'svc.bv:Thing', from: 'svc.bv' });
     const poke = actor.posts.find(p => p.op === 'poke!');
     expect(poke).toEqual(expect.objectContaining({ to: 'svc.bv:Thing:1' }));
     expect(new Set([ping.id, made.id, poke.id]).size).toBe(3);

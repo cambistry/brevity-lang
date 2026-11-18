@@ -96,11 +96,31 @@ describe('dependency addresses — construction', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<thing.bv:1>', ty: 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<thing.bv:1>', ty: 'thing.bv', from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'get', to: 'thing.bv:1' }) },
       { input: { id: '2', re: { value: 42 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 42 }, to: 'c' }) },
+    );
+  });
+});
+
+describe('dependency addresses — tags', () => {
+  it('an actor of a dependency\'s class is tagged with the class\'s address', async () => {
+    const actor = await createActor(`
+      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Peer = "peer.bv" as { take. (Anything) => . }
+      t = Thing(a: 5)
+      @give. = { Peer.take(t)... }
+    `, {
+      expects: [
+        { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) },
+      ],
+    });
+    await expectActorBehavior(actor,
+      { input: { id: '1', re: '#<thing.bv:1>', ty: 'thing.bv', from: 'thing.bv' } },
+      { input: { id: '2', op: 'give.', from: 'c' } },
+      { output: expect.objectContaining({ ty: [['thing.bv']], to: 'peer.bv' }) },
     );
   });
 });

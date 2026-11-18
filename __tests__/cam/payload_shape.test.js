@@ -39,7 +39,7 @@ describe('payload shape — named-only args are [{k: v}]', () => {
   it('a call on a remote actor', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '90', op: 'go', from: 'c' } },
       { output: { id: '2', op: [[{ k: 1 }], 'put'], to: 'Thing/1' } },
       { input: { id: '2', re: { value: 42 } } },
@@ -50,7 +50,7 @@ describe('payload shape — named-only args are [{k: v}]', () => {
   it('a silent call on a remote actor', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '91', op: 'note.', from: 'c' } },
       { output: expect.objectContaining({ op: [[{ k: 2 }], 'ping.'], to: 'Thing/1' }) },
     );
@@ -69,7 +69,7 @@ describe('payload shape — a named-only reply is {k: v}', () => {
   it('a reply', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '92', op: 'self', from: 'c' } },
       { output: { id: '92', re: { k: 3 }, 'ty': { k: 'Integer' }, to: 'c' } },
     );
@@ -80,7 +80,7 @@ describe('payload shape — mixed is [p, {k: v}]', () => {
   it('a call on a remote actor', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '94', op: 'sum', from: 'c' } },
       { output: expect.objectContaining({ op: [[7, { k: 8 }], 'add'], to: 'Thing/1' }) },
     );
@@ -89,7 +89,7 @@ describe('payload shape — mixed is [p, {k: v}]', () => {
   it('a silent call on a remote actor', async () => {
     const actor = await createActor(source);
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '93', op: 'both.', from: 'c' } },
       { output: expect.objectContaining({ op: [[7, { k: 8 }], 'mix.'], to: 'Thing/1' }) },
     );

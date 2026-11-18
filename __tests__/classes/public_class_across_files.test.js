@@ -45,7 +45,7 @@ describe('caller side', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'go', from: 'c' } },
         { output: { id: '1', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: target[label] } },
-        { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'Svc:Counter', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'svc.bv:Counter', from: 'svc.bv' } },
         { output: expect.objectContaining({ op: 'get', to: 'svc.bv:Counter:1' }) },
       );
     });
@@ -56,7 +56,7 @@ describe('caller side', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go!', from: 'c' } },
       { output: { id: '1', op: '$new', to: 'svc.bv' } },
-      { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' } },
+      { input: { id: '1', re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' } },
       { output: { id: '2', op: '$new', to: 'Svc/7:W!' } },
     );
   });
@@ -126,7 +126,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'chain', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv:Counter' } },
-      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'Svc:Counter', from: 'svc.bv' } },
+      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'svc.bv:Counter', from: 'svc.bv' } },
       { output: expect.objectContaining({ id: '2', op: 'get', to: 'svc.bv:Counter:1' }) },
     );
   });
@@ -136,7 +136,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'give', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv:Counter' } },
-      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'Svc:Counter', from: 'svc.bv' } },
+      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'svc.bv:Counter', from: 'svc.bv' } },
       { output: expect.objectContaining({ id: 'x', re: ['svc.bv:Counter:1'], to: 'c' }) },
     );
   });
@@ -146,7 +146,7 @@ describe('a new actor used in place', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'pass', from: 'c' } },
       { output: { id: '1', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv:Counter' } },
-      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'Svc:Counter', from: 'svc.bv' } },
+      { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'svc.bv:Counter', from: 'svc.bv' } },
       { output: expect.objectContaining({ op: 'get', to: 'svc.bv:Counter:1' }) },
     );
   });
@@ -177,7 +177,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'chain', from: 'c' } },
         { output: { id: '1', op: '$new', to: 'svc.bv' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7:Counter' } },
         { input: { id: '2', re: '#<Svc/7:Counter:1>', 'ty': 'Svc/7:Counter', from: 'Svc/7' } },
         { output: expect.objectContaining({ id: '3', op: 'get', to: 'Svc/7:Counter:1' }) },
@@ -189,7 +189,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'give', from: 'c' } },
         { output: { id: '1', op: '$new', to: 'svc.bv' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7:Counter' } },
       );
     });
@@ -199,7 +199,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'pass', from: 'c' } },
         { output: { id: '1', op: '$new', to: 'svc.bv' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' } },
         { output: { id: '2', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'Svc/7:Counter' } },
       );
     });
@@ -209,7 +209,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'own', from: 'c' } },
         { output: { id: '1', op: '$new', to: 'svc.bv' } },
-        { input: { id: '1', re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' } },
         { output: expect.objectContaining({ id: '2', op: 'plain', to: 'Svc/7' }) },
       );
     });
@@ -227,7 +227,7 @@ describe('a new actor used in place', () => {
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'chain', from: 'c' } },
         { output: { id: '1', op: [[5, { step: 2 }], '$new'], ty: [['Integer', { step: 'Integer' }]], to: 'svc.bv:Counter' } },
-        { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'Svc:Counter', from: 'svc.bv' } },
+        { input: { id: '1', re: '#<svc.bv:Counter:1>', 'ty': 'svc.bv:Counter', from: 'svc.bv' } },
         { output: expect.objectContaining({ id: '2', op: 'get', to: 'svc.bv:Counter:1' }) },
       );
     });
@@ -597,7 +597,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
       if (msg.to === 'c') return msg.re;
       if (msg.to === 'svc.bv' && (Array.isArray(msg.op) ? msg.op[msg.op.length - 1] : msg.op) === '$new') {
         actors['Svc/7'] = { actor: await (await compileActor(READER_SVC)).spawn(), served: 0 };
-        await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'ty': 'Svc', from: 'svc.bv' });
+        await caller.sendAsync({ id: msg.id, re: '#<Svc/7>', 'ty': 'svc.bv', from: 'svc.bv' });
         continue;
       }
       const name = msg.to.startsWith('Svc/7') ? 'Svc/7' : 'svc.bv';

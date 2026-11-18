@@ -33,6 +33,7 @@ import {
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
   rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances, classRefersToSelf,
+  rustTypeTag,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod, genRustFnCallExpr,
@@ -564,7 +565,7 @@ ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
   const t = decl?.typeName || 'Anything';
-  return `                ${JSON.stringify(wireLabel(n))} => Some("${t}"),`;
+  return `                ${JSON.stringify(wireLabel(n))} => Some(${JSON.stringify(rustTypeTag(t))}),`;
 }).join('\n')}
                 _ => None,
             };
@@ -2043,8 +2044,8 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
                                 // A reply whose whole value is one actor: its address is in re,
-                                // and ty, if any, is its class: the address it heads (Svc:Counter
-                                // of Svc:Counter:1; an opaque Thing/9 of Thing).
+                                // and ty, if any, is its class: the address it heads (svc.bv:Counter
+                                // of svc.bv:Counter:1; thing.bv:9 of thing.bv).
                                 let one_actor = re.as_str().and_then(|t| t.strip_prefix("#<")).and_then(|t| t.strip_suffix('>')).is_some_and(|x| {
                                     msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|c| x == c || (x.starts_with(c) && matches!(x.as_bytes().get(c.len()), Some(b':') | Some(b'/')))))
                                 });

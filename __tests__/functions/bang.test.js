@@ -1752,11 +1752,11 @@ describe('chained calls through a remote', () => {
       expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) }],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', 'ty': 'Thing', from: 'thing.bv' } },
+      { input: { id: '1', re: '#<thing.bv:1>', 'ty': 'thing.bv', from: 'thing.bv' } },
       { input: { id: '99', op: 'go!', from: 'caller' } },
-      { output: expect.objectContaining({ op: [[2], 'inc!'], to: 'Thing/1' }) },
-      { input: { id: '2', re: '#<Thing/9>', 'ty': 'Thing' } },
-      { output: expect.objectContaining({ op: 'total', to: 'Thing/9' }) },
+      { output: expect.objectContaining({ op: [[2], 'inc!'], to: 'thing.bv:1' }) },
+      { input: { id: '2', re: '#<thing.bv:9>', 'ty': 'thing.bv' } },
+      { output: expect.objectContaining({ op: 'total', to: 'thing.bv:9' }) },
       { input: { id: '3', re: { value: 7 } } },
       { output: expect.objectContaining({ id: '99', re: { value: 7 }, to: 'caller' }) },
     );

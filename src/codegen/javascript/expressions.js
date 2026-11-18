@@ -1420,6 +1420,9 @@ export function typeTag(ctx, t) {
   const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
   if (singleton) return selfAddress(singleton);
+  // An actor of a dependency's class is tagged with the class's address
+  // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
+  if (typeof t === 'string' && !ctx.typeDecls?.has(t) && ctx.depIsDependency?.(t)) return ctx.depAddress(t);
   if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
   // A type's tag is its address (src/codegen/type_table.js).
   return ctx.typeDecls.get(t).key;
