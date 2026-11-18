@@ -51,7 +51,7 @@ export default {
   codegen,
   runner: {
     async setup({ extract } = {}) {
-      // Warm the harness: launch Chromium + server + page once per worker.
+      // Warm the harness: connect to the browser, start the server and runner page.
       await getHarness();
       return { extract };
     },

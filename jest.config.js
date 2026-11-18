@@ -34,6 +34,13 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     ? [`<rootDir>/src/codegen/${entry.name}/jest.setup.js`]
     : [];
 
+  // Optional per-target global setup and teardown, run once in the parent process
+  // for the whole run (e.g. one shared browser for every worker).
+  const globalFiles = {};
+  for (const [key, file] of [['globalSetup', 'jest.global_setup.js'], ['globalTeardown', 'jest.global_teardown.js']]) {
+    if (existsSync(join(codegenDir, entry.name, file))) globalFiles[key] = `<rootDir>/src/codegen/${entry.name}/${file}`;
+  }
+
   projects.push({
     displayName: targetName,
     testEnvironment: 'node',
@@ -42,6 +49,7 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     testPathIgnorePatterns: ignorePatterns,
     globals: { BREVITY_TARGET: targetName },
     ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
+    ...globalFiles,
   });
 
   // The browser target also gets a `dom` project: only the DOM-specific
@@ -55,6 +63,7 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
       testPathIgnorePatterns: ['/node_modules/', ...exclude(excludeTests)],
       globals: { BREVITY_TARGET: targetName },
       ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
+      ...globalFiles,
     });
   }
 }

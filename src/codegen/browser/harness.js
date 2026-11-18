@@ -1,4 +1,7 @@
-// Playwright + static server harness, one per jest worker.
+// Playwright + static server harness, one per test file. Under jest, the test
+// files share one Chromium for the whole run (./jest.global_setup.js): a file
+// connects to it, and closes its own contexts and server when it ends
+// (./jest.setup.js). Outside jest, the harness launches a browser of its own.
 //
 // Two roles:
 //
@@ -52,7 +55,10 @@ async function startServer(testPages) {
       res.writeHead(404); res.end(`Unknown test page: ${id}`); return;
     }
 
-    await serveStatic(res, PROJECT_ROOT, path);
+    // Cacheable for the life of this server: its port, and so its origin, is the
+    // test file's own, and sources don't change during a run. Each page after the
+    // first in a file loads the compiler's modules from cache.
+    await serveStatic(res, PROJECT_ROOT, path, { 'Cache-Control': 'max-age=3600' });
   });
   await new Promise((r, rej) => {
     server.once('error', rej);
@@ -71,7 +77,9 @@ export async function getHarness() {
   const { chromium } = await import('playwright');
   const testPages = new Map();
   const { server, baseURL } = await startServer(testPages);
-  const browser = await chromium.launch({ headless: true });
+  // The run's shared browser, when there is one (./jest.global_setup.js).
+  const endpoint = process.env.BREVITY_PW_ENDPOINT || null;
+  const browser = endpoint ? await chromium.connect(endpoint) : await chromium.launch({ headless: true });
 
   const runnerContext = await browser.newContext({ baseURL });
   const runnerPage = await runnerContext.newPage();
@@ -92,16 +100,22 @@ export async function getHarness() {
   const harness = {
     server, browser, runnerContext, runnerPage, testContext,
     baseURL, testPages, mountTestPage,
+    // Test pages, reused across tests (loadTestPage, releaseTestPages).
+    pagePool: [], pagesInUse: new Set(),
   };
   globalThis[HARNESS_KEY] = harness;
 
-  const cleanup = () => {
-    try { browser.close(); } catch { /* ignore */ }
-    try { server.close(); } catch { /* ignore */ }
-  };
-  process.once('exit', cleanup);
-  process.once('SIGINT', () => { cleanup(); process.exit(130); });
-  process.once('SIGTERM', () => { cleanup(); process.exit(143); });
+  // A browser this harness launched itself dies with the process. A shared one
+  // is closed by the global teardown.
+  if (!endpoint) {
+    const cleanup = () => {
+      try { browser.close(); } catch { /* ignore */ }
+      try { server.close(); } catch { /* ignore */ }
+    };
+    process.once('exit', cleanup);
+    process.once('SIGINT', () => { cleanup(); process.exit(130); });
+    process.once('SIGTERM', () => { cleanup(); process.exit(143); });
+  }
 
   return harness;
 }
@@ -124,6 +138,8 @@ function wireLogs(page, label) {
   });
 }
 
+// Close this file's harness. On a shared browser, `close()` closes this
+// connection's contexts and disconnects; the browser stays up for other files.
 export async function closeHarness() {
   const h = globalThis[HARNESS_KEY];
   if (!h) return;
@@ -152,12 +168,21 @@ export async function callHarness(method, args) {
 //               page.route, so tests can exercise the <script src> path
 //               without a real file on disk.
 
+// A page is reused from test to test: navigating it gives each test a fresh
+// document and realm, and skips starting a renderer (~100ms). Pages a test used
+// go back to the pool after it (releaseTestPages, from ./jest.setup.js).
 export async function loadTestPage(html, opts = {}) {
-  const { testContext, mountTestPage } = await getHarness();
-  const page = await testContext.newPage();
-  wireLogs(page, 'test');
+  const h = await getHarness();
+  const { testContext, mountTestPage } = h;
+  let page = h.pagePool.pop();
+  if (!page) {
+    page = await testContext.newPage();
+    wireLogs(page, 'test');
+  }
+  h.pagesInUse.add(page);
 
   if (opts.sources) {
+    page.__bv_routed__ = true;
     await page.route('**/*', async (route) => {
       const url = new URL(route.request().url());
       if (Object.prototype.hasOwnProperty.call(opts.sources, url.pathname)) {
@@ -174,7 +199,7 @@ export async function loadTestPage(html, opts = {}) {
 
   const path = mountTestPage(html);
   await page.goto(path);
-  await page.waitForFunction(() => !!globalThis.brevity || !!globalThis.__bv_bootstrap_error__);
+  await page.waitForFunction(() => !!globalThis.brevity || !!globalThis.__bv_bootstrap_error__, null, { polling: 5 });
   const bootErr = await page.evaluate(() => globalThis.__bv_bootstrap_error__ || null);
   if (bootErr) throw new Error(`brevity.js bootstrap error: ${bootErr}`);
 
@@ -254,8 +279,26 @@ export async function loadTestPage(html, opts = {}) {
       };
     },
     async close() {
-      try { await page.close(); } catch { /* ignore */ }
+      if (h.pagesInUse.has(page)) await releasePage(h, page);
     },
   };
   return wrapper;
+}
+
+// Back to the pool, with the test's routes gone.
+async function releasePage(h, page) {
+  h.pagesInUse.delete(page);
+  if (page.isClosed()) return;
+  if (page.__bv_routed__) {
+    page.__bv_routed__ = false;
+    try { await page.unroute('**/*'); } catch { /* ignore */ }
+  }
+  h.pagePool.push(page);
+}
+
+// Every page the current test loaded goes back to the pool.
+export async function releaseTestPages() {
+  const h = globalThis[HARNESS_KEY];
+  if (!h) return;
+  for (const page of [...h.pagesInUse]) await releasePage(h, page);
 }
