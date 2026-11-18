@@ -2,7 +2,7 @@
 
 Follows `classes-as-singletons-2026-11-09.md` ("Files: the header declares the file's kind").
 
-**2026-11-17:** the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`. The lineal `**` header is unchanged.
+**2026-11-17:** DI moves to `use` (`use-di-2026-11-17.md`); the `**` header and head-of-file rule below are superseded. Also, the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`.
 
 ## Forms
 

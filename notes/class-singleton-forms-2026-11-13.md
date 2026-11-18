@@ -4,6 +4,8 @@ Follows `classes-as-singletons-2026-11-09.md` and `file-singleton-header-2026-11
 
 **2026-11-17:** the braced `**{ … }` is now the actor literal `actor { … }`; see `actor-literal-2026-11-17.md`. The trailing form takes `++`.
 
+**2026-11-17 (later):** the file-level `*` section after singleton lines ("Files: `**` header, then a `*` section") is retired: a file declares `new =` instead. A `*` at the head of a file still makes a factory. See `use-di-2026-11-17.md` ("Factory files and the trailing `*` section").
+
 ## Two forms, two meanings
 
 ```brevity
