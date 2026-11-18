@@ -167,7 +167,32 @@ n Integer = use("svc.bv").n()                    // used directly
   `options.remotes` (keyed by source); with neither it's the usual "has no type" error. A source
   claimed differently in two places is an error.
 - **Anywhere in the file actor**, inner scopes included. The entry is the file's. Not in a
-  factory file yet.
+  factory file yet. (So is the `use` statement: see "Inner scopes".)
+
+## Inner scopes
+
+Decided 2026-11-18, as `use-di-2026-11-17.md` has it ("Where it's allowed"). A `use` statement
+may be written in any scope: a function body, a branch, a loop body, a class body, a nested
+`actor { }`. Details settled:
+
+- **The entry is the file's.** Keyed by source and shared with top-level statements and
+  `use("…")`. A source named only inside gets an entry of its own; it is never bound file-wide.
+  Dependencies are addressed by source, so the entry's internal key never reaches the wire.
+- **Hoisted within its scope.** An inner `use` binds the whole of its scope, above its line
+  too, as a top-level `use` binds the whole file. An inline `use("…")` binding still follows text
+  order, like any `=`.
+- **The scope.** A block's statement binds that block and the blocks inside it; a class body's
+  binds the class and the classes nested in it. A `use` in one branch is unknown in the other and
+  after the conditional.
+- **Shadowing.** An inner `use` shadows an outer binding of the name (a local, a param, an outer
+  `use` of another source); a nested scope that rebinds the name keeps its own. The same holds
+  for `use("…")` bindings and body-form destructures.
+- **One binding per name in a scope.** A local, param, method or cell of the same name in the
+  `use`'s own scope is an error, and so is assigning to it (`svc = 1`, `svc <- 1`).
+- **A typed value** (`use n Integer = limit`) binds the file's load-time value `limit` in its
+  scope; the entry is shared with a top-level `use limit Integer = limit`. Two types for one key
+  anywhere in the file are an error.
+- **Not in a factory file** yet, as at top level.
 
 ## Open
 

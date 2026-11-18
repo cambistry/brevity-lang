@@ -95,6 +95,19 @@ use DB = "/services/db" as {
 }
 ```
 
+## `use` in an inner scope
+
+```brevity
+@lookup = (key: Text) {
+  use DB = "/services/db" as { get (key: Text) -> (value: Text) }   // binds all of @lookup
+  :value Text = DB.get(:key)
+  return :value
+}
+```
+
+The entry is the file's, granted at load. The name binds its whole scope and
+the scopes inside it, shadows an outer binding, and is unknown elsewhere.
+
 ## `use("…")` in value position
 
 ```brevity

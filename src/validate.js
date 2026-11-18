@@ -238,10 +238,29 @@ function validateProgram(ast, options = {}) {
     (node.type === 'Assign' || node.type === 'StateAssign' || (node.type === 'TypedAssign' && !node.typeName)) &&
     node.value?.type === 'Identifier' && node.value.fromUse
   );
-  const renameIn = (scope, from, to) => {
+  // Does `arr` (a block, or a constructor body) bind `name` with a scoped DI
+  // binding of its own? Then it is an inner scope that rebinds the name.
+  const bindsIn = (arr, name) => Array.isArray(arr) && arr.some(n => (isUseAlias(n) && n.name === name)
+    || (isDIBodyDestructure(n) && (n.pattern || []).some(e => e.name === name)));
+  // Rename the uses of `from` in `scope` to `to`. A nested scope that rebinds
+  // `from` keeps its own (the inner binding wins there). With `guard` (a `use`
+  // statement's binding, shown as `guard.shown`), binding or assigning the name
+  // again in scope is an error, and so is a param of that name.
+  const renameIn = (scope, from, to, guard = null) => {
+    const again = () => new Error(`'${from}' is bound by '${guard.shown}' in this scope, so it can't be bound or assigned again here`);
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (Array.isArray(node)) {
+        if (node !== scope && bindsIn(node, from)) return;
+        for (const n of node) walk(n);
+        return;
+      }
+      if (node.type === 'Actor' && bindsIn(node.constructorBody, from)) return;
+      if (guard) {
+        if (['Assign', 'TypedAssign', 'SetStatement', 'StateAssign', 'RefDecl'].includes(node.type) && node.name === from) throw again();
+        if (node.type === 'DestructureAssign' && (node.pattern || []).some(e => e.name === from)) throw again();
+        if (Array.isArray(node.params) && node.params.some(p => p?.name === from)) throw again();
+      }
       if (node.type === 'Identifier' && node.name === from) node.name = to;
       if (node.typeName === from) node.typeName = to;
       for (const k of Object.keys(node)) {
@@ -271,7 +290,7 @@ function validateProgram(ast, options = {}) {
     }
   };
   // A destructure in an inner scope: each name hidden, its uses in `scope` renamed.
-  const bindInScope = (node, scope, scopeKey) => {
+  const bindInScope = (node, scope, scopeKey, guard = null) => {
     const dep = depByName.get(node.source.name);
     const entries = (node.pattern || []).map(translatePatternEntry).filter(Boolean);
     if (entries.some(e => e.spread)) {
@@ -292,8 +311,8 @@ function validateProgram(ast, options = {}) {
         hidden = `__scoped${++hiddenCount}_${e.local}`;
         hiddenFor.set(key, hidden);
       }
-      renameIn(scope, e.local, hidden);
-      scopedNames.set(e.local, `${e.remote === e.local ? ':' + e.local : `${e.remote}: ${e.local}`} = ${shownSource(dep)}`);
+      renameIn(scope, e.local, hidden, guard && { shown: guard.shown });
+      scopedNames.set(e.local, guard?.shown ?? `${e.remote === e.local ? ':' + e.local : `${e.remote}: ${e.local}`} = ${shownSource(dep)}`);
       pushEntry(dep, { ...e, local: hidden });
     }
   };
@@ -310,19 +329,35 @@ function validateProgram(ast, options = {}) {
     return out;
   };
   // `arr[i]` is a body-form binding: bind it in `scope()`, and drop it.
-  const takeBinding = (arr, i, { scope, scopeKey, fileLevel, actor }) => {
+  // `arr[i]` is a body-form binding: bind it in `scope()`, and drop it. A `use`
+  // statement's binding (`useStatement`) is guarded: the name is the
+  // dependency's throughout its scope. `params` are the enclosing function's, for
+  // a binding at the top of its body; `actor` the class, at the top of its body.
+  const takeBinding = (arr, i, { scope, scopeKey, fileLevel, actor, params = [] }) => {
     const node = arr[i];
+    arr.splice(i, 1);
+    const guard = node.useStatement ? { shown: node.useShown } : null;
+    const names = isDIBodyDestructure(node) ? (node.pattern || []).map(e => e.name).filter(Boolean) : [node.name];
+    if (guard) {
+      const taken = new Set([
+        ...params.map(p => p?.name),
+        ...(actor ? [...(actor.stateVarDecls || []).map(v => v.name), ...(actor.functions || []).map(f => f.name?.replace(/^@/, '')), ...(actor.initParams || []).map(p => p.name)] : []),
+      ]);
+      for (const n of names) if (taken.has(n)) throw new Error(`'${n}' is bound by '${guard.shown}' in this scope, so it can't be bound or assigned again here`);
+    }
     if (isDIBodyDestructure(node)) {
       if (fileLevel) foldIntoDep(node);
-      else bindInScope(node, scope(), scopeKey);
+      else bindInScope(node, scope(), scopeKey, guard);
     } else {
-      const dep = depByName.get(node.value.name);
-      renameIn(scope(), node.name, dep.name);
-      if (!fileLevel) scopedNames.set(node.name, `${node.name} = ${shownSource(dep)}`);
+      const target = node.value.name;
+      const dep = depByName.get(target);
+      renameIn(scope(), node.name, target, guard);
+      if (!fileLevel) scopedNames.set(node.name, guard?.shown ?? `${node.name} = ${dep ? shownSource(dep) : target}`);
       if (actor) actor.stateVarDecls = (actor.stateVarDecls || []).filter(v => v.name !== node.name);
     }
-    arr.splice(i, 1);
   };
+  // A function's own params, for the block that is its body.
+  const paramsOf = new WeakMap();
   const rewriteBody = (node) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -330,7 +365,9 @@ function validateProgram(ast, options = {}) {
         if (isDIBodyDestructure(node[i]) || isUseAlias(node[i])) {
           const arr = node;
           const at = i;
-          takeBinding(node, i, { scope: () => arr.slice(at), scopeKey: `b${++blockCount}` });
+          // A `use` statement binds its whole block; an inline binding, what follows it.
+          const hoisted = node[i].useStatement;
+          takeBinding(node, i, { scope: () => (hoisted ? arr : arr.slice(at)), scopeKey: `b${++blockCount}`, params: paramsOf.get(arr) || [] });
           i--;
         } else {
           rewriteBody(node[i]);
@@ -338,6 +375,7 @@ function validateProgram(ast, options = {}) {
       }
       return;
     }
+    if (Array.isArray(node.body) && Array.isArray(node.params)) paramsOf.set(node.body, node.params);
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
       rewriteBody(node[k]);

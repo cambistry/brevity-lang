@@ -185,56 +185,60 @@ describe('use — a value', () => {
   });
 });
 
-describe('use — errors', () => {
+describe('use — in inner scopes, the entry is the file\'s', () => {
+  const manifest = (src) => extract(src).ast.dependencies.map(d => d.path);
+
   it('in a nested actor', () => {
-    expect(() => compileSource(`
+    expect(manifest(`
       inner = actor {
         use document
         @get = -> 1
       }
-    `)).toThrow("'use' in inner scopes is not supported yet");
+    `)).toEqual(['document']);
   });
 
   it('in a class body', () => {
-    expect(() => compileSource(`
+    expect(manifest(`
       C = (n Integer) *{
         use document
         @get = -> n
       }
-    `)).toThrow("'use' in inner scopes is not supported yet");
+    `)).toEqual(['document']);
   });
 
   it('in a function body', () => {
-    expect(() => compileSource(`
+    expect(manifest(`
       @get = {
         use document
         return 1
       }
-    `)).toThrow("'use' in inner scopes is not supported yet");
+    `)).toEqual(['document']);
   });
 
   it('in a conditional', () => {
-    expect(() => compileSource(`
+    expect(manifest(`
       @get = (n Integer) {
         if n > 0 {
           use document
         }
         return 1
       }
-    `)).toThrow("'use' in inner scopes is not supported yet");
+    `)).toEqual(['document']);
   });
 
   it('in a `new =` constructor body', () => {
-    expect(() => compileSource(`
+    expect(manifest(`
       new =
       *
         seed Integer
       *
       use document
       @n = -> seed
-    `)).toThrow("'use' in inner scopes is not supported yet");
+    `)).toEqual(['document']);
   });
+});
 
+describe('use — errors', () => {
   it('in a factory file', () => {
     expect(() => compileSource(`
       *

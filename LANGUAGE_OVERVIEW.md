@@ -203,7 +203,8 @@ the class header — the params accepted at construction. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
 The file actor is a singleton, built once at load. It needs no header: it
-declares its DI with `use`, anywhere in its own scope:
+declares its DI with `use`, anywhere in the file. A `use` in an inner scope is
+still the file's entry, but its name binds only in that scope:
 
 ```brevity
 use Remote = "Remote" as {

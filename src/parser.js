@@ -14,7 +14,7 @@ const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
 const FILE_STAR_SECTION_MSG = "a singleton's constructor is declared with 'new =': write 'new =', then '*' alone on its line, params one per line, and a closing '*'";
 const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) — declare it with 'use'`;
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
-const USE_INNER_MSG = "'use' in inner scopes is not supported yet";
+const USE_INNER_MSG = "'use' is a statement on a line of its own — in an expression, write 'use(\"…\")'";
 const USE_FACTORY_MSG = "'use' in a factory file is not supported yet";
 const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use HTML', 'use Svc = \"svc.bv\"'): a file with no header is an actor";
 const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
@@ -1327,6 +1327,11 @@ export function parse(tokensIn) {
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
+      // `use` in a loop body binds over the whole of it (src/validate.js).
+      if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
+        body.push(...parseInnerUse());
+        continue;
+      }
       if (atSelfValue()) {
         consume(); // self
         body.push({ ...AST.returnNode(selfReturnFields()), tailValue: true });
@@ -1511,6 +1516,11 @@ export function parse(tokensIn) {
     while (peek().type !== stopToken && peek().type !== 'EOF') {
       skipNewlines();
       if (peek().type === stopToken || peek().type === 'EOF') break;
+      // `use` in a block binds over the whole of it (src/validate.js).
+      if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
+        body.push(...parseInnerUse());
+        continue;
+      }
       if (peek().type === 'DOT') {
         if (declCtx) throw trailingDotError();
         consume();
@@ -3825,6 +3835,12 @@ export function parse(tokensIn) {
       skipNewlines();
       if (isStop()) break;
 
+      // `use` in a body binds over the whole of it (src/validate.js).
+      if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
+        body.push(...parseInnerUse());
+        continue;
+      }
+
       if (peek().type === 'DOT') {
         if (declCtx) throw trailingDotError();
         consume();
@@ -5077,9 +5093,10 @@ export function parse(tokensIn) {
       // `use` declares the file's DI: hoisted into its manifest, so it may come anywhere
       // in the file actor's own scope.
       if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
-        if (actorBodyDepth > 1) throw new Error(USE_INNER_MSG);
         if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
-        parseUse();
+        // In a class body or a nested actor, it binds that scope (src/validate.js).
+        if (actorBodyDepth > 1) constructorBody.push(...parseInnerUse());
+        else parseUse();
         continue;
       }
       // The retired trailing `*` section (singleton lines, then a lone `*` as the
@@ -5938,7 +5955,23 @@ export function parse(tokensIn) {
     return out;
   };
 
+  // A file-level `use`: each binding is a manifest entry, bound file-wide.
   function parseUse() {
+    parseUseStatement((target, segs, shape, shown) => addUse(lowerUse(target, segs, shape, shown)));
+  }
+
+  // A `use` in an inner scope: its entries join the manifest as `use("…")`'s do,
+  // keyed by source, and its bindings are scoped ones, over the whole scope
+  // (src/validate.js). Returns the binding statements.
+  function parseInnerUse() {
+    if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
+    const out = [];
+    parseUseStatement((target, segs, shape, shown) => out.push(lowerInnerUse(target, segs, shape, shown)));
+    return out;
+  }
+
+  // Parse one `use` statement, handing each binding to `emit`.
+  function parseUseStatement(emit) {
     const useTok = pos;
     consume(); // use
     if (USE_END.includes(peek().type)) throw new Error(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
@@ -5949,7 +5982,7 @@ export function parse(tokensIn) {
     const { eq, end } = scanUse(pos);
     const shown = () => `use ${showTokens(useTok + 1, end)}`;
     if (eq === null) {
-      parseUseShorthands(end);
+      parseUseShorthands(end, emit);
       return;
     }
     const target = parseUseTarget(eq, shown);
@@ -5961,11 +5994,11 @@ export function parse(tokensIn) {
       throw new Error(`'${shown()}': a statement is either names ('use HTML, document') or one binding ('use … = source'), not both`);
     }
     if (pos < end) throw new Error(`Unexpected ${peek().type} '${peek().value ?? tokText(peek())}' after the source in '${shown()}'`);
-    addUse(lowerUse(target, segs, shape, shown));
+    emit(target, segs, shape, shown);
   }
 
   // `use HTML, HTML::div, "/service"::Widget` — each binds its last segment.
-  function parseUseShorthands(end) {
+  function parseUseShorthands(end, emit) {
     while (pos < end) {
       if (peek().type === 'COMMA') { consume(); skipUseBreaks(); continue; }
       refuseRetiredUse(end);
@@ -5975,7 +6008,7 @@ export function parse(tokensIn) {
         throw new Error(`'use ${showSource(segs)}' has nothing to bind: its last segment isn't a name — write 'use ${nameFor(last)} = ${showSource(segs)}'`);
       }
       const shape = parseUseShape();
-      addUse(lowerUse({ kind: 'name', name: last }, segs, shape, () => `use ${showSource(segs)}`));
+      emit({ kind: 'name', name: last }, segs, shape, () => `use ${showSource(segs)}`);
       if (pos < end && peek().type !== 'COMMA') {
         throw new Error(`Unexpected ${peek().type} '${peek().value ?? tokText(peek())}' after 'use ${showSource(segs)}'`);
       }
@@ -5989,6 +6022,9 @@ export function parse(tokensIn) {
   // where it's written (src/validate.js). The node becomes a reference to its
   // entry's name once every entry is known (resolveUseExprs).
   const useExprs = [];
+  // An inner `use` of a load-time value (`use n Integer = limit`), resolved like
+  // a `use("…")` once the file's entries are known (resolveUseValues).
+  const useValues = [];
   // `use (` at `k` opens a statement when its parens hold a destructure followed
   // by `=` (`use (:div) = HTML`), and an expression otherwise.
   function isUseStatementAt(k) {
@@ -6076,6 +6112,32 @@ export function parse(tokensIn) {
       }
       for (const k of Object.keys(u)) delete u[k];
       Object.assign(u, { type: 'Identifier', name: dep.name, fromUse: true });
+    }
+  }
+
+  // Each inner value binding to the file's load-time value for its key: a
+  // top-level entry's, else one hidden entry per key. The node becomes a
+  // reference to it. Two different types for one key are an error.
+  function resolveUseValues() {
+    const byKey = new Map();
+    const taken = new Set(dependencies.map(d => d.name));
+    for (const u of useValues) {
+      let fp = dependencies.find(d => d.type === 'FileParam' && (d.key || d.name) === u.key);
+      if (!fp) fp = byKey.get(u.key);
+      if (!fp) {
+        let name = `__use_${u.key}`;
+        for (let i = 2; taken.has(name); i++) name = `__use_${u.key}_${i}`;
+        taken.add(name);
+        fp = AST.fileParam(name, { type: u.valueType, key: u.key });
+        fp.hidden = true;
+        dependencies.push(fp);
+        byKey.set(u.key, fp);
+      }
+      if (fp.paramType !== u.valueType) {
+        throw new Error(`'${u.useShown}': '${u.key}' is a value of type '${fp.paramType}' elsewhere in this file — one value has one type`);
+      }
+      for (const k of Object.keys(u)) delete u[k];
+      Object.assign(u, { type: 'Identifier', name: fp.name, fromUse: true });
     }
   }
 
@@ -6230,6 +6292,46 @@ export function parse(tokensIn) {
       return AST.fileParam(target.name, { type: valueType, key: head !== target.name ? head : null });
     }
     return AST.dependency(target.name, { path: head, ...claim(target.generic ? { generic: true } : shape) });
+  }
+
+  // An inner binding: the statement that binds it in its scope, over a
+  // `use("…")` of its source (or, for a value, the file's load-time value).
+  // Marked `useStatement`: it binds its whole scope, not only what follows it.
+  function lowerInnerUse(target, segs, shape, shown) {
+    if (segs.length > 2) throw new Error(`'${shown()}': a source of more than two segments isn't supported yet`);
+    const [head, member] = segs;
+    const useShown = shown();
+    const useOf = (claim) => {
+      const node = { type: 'UseExpr', source: head, ...(claim && { shape: claim }) };
+      useExprs.push(node);
+      return node;
+    };
+    const mark = (node) => Object.assign(node, { useStatement: true, useShown });
+    // Destructure entries in the form a body's destructure has.
+    const toPattern = (e) => (e.spread ? { spread: true }
+      : e.discard ? { key: e.remote, discard: true }
+      : e.local === e.remote ? { named: true, name: e.local, type: e.type ?? null }
+      : { name: e.local, key: e.remote, type: e.type ?? null });
+    if (target.kind === 'destructure') {
+      if (member !== undefined) throw new Error(`'${useShown}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
+      if (shape?.valueType) throw new Error(`'${useShown}': a destructure's source is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      return mark(AST.destructureAssign(target.entries.map(toPattern), useOf(shape)));
+    }
+    if ((target.generic || target.type) && shape) {
+      throw new Error(`'${useShown}' claims its shape twice — type the name or follow the source with 'as', not both`);
+    }
+    if (member !== undefined) {
+      if (shape || target.generic) throw new Error(`'${useShown}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
+      return mark(AST.destructureAssign([toPattern({ local: target.name, remote: member, type: target.type })], useOf(null)));
+    }
+    const valueType = target.type || shape?.valueType;
+    if (valueType) {
+      if (!isBvName(head)) throw new Error(`'${useShown}': a value's source is a name, not '${showSeg(head)}'`);
+      const value = { type: 'UseValue', key: head, valueType, useShown };
+      useValues.push(value);
+      return mark({ type: 'Assign', name: target.name, value });
+    }
+    return mark({ type: 'Assign', name: target.name, value: useOf(target.generic ? { generic: true } : shape) });
   }
 
   // Into the manifest: the same entry twice is one, and destructures of one
@@ -6839,6 +6941,7 @@ export function parse(tokensIn) {
 
   actors.push(...hoistedClasses);
   resolveUseExprs();
+  resolveUseValues();
   // `(sup T ++ …)` with `T` a class here is a retired wrapped parent; otherwise
   // validation says what it is (src/validate.js).
   for (const a of actors) {

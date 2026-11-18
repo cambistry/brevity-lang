@@ -26,8 +26,8 @@ const output = compile(ast, { target: 'js' });
 ## File-level class params
 
 A file is a singleton: its host builds it once, at load. It declares its DI
-with `use` statements, which can appear anywhere in the file's own scope; the
-host binds them all at load:
+with `use` statements, which can appear anywhere in the file, inner scopes
+included; the host binds them all at load:
 
 ```
 use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
@@ -83,6 +83,22 @@ doesn't:
 destructure of a statement's dependency (`:div = HTML`) is scoped the same way.
 With no `as` and no `options.remotes` document for its source, a `use("…")` is
 a compile error.
+
+A `use` in an inner scope (a function body, a branch, a loop, a class body, a
+nested `actor { }`) is still the file's entry, granted at load whether or not
+that code runs. Only its name is scoped: it binds the whole of its scope (above
+the line too, as a top-level `use` binds the whole file) and the scopes inside
+it, and shadows an outer binding of the name. Elsewhere it is unknown. Binding
+or assigning the same name again in that scope is an error. One source used in
+several scopes is one entry and one address.
+
+```
+@fetch = (key: Text) {
+  use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
+  :value Text = DB.lookup(:key)
+  return :value
+}
+```
 
 Inside the file, all of these entries behave like class params to the
 anonymous file actor. From the host side, its `use` entries are surfaced as the params
