@@ -160,7 +160,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   const selfTail = awaitReply ? selfSend : `begin ${selfSend}, null end`;
   const postBranch = `${v.seq} = bv_next_seq_(),
                 ${v.id} = integer_to_binary(${v.seq}),
-                ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${v.addr}},
+                ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => bv_to_addr_(${v.addr})},
                 io:put_chars([json_encode(${v.msg}), $\\n]),
                 ${tail}`;
   return `begin
@@ -466,7 +466,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.depWireTargets?.some(([n]) => n === expr.callee.name)) {
     const seq = ctx.sendCounter++;
     const newTo = expr.viaInstance
-      ? `<<(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)})/binary, ":${expr.viaSelector}"/utf8>>`
+      ? `<<(bv_to_addr_(${genExpr(ctx, { type: 'Identifier', name: expr.viaInstance }, typeEnv, sCtx)}))/binary, ":${expr.viaSelector}"/utf8>>`
       : erlString(ctx.constructorCoercions.get(expr.callee.name));
     return `begin
         New_seq_${seq} = bv_next_seq_(),

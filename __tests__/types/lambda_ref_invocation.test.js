@@ -67,7 +67,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '1', op: [[{ sig: sigWire }], 'generic.'], 'ty': [[{ sig: sigTag }]], from: 'caller' } },
-      { output: { id: expect.any(String), op: 'd', to: '#<caller:d>' } },
+      { output: { id: expect.any(String), op: 'd', to: 'caller:d' } },
     );
   });
 
@@ -75,7 +75,7 @@ describe('lambda ref invocation — service-hosted type callback field', () => {
     const actor = await (await compileActor(fixture, { compileOptions: { remotes } })).spawn();
     await expectActorBehavior(actor,
       { input: { id: '2', op: [[{ sig: sigWire }], 'typed.'], 'ty': [[{ sig: sigTag }]], from: 'caller' } },
-      { output: { id: expect.any(String), op: 'd', to: '#<caller:d>' } },
+      { output: { id: expect.any(String), op: 'd', to: 'caller:d' } },
     );
   });
 });
@@ -124,7 +124,7 @@ describe('lambda ref invocation — service method callback param (CAM round-tri
     });
     const fired = actor.posts.slice(before);
     expect(fired).toContainEqual(
-      expect.objectContaining({ op: 'd', to: '#<caller:d>' }),
+      expect.objectContaining({ op: 'd', to: 'caller:d' }),
     );
   });
 });

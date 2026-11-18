@@ -49,7 +49,7 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
   const elAddr = replies.find(m => m.id === 'new').re;
 
   // body.append!(element)
-  await page.send({ id: 'app', op: [[elAddr], 'append!'], to: bodyAddr, from: 't' });
+  await page.send({ id: 'app', op: [[elAddr], 'append!'], to: bodyAddr.slice(2, -1), from: 't' });
 
   // Fire a real DOM event and drain what the listener routed to `t`. The
   // listener runs synchronously inside dispatchEvent, so the message is already

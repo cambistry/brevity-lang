@@ -1003,7 +1003,10 @@ ${actor.spawnable ? `
   // What this actor sends to anyone else. A class sends it through its file actor,
   // which makes the call as its own and routes the reply back by id; a file actor
   // posts it itself. A silent message has no reply to route.
-  #out(msg, silent = false) {${readsOuter ? `
+  #out(msg, silent = false) {
+    // \`to\` is bare: an address value (a reference field, a callback, an instance
+    // held in a cell) loses the \`#<…>\` that marks it in a payload.
+    if (typeof msg.to === 'string' && msg.to.startsWith('#<') && msg.to.endsWith('>')) msg = { ...msg, to: _opre_unbracket(msg.to) };${readsOuter ? `
     // The file actor sends it as its own, so it gets our addresses translated
     // as our parents would translate them (\`lift\`).
     if (this.#outer) { this.#outer.receive({ ...(this.#_lift ? this.#_lift(msg) : msg), from: '__child', _route: (m) => this.receive(m), _silent: silent }); return; }` : ''}
@@ -1032,8 +1035,8 @@ ${actor.spawnable ? `
 
   async #childSend(child, op) {
     // A self-return from a remote yields an address, not a handle: \`to\` is
-    // the address itself, without the brackets that mark it as a value.
-    if (typeof child === 'string') return this.#send(op, child.startsWith('#<') && child.endsWith('>') ? child.slice(2, -1) : child);
+    // the address itself (#out drops the brackets that mark it as a value).
+    if (typeof child === 'string') return this.#send(op, child);
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       // A child's self-return arrives untranslated. We're its parent, so the
@@ -1254,7 +1257,15 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     return v;
   }
 
-` : ''}  receive(message) {${actor.spawnable ? `
+` : ''}  receive(message) {
+    // A bracketed \`to\`, \`from\` or \`ty\` is malformed: rejected, never routed.
+    if (_opre_bad_address(message)) {
+      const _op = Array.isArray(message.op) ? message.op[message.op.length - 1] : message.op;
+      if (message.id !== undefined && typeof _op === 'string') {
+        (message._route || ((msg) => this.#binding.post(msg)))({ id: message.id, ex: { [_op]: 'bad_address' }, to: _opre_unbracket(message.from) });
+      }
+      return;
+    }${actor.spawnable ? `
     // Still being constructed: a request waits; a reply is what construction waits on.
     if (this.#_starting && ('op' in message || message.test || message.cam)) {
       const later = () => this.receive(message);

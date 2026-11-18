@@ -325,6 +325,36 @@ fn bv_addr_to(v: &str) -> String {
     v.strip_prefix("#<").and_then(|t| t.strip_suffix('>')).unwrap_or(v).to_string()
 }
 
+// A received message is malformed when its \`to\` or \`from\` holds an address
+// value's \`#<…>\`, or any of its \`ty\` tags does: those fields are bare.
+#[allow(dead_code)]
+fn bv_bad_address(msg: &Value) -> bool {
+    fn bracketed(v: Option<&Value>) -> bool { v.and_then(|v| v.as_str()).is_some_and(|t| t.starts_with("#<")) }
+    fn any_tag(v: &Value) -> bool {
+        match v {
+            Value::String(t) => t.starts_with("#<"),
+            Value::Array(a) => a.iter().any(any_tag),
+            Value::Object(m) => m.values().any(any_tag),
+            _ => false,
+        }
+    }
+    bracketed(msg.get("to")) || bracketed(msg.get("from")) || msg.get("ty").is_some_and(any_tag)
+}
+
+// A message as it goes out: its \`to\` is bare, never an address value's
+// \`#<…>\` (a reference field, a callback, an instance held in a cell).
+#[allow(dead_code)]
+fn bv_bare_to(msg: Value) -> Value {
+    match msg {
+        Value::Object(mut m) => {
+            let bare = m.get("to").and_then(|v| v.as_str()).filter(|t| t.starts_with("#<")).map(bv_addr_to);
+            if let Some(b) = bare { m.insert("to".to_string(), Value::String(b)); }
+            Value::Object(m)
+        }
+        other => other,
+    }
+}
+
 // A named-only arg list off the wire, \`[{k: v}]\`, and its tags \`[[{k: t}]]\`, in
 // the form a handler reads in process: the fields alone, \`{k: v}\` and \`[{k: t}]\`.
 #[allow(dead_code)]

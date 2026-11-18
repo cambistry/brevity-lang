@@ -46,7 +46,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
   });
 
   // ── Core: child token posts subscribe ───────────────────────────────────
-  it('new with child "#<alias:sel>" posts subscribe with to: "#<alias:sel>"', async () => {
+  it('new with child "#<alias:sel>" posts subscribe to the bare address', async () => {
     const page = await loadPage(html);
     const pubPosts = [];
     await page.register('pub', msg => pubPosts.push(msg));

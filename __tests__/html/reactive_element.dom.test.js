@@ -147,7 +147,7 @@ describe('Q2: reactive element renders initial state', () => {
 //
 // @color *Text = "black" inside the element attr block is hoisted to the
 // parent file actor as a public ref. An outside actor can set it via
-// { op: [[v], '#set'], to: '#<factory.bv:color>' } and the reactive style
+// { op: [[v], '#set'], to: 'factory.bv:color' } and the reactive style
 // attr re-evaluates.
 
 describe('Q3: external set on lifted ref cell', () => {
@@ -172,14 +172,14 @@ describe('Q3: external set on lifted ref cell', () => {
 
   it('external set on @color updates style to red', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    await page.send({ id: '1', op: [['red'], '$set'], to: '#<factory.bv:color>', from: 'test', 'ty': [['Text']] });
+    await page.send({ id: '1', op: [['red'], '$set'], to: 'factory.bv:color', from: 'test', 'ty': [['Text']] });
     const style = await page.evaluate(() => document.querySelector('div').getAttribute('style'));
     expect(style).toBe('color: red');
   });
 
   it('external set on @color updates style to blue', async () => {
     const page = await loadPage(html, { sources: { '/factory.bv': factorySource } });
-    await page.send({ id: '1', op: [['blue'], '$set'], to: '#<factory.bv:color>', from: 'test', 'ty': [['Text']] });
+    await page.send({ id: '1', op: [['blue'], '$set'], to: 'factory.bv:color', from: 'test', 'ty': [['Text']] });
     const style = await page.evaluate(() => document.querySelector('div').getAttribute('style'));
     expect(style).toBe('color: blue');
   });

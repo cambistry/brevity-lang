@@ -228,8 +228,8 @@ body.append!(<div id="u">unscoped</div>)
 
   it('an outside #set on each cell updates its own hole', async () => {
     const page = await loadPage(html, { sources: { '/sheet.bv': sheetSource } });
-    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: '#<sheet.bv:color>', from: 'test', ty: [['Text']] });
-    await page.send({ id: '2', op: [['30px'], '$set'], to: '#<sheet.bv:size>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: 'sheet.bv:color', from: 'test', ty: [['Text']] });
+    await page.send({ id: '2', op: [['30px'], '$set'], to: 'sheet.bv:size', from: 'test', ty: [['Text']] });
     expect(await look(page)).toEqual({
       text: '@scope { :scope { color: rgb(4, 5, 6); font-size: 30px; } }',
       color: 'rgb(4, 5, 6)',
@@ -276,7 +276,7 @@ body.append!(<div id="scope-ranked"><style>@scope { :scope { color: rgb(1, 2, 3)
 
   it('a {{ }} hole in a bare declaration updates on an outside #set', async () => {
     const page = await loadPage(html, { sources: { '/bare.bv': bareSource } });
-    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: '#<bare.bv:color>', from: 'test', ty: [['Text']] });
+    await page.send({ id: '1', op: [['rgb(4, 5, 6)'], '$set'], to: 'bare.bv:color', from: 'test', ty: [['Text']] });
     expect(await colors(page)).toEqual(['rgb(4, 5, 6)', 'rgb(9, 9, 9)', 'rgb(1, 2, 3)']);
   });
 });

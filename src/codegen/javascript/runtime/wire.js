@@ -81,12 +81,11 @@ export function _bv_sel(addr) {
 }
 
 // The tokens of a received `to` that name something inside us. What reaches
-// us is relative to us: `:Box:1` or `Box 1`, bracketed or not.
+// us is relative to us, and bare: `:Box:1` or `Box:1`.
 export function _bv_local_tokens(to) {
   if (typeof to !== 'string' || to === '') return [];
-  const a = to.startsWith('#<') && to.endsWith('>') ? to.slice(2, -1) : to;
   let tokens;
-  try { tokens = _opre_split(a); } catch { return []; }
+  try { tokens = _opre_split(to); } catch { return []; }
   return tokens[0] === null ? tokens.slice(1) : tokens;
 }
 

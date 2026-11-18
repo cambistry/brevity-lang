@@ -212,7 +212,8 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   const seq = ctx.sendCounter++;
   lines.push(`${I}New_seq_${seq} = bv_next_seq_(),`);
   lines.push(`${I}New_id_${seq} = integer_to_binary(New_seq_${seq}),`);
-  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, s.value.args, typeEnv, stmtCtx)}, <<"to">> => ${toExpr}},`);
+  const toBare = toExpr.startsWith('<<"') ? toExpr : `bv_to_addr_(${toExpr})`;
+  lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, s.value.args, typeEnv, stmtCtx)}, <<"to">> => ${toBare}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
@@ -221,7 +222,9 @@ function genErlAsSend(ctx, varName, typeName, target, I, lines) {
   const v = erlSendVars(ctx);
   lines.push(`${I}${v.seq} = bv_next_seq_(),`);
   lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
-  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"$as">>], <<"to">> => ${target}},`);
+  // `to` is bare: an address value held in a cell or local loses its brackets.
+  const to = target.startsWith('<<"') ? target : `bv_to_addr_(${target})`;
+  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"$as">>], <<"to">> => ${to}},`);
   lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
   lines.push(`${I}${varName} = hd(await_response_(${v.id})),`);
 }

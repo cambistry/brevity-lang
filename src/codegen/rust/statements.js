@@ -1529,7 +1529,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    let mut as_msg = Map::new();`);
   lines.push(`${I}    as_msg.insert("id".to_string(), json!(as_id.clone()));`);
   lines.push(`${I}    as_msg.insert("op".to_string(), json!(["${s.typeName}", "$as"]));`);
-  lines.push(`${I}    as_msg.insert("to".to_string(), json!(addr.as_str().unwrap_or("")));`);
+  lines.push(`${I}    as_msg.insert("to".to_string(), json!(bv_addr_to(addr.as_str().unwrap_or(""))));`);
   lines.push(`${I}    let _ = self.binding.send(Value::Object(as_msg));`);
   lines.push(`${I}    let _re = self.await_response(&as_id);`);
   lines.push(`${I}    let _as_val: Value = if let Some(arr) = _re.as_array() { arr.first().cloned().unwrap_or(Value::Null) } else { Value::Null };`);

@@ -1256,7 +1256,7 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_inner', m => inbox.push(m));
     await page.send({
       id: 's', op: [['<b>hi</b>'], '$set'],
-      to: `#<${inner}:inner_html>`, from: '__t_set_inner',
+      to: `${inner}:inner_html`, from: '__t_set_inner',
     });
     // Two ticks for round-trip + dispatch.
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1274,7 +1274,7 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_tc', m => inbox.push(m));
     await page.send({
       id: 's', op: [['<b>raw</b>'], '$set'],
-      to: `#<${inner}:text_content>`, from: '__t_set_tc',
+      to: `${inner}:text_content`, from: '__t_set_tc',
     });
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1291,7 +1291,7 @@ describe('HTML element runtime — service side', () => {
     await page.register('__t_set_void', m => inbox.push(m));
     await page.send({
       id: 's', op: [['ignored'], '$set'],
-      to: `#<${inner}:inner_html>`, from: '__t_set_void',
+      to: `${inner}:inner_html`, from: '__t_set_void',
     });
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1660,9 +1660,9 @@ describe('HTML element runtime — service side', () => {
   });
 
   describe('Bare-set on text + comment nodes (`node <- "value"`)', () => {
-    // Wire form: `{op: [[v], '#set'], to: '#<<node-addr>>'}` — no field
-    // selector in `to`. route() unwraps the hash-angle and delivers with
-    // `to: undefined`; the dispatcher recognizes that as the object-level
+    // Wire form: `{op: [[v], '$set'], to: '<node-addr>'}`, bare, with no field
+    // selector in `to`. route() delivers it to the node with `to: undefined`;
+    // the dispatcher recognizes that as the object-level
     // form and writes nodeValue. Distinct from element field-set, which
     // carries `to: ':<field>'`.
 
@@ -1690,7 +1690,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_node_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [['updated'], '$set'],
-        to: textAddr, from: '__t_node_set',
+        to: textInner, from: '__t_node_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1729,7 +1729,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_comm_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [['after'], '$set'],
-        to: commentAddr, from: '__t_comm_set',
+        to: commentAddr.slice(2, -1), from: '__t_comm_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1758,7 +1758,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_null_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [[null], '$set'],
-        to: textAddr, from: '__t_null_set',
+        to: textAddr.slice(2, -1), from: '__t_null_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -1779,7 +1779,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_el_bare_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [['ignored'], '$set'],
-        to: elementAddr, from: '__t_el_bare_set',
+        to: elementAddr.slice(2, -1), from: '__t_el_bare_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -2047,7 +2047,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_scroll', m => inbox.push(m));
       await page.send({
         id: 's', op: [[100], '$set'],
-        to: `#<${inner}:scroll_top>`, from: '__t_scroll',
+        to: `${inner}:scroll_top`, from: '__t_scroll',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -2215,7 +2215,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_void_scroll', m => inbox.push(m));
       await page.send({
         id: 's', op: [[10], '$set'],
-        to: `#<${inner}:scroll_top>`, from: '__t_void_scroll',
+        to: `${inner}:scroll_top`, from: '__t_void_scroll',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
@@ -2328,7 +2328,7 @@ describe('HTML element runtime — service side', () => {
       await page.register('__t_cl_set', m => inbox.push(m));
       await page.send({
         id: 's', op: [['foo bar'], '$set'],
-        to: `#<${inner}:value>`, from: '__t_cl_set',
+        to: `${inner}:value`, from: '__t_cl_set',
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));

@@ -57,6 +57,18 @@ bv_sel_(Addr) when is_binary(Addr) ->
         _ -> Addr
     end;
 bv_sel_(Addr) -> Addr.
+%% A received message is malformed when its to or from holds an address value's
+%% #<…>, or any of its ty tags does: those fields are bare.
+bv_bad_address_(Msg) when is_map(Msg) ->
+    bv_bracketed_(maps:get(<<"to">>, Msg, null)) orelse bv_bracketed_(maps:get(<<"from">>, Msg, null))
+        orelse bv_any_bracketed_(maps:get(<<"ty">>, Msg, null));
+bv_bad_address_(_) -> false.
+bv_bracketed_(<<"#<", _/binary>>) -> true;
+bv_bracketed_(_) -> false.
+bv_any_bracketed_(V) when is_binary(V) -> bv_bracketed_(V);
+bv_any_bracketed_(V) when is_list(V) -> lists:any(fun bv_any_bracketed_/1, V);
+bv_any_bracketed_(V) when is_map(V) -> lists:any(fun bv_any_bracketed_/1, maps:values(V));
+bv_any_bracketed_(_) -> false.
 %% An address value used as a to: the address without the #<…> that marks it.
 bv_to_addr_(<<"#<", _/binary>> = A) when byte_size(A) >= 3 ->
     case binary:at(A, byte_size(A) - 1) of $> -> binary:part(A, 2, byte_size(A) - 3); _ -> A end;
@@ -70,9 +82,7 @@ bv_op_key_(Op, _) -> Op.
 %% The same, for a to that reached an actor we published at Addr: the target
 %% is what follows Addr.
 bv_op_key_under_(<<"$", _/binary>> = Op, To, Addr) ->
-    Sz_ = byte_size(To),
-    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
-    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    Toks_ = case catch bv_opre_split_(To) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
     N_ = length(bv_opre_split_(Addr)),
     case lists:nthtail(min(N_, length(Toks_)), Toks_) of [] -> Op; Rest_ -> {Op, lists:last(Rest_)} end;
 bv_op_key_under_(Op, _, _) -> Op.
@@ -833,9 +843,7 @@ bv_published_() -> case get(bv_published_) of undefined -> []; L_ -> L_ end.
 %% Box:1:x, bracketed or not), so the longest published address its tokens
 %% start with.
 bv_instance_at_(To) when is_binary(To) ->
-    Sz_ = byte_size(To),
-    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
-    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    Toks_ = case catch bv_opre_split_(To) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
     Found_ = [{A_, get({bv_instance, A_})} || N_ <- lists:seq(length(Toks_), 1, -1),
               A_ <- [bv_opre_join_(lists:sublist(Toks_, N_))],
               get({bv_instance, A_}) =/= undefined],
@@ -844,9 +852,7 @@ bv_instance_at_(_) -> none.
 %% The same for a message: \`$new\` to a class's own label (\`:C\`) builds one here,
 %% though its members are published there.
 bv_route_at_(<<"$new">>, To) when is_binary(To) ->
-    Sz_ = byte_size(To),
-    Inner_ = case To of <<"#<", R_:(Sz_ - 3)/binary, ">">> -> R_; _ -> To end,
-    Toks_ = case catch bv_opre_split_(Inner_) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
+    Toks_ = case catch bv_opre_split_(To) of [self | T_] -> T_; T_ when is_list(T_) -> T_; _ -> [] end,
     case bv_instance_at_(To) of
         {A_, _} = F_ -> case bv_opre_join_(Toks_) =:= A_ of true -> none; false -> F_ end;
         none -> none
@@ -1176,15 +1182,10 @@ brevity_re_after(Bin, Re) ->
 
 %% ── Wire-format helpers ─────────────────────────────────────────────────────
 %% Given a to-field binary, the wire name its last token names on us (val,
-%% ~val, #x, @N). The to is relative to us (:x, x, or #<alias:x>). Returns the
-%% name or nomatch.
+%% ~val, #x, @N). The to is bare and relative to us (:x, x, alias:x). Returns
+%% the name or nomatch.
 extract_to_selector_(Bin) when is_binary(Bin) ->
-    Sz = byte_size(Bin),
-    Inner = case Bin of
-        <<"#<", Rest:(Sz - 3)/binary, ">">> -> Rest;
-        _ -> Bin
-    end,
-    case catch bv_opre_split_(Inner) of
+    case catch bv_opre_split_(Bin) of
         Toks when is_list(Toks), Toks =/= [] ->
             case lists:last(Toks) of
                 self -> nomatch;

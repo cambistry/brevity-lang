@@ -115,11 +115,31 @@ export function _opre_map_bracketed(s, f) {
   return s.replace(/\\[\s\S]|#<((?:[^>\\]|\\[\s\S])*)>/g, (m, a) => a === undefined ? m : '#<' + f(a) + '>');
 }
 
+// An address value (`#<…>`, as in a payload) as the bare address a `to`,
+// `from` or `ty` holds: the brackets gone, and the escapes inside them (`\>`,
+// `\\`) undone. Anything else is returned as it is.
+export function _opre_unbracket(v) {
+  if (typeof v !== 'string' || !v.startsWith('#<') || !v.endsWith('>')) return v;
+  return v.slice(2, -1).replace(/\\([\s\S])/g, '$1');
+}
+
+// Is a received message malformed in its address fields? `to` and `from` hold a
+// bare address and `ty` bare tags: an address value's `#<…>` belongs only in a
+// payload. A receiver rejects such a message and never routes it.
+export function _opre_bad_address(message) {
+  const bracketed = (v) => typeof v === 'string' && v.startsWith('#<');
+  const anyTag = (v) => (bracketed(v) || (Array.isArray(v) ? v.some(anyTag)
+    : (v !== null && typeof v === 'object' && Object.values(v).some(anyTag))));
+  return bracketed(message?.to) || bracketed(message?.from) || anyTag(message?.ty);
+}
+
 // The functions above, for the JS runtime preamble.
 export const OPRE_TOKENS_PREAMBLE = [
   _opre_needs_quote, _opre_quote, _opre_split, _opre_join,
-  _opre_is_relative, _opre_under, _opre_resolve, _opre_map_bracketed,
+  _opre_is_relative, _opre_under, _opre_resolve, _opre_map_bracketed, _opre_unbracket,
+  _opre_bad_address,
 ].map(f => f.toString()).join('\n');
 
 export { _opre_split as split, _opre_join as join, _opre_quote as quote, _opre_is_relative as isRelative,
-  _opre_under as under, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed };
+  _opre_under as under, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed,
+  _opre_unbracket as unbracket, _opre_bad_address as badAddress };

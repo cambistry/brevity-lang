@@ -1914,6 +1914,25 @@ ${testTypeClauses || '                _ -> null'};
 %% named-only call is its fields alone: [#{k => v}] is #{k => v}, and its
 %% tags [[#{k => t}]] are [#{k => t}].
 ${opDispatchName}(Message0) ->
+    case bv_bad_address_(Message0) of
+        true -> bv_reject_address_(Message0);
+        false -> bv_dispatch_checked_(Message0)
+    end.
+
+%% A bracketed to, from or ty is malformed: rejected, never routed.
+bv_reject_address_(Message0) ->
+    Op_ = case maps:get(<<"op">>, Message0, null) of
+        O_ when is_binary(O_) -> O_;
+        L_ when is_list(L_), L_ =/= [] -> lists:last(L_);
+        _ -> null
+    end,
+    case {maps:get(<<"id">>, Message0, null), Op_} of
+        {Id_, OpB_} when Id_ =/= null, is_binary(OpB_) ->
+            io:put_chars([json_encode(#{<<"id">> => Id_, <<"ex">> => #{OpB_ => <<"bad_address">>}, <<"to">> => bv_to_addr_(maps:get(<<"from">>, Message0, <<>>))}), $\n]);
+        _ -> ok
+    end.
+
+bv_dispatch_checked_(Message0) ->
     case maps:get(<<"op">>, Message0, null) of
         [Bad_ | [_ | _] = BadRest_] when is_map(Bad_) ->
             io:put_chars([json_encode(#{<<"id">> => maps:get(<<"id">>, Message0, <<>>), <<"ex">> => #{lists:last(BadRest_) => <<"bad_op">>}, <<"to">> => maps:get(<<"from">>, Message0, <<>>)}), $\n]);

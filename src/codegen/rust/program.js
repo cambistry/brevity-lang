@@ -985,7 +985,8 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
     // relative to it, so they gain its address under us, as its parents would
     // translate them.
     #[allow(dead_code)]
-    fn bv_lift(&self, msg: Value) -> Value {${publishesClasses && G.ctx.readsOuter ? `
+    fn bv_lift(&self, msg: Value) -> Value {
+        let msg = bv_bare_to(msg);${publishesClasses && G.ctx.readsOuter ? `
         let addr = match self.lift_of.get(&self.state_owner) { Some(a) => a.clone(), None => return msg };
         match msg {
             Value::Object(m) => Value::Object(m.into_iter().map(|(k, v)| {
@@ -1911,6 +1912,17 @@ impl Actor {
 ${captureMethod}
 
     fn receive(&mut self, message: &Value) {
+        // A bracketed \`to\`, \`from\` or \`ty\` is malformed: rejected, never routed.
+        if bv_bad_address(message) {
+            let op = message.get("op").and_then(|o| o.as_str().map(str::to_string).or_else(|| o.as_array().and_then(|a| a.last()).and_then(|v| v.as_str()).map(str::to_string)));
+            if let (Some(id), Some(op)) = (message.get("id").and_then(|v| v.as_str()), op) {
+                let mut ex = Map::new();
+                ex.insert(op, json!("bad_address"));
+                let from = bv_addr_to(message.get("from").and_then(|v| v.as_str()).unwrap_or(""));
+                let _ = self.binding.send(json!({ "id": id, "ex": Value::Object(ex), "to": from }));
+            }
+            return;
+        }
 ${receiveBody}
     }
 

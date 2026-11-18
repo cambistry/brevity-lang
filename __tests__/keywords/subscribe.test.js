@@ -226,12 +226,9 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
   // after `srcPrev`, and deliver each one to `dstActor.sendAsync(...)` tagged
   // with `from: srcAddr`. Returns the new srcPrev watermark.
   //
-  // Matches both bare `to: 'dstAddr'` and `to: '#<dstAddr:selector>'`
-  // (hash-angle delimited alias with an optional colon-separated selector inside).
+  // Matches `to: 'dstAddr'` and `to: 'dstAddr:selector'` (a `to` is always bare).
   function toAliasOf(toStr) {
-    if (typeof toStr !== 'string') return null;
-    const m = /^#<([^:>]+)(?::[^>]*)?>/.exec(toStr);
-    return m ? m[1] : toStr.split(':')[0];
+    return typeof toStr === 'string' ? toStr.split(':')[0] : null;
   }
   async function routeNew(srcActor, srcPrev, dstAddr, srcAddr, dstActor) {
     const fresh = srcActor.posts.slice(srcPrev);

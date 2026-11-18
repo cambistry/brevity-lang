@@ -8,7 +8,7 @@
  * start() — compiles, instantiates, and wires up live actors
  */
 
-import { _opre_split as split, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
+import { _opre_split as split, _opre_join as join, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed, _opre_unbracket as unbracket, _opre_bad_address as badAddress } from '../opre_tokens.js';
 
 const documentDI = 'use document\n';
 // A file that declares its own DI or shape: a constructor form (delimited
@@ -1283,11 +1283,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         }
         const cls = tagClassification(tag);
         // Bare `set` op carries the field in `to`. Wire form is
-        // `{op: [[v], '$set'], to: '#<<addr> <field>>'}`; route() unwraps
-        // to `to: '<field>'` before handing the message to us. Maps to a
-        // DOM IDL property write per ELEMENT_SETTERS, then replies `self`.
+        // `{op: [[v], '$set'], to: '<addr>:<field>'}`; route() hands it to us
+        // as `to: ':<field>'`. Maps to a DOM IDL property write per
+        // ELEMENT_SETTERS, then replies `self`. Our own address is no field.
         if (eopName === '$set') {
-          const sel = typeof elemMsg.to === 'string' ? elemMsg.to : '';
+          const sel = typeof elemMsg.to === 'string' && elemMsg.to !== addr ? elemMsg.to : '';
           const fieldName = fieldOf(sel);
           const setter = fieldName && ELEMENT_SETTERS[fieldName];
           if (!setter) return;
@@ -1462,7 +1462,8 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // bare set (semantically ambiguous for elements, no nodeValue
         // meaning for the document).
         if (opName === '$set') {
-          const sel = typeof msg.to === 'string' ? msg.to : '';
+          // Our own address is the node itself; anything under it is a field.
+          const sel = typeof msg.to === 'string' && msg.to !== addr ? msg.to : '';
           if (sel) return; // field-targeted set — none declared on these kinds
           const payload = Array.isArray(op) && Array.isArray(op[0]) ? op[0] : null;
           const value = payload && payload.length > 0 ? payload[0] : null;
@@ -2001,12 +2002,12 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             // value (positional arg, tagged with its authority address). The
             // consumer reads value fields freely and invokes endpoint fields
             // in-frame; see buildEventValue.
-            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: v, from: addr, 'ty': [['HTML:Event']] });
+            route({ id: `_evt_${++subCounter}`, op: [[buildEventValue(ev)], selector], to: unbracket(v), from: addr, 'ty': [['HTML:Event']] });
           });
         } else {
           const subId = `_sub_${++subCounter}`;
           elemSubs.set(subId, { attrName: k });
-          Promise.resolve().then(() => route({ id: subId, op: '$subscribe', to: v, from: addr }));
+          Promise.resolve().then(() => route({ id: subId, op: '$subscribe', to: unbracket(v), from: addr }));
         }
       } else {
         applyDomAttribute(el, k, v);
@@ -2049,7 +2050,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const subId = `_sub_${++subCounter}`;
         elemSubs.set(subId, textNode);
         Promise.resolve().then(() => route({
-          id: subId, op: '$subscribe', to: child, from: addr,
+          id: subId, op: '$subscribe', to: inner, from: addr,
         }));
         continue;
       }
@@ -2067,18 +2068,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     }));
   }
 
-  // Extract the destination's alias from a `to` field: the head token of
-  // the bare form (`ALIAS:sel`) or the delimited form (`#<ALIAS:sel>`).
-  // Returns null for a relative address (`:sel`, `#<:sel>`) — it names no
+  // Extract the destination's alias from a `to` field: its head token
+  // (`ALIAS:sel`). Returns null for a relative address (`:sel`): it names no
   // outer alias to strip.
   function destAliasOf(to) {
-    if (typeof to !== 'string') return null;
-    let candidate = to;
-    if (to.startsWith('#<') && to.endsWith('>')) candidate = to.slice(2, -1);
-    if (candidate === '' || isRelative(candidate)) return null;
+    if (typeof to !== 'string' || to === '' || isRelative(to)) return null;
     // The head token as it is written: a quoted source (`'a:b.bv':x`) holds a `:`.
     let head;
-    try { [head] = split(candidate); } catch { return null; }
+    try { [head] = split(to); } catch { return null; }
     return head == null ? null : quote(head);
   }
 
@@ -2102,6 +2099,14 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   }
 
   function route(originalMsg) {
+    // A bracketed `to`, `from` or `ty` is malformed: rejected, never routed.
+    if (badAddress(originalMsg)) {
+      const op = Array.isArray(originalMsg.op) ? originalMsg.op[originalMsg.op.length - 1] : originalMsg.op;
+      if (originalMsg.id !== undefined && typeof op === 'string') {
+        Promise.resolve().then(() => route({ id: originalMsg.id, ex: { [op]: 'bad_address' }, to: unbracket(originalMsg.from) }));
+      }
+      return;
+    }
     const destAlias = destAliasOf(originalMsg.to);
     let msg = originalMsg;
     if (destAlias) {
@@ -2142,36 +2147,19 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       addresses.get(to)(msg);
       return;
     }
-    // `#<alias:selector>` form (hash-angle delimited): the full address is
-    // one chunk; interior is split into alias + selector. Deliver to alias
-    // with the selector, relative to it (`:selector`), as the new `to` for
-    // the receiver's dispatcher.
-    //
-    // Multi-segment instance addresses (`#<HTML:div:1:field>`) need the
-    // longest registered prefix, since the alias is the *instance address*
-    // (`HTML:div:1`), not just the first token. Try prefixes from longest
-    // to shortest before falling back to the first-token alias.
-    if (typeof to === 'string' && to.startsWith('#<') && to.endsWith('>')) {
-      const inner = to.slice(2, -1);
-      if (addresses.has(inner)) {
-        addresses.get(inner)({ ...msg, to: undefined });
-        return;
-      }
-      let cut = inner.lastIndexOf(':');
-      while (cut > 0) {
-        const prefix = inner.slice(0, cut);
+    // A multi-token address: deliver to its longest registered prefix, with
+    // the rest relative to it as the new `to` (`HTML:div:1:field` reaches
+    // `HTML:div:1` as `:field`; `factory.bv:color` reaches `factory.bv` as
+    // `:color`). Tokens, so a quoted source (`'a:b.bv':x`) splits right.
+    if (typeof to === 'string' && to !== '' && !isRelative(to)) {
+      let toks;
+      try { toks = split(to); } catch { return; }
+      for (let n = toks.length - 1; n > 0; n--) {
+        const prefix = join(toks.slice(0, n));
         if (addresses.has(prefix)) {
-          addresses.get(prefix)({ ...msg, to: ':' + inner.slice(cut + 1) });
+          addresses.get(prefix)({ ...msg, to: join([null, ...toks.slice(n)]) });
           return;
         }
-        cut = inner.lastIndexOf(':', cut - 1);
-      }
-      const sp = inner.indexOf(':');
-      const alias = sp === -1 ? inner : inner.slice(0, sp);
-      const selector = sp === -1 ? undefined : inner.slice(sp + 1);
-      if (addresses.has(alias)) {
-        const forwarded = selector ? { ...msg, to: ':' + selector } : { ...msg, to: undefined };
-        addresses.get(alias)(forwarded);
       }
     }
   }
