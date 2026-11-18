@@ -122,6 +122,7 @@ export function inferExprType(expr, typeEnv) {
     case 'TypeConstruction': return expr.typeName;
     case 'AsExpr':           return expr.typeName;
     case 'PresenceCheck':    return 'Boolean';
+    case 'ClassValue':       return 'Class';
   }
 
   // ── ListLiteral — infer "List of <plural>" from first-element type ─────

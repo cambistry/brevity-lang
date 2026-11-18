@@ -1,3 +1,4 @@
+import { lowerClassValues } from './class_values.js';
 // Class singletons: a class whose class block holds members of its own.
 //
 //   Nested:   C = actor { count *Integer = 0; new = (seed Integer) *{ … } }
@@ -109,6 +110,8 @@ export function lowerSingletonClasses(actors, types = []) {
 
   // `class` (and `self::class`) names the class of the actor it's in.
   for (const a of actors) resolveClassOf(a, blockClassOf);
+  // A class as a value, and a name bound to one (src/class_values.js).
+  lowerClassValues(actors, byName);
 
   for (const cls of actors.filter(a => a.membersClass && !a.membersInherited)) {
     const members = byName.get(cls.membersClass);

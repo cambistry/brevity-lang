@@ -50,7 +50,7 @@ class.count            // public member of my class's class block
 class::total           // protected member of my class's class block
 class.count <- 1       // `$set` of a public `*` cell; `class::total <- 1` of a protected one
 class(args)            // construct, as C(args) does
-k = class              // the class itself, as `k = C` (a class as a value isn't supported yet)
+k = class              // the class itself, as `k = C`
 ```
 
 - **Reserved**, not contextual as `actor` is: `class = …`, `class *Integer = …` and a param
@@ -64,6 +64,20 @@ k = class              // the class itself, as `k = C` (a class as a value isn't
 - **Where no class built the running actor** (a class block, a singleton, the file), `class`
   is an error.
 - `Self` is unchanged for now.
+
+## A class as a value — decided 2026-11-18
+
+`k = C`, `k = @C` and `k = class` bind the class. Its type is `Class` (`k Class = C`; `k C`
+is an actor of `C`). On the wire it is the class's address tagged `Class`: `#<:C>` from the
+file actor, which declares it, and the absolute `#<c.bv:C>` from anywhere else (an instance
+can't say where the file actor is relative to itself, as `Self` as a value can't), which needs
+the file's name.
+
+- A name bound to a class builds it (`k(args)`) and reaches its public members (`k.count`),
+  as the class's own name does. `k::x` is an error: `::` is static and family-only.
+- It's bound, not held: `k *Class = C` is an error.
+- Not yet: building or reaching a class value that arrives from elsewhere (a `Class` param),
+  and a class declared inside another class as a value.
 
 Open:
 - how `class` relates to the existing `Self` (the file's class).

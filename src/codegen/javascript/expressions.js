@@ -5,7 +5,7 @@ import { inferExprType } from '../../inference.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { wireLabel, selfAddress, memberOp } from '../wire_labels.js';
+import { wireLabel, selfAddress, memberOp, classAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
@@ -1167,6 +1167,7 @@ export function genExpr(ctx, expr) {
     }
   }
   if (expr.type === 'SelfValue') return '"#<:>"';
+  if (expr.type === 'ClassValue') return JSON.stringify(classAddress(ctx.fileName, expr));
   if (expr.type === 'DotAccessExpr') {
     // A sub-service (`Svc.s`) is its address (src/opre.js).
     if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);

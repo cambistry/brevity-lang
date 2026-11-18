@@ -2,7 +2,7 @@
 
 import { isDependencyValue } from '../dep_address.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { selfAddress, addressToken, memberOp, wireLabel } from '../wire_labels.js';
+import { selfAddress, addressToken, memberOp, wireLabel, classAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
@@ -904,6 +904,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'SelfValue') return '<<"#<:>"/utf8>>';
+  if (expr.type === 'ClassValue') return erlString(classAddress(ctx.fileName, expr));
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 

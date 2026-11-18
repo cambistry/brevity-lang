@@ -1,6 +1,6 @@
 // expressions.js — Expression generation for Rust codegen
 import { isDependencyValue } from '../dep_address.js';
-import { addressToken, memberOp, selfAddress, wireLabel } from '../wire_labels.js';
+import { addressToken, memberOp, selfAddress, wireLabel, classAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { publicLabel } from '../../singleton_classes.js';
@@ -1434,6 +1434,7 @@ ${subRegLines.join('\n')}
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
   if (expr.type === 'SelfValue') return 'json!("#<:>")';
+  if (expr.type === 'ClassValue') return `json!(${JSON.stringify(classAddress(G.ctx.fileName, expr))})`;
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 

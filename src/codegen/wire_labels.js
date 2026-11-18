@@ -62,3 +62,11 @@ export function addressToken(name) {
 export function selfAddress(name) {
   return ':' + quote(addressToken(name));
 }
+
+// A class value's address (src/class_values.js): `#<:C>` from the file actor,
+// `#<c.bv:C>` from anywhere else.
+export function classAddress(fileName, { label, relative }) {
+  if (relative) return '#<' + label + '>';
+  if (!fileName) throw new Error('A class as a value outside the file actor requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
+  return '#<' + quote(fileName) + label + '>';
+}
