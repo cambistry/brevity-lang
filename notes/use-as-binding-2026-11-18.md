@@ -169,8 +169,8 @@ n Integer = use("svc.bv").n()                    // used directly
 - **Shape.** From `as` on the expression (`{ … }`, `(…) -> *{ … }`), or from
   `options.remotes` (keyed by source); with neither it's the usual "has no type" error. A source
   claimed differently in two places is an error.
-- **Anywhere in the file actor**, inner scopes included. The entry is the file's. Not in a
-  factory file yet. (So is the `use` statement: see "Inner scopes".)
+- **Anywhere in the file actor**, inner scopes included, and in a factory file's constructor
+  body. The entry is the file's. (So is the `use` statement: see "Inner scopes".)
 
 ## Inner scopes
 
@@ -195,7 +195,8 @@ may be written in any scope: a function body, a branch, a loop body, a class bod
 - **A typed value** (`use n Integer = limit`) binds the file's load-time value `limit` in its
   scope; the entry is shared with a top-level `use limit Integer = limit`. Two types for one key
   anywhere in the file are an error.
-- **Not in a factory file** yet, as at top level.
+- **In a factory file too**, as at top level: each instance is its own actor, and its calls go
+  out from it.
 
 ## Open
 

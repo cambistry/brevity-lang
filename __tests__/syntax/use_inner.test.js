@@ -278,9 +278,4 @@ describe('use in inner scopes — errors', () => {
       }
     `)).toThrow(again('svc', `use svc = "svc.bv" as ${N}`));
   });
-
-  it('in a factory file, still', () => {
-    expect(() => extract('*\n  n Integer\n*\n@a = {\n  use document\n  return n\n}\n'))
-      .toThrow("'use' in a factory file is not supported yet");
-  });
 });

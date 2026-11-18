@@ -238,7 +238,6 @@ describe('use("…") — errors', () => {
     ['no argument', '@a = -> use()', `'use(…)' takes one source, a string: 'use("HTML")'`],
     ['more than one', '@a = -> use("a", "b")', `'use(…)' takes one source, a string: 'use("HTML")'`],
     ['no parens, in value position', '@a = {\n  x = use "svc.bv"\n  return x\n}', `'use' in an expression takes its source in parens: write 'use("svc.bv")'`],
-    ['in a factory file', '*\n  n Integer\n*\n@a = -> use("x")', `'use' in a factory file is not supported yet`],
   ])('%s', (_, src, message) => {
     expect(() => extract(src)).toThrow(message);
   });

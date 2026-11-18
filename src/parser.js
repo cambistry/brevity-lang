@@ -16,7 +16,6 @@ const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) —
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
 const USE_INNER_MSG = "'use' is a statement on a line of its own — in an expression, write 'use(\"…\")'";
 const RETIRED_HASH_CLAIM = "'#' claims nothing a document doesn't say — drop it, or claim the shape in full: 'as (…) -> *{ … }' or 'as { … }'";
-const USE_FACTORY_MSG = "'use' in a factory file is not supported yet";
 const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use HTML', 'use Svc = \"svc.bv\"'): a file with no header is an actor";
 const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
 const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file — an inline singleton is named: 'name = actor { … }'";
@@ -5094,7 +5093,6 @@ export function parse(tokensIn) {
       // `use` declares the file's DI: hoisted into its manifest, so it may come anywhere
       // in the file actor's own scope.
       if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
-        if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
         // In a class body or a nested actor, it binds that scope (src/validate.js).
         if (actorBodyDepth > 1) constructorBody.push(...parseInnerUse());
         else parseUse();
@@ -5965,7 +5963,6 @@ export function parse(tokensIn) {
   // keyed by source, and its bindings are scoped ones, over the whole scope
   // (src/validate.js). Returns the binding statements.
   function parseInnerUse() {
-    if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
     const out = [];
     parseUseStatement((target, segs, shape, shown) => out.push(lowerInnerUse(target, segs, shape, shown)));
     return out;
@@ -6023,6 +6020,8 @@ export function parse(tokensIn) {
   // where it's written (src/validate.js). The node becomes a reference to its
   // entry's name once every entry is known (resolveUseExprs).
   const useExprs = [];
+  // Entries a `use` made (a factory's other dependencies came from its params).
+  const useEntries = new Set();
   // An inner `use` of a load-time value (`use n Integer = limit`), resolved like
   // a `use("…")` once the file's entries are known (resolveUseValues).
   const useValues = [];
@@ -6041,7 +6040,6 @@ export function parse(tokensIn) {
     return tokens[j + 1]?.type === 'EQUALS' || tokens[j + 1]?.type === 'COMMA';
   }
   function parseUseExpr() {
-    if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
     consume(); // use
     consume(); // (
     const t = peek();
@@ -6103,6 +6101,7 @@ export function parse(tokensIn) {
       if (!dep) {
         dep = AST.dependency(hiddenName(nameFor(u.source), taken), { path: u.source });
         dep.hidden = true;
+        useEntries.add(dep);
         dependencies.push(dep);
         hidden.set(u.source, dep);
       }
@@ -6132,6 +6131,7 @@ export function parse(tokensIn) {
       if (!fp) {
         fp = AST.fileParam(hiddenName(u.key, taken), { type: u.valueType, key: u.key });
         fp.hidden = true;
+        useEntries.add(fp);
         dependencies.push(fp);
         byKey.set(u.key, fp);
       }
@@ -6347,7 +6347,7 @@ export function parse(tokensIn) {
       }
     }
     const json = JSON.stringify(node);
-    if (!dependencies.some(d => JSON.stringify(d) === json)) dependencies.push(node);
+    if (!dependencies.some(d => JSON.stringify(d) === json)) { useEntries.add(node); dependencies.push(node); }
   }
 
   // A header entry of the retired grammar, with no `=`: say what it is now.
@@ -6965,13 +6965,12 @@ export function parse(tokensIn) {
   result.fileKind = fileKind;
   resolveLoneNames(result);
   // A `*` header makes the file a factory: its entries are `new`'s params, never
-  // DI. A factory file can't declare `use` yet either, so its actors reach
-  // services through their params.
+  // DI. Its DI is declared with `use` in the constructor body.
   if (fileKind === 'factory') {
-    const dep = result.dependencies.find(d => d.type === 'Dependency');
+    const dep = result.dependencies.find(d => d.type === 'Dependency' && !useEntries.has(d));
     if (dep) {
       const shown = /^\w+$/.test(dep.path) ? dep.path : `"${dep.path}"`;
-      throw new Error(`A '*' file header is a factory's params and takes no DI ('${shown}') — DI is declared with 'use', which a factory file doesn't support yet`);
+      throw new Error(`A '*' file header is a factory's params and takes no DI ('${shown}') — declare DI with 'use' in the constructor body`);
     }
   }
   settleSilentDecls(result);

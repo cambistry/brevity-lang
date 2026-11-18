@@ -89,7 +89,7 @@ describe('factory header — no DI', () => {
 
   it('names the entry and points to `use`', () => {
     expect(() => extract('*\n  n Integer\n  "svc.bv": Svc\n*\n@get = -> n\n'))
-      .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — DI is declared with 'use', which a factory file doesn't support yet`);
+      .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 
   it('accepts params of every kind', () => {

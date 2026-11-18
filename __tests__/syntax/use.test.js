@@ -251,25 +251,6 @@ describe('use — in inner scopes, the entry is the file\'s', () => {
 });
 
 describe('use — errors', () => {
-  it('in a factory file', () => {
-    expect(() => compileSource(`
-      *
-        n Integer
-      *
-      use document
-      @get = -> n
-    `)).toThrow("'use' in a factory file is not supported yet");
-  });
-
-  it('in a delimited factory file', () => {
-    expect(() => compileSource(`
-      ( n Integer ) *{
-        use document
-        @get = -> n
-      }
-    `)).toThrow("'use' in a factory file is not supported yet");
-  });
-
   it('with nothing after it', () => {
     expect(() => compileSource(`
       use
@@ -403,6 +384,6 @@ describe('use — errors', () => {
         "svc.bv": Svc
       *
       @get = -> n
-    `)).toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — DI is declared with 'use', which a factory file doesn't support yet`);
+    `)).toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 });
