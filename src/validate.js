@@ -69,7 +69,22 @@ function checkParamSubscribes(ast) {
   }
 }
 
+// Validation messages show a `use("…")` entry and a scoped binding as written,
+// not by the hidden names they lower to.
 export function validate(ast, options = {}) {
+  try {
+    return validateProgram(ast, options);
+  } catch (e) {
+    const hidden = (ast.dependencies || []).filter(d => d.hidden);
+    if (e instanceof Error && (hidden.length > 0 || e.message.includes('__scoped'))) {
+      for (const d of hidden.sort((a, b) => b.name.length - a.name.length)) e.message = e.message.split(d.name).join(`use(${JSON.stringify(d.path)})`);
+      e.message = e.message.replace(/__scoped\d+_(\w+)/g, '$1');
+    }
+    throw e;
+  }
+}
+
+function validateProgram(ast, options = {}) {
   // Self-as-value provisioning: any source that references `Self` in a value
   // position (not callee, not type) needs a wire address baked in. We require
   // `options.fileName` (the canonical wire path, e.g. 'c.bv'). Without it
@@ -166,6 +181,8 @@ export function validate(ast, options = {}) {
     } else {
       for (const [name, iface] of Object.entries(options.remotes)) {
         ingestRemote(name, iface);
+        // A `use("…")` entry has a hidden name: its document is keyed by source.
+        for (const d of (ast.dependencies || [])) if (d.hidden && d.path === name) ingestRemote(d.name, iface);
       }
     }
   }
@@ -174,20 +191,24 @@ export function validate(ast, options = {}) {
   // options.remotes, or supplied by a constructor coercion).
   for (const d of (ast.dependencies || [])) {
     if (d.path && !d.interface && !remotesParsed[d.name] && !coercedDeps.has(d.name)) {
+      if (d.hidden) throw new Error(`'use(${JSON.stringify(d.path)})' has no type — claim one with 'as { … }', or supply its document via options.remotes`);
       throw new Error(`'${d.path}' (bound as '${d.name}') has no type — declare one in the header, or supply its document via options.remotes`);
     }
   }
 
-  // ── Rewrite body-form DI destructures into header destructures ─────────
-  // `(:div, p: Para, ...) = HTML` (or without parens for the non-spread form)
-  // in a function body translates to appending the equivalent entries to
-  // HTML's destructures list, then letting the header-spread pass below do
-  // the real work. The original DestructureAssign node is tagged `fromDI`
-  // so codegen skips emitting an object-unpack for it.
+  // ── DI bindings in body form are lexical ────────────────────────────────
+  // `(:div, p: para, ...) = HTML` (parens optional) with `HTML` a dependency, and
+  // `:div = use("HTML")` (src/parser.js lowers `use(…)` to a reference to its
+  // manifest entry, marked `fromUse`), bind where they're written: the rest of
+  // their block, and what's lexically inside it. In a class's constructor block
+  // that is the class (its methods, and classes nested in it); at the file's own
+  // level it is the file. An alias, `svc = use("svc.bv")`, binds the same way.
   //
-  // This keeps the source of truth in one place (the dep's destructures
-  // list → destructuredMembers → codegen routing) and avoids a second
-  // parallel code path.
+  // The names are routed by the dependency's destructures list (→
+  // destructuredMembers → codegen), so codegen keeps one picture: a binding at
+  // the file's level adds its names as written; one in an inner scope adds a
+  // hidden name per binding and renames its uses in scope to it. An alias
+  // renames its uses to the entry itself. The binding statement is dropped.
   const depByName = new Map();
   for (const d of (ast.dependencies || [])) depByName.set(d.name, d);
 
@@ -212,35 +233,170 @@ export function validate(ast, options = {}) {
     node.source?.type === 'Identifier' &&
     depByName.has(node.source.name)
   );
+  const isUseAlias = (node) => (
+    node && typeof node === 'object' &&
+    (node.type === 'Assign' || node.type === 'StateAssign' || (node.type === 'TypedAssign' && !node.typeName)) &&
+    node.value?.type === 'Identifier' && node.value.fromUse
+  );
+  const renameIn = (scope, from, to) => {
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) walk(n); return; }
+      if (node.type === 'Identifier' && node.name === from) node.name = to;
+      if (node.typeName === from) node.typeName = to;
+      for (const k of Object.keys(node)) {
+        if (k === 'type') continue;
+        walk(node[k]);
+      }
+    };
+    walk(scope);
+  };
+  const pushEntry = (dep, e) => {
+    if (!Array.isArray(dep.destructures)) dep.destructures = [];
+    const json = JSON.stringify(e);
+    if (!dep.destructures.some(x => JSON.stringify(x) === json)) dep.destructures.push(e);
+  };
+  // Names bound in an inner scope, for the out-of-scope check below.
+  const scopedNames = new Map(); // local → source shown
+  const hiddenFor = new Map(); // scope key + local → hidden name
+  let hiddenCount = 0;
+  let blockCount = 0;
+  const shownSource = (dep) => (dep.hidden ? `use(${JSON.stringify(dep.path)})` : dep.name);
+  // A destructure at the file's level: its names, as written, are the file's.
   const foldIntoDep = (node) => {
     const dep = depByName.get(node.source.name);
-    if (!Array.isArray(dep.destructures)) dep.destructures = [];
     for (const entry of (node.pattern || [])) {
       const translated = translatePatternEntry(entry);
-      if (translated) dep.destructures.push(translated);
+      if (translated) pushEntry(dep, translated);
     }
   };
-  const rewriteBodyDestructures = (node) => {
+  // A destructure in an inner scope: each name hidden, its uses in `scope` renamed.
+  const bindInScope = (node, scope, scopeKey) => {
+    const dep = depByName.get(node.source.name);
+    const entries = (node.pattern || []).map(translatePatternEntry).filter(Boolean);
+    if (entries.some(e => e.spread)) {
+      const manifest = remotesParsed[dep.name];
+      if (!manifest) {
+        throw new Error(`Dependency '${shownSource(dep)}' uses spread '...' but no manifest is available to expand it — supply an interface inline or via options.remotes`);
+      }
+      const consumed = new Set(entries.filter(e => e.remote && !e.spread).map(e => e.remote));
+      const names = [...Object.keys(manifest).filter(k => !k.startsWith('__')), ...Object.keys(manifest.__types || {})];
+      const at = entries.findIndex(e => e.spread);
+      entries.splice(at, 1, ...names.filter(n => !consumed.has(n)).map(n => ({ local: n, remote: n })));
+    }
+    for (const e of entries) {
+      if (e.discard) continue;
+      const key = `${scopeKey}\0${dep.name}\0${e.local}`;
+      let hidden = hiddenFor.get(key);
+      if (!hidden) {
+        hidden = `__scoped${++hiddenCount}_${e.local}`;
+        hiddenFor.set(key, hidden);
+      }
+      renameIn(scope, e.local, hidden);
+      scopedNames.set(e.local, `${e.remote === e.local ? ':' + e.local : `${e.remote}: ${e.local}`} = ${shownSource(dep)}`);
+      pushEntry(dep, { ...e, local: hidden });
+    }
+  };
+  // The classes lexically inside `actor` (hoisted to the top level by the parser).
+  const enclosedBy = (actor) => {
+    const out = [];
+    const names = new Set([actor.name]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const a of (ast.actors || [])) {
+        if (a.enclosing && names.has(a.enclosing) && !out.includes(a)) { out.push(a); names.add(a.name); grew = true; }
+      }
+    }
+    return out;
+  };
+  // `arr[i]` is a body-form binding: bind it in `scope()`, and drop it.
+  const takeBinding = (arr, i, { scope, scopeKey, fileLevel, actor }) => {
+    const node = arr[i];
+    if (isDIBodyDestructure(node)) {
+      if (fileLevel) foldIntoDep(node);
+      else bindInScope(node, scope(), scopeKey);
+    } else {
+      const dep = depByName.get(node.value.name);
+      renameIn(scope(), node.name, dep.name);
+      if (!fileLevel) scopedNames.set(node.name, `${node.name} = ${shownSource(dep)}`);
+      if (actor) actor.stateVarDecls = (actor.stateVarDecls || []).filter(v => v.name !== node.name);
+    }
+    arr.splice(i, 1);
+  };
+  const rewriteBody = (node) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
-      // Splice out DI body destructures in-place; fold their patterns into
-      // the dep's destructures list. Downstream codegen never sees them.
-      for (let i = node.length - 1; i >= 0; i--) {
-        if (isDIBodyDestructure(node[i])) {
-          foldIntoDep(node[i]);
-          node.splice(i, 1);
+      for (let i = 0; i < node.length; i++) {
+        if (isDIBodyDestructure(node[i]) || isUseAlias(node[i])) {
+          const arr = node;
+          const at = i;
+          takeBinding(node, i, { scope: () => arr.slice(at), scopeKey: `b${++blockCount}` });
+          i--;
         } else {
-          rewriteBodyDestructures(node[i]);
+          rewriteBody(node[i]);
         }
       }
       return;
     }
     for (const k of Object.keys(node)) {
       if (k === 'type') continue;
-      rewriteBodyDestructures(node[k]);
+      rewriteBody(node[k]);
     }
   };
-  for (const actor of (ast.actors || [])) rewriteBodyDestructures(actor);
+  const actorList = [...(ast.actors || [])];
+  for (const actor of actorList) {
+    // The constructor block's own statements (`initBody` repeats them).
+    const fileLevel = actor.name === null;
+    const scope = () => (fileLevel ? ast.actors : [actor, ...enclosedBy(actor)]);
+    for (const key of ['constructorBody', 'initBody']) {
+      const arr = actor[key] || [];
+      for (let i = 0; i < arr.length; i++) {
+        if (isDIBodyDestructure(arr[i]) || isUseAlias(arr[i])) {
+          takeBinding(arr, i, { scope, scopeKey: `a:${actor.name}`, fileLevel, actor });
+          i--;
+        }
+      }
+    }
+    rewriteBody(actor);
+  }
+  // A name bound in an inner scope, used where nothing else binds it.
+  if (scopedNames.size > 0) {
+    const fileNames = new Set();
+    for (const d of (ast.dependencies || [])) {
+      fileNames.add(d.name);
+      for (const e of (d.destructures || [])) if (e.local) fileNames.add(e.local);
+    }
+    for (const t of (ast.types || [])) fileNames.add(t.name);
+    const strip = (n) => n.replace(/^[@#]/, '').replace(/[.!]$/, '');
+    // Every name declared anywhere in `node` (any node's or entry's `name` but a reference's).
+    const declaredIn = (node, into) => {
+      if (!node || typeof node !== 'object') return into;
+      if (Array.isArray(node)) { for (const n of node) declaredIn(n, into); return into; }
+      if (node.type !== 'Identifier' && typeof node.name === 'string') into.add(strip(node.name));
+      for (const k of Object.keys(node)) if (k !== 'type') declaredIn(node[k], into);
+      return into;
+    };
+    const actorNames = new Set();
+    for (const a of (ast.actors || [])) {
+      if (a.name) actorNames.add(strip(a.name));
+      if (a.singletonOf) actorNames.add(strip(a.singletonOf));
+      for (const v of (a.stateVarDecls || [])) actorNames.add(strip(v.name));
+      for (const f of (a.functions || [])) if (f.name) actorNames.add(strip(f.name));
+      for (const p of (a.params || [])) if (p.name) actorNames.add(strip(p.name));
+    }
+    const check = (node, declared) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const n of node) check(n, declared); return; }
+      if (node.type === 'Identifier' && scopedNames.has(node.name) && !declared.has(node.name) && !fileNames.has(node.name) && !actorNames.has(node.name)) {
+        throw new Error(`'${node.name}' is unknown here — '${scopedNames.get(node.name)}' binds it only in the scope where it's written`);
+      }
+      for (const k of Object.keys(node)) if (k !== 'type') check(node[k], declared);
+    };
+    for (const a of (ast.actors || [])) {
+      for (const f of (a.functions || [])) check(f, declaredIn(f, new Set()));
+      check(a.constructorBody, declaredIn(a.constructorBody, new Set()));
+    }
+  }
 
   // ── Expand spread `...` and drop discards in DI destructure lists ───────
   // `<Name: (...)>` and `<Name: (remote: local, other: _, ...)>` flatten the

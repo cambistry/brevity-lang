@@ -928,6 +928,49 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
 
 // --- End extracted handlers ---// --- End extracted handlers ---
 
+// A call to a destructured member (`greet(name)`, `HTML` member `div`): sent to
+// its service, its reply awaited into `_re`.
+function genRustMemberCallAwait(call, typeEnv, I, lines) {
+  const { service, remote } = G.ctx.destructuredMembers.get(call.callee.name);
+  const to = JSON.stringify(service);
+  const method = JSON.stringify(memberOp(remote));
+  const callArgs = call.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = call.args.find(a => a.type === 'NamedArgsBag');
+  let opExpr;
+  if (callArgs.length === 0 && !namedBag) {
+    opExpr = `json!(${method})`;
+  } else if (namedBag) {
+    // Values route through toJsonValue so that BigInt (and other types
+    // without a direct serde::Serialize impl) are converted to
+    // serde_json::Value via the runtime helpers instead of being
+    // embedded raw inside a `json!` literal.
+    const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
+      const raw = genRustExpr(v, typeEnv);
+      const t = inferLiteralType(v) || inferExprType(v, typeEnv);
+      return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+    }).join(' ');
+    opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
+  } else {
+    const vals = callArgs.map(a => {
+      const raw = genRustExpr(a, typeEnv);
+      const t = inferLiteralType(a) || inferExprType(a, typeEnv);
+      return toJsonValue(raw, t || 'Anything');
+    });
+    opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
+  }
+  lines.push(`${I}let _re = {`);
+  lines.push(`${I}    let seq = self.send_seq.get();`);
+  lines.push(`${I}    self.send_seq.set(seq + 1);`);
+  lines.push(`${I}    let send_id = seq.to_string();`);
+  lines.push(`${I}    let mut send_msg = Map::new();`);
+  lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
+  lines.push(`${I}    send_msg.insert("op".to_string(), ${opExpr});`);
+  lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
+  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+  lines.push(`${I}    self.await_response(&send_id)`);
+  lines.push(`${I}};`);
+}
+
 function genRustTypedAssign(...args) {
   G.strictConvert = true;
   try { return genRustTypedAssignBody(...args); } finally { G.strictConvert = false; }
@@ -937,6 +980,14 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
       // Branch 1: dep constructor (tiny, keep inline)
       if (s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.dependencyNames.has(s.value.callee.name) && !G.ctx.destructuredMembers?.has(s.value.callee.name)) {
         genRustDepConstructorAsAssign(s, typeEnv, I, lines);
+        return true;
+      }
+
+      // Branch 1b: a destructured member's reply, awaited (`x Integer = n()`)
+      if (s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(s.value.callee.name)) {
+        genRustMemberCallAwait(s.value, typeEnv, I, lines);
+        G.ctx.needsAwaitNew = true;
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue('BvObject::pack(&_re).one()', s.typeName)};`);
         return true;
       }
 
@@ -1096,44 +1147,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
       }
       // Destructured member call: :v = greet(name) → send + await response
       if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(s.source.callee.name)) {
-        const { service, remote } = G.ctx.destructuredMembers.get(s.source.callee.name);
-        const to = JSON.stringify(service);
-        const method = JSON.stringify(memberOp(remote));
-        const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
-        const namedBag = s.source.args.find(a => a.type === 'NamedArgsBag');
-        let opExpr;
-        if (callArgs.length === 0 && !namedBag) {
-          opExpr = `json!(${method})`;
-        } else if (namedBag) {
-          // Values route through toJsonValue so that BigInt (and other types
-          // without a direct serde::Serialize impl) are converted to
-          // serde_json::Value via the runtime helpers instead of being
-          // embedded raw inside a `json!` literal.
-          const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
-            const raw = genRustExpr(v, typeEnv);
-            const t = inferLiteralType(v) || inferExprType(v, typeEnv);
-            return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
-          }).join(' ');
-          opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
-        } else {
-          const vals = callArgs.map(a => {
-            const raw = genRustExpr(a, typeEnv);
-            const t = inferLiteralType(a) || inferExprType(a, typeEnv);
-            return toJsonValue(raw, t || 'Anything');
-          });
-          opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
-        }
-        lines.push(`${I}let _re = {`);
-        lines.push(`${I}    let seq = self.send_seq.get();`);
-        lines.push(`${I}    self.send_seq.set(seq + 1);`);
-        lines.push(`${I}    let send_id = seq.to_string();`);
-        lines.push(`${I}    let mut send_msg = Map::new();`);
-        lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
-        lines.push(`${I}    send_msg.insert("op".to_string(), ${opExpr});`);
-        lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-        lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
-        lines.push(`${I}    self.await_response(&send_id)`);
-        lines.push(`${I}};`);
+        genRustMemberCallAwait(s.source, typeEnv, I, lines);
         G.ctx.needsAwaitNew = true;
         for (const item of s.pattern) {
           if (item.discard) continue;
@@ -2143,12 +2157,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         // Child actor ref — track mapping, call init if needed
         sCtx.childActorRefs.set(s.name, s.value.callee.name);
         const actorName = s.value.callee.name;
-        {
-          const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-          if (s.value.args.length > 0) {
-            const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
-            lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
-          }
+        if (s.value.args.length > 0) {
+          const initArgs = s.value.args.map(a => genRustExpr(a, typeEnv)).join(', ');
+          lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgs.split(', '))});`);
         }
       } else {
         const val = s.value ? genRustExpr(s.value, typeEnv) : 'Value::Null';

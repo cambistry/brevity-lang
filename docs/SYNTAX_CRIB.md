@@ -95,6 +95,22 @@ use DB = "/services/db" as {
 }
 ```
 
+## `use("…")` in value position
+
+```brevity
+@render = {
+  :div, p: para = use("HTML")            // scoped to @render
+  n Integer = use("svc.bv").n()          // used directly
+  svc = use("svc.bv") as { n () -> (Integer) }
+  return div()
+}
+```
+
+The source is one string literal. Each `use("…")` is hoisted into the manifest,
+one entry per source (shared with a `use` statement's). Its binding is the
+ordinary `=`, scoped where it's written. So is a body-form destructure of a
+dependency, `:div = HTML`.
+
 ## Silent Dependency Call
 
 ```brevity

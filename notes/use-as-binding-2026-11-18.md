@@ -1,6 +1,6 @@
 # `use` entries are bindings — 2026-11-18
 
-Decided 2026-11-18 (backticks and `use` in value position stay open). Replaces the entry grammar of `use-di-2026-11-17.md` (the header
+Decided 2026-11-18 (backticks stay open; `use` in value position is decided below). Replaces the entry grammar of `use-di-2026-11-17.md` (the header
 entries carried over from `**`: `"svc.bv": Svc`, `HTML: (:div)`). What `use` does is unchanged:
 static, hoisted into the file manifest, bound by the host, lexically scoped.
 
@@ -133,6 +133,42 @@ service is just an address"):
   scope, and without `use` a reader can't tell a static grant from the host from an ordinary
   runtime destructure of whatever the actor replies. `use :div = "/path/to/HTML"` is the form.
 
+## `use` in value position
+
+Decided 2026-11-18. `use("source")` is an expression: the dependency the host supplies for that
+source, as with JS `import()`.
+
+```brevity
+svc = use("svc.bv")                              // an actor ref
+svc = use("svc.bv") as { n () -> (Integer) }     // claimed with ordinary `as`
+:div, :span, p: para = use("HTML")               // destructure
+n Integer = use("svc.bv").n()                    // used directly
+@go = {
+  :div = use("HTML")                             // scoped to @go
+  return div()
+}
+```
+
+- **One string literal.** Single or double quotes, the whole source taken literally (no `::`
+  splitting). A bare name (`use(HTML)`), a `::` path, interpolation, no argument or two, and
+  `use "svc.bv"` with no parens are errors that name the fix. So is a member reach on the result,
+  `use("HTML")::div`: write `:div = use("HTML")`.
+- **Static, hoisted.** The source is known at compile time, so every `use("…")` is a manifest
+  entry like a statement's, keyed by source: two `use("HTML")`, or one and a `use HTML`
+  statement, are one entry. The manifest stays complete.
+- **The binding is lexical.** The expression has no local name of its own. It lowers to a
+  reference to its entry (a hidden name when no statement names the source). Its binding is the
+  ordinary `=` it stands in: `:div = use("HTML")` in a function binds `div` there only, and a name
+  bound inline never reaches the file's scope unless it is written there. In a class's
+  constructor block the scope is the class.
+- **The same for a body-form destructure of a dependency.** `:div = HTML`, with `HTML` from a
+  statement, binds where it's written too; it used to fold into the file-wide entry.
+- **Shape.** From `as` on the expression (`#`, `{ … }`, `(…) -> *{ … }`), or from
+  `options.remotes` (keyed by source); with neither it's the usual "has no type" error. A source
+  claimed differently in two places is an error.
+- **Anywhere in the file actor**, inner scopes included. The entry is the file's. Not in a
+  factory file yet.
+
 ## Open
 
 - **Backticks and local names.** `backticks-as-dynamic-names-2026-04-16.md` also has backticks
@@ -141,5 +177,5 @@ service is just an address"):
   on knowing whether a call is internal or external, so that isn't smoothed over: a plain
   backtick is external, the common case. A dynamic local name, if supported, is qualified as a
   reach into self: `` self::`#{ns}_count` ``, or `` ::`#{ns}_count` ``.
-- **`use` in value position.** `data = use("/datafile")`, as with JS `import()`. The binding is
-  then an ordinary `=`, scoped where it's written. A `use` statement would be sugar for it.
+- **The `use` statement as sugar for `use("…")`.** Not yet: the statement's `::` paths,
+  shorthands and claims don't map one-to-one onto the expression.

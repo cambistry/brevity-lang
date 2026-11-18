@@ -17,7 +17,8 @@ For source generation patterns, use
 - The file is the actor.
 - `@name` defines a public message handler.
 - `#name` defines a private function.
-- `use` declares the file singleton's DI (dependencies and load-time params).
+- `use` declares the file singleton's DI (dependencies and load-time params);
+  `use("source")` is the same in value position, scoped where it's bound.
 - `Name = (...) *{ ... }` declares a class (constructs actors).
 - `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
@@ -219,6 +220,20 @@ use Remote = "Remote" as {
 
 The call to `Remote.get(:url)` is source-level syntax for a typed CAM message
 to the declared dependency.
+
+In value position, `use("source")` is the same dependency, bound by an ordinary
+`=` and scoped where it's written, so it works in inner scopes too:
+
+```brevity
+@fetch = (url: Text) {
+  remote = use("Remote") as { get (url: Text) -> (response: Text) }
+  :response Text = remote.get(:url)
+  return :response
+}
+```
+
+It is still hoisted into the file's manifest, one entry per source, so the
+manifest lists every dependency the file has.
 
 ## Ref Cells
 

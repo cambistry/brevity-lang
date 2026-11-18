@@ -64,6 +64,26 @@ Typed scalar params are bindings with a type, supplied by the host at load:
 - Named scalar: `use port Integer = port`
 - Named, renamed locally: `use p Integer = port` (callers pass `port`; the file sees `p`)
 
+`use("source")` is the same dependency in value position. It takes one string
+literal and is hoisted into the manifest like a statement, with one entry per
+source, shared with a `use` statement for the same source. Its binding is the
+ordinary `=` it stands in, scoped where that is written, so it works in inner
+scopes (functions, constructor blocks, nested classes), where the statement
+doesn't:
+
+```
+@fetch = (key: Text) {
+  db = use("/services/db") as { lookup (key: Text) -> (value: Text) }
+  :value Text = db.lookup(:key)
+  return :value
+}
+```
+
+`:div = use("HTML")` in a function binds `div` there only. A body-form
+destructure of a statement's dependency (`:div = HTML`) is scoped the same way.
+With no `as` and no `options.remotes` document for its source, a `use("…")` is
+a compile error.
+
 Inside the file, all of these entries behave like class params to the
 anonymous file actor. From the host side, its `use` entries are surfaced as the params
 document in `interface.params`.

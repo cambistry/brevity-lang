@@ -336,6 +336,13 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         continue;
       }
 
+      // A destructured member's reply, awaited: x Integer = n()
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.value.callee.name)) {
+        const reVar = genErlMemberCallAwait(ctx, s.value, typeEnv, stmtCtx, I, lines);
+        lines.push(`${I}${varName} = bv_object_one(bv_object_pack(${reVar})),`);
+        continue;
+      }
+
       // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
@@ -1240,23 +1247,30 @@ function genListDestructure(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) {
   }
 }
 
+// A call to a destructured member (`greet(name)`): sent to its service, its
+// reply awaited. Returns the variable holding the reply.
+function genErlMemberCallAwait(ctx, call, typeEnv, sCtx, I, lines) {
+  const { service, remote } = ctx.destructuredMembers.get(call.callee.name);
+  const to = erlString(service);
+  const method = erlString(memberOp(remote));
+  const callArgs = call.args.filter(a => a.type !== 'NamedArgsBag');
+  const namedBag = call.args.find(a => a.type === 'NamedArgsBag');
+  const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';
+  const opExpr = erlOpExpr(callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)), fields, method);
+  const v = erlSendVars(ctx);
+  lines.push(`${I}${v.seq} = bv_next_seq_(),`);
+  lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
+  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},`);
+  lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
+  const reVar = v.seq.replace('Send_seq_', 'Dre_');
+  lines.push(`${I}${reVar} = await_response_(${v.id}),`);
+  return reVar;
+}
+
 function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) {
   // Destructured member call: :v = greet(name) → send + await response
   if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && ctx.destructuredMembers?.has(s.source.callee.name)) {
-    const { service, remote } = ctx.destructuredMembers.get(s.source.callee.name);
-    const to = erlString(service);
-    const method = erlString(memberOp(remote));
-    const callArgs = s.source.args.filter(a => a.type !== 'NamedArgsBag');
-    const namedBag = s.source.args.find(a => a.type === 'NamedArgsBag');
-    const fields = namedBag ? Object.entries(namedBag.fields).map(([k, v]) => `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`).join(', ') : '';
-    const opExpr = erlOpExpr(callArgs.map(a => genExpr(ctx, a, typeEnv, sCtx)), fields, method);
-    const v = erlSendVars(ctx);
-    lines.push(`${I}${v.seq} = bv_next_seq_(),`);
-    lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
-    lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},`);
-    lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
-    const reVar = `Dre_${stmtIdx}`;
-    lines.push(`${I}${reVar} = await_response_(${v.id}),`);
+    const reVar = genErlMemberCallAwait(ctx, s.source, typeEnv, sCtx, I, lines);
     for (const item of s.pattern) {
       if (item.discard) continue;
       const ssaName = getSSANameForAssignment(item.name, stmtIdx, ssaEnv);

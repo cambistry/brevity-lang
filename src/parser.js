@@ -2326,9 +2326,18 @@ export function parse(tokensIn) {
   }
 
   function parsePrimary() {
-    // A `use` reached as an expression is in an inner scope; the file's own are read
-    // as declarations (parseActorBodyIn).
-    if (peek().type === 'KEYWORD' && peek().value === 'use') throw new Error(USE_INNER_MSG);
+    // `use("source")` is an expression: the dependency the host supplies. Any other
+    // `use` reached here is a statement in an inner scope (the file's own are read
+    // as declarations, parseActorBodyIn), or a source with no parens.
+    if (peek().type === 'KEYWORD' && peek().value === 'use' && (tokens[pos + 1]?.type !== 'LPAREN' || isUseStatementAt(pos))) {
+      const prev = tokens[pos - 1];
+      const atStatement = !prev || ['NEWLINE', 'BLOCK_SEP', 'LBRACE'].includes(prev.type);
+      const src = tokens[pos + 1];
+      if (!atStatement && (src?.type === 'STRING' || src?.type === 'IDENT')) {
+        throw new Error(`'use' in an expression takes its source in parens: write 'use(${JSON.stringify(src.value)})'`);
+      }
+      throw new Error(USE_INNER_MSG);
+    }
     // `new(args)` in a singleton constructs its class (src/singleton_classes.js).
     if (peek().type === 'KEYWORD' && peek().value === 'new' && tokens[pos + 1]?.type === 'LPAREN') {
       tokens[pos] = { ...tokens[pos], type: 'IDENT' };
@@ -2423,7 +2432,9 @@ export function parse(tokensIn) {
     }
 
     let result;
-    if (atClass()) {
+    if (peek().type === 'KEYWORD' && peek().value === 'use') {
+      result = parseUseExpr();
+    } else if (atClass()) {
       consume();
       result = AST.identifier(CLASS_SELF);
     } else if (atSuper()) {
@@ -2877,7 +2888,8 @@ export function parse(tokensIn) {
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
       } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
-                 atClass() || atSuper() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON')) {
+                 atClass() || atSuper() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON') ||
+                 (peek().type === 'KEYWORD' && peek().value === 'use')) {
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -5064,7 +5076,7 @@ export function parse(tokensIn) {
       }
       // `use` declares the file's DI: hoisted into its manifest, so it may come anywhere
       // in the file actor's own scope.
-      if (peek().type === 'KEYWORD' && peek().value === 'use') {
+      if (peek().type === 'KEYWORD' && peek().value === 'use' && isUseStatementAt(pos)) {
         if (actorBodyDepth > 1) throw new Error(USE_INNER_MSG);
         if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
         parseUse();
@@ -5816,6 +5828,8 @@ export function parse(tokensIn) {
       if (stmt.type === 'ServiceCoercion' && stmt.constructorParams) {
         depRefNames.add(stmt.name);
       }
+      // An alias of a `use("…")` is its dependency (src/validate.js).
+      if ((stmt.type === 'TypedAssign' || stmt.type === 'Assign') && stmt.value?.type === 'UseExpr') depRefNames.add(stmt.name);
     }
     const isDepConstructorCall = (value) =>
       value?.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier' &&
@@ -5965,6 +5979,103 @@ export function parse(tokensIn) {
       if (pos < end && peek().type !== 'COMMA') {
         throw new Error(`Unexpected ${peek().type} '${peek().value ?? tokText(peek())}' after 'use ${showSource(segs)}'`);
       }
+    }
+  }
+
+  // ── `use("source")` ────────────────────────────────────────────────────
+  // An expression: the dependency the host supplies for `source`. Hoisted into the
+  // manifest like a statement, one entry per source (shared with a statement's).
+  // It binds nothing itself: its binding is the ordinary `=` it stands in, scoped
+  // where it's written (src/validate.js). The node becomes a reference to its
+  // entry's name once every entry is known (resolveUseExprs).
+  const useExprs = [];
+  // `use (` at `k` opens a statement when its parens hold a destructure followed
+  // by `=` (`use (:div) = HTML`), and an expression otherwise.
+  function isUseStatementAt(k) {
+    if (tokens[k + 1]?.type !== 'LPAREN') return true;
+    let depth = 0;
+    let j = k + 1;
+    for (; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN' && --depth === 0) break;
+      else if (t === 'EOF') return false;
+    }
+    return tokens[j + 1]?.type === 'EQUALS' || tokens[j + 1]?.type === 'COMMA';
+  }
+  function parseUseExpr() {
+    if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
+    consume(); // use
+    consume(); // (
+    const t = peek();
+    const oneSource = `'use(…)' takes one source, a string: 'use("HTML")'`;
+    if (t.type === 'RPAREN') throw new Error(oneSource);
+    if (t.type === 'INTERP_STRING') throw new Error(`A 'use' source is static: it takes no interpolation`);
+    if (t.type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON') {
+      const segs = [];
+      for (let k = pos; tokens[k]?.type === 'IDENT' || tokens[k]?.type === 'STRING'; k += 2) {
+        segs.push(tokens[k].value);
+        if (tokens[k + 1]?.type !== 'DCOLON') break;
+      }
+      const member = segs[segs.length - 1];
+      throw new Error(`'use(${showSource(segs)})' reaches a member: write ':${nameFor(member)} = use(${JSON.stringify(segs.slice(0, -1).join('::'))})'`);
+    }
+    if (t.type === 'IDENT') throw new Error(`a 'use' source in an expression is a string: 'use(${JSON.stringify(t.value)})'`);
+    if (t.type !== 'STRING') throw new Error(`${oneSource}, got ${t.type}`);
+    const source = consume().value;
+    if (peek().type !== 'RPAREN') throw new Error(oneSource);
+    consume(); // )
+    if (peek().type === 'DCOLON') {
+      const m = tokens[pos + 1];
+      const member = m?.type === 'IDENT' || m?.type === 'STRING' ? m.value : 'name';
+      throw new Error(`'use(${JSON.stringify(source)})::${member}' isn't supported: write ':${nameFor(member)} = use(${JSON.stringify(source)})'`);
+    }
+    // `as` claims the source's shape, as on a statement's source. A value's type
+    // (`as Integer`) is left to the expression.
+    let shape = null;
+    const n = tokens[pos + 1];
+    if (peek().type === 'KEYWORD' && peek().value === 'as' &&
+        (n?.type === 'HASH' || n?.type === 'LBRACE' || (n?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN') || (n?.type === 'LPAREN' && isCtorProfileAt(pos + 1)))) {
+      shape = parseUseShape();
+    }
+    const node = { type: 'UseExpr', source, ...(shape && { shape }) };
+    useExprs.push(node);
+    return node;
+  }
+  // Each `use("…")` into the manifest, keyed by source: an entry a statement made
+  // for the same source is shared, else one hidden entry per source. The node
+  // becomes a reference to the entry, marked as one (`fromUse`).
+  function resolveUseExprs() {
+    const hidden = new Map();
+    const taken = new Set(dependencies.map(d => d.name));
+    const claimOf = (s) => ({
+      ...(s?.generic && { generic: true }),
+      ...(s?.interface && { interface: s.interface }),
+      ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
+    });
+    const shown = (u) => `use(${JSON.stringify(u.source)})`;
+    for (const u of useExprs) {
+      let dep = dependencies.find(d => d.type === 'Dependency' && d.path === u.source && !d.hidden) || hidden.get(u.source);
+      if (!dep) {
+        let name = `__use_${nameFor(u.source)}`;
+        for (let i = 2; taken.has(name); i++) name = `__use_${nameFor(u.source)}_${i}`;
+        taken.add(name);
+        dep = AST.dependency(name, { path: u.source });
+        dep.hidden = true;
+        dependencies.push(dep);
+        hidden.set(u.source, dep);
+      }
+      if (u.shape?.valueType) throw new Error(`'${shown(u)} as ${u.shape.valueType}': a 'use(…)' is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      const claim = claimOf(u.shape);
+      if (Object.keys(claim).length > 0) {
+        const has = dep.generic || dep.interface || dep.constructorParams;
+        if (has) {
+          const same = JSON.stringify(claimOf(dep)) === JSON.stringify(claim);
+          if (!same) throw new Error(`'${shown(u)}' claims a shape its source already has — claim it once, on one 'use'`);
+        } else Object.assign(dep, claim);
+      }
+      for (const k of Object.keys(u)) delete u[k];
+      Object.assign(u, { type: 'Identifier', name: dep.name, fromUse: true });
     }
   }
 
@@ -6727,6 +6838,7 @@ export function parse(tokensIn) {
   }
 
   actors.push(...hoistedClasses);
+  resolveUseExprs();
   // `(sup T ++ …)` with `T` a class here is a retired wrapped parent; otherwise
   // validation says what it is (src/validate.js).
   for (const a of actors) {
@@ -7119,6 +7231,15 @@ export function parse(tokensIn) {
     });
     walk(program.actors);
     walk(program.types);
+    // An alias of a `use("…")` names its dependency (src/validate.js renames it to
+    // the entry), so a call through it is typed by it: `t = Thing(a: 5)`.
+    const aliases = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(aliases); return; }
+      if (typeof node.name === 'string' && node.value?.type === 'Identifier' && node.value.fromUse) typeNames.add(node.name);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') aliases(v);
+    };
+    aliases(program.actors);
 
     // Bodies: a destructure's `key: X`, and types inferred from a call's
     // callee (`c = Counter()`, `@origin = Point(0, 0)`).
