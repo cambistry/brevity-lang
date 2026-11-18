@@ -7,12 +7,14 @@
 %%
 %%   Commands (JS -> stdin):
 %%     {"cmd":"load","mod":"brevity_actor_1","dir":"/path/to/comp1"}
+%%     {"cmd":"compile","mod":"brevity_actor_1","file":"/path/to/comp1/brevity_actor_1.erl"}
 %%     {"cmd":"spawn","id":"a1","mod":"brevity_actor_1","args":[1,"x"]}
 %%     {"cmd":"msg","id":"a1","line":"{...json...}"}
 %%     {"cmd":"stop","id":"a1"}
 %%
 %%   Events (stdout -> JS):
 %%     {"ev":"loaded","mod":"brevity_actor_1"}
+%%     {"ev":"compile_error","mod":"brevity_actor_1","errors":"file:line: message\n…"}
 %%     {"ev":"spawned","id":"a1"}
 %%     {"ev":"out","id":"a1","data":{raw json line}}
 %%     {"ev":"ready","id":"a1"}
@@ -67,6 +69,25 @@ handle_cmd(#{<<"cmd">> := <<"load">>, <<"mod">> := ModBin, <<"dir">> := DirBin},
     code:add_patha(Dir),
     {module, Mod} = code:load_file(Mod),
     io:put_chars(standard_io, ["{\"ev\":\"loaded\",\"mod\":\"", ModBin, "\"}\n"]),
+    Instances;
+
+%% Compile a module's source in this VM and load it, with no `erlc` process and
+%% no .beam written. Tests don't need optimized code, so SSA optimization is off:
+%% it is most of the compile's time. Nothing is printed: errors come back as an
+%% event, so they never mix with the protocol on stdout.
+handle_cmd(#{<<"cmd">> := <<"compile">>, <<"mod">> := ModBin, <<"file">> := FileBin}, Instances) ->
+    Mod = binary_to_atom(ModBin, utf8),
+    File = binary_to_list(FileBin),
+    case compile:file(File, [binary, return_errors, no_ssa_opt]) of
+        {ok, Mod, Beam} ->
+            code:purge(Mod),
+            {module, Mod} = code:load_binary(Mod, File, Beam),
+            io:put_chars(standard_io, ["{\"ev\":\"loaded\",\"mod\":\"", ModBin, "\"}\n"]);
+        {error, Errors, _Warnings} ->
+            Text = unicode:characters_to_binary(format_errors(Errors)),
+            io:put_chars(standard_io, ["{\"ev\":\"compile_error\",\"mod\":\"", ModBin,
+                                       "\",\"errors\":\"", json_escape(Text), "\"}\n"])
+    end,
     Instances;
 
 handle_cmd(#{<<"cmd">> := <<"spawn">>, <<"id">> := Id, <<"mod">> := ModBin, <<"args">> := Args}, Instances) ->
@@ -189,6 +210,26 @@ strip_newline(Data) ->
         <<Pre:Sz/binary, $\n>> -> Pre;
         _ -> Data
     end.
+
+%% Compile errors as `erlc` prints them: `file:line:col: message`, one a line.
+format_errors(Errors) ->
+    [[File, ":", format_loc(Loc), ": ", Mod:format_error(Desc), "\n"]
+     || {File, Es} <- Errors, {Loc, Mod, Desc} <- Es].
+
+format_loc({Line, Col}) -> [integer_to_list(Line), ":", integer_to_list(Col)];
+format_loc(Line) when is_integer(Line) -> integer_to_list(Line);
+format_loc(_) -> "?".
+
+%% A binary as the body of a JSON string.
+json_escape(Bin) ->
+    << <<(json_escape_char(C))/binary>> || <<C/utf8>> <= Bin >>.
+
+json_escape_char($") -> <<"\\\"">>;
+json_escape_char($\\) -> <<"\\\\">>;
+json_escape_char($\n) -> <<"\\n">>;
+json_escape_char($\t) -> <<"\\t">>;
+json_escape_char(C) when C < 32 -> list_to_binary(io_lib:format("\\u~4.16.0b", [C]));
+json_escape_char(C) -> <<C/utf8>>.
 
 %% ── Minimal JSON command decoder ───────────────────────────────────────────
 %% Only needs to handle the router command format (flat objects with string/list values).

@@ -36,6 +36,15 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   return order.map(n => constructorArgs[n]);
 }
 
+// Compile a generated module inside the router's VM and load it: no `erlc`
+// process per module, and Node isn't blocked while it compiles. A compile error
+// is raised with the compiler's messages, as `erlc` printed them.
+async function compileInVm(ctx, moduleName, erlFile) {
+  ctx.send({ cmd: 'compile', mod: moduleName, file: erlFile });
+  const ev = await ctx.waitFor(e => (e.ev === 'loaded' || e.ev === 'compile_error') && e.mod === moduleName);
+  if (ev.ev === 'compile_error') throw new Error(`Compile failed: ${erlFile}\n${ev.errors}`);
+}
+
 export default {
   name: 'erlang',
   codegen: codegenErlang,
@@ -216,11 +225,7 @@ export default {
       mkdirSync(compileDir, { recursive: true });
       const erlFile = join(compileDir, `${moduleName}.erl`);
       writeFileSync(erlFile, output);
-      execSync(`erlc -o ${compileDir} ${erlFile}`, { stdio: 'pipe' });
-
-      // Load module into VM
-      ctx.send({ cmd: 'load', mod: moduleName, dir: compileDir });
-      await ctx.waitFor(ev => ev.ev === 'loaded' && ev.mod === moduleName);
+      await compileInVm(ctx, moduleName, erlFile);
 
       // Spawn instance
       const id = `r${seq}`;
@@ -259,15 +264,13 @@ export default {
       mkdirSync(compileDir, { recursive: true });
       const erlFile = join(compileDir, `${moduleName}.erl`);
       writeFileSync(erlFile, output);
-      execSync(`erlc -o ${compileDir} ${erlFile}`, { stdio: 'pipe' });
+      await compileInVm(ctx, moduleName, erlFile);
 
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const id = `i${seq}`;
       const posts = [];
 
-      // Load and spawn, collecting init-time emissions
-      ctx.send({ cmd: 'load', mod: moduleName, dir: compileDir });
-      await ctx.waitFor(ev => ev.ev === 'loaded' && ev.mod === moduleName);
+      // Spawn, collecting init-time emissions
 
       ctx.send({ cmd: 'spawn', id, mod: moduleName, args });
       await ctx.waitFor(ev => ev.ev === 'spawned' && ev.id === id);
@@ -297,7 +300,7 @@ export default {
       };
     },
 
-    compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
+    async compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const seq = ctx.compileSeq;
       const moduleName = `brevity_actor_${seq}`;
       const { ast } = ctx.extract(source);
@@ -306,19 +309,14 @@ export default {
       mkdirSync(compileDir, { recursive: true });
       const erlFile = join(compileDir, `${moduleName}.erl`);
       writeFileSync(erlFile, output);
-      execSync(`erlc -o ${compileDir} ${erlFile}`, { stdio: 'pipe' });
 
-      // Load module into VM once
-      const loadPromise = (async () => {
-        ctx.send({ cmd: 'load', mod: moduleName, dir: compileDir });
-        await ctx.waitFor(ev => ev.ev === 'loaded' && ev.mod === moduleName);
-      })();
+      // Compiled and loaded into the VM once; a compile error is raised here.
+      await compileInVm(ctx, moduleName, erlFile);
 
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
 
       return {
         async spawn() {
-          await loadPromise;
           const instanceId = `s${seq}_${ctx.instanceSeq}`;
           const posts = [];
 
