@@ -980,7 +980,7 @@ ${actor.spawnable ? `
     });
   }
 
-  #fire(op, to) {
+  #fire(op, to, ty) {
     // Fire-and-forget: post with no pending and no reply awaited. Used for
     // silent reference-field invocations (v.endpoint!) -- there is no reply
     // to consume, and unlike #send the caller never suspends on one.
@@ -994,7 +994,9 @@ ${actor.spawnable ? `
       this.#dispatch({ id, op, from: '__self' });
       return;
     }
-    this.#out({ id, op, to }, true);
+    const _msg = { id, op, to };
+    if (ty !== undefined) _msg['ty'] = ty;
+    this.#out(_msg, true);
   }
 
   // What this actor sends to anyone else. A class sends it through its file actor,

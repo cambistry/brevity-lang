@@ -31,11 +31,9 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 describe('explicit form — compilation', () => {
   it('single dependency with explicit class header compiles', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{
-          get () -> (value: Integer)
-        }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{
+        get () -> (value: Integer)
+      }
 
       t = Thing(a: 5)
 
@@ -45,9 +43,7 @@ describe('explicit form — compilation', () => {
 
   it('empty class params *() compiles', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing () -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing () -> *{ ping. () => . }
 
       t = Thing()
 
@@ -57,10 +53,8 @@ describe('explicit form — compilation', () => {
 
   it('multiple dependencies with class headers compile', () => {
     expect(() => compileSource(`
-      **
-        "db.bv": DB (host: Text) -> *{ lookup (key: Text) -> (value: Text) }
-        "cache.bv": Cache (size: Integer) -> *{ get (key: Text) -> (value: Text) }
-      **
+      use "db.bv": DB (host: Text) -> *{ lookup (key: Text) -> (value: Text) }
+      use "cache.bv": Cache (size: Integer) -> *{ get (key: Text) -> (value: Text) }
 
       db = DB(host: "localhost")
       cache = Cache(size: 100)
@@ -84,12 +78,10 @@ describe('explicit form — compilation', () => {
 
 describe('explicit form — actor routing', () => {
   const source = `
-    **
-        "thing.bv": Thing (a: Integer) -> *{
-        get () -> (value: Integer)
-        ping. () => .
-      }
-    **
+    use "thing.bv": Thing (a: Integer) -> *{
+    get () -> (value: Integer)
+    ping. () => .
+  }
 
     t = Thing(a: 5)
 
@@ -135,11 +127,9 @@ describe('explicit form — actor routing', () => {
 describe('explicit form — multiple actors', () => {
   it('two actors of the same dep route to independent addresses', async () => {
     const actor = await createActor(`
-      **
-          "thing.bv": Thing (tag: Text) -> *{
-          ping () -> (ok: Text)
-        }
-      **
+      use "thing.bv": Thing (tag: Text) -> *{
+      ping () -> (ok: Text)
+    }
 
       a = Thing(tag: "first")
       b = Thing(tag: "second")
@@ -179,11 +169,9 @@ describe('explicit form — multiple actors', () => {
 describe('explicit form — full roundtrip', () => {
   it('construct, call method with arg, mock reply, return to caller', async () => {
     const actor = await createActor(`
-      **
-          "math.bv": Math (base: Integer) -> *{
-          double (n: Integer) -> (result: Integer)
-        }
-      **
+      use "math.bv": Math (base: Integer) -> *{
+      double (n: Integer) -> (result: Integer)
+    }
 
       m = Math(base: 0)
 
@@ -211,9 +199,7 @@ describe('explicit form — full roundtrip', () => {
 describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
 
       @spawn. = {
         t = Thing(a: 5)
@@ -228,9 +214,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 
   it('construction + method call inside one handler', async () => {
     const actor = await createActor(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
 
       @go
         =
@@ -252,9 +236,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 describe('explicit form — class arg validation', () => {
   it('rejects wrong class arg type', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
 
       t = Thing(a: "not-an-int")
 
@@ -264,9 +246,7 @@ describe('explicit form — class arg validation', () => {
 
   it('rejects extra class args', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
 
       t = Thing(a: 5, b: 99)
 
@@ -276,9 +256,7 @@ describe('explicit form — class arg validation', () => {
 
   it('rejects missing class args', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer, b: Text) -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing (a: Integer, b: Text) -> *{ ping. () => . }
 
       t = Thing(a: 5)
 
@@ -288,9 +266,7 @@ describe('explicit form — class arg validation', () => {
 
   it('rejects construction against (Alias) { iface } service-only form', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing { ping. () => . }
-      **
+      use "thing.bv": Thing { ping. () => . }
 
       t = Thing()
 
@@ -303,9 +279,7 @@ describe('explicit form — class arg validation', () => {
 describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ ping. () => . }
 
       t = Thing(a: 5)
 
@@ -315,9 +289,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ call. (msg: Text) => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ call. (msg: Text) => . }
 
       t = Thing(a: 5)
 
@@ -327,9 +299,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ fire. () => . }
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ fire. () => . }
 
       t = Thing(a: 5)
 
@@ -348,36 +318,28 @@ describe('constructor block — calls are checked as in a handler body', () => {
 
   it('a call the manifest declares → compiles', () => {
     expect(() => compileSource(`
-      **
-        "greeter.bv": Greeter
-      **
+      use "greeter.bv": Greeter
       x = Greeter.greet(name: "a")
     `, { remotes })).not.toThrow();
   });
 
   it('a call the manifest lacks → compile error', () => {
     expect(() => compileSource(`
-      **
-        "greeter.bv": Greeter
-      **
+      use "greeter.bv": Greeter
       x = Greeter.gret(name: "a")
     `, { remotes })).toThrow(/'Greeter' has no function 'gret'/);
   });
 
   it('a bare call statement the manifest lacks → compile error', () => {
     expect(() => compileSource(`
-      **
-        "greeter.bv": Greeter
-      **
+      use "greeter.bv": Greeter
       Greeter.gret(name: "a")
     `, { remotes })).toThrow(/'Greeter' has no function 'gret'/);
   });
 
   it('a wrong arg type → compile error', () => {
     expect(() => compileSource(`
-      **
-        "greeter.bv": Greeter
-      **
+      use "greeter.bv": Greeter
       x = Greeter.greet(name: 5)
     `, { remotes })).toThrow(/named arg 'name': expected Text, got Integer/);
   });
@@ -394,9 +356,7 @@ describe('constructor block — calls are checked as in a handler body', () => {
 describe('# form — requires manifest', () => {
   it('bare # form throws without options.remotes', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       @go = -> 1
     `)).toThrow(/has no type/);
@@ -404,9 +364,7 @@ describe('# form — requires manifest', () => {
 
   it('# form with construction throws without options.remotes', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       t = Thing(a: 5)
 
@@ -420,9 +378,7 @@ describe('# form — manifest from options.remotes', () => {
 
   it('# form compiles when manifest supplied via options.remotes', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       t = Thing(a: 5)
 
@@ -432,9 +388,7 @@ describe('# form — manifest from options.remotes', () => {
 
   it('# form validates class args against the resolved manifest', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       t = Thing(a: "not-an-int")
 
@@ -444,9 +398,7 @@ describe('# form — manifest from options.remotes', () => {
 
   it('# form validates method calls against the resolved interface', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       t = Thing(a: 5)
 
@@ -456,9 +408,7 @@ describe('# form — manifest from options.remotes', () => {
 
   it('# form: actor method call routes to actor address', async () => {
     const actor = await createActor(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       t = Thing(a: 5)
 
@@ -487,9 +437,7 @@ describe('# form — manifest from options.remotes', () => {
 describe('coercion to typed class — compilation', () => {
   it('coercion of # dep to a typed class compiles', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -501,9 +449,7 @@ describe('coercion to typed class — compilation', () => {
 
   it('coercion validates class args', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -515,9 +461,7 @@ describe('coercion to typed class — compilation', () => {
 
   it('coercion validates method calls', () => {
     expect(() => compileSource(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -534,9 +478,7 @@ describe('coercion to typed class — runtime', () => {
     // The actor address from that reply is what subsequent method calls
     // route to.
     const actor = await createActor(`
-      **
-        "thing.bv": Thing #
-      **
+      use "thing.bv": Thing #
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -585,9 +527,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('an op the manifest declares → compiles', () => {
     expect(() => compileSource(`
-      **
-        Math: (:double)
-      **
+      use Math: (:double)
       @go = {
         :result Integer = double(n: 5)
         return :result
@@ -597,9 +537,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('an op the manifest lacks → compile error names it and the dependency', () => {
     expect(() => compileSource(`
-      **
-        Math: (:dubble)
-      **
+      use Math: (:dubble)
       @go = {
         :result Integer = dubble(n: 5)
         return :result
@@ -609,9 +547,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('an unused misspelled entry is still an error', () => {
     expect(() => compileSource(`
-      **
-        Math: (:double, :dubble)
-      **
+      use Math: (:double, :dubble)
       @go = {
         :result Integer = double(n: 5)
         return :result
@@ -621,9 +557,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('an aliased entry is checked by its remote name', () => {
     expect(() => compileSource(`
-      **
-        Math: (dubble: d)
-      **
+      use Math: (dubble: d)
       @go = {
         :result Integer = d(n: 5)
         return :result
@@ -633,9 +567,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('a discarded entry is checked too', () => {
     expect(() => compileSource(`
-      **
-        Math: (dubble: _, ...)
-      **
+      use Math: (dubble: _, ...)
       @go = {
         :result Integer = double(n: 5)
         return :result
@@ -645,9 +577,7 @@ describe('destructure entries — must be exported by the manifest', () => {
 
   it('a body-form entry is checked against an inline interface', () => {
     expect(() => compileSource(`
-      **
-        "math.bv": Math { double (n: Integer) -> (result: Integer) }
-      **
+      use "math.bv": Math { double (n: Integer) -> (result: Integer) }
       @go = {
         :inc = Math
         :result Integer = inc(n: 5)
@@ -666,9 +596,7 @@ describe('spread `(...)` — compilation', () => {
 
   it('`(...)` flattens all manifest ops into scope', () => {
     expect(() => compileSource(`
-      **
-        Math: (...)
-      **
+      use Math: (...)
       @go = {
         :result Integer = double(n: 5)
         return :result
@@ -678,9 +606,7 @@ describe('spread `(...)` — compilation', () => {
 
   it('every spread-injected name is callable as a bare function', () => {
     expect(() => compileSource(`
-      **
-        Math: (...)
-      **
+      use Math: (...)
       @triple = {
         :result Integer = double(n: 5)
         :result Integer = inc(n: result)
@@ -695,9 +621,7 @@ describe('spread `(...)` — compilation', () => {
     // and `...` still supplies inc and dec. Runtime wiring verified in the
     // routing test below.
     expect(() => compileSource(`
-      **
-        Math: (double: D, ...)
-      **
+      use Math: (double: D, ...)
       @go = {
         :result Integer = D(n: 5)
         :result Integer = inc(n: result)
@@ -713,9 +637,7 @@ describe('spread `(...)` — compilation', () => {
     // that consumed names aren't callable relies on the general unresolved-
     // reference check, which isn't a spread-operator concern.
     expect(() => compileSource(`
-      **
-        Math: (double: _, ...)
-      **
+      use Math: (double: _, ...)
       @go = {
         :result Integer = inc(n: 5)
         :result Integer = dec(n: result)
@@ -728,9 +650,7 @@ describe('spread `(...)` — compilation', () => {
     // No options.remotes for Math → the pre-existing interface check fires,
     // catching the missing manifest before spread expansion even runs.
     expect(() => compileSource(`
-      **
-        Math: (...)
-      **
+      use Math: (...)
       @go = { :result Integer = double(n: 5); return :result }
     `)).toThrow(/Math.*has no type|spread.*Math.*manifest/i);
   });
@@ -741,10 +661,8 @@ describe('spread `(...)` — compilation', () => {
       square (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
-      **
-        Math: (...)
-        Other: (...)
-      **
+      use Math: (...)
+      use Other: (...)
       @go = { :result Integer = double(n: 5); return :result }
     `, { remotes: [
       { path: 'Math', service: MATH_MANIFEST },
@@ -758,10 +676,8 @@ describe('spread `(...)` — compilation', () => {
       square (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
-      **
-        Math: (...)
-        Other: (double: OD, ...)
-      **
+      use Math: (...)
+      use Other: (double: OD, ...)
       @go = {
         :result Integer = double(n: 5)
         :result Integer = OD(n: result)
@@ -780,10 +696,8 @@ describe('spread `(...)` — compilation', () => {
       square (n: Integer) -> (result: Integer)
     }`;
     expect(() => compileSource(`
-      **
-        Math: (...)
-        Other: (double: _, ...)
-      **
+      use Math: (...)
+      use Other: (double: _, ...)
       @go = {
         :result Integer = double(n: 5)
         :result Integer = square(n: result)
@@ -804,9 +718,7 @@ describe('spread `(...)` — runtime routing', () => {
 
   it('spread-injected call routes to the service with the remote op', async () => {
     const compiled = await compileActor(`
-      **
-        Math: (...)
-      **
+      use Math: (...)
       @go = {
         :result Integer = double(n: 5)
         return :result
@@ -827,9 +739,7 @@ describe('spread `(...)` — runtime routing', () => {
     // `double: D` — the body calls `D(...)`, but the outbound op is still
     // `@double` (the remote name), not `@D` (the local binding).
     const compiled = await compileActor(`
-      **
-        Math: (double: D, ...)
-      **
+      use Math: (double: D, ...)
       @go = {
         :result Integer = D(n: 3)
         return :result
@@ -863,18 +773,14 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
   describe('compilation', () => {
     it('`<:Name>` retains the namespace — bare DI compiles', () => {
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = { :result Integer = Math.double(n: 5); return :result }
       `, { remotes: [{ path: 'Math', service: MATH_MANIFEST }] })).not.toThrow();
     });
 
     it('`(...) = Name` body destructure compiles', () => {
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -887,9 +793,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
       // Both `double(...)` (flattened) and `Math.double(...)` (namespace)
       // should compile — retention is the whole point of the body form.
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -901,9 +805,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
 
     it('specific-name body form `:double = Name` adds single local', () => {
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           :double = Math
           :result Integer = double(n: 5)
@@ -916,9 +818,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
       // Lowercase alias required in body form — uppercase idents are parsed
       // as type annotations by parseDestructureAssign.
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           double: d = Math
           :result Integer = d(n: 5)
@@ -929,9 +829,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
 
     it('discard + spread in body: `(double: _, ...) = Name`', () => {
       expect(() => compileSource(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           (double: _, ...) = Math
           :result Integer = inc(n: 5)
@@ -944,9 +842,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
   describe('runtime routing', () => {
     it('body spread — call routes to the service with the remote op', async () => {
       const compiled = await compileActor(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           (...) = Math
           :result Integer = double(n: 5)
@@ -962,9 +858,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
 
     it('body aliased — `d(...)` routes to the original @double', async () => {
       const compiled = await compileActor(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           double: d = Math
           :result Integer = d(n: 7)
@@ -979,9 +873,7 @@ describe('body-form DI destructure — <:Name> + (...) = Name', () => {
 
     it('namespace still routes: `Math.double(...)` after `(...) = Math`', async () => {
       const compiled = await compileActor(`
-        **
-          :Math
-        **
+        use :Math
         @go = {
           (...) = Math
           :result Integer = Math.inc(n: 5)

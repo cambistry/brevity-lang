@@ -16,11 +16,9 @@ import { compileActor } from '../helpers.js';
 
 async function forwardingActor(selfAddr) {
   const compiled = await compileActor(`
-    **
-      "Sink": Sink {
-        take (p: Point) -> ()
-      }
-    **
+    use "Sink": Sink {
+      take (p: Point) -> ()
+    }
     type Point (x Integer, y Integer)
     @fwd
       =

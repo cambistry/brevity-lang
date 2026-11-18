@@ -19,7 +19,7 @@ Returned fields used by tests:
 ## `interface.params` Rendering
 
 The file actor's construction-time inputs render in declaration order, inside
-`( … )` (`()` when empty): the caller-facing side of the header, keys and
+`( … )` (`()` when empty): the caller-facing side of the `use` entries, keys and
 types only.
 
 - `"/db": { … }`: service dependency with an inline interface.
@@ -34,11 +34,9 @@ type. Bindings are private and not surfaced — a dependency's local name or
 destructure, a positional param's name, a renamed param's local:
 
 ```brevity
-**
-  "/db": DB
-  HTML: (:div, :span)
-  limit: n Integer
-**
+use "/db": DB
+use HTML: (:div, :span)
+use limit: n Integer
 ```
 
 renders params as:

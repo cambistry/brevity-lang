@@ -25,15 +25,13 @@ const output = compile(ast, { target: 'js' });
 
 ## File-level class params
 
-A file is a singleton: its host builds it once, at load. It can declare its
-DI in a header at the head of the file, lineal (`**` … `**`, each `**` alone on
-its line) or delimited (`( … ) actor { body }`):
+A file is a singleton: its host builds it once, at load. It declares its DI
+with `use` statements, which can appear anywhere in the file's own scope; the
+host binds them all at load:
 
 ```
-**
-  "/services/db": DB { lookup (key: Text) -> (value: Text) }
-  "/services/cache": Cache { get (key: Text) -> (value: Text) }
-**
+use "/services/db": DB { lookup (key: Text) -> (value: Text) }
+use "/services/cache": Cache { get (key: Text) -> (value: Text) }
 
 @fetch = (key: Text) {
   :value Text = DB.lookup(:key)
@@ -41,7 +39,7 @@ its line) or delimited (`( … ) actor { body }`):
 }
 ```
 
-That header can mix service injections and ordinary scalar params. Every
+`use` can mix service injections and ordinary scalar params. Every
 entry is `key: binding [type]`: service entries map a path to a local name, and
 the local name is what you use in code (`DB.lookup(...)`). Two service forms
 are supported:
@@ -50,7 +48,7 @@ are supported:
   interface is declared inline. The compiler checks calls against it and never
   consults `options.remotes` for that path; a mismatch with the real service
   fails at runtime.
-- **Bare dependency**: `"/path": Alias` — no type in the header, so the entry
+- **Bare dependency**: `"/path": Alias` — no type in the entry, so it
   is resolved by its key: the interface must be supplied at compile time via
   `options.remotes` (a compile error otherwise). Any keyed entry with no type
   is a dependency this way — `HTML: Html`, `limit: n`, `limit:`.
@@ -66,12 +64,12 @@ Typed scalar params live in the same header, supplied by the host at load:
 - Positional scalar: `root Text`
 
 Inside the file, all of these entries behave like class params to the
-anonymous file actor. From the host side, the header is surfaced as the params
+anonymous file actor. From the host side, its `use` entries are surfaced as the params
 document in `interface.params`.
 
 ### Build system integration
 
-`extract()` surfaces the caller-facing side of the header in `interface.params`
+`extract()` surfaces the caller-facing side of its `use` entries in `interface.params`
 — keys and types, without the file's local names. Every named key is quoted;
 a positional entry is just its type:
 
@@ -88,25 +86,23 @@ const { interface: iface } = extract(source);
 //   )
 ```
 
-A dependency's type is what the header declares: an interface, a constructor
+A dependency's type is what its entry declares: an interface, a constructor
 profile, `#`, or nothing (`"key":`), when the type comes from
 `options.remotes`.
 
-For example, a mixed header might come back as:
+For example, a file's mixed `use` entries might come back as:
 
 ```javascript
 const { interface: iface } = extract(`
-  **
-    root Text
-    "/services/db": DB
-    cache_size: Integer
-  **
+  use :root Text
+  use "/services/db": DB
+  use :cache_size Integer
   @noop. = {}
 `);
 
 // iface.params:
 //   (
-//     Text
+//     "root": Text
 //     "/services/db":
 //     "cache_size": Integer
 //   )

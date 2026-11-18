@@ -2,57 +2,25 @@ import { compileSource, expectBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// File singleton header — `**`
+// The file actor
 //
-// A file is a singleton, built once by its host at load. Its header is its DI:
-//   **\n entries\n **\n body          — lineal (each `**` alone on its line)
-//   **\n entries\n ** { body }         — lineal header, delimited body
-//   ( entries ) actor { body }            — delimited
-//   **\n body  |  actor { body }          — no DI
-// Entries use the same grammar as the `*` header. Only the head of a file
-// takes one: an inline singleton (`name = actor { … }`) has nobody to fill it.
+// A file that doesn't open with a constructor form is an actor, built once by its
+// host at load. It needs no header; its DI is its `use` statements
+// (__tests__/syntax/use.test.js). It may open with `actor {` and close with `}`.
+// The `**` header and `( DI ) actor { }` are retired.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-  **
-    "Remote": Remote { get () -> (Integer) }
-    name: Text
-    n Integer
-  **
+  use "Remote": Remote { get () -> (Integer) }, :name Text, size: n Integer
   @get = -> name
 `;
 
-describe('file singleton header — forms', () => {
-  it('lineal: **\\n entries\\n **\\n body', () => {
+describe('file actor — forms', () => {
+  it('no header', () => {
     expect(() => compileSource(script)).not.toThrow();
   });
 
-  it('lineal header, delimited body: ** { body }', () => {
-    expect(() => compileSource(`
-      **
-        value Integer
-      ** {
-        @get = -> value
-      }
-    `)).not.toThrow();
-  });
-
-  it('delimited: ( entries ) actor { body }', () => {
-    expect(() => compileSource(`
-      ( value: Integer ) actor {
-        @get = -> value
-      }
-    `)).not.toThrow();
-  });
-
-  it('no DI, lineal: **\\n body', () => {
-    expect(() => compileSource(`
-      **
-      @hello = -> greeting: "hi"
-    `)).not.toThrow();
-  });
-
-  it('no DI, delimited: actor { body }', () => {
+  it('delimited: actor { body }', () => {
     expect(() => compileSource(`
       actor {
         @hello = -> greeting: "hi"
@@ -60,31 +28,26 @@ describe('file singleton header — forms', () => {
     `)).not.toThrow();
   });
 
-  it('lineal and delimited headers yield identical dependencies', () => {
-    const lineal = extract(script);
+  it('no header and actor { body } yield identical dependencies', () => {
+    const bare = extract(script);
     const delimited = extract(`
-      ( "Remote": Remote { get () -> (Integer) }, name: Text, n Integer ) actor {
+      actor {
+        use "Remote": Remote { get () -> (Integer) }, :name Text, size: n Integer
         @get = -> name
       }
     `);
-    expect(lineal.ast.dependencies).toEqual(delimited.ast.dependencies);
-    expect(lineal.interface.params).toBe(delimited.interface.params);
+    expect(bare.ast.dependencies).toEqual(delimited.ast.dependencies);
+    expect(bare.interface.params).toBe(delimited.interface.params);
   });
 
-  it('params are the same entries as in a `*` header', () => {
-    const params = `
-      **
-        name: Text
-        n Integer
-      **
-      @get = -> name
-    `;
-    expect(extract(params).ast.dependencies).toEqual(extract(params.replace(/\*\*/g, '*')).ast.dependencies);
+  it('a named param in `use` is the same entry as in a `*` header', () => {
+    expect(extract('use :name Text, size: n Integer\n@get = -> name\n').ast.dependencies)
+      .toEqual(extract('*\n  name: Text\n  size: n Integer\n*\n@get = -> name\n').ast.dependencies);
   });
 });
 
 describe('file singleton header — kind', () => {
-  it('a `**` header makes a singleton', () => {
+  it('a file with `use` is a singleton', () => {
     expect(extract(script).ast.fileKind).toBe('singleton');
   });
 
@@ -121,9 +84,9 @@ describe('factory header — no DI', () => {
     expect(() => extract('( "svc.bv": Svc, n Integer ) *{\n  @get = -> n\n}\n')).toThrow(refused);
   });
 
-  it('names the entry and points to `**`', () => {
+  it('names the entry and points to `use`', () => {
     expect(() => extract('*\n  n Integer\n  "svc.bv": Svc\n*\n@get = -> n\n'))
-      .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — inject it in a '**' header`);
+      .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — DI is declared with 'use', which a factory file doesn't support yet`);
   });
 
   it('accepts params of every kind', () => {
@@ -139,9 +102,9 @@ describe('factory header — no DI', () => {
     `)).not.toThrow();
   });
 
-  it('the same DI is fine in a `**` header', () => {
+  it('the same DI is fine in a `use`', () => {
     for (const entry of Object.values(entries)) {
-      expect(() => extract(`**\n  ${entry}\n**\n@get = -> 1\n`)).not.toThrow();
+      expect(() => extract(`use ${entry}\n@get = -> 1\n`)).not.toThrow();
     }
   });
 });
@@ -164,35 +127,78 @@ describe('file singleton header — the retired \'**{\'', () => {
   });
 });
 
-describe('file singleton header — only at the head of a file', () => {
-  it('after a declaration, actor { body } is an error', () => {
+describe('file actor — retired headers', () => {
+  it('a lineal ** header', () => {
+    expect(() => compileSource(`
+      **
+        value Integer
+      **
+      @get = -> value
+    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
+  });
+
+  it('a lineal ** header with a delimited body', () => {
+    expect(() => compileSource(`
+      **
+        value Integer
+      ** {
+        @get = -> value
+      }
+    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
+  });
+
+  it('a lineal ** header with no entries', () => {
+    expect(() => compileSource(`
+      **
+      @hello = -> greeting: "hi"
+    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
+  });
+
+  it('a lone ** after a declaration', () => {
+    expect(() => compileSource(`
+      x = 1
+      **
+      @get = -> 1
+    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
+  });
+
+  it('( entries ) actor { body }', () => {
+    expect(() => compileSource(`
+      ( value: Integer ) actor {
+        @get = -> value
+      }
+    `)).toThrow(/'\( … \) actor \{ … \}' is retired — declare DI with 'use' inside the braces/);
+  });
+});
+
+describe('file actor — actor { } only at the head of a file', () => {
+  it('after a declaration', () => {
     expect(() => compileSource(`
       x = 1
       actor {
         @get = -> 1
       }
-    `)).toThrow(/a file header must open the file/);
+    `)).toThrow(/a whole-file 'actor \{ … \}' must open the file/);
   });
 
-  it('after a type, a lineal ** header is an error', () => {
+  it('after a type', () => {
     expect(() => compileSource(`
       type Point (x Integer)
-      **
-        value Integer
-      **
-      @get = -> value
-    `)).toThrow(/a file header must open the file/);
+      actor {
+        @get = -> 1
+      }
+    `)).toThrow(/a whole-file 'actor \{ … \}' must open the file/);
   });
 
-  it('a second header is an error', () => {
+  it('twice', () => {
     expect(() => compileSource(`
-      **
-        value Integer
-      **
       actor {
-        @get = -> value
+        @get = -> 1
       }
-    `)).toThrow(/Multiple file headers|must open the file/);
+      actor {
+        @put = -> 1
+      }
+    `)).toThrow(/body must be the entire file|must open the file/);
   });
 });
 
@@ -233,8 +239,8 @@ describe('file with `new =`', () => {
     expect(extract(classFile).ast.fileKind).toBe('class');
   });
 
-  it('is a class after a `**` header too', () => {
-    expect(extract(`**\n${classFile}`).ast.fileKind).toBe('class');
+  it('is a class with a `use` too', () => {
+    expect(extract(`use :document\n${classFile}`).ast.fileKind).toBe('class');
   });
 
   it('its actor closes over the file\'s members', async () => {
@@ -319,8 +325,8 @@ describe('file with `new =` — errors', () => {
     expect(() => extract('count *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
   });
 
-  it('the retired trailing `*` section, after a `**` header', () => {
-    expect(() => extract('**\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
+  it('the retired trailing `*` section, after a `use`', () => {
+    expect(() => extract('use :document\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
   });
 
   const di = /a constructor's params take no DI \(.*\) — declare it with 'use'/;

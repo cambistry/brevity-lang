@@ -7,12 +7,10 @@ routing of the returned address.
 ## Canonical Form
 
 ```brevity
-**
-  "WebView": WebView (path: Text) -> *{
-    open. () => .
-    getTitle () -> (title: Text)
-  }
-**
+use "WebView": WebView (path: Text) -> *{
+  open. () => .
+  getTitle () -> (title: Text)
+}
 
 view = *WebView(path: "/my_view")
 

@@ -93,7 +93,7 @@ describe('a caller\'s annotation', () => {
   });
 
   it('checks a doc', () => {
-    const h = '**\n  "s.bv": Svc\n**\n';
+    const h = 'use "s.bv": Svc\n';
     const docs = (service) => ({ remotes: [{ path: 's.bv', service }] });
     rejects(`${h}@g = {\n  x Text = Svc.f()\n  return x\n}\n`, /'x Text' to 'Svc\.f\(\)' — it can return Integer/, docs('{ f () -> (Integer) }'));
     rejects(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, /it can return Integer \| Text/, docs('{ f () -> (Integer | Text) }'));
@@ -193,7 +193,7 @@ describe('a caller\'s annotation on an overload', () => {
   });
 
   it('checks a doc', () => {
-    const h = '**\n  "s.bv": Svc\n**\n';
+    const h = 'use "s.bv": Svc\n';
     const docs = { remotes: [{ path: 's.bv', service: '{ f (Integer) -> (Text)\n f (Text) -> (Integer) }' }] };
     rejects(`${h}@g = {\n  x Integer = Svc.f(1)\n  return x\n}\n`, /'x Integer' to 'Svc\.f\(\)' — it can return Text/, docs);
     accepts(`${h}@g = {\n  x Integer = Svc.f("a")\n  return x\n}\n`, docs);
@@ -201,7 +201,7 @@ describe('a caller\'s annotation on an overload', () => {
 });
 
 describe('a dependency instance held in a handler\'s local', () => {
-  const h = '**\n  "thing.bv": Thing (a: Integer) -> *{ get () -> (Text) }\n**\n';
+  const h = 'use "thing.bv": Thing (a: Integer) -> *{ get () -> (Text) }\n';
 
   it('checks its members', () => {
     expect(() => compileSource(`${h}@g = {\n  t = Thing(a: 5)\n  t.nope()\n  return 1\n}\n`)).toThrow(/'Thing' has no function 'nope'/);
@@ -247,7 +247,7 @@ describe('at runtime', () => {
   });
 
   it('a typed bind waits for a service\'s reply', async () => {
-    const actor = await createActor('**\n  "s.bv": Svc\n**\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) }' }] } });
+    const actor = await createActor('use "s.bv": Svc\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) }' }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
@@ -257,7 +257,7 @@ describe('at runtime', () => {
   });
 
   it('a remote\'s shapes reach the caller', async () => {
-    const actor = await createActor('**\n  "s.bv": Svc\n**\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) | (Text) }' }] } });
+    const actor = await createActor('use "s.bv": Svc\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) | (Text) }' }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'f', to: 'Svc' }) },
@@ -348,11 +348,9 @@ describe('a reply\'s tag', () => {
 // one, as if annotated with it, so a reply carrying the name is tagged with it.
 describe('an unannotated bind of a call', () => {
   const script = `
-    **
-      "svc.bv": Svc {
-        count () => (Integer)
-      }
-    **
+    use "svc.bv": Svc {
+      count () => (Integer)
+    }
     @seed = { return 9 }
     e = @seed()
 

@@ -40,10 +40,8 @@ describe('extract', () => {
 
   it('non-empty params render alongside service', () => {
     const source = `
-      **
-        "/db": DB { lookup (key: Text) -> (value: Text) }
-        limit: Integer
-      **
+      use "/db": DB { lookup (key: Text) -> (value: Text) }
+      use :limit Integer
 
       @fetch = (key: Text) -> value: "ok"
     `;

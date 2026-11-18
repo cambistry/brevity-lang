@@ -2,24 +2,22 @@ import { createActor, expectActorBehavior, expectBehavior, compileSource } from 
 
 describe('type coercion — runtime', () => {
   const script = `
-    **
-      "/services/counter": Counter {
-        get () -> (count: Integer)
-      } | Integer
-      "/services/store": Store {
-        ping. () => .
-      } | Integer | Text
-      "service.bv": Service () -> *{
-        ping. () => .
-      } | Integer | Text
-      "/s": Svc {
-        text () -> (Text)
-        int () -> (Integer)
-        float () -> (Float)
-        field () -> (a: Integer)
-        any () -> (Anything)
-      }
-    **
+    use "/services/counter": Counter {
+      get () -> (count: Integer)
+    } | Integer
+    use "/services/store": Store {
+      ping. () => .
+    } | Integer | Text
+    use "service.bv": Service () -> *{
+      ping. () => .
+    } | Integer | Text
+    use "/s": Svc {
+      text () -> (Text)
+      int () -> (Integer)
+      float () -> (Float)
+      field () -> (a: Integer)
+      any () -> (Anything)
+    }
 
     // type coercion — declared in the header
 
@@ -575,11 +573,9 @@ describe('type coercion — runtime', () => {
 
 describe('type coercion — documents supplied through options.remotes', () => {
   const script = `
-    **
-      "/services/counter": Counter
-      "/services/store": Store
-      "service.bv": Service #
-    **
+    use "/services/counter": Counter
+    use "/services/store": Store
+    use "service.bv": Service #
 
     @counterInt
       =
@@ -658,11 +654,9 @@ describe('type coercion — documents supplied through options.remotes', () => {
 describe('type coercion — class ref constructed at the top level', () => {
   it('declared in the header', async () => {
     const actor = await createActor(`
-      **
-        "service.bv": Service () -> *{
-          ping. () => .
-        } | Integer
-      **
+      use "service.bv": Service () -> *{
+        ping. () => .
+      } | Integer
 
       s = Service()
 
@@ -682,9 +676,7 @@ describe('type coercion — class ref constructed at the top level', () => {
 
   it('document supplied through options.remotes', async () => {
     const actor = await createActor(`
-      **
-        "service.bv": Service #
-      **
+      use "service.bv": Service #
 
       s = Service()
 
@@ -722,40 +714,32 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('service ref, declared in the header', () => {
     expect(() => compileSource(`
-      **
-        "/services/counter": Counter {
-          get () -> (count: Integer)
-        }
-      **
+      use "/services/counter": Counter {
+        get () -> (count: Integer)
+      }
       ${counter}
     `)).toThrow();
   });
 
   it('class ref, declared in the header', () => {
     expect(() => compileSource(`
-      **
-        "service.bv": Service () -> *{
-          ping. () => .
-        }
-      **
+      use "service.bv": Service () -> *{
+        ping. () => .
+      }
       ${service}
     `)).toThrow();
   });
 
   it('service ref, through options.remotes', () => {
     expect(() => compileSource(`
-      **
-        "/services/counter": Counter
-      **
+      use "/services/counter": Counter
       ${counter}
     `, { remotes: [{ path: '/services/counter', service: '{\n  get () -> (count: Integer)\n}' }] })).toThrow();
   });
 
   it('class ref, through options.remotes', () => {
     expect(() => compileSource(`
-      **
-        "service.bv": Service #
-      **
+      use "service.bv": Service #
       ${service}
     `, { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n}' }] })).toThrow();
   });

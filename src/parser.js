@@ -13,6 +13,13 @@ const RETIRED_SINGLETON_MSG = "'**{ … }' is now 'actor { … }'";
 const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
 const FILE_STAR_SECTION_MSG = "a singleton's constructor is declared with 'new =': write 'new =', then '*' alone on its line, params one per line, and a closing '*'";
 const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) — declare it with 'use'`;
+// DI is declared with `use` (notes/use-di-2026-11-17.md).
+const USE_INNER_MSG = "'use' in inner scopes is not supported yet";
+const USE_FACTORY_MSG = "'use' in a factory file is not supported yet";
+const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use :HTML, \"svc.bv\": Svc'): a file with no header is an actor";
+const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
+const USE_NAMED_TYPE_MSG = (name, type) => `In 'use', '${name}: ${type}' reads as a rename (key: local), not a type — a typed entry is ':${name} ${type}'`;
+const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file — an inline singleton is named: 'name = actor { … }'";
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -2320,6 +2327,9 @@ export function parse(tokensIn) {
   }
 
   function parsePrimary() {
+    // A `use` reached as an expression is in an inner scope; the file's own are read
+    // as declarations (parseActorBodyIn).
+    if (peek().type === 'KEYWORD' && peek().value === 'use') throw new Error(USE_INNER_MSG);
     // `new(args)` in a singleton constructs its class (src/singleton_classes.js).
     if (peek().type === 'KEYWORD' && peek().value === 'new' && tokens[pos + 1]?.type === 'LPAREN') {
       tokens[pos] = { ...tokens[pos], type: 'IDENT' };
@@ -4704,8 +4714,6 @@ export function parse(tokensIn) {
   // A star that closes a lineal constructor header: alone on its line, or
   // first on its line and followed only by `{` (delimited body).
   const isClosingStar = (t) => t?.type === 'STAR' && (t.alone || t.aloneBeforeBrace);
-  // The same for a file singleton's lineal header (`**\n entries\n **`).
-  const isClosingStarStar = (t) => t?.type === 'STARSTAR' && (t.alone || t.aloneBeforeBrace);
 
   // Try to parse the param run of a lineal header (`*\n params\n *`). Caller
   // has consumed the opening `*`. Returns the params with the closing `*`
@@ -4891,8 +4899,8 @@ export function parse(tokensIn) {
     return false;
   }
 
-  // `( entries ) [->] actor {` at token index `i`: a file singleton's delimited
-  // header (at the head of a file only).
+  // `( entries ) [->] actor {` at token index `i`: the retired delimited DI header
+  // of a file singleton, refused with a pointer to `use`.
   function isFileSingletonStart(i = pos) {
     if (tokens[i]?.type !== 'LPAREN') return false;
     let depth = 0;
@@ -5049,13 +5057,19 @@ export function parse(tokensIn) {
       }
       skipBlanks();
       if (peek().type === 'EOF' || isEnd()) break;
-      // An actor literal standing alone: a file header if it opens the file, else
+      // An actor literal standing alone: the whole file if it opens the file, else
       // it needs a name.
       if (isSingletonStart() || isRetiredSingletonAt()) {
         refuseRetiredSingleton();
-        throw new Error(actorBodyDepth === 1
-          ? `a file header must open the file — an inline singleton is named: 'name = actor { … }'`
-          : `An inline singleton is named: 'name = actor { … }'`);
+        throw new Error(actorBodyDepth === 1 ? WHOLE_FILE_ACTOR_MSG : `An inline singleton is named: 'name = actor { … }'`);
+      }
+      // `use` declares the file's DI: hoisted into its manifest, so it may come anywhere
+      // in the file actor's own scope.
+      if (peek().type === 'KEYWORD' && peek().value === 'use') {
+        if (actorBodyDepth > 1) throw new Error(USE_INNER_MSG);
+        if (fileKind === 'factory') throw new Error(USE_FACTORY_MSG);
+        parseUse();
+        continue;
       }
       // The retired trailing `*` section (singleton lines, then a lone `*` as the
       // file's `new`). A `*` at the head of a file is a factory header, read before here.
@@ -5766,9 +5780,8 @@ export function parse(tokensIn) {
           throw new Error(`A lineal class can't take trailing members ('*' params '*' constructor, then '**') — write 'C = **' with 'new =' inside it, or the delimited form 'C = (params) *{ … } ++ actor { … }'`);
         }
         refuseRetiredSingleton();
-        if (peek().type === 'STARSTAR' && peek().alone || isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') {
-          throw new Error(`a file header must open the file — an inline singleton is named: 'name = actor { … }'`);
-        }
+        if (peek().type === 'STARSTAR' && peek().alone) throw new Error(STARSTAR_HEADER_MSG);
+        if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') throw new Error(WHOLE_FILE_ACTOR_MSG);
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
     }
@@ -5859,9 +5872,36 @@ export function parse(tokensIn) {
   const dependencies = [];
   const types = [];
   let headerSeen = false;
-  // The file's kind, from its header: `**` a singleton (built once at load, its
-  // header is DI), `*` a factory. A headerless file is a singleton.
+  // The file's kind: a file that opens with a constructor form (`*`) is a factory.
+  // Any other file is an actor, built once by its host at load: 'singleton', or
+  // 'class' when it declares `new`. Its DI is its `use` statements.
   let fileKind = 'singleton';
+
+  // `use entries`: the entries a `**` header took, comma-separated, to the end of
+  // the line (a trailing comma carries on to the next). They accumulate into the
+  // file's manifest; the same entry twice is one.
+  function parseUse() {
+    consume(); // use
+    const atEnd = () => ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'].includes(peek().type);
+    if (atEnd()) throw new Error("'use' takes one or more entries: 'use :HTML, \"svc.bv\": Svc'");
+    const start = dependencies.length;
+    // An entry may read past its line break (an inline interface does); the line
+    // still ended the `use` unless a comma came before it.
+    const isBreak = (t) => t?.type === 'NEWLINE' || t?.type === 'BLOCK_SEP';
+    const lineEnded = () => {
+      let k = pos - 1;
+      if (!isBreak(tokens[k])) return false;
+      while (isBreak(tokens[k])) k--;
+      return tokens[k]?.type !== 'COMMA';
+    };
+    parseFileHeaderEntries(() => (atEnd() && tokens[pos - 1]?.type !== 'COMMA') || lineEnded(), true);
+    const seen = new Set(dependencies.slice(0, start).map(d => JSON.stringify(d)));
+    const added = dependencies.splice(start);
+    for (const d of added) {
+      const key = JSON.stringify(d);
+      if (!seen.has(key)) { seen.add(key); dependencies.push(d); }
+    }
+  }
 
   // Parse one type field declaration:
   //   `name Type`   — positional (no colon)
@@ -6042,27 +6082,53 @@ export function parse(tokensIn) {
     }
     return false;
   }
+  // In a `use`: an accessor (`@name …`) or a positional entry (`name Type`).
+  function refuseUseParam() {
+    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
+      const name = tokens[pos + 1].value;
+      throw new Error(`'use' can't declare an accessor ('@${name}') — write ':${name} Type', and publish it with a handler: '@${name} = -> ${name}'`);
+    }
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'COLON') {
+      const name = peek().value;
+      if (ENTRY_END.includes(tokens[pos + 1]?.type)) throw new Error(`'use ${name}': a dependency is ':${name}' (or '"${name}": ${name}')`);
+      throw new Error(`'use' takes no positional entry ('${name} …') — write ':${name} Type'`);
+    }
+  }
   function fileParamFrom(p, positional) {
     return AST.fileParam(p.name, {
       type: p.type, positional, defaultValue: p.defaultValue, accessor: p.accessor,
       key: p.key, typeOrLocal: p.typeOrLocal,
     });
   }
-  function parseFileHeaderEntries(isEnd) {
+  // What ends a header entry: the next one, or the end of its list or `use` line.
+  const ENTRY_END = ['RPAREN', 'COMMA', 'NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'];
+  // `inUse`: the entries of a `use`, which binds names from the host and so takes
+  // no accessor (`@name`) and no positional entry. A typed one is the destructure
+  // `:name Type`; `name: Type` would bind a local named for the type.
+  function parseFileHeaderEntries(isEnd, inUse = false) {
     while (!isEnd() && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
       let path, alias, destructures = null;
+      if (inUse) refuseUseParam();
+      if (inUse && peek().type === 'SIGIL' && tokens[pos + 1]?.type !== 'HASH' && !ENTRY_END.includes(tokens[pos + 1]?.type)) {
+        // `:name Type`: read as the param `name Type`, by its key.
+        tokens[pos] = { ...tokens[pos], type: 'IDENT' };
+        const p = parseOneParam();
+        if (p === null) throw new Error(`Expected a type after ':${tokens[pos - 1]?.value}' in 'use'`);
+        dependencies.push(fileParamFrom(p, false));
+        continue;
+      }
       if (peek().type === 'SIGIL') {
         // Two disambiguated cases:
         //   :name [#]  |  :name (end-of-entry)  → path-shorthand dependency
         //   :name Type                            → named scalar file-param
         const nextType = tokens[pos + 1]?.type;
-        if (nextType === 'HASH' || nextType === 'RPAREN' || nextType === 'COMMA' || nextType === 'NEWLINE' || nextType === 'BLOCK_SEP') {
+        if (nextType === 'HASH' || ENTRY_END.includes(nextType)) {
           const sigil = consume();
           path = sigil.value;
           alias = sigil.value;
           // Service dep with no destructures: commit before skipNewlines eats the terminator
-          if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+          if (ENTRY_END.includes(peek().type)) {
             dependencies.push(AST.dependency(alias, { path, destructures: null }));
             continue;
           }
@@ -6087,7 +6153,10 @@ export function parse(tokensIn) {
         // Named scalar file-param: `name: Type`, `name: local Type`
         const p = parseOneParam();
         if (p === null) throw new Error(`Expected scalar param in file-level header`);
-        dependencies.push(fileParamFrom(p, false));
+        if (inUse && !p.key && !p.typeOrLocal && p.type) throw new Error(USE_NAMED_TYPE_MSG(p.name, `${p.ref ? '*' : p.readonly ? '&' : ''}${typeof p.type === 'string' ? p.type : 'Type'}`));
+        const fp = fileParamFrom(p, false);
+        if (inUse && p.typeOrLocal) fp.inUse = true;
+        dependencies.push(fp);
         continue;
       } else if (peek().type === 'IDENT') {
         // Positional scalar file-param: `name Type`
@@ -6150,7 +6219,7 @@ export function parse(tokensIn) {
       if (!alias) alias = path;
       // end-of-entry — service reference, interface fetched via options.remotes
       // (check before skipNewlines so the NEWLINE terminator isn't consumed early)
-      if (peek().type === 'RPAREN' || peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+      if (ENTRY_END.includes(peek().type)) {
         dependencies.push(AST.dependency(alias, { path, destructures }));
         continue;
       }
@@ -6250,60 +6319,19 @@ export function parse(tokensIn) {
     }
     if (peek().type === 'DCOLON') throw new Error(`Unexpected '::'`);
 
-    // ── File singleton header ─────────────────────────────────────────────
-    //   **\n entries\n **\n body     — lineal: entries one per line, closed
-    //   **\n entries\n ** { body }     by `**` alone on its line
-    //   **\n body                      — lineal, no DI
-    //   ( entries ) [->] actor { body } — delimited
-    //   actor { body }                  — delimited, no DI
-    // The entries are the file's DI, filled in once by its host at load. Only
-    // the head of a file takes one: an inline singleton has nobody to fill it.
+    // ── Whole-file actor ──────────────────────────────────────────────────
+    //   actor { body }   — optional; its `use` statements go inside the braces
+    // A file with no header is an actor already. DI is declared with `use`; the
+    // `**` header and `( DI ) actor { … }` are retired.
     refuseRetiredSingleton();
-    if (peek().type === 'STARSTAR' && peek().alone ||
-        isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE' ||
-        peek().type === 'LPAREN' && isFileSingletonStart()) {
-      if (headerSeen || actors.length || types.length) {
-        throw new Error(headerSeen
-          ? `Multiple file headers are not allowed — combine all dependencies into a single header`
-          : `a file header must open the file`);
-      }
+    if (peek().type === 'STARSTAR') throw new Error(STARSTAR_HEADER_MSG);
+    if (peek().type === 'LPAREN' && isFileSingletonStart()) throw new Error(DI_ACTOR_HEADER_MSG);
+    if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') {
+      if (headerSeen || actors.length || types.length) throw new Error(WHOLE_FILE_ACTOR_MSG);
       headerSeen = true;
-      if (peek().type === 'LPAREN') {
-        consume(); // (
-        skipNewlines();
-        parseFileHeaderEntries(() => peek().type === 'RPAREN');
-        expect('RPAREN');
-        if (peek().type === '->') consume();
-        consume(); // actor
-        parseFileHeaderBody(false);
-        continue;
-      }
-      if (isActorKw(peek())) {
-        consume(); // actor
-        parseFileHeaderBody(false);
-        continue;
-      }
-      consume(); // **
-      const savedPos = pos;
-      const savedDeps = dependencies.length;
-      let closed = false;
-      try {
-        parseFileHeaderEntries(() => isClosingStarStar(peek()));
-        if (isClosingStarStar(peek())) { consume(); closed = true; }
-      } catch (e) {
-        if (e.fatal) throw e; // a recognised entry in a retired form
-        // not an entry run — no-DI form
-      }
-      if (!closed) {
-        pos = savedPos;
-        dependencies.length = savedDeps;
-      }
-      skipBlanks();
-      parseFileHeaderBody(true);
+      consume(); // actor
+      parseFileHeaderBody(false);
       continue;
-    }
-    if (peek().type === 'STARSTAR') {
-      throw new Error(`a '**' file header is '**' alone on its line — a delimited one is 'actor { … }' or '( … ) actor { … }'`);
     }
 
     // ── File-level constructor header — delimited ─────────────────────────
@@ -6398,7 +6426,7 @@ export function parse(tokensIn) {
                peek().type === 'DIVIDER' ||
                peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
-               (peek().type === 'KEYWORD' && (peek().value === 'untracked' || peek().value === 'self' || peek().value === 'true' || peek().value === 'false' || peek().value === 'new'))) {
+               (peek().type === 'KEYWORD' && (peek().value === 'untracked' || peek().value === 'self' || peek().value === 'true' || peek().value === 'false' || peek().value === 'new' || peek().value === 'use'))) {
       // anonymous actor — collect functions and nested actor definitions
       const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn } = parseActorBody(
         () => false,
@@ -6448,14 +6476,14 @@ export function parse(tokensIn) {
   const result = AST.program(actors, dependencies, types);
   result.fileKind = fileKind;
   resolveLoneNames(result);
-  // A `*` header makes the file a factory: its entries are `new`'s params.
-  // DI is the host filling in a singleton at load, so a factory takes none —
-  // its actors reach services through their params.
+  // A `*` header makes the file a factory: its entries are `new`'s params, never
+  // DI. A factory file can't declare `use` yet either, so its actors reach
+  // services through their params.
   if (fileKind === 'factory') {
     const dep = result.dependencies.find(d => d.type === 'Dependency');
     if (dep) {
       const shown = /^\w+$/.test(dep.path) ? dep.path : `"${dep.path}"`;
-      throw new Error(`A '*' file header is a factory's params and takes no DI ('${shown}') — inject it in a '**' header`);
+      throw new Error(`A '*' file header is a factory's params and takes no DI ('${shown}') — DI is declared with 'use', which a factory file doesn't support yet`);
     }
   }
   settleSilentDecls(result);
@@ -6751,6 +6779,8 @@ export function parse(tokensIn) {
       if (p.typeOrLocal) {
         delete p.typeOrLocal;
         const lone = p[typeField];
+        if (p.inUse && typeNames.has(lone)) throw new Error(USE_NAMED_TYPE_MSG(p.name, lone));
+        delete p.inUse;
         if (!typeNames.has(lone)) {
           p.key = p.name;
           p.name = lone;

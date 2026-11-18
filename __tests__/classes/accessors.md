@@ -50,10 +50,10 @@ Renamed = (a Integer) *{
 File params publish the same way:
 
 ```brevity
-**
+*
   @count Integer
   quiet: Integer
-**
+*
 ```
 
 ## Tested Behavior

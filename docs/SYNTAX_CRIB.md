@@ -82,14 +82,12 @@ Over = Box ++ *{ h = -> super::h() + 1 }           // the parent layer's protect
 Pick = A ++ B ++ *{ @get = -> super[A].get() }     // parent A's public @get
 ```
 
-## Dependency Header
+## Dependencies (`use`)
 
 ```brevity
-**
-  "/services/db": DB {
-    lookup (key: Text) -> (value: Text)
-  }
-**
+use "/services/db": DB {
+  lookup (key: Text) -> (value: Text)
+}
 
 @query = (key: Text) {
   :value Text = DB.lookup(:key)
@@ -100,11 +98,9 @@ Pick = A ++ B ++ *{ @get = -> super[A].get() }     // parent A's public @get
 ## Silent Dependency Call
 
 ```brevity
-**
-  "/services/log": Log {
-    write. (message: Text) => .
-  }
-**
+use "/services/log": Log {
+  write. (message: Text) => .
+}
 
 @record. = (message: Text) {
   Log.write(:message)...
@@ -114,11 +110,9 @@ Pick = A ++ B ++ *{ @get = -> super[A].get() }     // parent A's public @get
 ## Remote Actor
 
 ```brevity
-**
-  "WebView": WebView (path: Text) -> *{
-    open. () => .
-  }
-**
+use "WebView": WebView (path: Text) -> *{
+  open. () => .
+}
 
 view = *WebView(path: "/main")
 
@@ -154,10 +148,8 @@ A file's public class (`@W = *{ … }`) is constructed through the file, or impo
 Bind it before use. A class named with `!` keeps the `!` at the call, and its type doesn't.
 
 ```brevity
-**
-  "svc.bv": Svc
-  "other.bv": (:Item, :Widget!)
-**
+use "svc.bv": Svc
+use "other.bv": (:Item, :Widget!)
 
 @go! = {
   c = Svc.Counter(5)             // the shared Svc actor makes it
@@ -290,17 +282,15 @@ fields. A body's arrow is always `->`, so `(i Integer) => i` is an error. The co
 never reads an effect from a name in a doc.
 
 ```brevity
-**
-  "Store": Store {
-    get (key: Text) -> (value: Text)                    // reads
-    peek (key: Text) ~> (value: Text)                   // claims to read, unchecked
-    me () -> self                                       // identity
-    put! (key: Text, value: Text) => (count: Integer)   // writes, returns a value
-    add! (value: Text) => self                          // writes, returns self
-    take! (Boolean) => (Text) | self                    // either; can't be chained on
-    log. (Text) => .                                    // writes, silent
-  }
-**
+use "Store": Store {
+  get (key: Text) -> (value: Text)                    // reads
+  peek (key: Text) ~> (value: Text)                   // claims to read, unchecked
+  me () -> self                                       // identity
+  put! (key: Text, value: Text) => (count: Integer)   // writes, returns a value
+  add! (value: Text) => self                          // writes, returns self
+  take! (Boolean) => (Text) | self                    // either; can't be chained on
+  log. (Text) => .                                    // writes, silent
+}
 
 @glance = (key: Text) {
   :value Text = Store.peek(:key)         // its own doc says `~>` too
@@ -346,11 +336,9 @@ nested actors, and crosses into docs. An `untracked` function may only write `un
 state.
 
 ```brevity
-**
-  "logger.js": Log {
-    untracked write. (Text) => .         // stated by the importer
-  }
-**
+use "logger.js": Log {
+  untracked write. (Text) => .         // stated by the importer
+}
 
 Cache = *{
   hits *Integer = 0

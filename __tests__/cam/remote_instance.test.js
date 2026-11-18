@@ -17,13 +17,11 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const singleViewSource = `
-  **
-    "WebView": WebView (path: Text) -> *{
-      open. () => .
-      getTitle () -> (title: Text)
-      close. () => .
-    }
-  **
+  use "WebView": WebView (path: Text) -> *{
+    open. () => .
+    getTitle () -> (title: Text)
+    close. () => .
+  }
 
   view = *WebView(path: "/my_view")
 
@@ -76,11 +74,9 @@ describe('remote actor — sequential calls to actor', () => {
 // other messages, so a bump that arrives first is seen by the waiting handler.
 describe('a call used as a statement waits for its reply', () => {
   const script = `
-    **
-      "svc.bv": Svc {
-        ping! () => self
-      }
-    **
+    use "svc.bv": Svc {
+      ping! () => self
+    }
     n *Integer = 0
     @bump! = { n <- n + 1 }
     @go! = {
@@ -104,13 +100,11 @@ describe('a call used as a statement waits for its reply', () => {
 
 describe('a call that doesn\'t wait for a reply', () => {
   const script = `
-    **
-      "svc.bv": Svc {
-        log (Text) => .
-        note. (Text) => .
-        ping! () => self
-      }
-    **
+    use "svc.bv": Svc {
+      log (Text) => .
+      note. (Text) => .
+      ping! () => self
+    }
     @go! = {
       Svc.log("x")...
       Svc.note("z")...
@@ -142,7 +136,7 @@ describe('a call that doesn\'t wait for a reply', () => {
   });
 
   it('a doc\'s silent function needs its `...`, as one named with a dot does', () => {
-    const src = (call) => `**\n  "svc.bv": Svc {\n    log (Text) => .\n    note. (Text) => .\n  }\n**\n@go! = {\n  ${call}\n  return 1\n}\n`;
+    const src = (call) => `use "svc.bv": Svc {\n  log (Text) => .\n  note. (Text) => .\n}\n@go! = {\n  ${call}\n  return 1\n}\n`;
     expect(() => compileSource(src('Svc.log("x")'))).toThrow(/'Svc\.log' is silent — call it 'Svc\.log\(…\)\.\.\.'/);
     expect(() => compileSource(src('Svc.note.("x")'))).toThrow(/'Svc\.note\.' is silent/);
   });
@@ -176,11 +170,9 @@ describe('remote actor — a reply nobody is waiting for', () => {
 describe('remote actor — multiple actors', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
-      **
-        "WebView": WebView (path: Text) -> *{
-          open () -> (ok: Text)
-        }
-      **
+      use "WebView": WebView (path: Text) -> *{
+        open () -> (ok: Text)
+      }
 
       v1 = *WebView(path: "/a")
       v2 = *WebView(path: "/b")
@@ -220,11 +212,9 @@ describe('remote actor — multiple actors', () => {
 describe('remote actor — named class args', () => {
   it('named class args appear in `new` and routed calls reach the actor', async () => {
     const actor = await createActor(`
-      **
-        "Database": Database (host: Text, port: Integer) -> *{
-          ping () -> (ok: Text)
-        }
-      **
+      use "Database": Database (host: Text, port: Integer) -> *{
+        ping () -> (ok: Text)
+      }
 
       db = *Database(host: "localhost", port: 5432)
 

@@ -18,11 +18,11 @@ describe('subclass consumption — happy path', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
       U = T ++ (y Integer) *{ @b = -> v: y as Integer }
-      use = (t T) -> result: t.a() as Integer
+      take = (t T) -> result: t.a() as Integer
       @test
         =
         u = U(1, 2)
-        :result Integer = use(u)
+        :result Integer = take(u)
         return :result as Integer
     `)).not.toThrow();
   });
@@ -31,11 +31,11 @@ describe('subclass consumption — happy path', () => {
     expect(() => compileSource(`
       T = (x: Integer) *{ @a = -> v: x as Integer }
       U = T ++ (y: Integer) *{ @b = -> v: y as Integer }
-      use = (t: T) -> result: t.a() as Integer
+      take = (t: T) -> result: t.a() as Integer
       @test
         =
         u = U(x: 1, y: 2)
-        :result Integer = use(t: u)
+        :result Integer = take(t: u)
         return :result as Integer
     `)).not.toThrow();
   });
@@ -79,10 +79,10 @@ describe('subclass consumption — happy path', () => {
   it('nullable param accepts null', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      use = (t T | null) -> result: 0 as Integer
+      take = (t T | null) -> result: 0 as Integer
       @test
         =
-        :result Integer = use(null)
+        :result Integer = take(null)
         return :result as Integer
     `)).not.toThrow();
   });
@@ -90,11 +90,11 @@ describe('subclass consumption — happy path', () => {
   it('nullable param accepts the underlying type', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
-      use = (t T | null) -> result: 0 as Integer
+      take = (t T | null) -> result: 0 as Integer
       @test
         =
         t = T(1)
-        :result Integer = use(t)
+        :result Integer = take(t)
         return :result as Integer
     `)).not.toThrow();
   });
@@ -145,11 +145,11 @@ describe('subclass consumption — assignability (sad path)', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
       U = T ++ (y Integer) *{ @b = -> v: y as Integer }
-      use = (u U) -> result: u.b() as Integer
+      take = (u U) -> result: u.b() as Integer
       @test
         =
         t = T(1)
-        :result Integer = use(t)
+        :result Integer = take(t)
         return :result as Integer
     `)).toThrow(/'T' is not assignable to 'U'/);
   });
@@ -158,11 +158,11 @@ describe('subclass consumption — assignability (sad path)', () => {
     expect(() => compileSource(`
       T = (x Integer) *{ @a = -> v: x as Integer }
       W = (n Integer) *{ @w = -> v: n as Integer }
-      use = (t T) -> result: t.a() as Integer
+      take = (t T) -> result: t.a() as Integer
       @test
         =
         w = W(99)
-        :result Integer = use(w)
+        :result Integer = take(w)
         return :result as Integer
     `)).toThrow(/'W' is not assignable to 'T'/);
   });

@@ -58,9 +58,7 @@ describe('type imports — interface parser captures `type Name (...)`', () => {
 describe('type imports — destructured type binding', () => {
   it('imports a type via :sigil destructure and constructs locally', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (:Point)
-      **
+      use "geometry.bv": (:Point)
       @origin = -> p: Point(0, 0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
@@ -69,9 +67,7 @@ describe('type imports — destructured type binding', () => {
 
   it('aliased import: P(0, 0) becomes a TypeConstruction with canonical name Point', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (Point: P)
-      **
+      use "geometry.bv": (Point: P)
       @origin = -> p: P(0, 0)
     `);
     compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
@@ -83,9 +79,7 @@ describe('type imports — destructured type binding', () => {
 
   it('rejects local type colliding with destructured type name', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (:Point)
-      **
+      use "geometry.bv": (:Point)
       type Point (x Integer, y Integer)
       @noop = -> ok: 1
     `);
@@ -95,9 +89,7 @@ describe('type imports — destructured type binding', () => {
 
   it('multiple imports in one destructure list bind together', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (:Point, :Pair)
-      **
+      use "geometry.bv": (:Point, :Pair)
       @make = -> p: Point(0, 0)
       @make2 = -> q: Pair(1, 2)
     `);
@@ -107,9 +99,7 @@ describe('type imports — destructured type binding', () => {
 
   it('imported type construction validates against remote field count', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (:Point)
-      **
+      use "geometry.bv": (:Point)
       @bad = -> p: Point(0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
@@ -118,9 +108,7 @@ describe('type imports — destructured type binding', () => {
 
   it('a type the source does not export is a compile error, not an actor construction', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (:Pont)
-      **
+      use "geometry.bv": (:Pont)
       @make = -> p: Pont(0, 0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
@@ -131,9 +119,7 @@ describe('type imports — destructured type binding', () => {
 describe('type imports — cross-module type refs (Service::Name)', () => {
   it('accepts Geom::Point in a field annotation when Geom exports Point', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": Geom
-      **
+      use "geometry.bv": Geom
       type User (profile Geom::Point)
       @noop = -> ok: 1
     `);
@@ -142,9 +128,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
 
   it('rejects Geom::NoSuch when NoSuch is not exported', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": Geom
-      **
+      use "geometry.bv": Geom
       type User (profile Geom::NoSuch)
       @noop = -> ok: 1
     `);
@@ -162,9 +146,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
 
   it('cross-module ref in a parameter annotation is validated', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": Geom
-      **
+      use "geometry.bv": Geom
       @go = (p: Geom::Point) -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
@@ -174,9 +156,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
 describe('type imports — wire registry includes imported types', () => {
   it('emits canonical (remote) name even when imported under an alias', () => {
     const { ast } = extract(`
-      **
-        "geometry.bv": (Point: P)
-      **
+      use "geometry.bv": (Point: P)
       @origin = -> p: P(0, 0)
     `);
     const code = compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });

@@ -10,14 +10,12 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //   mixed        → [p1, p2, {k: v}]
 
 const source = `
-  **
-      "thing.bv": Thing (a: Integer) -> *{
-      put (k: Integer) -> (value: Integer)
-      ping. (k: Integer) => .
-      mix. (Integer, k: Integer) => .
-      add (Integer, k: Integer) -> (value: Integer)
-    }
-  **
+  use "thing.bv": Thing (a: Integer) -> *{
+  put (k: Integer) -> (value: Integer)
+  ping. (k: Integer) => .
+  mix. (Integer, k: Integer) => .
+  add (Integer, k: Integer) -> (value: Integer)
+}
 
   t = Thing(a: 5)
 

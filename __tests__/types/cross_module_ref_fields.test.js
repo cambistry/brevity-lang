@@ -27,9 +27,7 @@ const remotes = [{ path: 'Widget', service: WIDGET }];
 
 // A silent handler fires a reference; a replying one reads a value field.
 const handler = (body, name = '@handle.') => `
-  **
-    "Widget": Widget
-  **
+  use "Widget": Widget
   ${name} = (c: Widget::Control) ${body}
 `;
 
@@ -49,9 +47,7 @@ describe('cross-module type with reference fields', () => {
 
   it('rejects a name the service does not export', () => {
     expect(() => compileSource(`
-      **
-        "Widget": Widget
-      **
+      use "Widget": Widget
       @handle = (c: Widget::NoSuch) -> ok: 1
     `, { remotes })).toThrow(/not exported by 'Widget'/);
   });

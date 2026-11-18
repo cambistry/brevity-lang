@@ -2,9 +2,7 @@ import { expectBehavior, createActor } from '../helpers.js';
 
 describe('subscribe — runtime', () => {
   const script = `
-    **
-      "Pub": Pub { pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
-    **
+    use "Pub": Pub { pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
 
     // subscribe — in-file fns
     body *Integer = 0
@@ -288,9 +286,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
   `;
 
   const subscriber = `
-    **
-      "pub": Pub { body *Integer, pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
-    **
+    use "pub": Pub { body *Integer, pub () -> (Integer), pub_w_params (p: Integer) -> (Integer) }
 
     last *Integer = 0
 

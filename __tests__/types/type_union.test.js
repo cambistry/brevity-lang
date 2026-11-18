@@ -111,11 +111,11 @@ describe('General unions — valid syntax', () => {
 
 describe('General unions — call-site assignability', () => {
   const callerScript = (callArg) => `
-      use = (x Integer | Text) -> result: x as Integer | Text
+      take = (x Integer | Text) -> result: x as Integer | Text
       @test
         =
         =
-        :result = use(${callArg})
+        :result = take(${callArg})
         return :result
   `;
 

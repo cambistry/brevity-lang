@@ -10,12 +10,14 @@
 
 import { _opre_split as split, _opre_quote as quote, _opre_is_relative as isRelative, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 
-const documentDI = '**\n  "document": document\n**\n';
-// A file header: delimited `( ... ) [->] *{` / `actor {`, no-params `*{` / `actor {`,
-// or a lineal `*` / `**` alone on the first line.
+const documentDI = 'use "document": document\n';
+// A file that declares its own DI or shape: a constructor form (delimited
+// `( ... ) [->] *{`, `*{`, a lineal `*` alone on the first line), a whole-file
+// `actor {`, or a `use` statement.
 const hasHeader = (source) => {
   const s = source.trim();
-  if (/^(\*\s*\{|actor\s*\{|\*\*?[ \t]*(\n|$))/.test(s)) return true;
+  if (/^(\*\s*\{|actor\s*\{|\*[ \t]*(\n|$))/.test(s)) return true;
+  if (/^[ \t]*use\b/m.test(s)) return true;
   if (s[0] !== '(') return false;
   let depth = 0, quote = null;
   for (let i = 0; i < s.length; i++) {
@@ -23,7 +25,7 @@ const hasHeader = (source) => {
     if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
     if (c === '"') quote = c;
     else if (c === '(') depth++;
-    else if (c === ')' && --depth === 0) return /^\s*([-=~]>\s*)?(\*|actor)\s*\{/.test(s.slice(i + 1));
+    else if (c === ')' && --depth === 0) return /^\s*([-=~]>\s*)?\*\s*\{/.test(s.slice(i + 1));
   }
   return false;
 };
@@ -48,8 +50,8 @@ export async function boot(document, { extract, compile, compileOptions = {}, im
     if (!source || !source.trim()) continue;
 
     // Inline scripts in <head> get document DI auto-prepended, unless the
-    // script already has its own constructor header (in which case it must
-    // declare `:document` explicitly if it needs it).
+    // script declares its own DI or opens with a constructor form or `actor {`
+    // (then it declares `use :document` itself if it needs it).
     if (implicitDI && !isExternal && script.closest('head') && !hasHeader(source)) {
       source = documentDI + source;
     }

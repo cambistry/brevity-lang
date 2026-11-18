@@ -246,9 +246,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
   describe('compile with HTML manifest — valid interpolations succeed', () => {
     it('bare `#{expr}` compiles', () => {
       expect(() => compileWithHTML(`
-        **
-          HTML: (:div)
-        **
+        use HTML: (:div)
         name *Text = "x"
         @create = -> <div>#{ name }</div>
       `)).not.toThrow();
@@ -256,9 +254,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('mixed static text, `#{}` and `{{}}` compiles', () => {
       expect(() => compileWithHTML(`
-        **
-          HTML: (:div)
-        **
+        use HTML: (:div)
         a *Text = "a"
         b *Text = "b"
         @create = -> <div>pre #{ a } mid {{ b }} end</div>
@@ -267,18 +263,14 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
 
     it('valid escapes compile', () => {
       expect(() => compileWithHTML(`
-        **
-          HTML: (:div)
-        **
+        use HTML: (:div)
         @create = -> <div>\\\\ \\{ \\#{ literal</div>
       `)).not.toThrow();
     });
 
     it('invalid escape throws before reaching codegen', () => {
       expect(() => compileWithHTML(`
-        **
-          HTML: (:div)
-        **
+        use HTML: (:div)
         @create = -> <div>oops \\q here</div>
       `)).toThrow(/Invalid escape/);
     });

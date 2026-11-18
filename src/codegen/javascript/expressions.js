@@ -1045,7 +1045,7 @@ export function genExpr(ctx, expr) {
         : `(${genExpr(ctx, opreRoot(expr))} + ${JSON.stringify(':' + joinAddress(address.path))})`;
       const method = JSON.stringify(wireOp);
       const send = (op, ty) => {
-        if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to})`;
+        if (expr.method.endsWith('.') || expr.launched) return `this.#fire(${op}, ${to}${ty ? `, ${ty}` : ''})`;
         return `this.#send(${op}, ${to}${ty ? `, ${ty}` : ''})`;
       };
       if (positional.length === 0 && named.length === 0) return send(method);

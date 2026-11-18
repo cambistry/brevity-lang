@@ -19,11 +19,9 @@ describe('interop — two-actor request-reply', () => {
 
   it('primary sends get to Remote and forwards response', async () => {
     const actor = await createActor(`
-      **
-        "Remote": Remote {
-          get (url: Text) -> (response: Text)
-        }
-      **
+      use "Remote": Remote {
+        get (url: Text) -> (response: Text)
+      }
 
       @call_remote
         =
@@ -44,11 +42,9 @@ describe('interop — two-actor request-reply', () => {
 describe('interop — cross-call to silent public function', () => {
   it('caller spawns notify and replies ack', async () => {
     const actor = await createActor(`
-      **
-        "Store": Store {
-          notify. (msg: Text) => .
-        }
-      **
+      use "Store": Store {
+        notify. (msg: Text) => .
+      }
 
       @send_notify!
         =
@@ -103,11 +99,9 @@ describe('interop — three-actor chain', () => {
 
   it('middle sends compute to Backend and adds one', async () => {
     const actor = await createActor(`
-      **
-        "Backend": Backend {
-          compute (n: Integer) -> (result: Integer)
-        }
-      **
+      use "Backend": Backend {
+        compute (n: Integer) -> (result: Integer)
+      }
 
       @process
         =
@@ -124,11 +118,9 @@ describe('interop — three-actor chain', () => {
 
   it('front sends process to Middle and replies answer', async () => {
     const actor = await createActor(`
-      **
-        "Middle": Middle {
-          process (n: Integer) -> (result: Integer)
-        }
-      **
+      use "Middle": Middle {
+        process (n: Integer) -> (result: Integer)
+      }
 
       @start
         =
@@ -149,11 +141,9 @@ describe('interop — three-actor chain', () => {
 describe('interop — callback', () => {
   it('worker calls back Boss for secret and replies', async () => {
     const actor = await createActor(`
-      **
-        "Boss": Boss {
-          get_secret () -> (secret: Text)
-        }
-      **
+      use "Boss": Boss {
+        get_secret () -> (secret: Text)
+      }
 
       @process
         =
@@ -168,11 +158,9 @@ describe('interop — callback', () => {
 
   it('boss sends process to Worker, handles callback, replies', async () => {
     const actor = await createActor(`
-      **
-        "Worker": Worker {
-          process () -> (result: Text)
-        }
-      **
+      use "Worker": Worker {
+        process () -> (result: Text)
+      }
 
       @start
         =

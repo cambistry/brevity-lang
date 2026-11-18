@@ -290,9 +290,9 @@ describe('return-as — file-level with explicit → and as Type', () => {
 
 describe('return-as — file-level with constructor param expression', () => {
   const script = `
-    **
+    *
       factor: Integer
-    **
+    *
 
     @raw = -> value: factor as Integer
     return (factor * 3) as Integer
@@ -367,9 +367,9 @@ describe('return-as — file-level lineal form', () => {
 describe('return-as — file-level lineal with constructor params', () => {
   it('file-level → with param expression', async () => {
     const actor = await createActor(`
-      **
+      *
         n: Integer
-      **
+      *
 
       @get = -> value: n as Integer
       return (n * n) as Integer

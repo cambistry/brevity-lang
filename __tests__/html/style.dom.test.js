@@ -16,9 +16,7 @@ const compileWithHTML = (src) =>
 describe('<style> compile', () => {
   it('CSS reaches the style element as one text child, unchanged', () => {
     const { output } = compileWithHTML(`
-      **
-        HTML: (:style)
-      **
+      use HTML: (:style)
       @t = -> <style>/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: "}"; } } p:hover{color:#f00}</style>
     `);
     expect(output).toContain(
@@ -28,27 +26,21 @@ describe('<style> compile', () => {
 
   it('the media attribute compiles', () => {
     expect(() => compileWithHTML(`
-      **
-        HTML: (:style)
-      **
+      use HTML: (:style)
       @t = -> <style media="print">p { color: red; }</style>
     `)).not.toThrow();
   });
 
   it('an element child of <style> is rejected', () => {
     expect(() => compileWithHTML(`
-      **
-        HTML: (:style, :p)
-      **
+      use HTML: (:style, :p)
       @t = -> <style><p>x</p></style>
     `)).toThrow(/<style> takes text only — <p> can't be its child/);
   });
 
   it('an element child of <textarea> is rejected', () => {
     expect(() => compileWithHTML(`
-      **
-        HTML: (:textarea, :p)
-      **
+      use HTML: (:textarea, :p)
       @t = -> <textarea>a<p>x</p></textarea>
     `)).toThrow(/<textarea> takes text only — <p> can't be its child/);
   });
@@ -60,10 +52,8 @@ describe('<style> runtime — a sheet appended to body applies', () => {
     <script type="text/brevity" src="/builder.bv"></script>
     </head><body></body></html>`;
 
-  const builderSource = `**
-  :document
-  HTML: (:style, :p)
-**
+  const builderSource = `use :document
+use HTML: (:style, :p)
 @build. = {
   body = document.body()
   body.append!(<style>p.note { color: rgb(1, 2, 3); } /* } */ p.note::after { content: "}"; }</style>)
@@ -120,10 +110,8 @@ describe('<style> runtime — an inline @scope sheet styles only its parent subt
     <script type="text/brevity" src="/builder.bv"></script>
     </head><body></body></html>`;
 
-  const builderSource = `**
-  :document
-  HTML: (:div, :style, :p)
-**
+  const builderSource = `use :document
+use HTML: (:div, :style, :p)
 @build. = {
   body = document.body()
   body.append!(<div id="a"><style>@scope { :scope { border-top: 3px solid; } p { color: rgb(1, 2, 3); } }</style><p>a</p></div>)
@@ -192,10 +180,8 @@ describe('<style> runtime — {{ }} holes in a scoped sheet restyle the parent',
     <script type="text/brevity" src="/sheet.bv"></script>
     </head><body></body></html>`;
 
-  const sheetSource = `**
-  :document
-  HTML: (:div, :style)
-**
+  const sheetSource = `use :document
+use HTML: (:div, :style)
 @color *Text = "rgb(0, 0, 0)"
 @size *Text = "20px"
 
@@ -270,10 +256,8 @@ describe('<style> runtime — bare declarations inside @scope', () => {
     <script type="text/brevity" src="/bare.bv"></script>
     </head><body></body></html>`;
 
-  const bareSource = `**
-  :document
-  HTML: (:div, :p, :style)
-**
+  const bareSource = `use :document
+use HTML: (:div, :p, :style)
 @color *Text = "rgb(1, 2, 3)"
 
 body = document.body()

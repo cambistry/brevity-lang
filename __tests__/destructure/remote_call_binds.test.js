@@ -8,12 +8,10 @@ import { compileSource, createActor, expectActorBehavior, expectBehavior } from 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const THING = `
-  **
-    "thing.bv": Thing (a: Integer) -> *{
-      get () -> (Integer)
-      pair () -> (x: Integer)
-    }
-  **
+  use "thing.bv": Thing (a: Integer) -> *{
+    get () -> (Integer)
+    pair () -> (x: Integer)
+  }
 `;
 
 const constructed = (src) => createActor(src, {
@@ -121,9 +119,7 @@ describe('remote reply carrying only a field named like the local — not a sing
 
 describe('destructured service member — bare read', () => {
   const run = (reply, expected) => createActor(`
-    **
-      "counter.bv": (:count)
-    **
+    use "counter.bv": (:count)
     @go = { n Integer = count; return a1: n }
   `, { compileOptions: { remotes: [{ path: 'counter.bv', service: '{ count () -> (Integer) }' }] } })
     .then(actor => expectActorBehavior(actor,

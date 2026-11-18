@@ -10,7 +10,7 @@ describe('protected labels — runtime', () => {
     @read = -> val
     @readLabel = -> label
 
-    // $set to a token that isn\'t a cell
+    // $set to a token that isn't a cell
 
     @read2 = -> @pub
 

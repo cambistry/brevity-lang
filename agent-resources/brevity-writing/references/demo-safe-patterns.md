@@ -14,11 +14,9 @@ Use this for health, readiness, and obvious demo-visible state.
 ## 2. Service Call and Return
 
 ```brevity
-**
-  "services/db": DB {
-    lookup (key: Text) -> (value: Text)
-  }
-**
+use "services/db": DB {
+  lookup (key: Text) -> (value: Text)
+}
 
 @fetch
   =
@@ -33,11 +31,9 @@ Use this when the actor delegates to a declared dependency and returns the resul
 ## 3. Service Call, Transform, Return
 
 ```brevity
-**
-  "services/math": Math {
-    double (n: Integer) -> (result: Integer)
-  }
-**
+use "services/math": Math {
+  double (n: Integer) -> (result: Integer)
+}
 
 @compute
   =
@@ -52,13 +48,11 @@ Use this when you want to show application logic layered over a dependency call.
 ## 4. Remote Instance at File Init
 
 ```brevity
-**
-  "WebView": WebView (path: Text) -> *{
-    open. () => .
-    getTitle () -> (title: Text)
-    close. () => .
-  }
-**
+use "WebView": WebView (path: Text) -> *{
+  open. () => .
+  getTitle () -> (title: Text)
+  close. () => .
+}
 
 view = *WebView(path: "/my_view")
 
@@ -79,11 +73,9 @@ Use this when the actor owns a long-lived remote surface such as a WebView.
 ## 5. Factory With Mutable Content
 
 ```brevity
-**
-  "DOM": DOM {
-    div. () => .
-  }
-**
+use "DOM": DOM {
+  div. () => .
+}
 
 content *Text = "initial"
 
@@ -104,11 +96,9 @@ Use this for smoke tests and wiring checks.
 ## 7. Prefer Explicit Multi-Step Flow
 
 ```brevity
-**
-  "services/db": DB {
-    put! (key: Text, value: Text) => self
-  }
-**
+use "services/db": DB {
+  put! (key: Text, value: Text) => self
+}
 
 @saveAndReport!
   =

@@ -1,7 +1,5 @@
-**
-  :document
-  HTML: (:main, :h1, :p, :button)
-**
+use :document
+use HTML: (:main, :h1, :p, :button)
 count *Integer = 0
 
 page = <main>

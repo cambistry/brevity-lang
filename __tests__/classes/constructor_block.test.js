@@ -120,12 +120,10 @@ describe('a write in a constructor block', () => {
 
 describe('a class calling its file\'s dependency', () => {
   const script = `
-    **
-      "svc.bv": Svc {
-        note. () => .
-        ping! () => self
-      }
-    **
+    use "svc.bv": Svc {
+      note. () => .
+      ping! () => self
+    }
     W! = *{
       Svc.note...
       @get = { return 1 }
@@ -195,12 +193,10 @@ describe('a class calling its file\'s dependency', () => {
 
 describe('a class using an actor it got from a dependency', () => {
   const script = `
-    **
-      "svc.bv": Svc {
-        ping! () => self
-        Thing () -> *{ poke! () => self }
-      }
-    **
+    use "svc.bv": Svc {
+      ping! () => self
+      Thing () -> *{ poke! () => self }
+    }
     W = *{
       @go! = {
         Svc.ping!()

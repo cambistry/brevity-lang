@@ -266,7 +266,7 @@ describe('return shape — inherited methods', () => {
       }
       Box Base ++ -> *{}
     }`;
-    const withBox = (body) => compileSource(`**\n  Shapes: (:Box)\n**\n${body}\n`, {
+    const withBox = (body) => compileSource(`use Shapes: (:Box)\n${body}\n`, {
       remotes: [{ path: 'Shapes', service: shapes }],
     });
 

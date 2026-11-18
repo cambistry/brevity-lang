@@ -10,7 +10,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - `@name` is a public message handler.
 - Plain local functions are implementation helpers.
 - `#name` is an explicitly private function.
-- A `**` … `**` header at file top declares the file singleton's DI (dependencies and load-time params).
+- `use` declares the file singleton's DI (dependencies and load-time params).
 - `Name = (...) *{ ... }` declares a class (constructs actors).
 - `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
@@ -106,15 +106,13 @@ through "Chains".
 
 ## Dependencies
 
-Declare dependencies in the file header:
+Declare dependencies with `use`:
 
 ```brevity
-**
-  "/services/store": Store {
-    get (key: Text) -> (value: Text)
-    put. (key: Text, value: Text) => .
-  }
-**
+use "/services/store": Store {
+  get (key: Text) -> (value: Text)
+  put. (key: Text, value: Text) => .
+}
 
 @fetch = (key: Text) {
   :value Text = Store.get(:key)
@@ -134,12 +132,10 @@ trailing `...` (fire-and-forget). Replying methods bind their named reply fields
 `*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote-declared class:
 
 ```brevity
-**
-  "WebView": WebView (path: Text) -> *{
-    open. () => .
-    close. () => .
-  }
-**
+use "WebView": WebView (path: Text) -> *{
+  open. () => .
+  close. () => .
+}
 
 view = *WebView(path: "/main")
 

@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super', 'use']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -461,11 +461,11 @@ export function tokenize(source) {
     if (source[i] === '+' && source[i + 1] === '+') { tokens.push({ type: 'PLUSPLUS', value: '++' }); i += 2; continue; }
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
-    // `^` is the exponent. `**` is reserved for lineal singletons and `**` file
-    // headers (the braced form is `actor { }`); the parser rejects it as an operator.
+    // `^` is the exponent. `**` is reserved for lineal singletons (the braced form
+    // is `actor { }`); the parser rejects it as an operator.
     if (source[i] === '^') { tokens.push({ type: 'POWER', value: '^' }); i++; continue; }
     if (source[i] === '*') {
-      // Lineal headers require `*` (a constructor) or `**` (a file singleton)
+      // Lineal headers require `*` (a constructor) or `**` (a lineal singleton)
       // to be the only token on its line. `alone`: nothing but whitespace on
       // either side. `aloneBeforeBrace`: first on its line and followed only by
       // `{` (closing star of a lineal header opening a delimited body).
@@ -566,7 +566,7 @@ export function tokenize(source) {
         // A keyword keeps its own token (`.reduce!` is a built-in method).
         tokens.push({ type: 'IDENT', value: value + '!' });
         i++;
-      } else if ((value === 'untracked' || value === 'class' || value === 'super') && (tokens[tokens.length - 1]?.type === 'DOT' || (source[i] === ':' && source[i + 1] !== ':'))) {
+      } else if ((value === 'untracked' || value === 'class' || value === 'super' || value === 'use') && (tokens[tokens.length - 1]?.type === 'DOT' || (value === 'use' && tokens[tokens.length - 1]?.type === 'AT') || (source[i] === ':' && source[i + 1] !== ':'))) {
         // Reserved as a name of its own: a member or a key can have this name.
         tokens.push({ type: 'IDENT', value });
       } else {

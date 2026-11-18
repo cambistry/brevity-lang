@@ -3,15 +3,17 @@ import { compileSource, createActor, expectActorBehavior } from "../helpers.js";
 // ═══════════════════════════════════════════════════════════════════════════════
 // File-level scalar params
 //
-// Every Brevity file is by default a constructor. In addition to service (*)
-// and constructor (#) injections, a file can declare plain scalar params
-// in its top-level header (lineal `*` … `*`, or delimited `( ... ) *{ }`). These are parameters the parent actor
-// supplies at construction time (not DI in the service/ctor sense).
+// Every Brevity file with a `*` header is a constructor. Its header can
+// declare plain scalar params (lineal `*` … `*`, or delimited `( ... ) *{ }`).
+// These are parameters the parent actor supplies at construction time (not DI
+// in the service/ctor sense). A file that also takes DI is a singleton: it
+// declares named params with `use :name Type` beside its dependencies.
 //
 // Forms:
 //   name: Type                  named scalar
 //   t Type                      positional scalar
 //   t Type, opts: List          mixed with other entries in declaration order
+//   use :name Type              named scalar beside `use` DI (singleton)
 //
 // Inside the file, params bind to the names declared in the header
 // (same as inline constructor params). Positional params must be written
@@ -26,9 +28,9 @@ describe("file scalar params — compilation", () => {
   it("single named scalar param compiles", () => {
     expect(() =>
       compileSource(`
-      **
+      *
         value: Integer
-      **
+      *
 
       @get = -> value
     `),
@@ -38,10 +40,10 @@ describe("file scalar params — compilation", () => {
   it("multiple named scalar params compile", () => {
     expect(() =>
       compileSource(`
-      **
+      *
         name: Text
         count: Integer
-      **
+      *
 
       @label = -> line: name
     `),
@@ -51,9 +53,9 @@ describe("file scalar params — compilation", () => {
   it("single positional scalar param compiles", () => {
     expect(() =>
       compileSource(`
-      **
+      *
         t Text
-      **
+      *
 
       @echo = -> t
     `),
@@ -63,10 +65,10 @@ describe("file scalar params — compilation", () => {
   it("mixed positional and named scalar params compile", () => {
     expect(() =>
       compileSource(`
-      **
+      *
         t Text
         limit: Integer
-      **
+      *
 
       @first = -> t
     `),
@@ -76,10 +78,8 @@ describe("file scalar params — compilation", () => {
   it("scalar params mixed with service DI in same header compile", () => {
     expect(() =>
       compileSource(`
-      **
-        "/db": DB { lookup (key: Text) -> (value: Text) }
-        prefix: Text
-      **
+      use "/db": DB { lookup (key: Text) -> (value: Text) }
+      use :prefix Text
 
       @get = (key: Text) {
         :value Text = DB.lookup(:key)
@@ -92,10 +92,8 @@ describe("file scalar params — compilation", () => {
   it("scalar params mixed with constructor DI in same header compile", () => {
     expect(() =>
       compileSource(`
-      **
-        "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
-        base: Integer
-      **
+      use "thing.bv": Thing (a: Integer) -> *{ get () -> (value: Integer) }
+      use :base Integer
 
       t = Thing(a: base)
 
@@ -119,9 +117,9 @@ describe("file scalar params — runtime (named)", () => {
   it("named scalar param is visible as a local binding in handlers", async () => {
     const actor = await createActor(
       `
-      **
+      *
         value: Integer
-      **
+      *
 
       @get = -> :value
     `,
@@ -146,10 +144,10 @@ describe("file scalar params — runtime (named)", () => {
   it("multiple named scalar params bind independently", async () => {
     const actor = await createActor(
       `
-      **
+      *
         name: Text
         count: Integer
-      **
+      *
 
       @get_name = -> label: name
       @get_count = -> n: count
@@ -185,9 +183,9 @@ describe("file scalar params — runtime (positional)", () => {
   it("positional scalar param binds to its declared name", async () => {
     const actor = await createActor(
       `
-      **
+      *
         t Text
-      **
+      *
 
       @echo = -> got: t
     `,
@@ -212,10 +210,10 @@ describe("file scalar params — runtime (positional)", () => {
   it("multiple positional scalars bind to declared names", async () => {
     const actor = await createActor(
       `
-      **
+      *
         t Text
         n Integer
-      **
+      *
 
       @first = -> got: t
       @second = -> num: n

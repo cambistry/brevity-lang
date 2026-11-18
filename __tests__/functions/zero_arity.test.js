@@ -168,11 +168,9 @@ describe('zero-arity calls without parens', () => {
 
 describe('zero-arity calls on a dependency', () => {
   const script = `
-    **
-      "/svc": Svc {
-        count () -> (Integer)
-      }
-    **
+    use "/svc": Svc {
+      count () -> (Integer)
+    }
 
     @go = {
       v Integer = Svc.count

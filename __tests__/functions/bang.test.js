@@ -830,7 +830,7 @@ describe('a `!` function by name', () => {
     });
 
     it('rejects one in a doc param', () => {
-      expect(() => compileSource(`**\n  "svc.bv": Svc () -> *{ run (f: () -> ()) -> (n: Integer) }\n**\n${FILE}@go! = {\n  s = Svc()\n  :n Integer = s.run(f: &bump!)\n  return :n\n}\n`)).toThrow(rejected);
+      expect(() => compileSource(`use "svc.bv": Svc () -> *{ run (f: () -> ()) -> (n: Integer) }\n${FILE}@go! = {\n  s = Svc()\n  :n Integer = s.run(f: &bump!)\n  return :n\n}\n`)).toThrow(rejected);
     });
 
     it('accepts a read-only function', () => {
@@ -865,7 +865,7 @@ describe('a function named like a builtin', () => {
 
 describe('effect arrows in signatures', () => {
   const widget = (entry) => ({ remotes: [{ path: 'Widget', service: `{ ${entry} }` }] });
-  const useWidget = '**\n  "Widget": Widget\n**\n@go. = { x Integer = 1 }\n';
+  const useWidget = 'use "Widget": Widget\n@go. = { x Integer = 1 }\n';
 
   it.each([
     'total () -> (Integer)',
@@ -940,7 +940,7 @@ describe('effect arrows in signatures', () => {
   });
 
   it('a member named `untracked` can be called', () => {
-    expect(() => compileSource('**\n  "Svc": Svc\n**\n@go = {\n  :n Integer = Svc.untracked()\n  return :n\n}\n',
+    expect(() => compileSource('use "Svc": Svc\n@go = {\n  :n Integer = Svc.untracked()\n  return :n\n}\n',
       { remotes: [{ path: 'Svc', service: '{ untracked () -> (n: Integer) }' }] })).not.toThrow();
   });
 
@@ -971,9 +971,7 @@ describe('effect arrows in signatures', () => {
 
   it('a claim spreads: a function reading a `~>` gets `~>` in its own doc', () => {
     const { interface: doc } = compileSource(`
-      **
-        "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }
-      **
+      use "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }
       s = Svc()
       helper = {
         :n Integer = s.guess()
@@ -995,19 +993,19 @@ describe('effect arrows in signatures', () => {
   });
 
   it('a foreign silent function needs no dot in its name', () => {
-    const { output } = compileSource('**\n  "Logger": Logger\n**\n@go. = { Logger.log("x")... }\n',
+    const { output } = compileSource('use "Logger": Logger\n@go. = { Logger.log("x")... }\n',
       { remotes: [{ path: 'Logger', service: '{ log (Text) => . }' }] });
     expect(output).toBeTruthy();
   });
 
   it('`...` still needs a silent function', () => {
-    expect(() => compileSource('**\n  "Logger": Logger\n**\n@go. = { Logger.get("x")... }\n',
+    expect(() => compileSource('use "Logger": Logger\n@go. = { Logger.get("x")... }\n',
       { remotes: [{ path: 'Logger', service: '{ get (Text) -> (Integer) }' }] })).toThrow(/needs a silent/);
   });
 });
 
 describe('effect enforcement', () => {
-  const REMOTE = '**\n  "Svc": Svc\n**\n';
+  const REMOTE = 'use "Svc": Svc\n';
   const docs = (service) => ({ remotes: [{ path: 'Svc', service }] });
 
   it('a function that writes must say so', () => {
@@ -1151,7 +1149,7 @@ describe('effect enforcement', () => {
   });
 
   describe('calling a `~>`', () => {
-    const SVC = '**\n  "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }\n**\ns = Svc()\n';
+    const SVC = 'use "svc.bv": Svc () -> *{ guess () ~> (n: Integer) }\ns = Svc()\n';
     const reads = '  :n Integer = s.guess()\n  x Integer = n\n';
 
     it('a `!` function may rest on it alone', () => {
@@ -1168,12 +1166,10 @@ describe('effect enforcement', () => {
 
     it('a claim crosses classes and locals, until nothing changes', () => {
       const { interface: doc } = compileSource(`
-        **
-          "svc.bv": Svc () -> *{
-            guess () ~> (n: Integer)
-            sure () -> (n: Integer)
-          }
-        **
+        use "svc.bv": Svc () -> *{
+          guess () ~> (n: Integer)
+          sure () -> (n: Integer)
+        }
         @C = *{
           s = Svc()
           @g = {
@@ -1307,7 +1303,7 @@ describe('effect enforcement', () => {
     `;
     const body = (lines) => `${CLASSES}\n@go! = (c C) {\n  a <- 0\n  ${lines}\n}\n`;
     const service = '{ take (f: () -> ()) -> (n: Integer)\n pos (() -> ()) -> (n: Integer)\n give (f: () => ()) => self }';
-    const remote = (lines) => `**\n  "svc.bv": Svc () -> *${service}\n**\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
+    const remote = (lines) => `use "svc.bv": Svc () -> *${service}\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
 
     it.each([
       ['a type field', `r = R(f: ${WRITER}, g!: () -> { a <- 2 })`],
@@ -1397,13 +1393,13 @@ describe('effect enforcement', () => {
   });
 
   it('a file constructor\'s alias and arrow must agree', () => {
-    expect(() => compileSource('**\n  "w.bv": Widget (a: Integer) => *{ get () -> (n: Integer) }\n**\n@go = { return 1 }\n')).toThrow(/alias must be 'Widget!'/);
-    expect(() => compileSource('**\n  "w.bv": Widget! (a: Integer) -> *{ get () -> (n: Integer) }\n**\n@go = { return 1 }\n')).toThrow(/can't carry '!'/);
+    expect(() => compileSource('use "w.bv": Widget (a: Integer) => *{ get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/alias must be 'Widget!'/);
+    expect(() => compileSource('use "w.bv": Widget! (a: Integer) -> *{ get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/can't carry '!'/);
   });
 });
 
 describe('a fresh actor writes only itself — validation', () => {
-  const SVC = '**\n  "svc.bv": Svc {\n    ping! () => self\n    Thing () -> *{ poke! () => self }\n  }\n**\n';
+  const SVC = 'use "svc.bv": Svc {\n  ping! () => self\n  Thing () -> *{ poke! () => self }\n}\n';
   const W = (body) => `${SVC}W = *{\n  n *Integer = 0\n  @hit! = { ${body} }\n}\n`;
 
   it('a call that writes only the fresh actor isn\'t a write', () => {
@@ -1504,7 +1500,7 @@ describe('untracked', () => {
   });
 
   it('an untracked member in a foreign doc doesn\'t count', () => {
-    expect(() => compileSource('**\n  "Svc": Svc\n**\n@go = { Svc.write(1)...\n return 1 }\n',
+    expect(() => compileSource('use "Svc": Svc\n@go = { Svc.write(1)...\n return 1 }\n',
       { remotes: [{ path: 'Svc', service: '{ untracked write. (Integer) => . }' }] })).not.toThrow();
   });
 
@@ -1521,11 +1517,9 @@ describe('untracked', () => {
 describe('chained calls', () => {
   // A class named with `!` writes while constructing: here it tells `Svc`.
   const script = `
-    **
-      "svc.bv": Svc {
-        note. () => .
-      }
-    **
+    use "svc.bv": Svc {
+      note. () => .
+    }
 
     type Item (name: Text)
 
@@ -1742,12 +1736,10 @@ describe('chained calls', () => {
 
 describe('chained calls through a remote', () => {
   const source = `
-    **
-      "thing.bv": Thing (a: Integer) -> *{
-        inc! (Integer) => self
-        total () -> (value: Integer)
-      }
-    **
+    use "thing.bv": Thing (a: Integer) -> *{
+      inc! (Integer) => self
+      total () -> (value: Integer)
+    }
     t = Thing(a: 5)
     @go! = {
       :value Integer = t.inc!(2).total()
@@ -1774,11 +1766,9 @@ describe('chained calls through a remote', () => {
 describe('a public class named with `!`', () => {
   it('is constructed by that name in its own file', async () => {
     await expectBehavior(`
-      **
-        "svc.bv": Svc {
-          note. () => .
-        }
-      **
+      use "svc.bv": Svc {
+        note. () => .
+      }
 
       @Pub! = *{
         Svc.note...

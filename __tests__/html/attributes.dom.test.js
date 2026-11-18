@@ -79,9 +79,7 @@ describe('Q1: literal attr on real DOM element', () => {
 describe('Q2: non-reactive attr wire encoding', () => {
   it('literal string attr="value" encodes in wire attrs as bare string', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       @create = -> <div class="basic"></div>
     `;
     await expectEmission(script,
@@ -95,9 +93,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
 
   it('multiple literal attrs encode as a flat attrs object', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       @create = -> <div id="main" class="card"></div>
     `;
     await expectEmission(script,
@@ -111,9 +107,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
 
   it('literal attr with static children', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       @create = -> <div class="static">hello</div>
     `;
     await expectEmission(script,
@@ -127,9 +121,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
 
   it('element without attrs omits the attrs field', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       @create = -> <div>hello</div>
     `;
     await expectEmission(script,
@@ -147,9 +139,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
 describe('Q3: reactive attr wire encoding as closure address', () => {
   it('reactive Text ref encodes as #<main:@0> in attrs', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       cls *Text = "active"
       @create = -> <div class={ cls }></div>
     `;
@@ -164,9 +154,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
 
   it('mixed literal and reactive attrs: literal inline, reactive as address', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       cls *Text = "active"
       @create = -> <div id="root" class={ cls }></div>
     `;
@@ -183,9 +171,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
   // gets @0 and a reactive attr gets @1.
   it('reactive child (@0) and reactive attr (@1) get distinct addresses', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       label *Text = "hello"
       cls *Text = "active"
       @create = -> <div class={ cls }>{{ label }}</div>
@@ -208,9 +194,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
 describe('Q4: reactive attr closure subscription', () => {
   it('subscribe to reactive attr closure returns current value', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       cls *Text = "active"
       @create = -> <div class={ cls }></div>
     `;
@@ -227,9 +211,7 @@ describe('Q4: reactive attr closure subscription', () => {
 
   it('dep change replays subscription with new value', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       cls *Text = "active"
       @bump. = (v: Text) { cls <- v }
       @create = -> <div class={ cls }></div>
@@ -249,9 +231,7 @@ describe('Q4: reactive attr closure subscription', () => {
 
   it('multiple dep changes each replay the subscription', async () => {
     const script = `
-      **
-        HTML: (:div)
-      **
+      use HTML: (:div)
       cls *Text = "a"
       @bump. = (v: Text) { cls <- v }
       @create = -> <div class={ cls }></div>
@@ -280,10 +260,8 @@ describe('Q4: reactive attr closure subscription', () => {
 
 describe('integration: reactive attr in real DOM', () => {
   const factorySource = `
-    **
-      :document
-      HTML: (:div)
-    **
+    use :document
+    use HTML: (:div)
     cls *Text = "initial"
     el = <div class={ cls }>content</div>
     body = document.body()

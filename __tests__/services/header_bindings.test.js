@@ -10,7 +10,7 @@ import { extract, compile } from '../../index.js';
 // the remote's document. A mismatch with the real service fails at runtime.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const deps = (header) => extract(`**\n  ${header}\n**\n@go = -> 1\n`).ast.dependencies
+const deps = (header) => extract(`use ${header}\n@go = -> 1\n`).ast.dependencies
   .map(({ name, path, generic, destructures, constructorParams, interface: iface }) =>
     ({ name, path, generic, destructures, constructorParams, iface }));
 
@@ -42,7 +42,7 @@ describe('header bindings — forms', () => {
   });
 
   it('a typed keyed entry is a param supplied at construction', () => {
-    const { ast } = extract('**\n  limit: Integer\n  size: n Integer\n**\n@go = -> limit\n');
+    const { ast } = extract('use :limit Integer\nuse size: n Integer\n@go = -> limit\n');
     expect(ast.dependencies).toEqual([
       expect.objectContaining({ type: 'FileParam', name: 'limit', paramType: 'Integer' }),
       expect.objectContaining({ type: 'FileParam', key: 'size', name: 'n', paramType: 'Integer' }),
@@ -59,12 +59,12 @@ describe('header bindings — forms', () => {
   });
 
   it('an untyped keyed entry with no remote document is a compile error', () => {
-    expect(() => compile(extract('**\n  HTML: Html\n**\n@go = -> 1\n').ast))
+    expect(() => compile(extract('use HTML: Html\n@go = -> 1\n').ast))
       .toThrow(/'HTML' \(bound as 'Html'\) has no type/);
   });
 
   it('an untyped keyed entry takes its type from the remote document', () => {
-    const src = '**\n  Store: S\n**\n@go. = { S.ping... }\n';
+    const src = 'use Store: S\n@go. = { S.ping... }\n';
     expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () => .\n}' }] }))
       .not.toThrow();
   });
@@ -84,7 +84,7 @@ describe('header bindings — forms', () => {
 });
 
 describe('inline definition wins over the remote document', () => {
-  const header = '**\n  "/db": DB { get (key: Text) -> (value: Text) }\n**\n';
+  const header = 'use "/db": DB { get (key: Text) -> (value: Text) }\n';
   const remotes = [{ path: '/db', service: '{\n  put. (key: Text, value: Text) => .\n}' }];
   const compileWith = (body) => compile(extract(header + body).ast, { remotes });
 
@@ -97,13 +97,13 @@ describe('inline definition wins over the remote document', () => {
   });
 
   it('an inline constructor profile wins too', () => {
-    const src = '**\n  "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\n**\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
+    const src = 'use "lib.bv": Lib (a: Integer) -> *{ ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
     const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () => .\n}' }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });
 
   it('with no inline definition, the remote document is used', () => {
-    const src = '**\n  "/db": DB\n**\n@go. = { DB.put(key: "a", value: "b")... }\n';
+    const src = 'use "/db": DB\n@go. = { DB.put(key: "a", value: "b")... }\n';
     expect(() => compile(extract(src).ast, { remotes })).not.toThrow();
   });
 });
