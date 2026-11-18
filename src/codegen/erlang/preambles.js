@@ -1315,11 +1315,15 @@ brevity_list_unique([H|T], Acc) ->
         false -> brevity_list_unique(T, [H|Acc])
     end.
 
-`;
 
-// The runtime that calls into the actor's own module (its dispatch, read table,
-// type registry), so it is emitted into each module.
-const PREAMBLE = `
+%% ── Calls back into the actor's own module ─────────────────────────────────
+%% What follows calls the actor's module: its dispatch, read table, run-as and
+%% type registry. A generated module exports those callbacks, and each process
+%% records its module at its entry point (start, main, start_internal…), as a
+%% behaviour's runtime holds its callback module.
+
+bv_mod_() -> get(bv_mod).
+
 
 %% A type's wire tag is its address: its authority, the classes that own it,
 %% and its bare name (:Point, :W:X, svc.bv:Point). bv_type_name/1, emitted
@@ -1327,7 +1331,7 @@ const PREAMBLE = `
 %% its key or the alias spelling of its authority (Svc:Point), or undefined.
 
 bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
-    case bv_type_name(Tag) of
+    case (bv_mod_()):bv_type_name(Tag) of
         undefined -> Payload;
         Name ->
             PLen = length(Payload),
@@ -1338,7 +1342,7 @@ bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
             lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs)
     end;
 bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
-    case bv_type_name(Tag) of
+    case (bv_mod_()):bv_type_name(Tag) of
         undefined -> Payload;
         Name ->
             Base = #{<<"__type">> => Name},
@@ -1372,7 +1376,7 @@ bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
             {Outer_, Ref_, Chain_} = bv_outer_ctx_(Home),
             [{HomeClass_, HomePid_} | _] = Chain_,
             Members_ = case HomePid_ =:= self() of
-                true -> bv_read_(HomeClass_, Token);
+                true -> (bv_mod_()):bv_read_(HomeClass_, Token);
                 false ->
                     MRef_ = make_ref(),
                     HomePid_ ! {bv_outer_get, self(), Token, MRef_},
@@ -1387,7 +1391,7 @@ bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
 bv_outer_get_(Level, Token) ->
     Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
     case Owner_ of
-        Self_ when Self_ =:= self() -> bv_read_(bv_my_class_(), Token);
+        Self_ when Self_ =:= self() -> (bv_mod_()):bv_read_(bv_my_class_(), Token);
         _ ->
             Ref_ = make_ref(),
             Owner_ ! {bv_outer_get, self(), Token, Ref_},
@@ -1409,8 +1413,8 @@ outer_self_send(Level, Op, Payload, Silent) ->
         false -> receive {bv_reply, Ref_, V_} -> bv_object_pack(V_); {bv_error, Ref_, _} -> error(bv_call_failed) end
     end.
 bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
-    case bv_guard_(fun() -> bv_run_as_(Class, Op, Payload) end) of
-        {ok, Re_, Ty_} -> From ! {bv_reply, Ref, bv_unwire_reply(Re_, Ty_)};
+    case bv_guard_(fun() -> (bv_mod_()):bv_run_as_(Class, Op, Payload) end) of
+        {ok, Re_, Ty_} -> From ! {bv_reply, Ref, (bv_mod_()):bv_unwire_reply(Re_, Ty_)};
         {bv_failed, Fail_} -> From ! {bv_error, Ref, Fail_};
         _ -> From ! {bv_error, Ref, <<"error">>}
     end.
@@ -1419,12 +1423,12 @@ bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
 %% read is held until its line runs (src/init_order.js).
 bv_answer_outer_(From, Token, Ref) ->
     case get({bv_pending_, Token}) of
-        undefined -> From ! {bv_reply, Ref, bv_read_(bv_my_class_(), Token)};
+        undefined -> From ! {bv_reply, Ref, (bv_mod_()):bv_read_(bv_my_class_(), Token)};
         Waiting_ -> put({bv_pending_, Token}, [{From, Ref} | Waiting_])
     end.
 bv_cell_ready_(Token) ->
     Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
-    [From_ ! {bv_reply, Ref_, bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
+    [From_ ! {bv_reply, Ref_, (bv_mod_()):bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
     ok.
 bv_join_all_() ->
     Joins_ = case erase(bv_joins_) of undefined -> []; J_ -> J_ end,
@@ -1490,7 +1494,7 @@ bv_await_line_loop_(Id) ->
                         false ->
                             case maps:is_key(<<"ex">>, M_) of
                                 true when MsgId_ =:= Id -> {ex, M_};
-                                _ -> dispatch(M_), bv_want_line_(), bv_await_line_loop_(Id)
+                                _ -> (bv_mod_()):dispatch(M_), bv_want_line_(), bv_await_line_loop_(Id)
                             end
                     end
             end;
@@ -1526,7 +1530,7 @@ bv_next_line_() ->
 %% global tag passes.
 bv_local_tag_(<<":">>, Addr) -> bv_addr_class_(Addr);
 bv_local_tag_(<<":", _/binary>> = T, Addr) ->
-    case bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
+    case (bv_mod_()):bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
 bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
 bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
 bv_local_tag_(T, _) -> T.
@@ -1587,8 +1591,8 @@ bv_await_emit_(Id_) ->
 %% come to the type's key.
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
 type_member_of(Actual, Expected) when is_binary(Expected) ->
-    An = bv_type_name(Actual),
-    case (An =/= undefined) andalso (An =:= bv_source_key(Expected)) of
+    An = (bv_mod_()):bv_type_name(Actual),
+    case (An =/= undefined) andalso (An =:= (bv_mod_()):bv_source_key(Expected)) of
         true -> true;
         false ->
             case binary:match(Expected, <<"|">>) of
@@ -1598,7 +1602,7 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
                     lists:any(fun(P) ->
                         T = string:trim(P),
                         T =:= Actual orelse
-                            ((An =/= undefined) andalso (An =:= bv_source_key(T)))
+                            ((An =/= undefined) andalso (An =:= (bv_mod_()):bv_source_key(T)))
                     end, Parts)
             end
     end;
@@ -1683,7 +1687,7 @@ bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary
         {ok, Class_} -> [Re];
         _ -> Re
     end;
-bv_self_reply_(Re, Message) -> bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
+bv_self_reply_(Re, Message) -> (bv_mod_()):bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
 
 await_response_(Id) ->
     case bv_await_line_(Id) of
@@ -1803,4 +1807,7 @@ const RUNTIME_MODULE = `-module(brevity_rt).
 ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
-export { PREAMBLE, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };
+// What brevity_rt calls back in an actor's module: each generated module exports these.
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1'];
+
+export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };
