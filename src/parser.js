@@ -6079,24 +6079,29 @@ export function parse(tokensIn) {
     useExprs.push(node);
     return node;
   }
+  // A claim's fields on an entry: an interface, a constructor profile.
+  const claimOf = (s) => ({
+    ...(s?.interface && { interface: s.interface }),
+    ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
+  });
+  // An entry no statement names: `__use_<base>`, numbered past names taken.
+  function hiddenName(base, taken) {
+    let name = `__use_${base}`;
+    for (let i = 2; taken.has(name); i++) name = `__use_${base}_${i}`;
+    taken.add(name);
+    return name;
+  }
   // Each `use("…")` into the manifest, keyed by source: an entry a statement made
   // for the same source is shared, else one hidden entry per source. The node
   // becomes a reference to the entry, marked as one (`fromUse`).
   function resolveUseExprs() {
     const hidden = new Map();
     const taken = new Set(dependencies.map(d => d.name));
-    const claimOf = (s) => ({
-      ...(s?.interface && { interface: s.interface }),
-      ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
-    });
     const shown = (u) => `use(${JSON.stringify(u.source)})`;
     for (const u of useExprs) {
       let dep = dependencies.find(d => d.type === 'Dependency' && d.path === u.source && !d.hidden) || hidden.get(u.source);
       if (!dep) {
-        let name = `__use_${nameFor(u.source)}`;
-        for (let i = 2; taken.has(name); i++) name = `__use_${nameFor(u.source)}_${i}`;
-        taken.add(name);
-        dep = AST.dependency(name, { path: u.source });
+        dep = AST.dependency(hiddenName(nameFor(u.source), taken), { path: u.source });
         dep.hidden = true;
         dependencies.push(dep);
         hidden.set(u.source, dep);
@@ -6125,10 +6130,7 @@ export function parse(tokensIn) {
       let fp = dependencies.find(d => d.type === 'FileParam' && (d.key || d.name) === u.key);
       if (!fp) fp = byKey.get(u.key);
       if (!fp) {
-        let name = `__use_${u.key}`;
-        for (let i = 2; taken.has(name); i++) name = `__use_${u.key}_${i}`;
-        taken.add(name);
-        fp = AST.fileParam(name, { type: u.valueType, key: u.key });
+        fp = AST.fileParam(hiddenName(u.key, taken), { type: u.valueType, key: u.key });
         fp.hidden = true;
         dependencies.push(fp);
         byKey.set(u.key, fp);
@@ -6264,44 +6266,53 @@ export function parse(tokensIn) {
     return entries;
   }
 
-  // The Dependency or FileParam for one binding.
-  function lowerUse(target, segs, shape, shown) {
-    if (segs.length > 2) throw new Error(`'${shown()}': a source of more than two segments isn't supported yet`);
-    const claim = (s) => ({
-      ...(s?.interface && { interface: s.interface }),
-      ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
-    });
+  // What one binding is, whatever scope it's written in: a destructure of a
+  // source, one member of it, a load-time value, or the source itself. The
+  // checks every `use` binding shares are made here; lowerUse and lowerInnerUse
+  // differ only in what they emit for it.
+  function classifyUse(target, segs, shape, shown) {
+    if (segs.length > 2) throw new Error(`'${shown}': a source of more than two segments isn't supported yet`);
     const [head, member] = segs;
     if (target.kind === 'destructure') {
-      if (member !== undefined) throw new Error(`'${shown()}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
-      if (shape?.valueType) throw new Error(`'${shown()}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
-      return AST.dependency(head, { path: head, destructures: target.entries, ...claim(shape) });
+      if (member !== undefined) throw new Error(`'${shown}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
+      if (shape?.valueType) throw new Error(`'${shown}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
+      return { kind: 'destructure', head, entries: target.entries, shape };
     }
     if (target.type && shape) {
-      throw new Error(`'${shown()}' claims its shape twice — type the name or follow the source with 'as', not both`);
+      throw new Error(`'${shown}' claims its shape twice — type the name or follow the source with 'as', not both`);
     }
     if (member !== undefined) {
-      if (shape) throw new Error(`'${shown()}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
-      const type = target.type;
-      return AST.dependency(head, { path: head, destructures: [{ local: target.name, remote: member, ...(type && { type }) }] });
+      if (shape) throw new Error(`'${shown}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
+      return { kind: 'member', head, entry: { local: target.name, remote: member, ...(target.type && { type: target.type }) } };
     }
     const valueType = target.type || shape?.valueType;
     if (valueType) {
-      if (!isBvName(head)) throw new Error(`'${shown()}': a value's source is a name, not '${showSeg(head)}'`);
-      return AST.fileParam(target.name, { type: valueType, key: head !== target.name ? head : null });
+      if (!isBvName(head)) throw new Error(`'${shown}': a value's source is a name, not '${showSeg(head)}'`);
+      return { kind: 'value', name: target.name, key: head, valueType };
     }
-    return AST.dependency(target.name, { path: head, ...claim(shape) });
+    return { kind: 'actor', name: target.name, head, shape };
+  }
+
+  // A file-level binding: the manifest entry itself, named by the binding.
+  function lowerUse(target, segs, shape, shown) {
+    const b = classifyUse(target, segs, shape, shown());
+    switch (b.kind) {
+      case 'destructure': return AST.dependency(b.head, { path: b.head, destructures: b.entries, ...claimOf(b.shape) });
+      case 'member': return AST.dependency(b.head, { path: b.head, destructures: [b.entry] });
+      case 'value': return AST.fileParam(b.name, { type: b.valueType, key: b.key !== b.name ? b.key : null });
+      default: return AST.dependency(b.name, { path: b.head, ...claimOf(b.shape) });
+    }
   }
 
   // An inner binding: the statement that binds it in its scope, over a
-  // `use("…")` of its source (or, for a value, the file's load-time value).
+  // `use("…")` of its source (or, for a value, the file's load-time value), so
+  // the entry is the source's, shared file-wide, and the name is the scope's.
   // Marked `useStatement`: it binds its whole scope, not only what follows it.
   function lowerInnerUse(target, segs, shape, shown) {
-    if (segs.length > 2) throw new Error(`'${shown()}': a source of more than two segments isn't supported yet`);
-    const [head, member] = segs;
     const useShown = shown();
+    const b = classifyUse(target, segs, shape, useShown);
     const useOf = (claim) => {
-      const node = { type: 'UseExpr', source: head, ...(claim && { shape: claim }) };
+      const node = { type: 'UseExpr', source: b.head, ...(claim && { shape: claim }) };
       useExprs.push(node);
       return node;
     };
@@ -6311,26 +6322,16 @@ export function parse(tokensIn) {
       : e.discard ? { key: e.remote, discard: true }
       : e.local === e.remote ? { named: true, name: e.local, type: e.type ?? null }
       : { name: e.local, key: e.remote, type: e.type ?? null });
-    if (target.kind === 'destructure') {
-      if (member !== undefined) throw new Error(`'${useShown}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
-      if (shape?.valueType) throw new Error(`'${useShown}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
-      return mark(AST.destructureAssign(target.entries.map(toPattern), useOf(shape)));
+    switch (b.kind) {
+      case 'destructure': return mark(AST.destructureAssign(b.entries.map(toPattern), useOf(b.shape)));
+      case 'member': return mark(AST.destructureAssign([toPattern(b.entry)], useOf(null)));
+      case 'value': {
+        const value = { type: 'UseValue', key: b.key, valueType: b.valueType, useShown };
+        useValues.push(value);
+        return mark({ type: 'Assign', name: b.name, value });
+      }
+      default: return mark({ type: 'Assign', name: b.name, value: useOf(b.shape) });
     }
-    if (target.type && shape) {
-      throw new Error(`'${useShown}' claims its shape twice — type the name or follow the source with 'as', not both`);
-    }
-    if (member !== undefined) {
-      if (shape) throw new Error(`'${useShown}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
-      return mark(AST.destructureAssign([toPattern({ local: target.name, remote: member, type: target.type })], useOf(null)));
-    }
-    const valueType = target.type || shape?.valueType;
-    if (valueType) {
-      if (!isBvName(head)) throw new Error(`'${useShown}': a value's source is a name, not '${showSeg(head)}'`);
-      const value = { type: 'UseValue', key: head, valueType, useShown };
-      useValues.push(value);
-      return mark({ type: 'Assign', name: target.name, value });
-    }
-    return mark({ type: 'Assign', name: target.name, value: useOf(shape) });
   }
 
   // Into the manifest: the same entry twice is one, and destructures of one
