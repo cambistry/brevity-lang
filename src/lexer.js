@@ -606,7 +606,7 @@ export function tokenize(source) {
       continue;
     }
 
-    // #Name — end qualifier;  bare # — generic-constructor sigil
+    // #Name — end qualifier;  bare # — HASH
     if (source[i] === '#') {
       i++;
       let name = '';

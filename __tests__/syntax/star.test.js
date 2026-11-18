@@ -472,7 +472,7 @@ describe('public class @Cls = (...) *{...}', () => {
 describe('service coercion — `as *(...)`', () => {
   it('Coerced = Alias as (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
       @test = -> 1

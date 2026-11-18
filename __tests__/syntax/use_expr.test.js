@@ -88,7 +88,7 @@ describe('use("…") — in a constructor block', () => {
 });
 
 const deps = (src) => extract(`${src}\n@get = -> 1\n`).ast.dependencies;
-const hidden = (name, path, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path, generic: false, hidden: true, ...fields });
+const hidden = (name, path, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path, hidden: true, ...fields });
 
 describe('use("…") — the manifest', () => {
   it.each([

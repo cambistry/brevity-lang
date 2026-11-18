@@ -48,14 +48,17 @@ use "/service" as { send! () => self }   // binds nothing: types and declares th
   `Svc::Point` names a type and `C::name` a protected class member. So `::` reaches any name
   declared in an actor, not only types and protected members.
 - **`as` is coercion, here as everywhere.** No rule is special to `use`: renaming is the left
-  side of the binding, and `as` on the source claims its shape. An inline interface, `#`, and a
+  side of the binding, and `as` on the source claims its shape. An inline interface and a
   constructor profile become ordinary coercions on the source, so the entry grammar comes down to
   `target [Type] = source [as Shape]`.
 
 ## Details settled in the implementation
 
-- **A short claim can type the target.** `use Lib # = "lib.bv"` is `use Lib = "lib.bv" as #`,
-  as `x Integer = f()` is `x = f() as Integer`. Claiming on both sides is an error.
+- **`#` is no claim.** `as #` (and `use Lib # = "lib.bv"`) claimed "a class" and nothing more,
+  which the service's document already says; it's an error now. Construction and messaging are
+  told apart by the call (`Lib(…)` vs `Lib.f()`), checked by a document where there is one, and
+  otherwise fail at runtime with the service's `ex`. An unclaimed entry renders in the params
+  document with no type (`"lib.bv":`). Typing the target and claiming with `as` too is an error.
 - **A typed name is a value.** `use n Integer = size` (or `use n = size as Integer`) is the
   load-time value `size`, bound as `n`; its source must be a name. Untyped, `use limit` is a
   dependency on `limit`, and with no interface it's the usual "has no type" error.
@@ -163,7 +166,7 @@ n Integer = use("svc.bv").n()                    // used directly
   constructor block the scope is the class.
 - **The same for a body-form destructure of a dependency.** `:div = HTML`, with `HTML` from a
   statement, binds where it's written too; it used to fold into the file-wide entry.
-- **Shape.** From `as` on the expression (`#`, `{ … }`, `(…) -> *{ … }`), or from
+- **Shape.** From `as` on the expression (`{ … }`, `(…) -> *{ … }`), or from
   `options.remotes` (keyed by source); with neither it's the usual "has no type" error. A source
   claimed differently in two places is an error.
 - **Anywhere in the file actor**, inner scopes included. The entry is the file's. Not in a

@@ -71,7 +71,6 @@ describe('factory header — no DI', () => {
   const entries = {
     'a service': '"svc.bv": Svc { get () -> (Integer) }',
     'a bare path': '"svc.bv": Svc',
-    'a constructor (#)': '"svc.bv": Svc #',
     'a declared constructor': '"svc.bv": Svc (a: Integer) -> *{ get () -> (Integer) }',
     'a destructure': 'HTML: (:div)',
     'a path shorthand': ':document',
@@ -110,7 +109,6 @@ describe('factory header — no DI', () => {
     const bindings = [
       'Svc = "svc.bv" as { get () -> (Integer) }',
       'Svc = "svc.bv"',
-      'Svc = "svc.bv" as #',
       'Svc = "svc.bv" as (a: Integer) -> *{ get () -> (Integer) }',
       ':div = HTML',
       'document',
@@ -346,7 +344,6 @@ describe('file with `new =` — errors', () => {
   const entries = {
     'a path': '"svc.bv": Svc',
     'a service': '"svc.bv": Svc { get () -> (Integer) }',
-    'a constructor (#)': '"svc.bv": Svc #',
     'a path shorthand': ':document',
     'a destructure': 'HTML: (:div)',
   };

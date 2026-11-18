@@ -101,24 +101,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     };
   };
 
-  // A bare entry is an actor to talk to. `#` or a declared constructor is something to
-  // construct one from. An entry with no document might be a type, so it isn't checked.
   const depNamed = (name) => ast.dependencies.find(d => d.name === name && !d.wireTarget);
-  const constructsActors = (dep) => Boolean(dep.generic || dep.constructorParams);
-  const checkHeaderKind = (node) => {
-    if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
-      const dep = depNamed(node.callee.name);
-      if (dep && !constructsActors(dep) && (dep.interface || remotesParsed[dep.name])) {
-        throw new Error(`'${dep.name}' is already an actor, with no constructor signature, so there's nothing to construct — message it, or to construct one, import it as '"${dep.path}": ${dep.name} #'`);
-      }
-    }
-    if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
-      const dep = depNamed(node.object.name);
-      if (dep && constructsActors(dep)) {
-        throw new Error(`'${dep.name}' isn't an actor yet, so it can't be messaged — construct one first: 'x = ${dep.name}(…)'`);
-      }
-    }
-  };
 
   const localTypeNames = new Set((ast.types || []).map(t => t.name));
   // `Svc::Point` names a type in Svc's document. A class has no `::` form.
@@ -143,10 +126,8 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
     const isFunction = node.type === 'FunctionDecl' || node.type === 'Function';
     const scope = isFunction ? new Map(instances) : instances;
     const inside = inFunction || isFunction;
-    checkHeaderKind(node);
     checkQualifiedType(node);
     if (['Assign', 'TypedAssign', 'StateAssign'].includes(node.type)) {
-      if (node.value && typeof node.value === 'object') checkHeaderKind(node.value);
       const call = doesConstruct(node.value, scope);
       if (call) {
         const { method, object } = node.value;
@@ -195,7 +176,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
   // A call on a new actor needs its address first.
   lowerConstructionChains(
     { actors: ast.actors },
-    new Set(ast.dependencies.filter(d => d.wireTarget || constructsActors(d)).map(d => d.name)),
+    new Set(ast.dependencies.filter(d => d.type === 'Dependency').map(d => d.name)),
   );
 
   // The parser marks a file-level construction of a dependency as a reference, but

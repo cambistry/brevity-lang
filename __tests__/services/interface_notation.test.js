@@ -340,14 +340,14 @@ describe('constructor profiles in source', () => {
   });
 
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
-    expect(() => compileSrc(`use Thing = "thing.bv" as #
+    expect(() => compileSrc(`use Thing = "thing.bv"
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 @go = -> 1
 `)).not.toThrow();
   });
 
   it('retired: as *( … ) -> { … }', () => {
-    expect(() => extract(`use Thing = "thing.bv" as #
+    expect(() => extract(`use Thing = "thing.bv"
 Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
 @go = -> 1
 `)).toThrow(/retired/);

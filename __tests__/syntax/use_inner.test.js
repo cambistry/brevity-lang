@@ -161,7 +161,7 @@ const deps = (src) => extract(src).ast.dependencies;
 
 describe('use in inner scopes — the manifest', () => {
   it('a `use` in a branch that never runs is still an entry', () => {
-    expect(deps('@a = (c Boolean) {\n  if false {\n    use Never = "never.bv" as #\n  }\n  return 1\n}\n').map(d => d.path)).toEqual(['never.bv']);
+    expect(deps('@a = (c Boolean) {\n  if false {\n    use Never = "never.bv"\n  }\n  return 1\n}\n').map(d => d.path)).toEqual(['never.bv']);
   });
 
   it('the same source at top level and inside is one entry', () => {

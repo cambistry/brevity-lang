@@ -64,12 +64,12 @@ describe('extract — params rendering', () => {
     expect(iface.params).toBe('(\n  "thing.bv": (a: Integer) -> *{\n    get () -> (value: Integer)\n  }\n)');
   });
 
-  it('bare class DI renders as #', () => {
+  it('an unclaimed dependency renders with no type — its type is its document', () => {
     const { interface: iface } = extract(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
       @noop. = {}
     `);
-    expect(iface.params).toBe('(\n  "thing.bv": #\n)');
+    expect(iface.params).toBe('(\n  "thing.bv":\n)');
   });
 
   it('named scalar param renders as "name": Type', () => {
@@ -117,21 +117,21 @@ describe('extract — params rendering', () => {
 
   it('a dependency key is always quoted', () => {
     const { interface: iface } = extract(`
-      use App = "my-app.bv" as #
+      use App = "my-app.bv"
       @noop. = {}
     `);
-    expect(iface.params).toBe('(\n  "my-app.bv": #\n)');
+    expect(iface.params).toBe('(\n  "my-app.bv":\n)');
   });
 
   it('dependencies and named params mixed, declaration order preserved', () => {
     const { interface: iface } = extract(`
       use DB = "/db"
       use value Integer = value
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
       @noop. = {}
     `);
     expect(iface.params).toBe(
-      '(\n  "/db":\n  "value": Integer\n  "thing.bv": #\n)',
+      '(\n  "/db":\n  "value": Integer\n  "thing.bv":\n)',
     );
   });
 
@@ -156,10 +156,10 @@ describe('extract — params rendering', () => {
   it('a bare-identifier key is quoted too; its destructure is not surfaced', () => {
     const { interface: iface } = extract(`
       use :div, :span = HTML
-      use :Box = Shapes as #
+      use :Box = Shapes
       @noop. = {}
     `);
-    expect(iface.params).toBe('(\n  "HTML":\n  "Shapes": #\n)');
+    expect(iface.params).toBe('(\n  "HTML":\n  "Shapes":\n)');
   });
 });
 
@@ -313,7 +313,7 @@ describe('params document — read back as constructor params', () => {
     @noop. = {}
   `).interface;
   const consumer = (call) => extract(`
-    use Svc = "svc.bv" as #
+    use Svc = "svc.bv"
     s = ${call}
     @noop. = {}
   `).ast;

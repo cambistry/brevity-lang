@@ -4,14 +4,14 @@ const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { 
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GraphemeText — injected dependency via # form
+// GraphemeText — an injected dependency
 //
 // GraphemeText is NOT a built-in type. It's an external actor injected via DI.
 // The actor wraps a Text and provides grapheme-indexed operations.
 // Supports all Text functions except upper/lower (cast to Text for those).
 //
 // Usage:
-//   *( "GraphemeText": GT # )
+//   use GT = "GraphemeText"
 //   g = GT(text: "café")
 //   sz Integer = g.size()
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -40,9 +40,9 @@ const GT_MANIFEST = `(text Text) -> *{
   lines () -> (List)
 }`;
 
-describe('GraphemeText via DI — # class', () => {
+describe('GraphemeText via DI — a constructor document', () => {
   const source = `
-    use GT = "GraphemeText" as #
+    use GT = "GraphemeText"
 
     g = GT(text: "e\u{0301}")
 

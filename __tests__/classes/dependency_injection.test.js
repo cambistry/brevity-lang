@@ -19,9 +19,9 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 //
 // Three declaration shapes are supported:
 //
-//   (Alias) *(ctor) -> { iface }   explicit class header + service (compile-time check)
-//   (Alias) #                     generic dep (signature deferred to host)
-//   Coerced = Alias as *(ctor) -> { iface }   coercion of a # dep to a typed class
+//   use Alias = "…" as (ctor) -> *{ iface }   a claimed constructor (compile-time check)
+//   use Alias = "…"                           unclaimed: its document is its type
+//   Coerced = Alias as (ctor) -> *{ iface }   coercion of a dep to a typed class
 //
 // This file replaces the older `constructs` keyword.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -308,7 +308,7 @@ describe('explicit form — method call validation', () => {
   });
 });
 
-// ─── Phase 2a: # form (generic actor class) ─────────────────────────────────
+// ─── Phase 2a: an unclaimed dependency ──────────────────────────────────────
 
 describe('constructor block — calls are checked as in a handler body', () => {
   const GREETER_MANIFEST = `{
@@ -353,18 +353,18 @@ describe('constructor block — calls are checked as in a handler body', () => {
   });
 });
 
-describe('# form — requires manifest', () => {
-  it('bare # form throws without options.remotes', () => {
+describe('an unclaimed dependency — requires a document', () => {
+  it('throws without options.remotes', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       @go = -> 1
     `)).toThrow(/has no type/);
   });
 
-  it('# form with construction throws without options.remotes', () => {
+  it('with construction, throws without options.remotes', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       t = Thing(a: 5)
 
@@ -373,12 +373,12 @@ describe('# form — requires manifest', () => {
   });
 });
 
-describe('# form — manifest from options.remotes', () => {
+describe('an unclaimed dependency — document from options.remotes', () => {
   const ctorManifest = '(a: Integer) -> *{\n  ping. () => .\n  get () -> (value: Integer)\n}';
 
-  it('# form compiles when manifest supplied via options.remotes', () => {
+  it('compiles when a constructor document is supplied via options.remotes', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       t = Thing(a: 5)
 
@@ -386,9 +386,9 @@ describe('# form — manifest from options.remotes', () => {
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).not.toThrow();
   });
 
-  it('# form validates class args against the resolved manifest', () => {
+  it('validates constructor args against the document', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       t = Thing(a: "not-an-int")
 
@@ -396,9 +396,9 @@ describe('# form — manifest from options.remotes', () => {
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/expected Integer, got Text/);
   });
 
-  it('# form validates method calls against the resolved interface', () => {
+  it('validates method calls against the document', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       t = Thing(a: 5)
 
@@ -406,9 +406,9 @@ describe('# form — manifest from options.remotes', () => {
     `, { remotes: [{ path: 'thing.bv', service: ctorManifest }] })).toThrow(/has no function 'missing'/);
   });
 
-  it('# form: actor method call routes to actor address', async () => {
+  it('constructs, and a method call routes to the new actor\'s address', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       t = Thing(a: 5)
 
@@ -435,9 +435,9 @@ describe('# form — manifest from options.remotes', () => {
 // ─── Phase 2b: coercion to typed class ──────────────────────────────────────
 
 describe('coercion to typed class — compilation', () => {
-  it('coercion of # dep to a typed class compiles', () => {
+  it('coercion of a dep to a typed class compiles', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -449,7 +449,7 @@ describe('coercion to typed class — compilation', () => {
 
   it('coercion validates class args', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -461,7 +461,7 @@ describe('coercion to typed class — compilation', () => {
 
   it('coercion validates method calls', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 
@@ -478,7 +478,7 @@ describe('coercion to typed class — runtime', () => {
     // The actor address from that reply is what subsequent method calls
     // route to.
     const actor = await createActor(`
-      use Thing = "thing.bv" as #
+      use Thing = "thing.bv"
 
       Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 

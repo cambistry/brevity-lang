@@ -15,6 +15,7 @@ const FILE_STAR_SECTION_MSG = "a singleton's constructor is declared with 'new =
 const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) — declare it with 'use'`;
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
 const USE_INNER_MSG = "'use' is a statement on a line of its own — in an expression, write 'use(\"…\")'";
+const RETIRED_HASH_CLAIM = "'#' claims nothing a document doesn't say — drop it, or claim the shape in full: 'as (…) -> *{ … }' or 'as { … }'";
 const USE_FACTORY_MSG = "'use' in a factory file is not supported yet";
 const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use HTML', 'use Svc = \"svc.bv\"'): a file with no header is an actor";
 const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
@@ -6085,7 +6086,6 @@ export function parse(tokensIn) {
     const hidden = new Map();
     const taken = new Set(dependencies.map(d => d.name));
     const claimOf = (s) => ({
-      ...(s?.generic && { generic: true }),
       ...(s?.interface && { interface: s.interface }),
       ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
     });
@@ -6101,10 +6101,10 @@ export function parse(tokensIn) {
         dependencies.push(dep);
         hidden.set(u.source, dep);
       }
-      if (u.shape?.valueType) throw new Error(`'${shown(u)} as ${u.shape.valueType}': a 'use(…)' is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      if (u.shape?.valueType) throw new Error(`'${shown(u)} as ${u.shape.valueType}': a 'use(…)' is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
       const claim = claimOf(u.shape);
       if (Object.keys(claim).length > 0) {
-        const has = dep.generic || dep.interface || dep.constructorParams;
+        const has = dep.interface || dep.constructorParams;
         if (has) {
           const same = JSON.stringify(claimOf(dep)) === JSON.stringify(claim);
           if (!same) throw new Error(`'${shown(u)}' claims a shape its source already has — claim it once, on one 'use'`);
@@ -6160,7 +6160,7 @@ export function parse(tokensIn) {
   function parseUseShape() {
     if (!(peek().type === 'KEYWORD' && peek().value === 'as')) return null;
     consume(); // as
-    if (peek().type === 'HASH') { consume(); return { generic: true }; }
+    if (peek().type === 'HASH') throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
     if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
       throw Object.assign(new Error(`'as *( ... ) -> { ... }' is retired — write 'as ( ... ) -> *{ ... }'`), { fatal: true });
     }
@@ -6196,7 +6196,7 @@ export function parse(tokensIn) {
     return parseType();
   }
 
-  // The left side, up to the `=` at `eq`: a name, a name and a type (or `#`), or a
+  // The left side, up to the `=` at `eq`: a name, a name and a type, or a
   // destructure by name (`:x`, `key: local [Type]`, `key: _`, `...`), parens optional.
   function hasTopComma(a, b) {
     let depth = 0;
@@ -6224,7 +6224,7 @@ export function parse(tokensIn) {
     if (t.type !== 'IDENT') throw new Error(`Expected a name or a destructure before '=' in '${shown()}', got ${t.type}`);
     const name = consume().value;
     if (pos === eq) return { kind: 'name', name };
-    if (peek().type === 'HASH' && pos + 1 === eq) { consume(); return { kind: 'name', name, generic: true }; }
+    if (peek().type === 'HASH' && pos + 1 === eq) throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
     if (peek().type === 'LBRACE' || peek().type === 'LPAREN') {
       throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '(…) -> *{ … }'}'`);
     }
@@ -6268,21 +6268,20 @@ export function parse(tokensIn) {
   function lowerUse(target, segs, shape, shown) {
     if (segs.length > 2) throw new Error(`'${shown()}': a source of more than two segments isn't supported yet`);
     const claim = (s) => ({
-      ...(s?.generic && { generic: true }),
       ...(s?.interface && { interface: s.interface }),
       ...(s?.constructorParams && { constructorParams: s.constructorParams, constructorArrow: s.constructorArrow }),
     });
     const [head, member] = segs;
     if (target.kind === 'destructure') {
       if (member !== undefined) throw new Error(`'${shown()}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
-      if (shape?.valueType) throw new Error(`'${shown()}': a destructure's source is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      if (shape?.valueType) throw new Error(`'${shown()}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
       return AST.dependency(head, { path: head, destructures: target.entries, ...claim(shape) });
     }
-    if ((target.generic || target.type) && shape) {
+    if (target.type && shape) {
       throw new Error(`'${shown()}' claims its shape twice — type the name or follow the source with 'as', not both`);
     }
     if (member !== undefined) {
-      if (shape || target.generic) throw new Error(`'${shown()}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
+      if (shape) throw new Error(`'${shown()}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
       const type = target.type;
       return AST.dependency(head, { path: head, destructures: [{ local: target.name, remote: member, ...(type && { type }) }] });
     }
@@ -6291,7 +6290,7 @@ export function parse(tokensIn) {
       if (!isBvName(head)) throw new Error(`'${shown()}': a value's source is a name, not '${showSeg(head)}'`);
       return AST.fileParam(target.name, { type: valueType, key: head !== target.name ? head : null });
     }
-    return AST.dependency(target.name, { path: head, ...claim(target.generic ? { generic: true } : shape) });
+    return AST.dependency(target.name, { path: head, ...claim(shape) });
   }
 
   // An inner binding: the statement that binds it in its scope, over a
@@ -6314,14 +6313,14 @@ export function parse(tokensIn) {
       : { name: e.local, key: e.remote, type: e.type ?? null });
     if (target.kind === 'destructure') {
       if (member !== undefined) throw new Error(`'${useShown}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
-      if (shape?.valueType) throw new Error(`'${useShown}': a destructure's source is an actor, claimed with '#', '{ … }' or '(…) -> *{ … }'`);
+      if (shape?.valueType) throw new Error(`'${useShown}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
       return mark(AST.destructureAssign(target.entries.map(toPattern), useOf(shape)));
     }
-    if ((target.generic || target.type) && shape) {
+    if (target.type && shape) {
       throw new Error(`'${useShown}' claims its shape twice — type the name or follow the source with 'as', not both`);
     }
     if (member !== undefined) {
-      if (shape || target.generic) throw new Error(`'${useShown}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
+      if (shape) throw new Error(`'${useShown}': claim the shape of '${showSeg(head)}' instead: 'use ${target.name} = ${showSeg(head)}::${showSeg(member)}' after 'use ${showSeg(head)} as …'`);
       return mark(AST.destructureAssign([toPattern({ local: target.name, remote: member, type: target.type })], useOf(null)));
     }
     const valueType = target.type || shape?.valueType;
@@ -6331,7 +6330,7 @@ export function parse(tokensIn) {
       useValues.push(value);
       return mark({ type: 'Assign', name: target.name, value });
     }
-    return mark({ type: 'Assign', name: target.name, value: useOf(target.generic ? { generic: true } : shape) });
+    return mark({ type: 'Assign', name: target.name, value: useOf(shape) });
   }
 
   // Into the manifest: the same entry twice is one, and destructures of one
@@ -6371,7 +6370,7 @@ export function parse(tokensIn) {
       const a = tokens[k];
       const b = tokens[k + 1];
       if (a?.type === 'IDENT' && entryEnd(b)) return `use ${a.value} = ${src}`;
-      if (a?.type === 'IDENT' && b?.type === 'HASH') return `use ${a.value} # = ${src}`;
+      if (a?.type === 'IDENT' && b?.type === 'HASH') return `use ${a.value} = ${src}`;
       if (a?.type === 'IDENT' && b?.type === 'LBRACE') return `use ${a.value} = ${src} as { … }`;
       if (a?.type === 'IDENT' && b?.type === 'LPAREN') return `use ${a.value} = ${src} as (…) -> *{ … }`;
       if (a?.type === 'SIGIL') return `use :${a.value} = ${src}`;
@@ -6383,8 +6382,7 @@ export function parse(tokensIn) {
           else if (tokens[j].type === 'RPAREN') depth--;
           j++;
         } while (depth > 0 && j < end);
-        const hash = tokens[j]?.type === 'HASH' ? ' as #' : '';
-        return `use ${showTokens(k + 1, j - 1)} = ${src}${hash}`;
+        return `use ${showTokens(k + 1, j - 1)} = ${src}`;
       }
       return null;
     };
@@ -6410,7 +6408,7 @@ export function parse(tokensIn) {
       const now = afterKey(t.value, pos + 2);
       if (now) throw retired(now);
     }
-    if (t.type === 'IDENT' && t1?.type === 'HASH') throw retired(`use ${t.value} # = ${t.value}`);
+    if (t.type === 'IDENT' && t1?.type === 'HASH') throw retired(`use ${t.value}`);
     if (t.type === 'IDENT' && t1?.type === 'LBRACE') throw retired(`use ${t.value} = ${t.value} as { … }`);
     if (t.type === 'IDENT' && t1?.type === 'LPAREN') throw retired(`use ${t.value} = ${t.value} as (…) -> *{ … }`);
     if (t.type === 'IDENT' && !entryEnd(t1) && t1?.type !== 'DCOLON' && !(t1?.type === 'KEYWORD' && t1.value === 'as')) {
@@ -6717,12 +6715,7 @@ export function parse(tokensIn) {
         continue;
       }
       skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-      // Alias # — actor constructor, manifest fetched via options.remotes
-      if (peek().type === 'HASH') {
-        consume(); // #
-        dependencies.push(AST.dependency(alias, { path, generic: true, destructures }));
-        continue;
-      }
+      if (peek().type === 'HASH') throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
       if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
         throw Object.assign(
           new Error(`'(Alias) *( ... ) -> { ... }' is retired (dependency '${alias}') — write '${alias} ( ... ) -> *{ ... }'`),
@@ -6830,7 +6823,6 @@ export function parse(tokensIn) {
     // ── File-level constructor header — delimited ─────────────────────────
     //   ( "/path": Alias ) *{ body }                  — service ref, fetched externally
     //   ( "/path": Alias { iface } ) *{ body }        — service ref, inline interface
-    //   ( "/path": Alias # ) *{ body }                — actor constructor, fetched externally
     //   ( "/path": Alias (p: Type) -> *{ iface } ) *{ body } — inline manifest
     //   ( name: Type ) -> *{ body }                     — optional arrow
     // Told apart from a body statement that starts with `(` by looking ahead

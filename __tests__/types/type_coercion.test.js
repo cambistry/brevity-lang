@@ -575,7 +575,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
   const script = `
     use Counter = "/services/counter"
     use Store = "/services/store"
-    use Service = "service.bv" as #
+    use Service = "service.bv"
 
     @counterInt
       =
@@ -676,7 +676,7 @@ describe('type coercion — class ref constructed at the top level', () => {
 
   it('document supplied through options.remotes', async () => {
     const actor = await createActor(`
-      use Service = "service.bv" as #
+      use Service = "service.bv"
 
       s = Service()
 
@@ -739,7 +739,7 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('class ref, through options.remotes', () => {
     expect(() => compileSource(`
-      use Service = "service.bv" as #
+      use Service = "service.bv"
       ${service}
     `, { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n}' }] })).toThrow();
   });

@@ -49,12 +49,13 @@ A lone source binds its last segment: `use HTML` is `use HTML = HTML`, and
 - **Inline constraint**: `use Alias = "/path" as { method sig, ... }` — the
   service interface is claimed inline. The compiler checks calls against it and
   never consults `options.remotes` for that path; a mismatch with the real
-  service fails at runtime. `as #` claims a class, and
-  `as (params) -> *{ … }` a constructor profile; `use Alias # = "/path"` is
-  the same as `as #`.
+  service fails at runtime. `as (params) -> *{ … }` claims a constructor
+  profile.
 - **Bare dependency**: `use Alias = "/path"` — no claim, so it is resolved by
   its source: the interface must be supplied at compile time via
-  `options.remotes` (a compile error otherwise).
+  `options.remotes` (a compile error otherwise). The call says what it does:
+  `Alias(…)` constructs and `Alias.f()` messages, each checked against the
+  document. (`as #` is retired; the document says what it is.)
 
 A destructure takes members by name, parens optional:
 `use :div, :span, p: para = HTML`.
@@ -124,7 +125,7 @@ const { interface: iface } = extract(source);
 ```
 
 A dependency's type is what its entry claims: an interface, a constructor
-profile, `#`, or nothing, when the type comes from `options.remotes`.
+profile, or nothing, when the type comes from `options.remotes`.
 
 For example, a file's mixed `use` entries might come back as:
 

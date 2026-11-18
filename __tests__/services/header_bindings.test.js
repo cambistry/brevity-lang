@@ -2,7 +2,7 @@ import { extract, compile } from '../../index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // A `use` entry is a binding, `target = source`: the target is a local name
-// (typed, or `#`), or a destructure (`:div`, `key: local`); the source is a
+// (typed or not), or a destructure (`:div`, `key: local`); the source is a
 // `::` path the host resolves, its shape claimed with `as`. A lone source binds
 // its last segment. See notes/use-as-binding-2026-11-18.md.
 //
@@ -12,20 +12,10 @@ import { extract, compile } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const deps = (entry) => extract(`use ${entry}\n@go = -> 1\n`).ast.dependencies
-  .map(({ name, path, generic, destructures, constructorParams, interface: iface }) =>
-    ({ name, path, generic, destructures, constructorParams, iface }));
+  .map(({ name, path, destructures, constructorParams, interface: iface }) =>
+    ({ name, path, destructures, constructorParams, iface }));
 
 describe('use bindings — forms', () => {
-  it('Name = "path" as # — class dependency bound as Name', () => {
-    expect(deps('Thing = "thing.bv" as #')).toEqual([
-      expect.objectContaining({ name: 'Thing', path: 'thing.bv', generic: true }),
-    ]);
-  });
-
-  it('Name # = "path" — the same claim on the target', () => {
-    expect(deps('Thing # = "thing.bv"')).toEqual(deps('Thing = "thing.bv" as #'));
-  });
-
   it('Name = "path" — service dependency bound as Name', () => {
     expect(deps('Svc = "svc.bv"')).toEqual([expect.objectContaining({ name: 'Svc', path: 'svc.bv' })]);
   });
@@ -43,8 +33,8 @@ describe('use bindings — forms', () => {
     expect(deps(':div = "dom.bv"')).toEqual(deps('(:div) = "dom.bv"'));
   });
 
-  it('S = Shapes as # — a bare source with a binding', () => {
-    expect(deps('S = Shapes as #')).toEqual([expect.objectContaining({ name: 'S', path: 'Shapes', generic: true })]);
+  it('S = Shapes — a bare source with a binding', () => {
+    expect(deps('S = Shapes')).toEqual([expect.objectContaining({ name: 'S', path: 'Shapes' })]);
   });
 
   it('a typed binding is a value supplied at construction', () => {
@@ -61,7 +51,7 @@ describe('use bindings — forms', () => {
     ['n = limit', { name: 'n', path: 'limit' }],
     ['limit', { name: 'limit', path: 'limit' }],
   ])('an untyped binding is a dependency resolved by its source: %s', (entry, dep) => {
-    expect(deps(entry)).toEqual([expect.objectContaining({ ...dep, generic: false })]);
+    expect(deps(entry)).toEqual([expect.objectContaining(dep)]);
   });
 
   it('an untyped binding with no remote document is a compile error', () => {
@@ -80,9 +70,9 @@ describe('use bindings — forms', () => {
   });
 
   it.each([
-    ['"thing.bv": (Thing) #', `'"thing.bv": (Thing) #' is a retired header entry — write 'use Thing = "thing.bv" as #'`],
+    ['"thing.bv": (Thing) #', `'"thing.bv": (Thing) #' is a retired header entry — write 'use Thing = "thing.bv"'`],
     ['"/db": DB { get () -> (Text) }', `'"/db": DB { get () -> (Text) }' is a retired header entry — write 'use DB = "/db" as { … }'`],
-    ['Lib: L #', `'Lib: L #' is a retired header entry — write 'use L # = Lib'`],
+    ['Lib: L #', `'Lib: L #' is a retired header entry — write 'use L = Lib'`],
     ['limit: n Integer', `'limit: n Integer' is a retired header entry — write 'use n Integer = limit'`],
   ])('a header entry is retired: %s', (entry, message) => {
     expect(() => deps(entry)).toThrow(message);

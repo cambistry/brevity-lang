@@ -52,7 +52,7 @@ describe('caller side', () => {
   }
 
   it('an instance constructs through its own address', async () => {
-    const actor = await createActor(`use Svc = "svc.bv" as #\n@go! = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`, { compileOptions: { remotes } });
+    const actor = await createActor(`use Svc = "svc.bv"\n@go! = {\n  s = Svc()\n  w = s.W!()\n  return 1\n}\n`, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go!', from: 'c' } },
       { output: { id: '1', op: '$new', to: 'svc.bv' } },
@@ -153,7 +153,7 @@ describe('a new actor used in place', () => {
 
   describe('through an instance', () => {
     const script = `
-      use Svc = "svc.bv" as #
+      use Svc = "svc.bv"
 
       read = (w) { return w.get() }
 
@@ -204,7 +204,7 @@ describe('a new actor used in place', () => {
       );
     });
 
-    it('a # entry can be constructed and called in place', async () => {
+    it('an unclaimed entry can be constructed and called in place', async () => {
       const actor = await createActor(script, { compileOptions });
       await expectActorBehavior(actor,
         { input: { id: 'x', op: 'own', from: 'c' } },
@@ -264,49 +264,9 @@ describe('a new actor used in place', () => {
   });
 });
 
-// A bare entry is an actor to talk to; `#` is something to construct one from.
-describe('bare and # headers', () => {
-  it('a bare entry is already an actor, so it can\'t be constructed', () => {
-    expect(() => compileSource(`
-      use Svc = "svc.bv"
-      @go = {
-        s = Svc()
-        return 1
-      }
-    `, { remotes })).toThrow(/'Svc' is already an actor.*"svc\.bv": Svc #/);
-  });
-
-  it('nor constructed in place', () => {
-    expect(() => compileSource(`
-      use Svc = "svc.bv"
-      @go = { return Svc() }
-    `, { remotes })).toThrow(/'Svc' is already an actor/);
-  });
-
-  it('a # entry has to be constructed before it can be messaged', () => {
-    expect(() => compileSource(`
-      use Svc = "svc.bv" as #
-      @go = { return Svc.plain() }
-    `, { remotes })).toThrow(/'Svc' isn't an actor yet.*x = Svc\(/);
-  });
-
-  it('nor can it be asked for a class', () => {
-    expect(() => compileSource(`
-      use Svc = "svc.bv" as #
-      @go = {
-        w = Svc.Counter(1, step: 1)
-        return 1
-      }
-    `, { remotes })).toThrow(/'Svc' isn't an actor yet/);
-  });
-
-  it('a declared constructor follows the # rule', () => {
-    expect(() => compileSource(`
-      use Svc = "svc.bv" as () -> *{ get () -> (Integer) }
-      @go = { return Svc.get() }
-    `)).toThrow(/'Svc' isn't an actor yet/);
-  });
-
+// Construction and messaging are told apart by the call: `Svc(…)` constructs,
+// `Svc.f()` messages. A document, where there is one, checks either.
+describe('constructing and messaging a dependency', () => {
   it('a declared constructor can be constructed', () => {
     expect(() => compileSource(`
       use Svc = "svc.bv" as () -> *{ get () -> (Integer) }
@@ -318,14 +278,15 @@ describe('bare and # headers', () => {
     `)).not.toThrow();
   });
 
-  it('an inline interface is an actor too', () => {
+  it('an unclaimed dependency with a constructor document can be constructed', () => {
     expect(() => compileSource(`
-      use Svc = "svc.bv" as { get () -> (Integer) }
+      use Thing = "thing.bv"
       @go = {
-        s = Svc()
-        return 1
+        t = Thing(a: 5)
+        v Integer = t.get()
+        return v
       }
-    `)).toThrow(/'Svc' is already an actor/);
+    `, { remotes: [{ path: 'thing.bv', service: '(a: Integer) -> *{\n  get () -> (Integer)\n}' }] })).not.toThrow();
   });
 });
 
@@ -571,7 +532,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
   `;
   const readerRemotes = [{ path: 'svc.bv', service: '{ Reader () -> *{\n  get () -> (Integer)\n}\nbump! () => self }' }];
   const shared = `use Svc = "svc.bv"\n@read = { return Svc.Reader().get() }\n`;
-  const own = `use Svc = "svc.bv" as #\n@read = {\n  s = Svc()\n  return s.Reader().get()\n}\n`;
+  const own = `use Svc = "svc.bv"\n@read = {\n  s = Svc()\n  return s.Reader().get()\n}\n`;
 
   const promote = (v, name) => {
     if (typeof v === 'string') return v.replace(/#<([^>]*)>/g, (_, c) => `#<${resolve(c, name)}>`);

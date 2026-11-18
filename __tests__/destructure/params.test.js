@@ -152,21 +152,21 @@ describe('destructure params — aliasing', () => {
   });
 });
 
-// ─── Compilation — with class form ───────────────────────────────────────────
+// ─── Compilation — an unclaimed source ───────────────────────────────────────
 
-describe('destructure params — class (#) form', () => {
-  it('# form with manifest compiles (no construction)', () => {
+describe('destructure params — unclaimed source', () => {
+  it('with a document, compiles', () => {
     const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
     expect(() => compileSource(`
-      use :greet = "service.bv" as #
+      use :greet = "service.bv"
 
       @go = -> 1
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
-  it('# form without manifest throws', () => {
+  it('without a document, throws', () => {
     expect(() => compileSource(`
-      use :Point = "geometry.bv" as #
+      use :Point = "geometry.bv"
 
       @go = -> 1
     `)).toThrow(/has no type/);
@@ -358,13 +358,6 @@ describe('destructure params — validation', () => {
   it('bare * without remotes rejects even with destructures', () => {
     expect(() => compileSource(`
       use :greet = "service.bv"
-      @go = -> 1
-    `)).toThrow(/has no type/);
-  });
-
-  it('# form without remotes rejects with destructures', () => {
-    expect(() => compileSource(`
-      use :greet = "service.bv" as #
       @go = -> 1
     `)).toThrow(/has no type/);
   });

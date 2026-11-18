@@ -153,7 +153,6 @@ function dependencyTypeText(dep) {
     const params = dep.constructorParams.map(p => formatParam(p, new Map())).join(', ');
     return `(${params}) -> *${dep.interface || '{}'}`;
   }
-  if (dep.generic) return '#';
   return dep.interface || null;
 }
 

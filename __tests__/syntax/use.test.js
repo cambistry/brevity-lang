@@ -79,7 +79,7 @@ describe('use', () => {
 });
 
 const deps = (src) => extract(`${src}\n@get = -> 1\n`).ast.dependencies;
-const dep = (name, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path: name, generic: false, ...fields });
+const dep = (name, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path: name, ...fields });
 const member = (local, remote = local) => ({ local, remote });
 
 describe('use — the manifest', () => {
@@ -107,7 +107,6 @@ describe('use — the manifest', () => {
     ['use :div, :span, p: para = HTML', 'use (:div, :span, p: para) = HTML',
       [dep('HTML', { destructures: [member('div'), member('span'), member('para', 'p')] })]],
     ['use Svc = "svc.bv"', 'use Svc = \'svc.bv\'', [dep('Svc', { path: 'svc.bv' })]],
-    ['use Lib = "lib.bv" as #', 'use Lib # = "lib.bv"', [dep('Lib', { path: 'lib.bv', generic: true })]],
     ['use limit Integer = limit', 'use limit = limit as Integer', [{ type: 'FileParam', name: 'limit', paramType: 'Integer', positional: false }]],
     ['use n Integer = size', 'use n = size as Integer', [{ type: 'FileParam', name: 'n', key: 'size', paramType: 'Integer', positional: false }]],
     ['use slot *Integer = slot', 'use slot Integer = slot', [{ type: 'FileParam', name: 'slot', paramType: 'Integer', positional: false }]],
@@ -150,7 +149,7 @@ describe('use — the manifest', () => {
     expect(deps(`use el = 'my-actor'::"my-el"`)).toEqual([dep('my-actor', { destructures: [member('el', 'my-el')] })]);
   });
 
-  it('`as` claims the shape: an interface, `#`, a constructor profile', () => {
+  it('`as` claims the shape: an interface, a constructor profile', () => {
     expect(deps('use Svc = "svc.bv" as { n () -> (Integer) }')).toEqual([
       dep('Svc', { path: 'svc.bv', interface: '{\n  n () -> (Integer)\n}' }),
     ]);
@@ -158,7 +157,20 @@ describe('use — the manifest', () => {
     expect(deps('use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }')).toEqual([
       dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', constructorParams: [{ name: 'a', type: 'Integer' }], constructorArrow: '->' }),
     ]);
-    expect(deps('use :em, ... = "html.bv" as #')).toEqual([dep('html.bv', { generic: true, destructures: [member('em'), { spread: true }] })]);
+  });
+
+  it.each([
+    'use Lib # = "lib.bv"',
+    'use Lib = "lib.bv" as #',
+    'use :em, ... = "html.bv" as #',
+    'x = use("lib.bv") as #',
+  ])('`#` is no claim: %s', (src) => {
+    expect(() => compileSource(`${src}\n@get = -> 1\n`))
+      .toThrow("'#' claims nothing a document doesn't say — drop it, or claim the shape in full: 'as (…) -> *{ … }' or 'as { … }'");
+  });
+
+  it('an unclaimed destructure of a source', () => {
+    expect(deps('use :em, ... = "html.bv"')).toEqual([dep('html.bv', { destructures: [member('em'), { spread: true }] })]);
   });
 
   it('a discard in a destructure', () => {
@@ -166,9 +178,9 @@ describe('use — the manifest', () => {
   });
 
   it('`use` in a whole-file actor { … }', () => {
-    const wrapped = extract('actor {\n  use document\n  use Svc # = "svc.bv"\n  @get = -> 1\n}\n');
+    const wrapped = extract('actor {\n  use document\n  use Svc = "svc.bv"\n  @get = -> 1\n}\n');
     expect(wrapped.ast.fileKind).toBe('singleton');
-    expect(wrapped.ast.dependencies).toEqual(deps('use document\nuse Svc # = "svc.bv"'));
+    expect(wrapped.ast.dependencies).toEqual(deps('use document\nuse Svc = "svc.bv"'));
   });
 });
 
@@ -300,11 +312,11 @@ describe('use — errors', () => {
     ['HTML: :div', 'use :div = HTML'],
     ['"svc.bv": Svc { n () -> (Integer) }', 'use Svc = "svc.bv" as { … }'],
     ['Svc { n () -> (Integer) }', 'use Svc = Svc as { … }'],
-    ['"svc.bv": Svc #', 'use Svc # = "svc.bv"'],
-    ['Svc #', 'use Svc # = Svc'],
+    ['"svc.bv": Svc #', 'use Svc = "svc.bv"'],
+    ['Svc #', 'use Svc'],
     ['"thing.bv": Thing (a: Integer) -> *{ get () -> (Integer) }', 'use Thing = "thing.bv" as (…) -> *{ … }'],
     ['Thing (a: Integer) -> *{ get () -> (Integer) }', 'use Thing = Thing as (…) -> *{ … }'],
-    ['"service.bv": (:greet) #', 'use :greet = "service.bv" as #'],
+    ['"service.bv": (:greet) #', 'use :greet = "service.bv"'],
     [':limit Integer', 'use limit Integer = limit'],
     ['size: n Integer', 'use n Integer = size'],
     ['slot: *Integer', 'use slot *Integer = slot'],
@@ -337,8 +349,8 @@ describe('use — errors', () => {
   });
 
   it('a shape claimed twice', () => {
-    expect(() => compileSource(`use Lib # = "lib.bv" as #\n@get = -> 1\n`))
-      .toThrow(`'use Lib # = "lib.bv" as #' claims its shape twice`);
+    expect(() => compileSource(`use Lib Thing = "lib.bv" as { n () -> (Integer) }\n@get = -> 1\n`))
+      .toThrow(`'use Lib Thing = "lib.bv" as { n () -> (Integer) }' claims its shape twice`);
   });
 
   it('a source of three segments', () => {
