@@ -601,11 +601,136 @@ describe('a function body contains it', () => {
   it('a local function writes', async () => { await expectBehavior(bodyScript, ...ask('localWrite', 3)); });
 });
 
+// Code that isn't lexically inside a scope doesn't reach its names, and says so; a
+// name bound in a scope isn't bound again inside it. Each error names its boundary.
+// The trailing constructor's cases, one per member kind, are in class_scope.test.js
+// ('class scope — closure: the trailing constructor skips the class block'), the
+// `.`/`::` sigil cases in the same file ('class scope — sigils after a dot'), and a
+// block re-binding its own scope's local in if.test.js, repeat_while.test.js and
+// function.test.js.
 describe('boundaries', () => {
   it('a private name is never reached through an address', () => {
     expect(() => compileSource(`
       C = *{ #s = -> 1 }
       @a = { x = C(); y Integer = x.#s(); return y }
     `)).toThrow("'x.#s' — a private name is never reached through an address, only by name in its own scope");
+  });
+
+  it('…nor through `class::`', () => {
+    expect(() => compileSource(`
+      C = actor {
+        #p = -> 1
+        new = () *{
+          @get = {
+            x Integer = class::#p()
+            return x
+          }
+        }
+      }
+    `)).toThrow("'class::#p' — a private name is never reached through an address, only by name in its own scope");
+  });
+
+  it('a trailing constructor doesn\'t close over its class block', () => {
+    expect(() => compileSource(`
+      C = (seed Integer) *{
+        @get = { return count }
+      } ++ actor {
+        count *Integer = 0
+      }
+    `)).toThrow("'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block");
+  });
+
+  it('…nor does a subclass using its parent\'s class block', () => {
+    expect(() => compileSource(`
+      C = actor {
+        count *Integer = 0
+        new = (seed Integer) *{ @x = -> 1 }
+      }
+      D = C ++ (n Integer) *{
+        @get = { return count }
+      }
+    `)).toThrow("'count' is a member of the class 'C', and a subclass of 'C' doesn't close over its class block");
+  });
+
+  it('a subclass doesn\'t reach its parent\'s private names', () => {
+    expect(() => compileSource(`
+      A = *{
+        #secret = -> 5
+        @x = -> 1
+      }
+      B = A ++ *{
+        @get = { return #secret() }
+      }
+    `)).toThrow("Subclass 'B' cannot access private function '#secret' from superclass");
+  });
+
+  it('a file\'s `use` name isn\'t bound again in the file', () => {
+    expect(() => compileSource(`
+      use Svc = "svc.bv" as { n () -> (Integer) }
+      Svc = 3
+    `)).toThrow("'Svc' is bound by 'use' in this file, so it can't be bound or assigned again here");
+  });
+
+  it('…nor inside it', () => {
+    expect(() => compileSource(`
+      use Svc = "svc.bv" as { n () -> (Integer) }
+      @go = {
+        Svc = 3
+        return 1
+      }
+    `)).toThrow("Cannot re-bind 'Svc' inside a function — it's bound in the enclosing scope, so use a new name");
+  });
+
+  it('an inner `use` name isn\'t bound again in its scope', () => {
+    expect(() => compileSource(`
+      @go = {
+        use DB = "/db" as { n () -> (Integer) }
+        DB = 3
+        return 1
+      }
+    `)).toThrow("'DB' is bound by 'use DB = \"/db\" as { n () -> (Integer) }' in this scope, so it can't be bound or assigned again here");
+  });
+
+  it('a handler doesn\'t bind a name of its file', () => {
+    expect(() => compileSource(`
+      k Integer = 5
+      @h = {
+        k = 2
+        return k
+      }
+    `)).toThrow("Cannot re-bind 'k' inside a function — it's bound in the enclosing scope, so use a new name");
+  });
+});
+
+// Where a name may be reused: a class's own name wins over an outer one, and a
+// function's param may reuse an outer name, for that function's body.
+describe('boundaries — a name reused where it may be', () => {
+  const script = `
+    n Integer = 1
+    m *Integer = 10
+
+    @C = (n Integer) *{
+      @get = { return n }
+    }
+
+    bump = (m Integer) -> m + 1
+
+    @viaParam = {
+      x Integer = bump(5)
+      return x
+    }
+  `;
+
+  it('a class\'s own param wins over the file\'s name', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':C', from: 'c' } },
+      { output: { id: '1', re: ['#<:C:1>'], ty: [':C'], to: 'c' } },
+      { input: { id: '2', op: 'get', to: ':C:1', from: 'c' } },
+      { output: { id: '2', re: [4], ty: ['Integer'], to: 'c', from: ':C:1' } },
+    );
+  });
+
+  it('a function\'s param reuses the file\'s name', async () => {
+    await expectBehavior(script, ...ask('viaParam', 6));
   });
 });

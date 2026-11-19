@@ -150,7 +150,8 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     const notClosedOver = (name) => {
       const cls = a.name.replace(/^@/, '').replace(/[!.]$/, '');
       const reach = name.startsWith('@') ? `: reach it as '${cls}.${name.slice(1)}'` : '';
-      return new Error(`'${name}' is a member of the class '${cls}', and a trailing constructor doesn't close over its class block${reach}`);
+      const outside = a.membersInherited ? `a subclass of '${shownName(byName.get(a.membersInherited) ?? { name: a.membersInherited })}'` : 'a trailing constructor';
+      return new Error(`'${name}' is a member of the class '${cls}', and ${outside} doesn't close over its class block${reach}`);
     };
     for (const b of [a.initBody, a.constructorBody]) walk(b, (n) => {
       if (n.type === 'SetStatement' && !n.viaClass && memberCell(n.name)) throw notClosedOver(n.name);

@@ -58,6 +58,8 @@ function scopeParams(node, outer, taken) {
       const to = freeName(from, taken);
       renameIn(node.body, from, to, p.ref);
       renameIn(node.expr, from, to, p.ref);
+      // Another param's default may name it.
+      for (const q of node.params) if (q !== p && q.defaultValue) renameIn(q.defaultValue, from, to, p.ref);
       p.name = to;
       if (!p.positional && !p.key) p.key = from;
     }

@@ -1140,9 +1140,10 @@ function validateProgram(ast, options = {}) {
   checkSilentCallForm(ast, remotesParsed);
   // ── A function that writes says so in its name ────────────────────────
   checkEffects(ast, remotesParsed);
+  // A `new@` handler's params are a function's: they get their own names too.
+  addConstructHandlers(ast);
   lowerParamScope(ast);
   lowerOwnCellWrites(ast);
-  addConstructHandlers(ast);
   markOuterReads(ast);
   markCallResultTypes(ast);
   // ── A constructor block reads a cell only below its declaration ──────
@@ -2360,10 +2361,19 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     }
   }
 
+  // The file's `use` bindings (a source's name, a destructured member, a value) are
+  // names of its scope: the file doesn't bind them again, and nor does anything
+  // inside it. An inner scope's `use` is hidden (`__use_…`) and checked where it is.
+  const useNames = actor.name ? new Set() : new Set([...dependencyNames, ...destructuredMembers.keys()]
+    .filter(n => typeof n === 'string' && !n.startsWith('__')));
+  for (const d of [...(actor.stateVarDecls || []), ...actor.functions]) {
+    if (useNames.has(d.name)) throw new Error(`'${d.name}' is bound by 'use' in this file, so it can't be bound or assigned again here`);
+  }
   const actorNames = new Set([
     ...(actor.stateVarDecls || []).map(d => d.name),
     ...(actor.initParams || []).map(p => p.name),
     ...actor.functions.map(f => f.name),
+    ...useNames,
   ].filter(Boolean));
   checkNestedBlocks(actor.constructorBody || [], actorNames);
 
