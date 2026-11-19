@@ -826,7 +826,7 @@ function validateProgram(ast, options = {}) {
   // Overload clauses (Name << *(..)) — append to the base entry. If no named
   // actor exists (Function() pattern: `Name = Function(); Name << (..) *{}`),
   // start the entry fresh so the name still resolves as a constructor.
-  // An overload clause may itself inherit: `Sub << (Base ++ ...) *{}`, so its params
+  // An overload clause may itself inherit: `Sub << Base ^ (...) *{}`, so its params
   // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {

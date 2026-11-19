@@ -6,7 +6,7 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 // declared, that every actor of the class shares.
 //
 //   Nested:   C = actor { members … new = (params) *{ constructor } }
-//   Trailing: C = (params) *{ constructor } ++ actor { members }
+//   Trailing: C = (params) *{ constructor } ^ { members }
 //
 // In the nested form the constructor is inside the singleton, so it closes over it,
 // private cells included. In the trailing form it isn't, so it reaches the members
@@ -43,10 +43,35 @@ const script = `
     n Integer = @Trailing.count
     @n = { return n + seed }
     @bump! = { @Trailing.bump!() }
-  } ++ actor {
+  } ^ {
     @count *Integer = 3
     hidden *Integer = 40
     @bump! = { @count <- @count + 1 }
+  }
+
+  @Headed = actor {
+    @count *Integer = 7
+  } ^ (seed Integer) *{
+    n Integer = @Headed.count
+    @n = { return n + seed }
+  }
+
+  @Starred = *{
+    n Integer = @Starred.base
+    @n = { return n }
+  } ^ {
+    @base = { return 6 }
+  }
+
+  Base = *{ @one = { return 1 } }
+  @Stacked = Base ^ *{
+    n Integer = @Stacked.two
+    @n = {
+      x Integer = @one()
+      return n + x
+    }
+  } ^ {
+    @two = { return 2 }
   }
 
   @nested = {
@@ -61,7 +86,7 @@ const script = `
     return x
   }
 
-  Counter = (step Integer) *{ @tick! = { Counter.add!(step) } } ++ actor { @total *Integer = 0; @add! = (n Integer) { @total <- @total + n } }
+  Counter = (step Integer) *{ @tick! = { Counter.add!(step) } } ^ { @total *Integer = 0; @add! = (n Integer) { @total <- @total + n } }
 
   @counted! = {
     a = Counter(2)
@@ -77,7 +102,7 @@ const script = `
     Slot = (k Integer) *{
       v Integer = Slot.base
       @v = { return v + k }
-    } ++ actor {
+    } ^ {
       @base = { return seed * 10 }
     }
 
@@ -161,8 +186,68 @@ describe('trailing class members', () => {
 
   it('a protected cell isn\'t reached through the class', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = C.hidden } ++ actor { hidden *Integer = 40 }
+      C = (seed Integer) *{ n Integer = C.hidden } ^ { hidden *Integer = 40 }
     `)).toThrow(/^No public member 'hidden' in 'C'$/);
+  });
+});
+
+describe('class members as a ^ layer', () => {
+  it('a singleton head, then a constructor over it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Headed', from: 'c' } },
+      { output: { id: '1', re: ['#<:Headed:1>'], ty: [':Headed'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':Headed:1', from: 'c' } },
+      { output: { id: '2', re: [8], ty: ['Integer'], to: 'c', from: ':Headed:1' } },
+    );
+  });
+
+  it('a constructor with no params, then its singleton', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '$new', to: ':Starred', from: 'c' } },
+      { output: { id: '1', re: ['#<:Starred:1>'], ty: [':Starred'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':Starred:1', from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c', from: ':Starred:1' } },
+    );
+  });
+
+  it('a parent, a constructor, then a singleton', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '$new', to: ':Stacked', from: 'c' } },
+      { output: { id: '1', re: ['#<:Stacked:1>'], ty: [':Stacked'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':Stacked:1', from: 'c' } },
+      { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':Stacked:1' } },
+    );
+  });
+
+  it('`actor` begins a definition only: not after ^', () => {
+    expect(() => compileSource(`
+      T = *{ @v = { return 1 } } ^ actor { @c = { return 2 } }
+    `)).toThrow();
+  });
+
+  it('a singleton layer after ^ takes no keyword', () => {
+    expect(() => compileSource(`
+      T = *{ @v = { return 1 } } ^ { @c = { return 2 } }
+    `)).not.toThrow();
+  });
+
+  it('a class has one singleton layer', () => {
+    expect(() => compileSource(`
+      T = actor { @a = { return 1 } } ^ *{ @v = { return 1 } } ^ { @c = { return 2 } }
+    `)).toThrow("In 'T', a class has one singleton layer");
+  });
+
+  it('a class has one constructor layer', () => {
+    expect(() => compileSource(`
+      T = *{ @v = { return 1 } } ^ *{ @w = { return 2 } }
+    `)).toThrow("In 'T', a class has one constructor layer");
+  });
+
+  it('a parent isn\'t layered over a singleton head', () => {
+    expect(() => compileSource(`
+      A = *{ @v = { return 1 } }
+      T = actor { @c = { return 2 } } ^ A
+    `)).toThrow("In 'T', a parent class comes before the constructor and singleton layers");
   });
 });
 
@@ -245,7 +330,7 @@ describe('class members — lineal scope', () => {
 describe('class members — scope errors', () => {
   it('a trailing constructor can\'t name a member bare', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = count } ++ actor { count *Integer = 3 }
+      C = (seed Integer) *{ n Integer = count } ^ { count *Integer = 3 }
       @go = -> 1
     `)).toThrow(/^'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
@@ -274,7 +359,7 @@ describe('class members — ordering', () => {
 
   it('trailing: built in the class block when its constructor reaches the class is an error', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = C.count } ++ actor {
+      C = (seed Integer) *{ n Integer = C.count } ^ {
         @count *Integer = 0
         origin = C(1)
       }
@@ -340,11 +425,11 @@ describe('class members in the service document', () => {
           @n = -> 1
         }
       }
-    `).interface.service).toBe('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ++ actor {\n    count *Integer\n  }\n}');
+    `).interface.service).toBe('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ^ {\n    count *Integer\n  }\n}');
   });
 
   it('read back as a document of their own', () => {
-    const doc = parseInterface('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ++ actor {\n    count *Integer\n  }\n}');
+    const doc = parseInterface('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ^ {\n    count *Integer\n  }\n}');
     expect(doc.__types.C.functions).toEqual([{ name: 'n', effect: 'read', params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
     expect(doc.__types.C.members.__fields.count).toEqual({ type: 'Integer', cell: true, readOnly: false });
   });

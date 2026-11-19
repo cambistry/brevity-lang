@@ -613,7 +613,7 @@ describe('boundaries', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{
         @get = { return count }
-      } ++ actor {
+      } ^ {
         count *Integer = 0
       }
     `)).toThrow("'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block");
@@ -625,7 +625,7 @@ describe('boundaries', () => {
         count *Integer = 0
         new = (seed Integer) *{ @x = -> 1 }
       }
-      D = C ++ (n Integer) *{
+      D = C ^ (n Integer) *{
         @get = { return count }
       }
     `)).toThrow("'count' is a member of the class 'C', and a subclass of 'C' doesn't close over its class block");
@@ -637,7 +637,7 @@ describe('boundaries', () => {
         #secret = -> 5
         @x = -> 1
       }
-      B = A ++ *{
+      B = A ^ *{
         @get = { return #secret() }
       }
     `)).toThrow("Subclass 'B' cannot access private function '#secret' from superclass");

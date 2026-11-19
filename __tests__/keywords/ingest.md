@@ -11,7 +11,7 @@ Base = * {
   @label = -> :label
 }
 
-Greeting = Base ++ *{ "hello" }
+Greeting = Base ^ *{ "hello" }
 ```
 
 With a default:

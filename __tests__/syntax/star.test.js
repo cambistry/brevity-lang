@@ -17,9 +17,9 @@ import { compileSource } from '../helpers.js';
 //   The closing `*` may be followed by `{ body }` (same line or next).
 //   `Cls\n=` may replace `Cls =`; `Cls <<` opens a lineal overload.
 //   Subclass forms:
-//     Sub = Base ++ params ++ *{ body }
-//     Sub = Base ++ *{ expr }      — ingest / declaration return
-//     Sub = (name Base ++ params) *{ body }
+//     Sub = Base ^ params ^ *{ body }
+//     Sub = Base ^ *{ expr }      — ingest / declaration return
+//     Sub = (name Base ^ params) *{ body }
 //   Public `@`:
 //     @Cls = (params) *{ body }
 //   Service coercion:
@@ -375,35 +375,35 @@ describe('class () *{...} — empty params via parens', () => {
 
 describe('class (...) *{...} — subclass forms', () => {
 
-  it('Sub = Base ++ (params) *{ body }', () => {
+  it('Sub = Base ^ (params) *{ body }', () => {
     expect(() => compileSource(`
       Base = (value Integer) *{
         @get = -> result: value
       }
-      Sub = Base ++ (label Text) *{
+      Sub = Base ^ (label Text) *{
         @label = -> :label
       }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('Sub = Base ++ *{ expr }  (declaration return)', () => {
+  it('Sub = Base ^ *{ expr }  (declaration return)', () => {
     expect(() => compileSource(`
       Base = * {
         label Text = ingest
         @label = -> :label
       }
-      Greeting = Base ++ *{ "hello" }
+      Greeting = Base ^ *{ "hello" }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('Sub = Base ++ (params) *{ body } reaches the parent layer with super', () => {
+  it('Sub = Base ^ (params) *{ body } reaches the parent layer with super', () => {
     expect(() => compileSource(`
       Base = (x Integer) *{
         @x = -> v: x
       }
-      Wrap = Base ++ (y Integer) *{
+      Wrap = Base ^ (y Integer) *{
         @y = -> v: y
         @both = {
           :v Integer = super.x()

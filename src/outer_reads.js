@@ -186,7 +186,7 @@ export function markOuterReads(program) {
       const l = chain.find(l => l.opaque && l[kind].has(name));
       return l ? classes.get(l.owner) : null;
     };
-    // A subclass that uses its parent's class block (`D = C ++ …`) is outside the
+    // A subclass that uses its parent's class block (`D = C ^ …`) is outside the
     // block, as a trailing constructor is: neither closes over it.
     const outside = actor.membersInherited ? `a subclass of '${actor.membersInherited.replace(/^@/, '').replace(/__pub$/, '')}'` : 'a trailing constructor';
     const notClosedOver = (name, members) => {

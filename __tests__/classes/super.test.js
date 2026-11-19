@@ -23,7 +23,7 @@ const layers = `
     @readTotal = { return total }
   }
 
-  @U = @T ++ *{
+  @U = @T ^ *{
     total *Integer = super::total + 6
     h = -> super::h() + 10
     @pub = {
@@ -43,7 +43,7 @@ const layers = `
     }
   }
 
-  @V = @T ++ *{
+  @V = @T ^ *{
     @parentTotal = {
       x Integer = super::total
       return x
@@ -51,13 +51,13 @@ const layers = `
     @bump! = { total <- total + 1 }
   }
 
-  @W = @U ++ *{
+  @W = @U ^ *{
     h = -> super::h() + 100
   }
 
   A = *{ h = -> 1 }
   B = *{ h = -> 2 }
-  @C = A ++ B ++ (k Integer) *{
+  @C = A ^ B ^ (k Integer) *{
     h = -> 0
     @both = {
       x Integer = super[A]::h() * 10 + super[B]::h() + k
@@ -162,26 +162,26 @@ describe('super — errors', () => {
     expect(() => compileSource(`
       A = *{ h = -> 1 }
       B = *{ h = -> 2 }
-      C = A ++ B ++ *{ @x = { return super::h() } }
+      C = A ^ B ^ *{ @x = { return super::h() } }
     `)).toThrow("'super::h' in 'C' is ambiguous: 'A' and 'B' both define 'h' — write 'super[A]::h()' or 'super[B]::h()'");
   });
 
   it('super[S] names a direct parent only', () => {
     expect(() => compileSource(`${T}
-      U = T ++ *{}
-      V = U ++ *{ @x = { return super[T]::h() } }
+      U = T ^ *{}
+      V = U ^ *{ @x = { return super[T]::h() } }
     `)).toThrow("'super[T]::h' in 'V': 'T' isn't a direct parent of 'V' — only a direct parent's layer can be named for now");
   });
 
   it('super is not a value', () => {
     expect(() => compileSource(`${T}
-      U = T ++ *{ @x = { s = super; return 1 } }
+      U = T ^ *{ @x = { s = super; return 1 } }
     `)).toThrow("'super' names the parent layer, which isn't a value");
   });
 
   it('a name no parent defines', () => {
     expect(() => compileSource(`${T}
-      U = T ++ *{ @x = { return super::g() } }
+      U = T ^ *{ @x = { return super::g() } }
     `)).toThrow("'super::g' in 'U': 'T' has no protected 'g'");
   });
 

@@ -2,7 +2,7 @@ import { lowerActorValues } from './actor_values.js';
 // Class singletons: a class whose class block holds members of its own.
 //
 //   Nested:   C = actor { count *Integer = 0; new = (seed Integer) *{ … } }
-//   Trailing: C = (seed Integer) *{ … } ++ actor { count *Integer = 0 }
+//   Layered:  C = (seed Integer) *{ … } ^ { count *Integer = 0 }
 //
 // Either way the members are a singleton, kept in the declaring actor's cell
 // `C__class`, and `C` is an ordinary class of the declaring actor: `C()` builds

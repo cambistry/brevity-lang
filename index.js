@@ -92,10 +92,10 @@ function formatPublicFnSig(fn, aliasMap, purported = null) {
 function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', singletonBlock = () => null, typeDecls = []) {
   const ownParams = (actor.params || []).map(p => formatParam(p, aliasMap));
   const supertypes = (actor.supertypes || []).map(st => (st.sourceName ?? st.supertype).replace(/^@/, ''));
-  // Input: when subtyping, the parents come first, `Parent1 ++ Parent2 ++ `, and the
+  // Input: when subtyping, the parents come first, `Parent1 ^ Parent2 ^ `, and the
   // parens hold only the subtype's own params (inherited params are implied by the
-  // spread `...Parent` on the body side). No params: `T ++ -> *{…}`.
-  const parents = supertypes.length ? `${supertypes.join(' ++ ')} ++ ` : '';
+  // spread `...Parent` on the body side). No params: `T ^ -> *{…}`.
+  const parents = supertypes.length ? `${supertypes.join(' ^ ')} ^ ` : '';
   const input = !supertypes.length || ownParams.length ? `${parents}(${ownParams.join(', ')})` : parents.trimEnd();
   // Published params (`@name Type`) read as read-only fields.
   const fieldLines = publishedParamLines(actor, aliasMap).map(l => `    ${l}`);
@@ -270,9 +270,9 @@ function buildServiceDocument(ast) {
         return cls ? formatSingletonBlock(ast, cls, aliasMap, purportedByActor, 4) : null;
       };
       // A class with members of its own (src/singleton_classes.js) has them after
-      // its constructor: `C (…) -> *{ … } ++ actor { members }`.
+      // its constructor: `C (…) -> *{ … } ^ { members }`.
       const members = actor.membersClass ? ast.actors.find(a => a.name === actor.membersClass) : null;
-      const membersBlock = members ? ` ++ actor ${formatSingletonBlock(ast, members, aliasMap, purportedByActor, 2)}` : '';
+      const membersBlock = members ? ` ^ ${formatSingletonBlock(ast, members, aliasMap, purportedByActor, 2)}` : '';
       lines.push(`${name} ${formatConstructorSig(flat, aliasMap, flat.purported, name.endsWith('!') ? '=>' : '->', singletonBlock, ownTypes(ast, actor))}${membersBlock}`);
       continue;
     }

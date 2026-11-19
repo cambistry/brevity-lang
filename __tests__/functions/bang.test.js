@@ -1028,7 +1028,7 @@ describe('effect enforcement', () => {
   });
 
   it('a public parent is found: overriding its `!` needs no write', () => {
-    expect(() => compileSource('@P = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@U = @P ++ *{ @g! = { return self } }\n')).not.toThrow();
+    expect(() => compileSource('@P = *{\n  n *Integer = 0\n  @g! = { n <- 1 }\n}\n@U = @P ^ *{ @g! = { return self } }\n')).not.toThrow();
   });
 
   it('a public class is found: writing a fresh actor of it is no write', () => {
@@ -1041,7 +1041,7 @@ describe('effect enforcement', () => {
         @g = { return 1 }
         @quiet = { b Integer = 1 }
       }
-      U = C ++ *{}
+      U = C ^ *{}
     `;
 
     it('a typed param', () => {
@@ -1075,7 +1075,7 @@ describe('effect enforcement', () => {
         a *Integer = 0
         @go! = { a <- 1 }
       }
-      Sub = Base ++ *{
+      Sub = Base ^ *{
         @go! = { return 1 }
       }
       @t = { return 1 }
@@ -1290,7 +1290,7 @@ describe('effect enforcement', () => {
         @take = (f () -> ()) { return 1 }
         @give! = (f () => ()) { f() }
       }
-      D = C ++ *{}
+      D = C ^ *{}
     `;
     const body = (lines) => `${CLASSES}\n@go! = (c C) {\n  a <- 0\n  ${lines}\n}\n`;
     const service = '{ take (f: () -> ()) -> (n: Integer)\n pos (() -> ()) -> (n: Integer)\n give (f: () => ()) => self }';
@@ -1420,7 +1420,7 @@ describe('a fresh actor writes only itself — validation', () => {
   });
 
   it('a constructor calling its own function that writes only itself doesn\'t write', () => {
-    expect(() => compileSource(`${W('n <- 1')}V = W ++ *{\n  @hit!()\n}\n@go = { return 1 }\n`)).not.toThrow();
+    expect(() => compileSource(`${W('n <- 1')}V = W ^ *{\n  @hit!()\n}\n@go = { return 1 }\n`)).not.toThrow();
   });
 
   it('a constructor calling its own function that writes past it does', () => {
@@ -1591,7 +1591,7 @@ describe('chained calls', () => {
       @one = { return 1 }
     }
 
-    S! = Base! ++ *{
+    S! = Base! ^ *{
       @more = { return 10 }
     }
 
@@ -1622,7 +1622,7 @@ describe('chained calls', () => {
       @one = { return 1 }
     }
 
-    D = P ++ *{
+    D = P ^ *{
       @two = {
         v Integer = @one()
         return v + 1

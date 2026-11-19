@@ -86,7 +86,7 @@ const forms = `
       x Integer = n.built()
       return x
     }
-  } ++ actor {
+  } ^ {
     @pub *Integer = 1
     prot *Integer = 2
     @pubFn = -> 10
@@ -100,7 +100,7 @@ const forms = `
       x Integer = class::prot + class.pub
       return x
     }
-  } ++ actor {
+  } ^ {
     @pub *Integer = 0
     prot *Integer = 0
   }
@@ -249,13 +249,13 @@ const subclass = `
       x Integer = class::protFn()
       return x
     }
-  } ++ actor {
+  } ^ {
     @pub *Integer = 1
     prot *Integer = 2
     protFn = -> 20
   }
 
-  @U = @T ++ (u Integer) *{
+  @U = @T ^ (u Integer) *{
     first Integer = @T::prot + class.pub + u
     @first = { return first }
     @uProt = { return @T::prot }
@@ -337,19 +337,19 @@ describe('class and :: — from a subclass\'s actor', () => {
 describe('class and :: — what comes after `::`', () => {
   it('a public cell', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return class::count } } ++ actor { @count *Integer = 1 }
+      C = (s Integer) *{ @r = { return class::count } } ^ { @count *Integer = 1 }
     `)).toThrow(/^'count' is public: write 'class\.count'$/);
   });
 
   it('a public cell, by the class\'s name', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return C::count } } ++ actor { @count *Integer = 1 }
+      C = (s Integer) *{ @r = { return C::count } } ^ { @count *Integer = 1 }
     `)).toThrow(/^'count' is public: write 'C\.count'$/);
   });
 
   it('a write to a public cell', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @w! = { class::count <- 2 } } ++ actor { @count *Integer = 1 }
+      C = (s Integer) *{ @w! = { class::count <- 2 } } ^ { @count *Integer = 1 }
     `)).toThrow(/^'count' is public: write 'class\.count'$/);
   });
 
@@ -358,25 +358,25 @@ describe('class and :: — what comes after `::`', () => {
       C = (s Integer) *{ @r = {
         x Integer = C::pubFn()
         return x
-      } } ++ actor { @pubFn = -> 1 }
+      } } ^ { @pubFn = -> 1 }
     `)).toThrow(/^'pubFn' is public: write 'C\.pubFn\(\)'$/);
   });
 
   it('a name the class block doesn\'t declare', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return C::nope } } ++ actor { prot *Integer = 1 }
+      C = (s Integer) *{ @r = { return C::nope } } ^ { prot *Integer = 1 }
     `)).toThrow(/^No protected member 'nope' in 'C'$/);
   });
 
   it('a function, not called', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return C::h } } ++ actor { h = -> 1 }
+      C = (s Integer) *{ @r = { return C::h } } ^ { h = -> 1 }
     `)).toThrow(/^'C::h' is a function: call it, 'C::h\(\)'$/);
   });
 
   it('a write to a cell that isn\'t `*`', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @w! = { class::prot <- 2 } } ++ actor { prot Integer = 1 }
+      C = (s Integer) *{ @w! = { class::prot <- 2 } } ^ { prot Integer = 1 }
     `)).toThrow(/^Cannot set 'prot' — it's a cell of .* that isn't '\*', so it can't be set$/);
   });
 
@@ -384,7 +384,7 @@ describe('class and :: — what comes after `::`', () => {
     expect(() => compileSource(`
       C = (s Integer) *{
         class::prot <- s
-      } ++ actor { prot *Integer = 0 }
+      } ^ { prot *Integer = 0 }
     `)).toThrow(/^Class 'C' writes \(prot <- …\) while constructing, so it must be named 'C!'/);
   });
 
@@ -402,21 +402,21 @@ describe('class and :: — what comes after `::`', () => {
 describe('class and :: — only within the class\'s family', () => {
   it('a read from the file', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ++ actor { prot *Integer = 1 }
+      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
       @go = { return C::prot }
     `)).toThrow(/^'C::prot' — a protected member of 'C' is reached only from its family: its actors and its subclasses' actors$/);
   });
 
   it('a read from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ++ actor { prot *Integer = 1 }
+      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
       D = *{ @r = { return C::prot } }
     `)).toThrow(/^'C::prot' — a protected member of 'C' is reached only from its family/);
   });
 
   it('a call from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ++ actor { h = -> 1 }
+      C = (s Integer) *{ @r = -> 1 } ^ { h = -> 1 }
       D = *{ @r = {
         x Integer = C::h()
         return x
@@ -426,7 +426,7 @@ describe('class and :: — only within the class\'s family', () => {
 
   it('a write from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ++ actor { prot *Integer = 1 }
+      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
       D = *{ @w! = { C::prot <- 2 } }
     `)).toThrow(/^'C::prot <- …' — a protected member of 'C' is reached only from its family/);
   });
@@ -440,8 +440,8 @@ describe('class and :: — only within the class\'s family', () => {
 
   it('a subclass with a class block of its own isn\'t supported yet', () => {
     expect(() => compileSource(`
-      T = (s Integer) *{ @r = -> 1 } ++ actor { prot *Integer = 1 }
-      U = T ++ (u Integer) *{ @r2 = { return T::prot } } ++ actor { other *Integer = 1 }
+      T = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
+      U = T ^ (u Integer) *{ @r2 = { return T::prot } } ^ { other *Integer = 1 }
     `)).toThrow(/^'T::prot' — 'U' has a class block of its own, and reaching a parent's protected members from it isn't supported yet$/);
   });
 });
@@ -449,7 +449,7 @@ describe('class and :: — only within the class\'s family', () => {
 describe('class — where it names a class', () => {
   it('in a class block', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ++ actor {
+      C = (s Integer) *{ @r = -> 1 } ^ {
         prot *Integer = 1
         @x = { return class::prot }
       }
@@ -514,7 +514,7 @@ const selfClass = `
       x Integer = n.built()
       return x
     }
-  } ++ actor {
+  } ^ {
     @pub *Integer = 1
     prot *Integer = 2
   }
@@ -538,7 +538,7 @@ describe('self::class — the same as class', () => {
 
   it("another actor's class isn't supported yet", () => {
     expect(() => compileSource(`
-      C = *{} ++ actor { @a *Integer = 1 }
+      C = *{} ^ { @a *Integer = 1 }
       @go = {
         c = C()
         x Integer = c::class.a

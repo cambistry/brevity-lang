@@ -312,7 +312,7 @@ describe('constructor delimited form — expression defaults', () => {
     Base = *{
       @base = -> v: 1
     }
-    Sub = Base ++ (n Integer = 1 + 2) *{
+    Sub = Base ^ (n Integer = 1 + 2) *{
       @sum = -> total: n
     }
 
@@ -362,14 +362,14 @@ describe('constructor delimited form — expression defaults', () => {
   it('a default reads a later param', () => total('later', 21));
   it('a default reads a later param given by name', () => total('laterByName', 9));
   it('a default reads a file-level cell', () => total('fromFile', 13));
-  it('a subclass param takes one after ++', () => total('sub', 3));
+  it('a subclass param takes one after ^', () => total('sub', 3));
 
   it('renders as optional', () => {
     expect(extract(`
       @A = *{}
       @Sum = (a Integer, b Integer = 1 + 2) *{}
-      @Sub = @A ++ (n Integer = 1 + 2) *{}
-    `).interface.service).toBe('{\n  A () -> *{}\n  Sum (Integer, ? Integer) -> *{}\n  Sub A ++ (? Integer) -> *{\n    ...A\n  }\n}');
+      @Sub = @A ^ (n Integer = 1 + 2) *{}
+    `).interface.service).toBe('{\n  A () -> *{}\n  Sum (Integer, ? Integer) -> *{}\n  Sub A ^ (? Integer) -> *{\n    ...A\n  }\n}');
   });
 
   it('an untyped param with an expression default is an error', () => {

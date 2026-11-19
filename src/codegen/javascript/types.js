@@ -103,8 +103,8 @@ export function parseFieldList(str) {
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
 //   Counter (start: Integer) -> *{ … }    constructor; body always written
-//   Text Node ++ -> *{}                   constructor with a supertype
-//   C A ++ B ++ (c: Integer) -> *{ … }    two supertypes, then params
+//   Text Node ^ -> *{}                    constructor with a supertype
+//   C A ^ B ^ (c: Integer) -> *{ … }      two supertypes, then params
 //   set name (Type)                       settable field
 //   cell *Type                            ref cell (readable and settable)
 //   name Type                             read-only field
@@ -146,13 +146,13 @@ function splitTopLevel(str, sep) {
 }
 
 // A constructor entry's parents come before its params, outside the parens
-// (notes/class-extends-plusplus-2026-11-10.md): `C A ++ B ++ (c: Integer) -> *{ … }`,
-// `Text Node ++ -> *{}`. Returns the parents and what follows them, or null.
-const PARENTS_RE = /^((?:@?[A-Za-z_][A-Za-z0-9_]*!?\s*\+\+\s*)+)/;
+// (notes/caret-composition-2026-11-19.md): `C A ^ B ^ (c: Integer) -> *{ … }`,
+// `Text Node ^ -> *{}`. Returns the parents and what follows them, or null.
+const PARENTS_RE = /^((?:@?[A-Za-z_][A-Za-z0-9_]*!?\s*\^\s*)+)/;
 function splitLeadingParents(rest) {
   const m = rest.match(PARENTS_RE);
   if (!m) return null;
-  const supertypes = m[1].split('++').map(p => p.trim()).filter(Boolean).map(supertype => ({ supertype }));
+  const supertypes = m[1].split('^').map(p => p.trim()).filter(Boolean).map(supertype => ({ supertype }));
   return { supertypes, after: rest.slice(m[0].length).trim() };
 }
 
@@ -207,7 +207,7 @@ function parseTypeDeclFields(valueText) {
 const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.(?=[\s(]|$)|\??!?)/;
 
 // Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`. A
-// class with members of its own has them after: `*{ … } ++ actor { members }`.
+// class with members of its own has them after: `*{ … } ^ { members }`.
 function parseSignature(name, text) {
   const pEnd = groupEnd(text, 0);
   if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
@@ -223,7 +223,7 @@ function parseSignature(name, text) {
     if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
     const after = rest.slice(bEnd).trim();
     let membersInner = null;
-    const block = /^\+\+\s*actor\s*\{/.exec(after);
+    const block = /^\^\s*\{/.exec(after);
     if (block) {
       const open = block[0].length - 1;
       const mEnd = groupEnd(after, open);
@@ -284,7 +284,7 @@ function parseSignature(name, text) {
   throw new Error(`Interface entry '${name}': unexpected '${rest}'`);
 }
 
-// `[A ++ B ++] (params)` + constructor-body members → actor-shaped record:
+// `[A ^ B ^] (params)` + constructor-body members → actor-shaped record:
 //   { supertypes, initParams, functions, setters }
 // `supertypes` is an array of `{ supertype }` matching the AST.
 function parseConstructor(name, supertypes, paramsInner, bodyInner) {
@@ -352,7 +352,7 @@ function parseEntry(text) {
   }
   const parents = splitLeadingParents(rest);
   if (parents) {
-    // `C A ++ (params) -> *{ … }`, or with no params `C A ++ -> *{ … }`.
+    // `C A ^ (params) -> *{ … }`, or with no params `C A ^ -> *{ … }`.
     const sig = parseSignature(name, parents.after.startsWith('(') ? parents.after : `() ${parents.after}`);
     if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': unexpected '${parents.after}'`);
     const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
@@ -401,7 +401,7 @@ export function parseInterface(manifestStr) {
   //                                `returns` it's `=> (Type) | self`
   //   result.__types[Name]       — constructors `{ effect, supertypes, initParams, functions, setters }`,
   //                                and `members`, a document of their own, for a class
-  //                                with members (`*{ … } ++ actor { … }`)
+  //                                with members (`*{ … } ^ { … }`)
   //   result.__typeDecls[Name]   — `{ fields: [TypeField…] }`
   //   result.__fields[name]      — `{ type, cell, readOnly }`: a prop `name Type`
   //                                (cell false), a cell `name &Type` / `name *Type`;

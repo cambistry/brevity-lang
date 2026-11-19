@@ -88,16 +88,18 @@ echo = (k Actor) -> k
 make = (k (seed Integer) -> *{ get () -> (value: Integer) }) -> k(1)  // its constructor profile
 ```
 
-## Extends (`++`)
+## Composition (`^`)
 
 ```brevity
-Tagged = Box ++ (tag: Text) *{ @tag = -> tag: tag }  // parent, then params
-Both = A ++ B ++ (n Integer) *{}                   // several parents; later wins
-Plain = Box++                                      // a new actor with a `new`, no changes
-Mixed = A ++ B                                     // two parents, no changes
-Extra = Box ++ *{ @more = -> 1 }                   // body, no params
-Over = Box ++ *{ h = -> super::h() + 1 }           // the parent layer's protected h
-Pick = A ++ B ++ *{ @get = -> super[A].get() }     // parent A's public @get
+Tagged = Box ^ (tag: Text) *{ @tag = -> tag: tag }   // parent, then params
+Both = A ^ B ^ (n Integer) *{}                       // several parents; later wins
+Plain = Box^                                         // a new actor with a `new`, no changes
+Mixed = A ^ B                                        // two parents, no changes
+Extra = Box ^ *{ @more = -> 1 }                      // body, no params
+Over = Box ^ *{ h = -> super::h() + 1 }              // the parent layer's protected h
+Pick = A ^ B ^ *{ @get = -> super[A].get() }         // parent A's public @get
+Counted = (n Integer) *{} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
+Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor` only begins a definition
 ```
 
 ## Dependencies (`use`)
@@ -175,7 +177,7 @@ exposed: it's `@a` on the wire, and `.a` in the Brevity that calls it.
 ```brevity
 @Box = *{ @who = -> "public" }
 Box = *{ @who = -> "private" }
-@Sub = @Box ++ *{}              // superclasses and types use the same name
+@Sub = @Box ^ *{}               // superclasses and types use the same name
 
 @go = {
   a = @Box()                     // the public actor's new

@@ -450,8 +450,6 @@ export function tokenize(source) {
     }
 
     // Arithmetic operators
-    // `++` is the extends operator (class composition); `+` is arithmetic.
-    if (source[i] === '+' && source[i + 1] === '+') { tokens.push({ type: 'PLUSPLUS', value: '++' }); i += 2; continue; }
     if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
     if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
     // `^` is the exponent. `**` is reserved for lineal singletons (the braced form

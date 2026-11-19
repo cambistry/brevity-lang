@@ -121,9 +121,55 @@ export function parseTypeText(text) {
 export const colonParamError = (name, typeName) =>
   new Error(`':${name}' is colon destructuring, which a param list doesn't take — a named param is '${name}: ${typeName ?? 'Type'}'`);
 
-export function parse(tokensIn, { typeOnly = false } = {}) {
+// A definition that is a chain of names only, `C = A ^ B`, has the tokens of an
+// exponent, `n = x ^ y`. It composes when its head is a class in scope
+// (notes/caret-composition-2026-11-19.md). Scope is known only once the file is
+// read, so a file with such a chain is read twice: first to learn its classes,
+// then with each chain decided. So is `D = A ^ "x"`: when `A` is a class, what
+// follows `^` must be a layer.
+export function parse(tokensIn, options = {}) {
+  const seen = [];
+  const first = parseOnce(tokensIn, { ...options, nameChains: { seen } });
+  if (!seen.length) return first;
+  const bare = (n) => (n || '').replace(/^@/, '');
+  const classes = new Set();
+  const collect = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(collect); return; }
+    if (node.type === 'Actor' && node.name && node.nameChainAt === undefined) {
+      classes.add(bare(node.name));
+      if (node.sourceName) classes.add(bare(node.sourceName));
+    }
+    if (node.type === 'Dependency') {
+      if (node.name) classes.add(bare(node.name));
+      for (const d of node.destructures || []) if (d.local ?? d.name) classes.add(bare(d.local ?? d.name));
+    }
+    if (typeof node.name === 'string' && node.value?.type === 'Identifier' && node.value.fromUse) classes.add(bare(node.name));
+    for (const v of Object.values(node)) if (v && typeof v === 'object') collect(v);
+  };
+  collect(first);
+  // A chain that composes is a class too, for a chain whose head it is.
+  const compose = new Set();
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const c of seen) {
+      if (c.notLayer || compose.has(c.at) || !classes.has(bare(c.head))) continue;
+      compose.add(c.at);
+      classes.add(bare(c.name));
+      grew = true;
+    }
+  }
+  // After a class, `^` takes a layer.
+  const bad = seen.find(c => c.notLayer && classes.has(bare(c.head)));
+  if (bad) throw new Error(`In '${bad.name.replace(/^@/, '')}', '${bare(bad.head)}' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')`);
+  if (!seen.some(c => !c.notLayer)) return first;
+  return parseOnce(tokensIn, { ...options, nameChains: { compose } });
+}
+
+function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
   let tokens = foldSelfClass(joined);
+  const fileTokens = tokens;
   let pos = 0;
   const functionNames = new Set();
   const fileFunctionNames = fileLevelFunctionNames(tokensIn);
@@ -409,36 +455,131 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     return n ? { len: n } : null;
   };
 
-  // Token types that end a bare `D = A ++ B` definition.
+  // Token types that end a definition, as after `D = C^`.
   const isDefinitionEnd = (i) => ['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE', 'DIVIDER'].includes(tokens[i]?.type);
 
-  // A bare extends definition at `i`: `A ++ …` (no parens), as in `D = C++`,
-  // `D = A ++ B`, `D = C ++ *{ … }`.
-  const isBareExtendStart = (i = pos) => {
-    const seg = parentSegmentAt(i);
-    return !!seg && tokens[i + seg.len]?.type === 'PLUSPLUS';
+  // Index just past the `{ … }` group that opens at `i`, or -1.
+  const braceGroupEnd = (i) => {
+    let depth = 0;
+    for (let j = i; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LBRACE') depth++;
+      else if (t === 'RBRACE' && --depth === 0) return j + 1;
+      else if (t === 'EOF') return -1;
+    }
+    return -1;
   };
 
-  // Parse the `++`-joined parents of a class (notes/class-extends-plusplus-2026-11-10.md),
-  // which come before its params, outside the parens: `U = T ++ (u Text) *{ … }`,
-  // `D = A ++ B`. Left to right, a segment is a parent while it is `B` followed by `++`,
-  // or a bare `B` that ends the definition.
-  function parseExtendsParents() {
-    const supertypes = [];
-    while (true) {
-      const seg = parentSegmentAt(pos);
-      if (!seg) break;
-      const after = pos + seg.len;
-      const joined = tokens[after]?.type === 'PLUSPLUS';
-      const last = supertypes.length > 0 && isDefinitionEnd(after);
-      if (!joined && !last) break;
-      const sigil = peek().type === 'AT' ? (consume(), '@') : '';
-      supertypes.push({ supertype: sigil + expect('IDENT').value });
-      pos = after;
-      if (!joined) break;
-      consume(); // ++
+  // A layer of a `^` chain at token `i` (notes/caret-composition-2026-11-19.md), and
+  // the index past it, or null:
+  //   parent       `T`, `@T`
+  //   constructor  `*{ … }`, `(params) *{ … }`, `-> *{ … }`
+  //   singleton    `{ … }`
+  //   head         `actor { … }`, a singleton as the first layer only
+  const layerAt = (i) => {
+    if (isActorKw(tokens[i]) && tokens[i + 1]?.type === 'LBRACE') { const end = braceGroupEnd(i + 1); return end < 0 ? null : { kind: 'head', end }; }
+    const seg = parentSegmentAt(i);
+    if (seg) return { kind: 'parent', end: i + seg.len };
+    const t = tokens[i]?.type;
+    if (t === 'LBRACE') { const end = braceGroupEnd(i); return end < 0 ? null : { kind: 'singleton', end }; }
+    if ((t === 'STAR' && tokens[i + 1]?.type === 'LBRACE') || isDelimitedClassStart(i)) {
+      let j = i;
+      while (j < tokens.length && !(tokens[j].type === 'STAR' && tokens[j + 1]?.type === 'LBRACE')) {
+        if (tokens[j].type === 'LPAREN') { let depth = 0; for (; j < tokens.length; j++) { if (tokens[j].type === 'LPAREN') depth++; else if (tokens[j].type === 'RPAREN' && --depth === 0) break; } }
+        j++;
+      }
+      const end = braceGroupEnd(j + 1);
+      return end < 0 ? null : { kind: 'constructor', end };
     }
-    return supertypes;
+    return null;
+  };
+
+  // A `^` chain at token `i`: `{ kinds, namesOnly }`, or null. A chain is two or more
+  // layers joined by `^`, or a parent with a trailing `^` (`V^`, the empty subclass).
+  // `^ actor { … }` isn't a layer: `actor` begins a definition only.
+  const scanChain = (i = pos) => {
+    const first = layerAt(i);
+    if (!first) return null;
+    const kinds = [first.kind];
+    let j = first.end;
+    let trailing = false;
+    while (tokens[j]?.type === 'POWER') {
+      const next = layerAt(j + 1);
+      if (!next || next.kind === 'head') {
+        if (kinds.at(-1) === 'parent' && isDefinitionEnd(j + 1)) { trailing = true; j++; }
+        break;
+      }
+      kinds.push(next.kind);
+      j = next.end;
+    }
+    if (kinds.length < 2 && !trailing) return null;
+    const namesOnly = !trailing && kinds.every(k => k === 'parent');
+    // A chain of names that goes on is an expression: `x ^ y + 1`.
+    if (namesOnly && !isDefinitionEnd(j)) return null;
+    return { kinds, namesOnly };
+  };
+
+  // Whether the chain at `pos`, defining `op`, composes. A chain of names only
+  // composes when its head is a class in scope (see parse).
+  // A name followed by `^` that isn't a chain (`D = A ^ "x"`) is an exponent unless
+  // its head is a class, when what follows `^` isn't a layer: noted for parse to check.
+  const chainHead = () => (tokens[pos].type === 'AT' ? '@' : '') + tokens[pos + (tokens[pos].type === 'AT' ? 1 : 0)].value;
+  const chainComposes = (chain, op) => {
+    if (!chain) {
+      const seg = parentSegmentAt(pos);
+      if (seg && tokens[pos + seg.len]?.type === 'POWER' && tokens === fileTokens) nameChains?.seen?.push({ at: pos, name: op, head: chainHead(), notLayer: true });
+      return false;
+    }
+    if (!chain.namesOnly || tokens !== fileTokens) return true;
+    if (nameChains?.seen) {
+      nameChains.seen.push({ at: pos, name: op, head: chainHead() });
+      return true;
+    }
+    return !!nameChains?.compose?.has(pos);
+  };
+
+  // Parse a `^` chain (see scanChain), left to right; a layer further right takes
+  // precedence. Today's semantics: the parents, then at most one constructor and at
+  // most one singleton, the class's members block.
+  //   A ^ B                       parents only — a new class, no changes
+  //   C^                          one parent
+  //   C ^ (params) *{ body }      parents, then a constructor
+  //   (params) *{ body } ^ { … }  a constructor, then its singleton
+  //   actor { … } ^ *{ body }     a singleton head, then a constructor
+  function parseComposition(op) {
+    const at = pos;
+    const supertypes = [];
+    let params = [];
+    let nested = null;
+    let members = null;
+    while (true) {
+      const layer = layerAt(pos);
+      if (!layer) break;
+      if (layer.kind === 'head' && pos !== at) break;
+      if (layer.kind === 'parent') {
+        if (nested || members) throw new Error(`In '${op}', a parent class comes before the constructor and singleton layers`);
+        const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+        supertypes.push({ supertype: sigil + expect('IDENT').value });
+      } else if (layer.kind === 'constructor') {
+        if (nested) throw new Error(`In '${op}', a class has one constructor layer`);
+        if (peek().type === 'STAR') {
+          consume(); // *
+          nested = parseConstructorBody(op, false);
+        } else {
+          let parenSupertypes;
+          ({ params, supertypes: parenSupertypes, nested } = parseDelimitedClass(op));
+          supertypes.push(...parenSupertypes);
+        }
+      } else {
+        if (members) throw new Error(`In '${op}', a class has one singleton layer`);
+        members = parseTrailingMembers(op);
+      }
+      if (peek().type !== 'POWER') break;
+      consume(); // ^
+      if (isDefinitionEnd(pos)) break; // `V^`
+    }
+    nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
+    return { params, supertypes, nested, members };
   }
 
   const makeNumLiteral = (tok) => {
@@ -4109,7 +4250,7 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     // The private-singleton desugar (a hidden class, constructed once into the
     // cell) plus the published cell's getter. The actor is addressed by its
     // label: `@name` in its enclosing actor (`main @name`), not `@C/N`.
-    if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1))) {
+    if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1)) && !scanChain(pos + 1)) {
       consume(); // =
       const cls = `${op}_singleton`;
       const nested = parseSingletonMembers(cls);
@@ -4254,7 +4395,7 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
         // has been opened here, so it cannot be the RHS of `=`.
         throw new Error(`'return' cannot be the right-hand side of '=' — no function body has been opened. Use '@${op} = -> expr' or '@${op} = { return expr }'.`);
       }
-      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN' && !isBareExtendStart()) {
+      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN' && !scanChain()) {
         throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
       }
       // Allow `= \n *...` — body-opener `=` may sit on its own line
@@ -4288,20 +4429,20 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     // At this point we've consumed the operator (=, <<, >>).
     // Next could be: PIPE (delimited fn), LT (constructor), NEWLINE (lineal), ->, {, .
 
-    if (isDelimitedClassStart() || isBareExtendStart()) {
+    // A public class is never a value, so a chain of names composes here.
+    const _chain = scanChain();
+    if (isDelimitedClassStart() || _chain) {
       // Public constructor: @Name = (params) [->] *{ body } | @Name = [->] *{ body }
-      //                     @Name = A ++ B | @Name = C++ | @Name = C ++ *{ body }
-      const isBare = isBareExtendStart();
-      const { params: cParams, supertypes, nested } = isBare ? parseBareExtendClass('@' + op) : parseDelimitedClass('@' + op);
+      //                     @Name = A ^ B | @Name = C^ | @Name = C ^ *{ body } | … ^ { members }
+      const { params: cParams, supertypes, nested, members } = _chain ? parseComposition('@' + op) : { ...parseDelimitedClass('@' + op), members: null };
       const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
       if (overloadMode !== 'create') {
+        if (members) throw new Error(`'@${op}' is an overload clause, which takes no singleton layer`);
         return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
       }
       const classNode = AST.actor('@' + op, { ...actorNode, overloadMode });
-      // Trailing class members: `@C = (params) *{ … } ++ actor { members }`.
-      if (isTrailingMembersStart()) {
-        consume(); // ++
-        const members = parseTrailingMembers('@' + op);
+      // Its singleton layer: `@C = (params) *{ … } ^ { members }`.
+      if (members) {
         classNode.membersClass = members.actor.name;
         if (constructorBody) constructorBody.push(AST.typedAssign(members.cell, null, AST.functionCallExpr(AST.identifier(members.actor.name), [])));
         return [classNode, members.actor];
@@ -4752,12 +4893,7 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     return nested;
   }
 
-  // `++ actor {` right after a delimited constructor: its trailing class block.
-  function isTrailingMembersStart() {
-    return peek().type === 'PLUSPLUS' && isSingletonStart(pos + 1);
-  }
-
-  // A class's trailing members, `++ actor { … }` right after its constructor: a singleton
+  // A class's singleton layer, `^ { … }` (or an `actor { … }` head): a singleton
   // the class's actors reach through its published interface (`C.count`), not by
   // closing over it. Its actor is kept in the declaring actor's cell `C__class`.
   function parseTrailingMembers(className) {
@@ -4765,7 +4901,7 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     // the hidden names.
     const base = className.replace(/^[@#]/, '').replace(/[!.]$/, '');
     const cls = `${base}_singleton`;
-    const nested = parseSingletonMembers(cls);
+    const nested = peek().type === 'LBRACE' ? parseConstructorBody(cls, false) : parseSingletonMembers(cls);
     const actor = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
     actor.singletonOf = `${base}__class`;
     actor.membersOf = className;
@@ -4803,28 +4939,6 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
     if (peek().type === '->') consume();
     expect('STAR');
     const nested = parseConstructorBody(op, false);
-    return { params, supertypes, nested };
-  }
-
-  // Parse a bare extends definition (see isBareExtendStart):
-  //   A ++ B                    parents only — a new class, no changes
-  //   C++                       one parent
-  //   C ++ *{ body }            parents and a body, no params
-  //   C ++ (params) *{ body }   parents, then params
-  function parseBareExtendClass(op) {
-    const supertypes = parseExtendsParents();
-    let nested = null;
-    let params = [];
-    if (peek().type === 'LPAREN') {
-      ({ nested, params } = parseDelimitedClass(op));
-    } else if ((peek().type === '->' && tokens[pos + 1]?.type === 'STAR') || (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE')) {
-      if (peek().type === '->') consume();
-      consume(); // *
-      nested = parseConstructorBody(op, false);
-    } else if (!isDefinitionEnd(pos)) {
-      throw new Error(`In '${op}', expected a parent class, '(params)', '*{ … }' or the end of the definition after '++'`);
-    }
-    nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
     return { params, supertypes, nested };
   }
 
@@ -5160,7 +5274,7 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
         const name = peek().value;
         if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
-          // A trailing class block (`*{ … } ++ actor { … }`) hasn't been parsed yet, so the error
+          // A class's singleton layer (`*{ … } ^ { … }`) hasn't been parsed yet, so the error
           // waits until it is: src/singleton_classes.js says which it is.
           consume();
           const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
@@ -5384,7 +5498,9 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
           // here and constructs it once, when this actor is constructed; `name`
           // holds the actor. It takes no params and reaches what it needs
           // through the actors it's declared in.
-          if (isSingletonStart() || isLinealSingletonStart()) {
+          const _chain = scanChain();
+          const _composes = chainComposes(_chain, op);
+          if ((isSingletonStart() || isLinealSingletonStart()) && !_composes) {
             if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = actor { … }'`);
             const cls = `${op.replace(/^[@#]/, '')}_singleton`;
             const nested = parseSingletonMembers(cls);
@@ -5395,14 +5511,14 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
           }
           // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }
           //              name =\n*\n params\n*\n body (lineal)
-          // Subclass:    name = T ++ (params) *{ ... } | name = A ++ B ++ (params) *{ ... }
-          //              name = A ++ B | name = C++ | name = C ++ *{ ... }
-          const _isDelimitedClass = isDelimitedClassStart();
-          const _isBareExtend = !_isDelimitedClass && isBareExtendStart();
-          if (_isDelimitedClass || _isBareExtend || peek().type === 'STAR') {
-            let cParams, supertypes, nested;
-            if (_isBareExtend) {
-              ({ params: cParams, supertypes, nested } = parseBareExtendClass(op));
+          // Composed:    name = T ^ (params) *{ ... } | name = A ^ B ^ (params) *{ ... }
+          //              name = A ^ B | name = C^ | name = C ^ *{ ... } | ... ^ { members }
+          const _isDelimitedClass = !_composes && isDelimitedClassStart();
+          if (_composes || _isDelimitedClass || peek().type === 'STAR') {
+            let cParams, supertypes, nested, members = null;
+            const _at = pos;
+            if (_composes) {
+              ({ params: cParams, supertypes, nested, members } = parseComposition(op));
             } else if (_isDelimitedClass) {
               ({ params: cParams, supertypes, nested } = parseDelimitedClass(op));
             } else {
@@ -5411,13 +5527,13 @@ export function parse(tokensIn, { typeOnly = false } = {}) {
             }
             const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
+              if (members) throw new Error(`'${op}' is an overload clause, which takes no singleton layer`);
               functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
-              // Trailing class members: `C = (params) *{ … } ++ actor { members }`.
-              if ((_isDelimitedClass || _isBareExtend) && isTrailingMembersStart()) {
-                consume(); // ++
-                const members = parseTrailingMembers(op);
+              if (_chain?.namesOnly) Object.defineProperty(nestedActors[nestedActors.length - 1], 'nameChainAt', { value: _at });
+              // Its singleton layer: `C = (params) *{ … } ^ { members }`.
+              if (members) {
                 nestedActors.push(members.actor);
                 nestedActors[nestedActors.length - 2].membersClass = members.actor.name;
                 constructorBody.push(AST.typedAssign(members.cell, null, AST.functionCallExpr(AST.identifier(members.actor.name), [])));
