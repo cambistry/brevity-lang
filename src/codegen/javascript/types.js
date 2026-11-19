@@ -73,7 +73,7 @@ export function parseFieldList(str) {
   // concern; the specific default value is internal to the implementation
   // and is not part of the manifest.
   const fields = [];
-  for (const part of splitTopLevel(str, ',')) {
+  for (const part of commaParts(str)) {
     let trimmed = part.trim();
     if (!trimmed) continue;
     let optional = false;
@@ -131,6 +131,14 @@ function groupEnd(str, start) {
 }
 
 // Splits `str` at each top-level occurrence of `sep`.
+// A comma-separated list's parts. A comma follows a part: an empty one before
+// the last (`, a`, `a, , b`) is an error; a trailing comma is fine.
+function commaParts(str) {
+  const parts = splitTopLevel(str, ',');
+  if (parts.slice(0, -1).some(p => !p.trim())) throw new Error(`Unexpected ',' in '${str.trim()}'`);
+  return parts;
+}
+
 function splitTopLevel(str, sep) {
   const out = [];
   let depth = 0, last = 0;
@@ -164,7 +172,7 @@ function parseTypeDeclFields(valueText) {
   if (!inner) return [];
   // Commas OR newlines separate fields (lineal form); nested `()` (an
   // anonymous shape or a function-signature field type) is preserved.
-  const parts = splitTopLevel(inner, ',').flatMap(p => splitTopLevel(p, '\n'));
+  const parts = commaParts(inner).flatMap(p => splitTopLevel(p, '\n'));
   const fields = [];
   for (const raw of parts) {
     let trimmed = raw.trim();
@@ -386,7 +394,7 @@ export const fieldRecord = (e) => ({ type: e.type, cell: e.cell, readOnly: e.rea
 // multi-line type declarations and constructor bodies work.
 function parseEntries(body) {
   const entries = [];
-  for (const raw of splitTopLevel(body, '\n').flatMap(line => splitTopLevel(line, ','))) {
+  for (const raw of splitTopLevel(body, '\n').flatMap(line => commaParts(line))) {
     const text = raw.trim();
     if (text) entries.push(parseEntry(text));
   }

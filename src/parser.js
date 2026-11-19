@@ -75,7 +75,7 @@ function joinOwnCellWrites(tokensIn) {
 const atTypeOfClass = (tokens, i) => {
   const prev = tokens[i - 1];
   if (!prev) return false;
-  if (prev.type === 'IDENT' || prev.type === 'STAR' || prev.type === 'PIPE' || prev.type === 'AMPERSAND') return true;
+  if (prev.type === 'IDENT' || prev.type === 'STAR' || prev.type === 'PIPE') return true;
   if (prev.type === 'KEYWORD' && prev.value === 'of') return true;
   return prev.type === 'BANG' && tokens[i - 2]?.type === 'KEYWORD' && tokens[i - 2].value === 'as';
 };
@@ -383,6 +383,33 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   // In an XML attribute block (`<div @color *Text = "black" style={…}>`) the
   // separator is a space, not a line break.
   let inAttrBlock = false;
+  // A list's items are separated: `a, b`, or one per line where the list takes
+  // that. `open` is where its items start. Two items with nothing between them,
+  // or a comma that follows no item (`(, a)`, `a, , b`), is an error.
+  const LIST_SEPARATORS = new Set(['COMMA', 'NEWLINE', 'BLOCK_SEP']);
+  const expectListSeparator = (open, what) => {
+    if (pos === open || peek().type === 'COMMA' || LIST_SEPARATORS.has(tokens[pos - 1]?.type)) return;
+    throw new Error(`Expected ',' between ${what}, got ${peek().type} '${peek().value || ''}'`);
+  };
+  // A lineal header's params are one per line, or separated by commas.
+  const expectParamSeparator = () => {
+    if (['NEWLINE', 'BLOCK_SEP', 'COMMA', 'EQUALS', 'LPAREN'].includes(tokens[pos - 1]?.type)) return;
+    throw new Error(`Expected a line break or ',' between params, got ${peek().type} '${peek().value || ''}'`);
+  };
+  const LIST_OPENERS = new Set(['COMMA', 'LPAREN', 'LBRACE', 'LBRACKET', 'EQUALS']);
+  const expectItemBeforeComma = (open, what) => {
+    let k = pos - 1;
+    while (k >= 0 && (tokens[k].type === 'NEWLINE' || tokens[k].type === 'BLOCK_SEP')) k--;
+    if (k < (open ?? 0) || LIST_OPENERS.has(tokens[k]?.type)) throw new Error(`Unexpected ',' in ${what}`);
+  };
+  // A list's entries (header entries, a type's fields) are separated by a line
+  // break or a comma. `last` is where the previous entry began (-1 before the first).
+  const ENTRY_SEPARATORS = new Set(['NEWLINE', 'BLOCK_SEP', 'COMMA', 'EOF']);
+  const expectEntryEnd = (last, ends, what) => {
+    if (last < 0 || pos === last) return;
+    if (ENTRY_SEPARATORS.has(tokens[pos - 1]?.type) || ENTRY_SEPARATORS.has(peek().type) || ends()) return;
+    throw new Error(`Expected a line break or ',' between ${what}, got ${peek().type} '${peek().value || ''}'`);
+  };
   const expectStatementEnd = (last, ends) => {
     if (inAttrBlock || last < 0 || pos === last) return;
     if (STATEMENT_SEPARATORS.has(tokens[pos - 1]?.type) || STATEMENT_SEPARATORS.has(peek().type) || ends()) return;
@@ -792,8 +819,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseObjectType() {
     expect('LPAREN');
     const fields = [];
+    const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'fields');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'fields'); consume(); continue; }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // name: Type — named field (trailing colon)
         const name = take().value;
@@ -820,8 +849,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseObjectConstructor() {
     expect('LPAREN');
     const args = [];
+    const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'args');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (peek().type === 'NUMBER') {
         const numTok = take();
         let typeName = null;
@@ -853,8 +884,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseFunctionType() {
     expect('LPAREN');
     const inputs = [];
+    const listOpen = pos;
     while (peek().type !== 'RPAREN') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'inputs');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'inputs'); consume(); continue; }
       if (peek().type === 'IDENT') {
         const name = peek().value;
         if (tokens[pos + 1]?.type === 'COLON') {
@@ -899,8 +932,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const parseOutputs = () => {
       expect('LPAREN');
       const outputs = [];
+      const listOpen = pos;
       while (peek().type !== 'RPAREN') {
-        if (peek().type === 'COMMA') { consume(); continue; }
+        expectListSeparator(listOpen, 'outputs');
+        if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'outputs'); consume(); continue; }
         if (peek().type === 'IDENT') {
           const name = peek().value;
           if (tokens[pos + 1]?.type === 'COLON') {
@@ -1048,12 +1083,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     let afterNewline = true;
     while (peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
-      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
       if (peek().type === 'EQUALS' && afterNewline) {
         take(); // second = delimiter
         break;
       }
       if (isParamStart()) {
+        expectParamSeparator();
         const p = parseOneParam();
         if (p) { params.push(p); afterNewline = false; continue; }
       }
@@ -1192,8 +1228,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const args = [];
     const namedArgs = {};
     let hasNamed = false;
+    const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'args');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (isNamedArgKey()) {
         const key = take().value;
         take();
@@ -1214,8 +1252,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const _prevBare = bareFuncAllowed;
     bareFuncAllowed = true;
     const args = [];
+    const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'args');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (peek().type === 'SIGIL') {
         const name = take().value;
         let typeName = null;
@@ -1266,7 +1306,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const ctorParams = [];
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
       if (!separated) throw new Error(`Expected ',' or a newline between params ${where}, got ${peek().type} '${peek().value || ''}'`);
       const p = parseOneParam();
       if (p === null) break;
@@ -1331,7 +1371,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     };
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
       if (!separated) {
         throw new Error(`Expected ',' between params, got ${peek().type} '${peek().value || ''}'`);
       }
@@ -2651,8 +2691,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         result = buildInterpolatedString(tok.parts);
       } else if (tok.type === 'LBRACKET') {
         const elements = [];
+        const listOpen = pos;
         while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
-          if (peek().type === 'COMMA') { consume(); continue; }
+          expectListSeparator(listOpen, 'list elements');
+          if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
           elements.push(parseExpr());
         }
         expect('RBRACKET');
@@ -3031,14 +3073,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
     if (hasParen) take();
+    const listOpen = pos;
     // Fields are separated by a comma or a line break; a field directly after
     // another, on the same line, ends the list.
     let separated = 0;
+    let closed = false;
     while (true) {
       const before = pos;
       if (hasParen || !sameLine) skipNewlines();
-      if (hasParen && peek().type === 'RPAREN') { consume(); break; }
-      if (peek().type === 'COMMA') { consume(); separated = fields.length; continue; }
+      if (hasParen && peek().type === 'RPAREN') { consume(); closed = true; break; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'reply fields'); consume(); separated = fields.length; continue; }
       if (fields.length > separated && pos === before) break;
       separated = fields.length;
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
@@ -3196,6 +3240,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         break;
       }
     }
+    if (hasParen && !closed) expect('RPAREN');
     // Post-paren type attestation: ->(expr) as Type
     if (hasParen && fields.length === 1 && isTypeAttestation()) {
       fields[0].type = consumeTypeAttestation();
@@ -3329,7 +3374,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       } else {
         break;
       }
-      if (peek().type === 'COMMA') { consume(); } else { break; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); } else { break; }
     }
     return AST.objectConstructor(args);
   }
@@ -3337,8 +3382,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseListDestructureAssign() {
     expect('LBRACKET');
     const pattern = [];
+    const listOpen = pos;
     while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA') { consume(); continue; }
+      expectListSeparator(listOpen, 'list elements');
+      if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
       if (peek().type === 'ELLIPSIS') {
         take();
         if (peek().type === 'DISCARD') {
@@ -3529,7 +3576,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const args = firstElem ? [firstElem] : [];
     while (true) {
       if (isRHSObjectLiteralTerminator()) break;
-      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
+      // An element follows a comma.
+      if (args.length && tokens[pos - 1]?.type !== 'COMMA') throw new Error(`Expected ',' between elements, got ${peek().type} '${peek().value || ''}'`);
       const elem = parseRHSObjectElem();
       if (elem === null) break;
       args.push(elem);
@@ -3839,7 +3888,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       let separated = true;
       while (true) {
         if (peek().type === 'NEWLINE') { skipNewlines(); separated = true; }
-        if (peek().type === 'COMMA') { consume(); separated = true; continue; }
+        if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
         if (peek().type === 'RPAREN') break;
         if (!isParamStart()) break;
         if (!separated) throw new Error(`Expected ',' or a newline between params, got ${peek().type} '${peek().value || ''}'`);
@@ -3858,7 +3907,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       while (true) {
         const t = peek().type;
         if (t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'DIVIDER' || t === 'EOF') break;
-        if (t === 'COMMA') { consume(); continue; }
+        if (t === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
         if (!isParamStart()) break;
         const p = parseOneParam();
         if (p === null) break;
@@ -3890,7 +3939,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
             if (peek().type === 'EQUALS') { take(); foundDelimiter = true; break; }  // second = ends params
             if (peek().type === 'EOF') break;
             if (peek().type === 'NEWLINE') { consume(); continue; }
-            if (peek().type === 'COMMA') { consume(); continue; }
+            if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
             if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
             break;
           }
@@ -4532,13 +4581,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           try {
             while (peek().type !== 'EOF') {
               if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
-              if (peek().type === 'COMMA') { consume(); continue; }
+              if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
               if (peek().type === 'EQUALS' && afterNewline) {
                 take(); // second = delimiter
                 foundDelimiter = true;
                 break;
               }
               if (isParamStart()) {
+                expectParamSeparator();
                 const p = parseOneParam();
                 if (p) { params.push(p); afterNewline = false; continue; }
               }
@@ -4662,7 +4712,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     expect('LBRACE');
     const constraint = {};
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
       let methodName;
       if (peek().type === 'AT') {
         take();
@@ -4673,8 +4723,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       }
       expect('LPAREN');
       const params = [];
+      const listOpen = pos;
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-        if (peek().type === 'COMMA') { consume(); continue; }
+        expectListSeparator(listOpen, 'params');
+        if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'params'); consume(); continue; }
         if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
         const pName = expect('IDENT').value;
         let pType = null;
@@ -4696,8 +4748,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       } else if (peek().type === 'LPAREN') {
         expect('LPAREN');
         returns = [];
+        const listOpen = pos;
         while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-          if (peek().type === 'COMMA') { consume(); continue; }
+          expectListSeparator(listOpen, 'returns');
+          if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'returns'); consume(); continue; }
           const rName = expect('IDENT').value;
           let rType = null;
           if (peek().type === 'COLON') {
@@ -4710,6 +4764,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         }
         expect('RPAREN');
       }
+      if (!['NEWLINE', 'COMMA', 'RBRACE'].includes(peek().type)) throw new Error(`Unexpected ${peek().type} '${peek().value || ''}' after '${methodName}' in an interface`);
       constraint[methodName] = { params, returns };
     }
     expect('RBRACE');
@@ -4725,7 +4780,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const supertypes = [];
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
+      if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
       if (!separated) {
         throw new Error(`Expected ',' or a newline between class params, got ${peek().type} '${peek().value || ''}'`);
       }
@@ -5087,7 +5142,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       // (return-as); `return ()` / `-> ()` is a no-op. `->` persists here as the
       // becomes arrow; `return` is the value-return spelling.
       if (peek().type === '->' || isReturnKw()) {
-        take(); // -> or return
+        const arrow = take(); // -> or return
+        if (arrow.type === '->' && (peek().type === 'RBRACE' || peek().type === 'EOF' || peek().type === 'DOT')) {
+          throw new Error(`'->' at the end of a constructor block has nothing after it`);
+        }
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
           take(); // self
         } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
@@ -5169,9 +5227,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
               try {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
-                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
                   if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
-                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  if (isParamStart()) { expectParamSeparator(); const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
               } catch { foundDelimiter = false; }
@@ -5230,9 +5288,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
               try {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
-                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
                   if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
-                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  if (isParamStart()) { expectParamSeparator(); const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
               } catch { foundDelimiter = false; }
@@ -5357,9 +5415,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
               try {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
-                  if (peek().type === 'COMMA') { consume(); continue; }
+                  if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
                   if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
-                  if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
+                  if (isParamStart()) { expectParamSeparator(); const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
               } catch { foundDelimiter = false; }
@@ -5866,7 +5924,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   // `use HTML, HTML::div, "/service"::Widget` — each binds its last segment.
   function parseUseShorthands(end, emit) {
     while (pos < end) {
-      if (peek().type === 'COMMA') { consume(); skipUseBreaks(); continue; }
+      if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); skipUseBreaks(); continue; }
       const segs = parseUseSource();
       const last = segs[segs.length - 1];
       if (!isBvName(last)) {
@@ -6101,7 +6159,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const entries = [];
     const readType = () => (isEnd() || ['COMMA', 'RPAREN', 'EQUALS'].includes(peek().type) || isBreakTok(peek()) ? null : parseUseType());
     while (!isEnd() && peek().type !== 'EOF') {
-      if (peek().type === 'COMMA' || isBreakTok(peek())) { consume(); continue; }
+      if (peek().type === 'COMMA' || isBreakTok(peek())) { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
       const t = peek();
       if (t.type === 'ELLIPSIS') { take(); entries.push({ spread: true }); continue; }
       if (t.type === 'SIGIL') {
@@ -6280,19 +6338,26 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const fields = [];
     if (peek().type === 'LPAREN') {
       take();
+      let last = -1;
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+        expectEntryEnd(last, () => peek().type === 'RPAREN', 'fields');
         if (peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
+          if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'fields');
           take();
           continue;
         }
+        last = pos;
         fields.push(parseTypeField());
       }
       expect('RPAREN');
     } else {
       while (peek().type === 'NEWLINE') consume();
+      let last = -1;
       while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && !isTypeKw()) {
-        if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
+        expectEntryEnd(last, () => peek().type !== 'IDENT', 'fields');
+        if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
         if (peek().type !== 'IDENT') break;
+        last = pos;
         fields.push(parseTypeField());
       }
     }
@@ -6400,8 +6465,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   // What ends a header entry: the next one, or the end of its list or `use` line.
   const ENTRY_END = ['RPAREN', 'COMMA', 'NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'];
   function parseFileHeaderEntries(isEnd) {
+    let last = -1;
+    const listOpen = pos;
     while (!isEnd() && peek().type !== 'EOF') {
-      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { consume(); continue; }
+      expectEntryEnd(last, isEnd, 'header entries');
+      if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(listOpen, 'header entries'); consume(); continue; }
+      last = pos;
       let path, alias, destructures = null;
       if (peek().type === 'SIGIL') {
         // Two disambiguated cases:
@@ -6467,7 +6536,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         if (isDestructure) {
           destructures = [];
           while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-            if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
+            if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
             if (peek().type === 'ELLIPSIS') {
               take();
               destructures.push({ spread: true });
@@ -6592,7 +6661,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     if (peek().type === 'EOF') break;
 
     if (isTypeKw()) {
+      const at = pos;
       types.push(parseTypeDecl());
+      expectStatementEnd(at, () => false);
       continue;
     }
     if (peek().type === 'DCOLON') throw new Error(`Unexpected '::'`);

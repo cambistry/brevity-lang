@@ -13,7 +13,8 @@
     "test:rust": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage --randomize",
     "test:erlang": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects erlang --no-coverage --randomize",
     "test:browser": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects browser --no-coverage --randomize --maxWorkers=4",
-    "test:dom": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects dom --no-coverage --randomize --maxWorkers=4"
+    "test:dom": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects dom --no-coverage --randomize --maxWorkers=4",
+    "test:mutants": "MUTATION_SWEEP=1 node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage --testPathPattern=syntax/mutation"
   },
   "keywords": [
     "brevity",

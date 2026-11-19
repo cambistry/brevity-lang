@@ -44,4 +44,82 @@ describe('unexpected input', () => {
   it('a trailing `.` in a named function body', () => {
     expect(() => compileSource('@go = (n Integer) {\n  x = n\n  .\n}\n')).toThrow("Unexpected '.'");
   });
+
+  it('a lone `&`', () => {
+    expect(() => compileSource('@f = -> & 1\n')).toThrow("Unexpected character '&' (line 1)");
+  });
+});
+
+// A list's items are separated, and a comma follows an item (found by mutation.test.js).
+describe('unseparated input', () => {
+  const C = 'U = (a Integer, b Integer) *{}\n';
+
+  it('call args with no comma', () => {
+    expect(() => compileSource(`${C}@f = {\n  u U = U(1 2)\n  return 1\n}\n`)).toThrow("Expected ',' between args, got NUMBER '2'");
+  });
+
+  it('a doubled comma in call args', () => {
+    expect(() => compileSource(`${C}@f = {\n  u U = U(1, , 2)\n  return 1\n}\n`)).toThrow("Unexpected ',' in args");
+  });
+
+  it('list elements with no comma', () => {
+    expect(() => compileSource('@f = -> [1 1, 2]\n')).toThrow("Expected ',' between list elements, got NUMBER '1'");
+  });
+
+  it('a leading comma in a list', () => {
+    expect(() => compileSource('@f = -> [, 2]\n')).toThrow("Unexpected ',' in list elements");
+  });
+
+  it('a trailing comma is fine', () => {
+    expect(() => compileSource('@f = -> [1, 2,]\n')).not.toThrow();
+  });
+
+  it('a doubled comma in params', () => {
+    expect(() => compileSource('@f = (a Integer, , b Integer) -> a\n')).toThrow("Unexpected ',' in the list");
+  });
+
+  it('lineal params on one line with no comma', () => {
+    expect(() => compileSource('@add\n  =\n  a Integer        b Integer\n  =\n  -> a + b\n')).toThrow("Expected a line break or ';' after a statement, got IDENT 'b'");
+  });
+
+  it('object elements with no comma', () => {
+    expect(() => compileSource('@g\n  =\n  s = x: 5, y: 10 10\n  return s\n')).toThrow("Expected ',' between elements, got NUMBER '10'");
+  });
+
+  it('a reply opened with `(` and not closed', () => {
+    expect(() => compileSource('@go = { return (7, 8 }\n')).toThrow("Expected RPAREN, got RBRACE");
+  });
+
+  it('a type declaration and the next one on its line', () => {
+    expect(() => compileSource('type Sink (n: Integer) @go = -> 1\n')).toThrow("Expected a line break or ';' after a statement, got AT ''");
+  });
+
+  it('a type\'s fields with no comma', () => {
+    expect(() => compileSource('type P (x Integer y Integer)\n@go = -> 1\n')).toThrow("Expected a line break or ',' between fields, got IDENT 'y'");
+  });
+
+  it('a doubled comma in a type\'s fields', () => {
+    expect(() => compileSource('type P (x Integer, , y Integer)\n@f = -> 1\n')).toThrow("Unexpected ',' in fields");
+  });
+
+  it('header entries on one line with no comma', () => {
+    expect(() => compileSource('*\n  t Text      limit: Integer\n*\n@noop. = {}\n')).toThrow("got IDENT 'limit'");
+  });
+
+  it('a leading comma in a header', () => {
+    expect(() => compileSource('*\n  , t Text\n  limit: Integer\n*\n@first = -> t\n')).toThrow();
+  });
+
+  it('a leading or doubled comma in a document', () => {
+    expect(() => compileSource('use Svc = "svc.bv" as {, \n get () -> (Integer) }\n@f = -> 1\n')).toThrow("Unexpected ','");
+    expect(() => compileSource('use Svc = "svc.bv" as (a: Integer) -> *{ get () -> (, Text) }\n@f = -> 1\n')).toThrow("Unexpected ','");
+  });
+
+  it('a stray token after a signature in an interface', () => {
+    expect(() => compileSource('B = (inner { @get (key: Text) -> + (result: Text) }) *{}\n@f = -> 1\n')).toThrow("Unexpected PLUS '+' after '@get' in an interface");
+  });
+
+  it('`->` with nothing after it at the end of a constructor block', () => {
+    expect(() => compileSource('C = *{\n  @a = -> 1\n  -> }\n@f = -> 1\n')).toThrow("'->' at the end of a constructor block has nothing after it");
+  });
 });

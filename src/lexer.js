@@ -170,10 +170,14 @@ function silentSuffixAt(source, i, name, line) {
 export function tokenize(source) {
   const tokens = [];
   let i = 0;
-  // Every token carries the line it starts on.
+  // Every token carries the line it starts on, and where in the source it starts.
   let tokStart = 0, line = 1, scanned = 0;
-  const lineAt = (k) => { for (; scanned < k; scanned++) if (source[scanned] === '\n') line++; return line; };
-  const emit = (tok) => { tok.line = lineAt(tokStart); tokens.push(tok); };
+  const lineAt = (k) => {
+    if (k < scanned) { line = 1; scanned = 0; }
+    for (; scanned < k; scanned++) if (source[scanned] === '\n') line++;
+    return line;
+  };
+  const emit = (tok) => { tok.line = lineAt(tokStart); tok.start = tokStart; tokens.push(tok); };
   let atLineStart = true;
   let inBlockComment = false;
 
@@ -402,7 +406,7 @@ export function tokenize(source) {
     if ((source[i] === '=' || source[i] === '~') && source[i+1] === '>') { emit({ type: '->', value: source[i] + '>' }); i += 2; continue; }
     // `~` is only ever part of `~>`. (On the wire it marks a protected name; in source a
     // protected name is bare.)
-    if (source[i] === '~') throw new Error(`Unexpected '~' (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+    if (source[i] === '~') throw new Error(`Unexpected '~' (line ${lineAt(i)})`);
     if (source[i] === '=' && source[i+1] === '=') { emit({ type: 'EQ' }); i += 2; continue; }
     if (source[i] === '!' && source[i+1] === '=') { emit({ type: 'NEQ' }); i += 2; continue; }
     if (source[i] === '!') { emit({ type: 'BANG' }); i++; continue; }
@@ -524,7 +528,7 @@ export function tokenize(source) {
         let name = '';
         while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
         if (source[i] === '!' && source[i + 1] !== '=') name += source[i++];
-        if (source[i] === '.' && silentSuffixAt(source, i, ':' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
+        if (source[i] === '.' && silentSuffixAt(source, i, ':' + name, lineAt(i))) { name += '.'; i++; }
         emit({ type: 'SIGIL', value: name });
       } else {
         emit({ type: 'COLON' });
@@ -543,7 +547,7 @@ export function tokenize(source) {
       if (value === '_') {
         emit({ type: 'DISCARD' });
       } else if (!value.endsWith('?') && source[i] === '.' &&
-                 silentSuffixAt(source, i, value, tokens.filter(t => t.type === 'NEWLINE').length + 1)) {
+                 silentSuffixAt(source, i, value, lineAt(i))) {
         emit({ type: 'IDENT', value: value + '.' });
         i++;
       } else if (!value.endsWith('?') && source[i] === '!' && source[i + 1] !== '=' && !KEYWORDS.has(value)) {
@@ -565,11 +569,11 @@ export function tokenize(source) {
         const asType = prevTok && (['IDENT', 'STAR', 'PIPE'].includes(prevTok.type) || (prevTok.type === 'KEYWORD' && prevTok.value === 'of')
           || (prevTok.type === 'BANG' && tokens[tokens.length - 2]?.type === 'KEYWORD' && tokens[tokens.length - 2].value === 'as'));
         if (value === 'class' && !asMember && !asType && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
-          throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+          throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${lineAt(i)})`);
         }
         // `super` names the parent layer, likewise: `super = …`, `(super Integer)`.
         if (value === 'super' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
-          throw new Error(`'super' is reserved: it names the parent layer, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+          throw new Error(`'super' is reserved: it names the parent layer, so it can't be declared or set (line ${lineAt(i)})`);
         }
         emit({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
@@ -584,9 +588,10 @@ export function tokenize(source) {
       i++;
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
-      if (name && source[i] === '.' && silentSuffixAt(source, i, '&' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
+      if (name && source[i] === '.' && silentSuffixAt(source, i, '&' + name, lineAt(i))) { name += '.'; i++; }
       else if (name && source[i] === '!' && source[i + 1] !== '=') { name += '!'; i++; }
-      if (name) emit({ type: 'AMPERSAND_IDENT', value: name });
+      if (!name) throw new Error(`Unexpected character '&' (line ${lineAt(i - 1)})`);
+      emit({ type: 'AMPERSAND_IDENT', value: name });
       continue;
     }
 
