@@ -3,6 +3,10 @@
 Decided and implemented. Builds on `class-singleton-forms-2026-11-13.md` and
 `class-scope-and-inheritance-2026-11-16.md`.
 
+**Superseded in part (2026-11-19):** the trailing class block is `(p) *{ … } ^ { … }`, with no
+`actor` keyword. `actor` begins a definition only (a singleton, the file's actor, or the first
+layer of a `^` chain). See `caret-composition-2026-11-19.md`.
+
 ## Why
 
 A class is a relationship, not a type: an actor is a class relative to the actors its `new`

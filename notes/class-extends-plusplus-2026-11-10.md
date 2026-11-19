@@ -1,5 +1,8 @@
 # `++` is the extends operator — 2026-11-10
 
+**Superseded (2026-11-19):** `^` composes classes; `++` has no meaning on classes. See
+`caret-composition-2026-11-19.md`.
+
 Replaces the subclass bar `|` (and the comma list of parents before it) in
 class headers and service documents. `|` now means union only.
 
