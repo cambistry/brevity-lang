@@ -157,14 +157,14 @@ describe('ingest — runtime', () => {
   it('ingest — basic — runtime — superclass receives subclass constructor block return value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testGreeting', from: 'c' } },
-      { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ label: 'Text' }], re: [{ label: 'hello' }], to: 'c' } },
     );
   });
 
   it('ingest — basic — runtime — different subclasses provide different values', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testFarewell', from: 'c' } },
-      { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'goodbye' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ label: 'Text' }], re: [{ label: 'goodbye' }], to: 'c' } },
     );
   });
 
@@ -173,14 +173,14 @@ describe('ingest — runtime', () => {
   it('ingest — with default — runtime — direct construction uses default value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testDefault', from: 'c' } },
-      { output: { id: '1', 'ty': { content: 'Text' }, re: { content: '' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ content: 'Text' }], re: [{ content: '' }], to: 'c' } },
     );
   });
 
   it('ingest — with default — runtime — subclass overrides default value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride', from: 'c' } },
-      { output: { id: '1', 'ty': { content: 'Text' }, re: { content: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ content: 'Text' }], re: [{ content: 'hello' }], to: 'c' } },
     );
   });
 
@@ -189,14 +189,14 @@ describe('ingest — runtime', () => {
   it('ingest — with params — runtime — superclass params and ingest coexist — param works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testId', from: 'c' } },
-      { output: { id: '1', 'ty': { id: 'Integer' }, re: { id: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ id: 'Integer' }], re: [{ id: 42 }], to: 'c' } },
     );
   });
 
   it('ingest — with params — runtime — superclass params and ingest coexist — ingest works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testLabel', from: 'c' } },
-      { output: { id: '1', 'ty': { label: 'Text' }, re: { label: 'widget' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ label: 'Text' }], re: [{ label: 'widget' }], to: 'c' } },
     );
   });
 
@@ -205,7 +205,7 @@ describe('ingest — runtime', () => {
   it('ingest — computed value — runtime — subclass provides computed expression', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'test', from: 'c' } },
-      { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ value: 'Integer' }], re: [{ value: 42 }], to: 'c' } },
     );
   });
 });

@@ -30,7 +30,7 @@ describe('unhandled op', () => {
   it('multi-function actor — recognised op replies normally', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ x: 5 }], 'inc'], 'ty': [[{ x: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { bigger: 'Integer' }, re: { bigger: 6 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ bigger: 'Integer' }], re: [{ bigger: 6 }], to: 'c' } },
     );
   });
 });

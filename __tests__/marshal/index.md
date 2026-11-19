@@ -14,7 +14,7 @@ Capture is a CAM lifecycle message:
 The actor replies to `from` with a snapshot in `re`:
 
 ```json
-{ "id": "1", "re": { "count": 42 }, "to": "parent" }
+{ "id": "1", "re": [{ "count": 42 }], "to": "parent" }
 ```
 
 Tested captured cells include:
@@ -40,7 +40,7 @@ Hydrate restores state through CAM:
 The actor acknowledges:
 
 ```json
-{ "id": "2", "re": "hydrate", "to": "parent" }
+{ "id": "2", "re": ["hydrate"], "to": "parent" }
 ```
 
 Hydration overwrites initialization defaults. Later mutations apply on top of
@@ -63,5 +63,5 @@ current call behavior in the hydrated actor.
 
 - Describe capture/hydrate as CAM lifecycle traffic.
 - Use `cam: "capture"` and `cam: [snapshot, "hydrate"]` in wire examples.
-- Show hydrate ack as `re: "hydrate"`.
+- Show hydrate ack as `re: ["hydrate"]`.
 - Treat snapshots as actor state, not as source code.

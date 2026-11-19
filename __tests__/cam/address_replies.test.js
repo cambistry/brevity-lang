@@ -7,8 +7,10 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //   a self-return, the file   re: ['#<:>']        ty: ['*']      (no `new` built it)
 //   a self-return, built      re: ['#<:Box:1>']   ty: [':Box']   (the parent fills in `:`)
 //
-// Receiving, a reply to `$new` names its actor in `re[0]`; a bare `re` isn't an
-// address reply. See notes/actors-not-classes-2026-11-18.md.
+// Every reply's `re` is a list, its return Object: named values are its last
+// (`re: [{ ok: 'pong' }]`). Receiving, a reply to `$new` names its actor in
+// `re[0]`; a `re` that isn't a list is malformed, whatever the call. See
+// notes/actors-not-classes-2026-11-18.md.
 
 describe('replies that carry an address', () => {
   const script = `
@@ -67,8 +69,8 @@ describe('a dependency\'s reply to `$new`', () => {
       { output: { id: '1', op: [[{ tag: 'x' }], '$new'], ty: [[{ tag: 'Text' }]], to: 'thing.bv' } },
       { input: { id: '1', re: ['#<thing.bv:9>'], ty: ['thing.bv'], from: 'thing.bv' } },
       { output: { id: '2', op: 'ping', to: 'thing.bv:9' } },
-      { input: { id: '2', re: { ok: 'pong' }, ty: { ok: 'Text' }, from: 'thing.bv:9' } },
-      { output: { id: '1', re: { ok: 'pong' }, ty: { ok: 'Text' }, to: 'c' } },
+      { input: { id: '2', re: [{ ok: 'pong' }], ty: [{ ok: 'Text' }], from: 'thing.bv:9' } },
+      { output: { id: '1', re: [{ ok: 'pong' }], ty: [{ ok: 'Text' }], to: 'c' } },
     );
   });
 
@@ -77,6 +79,17 @@ describe('a dependency\'s reply to `$new`', () => {
       { input: { id: '1', op: 'make', from: 'c' } },
       { output: { id: '1', op: [[{ tag: 'x' }], '$new'], ty: [[{ tag: 'Text' }]], to: 'thing.bv' } },
       { input: { id: '1', re: '#<thing.bv:9>', ty: 'thing.bv', from: 'thing.bv' } },
+      { output: { id: '1', ex: { make: 'error' }, to: 'c' } },
+    );
+  });
+
+  it('a bare `re` to an ordinary call is malformed: the call fails', async () => {
+    await expectActorBehavior(await createActor(script),
+      { input: { id: '1', op: 'make', from: 'c' } },
+      { output: { id: '1', op: [[{ tag: 'x' }], '$new'], ty: [[{ tag: 'Text' }]], to: 'thing.bv' } },
+      { input: { id: '1', re: ['#<thing.bv:9>'], ty: ['thing.bv'], from: 'thing.bv' } },
+      { output: { id: '2', op: 'ping', to: 'thing.bv:9' } },
+      { input: { id: '2', re: { ok: 'pong' }, ty: { ok: 'Text' }, from: 'thing.bv:9' } },
       { output: { id: '1', ex: { make: 'error' }, to: 'c' } },
     );
   });

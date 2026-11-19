@@ -46,7 +46,7 @@ describe('global boundary', () => {
     await actor.sendAsync({ id: '2', op: 'refs', to: ':Box:1:tally', from: 'Tester' });
     expect(actor.posts[1]).toEqual(expect.objectContaining({
       id: '2',
-      re: { near: '#<app.bv:Box:1:tally:x>', hidden: '#<.hidden.file:x>', foreign: '#<@foreign:y>' },
+      re: [{ near: '#<app.bv:Box:1:tally:x>', hidden: '#<.hidden.file:x>', foreign: '#<@foreign:y>' }],
     }));
   });
 

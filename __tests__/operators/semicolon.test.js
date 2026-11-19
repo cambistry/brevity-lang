@@ -63,7 +63,7 @@ describe('semicolon — statement separator', () => {
   it('three statements on one line', async () => {
     await expectBehavior(stmtScript,
       { input: { id: '1', op: 'threeStmt!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a: 1, b: 2 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a: 1, b: 2 }], to: 'c' }) },
     );
   });
 });
@@ -72,7 +72,7 @@ describe('semicolon — function body', () => {
   it('braced function body with semicolons', async () => {
     await expectBehavior(fnBodyScript,
       { input: { id: '1', op: 'bracedFnBody!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a: 10, b: 11 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a: 10, b: 11 }], to: 'c' }) },
     );
   });
 
@@ -88,7 +88,7 @@ describe('semicolon — lineal param declaration', () => {
   it('public function params separated by semicolons', async () => {
     await expectBehavior(inlineParamScript,
       { input: { id: '1', op: [[{ n: 3, m: 4 }], 'add'], 'ty': [[{ n: 'Integer', m: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ sum: 'Integer' }], re: [{ sum: 7 }], to: 'c' } },
     );
   });
 });
@@ -97,7 +97,7 @@ describe('semicolon — ref declaration', () => {
   it('ref state vars separated by semicolons', async () => {
     await expectBehavior(refDeclScript,
       { input: { id: '1', op: 'refDecl', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { p: 1, q: 2 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ p: 1, q: 2 }], to: 'c' }) },
     );
   });
 });
@@ -106,7 +106,7 @@ describe('semicolon — mixed with newlines', () => {
   it('semicolons and newlines freely mixed', async () => {
     await expectBehavior(mixedScript,
       { input: { id: '1', op: 'mixedNewlines!', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a: 5, b: 10 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a: 5, b: 10 }], to: 'c' }) },
     );
   });
 });

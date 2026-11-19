@@ -23,7 +23,7 @@ Expected behavior:
 
 - incoming `@call_remote` receives `{ url }`
 - actor emits outgoing `@get` to `Remote`
-- host or remote actor replies with `re: { response: ... }`
+- host or remote actor replies with `re: [{ response: ... }]`
 - original caller receives the handler reply
 
 ## Silent Calls

@@ -78,6 +78,6 @@ describe('cross-module type with reference fields', () => {
     )).spawn();
     await actor.sendAsync({ id: '1', op: [[{ c: ctl }], 'handle'], 'ty': [[{ c: 'Widget:Control' }]], from: 'c' });
     const post = actor.posts.find(p => p.id === '1' && 're' in p);
-    expect(post).toEqual(expect.objectContaining({ id: '1', re: { label: 'ready' }, to: 'c' }));
+    expect(post).toEqual(expect.objectContaining({ id: '1', re: [{ label: 'ready' }], to: 'c' }));
   });
 });

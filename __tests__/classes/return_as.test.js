@@ -152,7 +152,7 @@ describe('return-as — runtime (class constructors)', () => {
   it('return-as — runtime (bare trailing expression) — public handler coexists with return-as', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'handlerStillWorks', from: 'c' } },
-      { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 123 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ value: 'Integer' }], re: [{ value: 123 }], to: 'c' } },
     );
   });
 
@@ -166,7 +166,7 @@ describe('return-as — runtime (class constructors)', () => {
   it('return-as — runtime (explicit → with as Type) — handler still works on actor with return-as', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'getOriginal', from: 'c' } },
-      { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 50 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ value: 'Integer' }], re: [{ value: 50 }], to: 'c' } },
     );
   });
 
@@ -234,7 +234,7 @@ describe('return-as — CAM [Type, as] message (file-level actor)', () => {
   it('public handler still works alongside return-as', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'fn', from: 'c' } },
-      { output: { id: '2', 'ty': { value: 'Integer' }, re: { value: 123 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ value: 'Integer' }], re: [{ value: 123 }], to: 'c' } },
     );
   });
 });
@@ -269,7 +269,7 @@ describe('return-as — file-level boolean', () => {
   it('handler coexists', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'ping', from: 'c' } },
-      { output: { id: '2', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ pong: 'Text' }], re: [{ pong: 'ok' }], to: 'c' } },
     );
   });
 });
@@ -312,7 +312,7 @@ describe('return-as — file-level with constructor param expression', () => {
 
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'raw', from: 'c' } },
-      { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ value: 'Integer' }], re: [{ value: 10 }], to: 'c' } },
     );
   });
 });
@@ -341,7 +341,7 @@ describe('return-as — coexists with explicit self-as clause', () => {
   it('handler still works', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'ping', from: 'c' } },
-      { output: { id: '3', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ pong: 'Text' }], re: [{ pong: 'ok' }], to: 'c' } },
     );
   });
 });

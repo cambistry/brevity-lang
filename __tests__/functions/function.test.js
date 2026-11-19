@@ -109,8 +109,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "1",
-          "ty": { result: "Integer" },
-          re: { result: 6 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 6 }],
           to: "c",
         },
       },
@@ -124,8 +124,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "2",
-          "ty": { result: "Integer" },
-          re: { result: 7 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 7 }],
           to: "c",
         },
       },
@@ -139,8 +139,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "3",
-          "ty": { result: "Integer" },
-          re: { result: 42 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 42 }],
           to: "c",
         },
       },
@@ -154,8 +154,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "4",
-          "ty": { result: "Integer" },
-          re: { result: 11 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 11 }],
           to: "c",
         },
       },
@@ -169,8 +169,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "4b",
-          "ty": { result: "Integer" },
-          re: { result: 11 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 11 }],
           to: "c",
         },
       },
@@ -184,8 +184,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "5",
-          "ty": { result: "Integer" },
-          re: { result: 14 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 14 }],
           to: "c",
         },
       },
@@ -199,8 +199,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "6",
-          "ty": { result: "Integer" },
-          re: { result: 7 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 7 }],
           to: "c",
         },
       },
@@ -214,8 +214,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "7",
-          "ty": { result: "Float" },
-          re: { result: 1.5 },
+          "ty": [{ result: "Float" }],
+          re: [{ result: 1.5 }],
           to: "c",
         },
       },
@@ -229,8 +229,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "8",
-          "ty": { result: "Integer" },
-          re: { result: 10 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 10 }],
           to: "c",
         },
       },
@@ -244,8 +244,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "9",
-          "ty": { x: "Integer", result: "Integer" },
-          re: { x: 10, result: 99 },
+          "ty": [{ x: "Integer", result: "Integer" }],
+          re: [{ x: 10, result: 99 }],
           to: "c",
         },
       },
@@ -259,8 +259,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "10",
-          "ty": { x: "Integer", y: "Integer" },
-          re: { x: 9, y: 25 },
+          "ty": [{ x: "Integer", y: "Integer" }],
+          re: [{ x: 9, y: 25 }],
           to: "c",
         },
       },
@@ -274,8 +274,8 @@ describe("function — all forms", () => {
       {
         output: {
           id: "11",
-          "ty": { x: "Integer", y: "Integer" },
-          re: { x: 8, y: 12 },
+          "ty": [{ x: "Integer", y: "Integer" }],
+          re: [{ x: 8, y: 12 }],
           to: "c",
         },
       },

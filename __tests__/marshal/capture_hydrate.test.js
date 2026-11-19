@@ -16,7 +16,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
     await original.sendAsync({ id: '2', op: 'inc!', from: 'c' });
     await original.sendAsync({ id: '3', op: 'inc!', from: 'c' });
     await original.sendAsync({ id: '4', cam: 'capture', from: 'p' });
-    const snapshot = original.posts.find(o => o.id === '4').re;
+    const snapshot = original.posts.find(o => o.id === '4').re[0];
     const restored = await createActor(source);
     await restored.sendAsync({ id: '1', cam: [snapshot, 'hydrate'], from: 'p' });
     return restored;
@@ -26,7 +26,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
     const restored = await buildRestoredActor();
     await expectActorBehavior(restored,
       { input: { id: '2', test: { get: '~count' }, from: 't' } },
-      { output: { id: '2', 'ty': 'Integer', re: 3, to: 't' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [3], to: 't' } },
     );
   });
 
@@ -35,7 +35,7 @@ describe('capture/hydrate round-trip — integer counter', () => {
     await restored.sendAsync({ id: '2', op: 'inc!', from: 'c' });
     await expectActorBehavior(restored,
       { input: { id: '3', test: { get: '~count' }, from: 't' } },
-      { output: { id: '3', 'ty': 'Integer', re: 4, to: 't' } },
+      { output: { id: '3', 'ty': ['Integer'], re: [4], to: 't' } },
     );
   });
 });
@@ -70,7 +70,7 @@ describe('capture/hydrate round-trip — multiple types', () => {
     await original.sendAsync({ id: '1', op: [[{ val: 'player1' }], 'setLabel!'], 'ty': [[{ val: 'Text' }]], from: 'c' });
     await original.sendAsync({ id: '2', op: [[{ val: 42 }], 'setScore!'], 'ty': [[{ val: 'Integer' }]], from: 'c' });
     await original.sendAsync({ id: '3', cam: 'capture', from: 'p' });
-    const snapshot = original.posts.find(o => o.id === '3').re;
+    const snapshot = original.posts.find(o => o.id === '3').re[0];
 
     restored = await createActor(source);
     await restored.sendAsync({ id: '1', cam: [snapshot, 'hydrate'], from: 'p' });
@@ -79,11 +79,11 @@ describe('capture/hydrate round-trip — multiple types', () => {
   it('all types survive the round-trip', async () => {
     await expectActorBehavior(restored,
       { input: { id: '2', test: { get: '~label' }, from: 't' } },
-      { output: { id: '2', 'ty': 'Text', re: 'player1', to: 't' } },
+      { output: { id: '2', 'ty': ['Text'], re: ['player1'], to: 't' } },
       { input: { id: '3', test: { get: '~score' }, from: 't' } },
-      { output: { id: '3', 'ty': 'Integer', re: 42, to: 't' } },
+      { output: { id: '3', 'ty': ['Integer'], re: [42], to: 't' } },
       { input: { id: '4', test: { get: '~active' }, from: 't' } },
-      { output: { id: '4', 'ty': 'Boolean', re: true, to: 't' } },
+      { output: { id: '4', 'ty': ['Boolean'], re: [true], to: 't' } },
     );
   });
 });
@@ -102,7 +102,7 @@ describe('capture/hydrate round-trip — clone divergence', () => {
     await original.sendAsync({ id: '2', op: 'inc!', from: 'c' });
     await original.sendAsync({ id: '3', op: 'inc!', from: 'c' });
     await original.sendAsync({ id: '4', cam: 'capture', from: 'p' });
-    const snapshot = original.posts.find(o => o.id === '4').re;
+    const snapshot = original.posts.find(o => o.id === '4').re[0];
 
     // Clone A: inc twice
     cloneA = await createActor(source);
@@ -118,14 +118,14 @@ describe('capture/hydrate round-trip — clone divergence', () => {
   it('clone A diverges from snapshot', async () => {
     await expectActorBehavior(cloneA,
       { input: { id: '4', test: { get: '~x' }, from: 't' } },
-      { output: { id: '4', 'ty': 'Integer', re: 5, to: 't' } },
+      { output: { id: '4', 'ty': ['Integer'], re: [5], to: 't' } },
     );
   });
 
   it('clone B stays at snapshot', async () => {
     await expectActorBehavior(cloneB,
       { input: { id: '2', test: { get: '~x' }, from: 't' } },
-      { output: { id: '2', 'ty': 'Integer', re: 3, to: 't' } },
+      { output: { id: '2', 'ty': ['Integer'], re: [3], to: 't' } },
     );
   });
 });
@@ -153,10 +153,10 @@ describe('capture/hydrate round-trip — function reference', () => {
     await original.sendAsync({ id: '1', op: 'useDouble.', from: 'c' });
     await original.sendAsync({ id: '2', op: [[{ n: 7 }], 'apply'], 'ty': [[{ n: 'Integer' }]], from: 'c' });
     // Verify double is active (useDouble is silent, no output)
-    expect(original.posts.find(o => o.id === '2')).toEqual(expect.objectContaining({ re: { result: 14 } }));
+    expect(original.posts.find(o => o.id === '2')).toEqual(expect.objectContaining({ re: [{ result: 14 }] }));
 
     await original.sendAsync({ id: '3', cam: 'capture', from: 'p' });
-    const snapshot = original.posts.find(o => o.id === '3').re;
+    const snapshot = original.posts.find(o => o.id === '3').re[0];
 
     restored = await createActor(source);
     await restored.sendAsync({ id: '1', cam: [snapshot, 'hydrate'], from: 'p' });
@@ -165,7 +165,7 @@ describe('capture/hydrate round-trip — function reference', () => {
   it('hydrated actor uses the captured behavior', async () => {
     await expectActorBehavior(restored,
       { input: { id: '2', op: [[{ n: 3 }], 'apply'], 'ty': [[{ n: 'Integer' }]], from: 'c' } },
-      { output: expect.objectContaining({ re: { result: 6 } }) },
+      { output: expect.objectContaining({ re: [{ result: 6 }] }) },
     );
   });
 });

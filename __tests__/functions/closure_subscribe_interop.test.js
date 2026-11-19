@@ -127,9 +127,9 @@ describe('closure-subscribe — payload-carried address', () => {
     const actor = await createActor(publisherWithGetAddr);
     await actor.sendAsync({ id: 'A', op: 'getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
-    expect(reply).toEqual(expect.objectContaining({ id: 'A', re: { ref: '#<:@0>' }, to: 'c' }));
+    expect(reply).toEqual(expect.objectContaining({ id: 'A', re: [{ ref: '#<:@0>' }], to: 'c' }));
 
-    const addr = reply.re.ref;
+    const addr = reply.re[0].ref;
     const selector = /^#<(.+)>$/.exec(addr)[1];
     expect(selector).toBe(':@0');
 
@@ -142,7 +142,7 @@ describe('closure-subscribe — payload-carried address', () => {
     const actor = await createActor(publisherWithGetAddr);
     await actor.sendAsync({ id: 'A', op: 'getAddr', from: 'c' });
     const reply = actor.posts.find(p => p.id === 'A');
-    const selector = /^#<(.+)>$/.exec(reply.re.ref)[1];
+    const selector = /^#<(.+)>$/.exec(reply.re[0].ref)[1];
 
     await actor.sendAsync({ id: 'S', op: '$subscribe', to: selector, from: 'c' });
     const postsBefore = actor.posts.length;
@@ -177,8 +177,8 @@ describe('closure-subscribe — payload-carried address', () => {
     await actor.sendAsync({ id: 'B', op: 'getMetaAddr', from: 'c' });
     const replyA = actor.posts.find(p => p.id === 'A');
     const replyB = actor.posts.find(p => p.id === 'B');
-    const selectorA = /^#<(.+)>$/.exec(replyA.re.ref)[1];
-    const selectorB = /^#<(.+)>$/.exec(replyB.re.ref)[1];
+    const selectorA = /^#<(.+)>$/.exec(replyA.re[0].ref)[1];
+    const selectorB = /^#<(.+)>$/.exec(replyB.re[0].ref)[1];
     expect(selectorA).toBe(':@0');
     expect(selectorB).toBe(':@1');
 
@@ -257,7 +257,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     const reply = sub.posts.find(p => p.id === 'Q');
     expect(reply).toEqual(expect.objectContaining({
       id: 'Q',
-      re: { received: 'initial' },
+      re: [{ received: 'initial' }],
       to: 'caller',
     }));
   });
@@ -290,7 +290,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     const reply = sub.posts.find(p => p.id === 'Q');
     expect(reply).toEqual(expect.objectContaining({
       id: 'Q',
-      re: { received: 'second' },
+      re: [{ received: 'second' }],
       to: 'caller',
     }));
   });
@@ -334,10 +334,10 @@ describe('closure-subscribe — inter-actor shepherded', () => {
     await subA.sendAsync({ id: 'QA', op: 'readReceived', from: 'caller' });
     await subB.sendAsync({ id: 'QB', op: 'readReceived', from: 'caller' });
     expect(subA.posts.find(p => p.id === 'QA')).toEqual(expect.objectContaining({
-      re: { received: 'broadcast' },
+      re: [{ received: 'broadcast' }],
     }));
     expect(subB.posts.find(p => p.id === 'QB')).toEqual(expect.objectContaining({
-      re: { received: 'broadcast' },
+      re: [{ received: 'broadcast' }],
     }));
   });
 });

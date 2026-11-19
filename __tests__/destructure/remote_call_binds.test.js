@@ -31,7 +31,7 @@ describe('remote actor (constructor-block construction)', () => {
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: [17], 'ty': ['Integer'] } },
-      { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '99', re: [{ a1: 17 }], to: 'caller' }) },
     );
   });
 
@@ -45,7 +45,7 @@ describe('remote actor (constructor-block construction)', () => {
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: [17], 'ty': ['Integer'] } },
-      { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '99', re: [{ a1: 17 }], to: 'caller' }) },
     );
   });
 
@@ -58,8 +58,8 @@ describe('remote actor (constructor-block construction)', () => {
       NEW_REPLY,
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'pair', to: 'Thing/1' }) },
-      { input: { id: '2', re: { x: 17 } } },
-      { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
+      { input: { id: '2', re: [{ x: 17 }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ a1: 17 }], to: 'caller' }) },
     );
   });
 });
@@ -71,7 +71,7 @@ describe('remote actor (handler-local construction)', () => {
     NEW_REPLY,
     { output: expect.objectContaining({ to: 'Thing/1' }) },
     { input: { id: '2', ...reply } },
-    { output: expect.objectContaining({ id: '99', re: { a1: 17 }, to: 'caller' }) },
+    { output: expect.objectContaining({ id: '99', re: [{ a1: 17 }], to: 'caller' }) },
   ));
 
   it('x T = r.m() binds the unnamed reply', async () => {
@@ -89,7 +89,7 @@ describe('remote actor (handler-local construction)', () => {
   it(':x T = r.m() destructures a named reply', async () => {
     await run(`${THING}
       @go = { t = Thing(a: 5); :x Integer = t.pair(); return a1: x }
-    `, { re: { x: 17 } });
+    `, { re: [{ x: 17 }] });
   });
 });
 
@@ -98,7 +98,7 @@ describe('remote reply carrying only a field named like the local — not a sing
     NEW_REPLY,
     { input: { id: '99', op: 'go', from: 'caller' } },
     { output: expect.objectContaining({ op: 'pair', to: 'Thing/1' }) },
-    { input: { id: '2', re: { x: 17 } } },
+    { input: { id: '2', re: [{ x: 17 }] } },
     { output: expect.objectContaining({ id: '99', ex: { 'go': 'error' }, to: 'caller' }) },
   ));
 
@@ -130,11 +130,11 @@ describe('destructured service member — bare read', () => {
     ));
 
   it('binds the unnamed reply', async () => {
-    await run({ re: [17], 'ty': ['Integer'] }, { re: { a1: 17 } });
+    await run({ re: [17], 'ty': ['Integer'] }, { re: [{ a1: 17 }] });
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {
-    await run({ re: { n: 17 } }, { ex: { 'go': 'error' } });
+    await run({ re: [{ n: 17 }] }, { ex: { 'go': 'error' } });
   });
 });
 
@@ -151,11 +151,11 @@ describe('reference-field callback — typed bind', () => {
   );
 
   it('binds the unnamed reply', async () => {
-    await run({ re: [999], 'ty': ['Integer'] }, { re: { a1: 999 } });
+    await run({ re: [999], 'ty': ['Integer'] }, { re: [{ a1: 999 }] });
   });
 
   it('a reply carrying only a field named like the local is not a single value', async () => {
-    await run({ re: { out: 999 } }, { ex: { 'go': 'error' } });
+    await run({ re: [{ out: 999 }] }, { ex: { 'go': 'error' } });
   });
 });
 
@@ -166,7 +166,7 @@ describe('actor ref in a lambda — call in tail position', () => {
       @run = { cs List = [C(), C()]; xs List = over(cs) (c) { c.seven() }; return a1: xs }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a1: [7, 7] } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a1: [7, 7] }] }) },
     );
   });
 

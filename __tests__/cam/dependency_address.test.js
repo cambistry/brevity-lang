@@ -62,8 +62,8 @@ describe('dependency addresses', () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'member', from: 'c' } },
       { output: { id: '1', op: [[{ n: 1 }], 'inc'], to: 'math.bv' } },
-      { input: { id: '1', re: { result: 2 }, ty: { result: 'Integer' }, from: 'math.bv' } },
-      { output: { id: '1', re: { result: 2 }, ty: { result: 'Integer' }, to: 'c' } },
+      { input: { id: '1', re: [{ result: 2 }], ty: [{ result: 'Integer' }], from: 'math.bv' } },
+      { output: { id: '1', re: [{ result: 2 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 
@@ -99,8 +99,8 @@ describe('dependency addresses — construction', () => {
       { input: { id: '1', re: ['#<thing.bv:1>'], ty: ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'get', to: 'thing.bv:1' }) },
-      { input: { id: '2', re: { value: 42 } } },
-      { output: expect.objectContaining({ id: '99', re: { value: 42 }, to: 'c' }) },
+      { input: { id: '2', re: [{ value: 42 }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ value: 42 }], to: 'c' }) },
     );
   });
 });

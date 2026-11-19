@@ -86,56 +86,56 @@ describe('higher-order functions', () => {
   it('function literal as positional arg', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'literalPos', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('function literal as named arg', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'literalNamed', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('&function reference as arg', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'fnRef', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('Function-typed local variable', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'fnTypedLocal', from: 'c' } },
-      { output: { id: '4', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ r: 'Integer' }], re: [{ r: 10 }], to: 'c' } },
     );
   });
 
   it('&fnVar passes a local function variable by reference', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'fnVarRef', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('forward &function reference', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'forwardRef', from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ result: 'Integer' }], re: [{ result: 15 }], to: 'c' } },
     );
   });
 
   it('function returning a function (lineal)', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'returnFn', from: 'c' } },
-      { output: { id: '7', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ result: 'Integer' }], re: [{ result: 42 }], to: 'c' } },
     );
   });
 
   it('lambda returning a function', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'returnFnLambda', from: 'c' } },
-      { output: { id: '8', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '8', 'ty': [{ result: 'Integer' }], re: [{ result: 42 }], to: 'c' } },
     );
   });
 });
@@ -366,77 +366,77 @@ describe('calling a function value', () => {
   it('called directly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'direct', from: 'c' } },
-      { output: { id: '1', re: { r: 2 }, to: 'c' } },
+      { output: { id: '1', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('through a reference', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'reference', from: 'c' } },
-      { output: { id: '4', re: { r: 2 }, to: 'c' } },
+      { output: { id: '4', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('held in a Function-typed local', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'typedLocal', from: 'c' } },
-      { output: { id: '5', re: { r: 2 }, to: 'c' } },
+      { output: { id: '5', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it("the file's function, called directly", async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'fileFunction', from: 'c' } },
-      { output: { id: '6', re: { r: 2 }, to: 'c' } },
+      { output: { id: '6', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it("the file's function, through a reference", async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'fileFunctionReference', from: 'c' } },
-      { output: { id: '8', re: { r: 2 }, to: 'c' } },
+      { output: { id: '8', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('passed as a param', async () => {
     await expectBehavior(script,
       { input: { id: '9', op: 'param', from: 'c' } },
-      { output: { id: '9', re: { r: 2 }, to: 'c' } },
+      { output: { id: '9', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('with a block body', async () => {
     await expectBehavior(script,
       { input: { id: '10', op: 'blockBody', from: 'c' } },
-      { output: { id: '10', re: { r: 2 }, to: 'c' } },
+      { output: { id: '10', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('with a body ending in a binding', async () => {
     await expectBehavior(script,
       { input: { id: '12', op: 'bindingBody', from: 'c' } },
-      { output: { id: '12', re: { r: 2 }, to: 'c' } },
+      { output: { id: '12', re: [{ r: 2 }], to: 'c' } },
     );
   });
 
   it('with no args', async () => {
     await expectBehavior(script,
       { input: { id: '13', op: 'noArgs', from: 'c' } },
-      { output: { id: '13', re: { r: 7 }, to: 'c' } },
+      { output: { id: '13', re: [{ r: 7 }], to: 'c' } },
     );
   });
 
   it('capturing a local', async () => {
     await expectBehavior(script,
       { input: { id: '14', op: 'captures', from: 'c' } },
-      { output: { id: '14', re: { r: 6 }, to: 'c' } },
+      { output: { id: '14', re: [{ r: 6 }], to: 'c' } },
     );
   });
 
   it('returning Text', async () => {
     await expectBehavior(script,
       { input: { id: '16', op: 'text', from: 'c' } },
-      { output: { id: '16', re: { r: 'n' }, to: 'c' } },
+      { output: { id: '16', re: [{ r: 'n' }], to: 'c' } },
     );
   });
 
@@ -457,7 +457,7 @@ describe('calling a function value', () => {
   it('as two named returns', async () => {
     await expectBehavior(script,
       { input: { id: '19', op: 'twoNamed', from: 'c' } },
-      { output: { id: '19', re: { a: 2, b: 3 }, to: 'c' } },
+      { output: { id: '19', re: [{ a: 2, b: 3 }], to: 'c' } },
     );
   });
 
@@ -471,51 +471,51 @@ describe('calling a function value', () => {
   it('as its own argument', async () => {
     await expectBehavior(script,
       { input: { id: '21', op: 'nested', from: 'c' } },
-      { output: { id: '21', re: { r: 3 }, to: 'c' } },
+      { output: { id: '21', re: [{ r: 3 }], to: 'c' } },
     );
   });
 
   it('in a list', async () => {
     await expectBehavior(script,
       { input: { id: '22', op: 'inList', from: 'c' } },
-      { output: { id: '22', re: { r: [2, 3] }, to: 'c' } },
+      { output: { id: '22', re: [{ r: [2, 3] }], to: 'c' } },
     );
   });
 
   it('in a list, called directly', async () => {
     await expectBehavior(script,
       { input: { id: '23', op: 'inListDirect', from: 'c' } },
-      { output: { id: '23', re: { r: [2, 3] }, to: 'c' } },
+      { output: { id: '23', re: [{ r: [2, 3] }], to: 'c' } },
     );
   });
 
   it('in an interpolated string', async () => {
     await expectBehavior(script,
       { input: { id: '24', op: 'interpolated', from: 'c' } },
-      { output: { id: '24', 'ty': { r: 'Text' }, re: { r: 'v2' }, to: 'c' } },
+      { output: { id: '24', 'ty': [{ r: 'Text' }], re: [{ r: 'v2' }], to: 'c' } },
     );
   });
 
   it('in arithmetic', async () => {
     await expectBehavior(script,
       { input: { id: '25', op: 'inArithmetic', from: 'c' } },
-      { output: { id: '25', 'ty': { r: 'Integer' }, re: { r: 12 }, to: 'c' } },
+      { output: { id: '25', 'ty': [{ r: 'Integer' }], re: [{ r: 12 }], to: 'c' } },
     );
   });
 
   it('in a condition', async () => {
     await expectBehavior(script,
       { input: { id: '26', op: 'inCondition', from: 'c' } },
-      { output: { id: '26', 'ty': { r: 'Integer' }, re: { r: 5 }, to: 'c' } },
+      { output: { id: '26', 'ty': [{ r: 'Integer' }], re: [{ r: 5 }], to: 'c' } },
     );
   });
 
   it('runs once for a named return', async () => {
     await expectBehavior(script,
       { input: { id: '27', op: 'oneCall!', from: 'c' } },
-      { output: { id: '27', re: { r: 1 }, to: 'c' } },
+      { output: { id: '27', re: [{ r: 1 }], to: 'c' } },
       { input: { id: '28', op: 'calls', from: 'c' } },
-      { output: { id: '28', 'ty': { r: 'Integer' }, re: { r: 1 }, to: 'c' } },
+      { output: { id: '28', 'ty': [{ r: 'Integer' }], re: [{ r: 1 }], to: 'c' } },
     );
   });
 

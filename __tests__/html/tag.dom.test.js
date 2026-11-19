@@ -394,7 +394,7 @@ async function renderAndQuery(page, tag, payload, queryFn) {
 
   const docActor = await page.connectActor('document');
   await docActor.sendAsync({ id: 'b', op: 'body' });
-  const bodyAddr = docActor.posts[0].re.slice(2, -1);
+  const bodyAddr = docActor.posts[0].re[0].slice(2, -1);
 
   const body = await page.connectActor(bodyAddr);
   await body.sendAsync({ id: 'a', op: [elementAddr, 'append!'] });
@@ -412,7 +412,7 @@ describe('HTML tag DOM render — every tag lands with the right tagName', () =>
     const page = await loadPage(PAGE_HTML);
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
-    const bodyAddr = docActor.posts[0].re.slice(2, -1);
+    const bodyAddr = docActor.posts[0].re[0].slice(2, -1);
     const body = await page.connectActor(bodyAddr);
 
     for (const tag of ALL_TAGS) {

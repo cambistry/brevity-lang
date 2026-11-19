@@ -118,8 +118,8 @@ describe("set operation", () => {
       {
         output: {
           id: "1",
-          "ty": { value: "Integer" },
-          re: { value: 42 },
+          "ty": [{ value: "Integer" }],
+          re: [{ value: 42 }],
           to: "c",
         },
       },
@@ -133,8 +133,8 @@ describe("set operation", () => {
       {
         output: {
           id: "2",
-          "ty": { value: "Integer" },
-          re: { value: 11 },
+          "ty": [{ value: "Integer" }],
+          re: [{ value: 11 }],
           to: "c",
         },
       },
@@ -148,8 +148,8 @@ describe("set operation", () => {
       {
         output: {
           id: "3",
-          "ty": { count: "Integer" },
-          re: { count: 99 },
+          "ty": [{ count: "Integer" }],
+          re: [{ count: 99 }],
           to: "c",
         },
       },
@@ -163,8 +163,8 @@ describe("set operation", () => {
       {
         output: {
           id: "4",
-          "ty": { result: "Integer" },
-          re: { result: 5 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 5 }],
           to: "c",
         },
       },
@@ -178,8 +178,8 @@ describe("set operation", () => {
       {
         output: {
           id: "5",
-          "ty": { value: "Integer" },
-          re: { value: 77 },
+          "ty": [{ value: "Integer" }],
+          re: [{ value: 77 }],
           to: "c",
         },
       },
@@ -193,8 +193,8 @@ describe("set operation", () => {
       {
         output: {
           id: "6",
-          "ty": { value: "Integer" },
-          re: { value: 55 },
+          "ty": [{ value: "Integer" }],
+          re: [{ value: 55 }],
           to: "c",
         },
       },
@@ -342,8 +342,8 @@ describe("set — public refs (set@name, silent)", () => {
       {
         output: {
           id: "1",
-          "ty": { result: "Integer" },
-          re: { result: 77 },
+          "ty": [{ result: "Integer" }],
+          re: [{ result: 77 }],
           to: "c",
         },
       },

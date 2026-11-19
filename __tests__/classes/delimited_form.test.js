@@ -80,21 +80,21 @@ describe('constructor delimited form — runtime', () => {
   it('no-param constructor works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testGreeter', from: 'c' } },
-      { output: { id: '1', 'ty': { greeting: 'Text' }, re: { greeting: 'hi' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ greeting: 'Text' }], re: [{ greeting: 'hi' }], to: 'c' } },
     );
   });
 
   it('constructor with param works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testCounter', from: 'c' } },
-      { output: { id: '1', 'ty': { value: 'Integer' }, re: { value: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ value: 'Integer' }], re: [{ value: 10 }], to: 'c' } },
     );
   });
 
   it('multiple params work', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testPair', from: 'c' } },
-      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ total: 'Integer' }], re: [{ total: 7 }], to: 'c' } },
     );
   });
 });
@@ -206,49 +206,49 @@ describe('constructor delimited form — optional args — runtime', () => {
   it('both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testPairBoth', from: 'c' } },
-      { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ total: 'Integer' }], re: [{ total: 7 }], to: 'c' } },
     );
   });
 
   it('optional omitted — default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testPairDefault', from: 'c' } },
-      { output: { id: '2', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ total: 'Integer' }], re: [{ total: 3 }], to: 'c' } },
     );
   });
 
   it('all-default params — both provided', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'testDefaultsBoth', from: 'c' } },
-      { output: { id: '3', 'ty': { total: 'Integer' }, re: { total: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ total: 'Integer' }], re: [{ total: 3 }], to: 'c' } },
     );
   });
 
   it('all-default params — none provided', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'testDefaultsNone', from: 'c' } },
-      { output: { id: '4', 'ty': { total: 'Integer' }, re: { total: 30 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ total: 'Integer' }], re: [{ total: 30 }], to: 'c' } },
     );
   });
 
   it('a negative positional default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'testBelowDefault', from: 'c' } },
-      { output: { id: '5', 'ty': { total: 'Integer' }, re: { total: 1 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ total: 'Integer' }], re: [{ total: 1 }], to: 'c' } },
     );
   });
 
   it('a negative named default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'testOffsetDefault', from: 'c' } },
-      { output: { id: '6', 'ty': { total: 'Integer' }, re: { total: 2 }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ total: 'Integer' }], re: [{ total: 2 }], to: 'c' } },
     );
   });
 
   it('a negative named arg overrides it', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'testOffsetGiven', from: 'c' } },
-      { output: { id: '7', 'ty': { total: 'Integer' }, re: { total: -2 }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ total: 'Integer' }], re: [{ total: -2 }], to: 'c' } },
     );
   });
 
@@ -386,7 +386,7 @@ describe('constructor delimited form — expression defaults', () => {
   `;
   const total = (op, value) => expectBehavior(script,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', 'ty': { total: 'Integer' }, re: { total: value }, to: 'c' } },
+    { output: { id: '1', 'ty': [{ total: 'Integer' }], re: [{ total: value }], to: 'c' } },
   );
 
   it('an omitted arg takes the expression', () => total('omitted', 4));

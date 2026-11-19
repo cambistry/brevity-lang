@@ -46,9 +46,9 @@ describe('*List of class — peers iterate a shared list-actor of their own kind
       { input: { id: '1', op: 'run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
-        re: expect.objectContaining({
+        re: [expect.objectContaining({
           names: ['Aaron', 'Betsy', 'Charlie'],
-        }),
+        })],
         to: 'caller',
       }) },
     );

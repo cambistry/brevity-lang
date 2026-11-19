@@ -62,49 +62,49 @@ describe('literal type inference — runtime', () => {
   it('literal type inference — variable assignment — string literal inferred as Text', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'text', from: 'c' } },
-      { output: { id: '1', 'ty': { x: 'Text' }, re: { x: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ x: 'Text' }], re: [{ x: 'hello' }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — integer literal inferred as Integer', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'integer', from: 'c' } },
-      { output: { id: '2', 'ty': { x: 'Integer' }, re: { x: 42 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ x: 'Integer' }], re: [{ x: 42 }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — decimal literal inferred as Decimal', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'decimal', from: 'c' } },
-      { output: { id: '3', 'ty': { x: 'Decimal' }, re: { x: 3.14 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ x: 'Decimal' }], re: [{ x: 3.14 }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — scientific notation literal inferred as Float', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'float', from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Float' }, re: { x: 123 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ x: 'Float' }], re: [{ x: 123 }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — true inferred as Boolean', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'boolTrue', from: 'c' } },
-      { output: { id: '5', 'ty': { x: 'Boolean' }, re: { x: true }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ x: 'Boolean' }], re: [{ x: true }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — false inferred as Boolean', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'boolFalse', from: 'c' } },
-      { output: { id: '6', 'ty': { x: 'Boolean' }, re: { x: false }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ x: 'Boolean' }], re: [{ x: false }], to: 'c' } },
     );
   });
 
   it('literal type inference — variable assignment — null literal inferred as null', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'nullLit', from: 'c' } },
-      { output: { id: '7', 'ty': { x: 'null' }, re: { x: null }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ x: 'null' }], re: [{ x: null }], to: 'c' } },
     );
   });
 
@@ -122,28 +122,28 @@ describe('literal type inference — runtime', () => {
   it('literal type inference — reply fields — string in named reply field', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'strNamed', from: 'c' } },
-      { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'hi' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ msg: 'Text' }], re: [{ msg: 'hi' }], to: 'c' } },
     );
   });
 
   it('literal type inference — reply fields — boolean in named reply field', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'boolNamed', from: 'c' } },
-      { output: { id: '3', 'ty': { ok: 'Boolean' }, re: { ok: true }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ ok: 'Boolean' }], re: [{ ok: true }], to: 'c' } },
     );
   });
 
   it('literal type inference — reply fields — decimal in named reply field', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'decNamed', from: 'c' } },
-      { output: { id: '4', 'ty': { pi: 'Decimal' }, re: { pi: 3.14 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ pi: 'Decimal' }], re: [{ pi: 3.14 }], to: 'c' } },
     );
   });
 
   it('literal type inference — reply fields — null in named reply field', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'nullNamed', from: 'c' } },
-      { output: { id: '5', 'ty': { value: 'null' }, re: { value: null }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ value: 'null' }], re: [{ value: null }], to: 'c' } },
     );
   });
 
@@ -154,21 +154,21 @@ describe('literal type inference — runtime', () => {
   it('literal type inference — function arguments — integer passed without annotation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'intArg', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 11 }], to: 'c' } },
     );
   });
 
   it('literal type inference — function arguments — string passed without annotation', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'strArg', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'world' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'world' }], to: 'c' } },
     );
   });
 
   it('literal type inference — function arguments — boolean passed without annotation', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'boolArg', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } },
     );
   });
 
@@ -179,14 +179,14 @@ describe('literal type inference — runtime', () => {
   it('literal type inference — object fields — integer field without annotation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'intField', from: 'c' } },
-      { output: { id: '1', 'ty': { count: 'Integer' }, re: { count: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ count: 'Integer' }], re: [{ count: 7 }], to: 'c' } },
     );
   });
 
   it('literal type inference — object fields — string field without annotation', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'strField', from: 'c' } },
-      { output: { id: '2', 'ty': { label: 'Text' }, re: { label: 'hello' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ label: 'Text' }], re: [{ label: 'hello' }], to: 'c' } },
     );
   });
 
@@ -197,14 +197,14 @@ describe('literal type inference — runtime', () => {
   it('literal type inference — explicit annotation coexists — integer with explicit annotation still works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'explicitInt', from: 'c' } },
-      { output: { id: '1', 'ty': { x: 'Integer' }, re: { x: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ x: 'Integer' }], re: [{ x: 5 }], to: 'c' } },
     );
   });
 
   it('literal type inference — explicit annotation coexists — string with explicit annotation still works', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'explicitStr', from: 'c' } },
-      { output: { id: '2', 'ty': { x: 'Text' }, re: { x: 'hi' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ x: 'Text' }], re: [{ x: 'hi' }], to: 'c' } },
     );
   });
 });

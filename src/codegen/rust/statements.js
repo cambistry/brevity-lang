@@ -2316,7 +2316,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}        } else {`);
               lines.push(`${I}            let mut _fn_resp = Map::new();`);
               lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
-              lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
+              lines.push(`${I}            _fn_resp.insert("re".to_string(), bv_wrap_reply(_fn_re, None).0);`);
               lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);
               lines.push(`${I}            let _ = self.binding.send(Value::Object(_fn_resp));`);
               lines.push(`${I}        }`);
@@ -2344,6 +2344,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               lines.push(`${I}        } else {`);
               lines.push(`${I}            let mut _fn_resp = Map::new();`);
               lines.push(`${I}            _fn_resp.insert("id".to_string(), json!(_fn_sub_id));`);
+              lines.push(`${I}            let (_fn_re, _fn_ty_opt) = bv_wrap_reply(_fn_re, _fn_ty_opt);`);
               lines.push(`${I}            _fn_resp.insert("re".to_string(), _fn_re);`);
               lines.push(`${I}            if let Some(_b) = _fn_ty_opt { _fn_resp.insert("ty".to_string(), _b); }`);
               lines.push(`${I}            _fn_resp.insert("to".to_string(), json!(_fn_sub_from));`);

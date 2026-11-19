@@ -732,8 +732,8 @@ describe('end to end: type values cross to and from a class in another file', ()
   it('a type nested in a reply is tagged the same way', async () => {
     const { sent, served, received } = await call('paired');
     const pair = sent.findIndex(m => m.op === 'pair');
-    expect(served[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: ':Point', n: 'Integer' }, to: 'Caller', from: ':W:1' });
-    expect(received[pair]).toEqual({ id: expect.any(String), re: { p: [1, 2], n: 1 }, ty: { p: 'svc.bv:Point', n: 'Integer' }, to: undefined, from: 'svc.bv:W:1' });
+    expect(served[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, 2], n: 1 }], ty: [{ p: ':Point', n: 'Integer' }], to: 'Caller', from: ':W:1' });
+    expect(received[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, 2], n: 1 }], ty: [{ p: 'svc.bv:Point', n: 'Integer' }], to: undefined, from: 'svc.bv:W:1' });
   }, 120000);
 
   it('a type value passed to a constructor decodes in the class', async () => {

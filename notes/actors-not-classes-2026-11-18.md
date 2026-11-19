@@ -80,18 +80,23 @@ actor. Docs move to this wording as they're touched.
 - **`k = C` with `k Box` is an error** naming `Actor`: `'k Box' takes an actor 'Box' built`.
 - **A singleton's self-return is tagged `*`**, as its value is: it's declared.
 
-## Address replies are array-wrapped
+## Every `re` is a list
 
-A reply that carries an address is positional like every other: the address is its one
-value. `$new` replies `{ re: ['#<:Box:1>'], ty: [':Box'] }`. A self-return replies
-`{ re: ['#<:>'], ty: [':'] }` from an actor a `new` built (`:` is its class; its parent
-translates both, to `['#<:Box:1>']`, `[':Box']`), and `ty: ['*']` from a declared actor (the
-file, a singleton), which knows no `new` built it. Receiving, a `$new` reply's actor is
-`re[0]`; a bare `re` there is malformed and the construction fails.
+A reply is its return Object, and `re` is always that Object's wire form, a list, as an
+op's args are: positional values in order, named values in a final map. A reply of named
+values only is `re: [{ result: 4 }]`, `ty: [{ result: 'Integer' }]` (not `{ result: 4 }`);
+nothing at all is `re: []`. The intrinsics answer the same way: a `test` get `re: [42]`,
+`ty: ['Integer']`; `capture` `re: [{ … }]`; `hydrate` `re: ['hydrate']`. So does the HTML
+host (src/codegen/browser/runtime.js), for every op: `first`, `body`, `title`, the
+element accessors (`re: ['DIV']`, a list value `re: [[a, b]]`).
 
-The HTML host (src/codegen/browser/runtime.js) wraps its `$new` and self-return replies too.
-Its other replies (`body`, `first`, accessors) still answer bare values, as its whole reply
-protocol does; that's its own change.
+An address is a reply's one value like any other. `$new` replies `{ re: ['#<:Box:1>'],
+ty: [':Box'] }`. A self-return replies `{ re: ['#<:>'], ty: [':'] }` from an actor a `new`
+built (`:` is its class; its parent translates both, to `['#<:Box:1>']`, `[':Box']`), and
+`ty: ['*']` from a declared actor (the file, a singleton), which knows no `new` built it.
+
+Receiving, a `re` that isn't a list is malformed, for every op, and the call waiting on it
+fails. A `$new` reply's actor is `re[0]`.
 
 ## `self` and `class`; `Self` is retired
 

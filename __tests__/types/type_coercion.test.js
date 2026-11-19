@@ -251,25 +251,25 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — Integer as Float changes later arithmetic', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'integerAsFloat', from: 'c' } },
-        { output: { id: '1', re: { r: 0.5 }, 'ty': { r: 'Float' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 0.5 }], 'ty': [{ r: 'Float' }], to: 'c' } },
       );
     });
     it('as — values in this file — Integer as Decimal', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'integerAsDecimal', from: 'c' } },
-        { output: { id: '1', re: { r: 1.5 }, 'ty': { r: 'Decimal' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 1.5 }], 'ty': [{ r: 'Decimal' }], to: 'c' } },
       );
     });
     it('as — values in this file — Text as Blob reads bytes', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'textAsBlob', from: 'c' } },
-        { output: { id: '1', re: { r: 6 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 6 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — values in this file — the same type leaves the value alone', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'sameType', from: 'c' } },
-        { output: { id: '1', re: { r: 43 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 43 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
   });
@@ -278,7 +278,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — bound, holding the type', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: [[41], 'paramBound'], 'ty': [['Integer']], from: 'c' } },
-        { output: { id: '1', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 42 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — values in this file — bound, holding another type', async () => {
@@ -302,7 +302,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — a union takes any member', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: [['x'], 'paramUnion'], 'ty': [['Text']], from: 'c' } },
-        { output: { id: '1', re: { r: 'ok' }, 'ty': { r: 'Text' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 'ok' }], 'ty': [{ r: 'Text' }], to: 'c' } },
       );
     });
     it('as — values in this file — a union fails on anything else', async () => {
@@ -323,7 +323,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — the path that holds', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: [[true], 'callBound'], 'ty': [['Boolean']], from: 'c' } },
-        { output: { id: '1', re: { r: 2 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 2 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — values in this file — the path that fails, before later code', async () => {
@@ -356,7 +356,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — n T = c as T asks the actor', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'actorBound', from: 'c' } },
-        { output: { id: '1', re: { r: 43 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 43 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — values in this file — no clause for the type fails', async () => {
@@ -383,7 +383,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — an untyped bind takes a sole positional', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'soleValue', from: 'c' } },
-        { output: { id: '1', re: { r: 1 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 1 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — values in this file — an untyped bind of a named reply fails', async () => {
@@ -401,13 +401,13 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — a positional Object in a named field goes out in wire form', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'objectInField', from: 'c' } },
-        { output: { id: '1', re: { r: [1] }, 'ty': { r: 'Object' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: [1] }], 'ty': [{ r: 'Object' }], to: 'c' } },
       );
     });
     it('as — values in this file — a named Object in a named field goes out in wire form', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'namedObjectInField', from: 'c' } },
-        { output: { id: '1', re: { r: { a: 1 } }, 'ty': { r: 'Object' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: { a: 1 } }], 'ty': [{ r: 'Object' }], to: 'c' } },
       );
     });
     it('as — values in this file — as Object binds the whole reply', async () => {
@@ -425,7 +425,7 @@ describe('type coercion — runtime', () => {
     it('as — values in this file — a one-entry Object unwraps into a typed bind', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'objectUnwraps', from: 'c' } },
-        { output: { id: '1', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '1', re: [{ r: 42 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
   });
@@ -444,7 +444,7 @@ describe('type coercion — runtime', () => {
         { input: { id: '99', op: 'overDoc', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'text', to: '/s' }) },
         { input: { id: '1', re: [41], 'ty': ['Integer'] } },
-        { output: { id: '99', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '99', re: [{ r: 42 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
   });
@@ -455,7 +455,7 @@ describe('type coercion — runtime', () => {
         { input: { id: '99', op: 'bare', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'int', to: '/s' }) },
         { input: { id: '1', re: [41], 'ty': ['Integer'] } },
-        { output: { id: '99', re: { r: 42 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '99', re: [{ r: 42 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — remote replies — the document is wrong', async () => {
@@ -478,7 +478,7 @@ describe('type coercion — runtime', () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'destructured', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'field', to: '/s' }) },
-        { input: { id: '1', re: { a: 'x' }, 'ty': { a: 'Integer' } } },
+        { input: { id: '1', re: [{ a: 'x' }], 'ty': [{ a: 'Integer' }] } },
         { output: { id: '99', ex: { 'destructured': 'as Integer: got Text' }, to: 'c' } },
       );
     });
@@ -498,7 +498,7 @@ describe('type coercion — runtime', () => {
         { input: { id: '99', op: 'floatBare', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'float', to: '/s' }) },
         { input: { id: '1', re: [3], 'ty': ['Float'] } },
-        { output: { id: '99', re: { r: 1.5 }, 'ty': { r: 'Float' }, to: 'c' } },
+        { output: { id: '99', re: [{ r: 1.5 }], 'ty': [{ r: 'Float' }], to: 'c' } },
       );
     });
     it('as — remote replies — a whole Float as Integer', async () => {
@@ -506,7 +506,7 @@ describe('type coercion — runtime', () => {
         { input: { id: '99', op: 'floatAsInteger', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'float', to: '/s' }) },
         { input: { id: '1', re: [3], 'ty': ['Float'] } },
-        { output: { id: '99', re: { r: 4 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '99', re: [{ r: 4 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — remote replies — a fractional Float as Integer', async () => {
@@ -524,16 +524,16 @@ describe('type coercion — runtime', () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
-        { input: { id: '1', re: { x: 1, y: 2 }, 'ty': { x: 'Integer', y: 'Integer' } } },
-        { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { input: { id: '1', re: [{ x: 1, y: 2 }], 'ty': [{ x: 'Integer', y: 'Integer' }] } },
+        { output: { id: '99', re: [{ r: 3 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — remote replies — extra fields are dropped', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
-        { input: { id: '1', re: { x: 1, y: 2, z: 3 }, 'ty': { x: 'Integer', y: 'Integer', z: 'Integer' } } },
-        { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { input: { id: '1', re: [{ x: 1, y: 2, z: 3 }], 'ty': [{ x: 'Integer', y: 'Integer', z: 'Integer' }] } },
+        { output: { id: '99', re: [{ r: 3 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — remote replies — a tagged positional passes', async () => {
@@ -541,14 +541,14 @@ describe('type coercion — runtime', () => {
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
         { input: { id: '1', re: [[1, 2]], 'ty': [':Point'] } },
-        { output: { id: '99', re: { r: 3 }, 'ty': { r: 'Integer' }, to: 'c' } },
+        { output: { id: '99', re: [{ r: 3 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
     it('as — remote replies — a missing field fails', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
-        { input: { id: '1', re: { x: 1 }, 'ty': { x: 'Integer' } } },
+        { input: { id: '1', re: [{ x: 1 }], 'ty': [{ x: 'Integer' }] } },
         { output: { id: '99', ex: { 'point': 'as Point: got Object' }, to: 'c' } },
       );
     });
@@ -556,7 +556,7 @@ describe('type coercion — runtime', () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
-        { input: { id: '1', re: { x: 1, y: 'no' }, 'ty': { x: 'Integer', y: 'Text' } } },
+        { input: { id: '1', re: [{ x: 1, y: 'no' }], 'ty': [{ x: 'Integer', y: 'Text' }] } },
         { output: { id: '99', ex: { 'point': 'as Point: got Object' }, to: 'c' } },
       );
     });

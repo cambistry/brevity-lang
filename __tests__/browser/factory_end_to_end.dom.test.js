@@ -67,7 +67,7 @@ describe('factory end-to-end', () => {
     const el = await page.connectActor('HTML:div:1');
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'initial' }) },
+      { output: expect.objectContaining({ re: ['initial'] }) },
     );
   });
 
@@ -90,7 +90,7 @@ describe('factory end-to-end', () => {
     const el = await page.connectActor('HTML:div:1');
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'updated' }) },
+      { output: expect.objectContaining({ re: ['updated'] }) },
     );
   });
 
@@ -111,7 +111,7 @@ describe('factory end-to-end', () => {
       });
       await expectBehavior(el,
         { input: { id: 'q-' + seq, op: 'inner_html' } },
-        { output: expect.objectContaining({ re: value }) },
+        { output: expect.objectContaining({ re: [value] }) },
       );
     }
   });

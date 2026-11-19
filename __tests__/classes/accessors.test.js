@@ -130,7 +130,7 @@ describe('published params — runtime', () => {
 
   const run = (op, value) => expectBehavior(script,
     { input: { id: '1', op, from: 'c' } },
-    { output: expect.objectContaining({ id: '1', re: { result: value }, to: 'c' }) },
+    { output: expect.objectContaining({ id: '1', re: [{ result: value }], to: 'c' }) },
   );
 
   it('accessor returns the provided value', async () => { await run('testProvided', 2); });

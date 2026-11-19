@@ -37,7 +37,7 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
 
   // document.body() → body address
   await page.send({ id: 'body', op: 'body', to: 'document', from: 't' });
-  const bodyAddr = replies.find(m => m.id === 'body').re;
+  const bodyAddr = replies.find(m => m.id === 'body').re[0];
 
   // HTML.<tag>(#new) with the handler wired back to us (`#<t>`)
   await page.send({
@@ -46,7 +46,7 @@ async function fireAndCapture(page, { on, tag = 'button', event }) {
     to: `HTML:${tag}`,
     from: 't',
   });
-  const elAddr = replies.find(m => m.id === 'new').re;
+  const elAddr = replies.find(m => m.id === 'new').re[0];
 
   // body.append!(element)
   await page.send({ id: 'app', op: [[elAddr], 'append!'], to: bodyAddr.slice(2, -1), from: 't' });

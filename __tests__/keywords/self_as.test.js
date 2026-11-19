@@ -117,12 +117,12 @@ describe('self-as clauses', () => {
   it('multiple self-as clauses — correct one selected by target type', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'multiCast', from: 'c' } },
-      { output: { id: '4', 'ty': { n: 'Integer', t: 'Text', b: 'Boolean' }, re: { n: 42, t: 'forty-two', b: false }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ n: 'Integer', t: 'Text', b: 'Boolean' }], re: [{ n: 42, t: 'forty-two', b: false }], to: 'c' } },
     );
   });
 
   it('untyped assignment — no cast, still works via ref', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'untypedRef', from: 'c' } }, { output: { id: '5', 'ty': { answer: 'Text' }, re: { answer: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'untypedRef', from: 'c' } }, { output: { id: '5', 'ty': [{ answer: 'Text' }], re: [{ answer: 'world' }], to: 'c' } });
   });
 
   it('negated catch-all — as !Self (Integer target)', async () => {
@@ -140,7 +140,7 @@ describe('self-as clauses', () => {
   it('actor with both as clauses and public functions coexist', async () => {
     await expectBehavior(script,
       { input: { id: '9', op: 'dualCoexist', from: 'c' } },
-      { output: { id: '9', 'ty': { n: 'Integer', msg: 'Text' }, re: { n: 7, msg: 'hi' }, to: 'c' } },
+      { output: { id: '9', 'ty': [{ n: 'Integer', msg: 'Text' }], re: [{ n: 7, msg: 'hi' }], to: 'c' } },
     );
   });
 });
@@ -163,7 +163,7 @@ describe('self as — CAM message (file-level actor)', () => {
   it('public handler still works alongside as clause', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'ping', from: 'c' } },
-      { output: { id: '2', 'ty': { pong: 'Text' }, re: { pong: 'ok' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ pong: 'Text' }], re: [{ pong: 'ok' }], to: 'c' } },
     );
   });
 });

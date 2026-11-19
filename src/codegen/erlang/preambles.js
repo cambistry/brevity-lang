@@ -1556,13 +1556,14 @@ bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, 
 bv_local_tag_(T, _) -> T.
 %% An address is a reply's one value, as any other is: re: [<<"#<…>">>], ty: [T]. A
 %% self-return with no tag is the file's, which no \`new\` built: \`*\`.
-bv_wrap_address_reply_(<<"#<", _/binary>> = A, Ty) ->
-    {[A], case Ty of
-        null when A =:= <<"#<:>">> -> [<<"*">>];
-        T_ when is_binary(T_) -> [T_];
-        T_ -> T_
-    end};
-bv_wrap_address_reply_(Re, Ty) -> {Re, Ty}.
+bv_wrap_reply_(Re, Ty) when is_list(Re) -> {Re, Ty};
+bv_wrap_reply_(Re, Ty) ->
+    {[Re], case Ty of
+        null when Re =:= <<"#<:>">> -> [<<"*">>];
+        null -> null;
+        T_ when is_list(T_) -> T_;
+        T_ -> [T_]
+    end}.
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
@@ -1578,9 +1579,10 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 {ok, <<"#<:>"/utf8>>, _} ->
                     io:put_chars([json_encode(Base_#{<<"re">> => [<<"#<:", Addr/binary, ">">>], <<"ty">> => [bv_addr_class_(Addr)]}), $\n]);
                 %% Its relative addresses, "me" among them, go under it.
-                {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
+                {ok, V_, null} -> {W_, _} = bv_wrap_reply_(V_, null), io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(W_, Addr))}), $\n]);
                 {ok, V_, Tag_} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr)), <<"ty">> => bv_local_tag_(Tag_, Addr)}), $\n]);
+                    {W_, WTag_} = bv_wrap_reply_(V_, Tag_),
+                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(W_, Addr)), <<"ty">> => bv_local_tag_(WTag_, Addr)}), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => F_}}), $\n])
             end
     end.
@@ -1710,31 +1712,47 @@ match_pos_types(Arr, [T|Rest], I) ->
 %% A reply whose whole value is one actor, [<<"#<…>">>]: the address, whatever its
 %% tag (its class, or \`*\`).
 bv_self_reply_([<<"#<", _/binary>>] = Re, _Message) -> Re;
-bv_self_reply_(Re, Message) -> (bv_mod_()):bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
+bv_self_reply_(Re, Message) ->
+    Ty_ = maps:get(<<"ty">>, Message, null),
+    bv_named_reply_((bv_mod_()):bv_unwire_reply(Re, Ty_), Ty_).
 
+%% A reply of named values only, as the wire carries it ([#{…}], ty [#{…}]), read as
+%% we hold it: the named values themselves.
+bv_named_reply_([M_], Ty) when is_map(M_) ->
+    case (Ty =:= null orelse (is_list(Ty) andalso length(Ty) =:= 1 andalso is_map(hd(Ty)))) andalso not maps:is_key(<<"__type">>, M_) of
+        true -> M_;
+        false -> [M_]
+    end;
+bv_named_reply_(Re, _Ty) -> Re.
+
+%% A reply whose re isn't a list is malformed.
 await_response_(Id) ->
     case bv_await_line_(Id) of
-        {re, Message} -> bv_self_reply_(maps:get(<<"re">>, Message), Message);
+        {re, Message} ->
+            case maps:get(<<"re">>, Message) of
+                L_ when is_list(L_) -> bv_self_reply_(L_, Message);
+                _ -> error({ex_response, Message})
+            end;
         {ex, Message} -> error({ex_response, Message});
         eof -> null
     end.
 
-%% The address a reply to \`$new\` names, unbracketed: its one value, re: [<<"#<…>">>].
-%% A bare re isn't an address reply (null); one with no address names its sender.
+%% The address a reply names, unbracketed: its one value, re: [<<"#<…>">>]. One with
+%% no address names its sender. A re that isn't a list is malformed (null).
 bv_new_reply_addr_(Message) ->
     case maps:get(<<"re">>, Message, null) of
         [<<"#<", _/binary>> = A_] -> bv_to_addr_(A_);
-        B_ when is_binary(B_) -> null;
-        _ -> maps:get(<<"from">>, Message, null)
+        L_ when is_list(L_) -> maps:get(<<"from">>, Message, null);
+        _ -> null
     end.
 
-%% A reply to \`$new\` with no address as its one value is malformed.
+%% A reply whose re isn't a list is malformed.
 await_new_response_(Id) ->
     case bv_await_line_(Id) of
         {re, Message} ->
             case maps:get(<<"re">>, Message, null) of
-                B_ when is_binary(B_) -> error({ex_response, Message});
-                _ -> bv_new_reply_addr_(Message)
+                L_ when is_list(L_) -> bv_new_reply_addr_(Message);
+                _ -> error({ex_response, Message})
             end;
         _ -> null
     end.

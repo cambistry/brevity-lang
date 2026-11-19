@@ -545,9 +545,9 @@ ${getClauses}
                             };
                             let mut resp = Map::new();
                             resp.insert("id".to_string(), json!(id));
-                            resp.insert("re".to_string(), tval);
+                            resp.insert("re".to_string(), json!([tval]));
                             resp.insert("to".to_string(), json!(from));
-                            if let Some(t) = ttype { resp.insert("ty".to_string(), json!(t)); }
+                            if let Some(t) = ttype { resp.insert("ty".to_string(), json!([t])); }
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
@@ -580,9 +580,9 @@ ${[...G.ctx.stateVarNames].map(n => {
             };
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
-            resp.insert("re".to_string(), val);
+            resp.insert("re".to_string(), json!([val]));
             resp.insert("to".to_string(), json!(from));
-            if let Some(t) = bv_type { resp.insert("ty".to_string(), json!(t)); }
+            if let Some(t) = bv_type { resp.insert("ty".to_string(), json!([t])); }
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
@@ -614,7 +614,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
             } else if let Some(re_val) = re {
-                let (re_val, ty_re) = bv_wrap_address_reply(re_val, ty_re);
+                let (re_val, ty_re) = bv_wrap_reply(re_val, ty_re);
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from));
                 if let Some(b) = ty_re { resp.insert("ty".to_string(), b); }
                 let _ = self.binding.send(Value::Object(resp));
@@ -714,7 +714,7 @@ ${bodyLines}
             if cam.as_str() == Some("capture") {
                 let mut resp = Map::new();
                 resp.insert("id".to_string(), json!(id));
-                resp.insert("re".to_string(), self.capture());
+                resp.insert("re".to_string(), json!([self.capture()]));
                 resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
                 return;
@@ -726,7 +726,7 @@ ${bodyLines}
                     }
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
-                    resp.insert("re".to_string(), json!("hydrate"));
+                    resp.insert("re".to_string(), json!(["hydrate"]));
                     resp.insert("to".to_string(), json!(from));
                     let _ = self.binding.send(Value::Object(resp));
                     return;
@@ -1082,7 +1082,7 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
                     resp.insert("to".to_string(), json!(from));
                     let _ = self.binding.send(Value::Object(resp));
                 } else if let Some(re_val) = re {
-                    let (re_val, ty_re) = bv_wrap_address_reply(re_val, ty_re);
+                    let (re_val, ty_re) = bv_wrap_reply(re_val, ty_re);
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
                     resp.insert("re".to_string(), ${G.ctx.publicSingletons ? 'self.bv_wire_own(&re_val)' : 're_val'});
@@ -1128,35 +1128,43 @@ impl Binding {
     }
 }
 
-// An address is a reply's one value, as any other is: re: ["#<…>"], ty: [t]. A
+// A reply is a return Object, and its wire form is a list: an address is its
+// one value (re: ["#<…>"], ty: [t]), named values its last (re: [{ … }]). A
 // self-return with no tag is the file's, which no \`new\` built: \`*\`.
 #[allow(dead_code)]
-fn bv_wrap_address_reply(re: Value, ty: Option<Value>) -> (Value, Option<Value>) {
-    match &re {
-        Value::String(a) if a.starts_with("#<") => {
-            let ty = match ty {
-                Some(Value::String(t)) => Some(json!([t])),
-                None if a == "#<:>" => Some(json!(["*"])),
-                other => other,
-            };
-            (json!([re]), ty)
-        }
-        _ => (re, ty),
-    }
+fn bv_wrap_reply(re: Value, ty: Option<Value>) -> (Value, Option<Value>) {
+    if re.is_array() { return (re, ty); }
+    let ty = match ty {
+        None if re.as_str() == Some("#<:>") => Some(json!(["*"])),
+        Some(t) if !t.is_array() => Some(json!([t])),
+        other => other,
+    };
+    (json!([re]), ty)
 }
 
-// The address a reply to \`$new\` names, unbracketed: its one value, re: ["#<…>"]. A
-// bare re isn't an address reply (null); one with no address in it names its sender.
+// The address a reply names, unbracketed: its one value, re: ["#<…>"]. One with no
+// address in it names its sender. A re that isn't a list is malformed (null).
 #[allow(dead_code)]
 fn bv_new_reply_addr(msg: &Value) -> Value {
     let from = || msg.get("from").cloned().unwrap_or(Value::Null);
     match msg.get("re") {
-        Some(Value::String(_)) => Value::Null,
         Some(Value::Array(a)) if a.len() == 1 => match a[0].as_str() {
             Some(s) if s.starts_with("#<") && s.ends_with('>') => Value::String(s[2..s.len() - 1].to_string()),
             _ => from(),
         },
-        _ => from(),
+        Some(Value::Array(_)) => from(),
+        _ => Value::Null,
+    }
+}
+
+// A reply of named values only, as the wire carries it ([{ … }], ty [{ … }]), read
+// as we hold it: the named values themselves.
+#[allow(dead_code)]
+fn bv_named_reply(re: Value, ty: Option<&Value>) -> Value {
+    let named_ty = ty.is_none_or(|t| t.as_array().is_some_and(|a| a.len() == 1 && a[0].is_object()));
+    match re.as_array() {
+        Some(a) if named_ty && a.len() == 1 && a[0].as_object().is_some_and(|o| !o.contains_key("__type")) => a[0].clone(),
+        _ => re,
     }
 }
 
@@ -2131,6 +2139,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 }
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
+                    let (v, tag) = bv_wrap_reply(v, tag);
                     resp.insert("re".to_string(), ${hasPublicSingletons ? 'self.bv_wire_own(&' : '('}bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<:>")), &addr)));
                     if let Some(t) = tag { resp.insert("ty".to_string(), bv_local_tag(&t, &addr)); }
                 }
@@ -2184,11 +2193,13 @@ ${heldSingletonArms}            _ => None,
         };
         match reply {
             Some(m) if m.get("ex").is_some() => panic!("ex_response"),
+            // A reply whose re isn't a list is malformed.
+            Some(m) if m.get("re").is_some_and(|r| !r.is_array()) => panic!("ex_response"),
             Some(m) => {
                 let re = m.get("re").cloned().unwrap_or(Value::Null);
                 // A reply whose whole value is one actor, as await_response reads it.
                 if re.as_array().is_some_and(|a| a.len() == 1 && a[0].as_str().is_some_and(|t| t.starts_with("#<") && t.ends_with('>'))) { return re; }
-                m.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, t))
+                bv_named_reply(m.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, t)), m.get("ty"))
             }
             None => Value::Null,
         }
@@ -2208,6 +2219,8 @@ ${heldSingletonArms}            _ => None,
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
+                                // A reply whose re isn't a list is malformed.
+                                if !re.is_array() { panic!("ex_response"); }
                                 // A reply whose whole value is one actor: its address is in re,
                                 // and ty, if any, is its class: the address it heads (svc.bv:Counter
                                 // of svc.bv:Counter:1; thing.bv:9 of thing.bv).
@@ -2218,7 +2231,7 @@ ${heldSingletonArms}            _ => None,
                                 if one_actor {
                                     return re.clone();
                                 }
-                                return msg.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
+                                return bv_named_reply(msg.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t)), msg.get("ty"));
                             }
                         }
                         if msg.get("ex").is_some() && msg_id == target_id {
@@ -2247,8 +2260,8 @@ ${heldSingletonArms}            _ => None,
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_id == target_id {
-                            // A reply to \`$new\` with no address as its one value is malformed.
-                            if msg.get("re").is_some_and(|r| r.is_string()) { panic!("ex_response"); }
+                            // A reply whose re isn't a list is malformed.
+                            if msg.get("re").is_some_and(|r| !r.is_array()) { panic!("ex_response"); }
                             return bv_new_reply_addr(&msg);
                         }
                         self.receive(&msg);

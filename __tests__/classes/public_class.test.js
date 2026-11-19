@@ -317,7 +317,7 @@ describe('self as one of several return values', () => {
       { input: { id: '1', op: '$new', to: ':Box', from: 'c' } },
       { output: { id: '1', re: ['#<:Box:1>'], 'ty': [':Box'], to: 'c' } },
       { input: { id: '2', op: 'named!', to: ':Box:1', from: 'c' } },
-      { output: { id: '2', re: { me: '#<:Box:1>', n: 1 }, 'ty': { me: ':Box', n: 'Integer' }, to: 'c', from: ':Box:1' } },
+      { output: { id: '2', re: [{ me: '#<:Box:1>', n: 1 }], 'ty': [{ me: ':Box', n: 'Integer' }], to: 'c', from: ':Box:1' } },
     );
   });
 

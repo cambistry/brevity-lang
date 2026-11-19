@@ -92,7 +92,7 @@ use :style, :p = HTML
     await actor.sendAsync({ id: '1', op: 'build.' });
     const sheet = await page.connectActor('HTML:style:2');
     await sheet.sendAsync({ id: '2', op: 'media' });
-    expect(sheet.posts[0]).toEqual(expect.objectContaining({ id: '2', re: 'print' }));
+    expect(sheet.posts[0]).toEqual(expect.objectContaining({ id: '2', re: ['print'] }));
   });
 });
 

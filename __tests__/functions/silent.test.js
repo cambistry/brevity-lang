@@ -96,21 +96,21 @@ describe('silent functions — runtime', () => {
   it('silent public functions + type matching — replying function still works alongside silent function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ sum: 'Integer' }], re: [{ sum: 7 }], to: 'c' } },
     );
   });
 
   it('silent public functions + type matching — overloaded — Text message gets reply', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ msg: 'hello' }], 'overloaded'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { ack: 'Text' }, re: { ack: 'noted' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ ack: 'Text' }], re: [{ ack: 'noted' }], to: 'c' } },
     );
   });
 
   it('silent public functions + type matching — spawn + silent private function — reply ok', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'spawnTest!', from: 'c' } },
-      { output: { id: '3', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ answer: 'Text' }], re: [{ answer: 'ok' }], to: 'c' } },
     );
   });
 
@@ -136,7 +136,7 @@ describe('silent functions — runtime', () => {
     await expectBehavior(script,
       { input: { id: 's1', op: [[{ msg: 'hello' }], 'store.'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
       { input: { id: 'c1', op: 'check', from: 'c' } },
-      { output: expect.objectContaining({ id: 'c1', re: { last: 'hello' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: 'c1', re: [{ last: 'hello' }], to: 'c' }) },
     );
   });
 
@@ -157,14 +157,14 @@ describe('silent functions — runtime', () => {
   it('stateful silent functions + lambdas — lambda — curly brace body', async () => {
     await expectBehavior(script,
       { input: { id: 'l3', op: 'lambdaCurly!', from: 'c' } },
-      { output: expect.objectContaining({ id: 'l3', re: { a: 10, b: 11 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: 'l3', re: [{ a: 10, b: 11 }], to: 'c' }) },
     );
   });
 
   it('stateful silent functions + lambdas — lambda — curly brace single line', async () => {
     await expectBehavior(script,
       { input: { id: 'l4', op: 'lambdaCurlySingle!', from: 'c' } },
-      { output: expect.objectContaining({ id: 'l4', re: { a: 77 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: 'l4', re: [{ a: 77 }], to: 'c' }) },
     );
   });
 
@@ -175,7 +175,7 @@ describe('silent functions — runtime', () => {
   it('silent function — empty lineal body — lineal private function — empty body is silent', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'spaciousEmpty!', from: 'c' } },
-      { output: { id: '1', 'ty': { answer: 'Text' }, re: { answer: 'ok' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ answer: 'Text' }], re: [{ answer: 'ok' }], to: 'c' } },
     );
   });
 

@@ -106,7 +106,12 @@ execution.
 ## Messages Use `op` and `re`
 
 A normal CAM request names an operation with `op`. If the operation replies, the
-reply comes back as `re` with the same `id`.
+reply comes back as `re` with the same `id`. A reply is an Object, its return
+values, and `re` is always a list, as an op's args are: positional values in
+order, named values in a final map (`re: [3]`, `re: [{ "result": 10 }]`,
+`re: [1, 2, { "x": 3 }]`), an actor by its address (`re: ["#<WebView:1>"]`), and
+nothing at all as `re: []`. Its `ty` has the same shape. A `re` that isn't a list
+is malformed.
 
 ```json
 {
@@ -120,9 +125,9 @@ reply comes back as `re` with the same `id`.
 ```json
 {
   "id": "100",
-  "re": { "response": "hello" },
+  "re": [{ "response": "hello" }],
   "to": "Primary",
-  "ty": { "response": "Text" }
+  "ty": [{ "response": "Text" }]
 }
 ```
 
@@ -138,7 +143,7 @@ An operation with no payload can be just a selector:
 and its reply can still be structured:
 
 ```json
-{ "id": "1", "re": { "status": "ok" }, "to": "Tester" }
+{ "id": "1", "re": [{ "status": "ok" }], "to": "Tester" }
 ```
 
 Actor construction is also a message. The construction operation is the

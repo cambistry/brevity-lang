@@ -78,7 +78,7 @@ describe('public constants — in-script class', () => {
   it('wrapper reads constant from child', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'readTag', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } },
     );
   });
 });

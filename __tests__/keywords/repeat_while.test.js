@@ -143,7 +143,7 @@ describe('repeat while — tail repeat in a `!` function → self', () => {
   });
 
   it('private lambda with tail repeat — call completes void', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'callPrivateTailLambda!', from: 'c' } }, { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) });
+    await expectBehavior(script, { input: { id: '4', op: 'callPrivateTailLambda!', from: 'c' } }, { output: expect.objectContaining({ id: '4', re: [{ ack: 'ok' }], to: 'c' }) });
   });
 });
 

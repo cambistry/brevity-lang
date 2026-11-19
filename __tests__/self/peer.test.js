@@ -53,10 +53,10 @@ describe('`class` — peer-shaped @-cell, two-actor gossip ring', () => {
       { input: { id: '1', op: 'run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
-        re: expect.objectContaining({
+        re: [expect.objectContaining({
           a1: ['breaking news'],
           b1: ['breaking news'],
-        }),
+        })],
         to: 'caller',
       }) },
     );
@@ -69,10 +69,10 @@ describe('`class` — peer-shaped @-cell, two-actor gossip ring', () => {
       { input: { id: '1', op: 'run!', from: 'caller' } },
       { output: expect.objectContaining({
         id: '1',
-        re: expect.objectContaining({
+        re: [expect.objectContaining({
           a2: ['breaking news', 'this just in'],
           b2: ['breaking news', 'this just in'],
-        }),
+        })],
         to: 'caller',
       }) },
     );

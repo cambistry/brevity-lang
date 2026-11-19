@@ -95,14 +95,14 @@ describe('RHS object literal', () => {
   it('s = :a, :b — named sigil object', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'namedSigil', from: 'c' } },
-      { output: { id: '4', re: { a: 11, b: 22 }, to: 'c' } },
+      { output: { id: '4', re: [{ a: 11, b: 22 }], to: 'c' } },
     );
   });
 
   it('s = x: 5, y: 10 — key-value named object', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'namedKeyValue', from: 'c' } },
-      { output: { id: '5', re: { x: 5, y: 10 }, to: 'c' } },
+      { output: { id: '5', re: [{ x: 5, y: 10 }], to: 'c' } },
     );
   });
 
@@ -123,7 +123,7 @@ describe('RHS object literal', () => {
   it('a, b = s where s was built as a literal', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'roundtrip', from: 'c' } },
-      { output: { id: '8', 'ty': { sum: 'Integer' }, re: { sum: 11 }, to: 'c' } },
+      { output: { id: '8', 'ty': [{ sum: 'Integer' }], re: [{ sum: 11 }], to: 'c' } },
     );
   });
 });
@@ -167,7 +167,7 @@ describe('Object coercion + named-field destructure', () => {
   it('(:a, :b) = Object(a: 1, b: 2) succeeds', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'namedFieldOk', from: 'c' } },
-      { output: { id: '3', 'ty': { sum: 'Integer' }, re: { sum: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ sum: 'Integer' }], re: [{ sum: 3 }], to: 'c' } },
     );
   });
 });

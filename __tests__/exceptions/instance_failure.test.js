@@ -532,7 +532,7 @@ describe('a failed as in a constructor block', () => {
     it('stores the value when it renders', async () => {
       await expectBehavior(script,
         { input: { id: '1', op: 'goOk', from: 'c' } },
-        { output: expect.objectContaining({ id: '1', re: { n: 5, m: 1, k: 1, t: 1 }, to: 'c' }) },
+        { output: expect.objectContaining({ id: '1', re: [{ n: 5, m: 1, k: 1, t: 1 }], to: 'c' }) },
       );
     });
     // With no params to prompt it, the block still runs: these read what it stored,
@@ -545,7 +545,7 @@ describe('a failed as in a constructor block', () => {
     ])('runs the block of a class with no params: %s', async (_, op) => {
       await expectBehavior(script,
         { input: { id: '1', op, from: 'c' } },
-        { output: expect.objectContaining({ id: '1', re: { r: 3 }, to: 'c' }) },
+        { output: expect.objectContaining({ id: '1', re: [{ r: 3 }], to: 'c' }) },
       );
     });
     it('runs a superclass block for a call in a constructor block', async () => {
@@ -578,7 +578,7 @@ describe('a failed as in a constructor block', () => {
         newGood('2', 5),
         { output: { id: '2', re: ['#<:Good:1>'], 'ty': [':Good'], to: 'c' } },
         { input: { id: '3', op: 'get', to: ':Good:1', from: 'c' } },
-        { output: expect.objectContaining({ id: '3', re: { n: 5, m: 1, k: 1, t: 1 }, to: 'c', from: ':Good:1' }) },
+        { output: expect.objectContaining({ id: '3', re: [{ n: 5, m: 1, k: 1, t: 1 }], to: 'c', from: ':Good:1' }) },
       );
     });
     it('leaves the file answering, with its state', async () => {

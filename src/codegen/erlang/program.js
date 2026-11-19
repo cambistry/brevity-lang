@@ -872,7 +872,7 @@ function genCamInit(ctx, actor) {
   }
 
   lines.push(`${I}put(bv_initialized_, true),`);
-  lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => <<"init">>, <<"to">> => From},`);
+  lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => [<<"init">>], <<"to">> => From},`);
   lines.push(`${I}io:put_chars([json_encode(Resp), $\n]).`);
 
   return lines.join('\n');
@@ -1830,8 +1830,8 @@ ${getClauses}                            _ -> null
                         TType = case TName of
 ${typeClauses}                            _ -> null
                         end,
-                        TResp0 = #{<<"id">> => Id, <<"re">> => TVal, <<"to">> => From},
-                        TResp = case TType of null -> TResp0; _ -> TResp0#{<<"ty">> => TType} end,
+                        TResp0 = #{<<"id">> => Id, <<"re">> => [TVal], <<"to">> => From},
+                        TResp = case TType of null -> TResp0; _ -> TResp0#{<<"ty">> => [TType]} end,
                         io:put_chars([json_encode(TResp), $\n]);
                     error ->
                         case maps:find(<<"set">>, Test) of
@@ -1867,8 +1867,8 @@ ${testGetClauses || '                _ -> null'};
 ${testTypeClauses || '                _ -> null'};
                 _ -> null
             end,
-            Resp0 = #{<<"id">> => Id, <<"re">> => Val, <<"to">> => From},
-            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"ty">> => BvType} end,
+            Resp0 = #{<<"id">> => Id, <<"re">> => [Val], <<"to">> => From},
+            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"ty">> => [BvType]} end,
             io:put_chars([json_encode(Resp), $\n]);
         error ->
     case maps:find(<<"set">>, Test) of
@@ -1989,7 +1989,7 @@ ${dispatchInner}
     end.
 
 handle_result({ok, Re0, TyRe0}, Id, From, _OpName) when Re0 =/= null ->
-    {Re, TyRe} = bv_wrap_address_reply_(Re0, TyRe0),
+    {Re, TyRe} = bv_wrap_reply_(Re0, TyRe0),
     Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Re), <<"to">> => From},
     Resp = case TyRe of
         null -> Resp0;
@@ -2108,7 +2108,7 @@ read_loop() ->
                                 <<"capture">> ->
                                     Id = maps:get(<<"id">>, Message, <<>>),
                                     From = maps:get(<<"from">>, Message, <<>>),
-                                    Resp = #{<<"id">> => Id, <<"re">> => capture(), <<"to">> => From},
+                                    Resp = #{<<"id">> => Id, <<"re">> => [capture()], <<"to">> => From},
                                     io:put_chars([json_encode(Resp), $\n]);
                                 CamList when is_list(CamList) ->
                                     case lists:last(CamList) of
@@ -2117,7 +2117,7 @@ read_loop() ->
                                             From = maps:get(<<"from">>, Message, <<>>),
                                             State = hd(CamList),
                                             hydrate(State),
-                                            Resp = #{<<"id">> => Id, <<"re">> => <<"hydrate">>, <<"to">> => From},
+                                            Resp = #{<<"id">> => Id, <<"re">> => [<<"hydrate">>], <<"to">> => From},
                                             io:put_chars([json_encode(Resp), $\n]);
                                         _ -> dispatch(Message)
                                     end;

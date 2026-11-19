@@ -241,7 +241,7 @@ Op with payload:
 Reply:
 
 ```json
-{ "id": "2", "re": { "result": 10 }, "ty": { "result": "Integer" }, "to": "caller" }
+{ "id": "2", "re": [{ "result": 10 }], "ty": [{ "result": "Integer" }], "to": "caller" }
 ```
 
 Unhandled message:

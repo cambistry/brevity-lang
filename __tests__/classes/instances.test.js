@@ -13,7 +13,7 @@ describe('class instances — independent state', () => {
       @run = { a = C(1); b = C(2); x Integer = a.n(); y Integer = b.n(); return r: x * 10 + y }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { r: 12 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ r: 12 }] }) },
     );
   });
 
@@ -25,7 +25,7 @@ describe('class instances — independent state', () => {
       @run = { x Integer = c.n(); y Integer = d.n(); return r: x * 10 + y }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { r: 34 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ r: 34 }] }) },
     );
   });
 
@@ -35,7 +35,7 @@ describe('class instances — independent state', () => {
       @run = { cs List = [C(1), C(2)]; ns List = over(cs) (c) { c.n() }; return r: ns }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { r: [1, 2] } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ r: [1, 2] }] }) },
     );
   });
 });

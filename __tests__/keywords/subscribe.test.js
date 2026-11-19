@@ -129,7 +129,7 @@ describe('subscribe — call-site syntax', () => {
     await expectBehavior(callSiteScript,
       { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
-      { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
+      { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 0 }], to: 'caller' } },
     );
   });
 
@@ -138,7 +138,7 @@ describe('subscribe — call-site syntax', () => {
       { input: { id: '1', op: 'doSubscribe.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 42 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
-      { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
+      { output: { id: '3', 'ty': [{ last: 'Integer' }], re: [{ last: 42 }], to: 'caller' } },
     );
   });
 
@@ -149,7 +149,7 @@ describe('subscribe — call-site syntax', () => {
       { input: { id: '3', op: [[{ n: 10 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '4', op: [[{ n: 99 }], 'setVal.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '5', op: 'readLast', from: 'caller' } },
-      { output: { id: '5', 'ty': { last: 'Integer' }, re: { last: 99 }, to: 'caller' } },
+      { output: { id: '5', 'ty': [{ last: 'Integer' }], re: [{ last: 99 }], to: 'caller' } },
     );
   });
 });
@@ -188,7 +188,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
         { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Remote:val' }) },
         { input: { id: '1', re: [7] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
-        { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 7 }, to: 'caller' } },
+        { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 7 }], to: 'caller' } },
       ],
     });
   });
@@ -203,7 +203,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
-        { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
+        { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 42 }], to: 'caller' } },
       ],
     });
   });
@@ -277,7 +277,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
     await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const readReply = sub.posts.slice(finalSubPrev).find(p => p.id === '3');
     expect(readReply).toEqual(expect.objectContaining({
-      id: '3', re: { last: 77 }, to: 'caller',
+      id: '3', re: [{ last: 77 }], to: 'caller',
     }));
   });
 });

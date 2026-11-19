@@ -309,7 +309,7 @@ describe('a reply\'s tag', () => {
 
   const paths = [
     ['positional', ['x'], ['Text'], [9], ['Integer']],
-    ['named', { n: 'x' }, { n: 'Text' }, { n: 9 }, { n: 'Integer' }],
+    ['named', [{ n: 'x' }], [{ n: 'Text' }], [{ n: 9 }], [{ n: 'Integer' }]],
     ['elseBranch', ['x'], ['Text'], [9], ['Integer']],
     ['nested', ['x'], ['Text'], [9], ['Integer']],
     ['inLoop', ['x'], ['Text'], [9], ['Integer']],

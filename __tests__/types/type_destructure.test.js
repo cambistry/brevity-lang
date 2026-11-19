@@ -107,28 +107,28 @@ describe('type destructure — runtime', () => {
   it('positional — (x, y) = p — paren positional pulls all fields', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'parenPositional', from: 'c' } },
-      { output: { id: '1', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
   it('positional — x, y = p — bare positional (no parens) pulls all fields', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'barePositional', from: 'c' } },
-      { output: { id: '2', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
   it('positional — (x) = p — single positional drops trailing fields', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'singlePositional', from: 'c' } },
-      { output: { id: '3', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ rx: 'Integer' }], re: [{ rx: 7 }], to: 'c' } },
     );
   });
 
   it('positional — (a, b) = p — locals named freely (renamed positions)', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'renamedPositional', from: 'c' } },
-      { output: { id: '4', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ ra: 'Integer', rb: 'Integer' }], re: [{ ra: 1, rb: 2 }], to: 'c' } },
     );
   });
 
@@ -137,28 +137,28 @@ describe('type destructure — runtime', () => {
   it('named — :x, :y = p — full named destructure', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'fullNamed', from: 'c' } },
-      { output: { id: '5', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
   it('named — :x = p — selective single-field destructure', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'selectiveNamed', from: 'c' } },
-      { output: { id: '6', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ rx: 'Integer' }], re: [{ rx: 7 }], to: 'c' } },
     );
   });
 
   it('named — x: alias_x = p — rename on extraction', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'aliasNamed', from: 'c' } },
-      { output: { id: '7', 'ty': { rx: 'Integer' }, re: { rx: 7 }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ rx: 'Integer' }], re: [{ rx: 7 }], to: 'c' } },
     );
   });
 
   it('named — :y, :x = p — order-insensitive', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'reorderedNamed', from: 'c' } },
-      { output: { id: '8', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '8', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
@@ -169,14 +169,14 @@ describe('type destructure — runtime', () => {
   it('mixed-form — positional-declared fields are reachable by named destructure', async () => {
     await expectBehavior(script,
       { input: { id: '9', op: 'fullNamed', from: 'c' } },
-      { output: { id: '9', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '9', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
   it('mixed-form — named-declared fields are reachable by named destructure', async () => {
     await expectBehavior(script,
       { input: { id: '10', op: 'namedDeclaredNamed', from: 'c' } },
-      { output: { id: '10', 'ty': { rx: 'Integer', ry: 'Integer' }, re: { rx: 1, ry: 2 }, to: 'c' } },
+      { output: { id: '10', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
     );
   });
 
@@ -185,14 +185,14 @@ describe('type destructure — runtime', () => {
     // of declaration form. Declaration order is the position.
     await expectBehavior(script,
       { input: { id: '11', op: 'namedDeclaredPositional', from: 'c' } },
-      { output: { id: '11', 'ty': { ra: 'Integer', rb: 'Integer' }, re: { ra: 1, rb: 2 }, to: 'c' } },
+      { output: { id: '11', 'ty': [{ ra: 'Integer', rb: 'Integer' }], re: [{ ra: 1, rb: 2 }], to: 'c' } },
     );
   });
 
   it('mixed-form — mixed positional/named declaration: both forms reach both fields', async () => {
     await expectBehavior(script,
       { input: { id: '12', op: 'mixedDeclared', from: 'c' } },
-      { output: { id: '12', 'ty': { rc: 'Integer', rl: 'Text' }, re: { rc: 3, rl: 'hi' }, to: 'c' } },
+      { output: { id: '12', 'ty': [{ rc: 'Integer', rl: 'Text' }], re: [{ rc: 3, rl: 'hi' }], to: 'c' } },
     );
   });
 
@@ -206,7 +206,7 @@ describe('type destructure — runtime', () => {
     // `as` cast (or an annotation on the destructure pattern).
     await expectBehavior(script,
       { input: { id: '13', op: 'optionalPresent', from: 'c' } },
-      { output: { id: '13', 'ty': { rt: 'Integer' }, re: { rt: 5 }, to: 'c' } },
+      { output: { id: '13', 'ty': [{ rt: 'Integer' }], re: [{ rt: 5 }], to: 'c' } },
     );
   });
 
@@ -215,14 +215,14 @@ describe('type destructure — runtime', () => {
     // after destructuring a typed value.
     await expectBehavior(script,
       { input: { id: '14', op: 'optionalFallback', from: 'c' } },
-      { output: { id: '14', 'ty': { rt: 'Integer' }, re: { rt: 99 }, to: 'c' } },
+      { output: { id: '14', 'ty': [{ rt: 'Integer' }], re: [{ rt: 99 }], to: 'c' } },
     );
   });
 
   it('optional — field absent: presence check on destructured local is false', async () => {
     await expectBehavior(script,
       { input: { id: '15', op: 'optionalPresence', from: 'c' } },
-      { output: { id: '15', 'ty': { rp: 'Boolean' }, re: { rp: false }, to: 'c' } },
+      { output: { id: '15', 'ty': [{ rp: 'Boolean' }], re: [{ rp: false }], to: 'c' } },
     );
   });
 });

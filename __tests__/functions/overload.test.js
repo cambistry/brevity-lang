@@ -326,21 +326,21 @@ describe('overload — runtime', () => {
   it('overload — << append — runtime — 1-arg matches first clause', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[10], 'calc'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('overload — << append — runtime — 2-arg matches second clause', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[3, 4], 'calc'], 'ty': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
   it('overload — << append — runtime — 3-arg matches third clause', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[1, 2, 3], 'calc'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
@@ -349,14 +349,14 @@ describe('overload — runtime', () => {
   it('overload — lineal form — runtime — 1-arg matches first clause', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOne', from: 'c' } },
-      { output: { id: '1', 'ty': { r: 'Integer' }, re: { r: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ r: 'Integer' }], re: [{ r: 5 }], to: 'c' } },
     );
   });
 
   it('overload — lineal form — runtime — 2-arg matches appended clause', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testTwo', from: 'c' } },
-      { output: { id: '2', 'ty': { r: 'Integer' }, re: { r: 10 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ r: 'Integer' }], re: [{ r: 10 }], to: 'c' } },
     );
   });
 
@@ -365,7 +365,7 @@ describe('overload — runtime', () => {
   it('overload — lambda — runtime — lambda << — single and double args dispatch correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testLambdaAppend', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 17 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 17 }], to: 'c' } },
     );
   });
 
@@ -374,35 +374,35 @@ describe('overload — runtime', () => {
   it('overload — mixed forms — runtime — text arg matches first clause', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ msg: 'hi' }], 'echo'], 'ty': [[{ msg: 'Text' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } },
     );
   });
 
   it('overload — mixed forms — runtime — integer arg matches appended clause', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ msg: 42 }], 'echo'], 'ty': [[{ msg: 'Integer' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'number' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'number' }], to: 'c' } },
     );
   });
 
   it('Function() — empty overload — runtime — 1-arg dispatches correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], 'calc5'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
     );
   });
 
   it('Function() — empty overload — runtime — 2-arg dispatches correctly', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[3, 4], 'calc5'], 'ty': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
   it('Function() — empty overload — runtime — 3-arg dispatches correctly', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[1, 2, 3], 'calc5'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
@@ -416,7 +416,7 @@ describe('overload — runtime', () => {
   it('Function() — lambda empty overload — runtime — all-<< lambda dispatches correctly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testAllAppend', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 17 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 17 }], to: 'c' } },
     );
   });
 
@@ -433,21 +433,21 @@ describe('overload — runtime', () => {
   it('overload — arity dispatch — 1-arg dispatches to unary handler', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[10], 'calc8'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('overload — arity dispatch — 2-arg dispatches to binary handler', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[3, 4], 'calc8'], 'ty': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
   it('overload — arity dispatch — 3-arg dispatches to ternary handler', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[1, 2, 3], 'calc8'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
@@ -456,21 +456,21 @@ describe('overload — runtime', () => {
   it('overload — optional positional args fill gaps — 1-arg matches first handler via default b=0', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], 'add'], 'ty': [['Integer']], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
     );
   });
 
   it('overload — optional positional args fill gaps — 2-arg matches first handler (both provided)', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[3, 7], 'add'], 'ty': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('overload — optional positional args fill gaps — 3-arg matches second handler (no defaults needed)', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[1, 2, 3], 'add'], 'ty': [['Integer', 'Integer', 'Integer']], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
@@ -479,21 +479,21 @@ describe('overload — runtime', () => {
   it('overload — optional named args — name-only matches first handler, greeting defaults', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ name: 'world' }], 'greet'], 'ty': [[{ name: 'Text' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } },
     );
   });
 
   it('overload — optional named args — name + greeting matches first handler', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ name: 'world', greeting: 'hey' }], 'greet'], 'ty': [[{ name: 'Text', greeting: 'Text' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hey world' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hey world' }], to: 'c' } },
     );
   });
 
   it('overload — optional named args — all three named args matches second handler', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[{ name: 'world', greeting: 'hey', punctuation: '!' }], 'greet'], 'ty': [[{ name: 'Text', greeting: 'Text', punctuation: 'Text' }]], from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hey world!' }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hey world!' }], to: 'c' } },
     );
   });
 
@@ -502,28 +502,28 @@ describe('overload — runtime', () => {
   it('overload — lambda with optional args — lambda — both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testBothProvided', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 8 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 8 }], to: 'c' } },
     );
   });
 
   it('overload — lambda with optional args — lambda — optional arg uses default', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testDefaultUsed', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 13 }], to: 'c' } },
     );
   });
 
   it('overload — lambda with optional args — lambda — named args both provided', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'testNamedDefault', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
   it('overload — lambda with optional args — lambda — named optional uses default', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'testNamedDefaultOmitted', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 100 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 100 }], to: 'c' } },
     );
   });
 
@@ -532,28 +532,28 @@ describe('overload — runtime', () => {
   it('overload — private lineal functions with defaults — private fn — both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testWithBoth', from: 'c' } },
-      { output: { id: '1', 'ty': { r: 'Integer' }, re: { r: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ r: 'Integer' }], re: [{ r: 7 }], to: 'c' } },
     );
   });
 
   it('overload — private lineal functions with defaults — private fn — optional arg uses default', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testWithDefault', from: 'c' } },
-      { output: { id: '2', 'ty': { r: 'Integer' }, re: { r: 1005 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ r: 'Integer' }], re: [{ r: 1005 }], to: 'c' } },
     );
   });
 
   it('overload — method called on a class actor — the first clause takes its own argument type', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'viaInteger', from: 'c' } },
-      { output: { id: '1', 'ty': { v: 'Integer' }, re: { v: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ v: 'Integer' }], re: [{ v: 5 }], to: 'c' } },
     );
   });
 
   it('overload — method called on a class actor — the appended clause takes its own argument type', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'viaText', from: 'c' } },
-      { output: { id: '2', 'ty': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ v: 'Integer' }], re: [{ v: 0 }], to: 'c' } },
     );
   });
 
@@ -565,14 +565,14 @@ describe('overload — runtime', () => {
   it('overload — handler a file calls on itself — the first clause takes its own argument type', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'viaInteger14', from: 'c' } },
-      { output: { id: '1', 'ty': { v: 'Integer' }, re: { v: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ v: 'Integer' }], re: [{ v: 5 }], to: 'c' } },
     );
   });
 
   it('overload — handler a file calls on itself — the appended clause takes its own argument type', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'viaText14', from: 'c' } },
-      { output: { id: '2', 'ty': { v: 'Integer' }, re: { v: 0 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ v: 'Integer' }], re: [{ v: 0 }], to: 'c' } },
     );
   });
 });

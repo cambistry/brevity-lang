@@ -17,7 +17,7 @@ describe('named param — rename', () => {
       @test = { r Integer = f(key: 41); return result: r }
     `,
       { input: { id: '1', op: 'test', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { result: 42 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ result: 42 }] }) },
     );
   });
 
@@ -27,7 +27,7 @@ describe('named param — rename', () => {
       @test = { r Integer = f(key: 21); return result: r }
     `,
       { input: { id: '1', op: 'test', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { result: 42 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ result: 42 }] }) },
     );
   });
 
@@ -38,7 +38,7 @@ describe('named param — rename', () => {
       @test = { r Integer = f(p: Point(1, 2)); return result: r }
     `,
       { input: { id: '1', op: 'test', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { result: 3 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ result: 3 }] }) },
     );
   });
 

@@ -328,12 +328,12 @@ describe('destructure params — full roundtrip', () => {
     ));
     expect(outgoing).toBeDefined();
 
-    await actor.sendAsync({ id: outgoing.id, re: { greeting: 'Hello, Alice!' } });
+    await actor.sendAsync({ id: outgoing.id, re: [{ greeting: 'Hello, Alice!' }] });
 
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply).toBeDefined();
     expect(reply.id).toBe('42');
-    expect(reply.re).toEqual({ greeting: 'Hello, Alice!' });
+    expect(reply.re).toEqual([{ greeting: 'Hello, Alice!' }]);
   });
 });
 

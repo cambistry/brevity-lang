@@ -134,7 +134,7 @@ describe("file scalar params — runtime (named)", () => {
       {
         output: expect.objectContaining({
           id: "1",
-          re: { value: 42 },
+          re: [{ value: 42 }],
           to: "caller",
         }),
       },
@@ -163,7 +163,7 @@ describe("file scalar params — runtime (named)", () => {
       {
         output: expect.objectContaining({
           id: "1",
-          re: { label: "widget" },
+          re: [{ label: "widget" }],
           to: "caller",
         }),
       },
@@ -171,7 +171,7 @@ describe("file scalar params — runtime (named)", () => {
       {
         output: expect.objectContaining({
           id: "2",
-          re: { n: 3 },
+          re: [{ n: 3 }],
           to: "caller",
         }),
       },
@@ -200,7 +200,7 @@ describe("file scalar params — runtime (positional)", () => {
       {
         output: expect.objectContaining({
           id: "1",
-          re: { got: "hello" },
+          re: [{ got: "hello" }],
           to: "caller",
         }),
       },
@@ -229,7 +229,7 @@ describe("file scalar params — runtime (positional)", () => {
       {
         output: expect.objectContaining({
           id: "1",
-          re: { got: "a" },
+          re: [{ got: "a" }],
           to: "caller",
         }),
       },
@@ -237,7 +237,7 @@ describe("file scalar params — runtime (positional)", () => {
       {
         output: expect.objectContaining({
           id: "2",
-          re: { num: 7 },
+          re: [{ num: 7 }],
           to: "caller",
         }),
       },

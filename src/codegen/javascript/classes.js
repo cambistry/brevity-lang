@@ -552,9 +552,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       expr = expr.replace('this.#send(', 'this.#sendRef(');
     }
     if (s.soleValue && s.value.type !== 'AsExpr') expr = `BvObject.one(${expr}, ${JSON.stringify(s.name)})`;
-    // A call on another actor in this process (a child, or one held in an enclosing
-    // actor's cell) waits for its reply, and the cell holds its one value.
-    if (s.value.type === 'DotCallExpr' && expr.startsWith('this.#childSend(')) {
+    // A call on another actor (a child, one held in an enclosing actor's cell, or
+    // a remote) waits for its reply, and the cell holds its one value.
+    if (s.value.type === 'DotCallExpr' && (expr.startsWith('this.#childSend(') || expr.startsWith('this.#send('))) {
       const decl = (mergedActor.stateVarDecls || []).find(d => d.name === s.name);
       const reply = `BvObject.pack(await ${expr})`;
       return `    this.#${stateKey(s.name)} = ${decl?.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`};`;
@@ -1017,8 +1017,9 @@ ${actor.spawnable ? `
 
   async #sendRef(op, to, ty) {
     const id = String(++this.#nextId);
-    return new Promise(resolve => {
-      this.#_newPending.set(id, resolve);
+    return new Promise((resolve, reject) => {
+      // A reply whose \`re\` isn't a list is malformed.
+      this.#_newPending.set(id, (addr) => addr === undefined ? reject(new Error("a reply's re is a list")) : resolve(addr));
       const _msg = { id, op, to };
       if (ty !== undefined) _msg['ty'] = ty;
       this.#out(_msg);
@@ -1035,7 +1036,6 @@ ${actor.spawnable ? `
       // A reply to \`$new\` with no address as its one value is malformed.
       const done = (addr) => addr === undefined ? reject(new Error('$new: the reply names no actor (re: ["#<…>"])'))
         : resolve(held && addr !== null ? '#<' + addr + '>' : addr);
-      done.strict = true;
       this.#_newPending.set(id, done);
       if (held && /^#<:/.test(to)) { this.receive({ id, op, to: _opre_unbracket(to), from: '__parent', _route: (m) => this.receive(m), ...(ty !== undefined && { ty }) }); return; }
       const _msg = { id, op, to };
@@ -1131,9 +1131,9 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
         const _hasNamed = _v.named && Object.keys(_v.named).length > 0;
         _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
       }
-      const _post = { id: message.id, re: _v, to: message.from };
+      const _post = { id: message.id, re: [_v], to: message.from };
       const _tag = _tyOf[t.get]?.();
-      if (_tag != null) _post['ty'] = _tag;
+      if (_tag != null) _post['ty'] = [_tag];
       this.#binding.post(_post);
     } else if ('set' in t) {
       const _sv = t.set;
@@ -1238,7 +1238,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
       return v;
     };
-    // A self-return says "me" with a bare \`#<:>\` and leaves out its \`:\` tag.
+    // A self-return says "me" with \`#<:>\`, tagged \`:\`.
     // A call it makes through the file actor (\`lift\`) is translated here and
     // by each parent above us, but its \`from\` is the file actor's.
     inst._adoptBinding({
@@ -1246,7 +1246,6 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
         const { ty, ...rest } = msg;
         const out = { ...local(rest), to: msg.to, from: msg.from ? _opre_under(msg.from, addr) : ':' + addr };
         if ('ty' in msg) out['ty'] = localTy(ty);
-        else if (msg.re === '#<:>') out['ty'] = tag;
         this.#binding.post(out);
       },
       lift: (msg) => {
@@ -1311,8 +1310,14 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }` : ''}
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
-      if (newResolve) { this.#_newPending.delete(message.id); newResolve(_bv_new_reply_addr(message, newResolve.strict)); return; }
+      if (newResolve) { this.#_newPending.delete(message.id); newResolve(_bv_new_reply_addr(message)); return; }
       const pending = this.#pending.get(message.id);
+      // A reply's \`re\` is a list (its return Object); anything else is malformed.
+      if (pending && !Array.isArray(message.re)) {
+        this.#pending.delete(message.id);
+        if (!pending.persistent) pending.reject(new Error("a reply's re is a list"));
+        return;
+      }
       if (pending) {
         if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['ty'])); return; }
         this.#pending.delete(message.id); pending.resolve(_bv_unwire_reply(message.re, message['ty'])); return;
@@ -1327,12 +1332,12 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       // No matching pending — may need to forward to a proxy via remote routes
     }
     if (message.cam === 'capture') {
-      this.#binding.post({ id: message.id, re: this.#capture(), to: message.from });
+      this.#binding.post({ id: message.id, re: [this.#capture()], to: message.from });
       return;
     }
     if (Array.isArray(message.cam) && message.cam[message.cam.length - 1] === 'hydrate') {
       this.#hydrate(message.cam[0]);
-      this.#binding.post({ id: message.id, re: 'hydrate', to: message.from });
+      this.#binding.post({ id: message.id, re: ['hydrate'], to: message.from });
       return;
     }
     if (message.test) {
@@ -1417,13 +1422,14 @@ ${ifChain}
     if (!_handled) {
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
-      // An address is a reply's one value, as any other is: \`re: ['#<…>']\`. A
-      // self-return is tagged with our class (\`:\`, which our parent fills in), or
-      // \`*\` when no \`new\` built us.
-      if (typeof re === 'string' && re.startsWith('#<')) {
+      // A reply is a return Object, and its wire form is a list: an address is
+      // its one value (\`re: ['#<…>']\`), named values its last (\`re: [{ … }]\`).
+      // A self-return is tagged with our class (\`:\`, which our parent fills
+      // in), or \`*\` when no \`new\` built us.
+      if (!Array.isArray(re)) {
         if (_ty_re === undefined && re === '#<:>') _ty_re = ${JSON.stringify(declaredActor(actor) ? '*' : ':')};
         re = [re];
-        if (typeof _ty_re === 'string') _ty_re = [_ty_re];
+        if (_ty_re !== undefined && !Array.isArray(_ty_re)) _ty_re = [_ty_re];
       }
       const _post = { id, re${publishesClasses ? `: (message._route || from === '__self') ? re : this.#_wireOwn(re)` : ''}, to: _replyTo };
       if (_ty_re !== undefined) _post['ty'] = _ty_re;
@@ -1526,6 +1532,8 @@ export function codegen(ast, options = {}) {
     a.functions.some(f => f.name && ((f.name.startsWith('@') || f.name === 'set' || f.name === 'update') ? (f.params.length > 0 || bodyUsesObject(f.body) || bodyHasEarlyReturn(f.body)) : true)) ||
     a.functions.some(f => hasNestedFunction(f.body) || hasNestedFunction(f.expr)) ||
     (a.initBody && bodyUsesObject(a.initBody)) ||
+    // A cell set from a call holds the reply's one value.
+    (a.initBody || []).some(s => s.value?.type === 'DotCallExpr') ||
     (a.initParams && a.initParams.length > 0),
   );
   const needsListPreamble = active.some(a =>

@@ -42,8 +42,8 @@ describe('payload shape — named-only args are [{k: v}]', () => {
       { input: { id: '1', re: ['#<Thing/1>'], 'ty': ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '90', op: 'go', from: 'c' } },
       { output: { id: '2', op: [[{ k: 1 }], 'put'], to: 'Thing/1' } },
-      { input: { id: '2', re: { value: 42 } } },
-      { output: { id: '90', re: { value: 42 }, 'ty': { value: 'Integer' }, to: 'c' } },
+      { input: { id: '2', re: [{ value: 42 }] } },
+      { output: { id: '90', re: [{ value: 42 }], 'ty': [{ value: 'Integer' }], to: 'c' } },
     );
   });
 
@@ -71,7 +71,7 @@ describe('payload shape — a named-only reply is {k: v}', () => {
     await expectActorBehavior(actor,
       { input: { id: '1', re: ['#<Thing/1>'], 'ty': ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '92', op: 'self', from: 'c' } },
-      { output: { id: '92', re: { k: 3 }, 'ty': { k: 'Integer' }, to: 'c' } },
+      { output: { id: '92', re: [{ k: 3 }], 'ty': [{ k: 'Integer' }], to: 'c' } },
     );
   });
 });

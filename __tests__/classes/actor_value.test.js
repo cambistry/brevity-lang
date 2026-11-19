@@ -167,7 +167,7 @@ describe('a declared actor as a value — from the file actor', () => {
   });
 
   it('in an object', async () => {
-    await expectActorBehavior(await actor(), ...ask('named', { n: '#<:N>', s: '#<:~s>', f: '#<:>' }, { n: '*', s: '*', f: '*' }));
+    await expectActorBehavior(await actor(), ...ask('named', [{ n: '#<:N>', s: '#<:~s>', f: '#<:>' }], [{ n: '*', s: '*', f: '*' }]));
   });
 
   it('compared: the same actor', async () => {

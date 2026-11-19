@@ -631,28 +631,28 @@ describe('if — runtime', () => {
   it('Boolean literals — true literal is truthy', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'boolTrue', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Boolean literals — false literal is falsy', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'boolFalse', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 0 }], to: 'c' } },
     );
   });
 
   it('Boolean literals — null is falsy', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'nullFalsy', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 0 }], to: 'c' } },
     );
   });
 
   it('Boolean literals — 0 (integer zero) is truthy', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'zeroTruthy', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
@@ -663,42 +663,42 @@ describe('if — runtime', () => {
   it('Comparison operators — == true case', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'eqTrue', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Comparison operators — != true case', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'neqTrue', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Comparison operators — > true case', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'gtTrue', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Comparison operators — < true case', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'ltTrue', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Comparison operators — >= true case', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'gteTrue', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('Comparison operators — <= true case', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'lteTrue', from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
@@ -709,35 +709,35 @@ describe('if — runtime', () => {
   it('if/else expression — single-line with type annotation on both branches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'singleLine', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('if/else expression — block form — last expression is the value', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'blockForm', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'abc' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'abc' }], to: 'c' } },
     );
   });
 
   it('if/else expression — else if chain', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'elseIf', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 20 }], to: 'c' } },
     );
   });
 
   it('if/else expression — a new name in a block leaves the outer name unchanged', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'newName', from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Integer', result: 'Integer' }, re: { x: 10, result: 99 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ x: 'Integer', result: 'Integer' }], re: [{ x: 10, result: 99 }], to: 'c' } },
     );
   });
 
   it('if/else expression — block reads outer scope variables', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'readOuter', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
@@ -748,21 +748,21 @@ describe('if — runtime', () => {
   it('if without else + function call — no-else if with false condition → result is null', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'noElseFalse', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'null' }, re: { result: null }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'null' }], re: [{ result: null }], to: 'c' } },
     );
   });
 
   it('if without else + function call — no-else if with true condition → result is value', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'noElseTrue', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 42 }], to: 'c' } },
     );
   });
 
   it('if without else + function call — function call inside if block branch', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'fnCallInIf', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 25 }], to: 'c' } },
     );
   });
 
@@ -881,13 +881,13 @@ describe('if — runtime', () => {
   it('a new name inside a branch — returns the new name by name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[true], 'byName'], 'ty': [['Boolean']], from: 'c' } },
-      { output: { id: '1', 'ty': { s: 'Integer' }, re: { s: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ s: 'Integer' }], re: [{ s: 2 }], to: 'c' } },
     );
   });
   it('a new name inside a branch — the path that skips the branch returns the outer value by name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[false], 'byName'], 'ty': [['Boolean']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { r: 5 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ r: 5 }], to: 'c' }) },
     );
   });
 
@@ -1097,7 +1097,7 @@ describe('if — runtime', () => {
   it('a function param named like an outer name — keeps its name in a reply', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[7], 'handlerParamByName'], 'ty': [['Integer']], from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { k: 7 }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ k: 7 }], to: 'c' }) },
     );
   });
   it('a function param named like an outer name — is the param inside a branch too', async () => {

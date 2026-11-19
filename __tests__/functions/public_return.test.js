@@ -73,21 +73,21 @@ describe('public function return — same-line + delimited', () => {
   it('-> :a, :b — sigil no-paren', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: [[{ a: 10, b: 20 }], 'sigilReturn'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '3', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 10, b: 20 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 10, b: 20 }], to: 'c' } },
     );
   });
 
   it('-> result: (a + b) as Integer — key-value', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ a: 5, b: 6 }], 'keyValueReturn'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 11 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 11 }], to: 'c' } },
     );
   });
 
   it('->(c: (a + b) as Integer) — delimited computed', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: [[{ a: 3, b: 4 }], 'denseComputed'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '5', 'ty': { c: 'Integer' }, re: { c: 7 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ c: 'Integer' }], re: [{ c: 7 }], to: 'c' } },
     );
   });
 
@@ -101,7 +101,7 @@ describe('public function return — same-line + delimited', () => {
   it('->(:a, :b) — delimited named paren', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: [[{ a: 11, b: 22 }], 'denseNamedParen'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '7', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 11, b: 22 }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 11, b: 22 }], to: 'c' } },
     );
   });
 
@@ -129,7 +129,7 @@ describe('public function return — same-line + delimited', () => {
   it('-> msg: "hello" as Text — string key-value', async () => {
     await expectBehavior(script,
       { input: { id: '11', op: 'stringKeyVal', from: 'c' } },
-      { output: { id: '11', 'ty': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' } },
+      { output: { id: '11', 'ty': [{ msg: 'Text' }], re: [{ msg: 'hello' }], to: 'c' } },
     );
   });
 });
@@ -218,56 +218,56 @@ describe('public function return — lineal form', () => {
   it('-> \\n :a — single named field on next line', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ a: 7 }], 'spaciousSingle'], 'ty': [[{ a: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { a: 'Integer' }, re: { a: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ a: 'Integer' }], re: [{ a: 7 }], to: 'c' } },
     );
   });
 
   it('-> \\n :a \\n :b — two named fields, blank-line terminated', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ a: 3, b: 4 }], 'spaciousTwo'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { a: 'Integer', b: 'Integer' }, re: { a: 3, b: 4 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ a: 'Integer', b: 'Integer' }], re: [{ a: 3, b: 4 }], to: 'c' } },
     );
   });
 
   it('lineal -> with typed key-value from private function', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'spaciousKeyValue', from: 'c' } },
-      { output: { id: '3', re: { x: 99 }, to: 'c' } },
+      { output: { id: '3', re: [{ x: 99 }], to: 'c' } },
     );
   });
 
   it('lineal -> terminated by -- comment', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ a: 21 }], 'spaciousDashTerm'], 'ty': [[{ a: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { a: 'Integer' }, re: { a: 21 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ a: 'Integer' }], re: [{ a: 21 }], to: 'c' } },
     );
   });
 
   it('->() empty parens — next function follows immediately', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'afterEmpty', from: 'c' } },
-      { output: { id: '5', 'ty': { answer: 'Text' }, re: { answer: 'pong' }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ answer: 'Text' }], re: [{ answer: 'pong' }], to: 'c' } },
     );
   });
 
   it('-- terminator allows next function to follow', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'spaciousDashNext', from: 'c' } },
-      { output: { id: '6', re: { x: 5 }, to: 'c' } },
+      { output: { id: '6', re: [{ x: 5 }], to: 'c' } },
     );
   });
 
   it('whitespace-only blank line terminates lineal reply — @greet', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'greet', from: 'c' } },
-      { output: { id: '7', 'ty': { msg: 'Text' }, re: { msg: 'hello' }, to: 'c' } },
+      { output: { id: '7', 'ty': [{ msg: 'Text' }], re: [{ msg: 'hello' }], to: 'c' } },
     );
   });
 
   it('whitespace-only blank line terminates lineal reply — @ping', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'ping', from: 'c' } },
-      { output: { id: '8', 'ty': { status: 'Text' }, re: { status: 'ok' }, to: 'c' } },
+      { output: { id: '8', 'ty': [{ status: 'Text' }], re: [{ status: 'ok' }], to: 'c' } },
     );
   });
 });

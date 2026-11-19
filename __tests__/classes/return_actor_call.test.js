@@ -98,7 +98,7 @@ describe('returning an actor call — runtime', () => {
   it('returning a call on an instance — keeps a named reply', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'wholeNamed', from: 'c' } },
-      { output: { id: '1', re: { a: 1 }, to: 'c' } },
+      { output: { id: '1', re: [{ a: 1 }], to: 'c' } },
     );
   });
   it('returning a call on an instance — passes args', async () => {
@@ -128,7 +128,7 @@ describe('returning an actor call — runtime', () => {
   it('returning a call on an instance — takes the sole value in a named field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'namedField', from: 'c' } },
-      { output: { id: '1', re: { z: 1 }, to: 'c' } },
+      { output: { id: '1', re: [{ z: 1 }], to: 'c' } },
     );
   });
   it('returning a call on an instance — as a tail expression', async () => {
@@ -146,7 +146,7 @@ describe('returning an actor call — runtime', () => {
   it('returning a call on an instance — bound as Object first, named', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'objectNamed', from: 'c' } },
-      { output: { id: '1', re: { a: 1 }, to: 'c' } },
+      { output: { id: '1', re: [{ a: 1 }], to: 'c' } },
     );
   });
   it('returning a call on an instance — with an as', async () => {

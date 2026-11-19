@@ -38,42 +38,42 @@ describe('a type declared in a class', () => {
   it('is constructed through its class, and tagged with the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'byClass', from: 'c' } },
-      { output: { id: '1', ty: { result: ':W:X' }, re: { result: [2] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':W:X' }], re: [{ result: [2] }], to: 'c' } },
     );
   });
 
   it('is constructed through an actor of the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'byActor', from: 'c' } },
-      { output: { id: '1', ty: { result: ':W:X' }, re: { result: [3] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':W:X' }], re: [{ result: [3] }], to: 'c' } },
     );
   });
 
   it('is constructed through a singleton', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bySingleton', from: 'c' } },
-      { output: { id: '1', ty: { result: ':S:Widget' }, re: { result: ['a', 'b'] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':S:Widget' }], re: [{ result: ['a', 'b'] }], to: 'c' } },
     );
   });
 
   it('is reached through nested classes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'nested', from: 'c' } },
-      { output: { id: '1', ty: { result: ':A:B:Y' }, re: { result: [4] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':A:B:Y' }], re: [{ result: [4] }], to: 'c' } },
     );
   });
 
   it('is bare inside the class, and comes back to the file as the class\'s type', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'inside', from: 'c' } },
-      { output: { id: '1', re: { result: 1 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: '1', re: [{ result: 1 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 
   it('decodes a param annotated with the class\'s type', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ p: [5] }], 'read'], ty: [[{ p: ':W:X' }]], from: 'c' } },
-      { output: { id: '1', re: { result: 5 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: '1', re: [{ result: 5 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 
@@ -132,29 +132,29 @@ describe('types of one name in different actors', () => {
   it('each is tagged with its own address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'file', from: 'c' } },
-      { output: { id: '1', ty: { result: ':X' }, re: { result: [1] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':X' }], re: [{ result: [1] }], to: 'c' } },
       { input: { id: '2', op: 'w', from: 'c' } },
-      { output: { id: '2', ty: { result: ':W:X' }, re: { result: [2] }, to: 'c' } },
+      { output: { id: '2', ty: [{ result: ':W:X' }], re: [{ result: [2] }], to: 'c' } },
       { input: { id: '3', op: 'v', from: 'c' } },
-      { output: { id: '3', ty: { result: ':V:X' }, re: { result: [3, 4] }, to: 'c' } },
+      { output: { id: '3', ty: [{ result: ':V:X' }], re: [{ result: [3, 4] }], to: 'c' } },
     );
   });
 
   it('values of one type are equal, and of two types are not', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'same', from: 'c' } },
-      { output: { id: '1', ty: { result: 'Boolean' }, re: { result: true }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } },
       { input: { id: '2', op: 'differ', from: 'c' } },
-      { output: { id: '2', ty: { result: 'Boolean' }, re: { result: false }, to: 'c' } },
+      { output: { id: '2', ty: [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } },
     );
   });
 
   it('a param takes its own type, and refuses the other', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ p: [5, 6] }], 'readV'], ty: [[{ p: ':V:X' }]], from: 'c' } },
-      { output: { id: '1', ty: { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
       { input: { id: '2', op: [[{ p: [5] }], 'readW'], ty: [[{ p: ':W:X' }]], from: 'c' } },
-      { output: { id: '2', ty: { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '2', ty: [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
       { input: { id: '3', op: [[{ p: [5, 6] }], 'readW'], ty: [[{ p: ':V:X' }]], from: 'c' } },
       { output: expect.objectContaining({ id: '3', to: 'c', ex: expect.anything() }) },
     );
@@ -180,7 +180,7 @@ describe('a type of another file, reached through the service', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'point', from: 'c' } },
-      { output: { id: '1', ty: { result: 'svc.bv:Point' }, re: { result: [1, 2] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: 'svc.bv:Point' }], re: [{ result: [1, 2] }], to: 'c' } },
     );
   });
 
@@ -188,7 +188,7 @@ describe('a type of another file, reached through the service', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'classType', from: 'c' } },
-      { output: { id: '1', ty: { result: 'svc.bv:W:X' }, re: { result: [4] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: 'svc.bv:W:X' }], re: [{ result: [4] }], to: 'c' } },
     );
   });
 
@@ -200,7 +200,7 @@ describe('a type of another file, reached through the service', () => {
       { input: { id: '1', re: ['#<svc.bv:W:1>'], ty: ['svc.bv:W'], from: 'svc.bv' } },
       { output: expect.objectContaining({ op: 'get', to: 'svc.bv:W:1' }) },
       { input: { id: '2', re: [[7]], ty: ['svc.bv:W:X'], from: 'svc.bv:W:1' } },
-      { output: { id: 'x', re: { result: 7 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: 'x', re: [{ result: 7 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 });
@@ -231,9 +231,9 @@ describe('types of one name in two services', () => {
     const actor = await createActor(script, { compileOptions });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'svc', from: 'c' } },
-      { output: { id: '1', ty: { result: 'svc.bv:Point' }, re: { result: [1, 2] }, to: 'c' } },
+      { output: { id: '1', ty: [{ result: 'svc.bv:Point' }], re: [{ result: [1, 2] }], to: 'c' } },
       { input: { id: '2', op: 'geo', from: 'c' } },
-      { output: { id: '2', ty: { result: 'geo.bv:Point' }, re: { result: [1, 2, 3] }, to: 'c' } },
+      { output: { id: '2', ty: [{ result: 'geo.bv:Point' }], re: [{ result: [1, 2, 3] }], to: 'c' } },
     );
   });
 
@@ -243,11 +243,11 @@ describe('types of one name in two services', () => {
       { input: { id: 'a', op: 'fromGeo', from: 'c' } },
       { output: expect.objectContaining({ op: 'origin', to: 'geo.bv' }) },
       { input: { id: '1', re: [[7, 8, 9]], ty: ['geo.bv:Point'], from: 'geo.bv' } },
-      { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: 'a', re: [{ result: 9 }], ty: [{ result: 'Integer' }], to: 'c' } },
       { input: { id: 'b', op: 'fromSvc', from: 'c' } },
       { output: expect.objectContaining({ op: 'origin', to: 'svc.bv' }) },
       { input: { id: '2', re: [[5, 6]], ty: ['svc.bv:Point'], from: 'svc.bv' } },
-      { output: { id: 'b', re: { result: 6 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: 'b', re: [{ result: 6 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 
@@ -260,7 +260,7 @@ describe('types of one name in two services', () => {
       { input: { id: 'a', op: 'fromGeo', from: 'c' } },
       { output: expect.objectContaining({ op: 'origin', to: 'geo.bv' }) },
       { input: { id: '1', re: [[7, 8, 9]], ty: [tag], from: 'geo.bv' } },
-      { output: { id: 'a', re: { result: 9 }, ty: { result: 'Integer' }, to: 'c' } },
+      { output: { id: 'a', re: [{ result: 9 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
 });

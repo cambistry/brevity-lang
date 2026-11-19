@@ -82,8 +82,8 @@ describe('subscribe — runtime', () => {
       { input: { id: '2', op: 'readAll', from: 'c' } },
       { output: {
         id: '2',
-        'ty': { lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' },
-        re: { lastPub: 0, lastPriv: 1, lastParam: 100 },
+        'ty': [{ lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' }],
+        re: [{ lastPub: 0, lastPriv: 1, lastParam: 100 }],
         to: 'c',
       } },
     );
@@ -96,8 +96,8 @@ describe('subscribe — runtime', () => {
       { input: { id: '3', op: 'readAll', from: 'c' } },
       { output: {
         id: '3',
-        'ty': { lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' },
-        re: { lastPub: 10, lastPriv: 6, lastParam: 105 },
+        'ty': [{ lastPub: 'Integer', lastPriv: 'Integer', lastParam: 'Integer' }],
+        re: [{ lastPub: 10, lastPriv: 6, lastParam: 105 }],
         to: 'c',
       } },
     );
@@ -109,7 +109,7 @@ describe('subscribe — runtime', () => {
       { input: { id: '2', op: 'writeOwn', from: 'c' } },
       { output: { id: '2', re: [2], to: 'c' } },
       { input: { id: '3', op: 'readReplays', from: 'c' } },
-      { output: { id: '3', 'ty': { replays: 'Integer' }, re: { replays: 1 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ replays: 'Integer' }], re: [{ replays: 1 }], to: 'c' } },
     );
   });
 
@@ -140,8 +140,8 @@ describe('subscribe — runtime', () => {
       { input: { id: '3', op: 'readBoth', from: 'c' } },
       { output: {
         id: '3',
-        'ty': { lastA: 'Integer', lastB: 'Integer' },
-        re: { lastA: 13, lastB: 23 },
+        'ty': [{ lastA: 'Integer', lastB: 'Integer' }],
+        re: [{ lastA: 13, lastB: 23 }],
         to: 'c',
       } },
     );
@@ -156,7 +156,7 @@ describe('subscribe — runtime', () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
-      { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
+      { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 0 }], to: 'caller' } },
     );
   });
 
@@ -165,7 +165,7 @@ describe('subscribe — runtime', () => {
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
-      { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 10 }, to: 'caller' } },
+      { output: { id: '3', 'ty': [{ last: 'Integer' }], re: [{ last: 10 }], to: 'caller' } },
     );
   });
 
@@ -173,7 +173,7 @@ describe('subscribe — runtime', () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
-      { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 100 }, to: 'caller' } },
+      { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 100 }], to: 'caller' } },
     );
   });
 
@@ -182,7 +182,7 @@ describe('subscribe — runtime', () => {
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
       { input: { id: '3', op: 'readLast', from: 'caller' } },
-      { output: { id: '3', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
+      { output: { id: '3', 'ty': [{ last: 'Integer' }], re: [{ last: 105 }], to: 'caller' } },
     );
   });
 
@@ -221,7 +221,7 @@ describe('subscribe — runtime', () => {
         { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Pub:pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
-        { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 0 }, to: 'caller' } },
+        { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 0 }], to: 'caller' } },
       ],
     });
   });
@@ -235,7 +235,7 @@ describe('subscribe — runtime', () => {
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
-        { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 42 }, to: 'caller' } },
+        { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 42 }], to: 'caller' } },
       ],
     });
   });
@@ -252,7 +252,7 @@ describe('subscribe — runtime', () => {
         { input: { id: '1', re: [100] } },
         { input: { id: '1', re: [105] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
-        { output: { id: '2', 'ty': { last: 'Integer' }, re: { last: 105 }, to: 'caller' } },
+        { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 105 }], to: 'caller' } },
       ],
     });
   });
@@ -319,7 +319,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const reply = sub.posts.slice(subPrev).find(p => p.id === '3');
     expect(reply).toEqual(expect.objectContaining({
-      id: '3', re: { last: 10 }, to: 'caller',
+      id: '3', re: [{ last: 10 }], to: 'caller',
     }));
   });
 
@@ -342,7 +342,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     await sub.sendAsync({ id: '3', op: 'readLast', from: 'caller' });
     const reply = sub.posts.slice(subPrev).find(p => p.id === '3');
     expect(reply).toEqual(expect.objectContaining({
-      id: '3', re: { last: 105 }, to: 'caller',
+      id: '3', re: [{ last: 105 }], to: 'caller',
     }));
   });
 });

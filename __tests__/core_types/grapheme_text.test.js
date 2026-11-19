@@ -1,6 +1,6 @@
 import { createActor, expectActorBehavior, expectBehavior } from '../helpers.js';
 
-const out = (id, type, value) => ({ output: { id, 'ty': { result: type }, re: { result: value }, to: 'c' } });
+const out = (id, type, value) => ({ output: { id, 'ty': [{ result: type }], re: [{ result: value }], to: 'c' } });
 const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -62,8 +62,8 @@ describe('GraphemeText via DI — a constructor document', () => {
       { input: { id: '1', re: ['#<GT/1>'], 'ty': ['GraphemeText'], from: 'GraphemeText' } },
       { input: { id: '99', op: 'getSize', from: 'caller' } },
       { output: expect.objectContaining({ op: 'size', to: 'GT/1' }) },
-      { input: { id: '2', re: { result: 1 } } },
-      { output: expect.objectContaining({ id: '99', re: { result: 1 }, to: 'caller' }) },
+      { input: { id: '2', re: [{ result: 1 }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ result: 1 }], to: 'caller' }) },
     );
   });
 
@@ -79,8 +79,8 @@ describe('GraphemeText via DI — a constructor document', () => {
       { input: { id: '1', re: ['#<GT/1>'], 'ty': ['GraphemeText'], from: 'GraphemeText' } },
       { input: { id: '99', op: 'getFirst', from: 'caller' } },
       { output: expect.objectContaining({ op: 'first', to: 'GT/1' }) },
-      { input: { id: '2', re: { result: 'e\u{0301}' } } },
-      { output: expect.objectContaining({ id: '99', re: { result: 'e\u{0301}' }, to: 'caller' }) },
+      { input: { id: '2', re: [{ result: 'e\u{0301}' }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ result: 'e\u{0301}' }], to: 'caller' }) },
     );
   });
 });

@@ -43,9 +43,9 @@ describe('test.op — runtime', () => {
       { input:  { id: '1', test: { op: 'inc!' }, from: 't' } },
       { input:  { id: '2', test: { op: 'inc!' }, from: 't' } },
       { input:  { id: '3', test: { op: 'get' }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', re: { x: 1 } }) },
-      { output: expect.objectContaining({ id: '2', re: { x: 2 } }) },
-      { output: expect.objectContaining({ id: '3', re: { x: 2 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ x: 1 }] }) },
+      { output: expect.objectContaining({ id: '2', re: [{ x: 2 }] }) },
+      { output: expect.objectContaining({ id: '3', re: [{ x: 2 }] }) },
     );
   });
 
@@ -61,16 +61,16 @@ describe('test.op — runtime', () => {
       { input: { id: '1', test: { op: [[{ n: 3 }], 'add!'] }, from: 't' } },
       { input: { id: '2', test: { op: [[{ n: 7 }], 'add!'] }, from: 't' } },
       { input: { id: '3', test: { get: '~x' }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', re: { x: 3 } }) },
-      { output: expect.objectContaining({ id: '2', re: { x: 10 } }) },
-      { output: { id: '3', 'ty': 'Integer', re: 10, to: 't' } },
+      { output: expect.objectContaining({ id: '1', re: [{ x: 3 }] }) },
+      { output: expect.objectContaining({ id: '2', re: [{ x: 10 }] }) },
+      { output: { id: '3', 'ty': ['Integer'], re: [10], to: 't' } },
     );
   });
 
   it('test.op — bypasses schema validation — no ty required', async () => {
     await expectBehavior(script,
       { input: { id: '1', test: { op: [[{ msg: 'hello' }], 'echo'] }, from: 't' } },
-      { output: expect.objectContaining({ id: '1', re: { msg: 'hello' } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ msg: 'hello' }] }) },
     );
   });
 });

@@ -13,7 +13,7 @@ describe('interop — two-actor request-reply', () => {
     `;
     await expectBehavior(script,
       { input: { id: 'R1', op: [[{ url: 'http://example.com' }], 'get'], from: 'Primary', 'ty': [[{ url: 'Text' }]] } },
-      { output: expect.objectContaining({ id: 'R1', re: { response: 'hello from remote' }, to: 'Primary' }) },
+      { output: expect.objectContaining({ id: 'R1', re: [{ response: 'hello from remote' }], to: 'Primary' }) },
     );
   });
 
@@ -31,9 +31,9 @@ describe('interop — two-actor request-reply', () => {
         return :response
     `);
     await actor.sendAsync({ id: '100', op: [[{ url: 'http://example.com' }], 'call_remote'], from: 'Tester', 'ty': [[{ url: 'Text' }]] });
-    await actor.sendAsync({ id: '1', re: { response: 'hello from remote' } });
+    await actor.sendAsync({ id: '1', re: [{ response: 'hello from remote' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ url: 'http://example.com' }], 'get'], to: 'Remote' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '100', re: { response: 'hello from remote' }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '100', re: [{ response: 'hello from remote' }], to: 'Tester' }));
   });
 });
 
@@ -55,7 +55,7 @@ describe('interop — cross-call to silent public function', () => {
     `);
     await actor.sendAsync({ id: '1', op: [[{ msg: 'hello' }], 'send_notify!'], from: 'Tester', 'ty': [[{ msg: 'Text' }]] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ msg: 'hello' }], 'notify.'], to: 'Store' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: [{ ack: 'ok' }], to: 'Tester' }));
   });
 
   it('store handles silent notify and check', async () => {
@@ -75,7 +75,7 @@ describe('interop — cross-call to silent public function', () => {
     await expectBehavior(script,
       { input: { id: 'N1', op: [[{ msg: 'hello' }], 'notify.'], from: 'Caller', 'ty': [[{ msg: 'Text' }]] } },
       { input: { id: '2', op: 'check', from: 'Tester' } },
-      { output: expect.objectContaining({ id: '2', re: { last: 'hello' }, to: 'Tester' }) },
+      { output: expect.objectContaining({ id: '2', re: [{ last: 'hello' }], to: 'Tester' }) },
     );
   });
 });
@@ -93,7 +93,7 @@ describe('interop — three-actor chain', () => {
     `;
     await expectBehavior(script,
       { input: { id: 'B1', op: [[{ n: 5 }], 'compute'], from: 'Middle', 'ty': [[{ n: 'Integer' }]] } },
-      { output: expect.objectContaining({ id: 'B1', re: { result: 10 }, to: 'Middle' }) },
+      { output: expect.objectContaining({ id: 'B1', re: [{ result: 10 }], to: 'Middle' }) },
     );
   });
 
@@ -111,9 +111,9 @@ describe('interop — three-actor chain', () => {
         return result: (result + 1)
     `);
     await actor.sendAsync({ id: 'M1', op: [[{ n: 5 }], 'process'], from: 'Front', 'ty': [[{ n: 'Integer' }]] });
-    await actor.sendAsync({ id: '1', re: { result: 10 } });
+    await actor.sendAsync({ id: '1', re: [{ result: 10 }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ n: 5 }], 'compute'], to: 'Backend' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'M1', re: { result: 11 }, to: 'Front' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'M1', re: [{ result: 11 }], to: 'Front' }));
   });
 
   it('front sends process to Middle and replies answer', async () => {
@@ -130,9 +130,9 @@ describe('interop — three-actor chain', () => {
         return answer: result
     `);
     await actor.sendAsync({ id: 'F1', op: [[{ n: 5 }], 'start'], from: 'Tester', 'ty': [[{ n: 'Integer' }]] });
-    await actor.sendAsync({ id: '1', re: { result: 11 } });
+    await actor.sendAsync({ id: '1', re: [{ result: 11 }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ n: 5 }], 'process'], to: 'Middle' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'F1', re: { answer: 11 }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'F1', re: [{ answer: 11 }], to: 'Tester' }));
   });
 });
 
@@ -151,9 +151,9 @@ describe('interop — callback', () => {
         return result: secret
     `);
     await actor.sendAsync({ id: 'W1', op: 'process', from: 'Boss' });
-    await actor.sendAsync({ id: '1', re: { secret: 's3cret' } });
+    await actor.sendAsync({ id: '1', re: [{ secret: 's3cret' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: 'get_secret', to: 'Boss' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: { result: 's3cret' }, to: 'Boss' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: [{ result: 's3cret' }], to: 'Boss' }));
   });
 
   it('boss sends process to Worker, handles callback, replies', async () => {
@@ -173,9 +173,9 @@ describe('interop — callback', () => {
     `);
     await actor.sendAsync({ id: 'B1', op: 'start', from: 'Tester' });
     await actor.sendAsync({ id: 'W1', op: 'get_secret', from: 'Worker' });
-    await actor.sendAsync({ id: '1', re: { result: 's3cret' } });
+    await actor.sendAsync({ id: '1', re: [{ result: 's3cret' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: 'process', to: 'Worker' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: { secret: 's3cret' }, to: 'Worker' }));
-    expect(actor.posts[2]).toEqual(expect.objectContaining({ id: 'B1', re: { result: 's3cret' }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: 'W1', re: [{ secret: 's3cret' }], to: 'Worker' }));
+    expect(actor.posts[2]).toEqual(expect.objectContaining({ id: 'B1', re: [{ result: 's3cret' }], to: 'Tester' }));
   });
 });

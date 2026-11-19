@@ -154,12 +154,12 @@ describe('file-level DI — full roundtrip', () => {
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([[{ key: 'color' }], 'lookup']);
 
-    await actor.sendAsync({ id: outgoing.id, re: { value: 'blue' } });
+    await actor.sendAsync({ id: outgoing.id, re: [{ value: 'blue' }] });
 
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply).toBeDefined();
     expect(reply.id).toBe('42');
-    expect(reply.re).toEqual({ value: 'blue' });
+    expect(reply.re).toEqual([{ value: 'blue' }]);
   });
 
   it('call out, transform result, return to caller', async () => {
@@ -169,11 +169,11 @@ describe('file-level DI — full roundtrip', () => {
     const outgoing = actor.posts.find(p => p.to === '/services/math');
     expect(outgoing.op).toEqual([[{ n: 5 }], 'double']);
 
-    await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
+    await actor.sendAsync({ id: outgoing.id, re: [{ result: 10 }] });
 
     const reply = actor.posts.find(p => p.to === 'tester');
     expect(reply.id).toBe('7');
-    expect(reply.re).toEqual({ answer: 11 });
+    expect(reply.re).toEqual([{ answer: 11 }]);
   });
 });
 

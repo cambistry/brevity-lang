@@ -100,47 +100,47 @@ describe('Text — runtime', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text concatenation — literals — two literals', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'concatTwo', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'concatTwo', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   it('Text concatenation — literals — three literals', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'concatThree', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'abc' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'concatThree', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'abc' }], to: 'c' } });
   });
 
   it('Text concatenation — literals — empty + non-empty', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'concatEmpty', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'concatEmpty', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
 
   it('Text concatenation — literals — empty + empty', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'concatBothEmpty', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'concatBothEmpty', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: '' }], to: 'c' } });
   });
 
   it('Text concatenation — constants — two constants with literal between', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'concatConsts', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'concatConsts', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   it('Text concatenation — constants — constant + literal', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'concatConstLiteral', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'foobar' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'concatConstLiteral', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'foobar' }], to: 'c' } });
   });
 
   it('Text concatenation — constants — literal + constant', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'concatLiteralConst', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'foobar' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'concatLiteralConst', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'foobar' }], to: 'c' } });
   });
 
   it('Text concatenation — refs — ref + literal', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'concatRef', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'concatRef', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   it('Text concatenation — refs — ref + ref', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'concatTwoRefs', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'foobar' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'concatTwoRefs', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'foobar' }], to: 'c' } });
   });
 
   it('Text concatenation — refs — concat after mutation uses new value', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'concatAfterMutate', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'new!' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'concatAfterMutate', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'new!' }], to: 'c' } });
   });
 
   it('Text concatenation — refs — ref + constant + literal', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'concatRefConst', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'concatRefConst', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -148,26 +148,26 @@ describe('Text — runtime', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text .size — ref dot access — basic ref .size', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'basic', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'basic', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } });
   });
 
   it('Text .size — ref dot access — empty ref .size', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'empty', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 0 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'empty', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 0 }], to: 'c' } });
   });
 
   it('Text .size — ref dot access — .size after mutation reflects new value', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'afterMutate', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'afterMutate', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } });
   });
 
   it('Text .size — ref dot access — .size in arithmetic expression', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'inExpr', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 13 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'inExpr', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 13 }], to: 'c' } });
   });
 
   it('Text .size — ref dot access — .size with astral code point — counts scalars', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'astral', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'astral', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } });
   });
 
   it('Text .size — ref dot access — .size assigned to typed constant', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'assign', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'assign', from: 'c' } }, { output: { id: '6', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } });
   });
 });

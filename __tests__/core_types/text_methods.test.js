@@ -185,81 +185,81 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text.upper / Text.lower — Text.upper literal', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'upper', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'HELLO' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'upper', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'HELLO' }], to: 'c' } });
   });
   it('Text.upper / Text.lower — Text.lower literal', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'lower', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'lower', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Text.upper / Text.lower — ref.upper', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'upperRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'HELLO' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'upperRef', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'HELLO' }], to: 'c' } });
   });
   it('Text.upper / Text.lower — ref.lower', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'lowerRef', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'lowerRef', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Text.upper / Text.lower — upper(const) bare call', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'upperConst', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'WORLD' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'upperConst', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'WORLD' }], to: 'c' } });
   });
 
   it('Text.trim / trim_start / trim_end — trim both sides', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'trim', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'trim', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } });
   });
   it('Text.trim / trim_start / trim_end — trim_start', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'trimStart', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hi  ' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'trimStart', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hi  ' }], to: 'c' } });
   });
   it('Text.trim / trim_start / trim_end — trim_end', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'trimEnd', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '  hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'trimEnd', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: '  hi' }], to: 'c' } });
   });
   it('Text.trim / trim_start / trim_end — ref.trim', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'trimRef', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'ok' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'trimRef', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'ok' }], to: 'c' } });
   });
 
   it('Text.first / Text.last — first scalar', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'first', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'h' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'first', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'h' }], to: 'c' } });
   });
   it('Text.first / Text.last — last scalar', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'last', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'o' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'last', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'o' }], to: 'c' } });
   });
   it('Text.first / Text.last — first of empty', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'firstEmpty', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'firstEmpty', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: '' }], to: 'c' } });
   });
   it('Text.first / Text.last — first of emoji string — full scalar', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'firstEmoji', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '\u{1F600}' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'firstEmoji', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: '\u{1F600}' }], to: 'c' } });
   });
   it('Text.first / Text.last — ref.last', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'lastRef', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'd' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'lastRef', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'd' }], to: 'c' } });
   });
 
   it('Text.repeat — repeat 3 times', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'repeat', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'ababab' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'repeat', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'ababab' }], to: 'c' } });
   });
   it('Text.repeat — ref.repeat', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'repeatRef', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'xxxx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'repeatRef', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'xxxx' }], to: 'c' } });
   });
   it('Text.repeat — repeat 0 times', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'repeatZero', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'repeatZero', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: '' }], to: 'c' } });
   });
 
   it('Text.empty? — empty string is true', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'emptyTrue', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'emptyTrue', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Text.empty? — non-empty is false', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'emptyFalse', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'emptyFalse', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } });
   });
   it('Text.empty? — ref.empty?', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'emptyRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'emptyRef', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
 
   it('Text.slice — slice(1) — from index to end', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'sliceFrom', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'ello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'sliceFrom', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'ello' }], to: 'c' } });
   });
   it('Text.slice — slice(1, 3) — range', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'sliceRange', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'el' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'sliceRange', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'el' }], to: 'c' } });
   });
   it('Text.slice — ref.slice(0, 2)', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'sliceRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'ab' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'sliceRef', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'ab' }], to: 'c' } });
   });
   it('Text.slice — slice across emoji — scalar indexed', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'sliceEmoji', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '\u{1F600}' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'sliceEmoji', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: '\u{1F600}' }], to: 'c' } });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -267,61 +267,61 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text.contains / starts_with / ends_with — contains match', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'containsYes', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'containsYes', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — contains no match', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'containsNo', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'containsNo', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — starts_with match', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'startsWith', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'startsWith', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — starts_with no match', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'startsNo', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'startsNo', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — ends_with match', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'endsWith', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'endsWith', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — ends_with no match', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'endsNo', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'endsNo', from: 'c' } }, { output: { id: '6', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } });
   });
   it('Text.contains / starts_with / ends_with — ref.contains', async () => {
-    await expectBehavior(script, { input: { id: '7', op: 'containsRef', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'containsRef', from: 'c' } }, { output: { id: '7', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
 
   it('Text.index_of — index_of found', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'found', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'found', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } });
   });
   it('Text.index_of — index_of not found returns -1', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'notFound', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: -1 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'notFound', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: -1 }], to: 'c' } });
   });
   it('Text.index_of — ref.index_of', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'indexRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'indexRef', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } });
   });
 
   it('Text.before / Text.after — before separator', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'before', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'before', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Text.before / Text.after — after separator', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'after', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'after', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'world' }], to: 'c' } });
   });
   it('Text.before / Text.after — before no match returns whole text', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'beforeMiss', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'beforeMiss', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Text.before / Text.after — after no match returns empty', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'afterMiss', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'afterMiss', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: '' }], to: 'c' } });
   });
   it('Text.before / Text.after — ref.before', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'beforeRef', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'foo' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'beforeRef', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'foo' }], to: 'c' } });
   });
 
   it('Text.replace / Text.replace_first — replace all occurrences', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'replaceAll', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'xxbxx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'replaceAll', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'xxbxx' }], to: 'c' } });
   });
   it('Text.replace / Text.replace_first — replace_first — only first occurrence', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'replaceFirst', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'xabaa' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'replaceFirst', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'xabaa' }], to: 'c' } });
   });
   it('Text.replace / Text.replace_first — ref.replace', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'replaceRef', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hell0 w0rld' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'replaceRef', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hell0 w0rld' }], to: 'c' } });
   });
 
   // split and lines tests deferred — List return type integration
@@ -331,31 +331,31 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Regex arguments — contains with regex', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'containsRe', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'containsRe', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Regex arguments — contains with regex — no match', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'containsReNo', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Boolean' }, re: { result: false }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'containsReNo', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } });
   });
   it('Regex arguments — index_of with regex', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'indexRe', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 4 }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'indexRe', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 4 }], to: 'c' } });
   });
   it('Regex arguments — replace with regex (all)', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'replaceRe', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'axbxcx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'replaceRe', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'axbxcx' }], to: 'c' } });
   });
   it('Regex arguments — replace_first with regex', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'replaceFirstRe', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'axb2c3' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'replaceFirstRe', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'axb2c3' }], to: 'c' } });
   });
   it('Regex arguments — starts_with regex', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'startsRe', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'startsRe', from: 'c' } }, { output: { id: '6', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Regex arguments — ends_with regex', async () => {
-    await expectBehavior(script, { input: { id: '7', op: 'endsRe', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Boolean' }, re: { result: true }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'endsRe', from: 'c' } }, { output: { id: '7', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } });
   });
   it('Regex arguments — before regex', async () => {
-    await expectBehavior(script, { input: { id: '8', op: 'beforeRe', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'hello ' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'beforeRe', from: 'c' } }, { output: { id: '8', 'ty': [{ result: 'Text' }], re: [{ result: 'hello ' }], to: 'c' } });
   });
   it('Regex arguments — after regex', async () => {
-    await expectBehavior(script, { input: { id: '9', op: 'afterRe', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: ' world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '9', op: 'afterRe', from: 'c' } }, { output: { id: '9', 'ty': [{ result: 'Text' }], re: [{ result: ' world' }], to: 'c' } });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -363,58 +363,58 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Bang methods — mutation — t.upper! mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'bangUpper', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'HELLO' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'bangUpper', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'HELLO' }], to: 'c' } });
   });
 
   it('Bang methods — mutation — t.lower! mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'bangLower', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'bangLower', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
 
   it('Bang methods — mutation — t.trim! mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'bangTrim', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'bangTrim', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } });
   });
 
   it('Bang methods — mutation — t.slice!(0, 5) mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'bangSlice', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'bangSlice', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
 
   it('Bang methods — mutation — t.replace!("a", "x") mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'bangReplace', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'xxbxx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'bangReplace', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'xxbxx' }], to: 'c' } });
   });
 
   it('Text.reverse — reverse ascii', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'rev', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'olleh' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'rev', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'olleh' }], to: 'c' } });
   });
   it('Text.reverse — ref.reverse', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'revRef', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'edcba' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'revRef', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'edcba' }], to: 'c' } });
   });
   it('Text.reverse — reverse with emoji — scalar-level', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'revEmoji', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'b\u{1F600}a' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'revEmoji', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'b\u{1F600}a' }], to: 'c' } });
   });
   it('Text.reverse — reverse empty', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'revEmpty', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: '' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'revEmpty', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: '' }], to: 'c' } });
   });
   it('Text.reverse — bare reverse(const)', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'revBare', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'zyx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'revBare', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'zyx' }], to: 'c' } });
   });
 
   it('Bang methods — additional — t.reverse!', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'bangReverse', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'olleh' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'bangReverse', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'olleh' }], to: 'c' } });
   });
   it('Bang methods — additional — t.trim_start!', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'bangTrimStart', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hi  ' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'bangTrimStart', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hi  ' }], to: 'c' } });
   });
   it('Bang methods — additional — t.trim_end!', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'bangTrimEnd', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '  hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'bangTrimEnd', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: '  hi' }], to: 'c' } });
   });
   it('Bang methods — additional — t.before!("-")', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'bangBefore', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'bangBefore', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Bang methods — additional — t.after!("-")', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'bangAfter', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'bangAfter', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'world' }], to: 'c' } });
   });
   it('Bang methods — additional — t.replace_first!("a", "x")', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'bangReplaceFirst', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'xabaa' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'bangReplaceFirst', from: 'c' } }, { output: { id: '6', 'ty': [{ result: 'Text' }], re: [{ result: 'xabaa' }], to: 'c' } });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -422,24 +422,24 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text.concat — Text.concat(a, b)', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'concatFunc', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'concatFunc', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
   it('Text.concat — ref.concat(b)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'concatRef', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'concatRef', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   it('Text.append! — t.append!(b) mutates ref', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'appendBang', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'appendBang', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 
   it('Text.at — Text.at(text, 1)', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'atFunc', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'e' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'atFunc', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'e' }], to: 'c' } });
   });
   it('Text.at — ref.at(0)', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'atRef', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'h' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'atRef', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'h' }], to: 'c' } });
   });
   it('Text.at — at emoji — scalar indexed', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'atEmoji', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: '\u{1F600}' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'atEmoji', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: '\u{1F600}' }], to: 'c' } });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -452,36 +452,36 @@ describe('Text methods', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Text bang forms — same-type-returning mutators — upper! mutates ref to upper-cased', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'upperBang', from: 'c' } }, { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'HI' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'upperBang', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'HI' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — lower! mutates ref to lower-cased', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'lowerBang', from: 'c' } }, { output: { id: '2', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '2', op: 'lowerBang', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — trim! mutates ref to trimmed', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'trimBang', from: 'c' } }, { output: { id: '3', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '3', op: 'trimBang', from: 'c' } }, { output: { id: '3', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — reverse! mutates ref to reversed', async () => {
-    await expectBehavior(script, { input: { id: '4', op: 'reverseBang', from: 'c' } }, { output: { id: '4', 'ty': { result: 'Text' }, re: { result: 'cba' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '4', op: 'reverseBang', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'cba' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — repeat! mutates ref to repeated', async () => {
-    await expectBehavior(script, { input: { id: '5', op: 'repeatBang', from: 'c' } }, { output: { id: '5', 'ty': { result: 'Text' }, re: { result: 'ababab' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '5', op: 'repeatBang', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'ababab' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — replace! mutates all occurrences', async () => {
-    await expectBehavior(script, { input: { id: '6', op: 'replaceBang', from: 'c' } }, { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'xxbxx' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '6', op: 'replaceBang', from: 'c' } }, { output: { id: '6', 'ty': [{ result: 'Text' }], re: [{ result: 'xxbxx' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — replace_first! mutates first occurrence', async () => {
-    await expectBehavior(script, { input: { id: '7', op: 'replaceFirstBang', from: 'c' } }, { output: { id: '7', 'ty': { result: 'Text' }, re: { result: 'Xaa' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '7', op: 'replaceFirstBang', from: 'c' } }, { output: { id: '7', 'ty': [{ result: 'Text' }], re: [{ result: 'Xaa' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — before! mutates ref to prefix', async () => {
-    await expectBehavior(script, { input: { id: '8', op: 'beforeBang', from: 'c' } }, { output: { id: '8', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '8', op: 'beforeBang', from: 'c' } }, { output: { id: '8', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — after! mutates ref to suffix', async () => {
-    await expectBehavior(script, { input: { id: '9', op: 'afterBang', from: 'c' } }, { output: { id: '9', 'ty': { result: 'Text' }, re: { result: 'bye' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '9', op: 'afterBang', from: 'c' } }, { output: { id: '9', 'ty': [{ result: 'Text' }], re: [{ result: 'bye' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — slice! mutates ref to range', async () => {
-    await expectBehavior(script, { input: { id: '10', op: 'sliceBang', from: 'c' } }, { output: { id: '10', 'ty': { result: 'Text' }, re: { result: 'bcd' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '10', op: 'sliceBang', from: 'c' } }, { output: { id: '10', 'ty': [{ result: 'Text' }], re: [{ result: 'bcd' }], to: 'c' } });
   });
   it('Text bang forms — same-type-returning mutators — concat! mutates ref to concatenated', async () => {
-    await expectBehavior(script, { input: { id: '11', op: 'concatBang', from: 'c' } }, { output: { id: '11', 'ty': { result: 'Text' }, re: { result: 'hello world' }, to: 'c' } });
+    await expectBehavior(script, { input: { id: '11', op: 'concatBang', from: 'c' } }, { output: { id: '11', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
   });
 });

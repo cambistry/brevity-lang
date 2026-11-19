@@ -63,9 +63,9 @@ describe('remote actor — sequential calls to actor', () => {
       // `open.` and `close.` are silent: nothing replies, and nothing waits.
       { output: expect.objectContaining({ op: 'open.', to: 'WebView/42' }) },
       { output: expect.objectContaining({ op: 'getTitle', to: 'WebView/42' }) },
-      { input: { id: '3', re: { title: 'My Page' }, 'ty': { title: 'Text' } } }, // reply to getTitle
+      { input: { id: '3', re: [{ title: 'My Page' }], 'ty': [{ title: 'Text' }] } }, // reply to getTitle
       { output: expect.objectContaining({ op: 'close.', to: 'WebView/42' }) },
-      { output: expect.objectContaining({ id: '100', re: { title: 'My Page' }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '100', re: [{ title: 'My Page' }], to: 'caller' }) },
     );
   });
 });
@@ -160,9 +160,9 @@ describe('remote actor — a reply nobody is waiting for', () => {
     });
     await expectActorBehavior(actor,
       { input: { id: '1', re: ['#<WebView/42>'], 'ty': ['WebView'], from: 'WebView' } },
-      { input: { id: '77', re: {}, from: 'WebView/42' } },
+      { input: { id: '77', re: [{}], from: 'WebView/42' } },
       { input: { id: '100', op: 'status', from: 'caller' } },
-      { output: expect.objectContaining({ id: '100', re: { ok: 'ready' }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '100', re: [{ ok: 'ready' }], to: 'caller' }) },
     );
   });
 });
@@ -198,13 +198,13 @@ describe('remote actor — multiple actors', () => {
       // v1
       { input: { id: '10', op: 'open_a', from: 'caller' } },
       { output: expect.objectContaining({ op: 'open', to: 'WebView/a1' }) },
-      { input: { id: '3', re: { ok: 'A' } } },
-      { output: expect.objectContaining({ id: '10', re: { ok: 'A' }, to: 'caller' }) },
+      { input: { id: '3', re: [{ ok: 'A' }] } },
+      { output: expect.objectContaining({ id: '10', re: [{ ok: 'A' }], to: 'caller' }) },
       // v2
       { input: { id: '20', op: 'open_b', from: 'caller' } },
       { output: expect.objectContaining({ op: 'open', to: 'WebView/b1' }) },
-      { input: { id: '4', re: { ok: 'B' } } },
-      { output: expect.objectContaining({ id: '20', re: { ok: 'B' }, to: 'caller' }) },
+      { input: { id: '4', re: [{ ok: 'B' }] } },
+      { output: expect.objectContaining({ id: '20', re: [{ ok: 'B' }], to: 'caller' }) },
     );
   });
 });
@@ -234,8 +234,8 @@ describe('remote actor — named class args', () => {
       { input: { id: '1', re: ['#<Database/1>'], 'ty': ['Database'], from: 'Database' } },
       { input: { id: '99', op: 'ping', from: 'caller' } },
       { output: expect.objectContaining({ op: 'ping', to: 'Database/1' }) },
-      { input: { id: '2', re: { ok: 'pong' } } },
-      { output: expect.objectContaining({ id: '99', re: { ok: 'pong' }, to: 'caller' }) },
+      { input: { id: '2', re: [{ ok: 'pong' }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ ok: 'pong' }], to: 'caller' }) },
     );
   });
 });

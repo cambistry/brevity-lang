@@ -97,7 +97,7 @@ describe('a class reads its file\'s cells', () => {
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: ['#<:W:1>'] }) },
       { input: { id: '2', op: 'named', to: ':W:1', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: { total: 4 } }) },
+      { output: expect.objectContaining({ id: '2', re: [{ total: 4 }] }) },
     );
   });
 

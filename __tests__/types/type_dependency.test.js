@@ -49,7 +49,7 @@ describe('type dependency — grounded -> types', () => {
     `;
     await expectBehavior(script,
       { input: { id: 'R1', op: [[{ url: 'http://example.com' }], 'get'], from: 'Caller', 'ty': [[{ url: 'Text' }]] } },
-      { output: expect.objectContaining({ id: 'R1', re: { response: 'hello' }, to: 'Caller' }) },
+      { output: expect.objectContaining({ id: 'R1', re: [{ response: 'hello' }], to: 'Caller' }) },
     );
   });
 
@@ -69,9 +69,9 @@ describe('type dependency — grounded -> types', () => {
     // Send the request — it will produce an outbound message to Remote
     await actor.sendAsync({ id: '1', op: [[{ url: 'http://example.com' }], 'fetch'], from: 'Tester', 'ty': [[{ url: 'Text' }]] });
     // Simulate Remote's reply
-    await actor.sendAsync({ id: '1', re: { response: 'hello' } });
+    await actor.sendAsync({ id: '1', re: [{ response: 'hello' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ url: 'http://example.com' }], 'get'], to: 'Remote' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { response: 'hello' }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: [{ response: 'hello' }], to: 'Tester' }));
   });
 
   it('math actor doubles a number', async () => {
@@ -84,7 +84,7 @@ describe('type dependency — grounded -> types', () => {
     `;
     await expectBehavior(script,
       { input: { id: 'M1', op: [[{ n: 5 }], 'double'], from: 'Caller', 'ty': [[{ n: 'Integer' }]] } },
-      { output: expect.objectContaining({ id: 'M1', re: { result: 10 }, to: 'Caller' }) },
+      { output: expect.objectContaining({ id: 'M1', re: [{ result: 10 }], to: 'Caller' }) },
     );
   });
 
@@ -102,9 +102,9 @@ describe('type dependency — grounded -> types', () => {
         return answer: result + 1
     `);
     await actor.sendAsync({ id: '1', op: [[{ n: 5 }], 'compute'], from: 'Tester', 'ty': [[{ n: 'Integer' }]] });
-    await actor.sendAsync({ id: '1', re: { result: 10 } });
+    await actor.sendAsync({ id: '1', re: [{ result: 10 }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ n: 5 }], 'double'], to: 'Math' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { answer: 11 }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: [{ answer: 11 }], to: 'Tester' }));
   });
 });
 
@@ -179,9 +179,9 @@ describe('type dependency — remote interface inference', () => {
         return :response as Text
     `, { compileOptions: { remotes: [{ path: 'Remote', service: remoteIface }] } });
     await actor.sendAsync({ id: '1', op: [[{ url: 'http://example.com' }], 'fetch'], from: 'Tester', 'ty': [[{ url: 'Text' }]] });
-    await actor.sendAsync({ id: '1', re: { response: 'hello' } });
+    await actor.sendAsync({ id: '1', re: [{ response: 'hello' }] });
     expect(actor.posts[0]).toEqual(expect.objectContaining({ op: [[{ url: 'http://example.com' }], 'get'], to: 'Remote' }));
-    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: { response: 'hello' }, to: 'Tester' }));
+    expect(actor.posts[1]).toEqual(expect.objectContaining({ id: '1', re: [{ response: 'hello' }], to: 'Tester' }));
   });
 
   it('circular use statements both compile when -> types are grounded', () => {

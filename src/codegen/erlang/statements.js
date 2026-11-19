@@ -800,8 +800,9 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             lines.push(`${I}                FnSubPid${sfx}_ when is_pid(FnSubPid${sfx}_) ->`);
             lines.push(`${I}                    FnSubPid${sfx}_ ! {bv_notify, FnSubId${sfx}_, FnRe${sfx}_};`);
             lines.push(`${I}                _ ->`);
-            lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnRe${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
-            lines.push(`${I}                    FnResp${sfx}_ = case FnTy${sfx}_ of null -> FnResp${sfx}_0; undefined -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"ty">> => FnTy${sfx}_} end,`);
+            lines.push(`${I}                    {FnW${sfx}_, FnWTy${sfx}_} = bv_wrap_reply_(FnRe${sfx}_, case FnTy${sfx}_ of undefined -> null; _ -> FnTy${sfx}_ end),`);
+            lines.push(`${I}                    FnResp${sfx}_0 = #{<<"id">> => FnSubId${sfx}_, <<"re">> => FnW${sfx}_, <<"to">> => FnSubFrom${sfx}_},`);
+            lines.push(`${I}                    FnResp${sfx}_ = case FnWTy${sfx}_ of null -> FnResp${sfx}_0; _ -> FnResp${sfx}_0#{<<"ty">> => FnWTy${sfx}_} end,`);
             lines.push(`${I}                    io:put_chars([json_encode(FnResp${sfx}_), $\\n])`);
             lines.push(`${I}            end;`);
             lines.push(`${I}        _ -> ok`);

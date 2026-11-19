@@ -541,7 +541,7 @@ describe('! functions — runtime', () => {
   it('! function — return paths — `untracked` works as a reply key', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'keyReply', from: 'c' } },
-      { output: { id: '1', re: { untracked: 1 }, 'ty': { untracked: 'Integer' }, to: 'c' } },
+      { output: { id: '1', re: [{ untracked: 1 }], 'ty': [{ untracked: 'Integer' }], to: 'c' } },
     );
   });
 
@@ -689,8 +689,8 @@ describe('! functions — runtime', () => {
     await expectBehavior(script,
       { input: { id: '50', op: [[{ a: [200, '#<caller:cb>'] }], 'go5!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: 'caller:cb' }) },
-      { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
-      { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },
+      { input: { id: '1', re: [{ out: 999 }], 'ty': [{ out: 'Integer' }] } },
+      { output: expect.objectContaining({ id: '50', re: [{ result: 999 }], 'ty': [{ result: 'Integer' }], to: 'caller' }) },
     );
   });
 });
@@ -1759,8 +1759,8 @@ describe('chained calls through a remote', () => {
       { output: expect.objectContaining({ op: [[2], 'inc!'], to: 'thing.bv:1' }) },
       { input: { id: '2', re: ['#<thing.bv:9>'], 'ty': ['thing.bv'] } },
       { output: expect.objectContaining({ op: 'total', to: 'thing.bv:9' }) },
-      { input: { id: '3', re: { value: 7 } } },
-      { output: expect.objectContaining({ id: '99', re: { value: 7 }, to: 'caller' }) },
+      { input: { id: '3', re: [{ value: 7 }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ value: 7 }], to: 'caller' }) },
     );
   });
 });

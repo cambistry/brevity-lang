@@ -644,28 +644,28 @@ describe('subclasses — runtime', () => {
   it('subclasses — arg inheritance — runtime — positional subclass inherits arg and computes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testPos', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('subclasses — arg inheritance — runtime — named subclass inherits arg and computes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testNamed', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('subclasses — arg inheritance — runtime — inherited positional arg accessor works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testPosAccessorA', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
   it('subclasses — arg inheritance — runtime — subclass own positional arg accessor works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testPosAccessorB', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
@@ -674,42 +674,42 @@ describe('subclasses — runtime', () => {
   it('subclasses — mixed positional/named args — runtime — positional super arg with named subclass arg — positional value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMixedA_a', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 5 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
     );
   });
 
   it('subclasses — mixed positional/named args — runtime — positional super arg with named subclass arg — named value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMixedA_b', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } },
     );
   });
 
   it('subclasses — mixed positional/named args — runtime — named super arg with positional subclass arg — named value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMixedB_a', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hey' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hey' }], to: 'c' } },
     );
   });
 
   it('subclasses — mixed positional/named args — runtime — named super arg with positional subclass arg — positional value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMixedB_b', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 9 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 9 }], to: 'c' } },
     );
   });
 
   it('subclasses — mixed positional/named args — runtime — multiple mixed args across two levels — sum', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMultiSum', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
   it('subclasses — mixed positional/named args — runtime — multiple mixed args across two levels — inherited text', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testMultiText', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'x' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'x' }], to: 'c' } },
     );
   });
 
@@ -718,14 +718,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — inherit/extend public functions — runtime — subclass inherits superclass public function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testInheritedA', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'a' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'a' }], to: 'c' } },
     );
   });
 
   it('subclasses — inherit/extend public functions — runtime — subclass exposes own public function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOwnB', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'b' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'b' }], to: 'c' } },
     );
   });
 
@@ -734,14 +734,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — override public functions — runtime — superclass returns original value', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuper', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — override public functions — runtime — subclass override replaces function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
@@ -750,7 +750,7 @@ describe('subclasses — runtime', () => {
   it('subclasses — invoke inherited functions — runtime — subclass invokes inherited protected functions', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testInvokeInherited', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
@@ -759,14 +759,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — inherit protected functions — runtime — superclass uses its own protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperProtected', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'x' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'x' }], to: 'c' } },
     );
   });
 
   it('subclasses — inherit protected functions — runtime — subclass calls inherited protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testInheritedProtected', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'x' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'x' }], to: 'c' } },
     );
   });
 
@@ -775,14 +775,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — override protected functions — runtime — superclass uses original protected function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperProtected7', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — override protected functions — runtime — subclass override changes inherited behavior', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverriddenProtected', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
@@ -791,14 +791,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — super. — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride8', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it('subclasses — super. — runtime — super.a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
@@ -807,14 +807,14 @@ describe('subclasses — runtime', () => {
   it('subclasses — super[T] — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride9', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it('subclasses — super[T] — runtime — super[T].a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess9', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
@@ -823,21 +823,21 @@ describe('subclasses — runtime', () => {
   it('subclasses — multi-level inheritance — runtime — V inherits from T through U', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testInheritedFromT', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level inheritance — runtime — V inherits from U directly', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testInheritedFromU', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level inheritance — runtime — V exposes own function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOwnV', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
@@ -846,21 +846,21 @@ describe('subclasses — runtime', () => {
   it('subclasses — multi-level override — runtime — T returns original', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testT', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level override — runtime — U overrides T', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testU', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level override — runtime — V overrides U (and transitively T)', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testV', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
@@ -869,21 +869,21 @@ describe('subclasses — runtime', () => {
   it('subclasses — multi-level protected override — runtime — T uses own protected', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testT12', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level protected override — runtime — U override propagates to inherited public function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testU12', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 20 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level protected override — runtime — V override propagates through two levels', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testV12', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 30 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 30 }], to: 'c' } },
     );
   });
 
@@ -892,21 +892,21 @@ describe('subclasses — runtime', () => {
   it('subclasses — multi-level arg accumulation — runtime — three-level subclass accumulates args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSum', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 6 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level arg accumulation — runtime — accessor for grandparent arg works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testAccessorA', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — multi-level arg accumulation — runtime — accessor for own arg works', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testAccessorC', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
@@ -915,42 +915,42 @@ describe('subclasses — runtime', () => {
   it('subclasses — multi-level parent layers — runtime — V returns own override', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testV14', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
   it("subclasses — multi-level parent layers — runtime — V's super.a is U's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromU', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it("subclasses — multi-level parent layers — runtime — V inherits U.fromT, whose super.a is T's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromT', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — optional args — runtime — both args provided', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testBothProvided', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 25 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 25 }], to: 'c' } },
     );
   });
 
   it('subclasses — optional args — runtime — subclass default fills in', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testSubDefault', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 15 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 15 }], to: 'c' } },
     );
   });
 
   it('subclasses — optional args — runtime — all defaults fill in', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'testAllDefaults', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
@@ -959,42 +959,42 @@ describe('subclasses — runtime', () => {
   it('subclasses — ++ bare forms and two parents — runtime — a pure subclass keeps its parent\'s methods', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSame', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 1 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
   it('subclasses — ++ bare forms and two parents — runtime — with two parents, the later one wins', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'testBothLaterWins', from: 'c' } },
-      { output: { id: '2', 'ty': { result: 'Integer' }, re: { result: 2 }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
   it('subclasses — ++ bare forms and two parents — runtime — the first parent\'s own method is inherited', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'testBothFirstParent', from: 'c' } },
-      { output: { id: '3', 'ty': { result: 'Integer' }, re: { result: 10 }, to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 10 }], to: 'c' } },
     );
   });
 
   it('subclasses — ++ bare forms and two parents — runtime — the second parent\'s own method is inherited', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: 'testBothSecondParent', from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 20 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 20 }], to: 'c' } },
     );
   });
 
   it('subclasses — ++ bare forms and two parents — runtime — a body after a bare ++ adds methods', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'testAdded', from: 'c' } },
-      { output: { id: '5', 'ty': { result: 'Integer' }, re: { result: 3 }, to: 'c' } },
+      { output: { id: '5', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
     );
   });
 
   it('subclasses — ++ bare forms and two parents — runtime — params follow the last ++', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'testSized', from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 });

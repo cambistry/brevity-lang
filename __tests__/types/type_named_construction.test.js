@@ -255,7 +255,7 @@ describe('named construction — runtime field placement', () => {
   const expectOp = (op, re, ty) => expectBehavior(
     fixture,
     { input: { id: '1', op, from: 'c' } },
-    { output: { id: '1', ...(ty ? { 'ty': { result: ty } } : {}), re: { result: re }, to: 'c' } },
+    { output: { id: '1', ...(ty ? { 'ty': [{ result: ty }] } : {}), re: [{ result: re }], to: 'c' } },
   );
 
   it('all-named, declared order → fields carry their values', async () => {

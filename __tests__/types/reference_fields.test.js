@@ -169,10 +169,10 @@ describe('reference fields — runtime invocation', () => {
       // Synthesize the callback's typed reply (internal send id '1'). 999 is an
       // arbitrary value the "remote" computed — not derived from the seed —
       // so a correct pass-through can only come from consuming this reply.
-      { input: { id: '1', re: { out: 999 }, 'ty': { out: 'Integer' } } },
+      { input: { id: '1', re: [{ out: 999 }], 'ty': [{ out: 'Integer' }] } },
       // The handler's reply carries the consumed result, typed Integer —
       // proving it awaited, bound `out`, and passed it through.
-      { output: expect.objectContaining({ id: '50', re: { result: 999 }, 'ty': { result: 'Integer' }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '50', re: [{ result: 999 }], 'ty': [{ result: 'Integer' }], to: 'caller' }) },
     );
   });
 });

@@ -99,7 +99,7 @@ describe('named destructure — accepted', () => {
       @run = { value: v Integer = f(7); return a1: v }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a1: 7 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a1: 7 }] }) },
     );
   });
 
@@ -126,7 +126,7 @@ describe('positional result — bind by position', () => {
       @test = { result Integer = double(21); return :result }
     `,
       { input: { id: '1', op: 'test', from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 42 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 42 }], to: 'c' } },
     );
   });
 });
@@ -134,7 +134,7 @@ describe('positional result — bind by position', () => {
 describe('positional result of a class method — bind by position', () => {
   const run = (src, value) => expectBehavior(src,
     { input: { id: '1', op: 'run', from: 'c' } },
-    { output: expect.objectContaining({ id: '1', re: { a1: value } }) },
+    { output: expect.objectContaining({ id: '1', re: [{ a1: value }] }) },
   );
 
   it('Integer literal reply', async () => {
@@ -243,7 +243,7 @@ describe('return shape — inherited methods', () => {
       @run = { b = Box(); :value Integer = b.get(); return a1: value }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a1: 7 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a1: 7 }] }) },
     );
   });
 
@@ -254,7 +254,7 @@ describe('return shape — inherited methods', () => {
       @run = { b = Box(); n Integer = b.seven(); return a1: n }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { a1: 7 } }) },
+      { output: expect.objectContaining({ id: '1', re: [{ a1: 7 }] }) },
     );
   });
 

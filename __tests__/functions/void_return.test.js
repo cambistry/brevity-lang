@@ -136,7 +136,7 @@ describe('void return — runtime', () => {
   it('void return — private functions, empty body {} — private lambda with empty body — call completes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'callEmptyLambda', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 });
@@ -197,42 +197,42 @@ describe('void return — private functions, () as tail value', () => {
   it('lambda { () } — implicit tail', async () => {
     await expectBehavior(lambdaScript,
       { input: { id: '1', op: 'callDelimImplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '1', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 
   it('lambda { return () } — explicit return', async () => {
     await expectBehavior(lambdaScript,
       { input: { id: '2', op: 'callDelimExplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '2', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 
   it('lambda () -> () — single-line', async () => {
     await expectBehavior(lambdaScript,
       { input: { id: '3', op: 'callInlineArrow', from: 'c' } },
-      { output: expect.objectContaining({ id: '3', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '3', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 
   it('lineal fn — implicit () tail', async () => {
     await expectBehavior(linealScript,
       { input: { id: '4', op: 'callLinealImplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '4', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '4', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 
   it('lineal fn — explicit -> ()', async () => {
     await expectBehavior(linealScript,
       { input: { id: '5', op: 'callLinealExplicit', from: 'c' } },
-      { output: expect.objectContaining({ id: '5', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '5', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 
   it('lineal fn — ->() tight', async () => {
     await expectBehavior(linealScript,
       { input: { id: '6', op: 'callLinealTight', from: 'c' } },
-      { output: expect.objectContaining({ id: '6', re: { ack: 'ok' }, to: 'c' }) },
+      { output: expect.objectContaining({ id: '6', re: [{ ack: 'ok' }], to: 'c' }) },
     );
   });
 });

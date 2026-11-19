@@ -92,7 +92,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     const el = await page.connectActor('HTML:div:1');
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'initial' }) },
+      { output: expect.objectContaining({ re: ['initial'] }) },
     );
   });
 
@@ -111,13 +111,13 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     await page.send({ id: sub.id, re: ['first'], to: 'HTML:div:1', from: 'pub' });
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'first' }) },
+      { output: expect.objectContaining({ re: ['first'] }) },
     );
 
     await page.send({ id: sub.id, re: ['second'], to: 'HTML:div:1', from: 'pub' });
     await expectBehavior(el,
       { input: { id: 'q2', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'second' }) },
+      { output: expect.objectContaining({ re: ['second'] }) },
     );
   });
 
@@ -142,7 +142,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'pre middle post' }) },
+      { output: expect.objectContaining({ re: ['pre middle post'] }) },
     );
   });
 
@@ -171,7 +171,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: 'left — right' }) },
+      { output: expect.objectContaining({ re: ['left — right'] }) },
     );
   });
 });
@@ -199,7 +199,7 @@ describe('HTML element — a subscribed element address fills the slot', () => {
     const el = await page.connectActor('HTML:div:1');
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: '[<span>inner</span>]' }) },
+      { output: expect.objectContaining({ re: ['[<span>inner</span>]'] }) },
     );
   });
 
@@ -218,7 +218,7 @@ describe('HTML element — a subscribed element address fills the slot', () => {
     const el = await page.connectActor('HTML:div:1');
     await expectBehavior(el,
       { input: { id: 'q1', op: 'inner_html' } },
-      { output: expect.objectContaining({ re: '[plain]' }) },
+      { output: expect.objectContaining({ re: ['[plain]'] }) },
     );
   });
 });

@@ -104,9 +104,9 @@ describe('explicit form — actor routing', () => {
       // First post after the cursor: t.get() routed to the actor
       { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       // Reply to t.get() with the value
-      { input: { id: '2', re: { value: 42 } } },
+      { input: { id: '2', re: [{ value: 42 }] } },
       // Final reply to the original caller
-      { output: expect.objectContaining({ id: '99', re: { value: 42 }, to: 'caller' }) },
+      { output: expect.objectContaining({ id: '99', re: [{ value: 42 }], to: 'caller' }) },
     );
   });
 
@@ -155,13 +155,13 @@ describe('explicit form — multiple actors', () => {
       // Hit a
       { input: { id: '10', op: 'ping_a', from: 'caller' } },
       { output: expect.objectContaining({ op: 'ping', to: 'Thing/A' }) },
-      { input: { id: '3', re: { ok: 'A' } } },
-      { output: expect.objectContaining({ id: '10', re: { ok: 'A' }, to: 'caller' }) },
+      { input: { id: '3', re: [{ ok: 'A' }] } },
+      { output: expect.objectContaining({ id: '10', re: [{ ok: 'A' }], to: 'caller' }) },
       // Hit b
       { input: { id: '20', op: 'ping_b', from: 'caller' } },
       { output: expect.objectContaining({ op: 'ping', to: 'Thing/B' }) },
-      { input: { id: '4', re: { ok: 'B' } } },
-      { output: expect.objectContaining({ id: '20', re: { ok: 'B' }, to: 'caller' }) },
+      { input: { id: '4', re: [{ ok: 'B' }] } },
+      { output: expect.objectContaining({ id: '20', re: [{ ok: 'B' }], to: 'caller' }) },
     );
   });
 });
@@ -190,8 +190,8 @@ describe('explicit form — full roundtrip', () => {
       { input: { id: '1', re: ['#<Math/1>'], 'ty': ['math.bv'], from: 'math.bv' } },
       { input: { id: '7', op: [[{ n: 5 }], 'compute'], from: 'tester', 'ty': [[{ n: 'Integer' }]] } },
       { output: expect.objectContaining({ op: [[{ n: 5 }], 'double'], to: 'Math/1' }) },
-      { input: { id: '2', re: { result: 10 } } },
-      { output: expect.objectContaining({ id: '7', re: { answer: 11 }, to: 'tester' }) },
+      { input: { id: '2', re: [{ result: 10 }] } },
+      { output: expect.objectContaining({ id: '7', re: [{ answer: 11 }], to: 'tester' }) },
     );
   });
 });
@@ -227,8 +227,8 @@ describe('explicit form — deferred (function-body) construction', () => {
       { output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) },
       { input: { id: '1', re: ['#<Thing/42>'], 'ty': ['thing.bv'], from: 'thing.bv' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/42' }) },
-      { input: { id: '2', re: { value: 17 } } },
-      { output: expect.objectContaining({ id: '99', re: { value: 17 }, to: 'caller' }) },
+      { input: { id: '2', re: [{ value: 17 }] } },
+      { output: expect.objectContaining({ id: '99', re: [{ value: 17 }], to: 'caller' }) },
     );
   });
 });
@@ -426,8 +426,8 @@ describe('an unclaimed dependency — document from options.remotes', () => {
       { input: { id: '1', re: ['#<Thing/9>'], 'ty': ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '50', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/9' }) },
-      { input: { id: '2', re: { value: 17 } } },
-      { output: expect.objectContaining({ id: '50', re: { value: 17 }, to: 'caller' }) },
+      { input: { id: '2', re: [{ value: 17 }] } },
+      { output: expect.objectContaining({ id: '50', re: [{ value: 17 }], to: 'caller' }) },
     );
   });
 });
@@ -500,8 +500,8 @@ describe('coercion to typed class — runtime', () => {
       { input: { id: '7', op: 'go', from: 'caller' } },
       // The actor address came from the Thing reply, not 'Coerced/...'
       { output: expect.objectContaining({ op: 'get', to: 'Thing/42' }) },
-      { input: { id: '2', re: { value: 99 } } },
-      { output: expect.objectContaining({ id: '7', re: { value: 99 }, to: 'caller' }) },
+      { input: { id: '2', re: [{ value: 99 }] } },
+      { output: expect.objectContaining({ id: '7', re: [{ value: 99 }], to: 'caller' }) },
     );
   });
 });
@@ -729,10 +729,10 @@ describe('spread `(...)` — runtime routing', () => {
     const outgoing = actor.posts.find(p => p.to === 'Math');
     expect(outgoing).toBeDefined();
     expect(outgoing.op).toEqual([[{ n: 5 }], 'double']);
-    await actor.sendAsync({ id: outgoing.id, re: { result: 10 } });
+    await actor.sendAsync({ id: outgoing.id, re: [{ result: 10 }] });
     const reply = actor.posts.find(p => p.to === 'caller');
     expect(reply.id).toBe('42');
-    expect(reply.re).toEqual({ result: 10 });
+    expect(reply.re).toEqual([{ result: 10 }]);
   });
 
   it('aliased spread entry routes to the original remote op', async () => {

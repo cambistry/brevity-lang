@@ -1055,7 +1055,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const type = ARIA_ACCESSORS[accessorName];
         if (!type) return;
         const value = readAriaAccessor(el, accessorName, type);
-        Promise.resolve().then(() => route({ id, re: value, from: addr, to: from }));
+        Promise.resolve().then(() => route({ id, re: [value], from: addr, to: from }));
       } catch {
         if (typeof opName === 'string' && opName.length > 0) {
           Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
@@ -1088,23 +1088,23 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const payload = argsOf(op);
         switch (accessorName) {
           case 'length': {
-            Promise.resolve().then(() => route({ id, re: BigInt(el.classList.length), from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [BigInt(el.classList.length)], from: addr, to: from }));
             return;
           }
           case 'value': {
-            Promise.resolve().then(() => route({ id, re: el.classList.value, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [el.classList.value], from: addr, to: from }));
             return;
           }
           case 'item': {
             const idx = extractSingle(payload, 'index');
             const i = typeof idx === 'bigint' ? Number(idx) : Number(idx);
-            Promise.resolve().then(() => route({ id, re: el.classList.item(i), from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [el.classList.item(i)], from: addr, to: from }));
             return;
           }
           case 'contains': {
             const token = extractSingle(payload, 'token');
             const result = typeof token === 'string' ? el.classList.contains(token) : false;
-            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [result], from: addr, to: from }));
             return;
           }
           case 'add!': {
@@ -1127,7 +1127,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             else if (payload && typeof payload === 'object') { token = payload.token; if ('force' in payload) force = payload.force; }
             if (typeof token !== 'string') return;
             const result = typeof force === 'boolean' ? el.classList.toggle(token, force) : el.classList.toggle(token);
-            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [result], from: addr, to: from }));
             return;
           }
           case 'replace!': {
@@ -1138,7 +1138,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             else if (payload && typeof payload === 'object') { oldTok = payload.old_token; newTok = payload.new_token; }
             if (typeof oldTok !== 'string' || typeof newTok !== 'string') return;
             const result = el.classList.replace(oldTok, newTok);
-            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [result], from: addr, to: from }));
             return;
           }
         }
@@ -1164,20 +1164,20 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const payload = argsOf(op);
         switch (accessorName) {
           case 'size': {
-            Promise.resolve().then(() => route({ id, re: BigInt(Object.keys(el.dataset).length), from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [BigInt(Object.keys(el.dataset).length)], from: addr, to: from }));
             return;
           }
           case 'has': {
             const key = extractSingle(payload, 'key');
             const result = typeof key === 'string' ? key in el.dataset : false;
-            Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [result], from: addr, to: from }));
             return;
           }
           case 'get': {
             const key = extractSingle(payload, 'key');
             // DOMStringMap returns undefined for missing keys; normalize to null.
             const v = typeof key === 'string' ? el.dataset[key] : undefined;
-            Promise.resolve().then(() => route({ id, re: v == null ? null : v, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [v == null ? null : v], from: addr, to: from }));
             return;
           }
           case 'put!': {
@@ -1200,16 +1200,16 @@ export async function start(document, { extract, compile, compileOptions = {}, f
             return;
           }
           case 'keys': {
-            Promise.resolve().then(() => route({ id, re: Object.keys(el.dataset), from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [Object.keys(el.dataset)], from: addr, to: from }));
             return;
           }
           case 'values': {
-            Promise.resolve().then(() => route({ id, re: Object.values(el.dataset), from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [Object.values(el.dataset)], from: addr, to: from }));
             return;
           }
           case 'entries': {
             const out = Object.entries(el.dataset).map(([k, v]) => ({ key: k, value: v }));
-            Promise.resolve().then(() => route({ id, re: out, from: addr, to: from }));
+            Promise.resolve().then(() => route({ id, re: [out], from: addr, to: from }));
             return;
           }
         }
@@ -1262,9 +1262,10 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       const { id: eid, op: eop, from: efrom, re: eRe } = elemMsg;
       const eopName = typeof eop === 'string' ? eop : (Array.isArray(eop) ? eop[eop.length - 1] : null);
       try {
-        if (eRe !== undefined && elemSubs.has(eid)) {
+        // A reply's \`re\` is a list; its one value fills the slot.
+        if (Array.isArray(eRe) && elemSubs.has(eid)) {
           const target = elemSubs.get(eid);
-          const val = Array.isArray(eRe) ? eRe[0] : eRe;
+          const val = eRe[0];
           if (target instanceof Node) {
             // A value naming a live element (`#<HTML:tag:N>`, or its local
             // form) puts that element in the slot; anything else is text.
@@ -1324,7 +1325,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
           const value = accessorName === 'get_attribute'
             ? (el.hasAttribute(name) ? el.getAttribute(name) : null)
             : el.hasAttribute(name);
-          Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
+          Promise.resolve().then(() => route({ id: eid, re: [value], from: addr, to: efrom }));
           return;
         }
         // Selector-based queries (querySelector / closest / matches /
@@ -1332,7 +1333,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // its payload-bearing branches can't be shadowed by zero-arg names.
         const queryValue = readQueryAccessor(el, accessorName, eop);
         if (queryValue !== undefined) {
-          Promise.resolve().then(() => route({ id: eid, re: queryValue, from: addr, to: efrom }));
+          Promise.resolve().then(() => route({ id: eid, re: [queryValue], from: addr, to: efrom }));
           return;
         }
         // Tree traversal: Node-level (parent_node/child_nodes/etc.) plus
@@ -1341,17 +1342,17 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // letting the next layer try.
         const traversalValue = readElementTraversal(el, accessorName);
         if (traversalValue !== undefined) {
-          Promise.resolve().then(() => route({ id: eid, re: traversalValue, from: addr, to: efrom }));
+          Promise.resolve().then(() => route({ id: eid, re: [traversalValue], from: addr, to: efrom }));
           return;
         }
         const geometryValue = readElementGeometry(el, accessorName);
         if (geometryValue !== undefined) {
-          Promise.resolve().then(() => route({ id: eid, re: geometryValue, from: addr, to: efrom }));
+          Promise.resolve().then(() => route({ id: eid, re: [geometryValue], from: addr, to: efrom }));
           return;
         }
         const nodeValue = readNodeAccessor(el, accessorName, eop);
         if (nodeValue !== undefined) {
-          Promise.resolve().then(() => route({ id: eid, re: nodeValue, from: addr, to: efrom }));
+          Promise.resolve().then(() => route({ id: eid, re: [nodeValue], from: addr, to: efrom }));
           return;
         }
         // Lookup pyramid mirrors the manifest's inheritance: tag's own body
@@ -1387,7 +1388,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         else if  (type === 'hasattributes')   value = el.hasAttributes();
         else if  (type === 'getattributenames') value = el.getAttributeNames();
         else value = readElementAccessor(el, accessorName, type);
-        Promise.resolve().then(() => route({ id: eid, re: value, from: addr, to: efrom }));
+        Promise.resolve().then(() => route({ id: eid, re: [value], from: addr, to: efrom }));
       } catch {
         // Any DOM-thrown error (e.g. invalid CSS selector for query_selector,
         // failed appendChild on a circular tree, etc.) becomes an `ex`-shaped
@@ -1483,7 +1484,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const accessorName = opName;
         const result = readNodeAccessor(node, accessorName, op);
         if (result === undefined) return;
-        Promise.resolve().then(() => route({ id, re: result, from: addr, to: from }));
+        Promise.resolve().then(() => route({ id, re: [result], from: addr, to: from }));
       } catch {
         if (typeof opName === 'string' && opName.length > 0) {
           Promise.resolve().then(() => route({ id, ex: { [opName]: 'error' }, from: addr, to: from }));
@@ -2175,7 +2176,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const opName = typeof op === 'string' ? op : (Array.isArray(op) ? op[op.length - 1] : null);
     try {
       if (opName === 'title') {
-        Promise.resolve().then(() => route({ id, re: document.title, from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: [document.title], from: 'document', to: from }));
         return;
       }
       if (opName === 'first') {
@@ -2184,7 +2185,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.querySelector(selector);
         if (el) {
           const addr = addrForNode(el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML:' + el.localName, from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: ['#<' + addr + '>'], 'ty': ['HTML:' + el.localName], from: 'document', to: from }));
         }
         return;
       }
@@ -2192,7 +2193,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const el = document.body;
         if (el) {
           const addr = addrForNode(el);
-          Promise.resolve().then(() => route({ id, re: '#<' + addr + '>', 'ty': 'HTML:body', from: 'document', to: from }));
+          Promise.resolve().then(() => route({ id, re: ['#<' + addr + '>'], 'ty': ['HTML:body'], from: 'document', to: from }));
         }
         return;
       }
@@ -2207,7 +2208,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         // Indirect eval — runs at global scope, no access to runtime locals.
         const result = (0, eval)(typeof js === 'string' ? js : '');
         const text = result == null ? '' : String(result);
-        Promise.resolve().then(() => route({ id, re: text, 'ty': 'Text', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: [text], 'ty': ['Text'], from: 'document', to: from }));
         return;
       }
       if (typeof opName !== 'string' || !isPublicOp(opName)) return;
@@ -2215,13 +2216,13 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       // Selector queries on the document scope to descendants of <html>.
       const queryValue = readQueryAccessor(document, accessorName, op);
       if (queryValue !== undefined) {
-        Promise.resolve().then(() => route({ id, re: queryValue, from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: [queryValue], from: 'document', to: from }));
         return;
       }
       // Node-level surface (parent_node, child_nodes, contains, ...).
       const nodeValue = readNodeAccessor(document, accessorName, op);
       if (nodeValue !== undefined) {
-        Promise.resolve().then(() => route({ id, re: nodeValue, from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: [nodeValue], from: 'document', to: from }));
         return;
       }
     } catch {

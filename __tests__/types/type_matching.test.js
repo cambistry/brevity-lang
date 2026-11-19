@@ -10,7 +10,7 @@ describe('type matching — named params', () => {
   it('exact named match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ a: 3, b: 4 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ sum: 'Integer' }], re: [{ sum: 7 }], to: 'c' } },
     );
   });
 
@@ -31,7 +31,7 @@ describe('type matching — named params', () => {
   it('extra named field still matches', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ a: 3, b: 4, c: 99 }], 'add'], 'ty': [[{ a: 'Integer', b: 'Integer', c: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { sum: 'Integer' }, re: { sum: 7 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ sum: 'Integer' }], re: [{ sum: 7 }], to: 'c' } },
     );
   });
 
@@ -53,7 +53,7 @@ describe('type matching — positional params', () => {
   it('exact positional match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3, 5], 'mult'], 'ty': [['Integer', 'Integer']], from: 'c' } },
-      { output: { id: '1', 'ty': { product: 'Integer' }, re: { product: 15 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ product: 'Integer' }], re: [{ product: 15 }], to: 'c' } },
     );
   });
 
@@ -102,7 +102,7 @@ describe('type matching — runtime', () => {
   it('type matching — mixed params + ...args — mixed positional + named match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3, 4, { label: 'hi' }], 'mash'], 'ty': [['Integer', 'Integer', { label: 'Text' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
@@ -123,7 +123,7 @@ describe('type matching — runtime', () => {
   it('type matching — mixed params + ...args — ...args matches named payload with ty', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[{ x: 1 }], 'import'], 'ty': [[{ x: 'Integer' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { x: 'Integer' }, re: { x: 1 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ x: 'Integer' }], re: [{ x: 1 }], to: 'c' } },
     );
   });
 
@@ -141,14 +141,14 @@ describe('type matching — runtime', () => {
   it('type matching — overloading — Integer message routes to first overload', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ name: 42 }], 'greet'], 'ty': [[{ name: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { msg: 'Text' }, re: { msg: 'number' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ msg: 'Text' }], re: [{ msg: 'number' }], to: 'c' } },
     );
   });
 
   it('type matching — overloading — Text message routes to second overload', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: [[{ name: 'Alice' }], 'greet'], 'ty': [[{ name: 'Text' }]], from: 'c' } },
-      { output: { id: '2', 'ty': { msg: 'Text' }, re: { msg: 'text' }, to: 'c' } },
+      { output: { id: '2', 'ty': [{ msg: 'Text' }], re: [{ msg: 'text' }], to: 'c' } },
     );
   });
 
@@ -166,7 +166,7 @@ describe('type matching — runtime', () => {
   it('type matching — key-mapped params — exact key-mapped match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[{ a: 'hello', b: 42 }], 'lettersTwo'], 'ty': [[{ a: 'Text', b: 'Integer' }]], from: 'c' } },
-      { output: { id: '1', 'ty': { result: 'Text' }, re: { result: 'hello' }, to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } },
     );
   });
 
@@ -187,7 +187,7 @@ describe('type matching — runtime', () => {
   it('type matching — key-mapped params — key-mapped + positional match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '4', op: [[7, { a: 'hi' }], 'mashKeyed'], 'ty': [['Integer', { a: 'Text' }]], from: 'c' } },
-      { output: { id: '4', 'ty': { result: 'Integer' }, re: { result: 7 }, to: 'c' } },
+      { output: { id: '4', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
     );
   });
 
@@ -201,7 +201,7 @@ describe('type matching — runtime', () => {
   it('type matching — key-mapped params — key-mapped + sigil shorthand match dispatches', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: [[{ a: 'hi', c: 5 }], 'lettersSigil'], 'ty': [[{ a: 'Text', c: 'Integer' }]], from: 'c' } },
-      { output: { id: '6', 'ty': { result: 'Text' }, re: { result: 'hi' }, to: 'c' } },
+      { output: { id: '6', 'ty': [{ result: 'Text' }], re: [{ result: 'hi' }], to: 'c' } },
     );
   });
 
