@@ -264,9 +264,8 @@ const subclass = `
       return x
     }
     @uCall = {
-      a Integer = @T::protFn()
-      b Integer = class::protFn()
-      return a + b
+      x Integer = @T::protFn() + class::protFn()
+      return x
     }
     @uSet! = { @T::prot <- u }
     @uClassSet! = { class::prot <| u + 1 }

@@ -996,7 +996,18 @@ function genRustMemberCallAwait(call, typeEnv, I, lines) {
 
 function genRustTypedAssign(...args) {
   G.strictConvert = true;
+  expectType(args[0].value, args[0].typeName);
   try { return genRustTypedAssignBody(...args); } finally { G.strictConvert = false; }
+}
+
+// `x Integer = f() + g()`: arithmetic whose operands have no type of their own
+// (replies are Values) computes in the type it's assigned to.
+const ARITH_OPS = new Set(['+', '-', '*', '/', '%', '**']);
+function expectType(expr, typeName) {
+  if (expr?.type !== 'BinaryExpr' || !ARITH_OPS.has(expr.op) || !['Integer', 'Decimal', 'Float'].includes(typeName)) return;
+  expr.expectedType = typeName;
+  expectType(expr.left, typeName);
+  expectType(expr.right, typeName);
 }
 
 function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mutableVars, fns, _functionAnalysis) {

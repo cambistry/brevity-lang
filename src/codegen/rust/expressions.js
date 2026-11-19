@@ -385,9 +385,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const field = (decl.fields || []).find(f => f.name === e.property);
       return field?.paramType || null;
     };
-    // Detect if this is integer or decimal arithmetic
-    const lType = inferTypeFieldType(expr.left) || inferExprType(expr.left, typeEnv);
-    const rType = inferTypeFieldType(expr.right) || inferExprType(expr.right, typeEnv);
+    // Detect if this is integer or decimal arithmetic. An operand with no type of its
+    // own (a reply's Value, or arithmetic on them) takes the type the result is
+    // assigned to (statements.js, expectType).
+    const expected = (e, isValue) => (isValue || e.expectedType) ? expr.expectedType ?? null : null;
+    const lType = inferTypeFieldType(expr.left) || inferExprType(expr.left, typeEnv) || expected(expr.left, lIsValue);
+    const rType = inferTypeFieldType(expr.right) || inferExprType(expr.right, typeEnv) || expected(expr.right, rIsValue);
     // Float detection — must come before Decimal/Integer detection
     const lIsFloat = lType === 'Float' || expr.left.type === 'FloatLiteral';
     const rIsFloat = rType === 'Float' || expr.right.type === 'FloatLiteral';
