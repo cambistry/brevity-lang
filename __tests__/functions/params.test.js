@@ -149,11 +149,12 @@ describe('function params — all forms', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Prefix-colon param form retired 2026-05-10; trailing-colon is the new form
+// Named params take a trailing colon; `:name` is colon destructuring, which a
+// param list doesn't take
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('function params — prefix-colon rejected, trailing-colon accepted', () => {
-  it('(a:) ->  succeeds (trailing colon is the new form)', () => {
+describe('function params — `:name` rejected, trailing colon accepted', () => {
+  it('(a:) ->  succeeds (trailing colon names a param)', () => {
     expect(() => compileSource('f = (a:) -> a\n')).not.toThrow();
   });
 
@@ -165,8 +166,16 @@ describe('function params — prefix-colon rejected, trailing-colon accepted', (
     expect(() => compileSource('f = (a, b:) -> a + b\n')).not.toThrow();
   });
 
-  it('(:a) ->  prefix sigil fails', () => {
-    expect(() => compileSource('f = (:a) -> a\n')).toThrow();
+  it('(:a) ->  is colon destructuring', () => {
+    expect(() => compileSource('f = (:a) -> a\n')).toThrow("':a' is colon destructuring, which a param list doesn't take — a named param is 'a: Type'");
+  });
+
+  it('(:a Integer) ->  names the type in the fix', () => {
+    expect(() => compileSource('f = (:a Integer) -> a\n')).toThrow("a named param is 'a: Integer'");
+  });
+
+  it('a class param', () => {
+    expect(() => compileSource('C = (:a Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("':a' is colon destructuring");
   });
 
   it('(:a, :b) ->  prefix sigil fails', () => {

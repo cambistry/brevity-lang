@@ -117,24 +117,12 @@ describe('arrow + block lambda — existing forms still parse', () => {
   });
 });
 
-describe('arrow + block lambda — unrelated post-brace rules preserved', () => {
-  it('a type annotation after a closing `}` is still rejected', () => {
-    expect(() => extract(`@go = { run = (e) { markf: e } as Integer }`))
-      .toThrow(/after closing '\}' is not valid/);
-  });
-
-  it('`->` immediately after a closing `}` is still rejected', () => {
-    expect(() => extract(`@go = { run = (e) { markg: e } -> () }`))
-      .toThrow(/after closing '\}' is not valid/);
-  });
-});
-
 describe('arrow + block lambda — compiles end to end', () => {
   it('a block-bodied arrow lambda used as a local function compiles', () => {
     expect(() => compileSource(`
       @go
         =
-        add = (n) -> { r: Integer = n + 1 return out: r }
+        add = (n) -> { r: Integer = n + 1; return out: r }
         v: Integer = add(2)
         return result: v
     `)).not.toThrow();

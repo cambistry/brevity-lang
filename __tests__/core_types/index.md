@@ -12,6 +12,8 @@ and built-in methods.
 - `Object` rest binding, destructuring, indexing, and literals.
 - Text interpolation and grapheme-aware text behavior.
 - Type indexing and literal type inference.
+- A builtin namespace called by name (`Text.upper(…)`) answers only its own
+  methods, unless the file binds that name itself (`namespace_methods.test.js`).
 
 ## Method Guides
 

@@ -3,7 +3,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // `class` in value position, in a factory file (a `*` header)
 //
 // A factory file is built by its host, so its code has a class: `class`, the
-// file's own kind (it was spelled `Self`, now retired). It works in three
+// file's own kind. It works in three
 // positions:
 //   - Type position:        @peer *class | null = null   (self/peer.test.js)
 //   - Call/construct:       child = class(args)          (self/self.test.js)
@@ -77,10 +77,16 @@ describe('class as a value — wire shape', () => {
   });
 });
 
-describe('`Self` is retired', () => {
-  it('as a value, a call or a type, it points to `class` and `self`', () => {
-    for (const src of ['@a = { return Self }', '@a = { c = Self(); return 1 }', 'C = *{ @peer *Self | null = null }']) {
-      expect(() => compileSource(src, { fileName: 'c.bv' })).toThrow("'Self' is retired — the class of the actor it's in is 'class'");
-    }
+describe('`Self` is an ordinary name', () => {
+  it('a function named `Self` in a factory file is that function, not `class`', async () => {
+    const actor = await createActor(`
+      *
+      Self = (n Integer) -> n * 2
+      @a = { return Self(3) }
+    `, { fileName: 'c.bv' });
+    await expectActorBehavior(actor,
+      { input: { id: '1', op: 'a', from: 'caller' } },
+      { output: { id: '1', re: [6], to: 'caller' } },
+    );
   });
 });

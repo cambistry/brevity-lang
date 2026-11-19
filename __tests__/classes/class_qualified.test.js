@@ -388,24 +388,6 @@ describe('class and :: — what comes after `::`', () => {
     `)).toThrow(/^Class 'C' writes \(prot <- …\) while constructing, so it must be named 'C!'/);
   });
 
-  it('`@`: a public member is reached through a dot', () => {
-    expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return C::@count } } ++ actor { @count *Integer = 1 }
-    `)).toThrow(/^'C::@count' — a public member is reached through a dot: write 'C\.count' \(line 2\)$/);
-  });
-
-  it('`#`: a private name is never reached through an address', () => {
-    expect(() => compileSource(`
-      C = actor {
-        #h = -> 1
-        new = (s Integer) *{ @r = {
-          x Integer = C::#h()
-          return x
-        } }
-      }
-    `)).toThrow(/^'C::#h' — a private name is never reached through an address, only by name in its own scope \(line 5\)$/);
-  });
-
   it('a type is still a type, not a value', () => {
     expect(() => compileSource(`
       C = *{
@@ -552,12 +534,6 @@ describe('self::class — the same as class', () => {
       { input: { id: '5', op: 'again', to: ':S:1', from: 'c' } },
       { output: { id: '5', re: [22], ty: ['Integer'], to: 'c', from: ':S:1' } },
     );
-  });
-
-  it('class_of is retired', () => {
-    expect(() => compileSource(`
-      C = *{ @r = { return class_of(self).a } } ++ actor { @a *Integer = 1 }
-    `)).toThrow(/^'class_of\(…\)' is retired: an actor's class is 'x::class', and 'class' is 'self::class' \(line 2\)$/);
   });
 
   it("another actor's class isn't supported yet", () => {

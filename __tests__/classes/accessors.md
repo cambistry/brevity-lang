@@ -3,7 +3,7 @@
 LLM orientation: constructor and file params are private unless published with `@`.
 A published param gets a public accessor handler that replies with the
 param's value. The tests cover positional, named and aliased params, defaults,
-file params, the service document, and the retired accessor syntax.
+file params and the service document.
 
 ## Canonical Forms
 

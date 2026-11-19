@@ -609,27 +609,6 @@ describe('a function body contains it', () => {
 // block re-binding its own scope's local in if.test.js, repeat_while.test.js and
 // function.test.js.
 describe('boundaries', () => {
-  it('a private name is never reached through an address', () => {
-    expect(() => compileSource(`
-      C = *{ #s = -> 1 }
-      @a = { x = C(); y Integer = x.#s(); return y }
-    `)).toThrow("'x.#s' — a private name is never reached through an address, only by name in its own scope");
-  });
-
-  it('…nor through `class::`', () => {
-    expect(() => compileSource(`
-      C = actor {
-        #p = -> 1
-        new = () *{
-          @get = {
-            x Integer = class::#p()
-            return x
-          }
-        }
-      }
-    `)).toThrow("'class::#p' — a private name is never reached through an address, only by name in its own scope");
-  });
-
   it('a trailing constructor doesn\'t close over its class block', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{

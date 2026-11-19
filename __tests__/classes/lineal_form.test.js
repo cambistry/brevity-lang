@@ -104,14 +104,6 @@ describe('lineal class grammar — rejected forms', () => {
     `)).toThrow(/requires '=' before '\*'/);
   });
 
-  it('Cls = *(params) = { body } is a parse error', () => {
-    expect(() => compileSource(`
-      Box = *(value Integer) = {
-        @get = -> result: value
-      }
-    `)).toThrow(/is retired/);
-  });
-
   it("@op\\n*\\nparams (public, missing opening '=') is a parse error", () => {
     expect(() => compileSource(`
       @get
@@ -122,20 +114,4 @@ describe('lineal class grammar — rejected forms', () => {
     `)).toThrow(/requires '=' before '\*'/);
   });
 
-  it('Cls = *(params) =\\nbody . (paren header, lineal body) is a parse error', () => {
-    expect(() => compileSource(`
-      Box = *(value Integer) =
-        @get = -> result: value
-        .
-    `)).toThrow(/is retired/);
-  });
-
-  it('Cls = *(params)\\n direct-content (no body opener) is a parse error', () => {
-    expect(() => compileSource(`
-      Box = *(value Integer)
-        @get = -> result: value
-        .
-      @test = -> 1
-    `)).toThrow(/is retired/);
-  });
 });

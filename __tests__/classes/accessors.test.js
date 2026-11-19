@@ -54,36 +54,6 @@ describe('published params — compilation', () => {
   });
 });
 
-describe('published params — retired accessor syntax', () => {
-  it('(name) Type', () => {
-    expect(() => compileSource(`
-      T = ((a) Integer) *{ @x = -> 1 }
-      @test = -> 1
-    `)).toThrow(/'\(a\)' is retired: params are private unless published/);
-  });
-
-  it('(name) :accessor Type', () => {
-    expect(() => compileSource(`
-      T = ((a) :b Integer) *{ @x = -> 1 }
-      @test = -> 1
-    `)).toThrow(/Accessor remap '\(a\) :b' is retired.*'@b = \{ a \}'/);
-  });
-
-  it('name: :accessor Type', () => {
-    expect(() => compileSource(`
-      T = (a: :b Integer) *{ @x = -> 1 }
-      @test = -> 1
-    `)).toThrow(/Accessor remap 'a: :b' is retired/);
-  });
-
-  it('name: (alias) :accessor Type', () => {
-    expect(() => compileSource(`
-      T = (a: (l) :b Integer) *{ @x = -> 1 }
-      @test = -> 1
-    `)).toThrow(/Accessor remap 'a: \(l\) :b' is retired/);
-  });
-});
-
 describe('published params — service document', () => {
   it('lists published params as read-only fields', () => {
     const { interface: iface } = compileSource(`

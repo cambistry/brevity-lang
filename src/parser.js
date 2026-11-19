@@ -9,20 +9,21 @@ import { lowerSuperLayers } from './super_layers.js';
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
 // `new` names only a singleton's constructor (notes/class-singleton-forms-2026-11-13.md).
-const RETIRED_SINGLETON_MSG = "'**{ … }' is now 'actor { … }'";
 const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
-const FILE_STAR_SECTION_MSG = "a singleton's constructor is declared with 'new =': write 'new =', then '*' alone on its line, params one per line, and a closing '*'";
-const CTOR_DI_MSG = (shown) => `a constructor's params take no DI (${shown}) — declare it with 'use'`;
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
 const USE_INNER_MSG = "'use' is a statement on a line of its own — in an expression, write 'use(\"…\")'";
-const RETIRED_HASH_CLAIM = "'#' claims nothing a document doesn't say — drop it, or claim the shape in full: 'as (…) -> *{ … }' or 'as { … }'";
-const STARSTAR_HEADER_MSG = "the '**' file header is retired — declare DI with 'use' (e.g. 'use HTML', 'use Svc = \"svc.bv\"'): a file with no header is an actor";
-const DI_ACTOR_HEADER_MSG = "'( … ) actor { … }' is retired — declare DI with 'use' inside the braces: 'actor {', then 'use …' on its own line";
 const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file — an inline singleton is named: 'name = actor { … }'";
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
+
+// The builtin namespaces and the methods each answers when called on the name
+// itself: `Text.upper(t)`, `Math.sqrt(x)`, `Integer.to_text(n)`.
+const NAMESPACE_METHODS = {
+  Text: TEXT_METHODS, Blob: BLOB_METHODS, GraphemeText: GRAPHEME_TEXT_METHODS, List: LIST_METHODS,
+  Math: MATH_METHODS, Integer: MATH_METHODS, Float: MATH_METHODS, Decimal: MATH_METHODS,
+};
 
 // The bang form (`*x.method!(...)`) is a distinct method name from its pure
 // counterpart, not a modifier. It exists only on the receiver-ref form, and
@@ -36,10 +37,6 @@ function assertBangValidRef(recv, method, isBang, table) {
   if (!meta || meta.returns !== recv) {
     throw new Error(`${recv} has no method \`${method}!\` — bang form exists only for methods that return ${recv}.`);
   }
-}
-function assertNoBangFunctional(recv, method, isBang) {
-  if (!isBang) return;
-  throw new Error(`${recv}.${method}!(...) is not a valid form — the bang form applies only to a receiver-ref method call (\`*ref.${method}!(...)\`).`);
 }
 
 // Functions declared at file level, found up front so that one named like a bare
@@ -75,10 +72,8 @@ function joinOwnCellWrites(tokensIn) {
 // `x::class` is the class of actor `x`, and `class` is `self::class`: an actor's class is
 // a fact about its reference, so `::` (a name in its scope, as declared), not `.` (a
 // message it answers). `class` is reserved, so `x::class` can't be a member or a type.
-// Only `self::class` is supported for now; it folds to `class`. `class_of(x)` is retired.
+// Only `self::class` is supported for now; it folds to `class`.
 // See notes/class-scope-and-inheritance-2026-11-16.md.
-// `Self` is retired: the class of the actor it's in is `class`, and the actor is `self`.
-export const RETIRED_SELF = "'Self' is retired — the class of the actor it's in is 'class' ('class(args)', 'x class', '*List of class'), and the actor itself is 'self'";
 
 // Where `class` is a type: after a name (`x class`), `*`, `|`, `of`, or `as !`. It's
 // the class of the actor it's in, the type `Self` named (src/singleton_classes.js
@@ -96,13 +91,9 @@ function foldSelfClass(tokens) {
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (t.type === 'IDENT' && t.value === 'Self') throw new Error(`${RETIRED_SELF} (line ${line(i)})`);
     if (t.type === 'KEYWORD' && t.value === 'class' && atTypeOfClass(tokens, i) && tokens[i + 1]?.type !== 'DCOLON' && tokens[i + 1]?.type !== 'DOT' && tokens[i + 1]?.type !== 'LPAREN') {
-      out.push({ ...t, type: 'IDENT', value: 'Self' });
+      out.push({ ...t, type: 'IDENT', value: 'class' });
       continue;
-    }
-    if (t.type === 'IDENT' && t.value === 'class_of' && tokens[i + 1]?.type === 'LPAREN') {
-      throw new Error(`'class_of(…)' is retired: an actor's class is 'x::class', and 'class' is 'self::class' (line ${line(i)})`);
     }
     if (tokens[i + 1]?.type === 'DCOLON' && tokens[i + 2]?.type === 'KEYWORD' && tokens[i + 2].value === 'class' && tokens[i - 1]?.type !== 'DCOLON') {
       if (t.type === 'KEYWORD' && t.value === 'self') {
@@ -118,7 +109,19 @@ function foldSelfClass(tokens) {
   return out;
 }
 
-export function parse(tokensIn) {
+// `text` is one type and nothing else, as a service document writes it: a type
+// (`Integer | null`, `List of Texts`, `(Integer) -> (Text)`, a constructor
+// profile), optionally a cell (`*Type`, `&Type`), or an interface `{ … }`.
+// Throws where it doesn't parse.
+export function parseTypeText(text) {
+  parse(tokenize(text), { typeOnly: true });
+}
+
+// `:name` where a param is expected.
+export const colonParamError = (name, typeName) =>
+  new Error(`':${name}' is colon destructuring, which a param list doesn't take — a named param is '${name}: ${typeName ?? 'Type'}'`);
+
+export function parse(tokensIn, { typeOnly = false } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
   let tokens = foldSelfClass(joined);
   let pos = 0;
@@ -157,9 +160,6 @@ export function parse(tokensIn) {
   // Inside a one-line actor (`actor -> statement`): the actor-body depth whose
   // body ends at the end of its first statement's line, or 0.
   let stopAtLineEnd = 0;
-  // How many lineal class bodies we're in: a `**` there would be the lineal
-  // trailing form, which isn't supported.
-  let linealClassDepth = 0;
   // How many actor bodies we're in: 1 is the file's own.
   let actorBodyDepth = 0;
 
@@ -286,11 +286,22 @@ export function parse(tokensIn) {
     return tok;
   };
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
+  // Statements are separated by a line break (`;` is one). `last` is where the
+  // previous statement began (-1 before the first); `ends` says whether the
+  // current token closes the body.
+  const STATEMENT_SEPARATORS = new Set(['NEWLINE', 'BLOCK_SEP', 'EOF', 'DIVIDER']);
+  // In an XML attribute block (`<div @color *Text = "black" style={…}>`) the
+  // separator is a space, not a line break.
+  let inAttrBlock = false;
+  const expectStatementEnd = (last, ends) => {
+    if (inAttrBlock || last < 0 || pos === last) return;
+    if (STATEMENT_SEPARATORS.has(tokens[pos - 1]?.type) || STATEMENT_SEPARATORS.has(peek().type) || ends()) return;
+    throw new Error(`Expected a line break or ';' after a statement, got ${peek().type} '${peek().value || ''}'`);
+  };
   // `return` is the explicit value-return keyword. `->` is the lambda /
   // body-opener arrow; standing on its own where a statement is expected, it is
   // simply a misplaced arrow (syntax error).
   const isReturnKw = () => peek().type === 'KEYWORD' && peek().value === 'return';
-  const MISPLACED_ARROW_MSG = "'->' is the lambda arrow and can't start a statement here";
 
   // Silence is in a declaration's name (`sfn. = …`), never a trailing `.` in its
   // body. `declCtx` is the named declaration whose body is being parsed (null
@@ -300,10 +311,7 @@ export function parse(tokensIn) {
   let declCtx = null;
   const declFor = (name) => ({ name, silent: name.endsWith('.') });
   const trailingDotError = () => {
-    const { name, silent, builtin } = declCtx;
-    if (builtin) return new Error(`'${name}' takes no trailing '.'`);
-    if (silent) return new Error(`'${name}' is silent by its name — drop the trailing '.' ('return' exits early)`);
-    return new Error(`A trailing '.' no longer makes a function silent — name it '${name}.' and drop the '.'`);
+    return new Error(`Unexpected '.'`);
   };
   // `set = (params) -> stmt` is a one-line body: the end of its line ends it
   // (a trailing `.` used to), so the next declaration may follow directly.
@@ -326,7 +334,10 @@ export function parse(tokensIn) {
   };
   const skipBlanks = () => { while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume(); };
   const currentScope = () => localScopes[localScopes.length - 1];
-  const declareLocal = (name) => { if (name) currentScope().add(name); };
+  // Every name the file declares anywhere: a builtin namespace (`Math`) may be one.
+  const declaredAnywhere = new Set();
+  const declareLocal = (name) => { if (name) { currentScope().add(name); declaredAnywhere.add(name); } };
+
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name, typeName = null) => refVarScopes[refVarScopes.length - 1].set(name, typeName);
   const isRef = (name) => ownCellWrites.has(name) || refVarScopes.some(s => s.has(name));
@@ -392,53 +403,10 @@ export function parse(tokensIn) {
     }
   };
 
-  // Detect the retired superclass prefix: T |, T* |, T *name |, T, U |
-  const looksLikeRetiredSupertypePrefix = (startPos = pos) => {
-    let look = startPos;
-    while (tokens[look]?.type === 'NEWLINE') look++;
-    while (true) {
-      if (tokens[look]?.type === 'AT') look++;
-      if (tokens[look]?.type !== 'IDENT') return false;
-      look++;
-      if (tokens[look]?.type === 'STAR') {
-        look++;
-        if (tokens[look]?.type === 'IDENT') look++;
-      }
-      while (tokens[look]?.type === 'NEWLINE') look++;
-      if (tokens[look]?.type === 'PIPE') return true;
-      if (tokens[look]?.type === 'COMMA') { look++; while (tokens[look]?.type === 'NEWLINE') look++; continue; }
-      return false;
-    }
-  };
-
-  // The `++` rewrite of a retired `(T *sup, U | params)` prefix, for the error.
-  const retiredSupertypeMessage = (op) => {
-    const parents = [];
-    let look = pos;
-    let wrapped = false;
-    while (tokens[look]?.type !== 'PIPE') {
-      const t = tokens[look];
-      if (t.type === 'AT') parents.push('@');
-      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'STAR') wrapped = true;
-      else if (t.type === 'IDENT' && tokens[look - 1]?.type === 'AT') parents[parents.length - 1] += t.value;
-      else if (t.type === 'IDENT') parents.push(t.value);
-      else if (t.type === 'STAR') wrapped = true;
-      look++;
-    }
-    const hasParams = tokens[look + 1] && tokens[look + 1].type !== 'RPAREN';
-    const shown = `${op} = ${parents.join(' ++ ')} ++ ${hasParams ? '(…) ' : ''}*{ … }`;
-    const layer = wrapped ? ", and reach the parent layer with 'super::name' (protected) or 'super.name' (public)" : '';
-    return `In '${op}', the subclass bar '|' is retired — extend with '++': write '${shown}'${layer}`;
-  };
-
-  // An extends parent at token `i`: `[@]B`, or the retired wrapped `sup [@]B`, which has
-  // the shape of a positional param (`b Box`); the caller decides by what follows.
+  // An extends parent at token `i`: `[@]B`.
   const parentSegmentAt = (i) => {
-    const nameLen = (j) => tokens[j]?.type === 'AT' ? (tokens[j + 1]?.type === 'IDENT' ? 2 : 0) : (tokens[j]?.type === 'IDENT' ? 1 : 0);
-    const n = nameLen(i);
-    if (!n) return null;
-    if (n === 1) { const m = nameLen(i + 1); if (m) return { len: 1 + m, wrapped: true }; }
-    return { len: n, wrapped: false };
+    const n = tokens[i]?.type === 'AT' ? (tokens[i + 1]?.type === 'IDENT' ? 2 : 0) : (tokens[i]?.type === 'IDENT' ? 1 : 0);
+    return n ? { len: n } : null;
   };
 
   // Token types that end a bare `D = A ++ B` definition.
@@ -455,17 +423,15 @@ export function parse(tokensIn) {
   // which come before its params, outside the parens: `U = T ++ (u Text) *{ … }`,
   // `D = A ++ B`. Left to right, a segment is a parent while it is `B` followed by `++`,
   // or a bare `B` that ends the definition.
-  function parseExtendsParents(op) {
+  function parseExtendsParents() {
     const supertypes = [];
     while (true) {
       const seg = parentSegmentAt(pos);
       if (!seg) break;
       const after = pos + seg.len;
       const joined = tokens[after]?.type === 'PLUSPLUS';
-      const last = !seg.wrapped && supertypes.length > 0 && isDefinitionEnd(after);
-      const wrappedLast = seg.wrapped && supertypes.length > 0 && isDefinitionEnd(after);
-      if (!joined && !last && !wrappedLast) break;
-      if (seg.wrapped) throw new Error(retiredWrapMessage(op, tokens[pos].value, tokens.slice(pos + 1, after).map(t => t.type === 'AT' ? '@' : t.value).join('')));
+      const last = supertypes.length > 0 && isDefinitionEnd(after);
+      if (!joined && !last) break;
       const sigil = peek().type === 'AT' ? (consume(), '@') : '';
       supertypes.push({ supertype: sigil + expect('IDENT').value });
       pos = after;
@@ -473,42 +439,6 @@ export function parse(tokensIn) {
       consume(); // ++
     }
     return supertypes;
-  }
-
-  // A wrapped parent, `(sup T ++)`, bound the parent as a local. It's retired: the parent
-  // layer is reached with `super::name` / `super.name`.
-  const retiredWrapMessage = (op, local, parent) =>
-    `In '${op}', the wrapped parent '${local} ${parent}' is retired — write '${op} = ${parent} ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)`;
-
-  // `(T ++ …)` in a constructor's parens: the parents go before the parens now. Called
-  // with `pos` just past the `(`.
-  function rejectParentsInParens(op) {
-    let i = pos;
-    while (tokens[i]?.type === 'NEWLINE') i++;
-    const parents = [];
-    while (true) {
-      const seg = parentSegmentAt(i);
-      if (!seg) break;
-      let after = i + seg.len;
-      while (tokens[after]?.type === 'NEWLINE') after++;
-      const joined = tokens[after]?.type === 'PLUSPLUS';
-      const last = !seg.wrapped && parents.length > 0 && tokens[after]?.type === 'RPAREN';
-      if (!joined && !last) break;
-      const name = tokens.slice(seg.wrapped ? i + 1 : i, i + seg.len).map(t => t.type === 'AT' ? '@' : t.value).join('');
-      // `(sup T ++ …)` and `(x Integer ++ …)` have one shape: which it is depends on
-      // whether `T` is a class, which validation knows (src/validate.js).
-      if (seg.wrapped && !parents.length) return { local: tokens[i].value, parent: name };
-      if (seg.wrapped) throw new Error(retiredWrapMessage(op, tokens[i].value, name));
-      parents.push(name);
-      i = after;
-      if (!joined) { i = -1; break; }
-      i++;
-      while (tokens[i]?.type === 'NEWLINE') i++;
-    }
-    if (!parents.length) return;
-    const hasParams = i >= 0 && tokens[i]?.type !== 'RPAREN';
-    const shown = `${op} = ${parents.join(' ++ ')} ++ ${hasParams ? '(…) ' : ''}*{ … }`;
-    throw new Error(`In '${op}', parents go before the params, outside the parens — write '${shown}'`);
   }
 
   const makeNumLiteral = (tok) => {
@@ -619,9 +549,6 @@ export function parse(tokensIn) {
   }
 
   function parseType(inOf = false) {
-    if (peek().type === 'IDENT' && peek().value.endsWith('!')) {
-      throw new Error(`'${peek().value}' — a type name takes no '!'; declare a write-capable ref as '*${peek().value.slice(0, -1)}'`);
-    }
     let result = parseAtomicType(inOf);
     // Union suffix — only at top level (not inside 'of').
     // Greedily consumes any number of `| Type` and `| null` segments.
@@ -1226,17 +1153,12 @@ export function parse(tokensIn) {
         params.push({ name, type, rest: true, positional: true });
         continue;
       }
-      // :name — prefix-colon param form retired 2026-05-10
-      if (peek().type === 'SIGIL') {
-        const name = peek().value;
-        throw new Error(`Prefix-colon param form ':${name}' is no longer valid. Use '${name}:' for a named param (post-colon flip 2026-05-10).`);
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
+      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // name: ... — named param (external label = `name`).
         const name = consume().value;
         consume(); // COLON
-        if (isRetiredParenAlias()) {
-          throwRetiredParenAlias(name);
-        } else if (startsRenamedParam()) {
+        if (startsRenamedParam()) {
           // name: local Type — the caller passes `name`, the body sees `local`
           params.push(parseRenamedParam(name));
         } else if (isLoneNameAfterColon()) {
@@ -1358,7 +1280,10 @@ export function parse(tokensIn) {
 
   function parseWhileBody() {
     const body = [];
+    let last = -1;
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
+      expectStatementEnd(last, () => false);
+      last = pos;
       skipNewlines();
       if (peek().type === 'RBRACE' || peek().type === 'EOF') break;
       // `use` in a loop body binds over the whole of it (src/validate.js).
@@ -1381,7 +1306,6 @@ export function parse(tokensIn) {
         body.push(AST.returnNode(parseReplyFields(true)));
         continue;
       }
-      if (peek().type === '->') throw new Error(MISPLACED_ARROW_MSG);
       // Block-label syntax inside while body — same desugar as elsewhere.
       {
         const labeledNode = tryParseLabeledConstruct();
@@ -1547,7 +1471,10 @@ export function parse(tokensIn) {
 
   function parseFunctionBody(stopToken = 'RBRACE', { implicitReplyFields = false } = {}) {
     const body = [];
+    let last = -1;
     while (peek().type !== stopToken && peek().type !== 'EOF') {
+      expectStatementEnd(last, () => peek().type === 'DOT');
+      last = pos;
       skipNewlines();
       if (peek().type === stopToken || peek().type === 'EOF') break;
       // `use` in a block binds over the whole of it (src/validate.js).
@@ -1585,8 +1512,6 @@ export function parse(tokensIn) {
           break;
         }
         body.push(AST.returnNode(parseReplyFields(true) ));
-      } else if (peek().type === '->') {
-        throw new Error(MISPLACED_ARROW_MSG);
       } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
         // Void marker `()` as tail expression — pushes empty Return that the
         // outer braced-body normalizer collapses to returnType = '()'.
@@ -1812,14 +1737,6 @@ export function parse(tokensIn) {
       }
       skipNewlines();
       expect('RBRACE');
-      if (!isSilent && (isTypeAttestation() || peek().type === 'COLON')) {
-        const sigil = peek().type === 'COLON' ? ':' : 'as';
-        throw new Error(`Type annotation '${sigil} Type' after closing '}' is not valid — coerce inside the body: { ... value as Type }`);
-      }
-      // Reject -> after closing brace — return goes INSIDE braces
-      if (peek().type === '->') {
-        throw new Error("'->' after closing '}' is not valid — the return statement belongs inside the braces");
-      }
       // Convert Reply nodes in braced body — same as lineal lambda conversion
       for (let i = 0; i < body.length; i++) {
         if (body[i].type === 'Reply') {
@@ -2361,11 +2278,14 @@ export function parse(tokensIn) {
     tokens = tokenize(source).map((t, i, ts) => t.type === 'KEYWORD' && (t.value === 'class' || t.value === 'super')
       && ts[i + 1]?.type === 'EQUALS' && ts[i - 1]?.type !== 'AT' ? { ...t, type: 'IDENT' } : t);
     pos = 0;
+    const savedInAttrBlock = inAttrBlock;
+    inAttrBlock = true;
     try {
       return parseActorBody(() => peek().type === 'EOF');
     } finally {
       tokens = savedTokens;
       pos = savedPos;
+      inAttrBlock = savedInAttrBlock;
     }
   }
 
@@ -2659,22 +2579,19 @@ export function parse(tokensIn) {
       if (isBang && result.type === 'Identifier' && isReadonlyParam(result.name)) {
         throw new Error(`Cannot call mutating method '.${cleanMethod}!' on read-only parameter '${result.name}'`);
       }
-      if (result.type === 'Identifier' && result.name === 'Text' && TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
-        assertNoBangFunctional('Text', cleanMethod, isBang);
+      if (result.type === 'Identifier' && result.name === 'Text' && !isBang && TEXT_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
-      } else if (result.type === 'Identifier' && result.name === 'Blob' && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
-        assertNoBangFunctional('Blob', cleanMethod, isBang);
+      } else if (result.type === 'Identifier' && result.name === 'Blob' && !isBang && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = AST.blobMethodExpr(cleanMethod, args);
-      } else if (result.type === 'Identifier' && result.name === 'List' && LIST_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
-        assertNoBangFunctional('List', cleanMethod, isBang);
+      } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && LIST_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
@@ -2798,13 +2715,9 @@ export function parse(tokensIn) {
     ['EQ','==='],['NEQ','!=='],['GT','>'],['LT','<'],['GTE','>='],['LTE','<='],
   ]);
 
-  function rejectStarStarOperator() {
-    if (peek().type === 'STARSTAR') throw new Error("'**' is not an operator — the exponent is '^' (e.g. 'a ^ b')");
-  }
 
   function parseExpExpr() {
     let base = parsePrimary();
-    rejectStarStarOperator();
     if (peek().type === 'POWER') {
       consume();
       return AST.binaryExpr('**', base, parseExpExpr());
@@ -2928,10 +2841,16 @@ export function parse(tokensIn) {
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
     if (hasParen) consume();
+    // Fields are separated by a comma or a line break; a field directly after
+    // another, on the same line, ends the list.
+    let separated = 0;
     while (true) {
+      const before = pos;
       if (hasParen || !sameLine) skipNewlines();
       if (hasParen && peek().type === 'RPAREN') { consume(); break; }
-      if (peek().type === 'COMMA') { consume(); continue; }
+      if (peek().type === 'COMMA') { consume(); separated = fields.length; continue; }
+      if (fields.length > separated && pos === before) break;
+      separated = fields.length;
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         fields.push({ expr: parseExpr(), type: null, positional: true });
       } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
@@ -3015,7 +2934,6 @@ export function parse(tokensIn) {
               exprNode = AST.functionCallExpr(exprNode, args);
             }
           }
-          rejectStarStarOperator();
           while (['PLUS', 'MINUS', 'STAR', 'SLASH', 'PERCENT', 'POWER'].includes(peek().type)) {
             const tok = consume();
             const op = tok.type === 'POWER' ? '**' : tok.value;
@@ -3584,28 +3502,7 @@ export function parse(tokensIn) {
 
   // ── After a named param's colon (`key: …`) ────────────────────────────────
   // `key: local Type` renames; a lone `key: X` is a type or a local depending
-  // on what is in scope (resolveLoneNames). A single name in parens is retired.
-  function isRetiredParenAlias() {
-    return peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' &&
-      tokens[pos + 2]?.type === 'RPAREN' && tokens[pos + 3]?.type !== '->';
-  }
-  function throwRetiredParenAlias(key) {
-    const alias = tokens[pos + 1].value;
-    const after = tokens[pos + 3];
-    if (after?.type === 'SIGIL') {
-      throw new Error(`Accessor remap '${key}: (${alias}) :${after.value}' is retired. Publish the param with '@${key}: ${alias} Type', or write a handler: '@${after.value} = { ${alias} }'`);
-    }
-    const rest = after?.type === 'IDENT' ? ` ${after.value}`
-      : after?.type === 'STAR' ? ' *'
-      : after?.type === 'HASH' ? ' #'
-      : after?.type === 'LBRACE' ? ' { … }'
-      : after?.type === 'LPAREN' ? ' ( … ) -> *{ … }'
-      : '';
-    throw Object.assign(
-      new Error(`'${key}: (${alias})' is retired — write '${key}: ${alias}${rest}' (no parens around a single name)`),
-      { fatal: true },
-    );
-  }
+  // on what is in scope (resolveLoneNames).
   function startsRenamedParam() {
     if (peek().type !== 'IDENT') return false;
     const next = tokens[pos + 1];
@@ -3641,8 +3538,6 @@ export function parse(tokensIn) {
     if (t === 'IDENT') return true;
     // @name — published param (class / file header)
     if (t === 'AT' && tokens[pos + 1]?.type === 'IDENT') return true;
-    // (name) — retired suppressed-accessor form; parsed to report it
-    if (t === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') return true;
     return false;
   }
 
@@ -3681,14 +3576,11 @@ export function parse(tokensIn) {
       p.accessor = p.key || p.name;
       return p;
     } else if (peek().type === 'SIGIL') {
-      // Prefix-colon param form retired 2026-05-10. Use post-colon `name:` instead.
-      const name = peek().value;
-      throw new Error(`Prefix-colon param form ':${name}' is no longer valid. Use '${name}:' for a named param (post-colon flip 2026-05-10).`);
+      throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       // name: ... — named param (external label = `name`).
       const first = consume().value;
       consume(); // COLON
-      if (isRetiredParenAlias()) throwRetiredParenAlias(first);
       if (startsRenamedParam()) {
         // name: local Type — the caller passes `name`, the body sees `local`
         return withDefault(parseRenamedParam(first), tryParseDefault());
@@ -3697,9 +3589,6 @@ export function parse(tokensIn) {
         // name: X — X is a type if one is in scope, else a local (resolved
         // after parsing: see resolveLoneNames)
         return withDefault({ name: first, type: consume().value, typeOrLocal: true }, tryParseDefault());
-      }
-      if (peek().type === 'SIGIL') {
-        throw new Error(`Accessor remap '${first}: :${peek().value}' is retired. Publish the param with '@${first}: Type', or write a handler: '@${peek().value} = { ${first} }'`);
       }
       if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
         // name: * — named ref param (wildcard, no explicit type)
@@ -3726,16 +3615,6 @@ export function parse(tokensIn) {
         return withDefault({ name: first, type }, defaultValue);
       }
       return withDefault({ name: first, type }, tryParseDefault());
-    } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'RPAREN') {
-      // (name) Type / (name) :accessor Type — retired: params are private
-      // unless published with `@name`.
-      consume(); // LPAREN
-      const name = expect('IDENT').value;
-      expect('RPAREN');
-      if (peek().type === 'SIGIL') {
-        throw new Error(`Accessor remap '(${name}) :${peek().value}' is retired. Write '${name} Type' and a handler: '@${peek().value} = { ${name} }'`);
-      }
-      throw new Error(`'(${name})' is retired: params are private unless published. Write '${name} Type' (private) or '@${name} Type' (published)`);
     } else if (peek().type === 'IDENT') {
       const name = consume().value;
       // *Type — positional ref param with explicit type
@@ -3870,7 +3749,10 @@ export function parse(tokensIn) {
 
     const isStop = () => peek().type === 'BLOCK_SEP' || peek().type === 'EOF' || (stopToken && peek().type === stopToken);
     const body = [];
+    let last = -1;
     while (!isStop()) {
+      expectStatementEnd(last, () => peek().type === 'DOT' || (peek().type === 'KEYWORD' && peek().value === 'end'));
+      last = pos;
       skipNewlines();
       if (isStop()) break;
 
@@ -3909,13 +3791,10 @@ export function parse(tokensIn) {
         break;
       }
 
-      if (peek().type === '->') {
-        // A leading `->` in a *lineal* body (no stopToken, nothing parsed yet)
-        // is the arrow one-liner / body-opener (`@get = -> x`): keep it and let
-        // the single tail be the implicit return. Anywhere else — inside a
-        // braced body, or after another statement — a bare `->` is just a
-        // misplaced lambda arrow.
-        if (stopToken || body.length > 0) throw new Error(MISPLACED_ARROW_MSG);
+      // A leading `->` in a *lineal* body (no stopToken, nothing parsed yet) is the
+      // arrow one-liner / body-opener (`@get = -> x`): the single tail is the
+      // implicit return.
+      if (peek().type === '->' && !stopToken && body.length === 0) {
         consume();
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
@@ -4230,15 +4109,10 @@ export function parse(tokensIn) {
     // The private-singleton desugar (a hidden class, constructed once into the
     // cell) plus the published cell's getter. The actor is addressed by its
     // label: `@name` in its enclosing actor (`main @name`), not `@C/N`.
-    if (tokens[pos]?.type === 'EQUALS') refuseRetiredSingleton(pos + 1);
-    if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1) || isParamSingletonStart(pos + 1))) {
+    if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1))) {
       consume(); // =
-      if (!isSingletonStart() && !isLinealSingletonStart()) {
-        throw new Error(`Singleton '@${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '@${op} = actor { … }'`);
-      }
       const cls = `${op}_singleton`;
       const nested = parseSingletonMembers(cls);
-      refuseLeadingClassForm('@' + op);
       const classNode = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
       classNode.singletonOf = '@' + op;
       declareLocal('@' + op);
@@ -4277,7 +4151,7 @@ export function parse(tokensIn) {
       // an actor-ref cell holds an address, and rebinding it has no compound-value
       // invariants to break — same as a primitive cell.
       const refsSelf = typeof typeName === 'string' &&
-        typeName.split('|').some(m => m.trim() === 'Self');
+        typeName.split('|').some(m => m.trim() === 'class');
       if (baseTypes.has(typeName) || refsSelf) {
         const setter = AST.functionDecl('set@' + op,
           [{ name: '_v', type: typeName, positional: true }],
@@ -4425,7 +4299,7 @@ export function parse(tokensIn) {
       }
       const classNode = AST.actor('@' + op, { ...actorNode, overloadMode });
       // Trailing class members: `@C = (params) *{ … } ++ actor { members }`.
-      if (isTrailingMembersStart('@' + op)) {
+      if (isTrailingMembersStart()) {
         consume(); // ++
         const members = parseTrailingMembers('@' + op);
         classNode.membersClass = members.actor.name;
@@ -4621,23 +4495,18 @@ export function parse(tokensIn) {
       } else {
         methodName = consume().value;
       }
-      if (peek().type === 'COLON') {
-        throw new Error(`Interface entry '${methodName}:' — the entry colon is retired; write '${methodName} (params) -> (returns)'`);
-      }
       expect('LPAREN');
       const params = [];
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
         if (peek().type === 'COMMA') { consume(); continue; }
-        if (peek().type === 'SIGIL') {
-          throw new Error(`Prefix-colon param form ':${peek().value}' is no longer valid in service constraints. Use '${peek().value}: Type' (post-colon flip 2026-05-10).`);
-        }
+        if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
         const pName = expect('IDENT').value;
         let pType = null;
         if (peek().type === 'COLON') {
           consume();
           if (peek().type === 'IDENT') pType = consume().value;
         } else if (peek().type === 'IDENT') {
-          // legacy positional form `name Type` — keep working
+          // positional `name Type`
           pType = consume().value;
         }
         params.push({ name: pName, type: pType });
@@ -4653,9 +4522,6 @@ export function parse(tokensIn) {
         returns = [];
         while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
           if (peek().type === 'COMMA') { consume(); continue; }
-          if (peek().type === 'SIGIL') {
-            throw new Error(`Prefix-colon return form ':${peek().value}' is no longer valid in service constraints. Use '${peek().value}: Type' (post-colon flip 2026-05-10).`);
-          }
           const rName = expect('IDENT').value;
           let rType = null;
           if (peek().type === 'COLON') {
@@ -4676,24 +4542,11 @@ export function parse(tokensIn) {
 
   // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
   // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
-  // Parents go before the parens (`T ++ (params)`); one inside is an error. Handles
-  // ref-param shortcuts.
-  function parseConstructorParenParams(op) {
+  // Handles ref-param shortcuts.
+  function parseConstructorParenParams() {
     const cParams = [];
     skipNewlines();
-    if (looksLikeRetiredSupertypePrefix()) throw new Error(retiredSupertypeMessage(op));
     const supertypes = [];
-    const wrap = rejectParentsInParens(op);
-    if (wrap) {
-      // The error waits for validation; skip to the `)`.
-      for (let depth = 0; peek().type !== 'EOF'; consume()) {
-        if (peek().type === 'LPAREN') depth++;
-        else if (peek().type === 'RPAREN' && depth-- === 0) break;
-      }
-      expect('RPAREN');
-      supertypes.retiredWrap = { ...wrap, op };
-      return { params: [], supertypes };
-    }
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); separated = true; continue; }
@@ -4816,13 +4669,6 @@ export function parse(tokensIn) {
     } catch {
       // not a param run — fall through to restore
     }
-    // A typed param run closed by a lone `=` is the retired `*\n params\n =`
-    // form (no valid body has a typed declaration followed by a lone `=`).
-    const last = cParams[cParams.length - 1];
-    if (last && last.type && last.type !== 'Anything' && peek().type === 'EQUALS' &&
-        tokens[pos - 1]?.type === 'NEWLINE' && tokens[pos + 1]?.type === 'NEWLINE') {
-      throw new Error(`a lineal constructor header is closed by '*' alone on its line, not '='`);
-    }
     pos = saved;
     return null;
   }
@@ -4833,9 +4679,6 @@ export function parse(tokensIn) {
   // body must be opened by `{` or be the tail form (`->`/`return`). An empty
   // body is legal (e.g. `{}`).
   function parseConstructorBody(op, linealHeader) {
-    if (!linealHeader && peek().type === 'EQUALS') {
-      throw new Error(`'=' no longer opens a constructor body (in '${op}') — use a lineal header ('*' alone on a line, params one per line, closing '*' alone on a line) or a delimited body '{ ... }'`);
-    }
     let nested;
     if (peek().type === 'LBRACE') {
       consume();
@@ -4847,12 +4690,10 @@ export function parse(tokensIn) {
       expect('RBRACE');
     } else if (linealHeader || peek().type === '->' || isReturnKw()) {
       // Lineal body or tail form (`return`/`->` consumed by parseActorBody).
-      linealClassDepth++;
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
       );
-      linealClassDepth--;
       // In a lineal singleton, the blank line that ends this body ends the singleton.
       if (!(stopAtBlankLine && peek().type === 'BLOCK_SEP')) {
         skipBlanks();
@@ -4879,10 +4720,6 @@ export function parse(tokensIn) {
   // `actor { … }` or `actor -> statement` at token index `i`: an actor literal
   // (define and instantiate). `actor` is a keyword only there.
   function isSingletonStart(i = pos) { return isActorKw(tokens[i]) && (tokens[i + 1]?.type === 'LBRACE' || tokens[i + 1]?.type === '->'); }
-
-  // `**{` at token index `i`: the retired spelling of `actor {`.
-  function isRetiredSingletonAt(i = pos) { return tokens[i]?.type === 'STARSTAR' && tokens[i + 1]?.type === 'LBRACE'; }
-  function refuseRetiredSingleton(i = pos) { if (isRetiredSingletonAt(i)) throw new Error(RETIRED_SINGLETON_MSG); }
 
   // `**` then a line break: a lineal inline singleton, whose members run to the
   // first blank line.
@@ -4916,16 +4753,8 @@ export function parse(tokensIn) {
   }
 
   // `++ actor {` right after a delimited constructor: its trailing class block.
-  // Juxtaposed (no `++`), or spelled `**{`, it is refused with the fix.
-  function isTrailingMembersStart(name) {
-    if (peek().type === 'PLUSPLUS') {
-      refuseRetiredSingleton(pos + 1);
-      return isSingletonStart(pos + 1);
-    }
-    if (isRetiredSingletonAt() || isSingletonStart()) {
-      throw new Error(`A class block joins its constructor with '++': '${name} = (params) *{ … } ++ actor { … }'`);
-    }
-    return false;
+  function isTrailingMembersStart() {
+    return peek().type === 'PLUSPLUS' && isSingletonStart(pos + 1);
   }
 
   // A class's trailing members, `++ actor { … }` right after its constructor: a singleton
@@ -4941,46 +4770,6 @@ export function parse(tokensIn) {
     actor.singletonOf = `${base}__class`;
     actor.membersOf = className;
     return { actor, cell: `${base}__class` };
-  }
-
-  // After a singleton's members: `(params) *{ … }` there is the leading form, which
-  // isn't a class (it reads as a call on the singleton).
-  function refuseLeadingClassForm(name) {
-    if (isDelimitedClassStart() || peek().type === 'LPAREN') {
-      throw new Error(`'${name} = actor { … } (params) *{ … }' isn't a class — write the constructor first, '${name} = (params) *{ … } ++ actor { … }', or put it inside: '${name} = actor { … new = (params) *{ … } }'`);
-    }
-  }
-
-  // `(params) actor {` at token index `i`: a singleton given params, which nobody
-  // could pass, since it is built when its enclosing actor is.
-  function isParamSingletonStart(i = pos) {
-    if (tokens[i]?.type !== 'LPAREN') return false;
-    let depth = 0;
-    for (let j = i; j < tokens.length; j++) {
-      const t = tokens[j].type;
-      if (t === 'LPAREN') depth++;
-      else if (t === 'RPAREN' && --depth === 0) return isSingletonStart(j + 1) || isRetiredSingletonAt(j + 1);
-      else if (t === 'EOF') return false;
-    }
-    return false;
-  }
-
-  // `( entries ) [->] actor {` at token index `i`: the retired delimited DI header
-  // of a file singleton, refused with a pointer to `use`.
-  function isFileSingletonStart(i = pos) {
-    if (tokens[i]?.type !== 'LPAREN') return false;
-    let depth = 0;
-    for (let j = i; j < tokens.length; j++) {
-      const t = tokens[j].type;
-      if (t === 'LPAREN') depth++;
-      else if (t === 'RPAREN' && --depth === 0) {
-        const k = tokens[j + 1]?.type === '->' ? j + 2 : j + 1;
-        refuseRetiredSingleton(k);
-        return isActorKw(tokens[k]) && tokens[k + 1]?.type === 'LBRACE';
-      }
-      else if (t === 'EOF') return false;
-    }
-    return false;
   }
 
   // `(params) [->] *{` or `[->] *{` at token index `i` — a delimited class
@@ -5009,7 +4798,7 @@ export function parse(tokensIn) {
     let supertypes = [];
     if (peek().type === 'LPAREN') {
       consume();
-      ({ params, supertypes } = parseConstructorParenParams(op));
+      ({ params, supertypes } = parseConstructorParenParams());
     }
     if (peek().type === '->') consume();
     expect('STAR');
@@ -5023,13 +4812,11 @@ export function parse(tokensIn) {
   //   C ++ *{ body }            parents and a body, no params
   //   C ++ (params) *{ body }   parents, then params
   function parseBareExtendClass(op) {
-    const supertypes = parseExtendsParents(op);
+    const supertypes = parseExtendsParents();
     let nested = null;
     let params = [];
     if (peek().type === 'LPAREN') {
-      let inParens;
-      ({ nested, params, supertypes: inParens } = parseDelimitedClass(op));
-      if (inParens.retiredWrap) supertypes.retiredWrap = inParens.retiredWrap;
+      ({ nested, params } = parseDelimitedClass(op));
     } else if ((peek().type === '->' && tokens[pos + 1]?.type === 'STAR') || (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE')) {
       if (peek().type === '->') consume();
       consume(); // *
@@ -5040,9 +4827,6 @@ export function parse(tokensIn) {
     nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
     return { params, supertypes, nested };
   }
-
-  const RETIRED_STAR_PAREN_MSG = (op) =>
-    `'*(params) { ... }' is retired (in '${op}') — the '*' now marks the body: write '(params) *{ ... }'`;
 
   // Dispatch after a `*` that opens a constructor. Caller has consumed `*`.
   // (`(params) *{ body }` goes through parseDelimitedClass instead.)
@@ -5060,36 +4844,11 @@ export function parse(tokensIn) {
       return { params, supertypes: [], nested };
     }
     skipNewlines();
-    if (peek().type === 'LPAREN') throw new Error(RETIRED_STAR_PAREN_MSG(op));
     if (peek().type !== 'LBRACE') {
       throw new Error(`In '${op}', a lineal constructor header's '*' must be alone on its line — write '${op} =', then '*' on its own line, params one per line, and a closing '*' on its own line`);
     }
     const nested = parseConstructorBody(op, false);
     return { params: [], supertypes: [], nested };
-  }
-
-  // The params of the constructor at token `i` (`new =`'s), lineal `*`…`*` or
-  // `( … ) *{`, refused if any is a DI entry: read as header entries, nothing kept.
-  function refuseCtorDI(i) {
-    while (tokens[i]?.type === 'NEWLINE' || tokens[i]?.type === 'BLOCK_SEP') i++;
-    let isEnd;
-    if (tokens[i]?.type === 'STAR' && tokens[i].alone) isEnd = () => peek().type === 'STAR' && peek().alone;
-    else if (tokens[i]?.type === 'LPAREN' && isDelimitedClassStart(i)) isEnd = () => peek().type === 'RPAREN';
-    else return;
-    const saved = pos;
-    const savedDeps = dependencies.length;
-    let dep;
-    try {
-      pos = i + 1;
-      parseFileHeaderEntries(isEnd);
-    } catch {
-      // not an entry run — the params parser says what's wrong
-    } finally {
-      dep = dependencies.slice(savedDeps).find(d => d.type === 'Dependency');
-      dependencies.length = savedDeps;
-      pos = saved;
-    }
-    if (dep) throw new Error(CTOR_DI_MSG(/^\w+$/.test(dep.path) ? `'${dep.path}'` : `'"${dep.path}"'`));
   }
 
   function parseActorBody(isEnd) {
@@ -5112,7 +4871,10 @@ export function parse(tokensIn) {
     const isFileTop = actorBodyDepth === 1 && fileKind !== 'factory';
     // While the file's `new =` is read: what `stopAtBlankLine` was before it.
     let fileNewStop = null;
+    let last = -1;
     while (peek().type !== 'EOF') {
+      expectStatementEnd(last, () => isEnd() || peek().type === 'DOT' || (peek().type === 'KEYWORD' && peek().value === 'end'));
+      last = pos;
       declCtx = null;
       if (fileNewStop !== null) { stopAtBlankLine = fileNewStop; fileNewStop = null; }
       if (stopAtBlankLine && peek().type === 'BLOCK_SEP') break;
@@ -5125,8 +4887,7 @@ export function parse(tokensIn) {
       if (peek().type === 'EOF' || isEnd()) break;
       // An actor literal standing alone: the whole file if it opens the file, else
       // it needs a name.
-      if (isSingletonStart() || isRetiredSingletonAt()) {
-        refuseRetiredSingleton();
+      if (isSingletonStart()) {
         throw new Error(actorBodyDepth === 1 ? WHOLE_FILE_ACTOR_MSG : `An inline singleton is named: 'name = actor { … }'`);
       }
       // `use` declares the file's DI: hoisted into its manifest, so it may come anywhere
@@ -5136,11 +4897,6 @@ export function parse(tokensIn) {
         if (actorBodyDepth > 1) constructorBody.push(...parseInnerUse());
         else parseUse();
         continue;
-      }
-      // The retired trailing `*` section (singleton lines, then a lone `*` as the
-      // file's `new`). A `*` at the head of a file is a factory header, read before here.
-      if (isFileTop && peek().type === 'STAR' && peek().alone) {
-        throw new Error(FILE_STAR_SECTION_MSG);
       }
       // `new = (params) *{ … }` in a singleton makes it a class; `new` is reserved
       // for that (src/singleton_classes.js).
@@ -5152,7 +4908,6 @@ export function parse(tokensIn) {
         // In the file, it makes the file a class. Its lineal body ends at the first
         // blank line, as a lineal singleton's members do.
         if (isFileTop) {
-          refuseCtorDI(k + 1);
           fileNewStop = stopAtBlankLine;
           stopAtBlankLine = true;
         }
@@ -5160,6 +4915,7 @@ export function parse(tokensIn) {
       // `untracked` marks the declaration that follows: its writes don't count.
       if (peek().type === 'KEYWORD' && peek().value === 'untracked') {
         consume();
+        last = pos; // a prefix: the declaration it marks is the statement
         if (peek().type === 'HASH_IDENT') {
           untrackedDecls.add('#' + peek().value);
           continue;
@@ -5628,15 +5384,10 @@ export function parse(tokensIn) {
           // here and constructs it once, when this actor is constructed; `name`
           // holds the actor. It takes no params and reaches what it needs
           // through the actors it's declared in.
-          refuseRetiredSingleton();
-          if (isParamSingletonStart()) {
-            throw new Error(`Singleton '${op}' takes no params — it is built when its enclosing actor is, with nobody to pass them. It reads the actors it's declared in instead: write '${op} = actor { … }'`);
-          }
           if (isSingletonStart() || isLinealSingletonStart()) {
             if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = actor { … }'`);
             const cls = `${op.replace(/^[@#]/, '')}_singleton`;
             const nested = parseSingletonMembers(cls);
-            refuseLeadingClassForm(op);
             nestedActors.push(AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' }));
             nestedActors[nestedActors.length - 1].singletonOf = op;
             constructorBody.push(AST.typedAssign(op, null, AST.functionCallExpr(AST.identifier(cls), [])));
@@ -5664,7 +5415,7 @@ export function parse(tokensIn) {
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
               // Trailing class members: `C = (params) *{ … } ++ actor { members }`.
-              if ((_isDelimitedClass || _isBareExtend) && isTrailingMembersStart(op)) {
+              if ((_isDelimitedClass || _isBareExtend) && isTrailingMembersStart()) {
                 consume(); // ++
                 const members = parseTrailingMembers(op);
                 nestedActors.push(members.actor);
@@ -5701,9 +5452,6 @@ export function parse(tokensIn) {
               const constraint = parseServiceConstraint();
               constructorBody.push(AST.serviceCoercion(op, value, constraint));
               continue;
-            }
-            if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN') {
-              throw new Error(`'as *( ... ) -> { ... }' is retired (in coercion of '${op}') — write 'as ( ... ) -> *{ ... }'`);
             }
             // Constructor coercion: name = ref as (p: Type, ...) [->] *{ method ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && ctorProfileAhead(pos + 1)) {
@@ -5763,13 +5511,6 @@ export function parse(tokensIn) {
             body = parseBody('RBRACE');
             skipNewlines();
             expect('RBRACE');
-            // Optional return type after closing brace: } : Type or } as Type
-            if (isTypeAttestation()) {
-              consumeTypeAttestation(); // consume but discard for internal functions
-            } else if (peek().type === 'COLON') {
-              consume(); // COLON
-              parseType(); // consume but discard
-            }
           } else {
             body = parseBody();
           }
@@ -5842,11 +5583,6 @@ export function parse(tokensIn) {
         if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
         constructorBody.push(AST.implicitReturn(expr, typeName));
       } else {
-        if (peek().type === 'STARSTAR' && linealClassDepth > 0) {
-          throw new Error(`A lineal class can't take trailing members ('*' params '*' constructor, then '**') — write 'C = **' with 'new =' inside it, or the delimited form 'C = (params) *{ … } ++ actor { … }'`);
-        }
-        refuseRetiredSingleton();
-        if (peek().type === 'STARSTAR' && peek().alone) throw new Error(STARSTAR_HEADER_MSG);
         if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') throw new Error(WHOLE_FILE_ACTOR_MSG);
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
       }
@@ -5921,7 +5657,7 @@ export function parse(tokensIn) {
     // one (notes/at-sigil-internal-and-quoted-names-2026-11-12.md).
     for (const stmt of constructorBody) {
       if (stmt.type !== 'RefDecl' || /^[@#]/.test(stmt.name) || typeof stmt.typeName !== 'string') continue;
-      if (!PROTECTED_SETTER_TYPES.has(stmt.typeName) && !stmt.typeName.split('|').some(m => m.trim() === 'Self')) continue;
+      if (!PROTECTED_SETTER_TYPES.has(stmt.typeName) && !stmt.typeName.split('|').some(m => m.trim() === 'class')) continue;
       if (functions.some(f => f.name === 'set.' + stmt.name)) continue;
       functions.push(AST.functionDecl('set.' + stmt.name,
         [{ name: '_v', type: stmt.typeName, positional: true }],
@@ -6012,10 +5748,6 @@ export function parse(tokensIn) {
     const useTok = pos;
     consume(); // use
     if (USE_END.includes(peek().type)) throw new Error(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
-    if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
-      const name = tokens[pos + 1].value;
-      throw new Error(`'use' can't declare an accessor ('@${name}') — write 'use ${name} Type = ${name}', and publish it with a handler: '@${name} = -> ${name}'`);
-    }
     const { eq, end } = scanUse(pos);
     const shown = () => `use ${showTokens(useTok + 1, end)}`;
     if (eq === null) {
@@ -6038,7 +5770,6 @@ export function parse(tokensIn) {
   function parseUseShorthands(end, emit) {
     while (pos < end) {
       if (peek().type === 'COMMA') { consume(); skipUseBreaks(); continue; }
-      refuseRetiredUse(end);
       const segs = parseUseSource();
       const last = segs[segs.length - 1];
       if (!isBvName(last)) {
@@ -6201,10 +5932,6 @@ export function parse(tokensIn) {
   function parseUseShape() {
     if (!(peek().type === 'KEYWORD' && peek().value === 'as')) return null;
     consume(); // as
-    if (peek().type === 'HASH') throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
-    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
-      throw Object.assign(new Error(`'as *( ... ) -> { ... }' is retired — write 'as ( ... ) -> *{ ... }'`), { fatal: true });
-    }
     if (peek().type === 'LBRACE') return { interface: parseAsTypeSuffix(parseInlineIface()) };
     if (peek().type === 'LPAREN' && isCtorProfileAt(pos)) {
       ctorArrow = '->';
@@ -6265,7 +5992,6 @@ export function parse(tokensIn) {
     if (t.type !== 'IDENT') throw new Error(`Expected a name or a destructure before '=' in '${shown()}', got ${t.type}`);
     const name = consume().value;
     if (pos === eq) return { kind: 'name', name };
-    if (peek().type === 'HASH' && pos + 1 === eq) throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
     if (peek().type === 'LBRACE' || peek().type === 'LPAREN') {
       throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '(…) -> *{ … }'}'`);
     }
@@ -6387,78 +6113,6 @@ export function parse(tokensIn) {
     }
     const json = JSON.stringify(node);
     if (!dependencies.some(d => JSON.stringify(d) === json)) { useEntries.add(node); dependencies.push(node); }
-  }
-
-  // A header entry of the retired grammar, with no `=`: say what it is now.
-  function refuseRetiredUse(end) {
-    const t = peek();
-    const t1 = tokens[pos + 1];
-    const entryEnd = (x) => !x || x.type === 'COMMA' || USE_END.includes(x.type);
-    const entry = () => {
-      let k = pos;
-      let depth = 0;
-      while (k < end && !(depth === 0 && tokens[k].type === 'COMMA')) {
-        if (['LPAREN', 'LBRACE'].includes(tokens[k].type)) depth++;
-        else if (['RPAREN', 'RBRACE'].includes(tokens[k].type)) depth--;
-        k++;
-      }
-      return showTokens(pos, k);
-    };
-    const retired = (now) => new Error(`'${entry()}' is a retired header entry — write '${now}'`);
-    // After `Key:` (a quoted path or a name): the binding it made.
-    const afterKey = (src, k) => {
-      const a = tokens[k];
-      const b = tokens[k + 1];
-      if (a?.type === 'IDENT' && entryEnd(b)) return `use ${a.value} = ${src}`;
-      if (a?.type === 'IDENT' && b?.type === 'HASH') return `use ${a.value} = ${src}`;
-      if (a?.type === 'IDENT' && b?.type === 'LBRACE') return `use ${a.value} = ${src} as { … }`;
-      if (a?.type === 'IDENT' && b?.type === 'LPAREN') return `use ${a.value} = ${src} as (…) -> *{ … }`;
-      if (a?.type === 'SIGIL') return `use :${a.value} = ${src}`;
-      if (a?.type === 'LPAREN') {
-        let j = k;
-        let depth = 0;
-        do {
-          if (tokens[j].type === 'LPAREN') depth++;
-          else if (tokens[j].type === 'RPAREN') depth--;
-          j++;
-        } while (depth > 0 && j < end);
-        return `use ${showTokens(k + 1, j - 1)} = ${src}`;
-      }
-      return null;
-    };
-    if (t.type === 'SIGIL' && entryEnd(t1)) throw new Error(`'use :${t.value}': a lone ':${t.value}' destructures nothing — write 'use ${t.value}'`);
-    if (t.type === 'SIGIL') throw retired(`use ${t.value} ${showTokens(pos + 1, scanEntryEnd(pos + 1, end))} = ${t.value}`);
-    if (t.type === 'STRING' && t1?.type === 'COLON') {
-      const now = afterKey(JSON.stringify(t.value), pos + 2);
-      if (now) throw retired(now);
-    }
-    if (t.type === 'IDENT' && t1?.type === 'COLON') {
-      const a = tokens[pos + 2];
-      const b = tokens[pos + 3];
-      // `size: n Integer` → a renamed value; `value: Integer` → a value or a rename.
-      if (a?.type === 'IDENT' && !entryEnd(b) && b?.type !== 'HASH' && b?.type !== 'LBRACE' && b?.type !== 'LPAREN') {
-        throw retired(`use ${a.value} ${showTokens(pos + 3, scanEntryEnd(pos + 3, end))} = ${t.value}`);
-      }
-      if (a?.type === 'IDENT' && entryEnd(b)) {
-        throw new Error(`'${entry()}' is a retired header entry — a typed value is 'use ${t.value} ${a.value} = ${t.value}', a rename 'use ${a.value} = ${t.value}'`);
-      }
-      if (a?.type === 'STAR' || a?.type === 'AMPERSAND_IDENT') {
-        throw retired(`use ${t.value} ${showTokens(pos + 2, scanEntryEnd(pos + 2, end))} = ${t.value}`);
-      }
-      const now = afterKey(t.value, pos + 2);
-      if (now) throw retired(now);
-    }
-    if (t.type === 'IDENT' && t1?.type === 'HASH') throw retired(`use ${t.value}`);
-    if (t.type === 'IDENT' && t1?.type === 'LBRACE') throw retired(`use ${t.value} = ${t.value} as { … }`);
-    if (t.type === 'IDENT' && t1?.type === 'LPAREN') throw retired(`use ${t.value} = ${t.value} as (…) -> *{ … }`);
-    if (t.type === 'IDENT' && !entryEnd(t1) && t1?.type !== 'DCOLON' && !(t1?.type === 'KEYWORD' && t1.value === 'as')) {
-      throw new Error(`'use ${entry()}' has no source — write 'use ${entry()} = ${t.value}'`);
-    }
-  }
-  // The end of a type after a header entry's name: the next comma, or the statement's end.
-  function scanEntryEnd(k, end) {
-    while (k < end && tokens[k].type !== 'COMMA') k++;
-    return k;
   }
 
   // Parse one type field declaration:
@@ -6702,7 +6356,6 @@ export function parse(tokensIn) {
       skipNewlines();
       // The binding: a local name (`"thing.bv": Thing #`), one member
       // (`HTML: :div`), or a destructure group (`HTML: (:div, :span)`).
-      if (isRetiredParenAlias()) throwRetiredParenAlias(/^\w+$/.test(path) ? path : `"${path}"`);
       if (peek().type === 'IDENT') {
         alias = consume().value;
       } else if (peek().type === 'SIGIL') {
@@ -6755,13 +6408,6 @@ export function parse(tokensIn) {
         continue;
       }
       skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-      if (peek().type === 'HASH') throw Object.assign(new Error(RETIRED_HASH_CLAIM), { fatal: true });
-      if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
-        throw Object.assign(
-          new Error(`'(Alias) *( ... ) -> { ... }' is retired (dependency '${alias}') — write '${alias} ( ... ) -> *{ ... }'`),
-          { fatal: true },
-        );
-      }
       // Alias (p: Type, ...) [->] *{ iface } — explicit constructor + service
       if (peek().type === 'LPAREN') {
         ctorArrow = '->';
@@ -6788,9 +6434,6 @@ export function parse(tokensIn) {
   // tail form (`return`/`->`). Returns true when the body was consumed here.
   function parseFileHeaderBody(linealHeader) {
     const fileOpenerTok = peek().type;
-    if (fileOpenerTok === 'EQUALS') {
-      throw new Error(`'=' no longer opens a file-level class body — use a lineal header ('*' alone on a line, entries one per line, closing '*' alone on a line) or a delimited body '{ ... }'`);
-    }
     if (fileOpenerTok === 'LBRACE') {
       consume(); // {
       const nested = parseActorBody(() => peek().type === 'RBRACE');
@@ -6835,6 +6478,17 @@ export function parse(tokensIn) {
     throw new Error(`file-level class header requires a body — use '( ... ) *{ ... }' or a lineal header`);
   }
 
+  if (typeOnly) {
+    skipNewlines();
+    if (peek().type === 'STAR') consume();
+    if (peek().type === 'LBRACE') parseInlineIface();
+    else if (peek().type === 'AMPERSAND_IDENT') consumeAmpersandTypeForParam();
+    else parseType();
+    skipNewlines();
+    if (peek().type !== 'EOF') throw new Error(`Unexpected token in a type: ${peek().type} '${peek().value || ''}'`);
+    return null;
+  }
+
   while (peek().type !== 'EOF') {
     skipBlanks();
     if (peek().type === 'EOF') break;
@@ -6847,11 +6501,7 @@ export function parse(tokensIn) {
 
     // ── Whole-file actor ──────────────────────────────────────────────────
     //   actor { body }   — optional; its `use` statements go inside the braces
-    // A file with no header is an actor already. DI is declared with `use`; the
-    // `**` header and `( DI ) actor { … }` are retired.
-    refuseRetiredSingleton();
-    if (peek().type === 'STARSTAR') throw new Error(STARSTAR_HEADER_MSG);
-    if (peek().type === 'LPAREN' && isFileSingletonStart()) throw new Error(DI_ACTOR_HEADER_MSG);
+    // A file with no header is an actor already. DI is declared with `use`.
     if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') {
       if (headerSeen || actors.length || types.length) throw new Error(WHOLE_FILE_ACTOR_MSG);
       headerSeen = true;
@@ -6882,9 +6532,6 @@ export function parse(tokensIn) {
       parseFileHeaderBody(false);
       continue;
     }
-    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LPAREN') {
-      throw new Error(`'*( ... )' file headers are retired — the '*' now marks the body: write '( ... ) *{ ... }' or a lineal header`);
-    }
 
     // ── File-level class header — lineal form ──────────────────────────────
     //   *\n entries\n *\n body        — entries one per line (same entry
@@ -6905,8 +6552,7 @@ export function parse(tokensIn) {
       try {
         parseFileHeaderEntries(() => isClosingStar(peek()));
         if (isClosingStar(peek())) { consume(); closed = true; }
-      } catch (e) {
-        if (e.fatal) throw e; // a recognised entry in a retired form
+      } catch {
         // not an entry run — no-params form
       }
       if (!closed) {
@@ -6959,26 +6605,49 @@ export function parse(tokensIn) {
       actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn }));
       // Promote nested actor definitions to top-level actors
       actors.push(...nestedActors);
-    } else if (!headerSeen && (peek().type === 'EQUALS' || peek().type === 'LBRACE' || peek().type === '->')) {
-      // Headerless file-class begins its body directly — no opener token. A
-      // leading `=`, `{`, or `->` here is a parse error (those are openers for
-      // a header that doesn't exist).
-      const tok = peek();
-      const shown = tok.type === 'EQUALS' ? '=' : tok.type === 'LBRACE' ? '{' : '->';
-      throw new Error(`file actor takes no body opener — remove the leading '${shown}'`);
     } else {
-      consume();
+      throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
     }
   }
 
   actors.push(...hoistedClasses);
   resolveUseExprs();
   resolveUseValues();
-  // `(sup T ++ …)` with `T` a class here is a retired wrapped parent; otherwise
-  // validation says what it is (src/validate.js).
-  for (const a of actors) {
-    const wrap = a.supertypes?.retiredWrap;
-    if (wrap && actors.some(c => c.name === wrap.parent)) throw new Error(retiredWrapMessage(wrap.op, wrap.local, wrap.parent));
+  // `Text.m(…)` etc. naming no method of that builtin. Settled once every binding is
+  // known: a file may bind `Math` itself (`use Math`), anywhere in it.
+  {
+    const bound = new Set([...declaredAnywhere, ...fileFunctionNames]);
+    for (const d of dependencies) {
+      bound.add(d.name);
+      for (const x of d.destructures || []) bound.add(x.local ?? x.name ?? x);
+    }
+    for (const a of [...actors, ...hoistedClasses]) {
+      bound.add(a.name);
+      if (typeof a.singletonOf === 'string') bound.add(a.singletonOf);
+      for (const x of [...(a.stateVarDecls || []), ...(a.initParams || []), ...(a.params || []), ...(a.functions || [])]) bound.add(x.name);
+      for (const x of a.constructorBody || []) if (x.name) bound.add(x.name);
+    }
+    for (const t of types) bound.add(t.name);
+    // Every param of every function and lambda.
+    const collectParams = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(collectParams); return; }
+      if (Array.isArray(n.params)) for (const x of n.params) if (x?.name) bound.add(x.name);
+      for (const [k, v] of Object.entries(n)) if (k !== 'loc' && v && typeof v === 'object') collectParams(v);
+    };
+    collectParams(actors);
+    collectParams(hoistedClasses);
+    const visit = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(visit); return; }
+      if (n.type === 'DotCallExpr' && n.object?.type === 'Identifier') {
+        const table = NAMESPACE_METHODS[n.object.name];
+        if (table && !table.has(n.method) && !bound.has(n.object.name)) throw new Error(`'${n.object.name}' has no method '${n.method}'`);
+      }
+      for (const [k, v] of Object.entries(n)) if (k !== 'loc' && v && typeof v === 'object') visit(v);
+    };
+    visit(actors);
+    visit(hoistedClasses);
   }
   lowerSingletonClasses(actors, types, { fileKind });
   lowerSuperLayers(actors);
@@ -7143,9 +6812,6 @@ export function parse(tokensIn) {
       // A `!` function declared in a body follows the same rules.
       if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.name?.endsWith('!') && node.value?.type === 'Function') {
         settle({ name: node.name, body: node.value.body ?? (node.value.body = []) });
-      }
-      if (node.type === 'FunctionCallExpr' && node.callee?.name?.endsWith('!') && AST.BUILTIN_TYPE_NAMES.has(node.callee.name.slice(0, -1))) {
-        throw new Error(`'${node.callee.name}' — a type name takes no '!'`);
       }
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
     };

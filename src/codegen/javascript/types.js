@@ -1,5 +1,12 @@
 import { inferExprType } from '../../inference.js';
 import { fieldAcrossReturns } from '../../return_shapes.js';
+import { parseTypeText, colonParamError } from '../../parser.js';
+
+// A type as a service document writes it, parsed by the language's own type
+// grammar (src/parser.js, parseTypeText). `where` says whose type it is.
+function checkType(type, where) {
+  try { parseTypeText(type); } catch (e) { throw new Error(`${where}: ${e.message}`, { cause: e }); }
+}
 
 export function inferLiteralType(expr) {
   if (!expr) return null;
@@ -71,16 +78,16 @@ export function parseFieldList(str) {
     if (!trimmed) continue;
     let optional = false;
     if (trimmed.startsWith('? ')) { optional = true; trimmed = trimmed.slice(2).trim(); }
-    if (trimmed.startsWith(':')) {
-      const name = trimmed.slice(1).split(/\s/)[0];
-      throw new Error(`Prefix-colon field ':${name}' is retired — write '${name}: Type'`);
-    }
+    const colon = trimmed.match(/^:([A-Za-z_]\w*)\s*([\s\S]*)$/);
+    if (colon) throw colonParamError(colon[1], colon[2].trim() || null);
     // `name: Type` is named; a `::` qualifier (`Geom::Point`) is not a label.
     const named = trimmed.match(/^([A-Za-z_]\w*)\s*:(?!:)/);
     if (!named) {
+      checkType(trimmed, `In '(${str.trim()})'`);
       fields.push({ name: null, type: trimmed, positional: true, ...(optional && { optional: true }) });
     } else {
       const type = trimmed.slice(named[0].length).trim();
+      if (type) checkType(type, `In '(${str.trim()})'`);
       fields.push({ name: named[1], type, positional: false, ...(optional && { optional: true }) });
     }
   }
@@ -149,41 +156,6 @@ function splitLeadingParents(rest) {
   return { supertypes, after: rest.slice(m[0].length).trim() };
 }
 
-// `(T ++ …)` inside a constructor's parens is retired: the parents go first.
-function rejectParentsInParens(name, inner) {
-  let depth = 0;
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i];
-    if ('-=~'.includes(ch) && inner[i + 1] === '>') { i++; continue; }
-    if (isOpenBracket(ch)) depth++;
-    else if (isCloseBracket(ch)) depth--;
-    else if (ch === '+' && inner[i + 1] === '+' && depth === 0) {
-      throw new Error(`Interface entry '${name}': parents go before the params, outside the parens — write '${name} Parent ++ (params) -> *{ … }'`);
-    }
-  }
-  rejectRetiredBar(name, inner);
-}
-
-// The retired subclass bar: `(T |)`, `(T, U | …)`, `(T *sup | …)`. A bar after
-// a single name with something on its right is a union param (`(Integer | Text)`).
-function rejectRetiredBar(name, inner) {
-  let depth = 0;
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i];
-    if ('-=~'.includes(ch) && inner[i + 1] === '>') { i++; continue; }
-    if (isOpenBracket(ch)) depth++;
-    else if (isCloseBracket(ch)) depth--;
-    else if (ch === '|' && depth === 0) {
-      const lhs = inner.slice(0, i).trim();
-      const rhs = inner.slice(i + 1).trim();
-      if (/^[A-Za-z_][\w!]*(\s*\*\s*\w*)?(\s*,\s*[A-Za-z_][\w!]*(\s*\*\s*\w*)?)*$/.test(lhs) && (rhs === '' || /[,*]/.test(lhs))) {
-        throw new Error(`Interface entry '${name}': the subclass bar '|' is retired — extend with '++': '(Parent++)', '(A ++ B ++ params)'`);
-      }
-      return;
-    }
-  }
-}
-
 // Parses the inner of a `(...)` typedecl into AST-shape TypeField nodes.
 // Field syntax is `[? ]name[: ]Type` — `name Type` is positional,
 // `name: Type` is named, with optional `? ` prefix in either form.
@@ -233,15 +205,6 @@ function parseTypeDeclFields(valueText) {
 
 // A name may end in `?`, `!`, or the silent `.` (`notify. (Text) => .`).
 const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.(?=[\s(]|$)|\??!?)/;
-// A read-only field's type: names, `of`, `|` unions, `::` qualifiers.
-const FIELD_TYPE_RE = /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)?(\s+(of\s+)?[A-Za-z_][A-Za-z0-9_]*)*(\s*\|\s*[A-Za-z_][A-Za-z0-9_]*(\s+of\s+[A-Za-z_][A-Za-z0-9_]*)?)*$/;
-
-function retiredEntryColon(name) {
-  return new Error(
-    `Interface entry '${name}:' — the entry colon is retired; write '${name} <definition>' ` +
-    `(e.g. '${name} (Type) -> (Type)', '${name} *Type', '${name} Type')`,
-  );
-}
 
 // Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`. A
 // class with members of its own has them after: `*{ … } ++ actor { members }`.
@@ -287,8 +250,6 @@ function parseSignature(name, text) {
     if (arrow === '~>') throw new Error(`Interface entry '${name}': '~> self' has nothing to read — write '=> self', or '-> self' if it's the identity function`);
     return { kind: 'function', params, returns: null, returnsSelf: true, effect };
   }
-  if (rest === '(self)') throw new Error(`Interface entry '${name}': a self-return takes no parens — write '=> self'`);
-  if (/^self\s*\|/.test(rest)) throw new Error(`Interface entry '${name}': 'self' goes last — write '=> (Type) | self'`);
   if (rest.startsWith('(')) {
     // `(A) | (B) | self`: what comes back depends on the path. Each shape prints once.
     const shapes = [];
@@ -304,10 +265,7 @@ function parseSignature(name, text) {
       tail = tail.slice(1).trim();
     }
     if (tail) {
-      throw new Error(
-        `Interface entry '${name}': unexpected text after return: '${tail}'` +
-        (tail.startsWith('|') || /^[-=~]>/.test(tail) ? ' (overloads go on separate lines, repeating the name)' : ''),
-      );
+      throw new Error(`Interface entry '${name}': unexpected text after return: '${tail}'`);
     }
     const parsedShapes = shapes.map(inner => (inner ? parseFieldList(inner) : []));
     const sole = shapes.length === 1 && !shapes[0] && !orSelf ? null : parsedShapes[0];
@@ -323,14 +281,13 @@ function parseSignature(name, text) {
       `(a constructor with no members of its own is '-> *{}')`,
     );
   }
-  throw new Error(`Interface entry '${name}': return must be parenthesized — write '-> (${rest})'`);
+  throw new Error(`Interface entry '${name}': unexpected '${rest}'`);
 }
 
 // `[A ++ B ++] (params)` + constructor-body members → actor-shaped record:
 //   { supertypes, initParams, functions, setters }
 // `supertypes` is an array of `{ supertype }` matching the AST.
 function parseConstructor(name, supertypes, paramsInner, bodyInner) {
-  rejectParentsInParens(name, paramsInner);
   const initParams = paramsInner ? parseFieldList(paramsInner) : [];
   const functions = [];
   const setters = [];
@@ -380,12 +337,13 @@ function parseEntry(text) {
   if (name === 'set') {
     // `set name (Type)`; otherwise `set` is an ordinary entry name.
     const sm = rest.match(/^\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\([\s\S]*\))$/);
-    if (sm) return { kind: 'setter', name: sm[1], type: sm[2].slice(1, -1).trim() };
-    const old = rest.match(/^\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/);
-    if (old) throw retiredEntryColon(`set ${old[1]}`);
+    if (sm) {
+      const type = sm[2].slice(1, -1).trim();
+      checkType(type, `Interface entry 'set ${sm[1]}'`);
+      return { kind: 'setter', name: sm[1], type };
+    }
   }
   rest = rest.trim();
-  if (rest.startsWith(':')) throw retiredEntryColon(name);
   // `name { members }`: a member that is an actor, a sub-service (a public
   // singleton). Its members read as a service document of their own.
   if (rest.startsWith('{')) {
@@ -396,7 +354,7 @@ function parseEntry(text) {
   if (parents) {
     // `C A ++ (params) -> *{ … }`, or with no params `C A ++ -> *{ … }`.
     const sig = parseSignature(name, parents.after.startsWith('(') ? parents.after : `() ${parents.after}`);
-    if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': parents ('${parents.supertypes.map(s => s.supertype).join(' ++ ')} ++') belong to a constructor — write '-> *{ … }' after them`);
+    if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': unexpected '${parents.after}'`);
     const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
     return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, parents.supertypes, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
   }
@@ -415,7 +373,7 @@ function parseEntry(text) {
   // that answer `$get` / `$subscribe` (and `$set`, for `*`).
   const sigil = rest[0] === '*' || rest[0] === '&' ? rest[0] : null;
   const type = sigil ? rest.slice(1).trim() : rest;
-  if (!FIELD_TYPE_RE.test(type)) throw new Error(`Interface entry '${name}': malformed definition '${rest}'`);
+  checkType(rest, `Interface entry '${name}'`);
   return { kind: 'field', name, type, cell: !!sigil, readOnly: sigil !== '*' };
 }
 

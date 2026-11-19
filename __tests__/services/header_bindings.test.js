@@ -69,14 +69,6 @@ describe('use bindings — forms', () => {
     expect(deps('HTML')).toEqual([expect.objectContaining({ name: 'HTML', path: 'HTML' })]);
   });
 
-  it.each([
-    ['"thing.bv": (Thing) #', `'"thing.bv": (Thing) #' is a retired header entry — write 'use Thing = "thing.bv"'`],
-    ['"/db": DB { get () -> (Text) }', `'"/db": DB { get () -> (Text) }' is a retired header entry — write 'use DB = "/db" as { … }'`],
-    ['Lib: L #', `'Lib: L #' is a retired header entry — write 'use L = Lib'`],
-    ['limit: n Integer', `'limit: n Integer' is a retired header entry — write 'use n Integer = limit'`],
-  ])('a header entry is retired: %s', (entry, message) => {
-    expect(() => deps(entry)).toThrow(message);
-  });
 });
 
 describe('inline definition wins over the remote document', () => {

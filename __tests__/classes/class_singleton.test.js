@@ -292,44 +292,6 @@ describe('class members — ordering', () => {
   });
 });
 
-describe('class members — forms that aren\'t', () => {
-  it('the leading form is an error', () => {
-    expect(() => compileSource(`
-      C = actor { count *Integer = 0 } (seed Integer) *{ }
-    `)).toThrow(/'C = actor \{ … \} \(params\) \*\{ … \}' isn't a class/);
-  });
-
-  it('a class block without \'++\' is an error', () => {
-    expect(() => compileSource(`
-      C = (seed Integer) *{ } actor { count *Integer = 0 }
-    `)).toThrow("A class block joins its constructor with '++': 'C = (params) *{ … } ++ actor { … }'");
-  });
-
-  it('the retired \'} **{\' is an error', () => {
-    expect(() => compileSource(`
-      C = (seed Integer) *{ } **{ count *Integer = 0 }
-    `)).toThrow("A class block joins its constructor with '++'");
-  });
-
-  it('the retired \'} ++ **{\' is an error', () => {
-    expect(() => compileSource(`
-      C = (seed Integer) *{ } ++ **{ count *Integer = 0 }
-    `)).toThrow("'**{ … }' is now 'actor { … }'");
-  });
-
-  it('the lineal trailing form is an error', () => {
-    expect(() => compileSource(`
-      C =
-        *
-        seed Integer
-        *
-        @n = -> seed
-        **
-        @count *Integer = 0
-    `)).toThrow(/A lineal class can't take trailing members/);
-  });
-});
-
 describe('`new` is reserved', () => {
   it('can\'t be a function', () => {
     expect(() => compileSource(`

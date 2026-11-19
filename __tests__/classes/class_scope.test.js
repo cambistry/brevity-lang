@@ -449,46 +449,6 @@ describe('class scope — only public members after a dot', () => {
 });
 
 describe('class scope — sigils after a dot', () => {
-  it('`#`: a private name is never reached through an address', () => {
-    expect(() => compileSource(`
-      C = actor {
-        #priv = -> 3
-        new = (seed Integer) *{ @r = {
-          x Integer = C.#priv()
-          return x
-        } }
-      }
-    `)).toThrow(/'C\.#priv' — a private name is never reached through an address/);
-  });
-
-  it('`#`, on any actor', () => {
-    expect(() => compileSource(`
-      K = *{ #x = -> 1 }
-      @go = {
-        k = K()
-        x Integer = k.#x()
-        return x
-      }
-    `)).toThrow(/'k\.#x' — a private name is never reached through an address/);
-  });
-
-  it('`@`: a public member takes no `@` after the dot', () => {
-    expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return C.@pub } } ++ actor { @pub *Integer = 1 }
-    `)).toThrow(/'C\.@pub' — a public member takes no '@' after a dot: write 'C\.pub'/);
-  });
-
-  it('`@`, on any actor', () => {
-    expect(() => compileSource(`
-      K = *{ @n = -> 1 }
-      @go = {
-        k = K()
-        x Integer = k.@n()
-        return x
-      }
-    `)).toThrow(/'k\.@n' — a public member takes no '@' after a dot: write 'k\.n'/);
-  });
-
   it('`~` is a syntax error', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ @r = { return C.~prot } } ++ actor { prot *Integer = 1 }

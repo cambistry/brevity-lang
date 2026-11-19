@@ -386,7 +386,8 @@ function genFn(ctx, fn) {
 
   // `set.val` (a protected cell's setter) has a `.` inside, too.
   const fnBaseName = (op.startsWith('#') ? `pv_${op.slice(1)}` : op).replace(/\.$/, '__s').replace(/!$/, '__w').replace(/\./g, '_d_');
-  return `${fnBaseName}_fn({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
+  // Quoted: a name may start uppercase (`Self = …`), which unquoted is an Erlang variable.
+  return `'${fnBaseName}_fn'({S_pos, S_named}) ->\n${allLines.join('\n')}.`;
 }
 
 // ── Program codegen ─────────────────────────────────────────────────────────

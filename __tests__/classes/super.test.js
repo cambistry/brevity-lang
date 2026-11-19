@@ -179,15 +179,6 @@ describe('super — errors', () => {
     `)).toThrow("'super' names the parent layer, which isn't a value");
   });
 
-  it('after :: a name is written bare', () => {
-    expect(() => compileSource(`${T}
-      U = T ++ *{ @x = { return super::@a() } }
-    `)).toThrow("'super::@a' — a public member is reached through a dot: write 'super.a'");
-    expect(() => compileSource(`${T}
-      U = T ++ *{ @x = { return super::#c() } }
-    `)).toThrow("'super::#c' — a private name is never reached through an address");
-  });
-
   it('a name no parent defines', () => {
     expect(() => compileSource(`${T}
       U = T ++ *{ @x = { return super::g() } }
@@ -210,38 +201,3 @@ describe('super — errors', () => {
   });
 });
 
-describe('super — retired forms', () => {
-  it('a wrapped parent', () => {
-    expect(() => compileSource(`
-      T = *{ @a = { return 1 } }
-      U = (sup T ++) *{ @b = { return sup.a() } }
-    `)).toThrow("In 'U', the wrapped parent 'sup T' is retired — write 'U = T ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
-  });
-
-  it('several wrapped parents', () => {
-    expect(() => compileSource(`
-      A = *{}
-      B = *{}
-      C = (sa A ++ sb B ++) *{}
-    `)).toThrow("In 'C', the wrapped parent 'sa A' is retired");
-  });
-
-  it('a parent inside the params', () => {
-    expect(() => compileSource(`
-      T = *{}
-      U = (T ++ u Text) *{}
-    `)).toThrow("In 'U', parents go before the params, outside the parens — write 'U = T ++ (…) *{ … }'");
-  });
-
-  it('parents alone in parens', () => {
-    expect(() => compileSource(`
-      T = *{}
-      U = (T++) *{}
-    `)).toThrow("In 'U', parents go before the params, outside the parens — write 'U = T ++ *{ … }'");
-    expect(() => compileSource(`
-      A = *{}
-      B = *{}
-      C = (A ++ B) *{}
-    `)).toThrow("In 'C', parents go before the params, outside the parens — write 'C = A ++ B ++ *{ … }'");
-  });
-});

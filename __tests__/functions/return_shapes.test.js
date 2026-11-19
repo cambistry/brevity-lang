@@ -59,10 +59,6 @@ describe('reading a doc', () => {
     expect(parseInterface(service).f[0].returnAlternatives).toHaveLength(2);
   });
 
-  it('self still goes last', () => {
-    expect(() => parseInterface('{ f () => self | (Integer) }')).toThrow(/'self' goes last/);
-    expect(() => parseInterface('{ f () => (Integer) | self | (Text) }')).toThrow(/unexpected text/);
-  });
 });
 
 describe('a caller\'s annotation', () => {

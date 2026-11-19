@@ -1,4 +1,4 @@
-import { lowerActorValues, checkRetiredClass } from './actor_values.js';
+import { lowerActorValues } from './actor_values.js';
 // Class singletons: a class whose class block holds members of its own.
 //
 //   Nested:   C = actor { count *Integer = 0; new = (seed Integer) *{ … } }
@@ -112,7 +112,6 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
   // `class` (and `self::class`) names the class of the actor it's in.
   for (const a of actors) resolveClassOf(a, blockClassOf, fileKind);
   // A declared actor as a value, and a name bound to one (src/actor_values.js).
-  checkRetiredClass(actors);
   lowerActorValues(actors, byName);
 
   for (const cls of actors.filter(a => a.membersClass && !a.membersInherited)) {
@@ -255,7 +254,7 @@ function resolveClassOf(actor, blockClassOf, fileKind) {
   });
   for (const b of bodies(actor)) walk(b, (n) => {
     if (isClassId(n)) {
-      if (factoryFile) { n.name = 'Self'; return; }
+      if (factoryFile) { n.name = 'class'; return; }
       if (!isClass) throw notAClass();
       n.name = actor.name;
     }

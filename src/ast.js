@@ -37,7 +37,7 @@ export const dependency = (name, { interface: iface = null, constructorParams = 
 // Type names that never need an import. Plurals are the List-element
 // shorthands.
 export const BUILTIN_TYPE_NAMES = new Set([
-  'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'Anything', 'Self',
+  'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'Anything', 'class',
   'Function', 'List', 'Map', 'Array', 'Object', 'Null', 'Timestamp', 'Duration',
   'Integers', 'Texts', 'Booleans', 'Decimals', 'Floats', 'Blobs', 'Anythings',
   'Lists', 'Maps', 'Arrays', 'Objects',

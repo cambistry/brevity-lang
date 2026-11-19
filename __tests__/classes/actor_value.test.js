@@ -363,20 +363,20 @@ describe('a declared actor as a value — errors', () => {
     `)).toThrow("'k C = C': 'k C' takes an actor 'C' built, and 'C' itself isn't one — write 'k Actor = C'");
   });
 
-  it('`Class` is retired', () => {
+  it('`Class` is an ordinary type name: `C` is not an actor `Class` built', () => {
     expect(() => compileSource(`
       C = (n Integer) *{ @x = -> n }
       @get = {
         k Class = C
         return k
       }
-    `)).toThrow("'Class' is retired — use 'Actor' for any actor, or a constructor profile 'k (…) -> *{ … }' for one with a `new`");
+    `)).toThrow("'k Class = C': 'k Class' takes an actor 'Class' built, and 'C' itself isn't one — write 'k Actor = C'");
   });
 
-  it('`Class` is retired as a param type', () => {
+  it('`Class` is an ordinary type name as a param type', () => {
     expect(() => compileSource(`
       echo = (c Class) -> c
       @go = { return 1 }
-    `)).toThrow("'Class' is retired");
+    `)).not.toThrow();
   });
 });

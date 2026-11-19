@@ -64,7 +64,7 @@ function walk(node, classes) {
 }
 
 export function lowerBranchOrder(ast) {
-  const classes = new Set(['Self']);
+  const classes = new Set(['class']);
   (ast.actors || []).forEach(a => { if (a.name) classes.add(a.name); });
   (ast.dependencies || []).forEach(d => classes.add(d.name));
   walk(ast.actors, classes);

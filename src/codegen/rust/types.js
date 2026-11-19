@@ -1001,9 +1001,9 @@ function classRefersToSelf(actor) {
   if (!actor) return false;
   for (const p of (actor.initParams || [])) {
     if (typeof p.type !== 'string') continue;
-    if (p.type === 'Self') return true;
-    if (p.type.split('|').some(m => m.trim() === 'Self')) return true;
-    if (/\bSelf\b/.test(p.type)) return true;
+    if (p.type === 'class') return true;
+    if (p.type.split('|').some(m => m.trim() === 'class')) return true;
+    if (/\bclass\b/.test(p.type)) return true;
   }
   const decls = [
     ...(actor.constructorBody || []),
@@ -1012,15 +1012,15 @@ function classRefersToSelf(actor) {
   ];
   for (const d of decls) {
     if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
-      if (d.typeName === 'Self') return true;
-      if (d.typeName.split('|').some(m => m.trim() === 'Self')) return true;
+      if (d.typeName === 'class') return true;
+      if (d.typeName.split('|').some(m => m.trim() === 'class')) return true;
     }
   }
   function bodyHasSelfCall(body) {
     if (!Array.isArray(body)) return false;
     for (const node of body) {
       if (!node || typeof node !== 'object') continue;
-      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'Self') return true;
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && node.callee.name === 'class') return true;
       for (const key of Object.keys(node)) {
         const v = node[key];
         if (Array.isArray(v) && bodyHasSelfCall(v)) return true;

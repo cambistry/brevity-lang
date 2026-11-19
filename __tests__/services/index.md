@@ -23,7 +23,7 @@ and then compile with the resolved context.
   multi-parent rendering (`C A ++ B ++ (c: Integer) -> *{ … }`).
 - `dependency_injection.test.js`: file-level dependency declarations and
   outgoing CAM messages.
-- `interface_notation.test.js`: service-document entry forms, retired forms,
+- `interface_notation.test.js`: service-document entry forms, invalid forms,
   props and cells, constructor profiles in source.
 
 ## Service Document Notation

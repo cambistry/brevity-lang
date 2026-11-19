@@ -84,11 +84,6 @@ describe('public class in its own file', () => {
     expect(() => compileSource('@Pub = *{}\n@go = (p Pub) { return 1 }\n')).toThrow(/'Pub' isn't in scope — the public class is '@Pub'/);
   });
 
-  it('a retired wrapped superclass reports the ++ form and super', () => {
-    expect(() => compileSource('@Pub = *{}\n@Sub = (@Pub* |) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow("write '@Sub = @Pub ++ *{ … }', and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
-    expect(() => compileSource('@Pub = *{}\n@Sub = (inner @Pub ++) *{ @a = -> 1 }\n@go = { return 1 }\n')).toThrow("In '@Sub', the wrapped parent 'inner @Pub' is retired — write '@Sub = @Pub ++ …'");
-  });
-
   it('errors name it as it\'s written', () => {
     expect(() => compileSource('@Pub = *{}\n@go = {\n  p = @Pub()\n  n Integer = p.nope()\n  return n\n}\n')).toThrow(/'@Pub' has no method 'nope'/);
   });

@@ -19,8 +19,6 @@ import { selfAddress } from './codegen/wire_labels.js';
 
 export const ACTOR_TYPE = 'Actor';
 
-export const RETIRED_CLASS = "'Class' is retired — use 'Actor' for any actor, or a constructor profile 'k (…) -> *{ … }' for one with a `new`";
-
 const BINDS = new Set(['Assign', 'TypedAssign']);
 const FUNCTIONS = new Set(['Function', 'FunctionDecl']);
 // Keys whose Identifier isn't a value read: what's called, messaged or qualified.
@@ -65,25 +63,6 @@ export const isActorRefType = (t) => typeof t === 'string' && (t.replace(/^[*&]/
 // constructor profile all take it. Any other name is one that actor built.
 const takesDeclared = (t) => t === ACTOR_TYPE || /^\*?\{/.test(t) || isCtorProfile(t) || (/\bActor\b/.test(t) && /\|/.test(t));
 
-// `Class` written as a type anywhere: a param, a binding, a cell, a return.
-export function checkRetiredClass(actors) {
-  const isClassType = (t) => typeof t === 'string' && t.split(/[\s|()]+/).includes('Class');
-  const visit = (n) => {
-    if (!n || typeof n !== 'object') return;
-    if (Array.isArray(n)) { n.forEach(visit); return; }
-    for (const key of ['typeName', 'type', 'returnType', 'declaredType']) {
-      if (key === 'type' && typeof n.type === 'string' && /^[A-Z][A-Za-z]*$/.test(n.type) && n.type !== 'Class') continue;
-      if (isClassType(n[key]) && !(key === 'type' && n.type === 'Class' && !('name' in n) && !('expr' in n) && !('positional' in n))) throw new Error(RETIRED_CLASS);
-    }
-    for (const [k, v] of Object.entries(n)) if (k !== 'loc' && v && typeof v === 'object') visit(v);
-  };
-  for (const a of actors) {
-    for (const d of a.stateVarDecls || []) if (isClassType(d.typeName)) throw new Error(RETIRED_CLASS);
-    for (const p of a.initParams || []) if (isClassType(p.typeName ?? p.type)) throw new Error(RETIRED_CLASS);
-    [a.functions, a.initBody, a.constructorBody, a.declarationReturn].forEach(visit);
-  }
-}
-
 export function lowerActorValues(actors, byName) {
   const isClass = (a) => a && a.name && !a.singletonOf && !a.membersOf && !/^new__/.test(a.name);
   const isSingleton = (a) => a && a.singletonOf && !a.membersOf;
@@ -125,7 +104,7 @@ export function lowerActorValues(actors, byName) {
   // Either way it's written by its absolute address.
   const selfOf = (actor) => {
     const cls = isClass(actor) ? actor : null;
-    if (cls && declarerOf(cls) !== null) throw new Error(`'Self' as a value in '${shown(cls)}': an actor declared inside another actor isn't supported yet`);
+    if (cls && declarerOf(cls) !== null) throw new Error(`'class' as a value in '${shown(cls)}': an actor declared inside another actor isn't supported yet`);
     return cls ? { type: 'ActorValue', name: cls.name, label: selfAddress(cls.name), relative: false }
       : { type: 'ActorValue', name: null, label: '', relative: false };
   };
@@ -135,7 +114,7 @@ export function lowerActorValues(actors, byName) {
     const asValue = (expr, shadowed) => {
       if (expr?.type !== 'Identifier' && expr?.type !== 'RefRead') return null;
       if (shadowed.has(expr.name)) return null;
-      if (expr.name === 'Self' && expr.type === 'Identifier') return selfOf(actor);
+      if (expr.name === 'class' && expr.type === 'Identifier') return selfOf(actor);
       const d = declared(expr.name, actor);
       return d ? valueOf(d, actor) : null;
     };
@@ -184,7 +163,7 @@ export function lowerActorValues(actors, byName) {
         // `k = self` holds the actor's own address.
         if (s?.type === 'Assign' && s.value?.type === 'SelfValue' && !s.isRef) Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE });
         if (!BINDS.has(s?.type) || s.value?.type !== 'ActorValue' || s.isRef || cells.has(s.name)) continue;
-        const written = shownName(s.value.name ?? 'Self');
+        const written = shownName(s.value.name ?? 'class');
         if (s.type === 'TypedAssign' && !takesDeclared(s.typeName)) {
           throw new Error(`'${s.name} ${s.typeName} = ${written}': '${s.name} ${s.typeName}' takes an actor '${s.typeName}' built, and '${written}' itself isn't one — write '${s.name} Actor = ${written}'`);
         }

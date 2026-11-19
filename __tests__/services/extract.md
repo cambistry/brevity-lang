@@ -51,7 +51,7 @@ renders params as:
 
 Read back (a remote's `params` in `compile` options), the scalar entries give
 the constructor signature that calls to the dependency are checked against.
-Dependency entries are skipped for now. The retired `*( … )` shape is rejected.
+Dependency entries are skipped for now.
 
 ## `interface.service` Rendering
 

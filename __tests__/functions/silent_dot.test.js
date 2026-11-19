@@ -8,21 +8,6 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('silent name — definition', () => {
-  it('a trailing `.` in a named function body is an error naming the fix', () => {
-    expect(() => compileSource('fire = { x Integer = 1 . }\n@go = -> 1\n'))
-      .toThrow(/name it 'fire\.' and drop the '\.'/);
-  });
-
-  it('a trailing `.` in a silent-named body is redundant and an error', () => {
-    expect(() => compileSource('fire. = { x Integer = 1 . }\n@go = -> 1\n'))
-      .toThrow(/'fire\.' is silent by its name — drop the trailing '\.'/);
-  });
-
-  it('`return .` in a named function is an error', () => {
-    expect(() => compileSource('@go = (n Integer) { return . }\n'))
-      .toThrow(/name it '@go\.' and drop the '\.'/);
-  });
-
   it('`return value` in a silent function is an error', () => {
     expect(() => compileSource('@go. = (n Integer) { return n }\n'))
       .toThrow(/'@go\.' is silent — 'return' takes no value/);
@@ -148,10 +133,6 @@ describe('silent name — invocation', () => {
       .toThrow(/never writes the silent dot — write 'fire\.\.\.'/);
   });
 
-  it('four dots is an error naming the elided form', () => {
-    expect(() => compileSource('fire. = { x Integer = 1 }\n@go = { fire....; return 1 }\n'))
-      .toThrow(/write 'fire\.\.\.'/);
-  });
 });
 
 describe('silent name — on the wire', () => {

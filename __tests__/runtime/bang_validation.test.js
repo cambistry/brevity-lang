@@ -126,10 +126,10 @@ describe('bang form on receiver ref: same-type-return rule (GraphemeText)', () =
   });
 });
 
-describe('bang form on functional call: never valid', () => {
-  // Functional form `Text.method!(arg)` has no receiver ref to mutate. The
-  // bang there is structurally meaningless regardless of return type.
-  it('Text.upper!(t) is rejected', () => {
+describe('bang form on functional call: a different method', () => {
+  // `upper!` is its own name, not `upper` with a modifier: `Text.upper!(t)` calls a
+  // method `Text` doesn't have, never the builtin `Text.upper`.
+  it('Text.upper!(t) is not Text.upper', () => {
     const src = `
       @bad
         =
@@ -137,10 +137,10 @@ describe('bang form on functional call: never valid', () => {
         x Text = Text.upper!(t)
         return :x
     `;
-    expect(() => compileSrc(src)).toThrow(/Text\.upper!\(\.\.\.\) is not a valid form/);
+    expect(() => compileSrc(src)).toThrow("'Text' has no method 'upper!'");
   });
 
-  it('Blob.reverse!(b) is rejected', () => {
+  it('Blob.reverse!(b) is not Blob.reverse', () => {
     const src = `
       @bad
         =
@@ -148,6 +148,6 @@ describe('bang form on functional call: never valid', () => {
         x Blob = Blob.reverse!(b)
         return :x
     `;
-    expect(() => compileSrc(src)).toThrow(/Blob\.reverse!\(\.\.\.\) is not a valid form/);
+    expect(() => compileSrc(src)).toThrow("'Blob' has no method 'reverse!'");
   });
 });

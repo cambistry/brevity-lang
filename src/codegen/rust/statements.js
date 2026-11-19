@@ -1043,7 +1043,7 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
       // Branch 6.5: Self() recursive spawn — allocate an instance in the
       // file class's self_instances pool, init at that id, bind the var to
       // the u32 id. Downstream dispatch routes via handle_op_at(id, ...).
-      if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'Self') {
+      if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'class') {
         const argExprs = s.value.args.map(a => genRustExpr(a, typeEnv));
         const argsExpr = argExprs.length === 0 ? 'json!([])' : valueArray(argExprs);
         const idVar = mintRustSsa(s.name);

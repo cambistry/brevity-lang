@@ -314,7 +314,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // `Self` in expression position resolves to the class wire address as
     // an Erlang binary. fileName is enforced by validate() whenever the AST
     // uses Self as a value.
-    if (name === 'Self') return erlString('#<' + quoteToken(ctx.fileName) + '>');
+    if (name === 'class') return erlString('#<' + quoteToken(ctx.fileName) + '>');
     // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
     if (isDependencyValue(ctx, name, typeEnv)) return erlString('#<' + ctx.depAddress(name) + '>');
     // Resolve SSA if context has ssaEnv
@@ -1146,7 +1146,7 @@ export function erlOuterCtx(ctx, cls) {
 function refCellTypeIsSelfBearing(ctx, cellName) {
   const t = ctx.stateVarTypeEnv?.get(cellName);
   if (typeof t !== 'string') return false;
-  return t.split('|').some(m => m.trim() === 'Self');
+  return t.split('|').some(m => m.trim() === 'class');
 }
 
 // Dot-call on a Self-bearing ref cell: the cell holds a PID. Read it,

@@ -664,7 +664,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   // above) — bind the actor instance directly. BvObject.one would interpret
   // the instance as an object-pack and crash on s.positional.length.
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
-      (s.value.callee.name === 'Self' || ctx.actorNames.has(s.value.callee.name))) {
+      (s.value.callee.name === 'class' || ctx.actorNames.has(s.value.callee.name))) {
     return emitBinding(s.name, genExpr(ctx, s.value));
   }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
@@ -803,7 +803,7 @@ export function genLocals(ctx, body, outerEnv) {
   ctx.childActorVars = new Map();
   const isActorCtorCall = (e) =>
     e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' &&
-    (ctx.actorNames.has(e.callee.name) || e.callee.name === 'Self');
+    (ctx.actorNames.has(e.callee.name) || e.callee.name === 'class');
   const refVars = new Set();
   for (const s of body) {
     if (s.type === 'RefDecl') {
@@ -1003,7 +1003,7 @@ export function genLocals(ctx, body, outerEnv) {
     // Plain assign
     // Dependency constructor: t = Thing(args) → `new` + local actor binding
     if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
-    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (ctx.actorNames.has(s.value.callee.name) || s.value.callee.name === 'Self')) {
+    if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (ctx.actorNames.has(s.value.callee.name) || s.value.callee.name === 'class')) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     // A template constructs an element actor, like `div()`: the bind holds its address.

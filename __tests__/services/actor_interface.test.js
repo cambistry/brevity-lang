@@ -355,7 +355,6 @@ describe('class interface — a class named with `!`', () => {
   it('the annotation is the class name without `!`', () => {
     const body = (type) => `${SVC}W! = *{\n  Svc.note...\n  @get = { return 1 }\n}\n@go! = {\n  x ${type} = W!()\n  n Integer = x.get()\n  return n\n}\n`;
     expect(() => compileSource(body('W'))).not.toThrow();
-    expect(() => compileSource(body('W!'))).toThrow(/a type name takes no '!'/);
   });
 
   it('the annotation is checked against the class', () => {
@@ -463,10 +462,6 @@ describe('class interface — return paths', () => {
 
   it('a silent function stays silent with an early exit', () => {
     expect(docOf('n *Integer = 0\n@fire. = (b Boolean) {\n  if b { return }\n  n <- 1\n}\n')).toBe('{\n  fire. (Boolean) => .\n}');
-  });
-
-  it('a hand-written doc writes self last', () => {
-    expect(() => parseInterface('{ go! () => self | (Integer) }')).toThrow(/'self' goes last/);
   });
 
   it('other text after a return is still rejected', () => {

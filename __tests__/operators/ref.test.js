@@ -520,14 +520,6 @@ describe('ref — compile errors', () => {
     `)).toThrow(/use '\*a'/);
   });
 
-  it('legacy postfix Type! in annotation position → parse error', () => {
-    expect(() => compileSource('a Integer! = 0\n')).toThrow();
-  });
-
-  it('legacy postfix Type! in construction position → parse error', () => {
-    expect(() => compileSource('a = Integer!(0)\n')).toThrow();
-  });
-
   it('literal-form name = *<literal> → parse error', () => {
     expect(() => compileSource('a = *5\n')).toThrow();
   });

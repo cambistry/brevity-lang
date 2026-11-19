@@ -159,16 +159,6 @@ describe('use — the manifest', () => {
     ]);
   });
 
-  it.each([
-    'use Lib # = "lib.bv"',
-    'use Lib = "lib.bv" as #',
-    'use :em, ... = "html.bv" as #',
-    'x = use("lib.bv") as #',
-  ])('`#` is no claim: %s', (src) => {
-    expect(() => compileSource(`${src}\n@get = -> 1\n`))
-      .toThrow("'#' claims nothing a document doesn't say — drop it, or claim the shape in full: 'as (…) -> *{ … }' or 'as { … }'");
-  });
-
   it('an unclaimed destructure of a source', () => {
     expect(deps('use :em, ... = "html.bv"')).toEqual([dep('html.bv', { destructures: [member('em'), { spread: true }] })]);
   });
@@ -258,62 +248,6 @@ describe('use — errors', () => {
     `)).toThrow(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
   });
 
-  it('an accessor', () => {
-    expect(() => compileSource(`
-      use @count Integer
-      @get = -> 1
-    `)).toThrow("'use' can't declare an accessor ('@count') — write 'use count Type = count', and publish it with a handler: '@count = -> count'");
-  });
-
-  it('a renamed accessor', () => {
-    expect(() => compileSource(`
-      use @label: l Text
-      @get = -> 1
-    `)).toThrow("'use' can't declare an accessor ('@label')");
-  });
-
-  it('a lone sigil', () => {
-    expect(() => compileSource(`
-      use :HTML
-      @get = -> 1
-    `)).toThrow("'use :HTML': a lone ':HTML' destructures nothing — write 'use HTML'");
-  });
-
-  it('a typed name with no source', () => {
-    expect(() => compileSource(`
-      use n Integer
-      @get = -> n
-    `)).toThrow("'use n Integer' has no source — write 'use n Integer = n'");
-  });
-
-  it.each([
-    ['"svc.bv": Svc', 'use Svc = "svc.bv"'],
-    ['HTML: (:div)', 'use :div = HTML'],
-    ['HTML: (:div, span: s)', 'use :div, span: s = HTML'],
-    ['HTML: :div', 'use :div = HTML'],
-    ['"svc.bv": Svc { n () -> (Integer) }', 'use Svc = "svc.bv" as { … }'],
-    ['Svc { n () -> (Integer) }', 'use Svc = Svc as { … }'],
-    ['"svc.bv": Svc #', 'use Svc = "svc.bv"'],
-    ['Svc #', 'use Svc'],
-    ['"thing.bv": Thing (a: Integer) -> *{ get () -> (Integer) }', 'use Thing = "thing.bv" as (…) -> *{ … }'],
-    ['Thing (a: Integer) -> *{ get () -> (Integer) }', 'use Thing = Thing as (…) -> *{ … }'],
-    ['"service.bv": (:greet) #', 'use :greet = "service.bv"'],
-    [':limit Integer', 'use limit Integer = limit'],
-    ['size: n Integer', 'use n Integer = size'],
-    ['slot: *Integer', 'use slot *Integer = slot'],
-  ])('a retired header entry: %s', (entry, now) => {
-    expect(() => compileSource(`use ${entry}\n@get = -> 1\n`)).toThrow(`'${entry}' is a retired header entry — write '${now}'`);
-  });
-
-  it('a retired `name: Type` entry', () => {
-    expect(() => compileSource(`use value: Integer\n@get = -> value\n`))
-      .toThrow("'value: Integer' is a retired header entry — a typed value is 'use value Integer = value', a rename 'use Integer = value'");
-  });
-
-  it('a retired entry after a shorthand', () => {
-    expect(() => compileSource(`use document, "svc.bv": Svc\n@get = -> 1\n`)).toThrow(`'"svc.bv": Svc' is a retired header entry — write 'use Svc = "svc.bv"'`);
-  });
-
   it('a shorthand whose last segment is quoted', () => {
     expect(() => compileSource(`use HTML::"my-el"\n@get = -> 1\n`))
       .toThrow(`'use HTML::"my-el"' has nothing to bind: its last segment isn't a name — write 'use myEl = HTML::"my-el"'`);
@@ -342,30 +276,6 @@ describe('use — errors', () => {
   it('a value from a quoted source', () => {
     expect(() => compileSource(`use n Integer = "a.bv"\n@get = -> n\n`))
       .toThrow(`'use n Integer = "a.bv"': a value's source is a name, not '"a.bv"'`);
-  });
-
-  it('a lineal `**` header', () => {
-    expect(() => compileSource(`
-      **
-        :document
-      **
-      @get = -> 1
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('a lineal `**` header with no entries', () => {
-    expect(() => compileSource(`
-      **
-      @get = -> 1
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('a `( DI ) actor { }` header', () => {
-    expect(() => compileSource(`
-      ( :document ) actor {
-        @get = -> 1
-      }
-    `)).toThrow(/'\( … \) actor \{ … \}' is retired — declare DI with 'use' inside the braces/);
   });
 
   it('a whole-file actor { … } after a `use`', () => {

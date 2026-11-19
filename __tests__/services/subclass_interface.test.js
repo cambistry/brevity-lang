@@ -46,12 +46,6 @@ describe('subclass interface — input side', () => {
     expect(s).toContain('C A ++ B ++ (c: Integer)');
   });
 
-  it('a retired wrapped parent is an error, not a rendered interface', () => {
-    expect(() => svc(`
-      @T = * { @a = -> v: 1 as Integer }
-      @U = (sup @T ++) *{ @b = -> v: 2 as Integer }
-    `)).toThrow("In '@U', the wrapped parent 'sup @T' is retired — write '@U = @T ++ …'");
-  });
 });
 
 describe('subclass interface — body side', () => {
@@ -211,8 +205,8 @@ describe('subclass interface — ++ forms', () => {
     expect(parsed.__types.C.initParams).toHaveLength(1);
   });
 
-  it('the subclass bar is retired', () => {
-    expect(() => parseInterface('{\n  Text (Node |) -> *{}\n}')).toThrow(/Interface entry 'Text': the subclass bar '\|' is retired — extend with '\+\+'/);
+  it('a param type ending in a bare `|` is an error', () => {
+    expect(() => parseInterface('{\n  Text (Node |) -> *{}\n}')).toThrow("In '(Node |)': Unexpected token in a type: PIPE ''");
   });
 });
 

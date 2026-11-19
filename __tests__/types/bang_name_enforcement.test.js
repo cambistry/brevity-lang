@@ -38,7 +38,7 @@ describe('bang enforcement — type reference fields', () => {
 
   it('rejects a spurious bang on a callback field invoked with args', () => {
     expect(() => compileSource(`${TYPES}
-      @h. = (sig: Signal) { p = Panel(onpress.: (s) { s.dismiss... }, label: "x") p.onpress!(sig) }
+      @h. = (sig: Signal) { p = Panel(onpress.: (s) { s.dismiss... }, label: "x"); p.onpress!(sig) }
     `)).toThrow(/declared without '!'/);
   });
 });
@@ -78,14 +78,14 @@ describe('bang enforcement — class methods', () => {
   it('accepts a declared no-bang method called without a bang', () => {
     expect(() => compileSource(`
       Box = (v Integer) *{ @get = -> r: v () }
-      @h. = { b = Box(1) r: Integer = b.get() }
+      @h. = { b = Box(1); r: Integer = b.get() }
     `)).not.toThrow();
   });
 
   it('rejects a spurious bang on a class method', () => {
     expect(() => compileSource(`
       Box = (v Integer) *{ @get = -> r: v () }
-      @h. = { b = Box(1) r: Integer = b.get!() }
+      @h. = { b = Box(1); r: Integer = b.get!() }
     `)).toThrow(/has no method 'get!'/);
   });
 });

@@ -120,68 +120,6 @@ describe('factory header — no DI', () => {
   });
 });
 
-describe('file singleton header — the retired \'**{\'', () => {
-  it('no DI', () => {
-    expect(() => compileSource(`
-      **{
-        @get = -> 1
-      }
-    `)).toThrow("'**{ … }' is now 'actor { … }'");
-  });
-
-  it('delimited entries', () => {
-    expect(() => compileSource(`
-      ( value: Integer ) **{
-        @get = -> value
-      }
-    `)).toThrow("'**{ … }' is now 'actor { … }'");
-  });
-});
-
-describe('file actor — retired headers', () => {
-  it('a lineal ** header', () => {
-    expect(() => compileSource(`
-      **
-        value Integer
-      **
-      @get = -> value
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('a lineal ** header with a delimited body', () => {
-    expect(() => compileSource(`
-      **
-        value Integer
-      ** {
-        @get = -> value
-      }
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('a lineal ** header with no entries', () => {
-    expect(() => compileSource(`
-      **
-      @hello = -> greeting: "hi"
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('a lone ** after a declaration', () => {
-    expect(() => compileSource(`
-      x = 1
-      **
-      @get = -> 1
-    `)).toThrow(/the '\*\*' file header is retired — declare DI with 'use'/);
-  });
-
-  it('( entries ) actor { body }', () => {
-    expect(() => compileSource(`
-      ( value: Integer ) actor {
-        @get = -> value
-      }
-    `)).toThrow(/'\( … \) actor \{ … \}' is retired — declare DI with 'use' inside the braces/);
-  });
-});
-
 describe('file actor — actor { } only at the head of a file', () => {
   it('after a declaration', () => {
     expect(() => compileSource(`
@@ -330,34 +268,6 @@ describe('factory files are unchanged', () => {
 });
 
 describe('file with `new =` — errors', () => {
-  const section = /a singleton's constructor is declared with 'new ='/;
-
-  it('the retired trailing `*` section', () => {
-    expect(() => extract('count *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
-  });
-
-  it('the retired trailing `*` section, after a `use`', () => {
-    expect(() => extract('use document\ncount *Integer = 0\n*\n  seed Integer\n*\n@n = -> seed\n')).toThrow(section);
-  });
-
-  const di = /a constructor's params take no DI \(.*\) — declare it with 'use'/;
-  const entries = {
-    'a path': '"svc.bv": Svc',
-    'a service': '"svc.bv": Svc { get () -> (Integer) }',
-    'a path shorthand': ':document',
-    'a destructure': 'HTML: (:div)',
-  };
-  for (const [label, entry] of Object.entries(entries)) {
-    it(`refuses ${label} in its params`, () => {
-      expect(() => extract(`count *Integer = 0\nnew =\n*\n  seed Integer\n  ${entry}\n*\n@n = -> seed\n`)).toThrow(di);
-    });
-  }
-
-  it('refuses DI in delimited params', () => {
-    expect(() => extract('new = ( "svc.bv": Svc, n Integer ) *{\n  @n = -> n\n}\n'))
-      .toThrow(`a constructor's params take no DI ('"svc.bv"') — declare it with 'use'`);
-  });
-
   it('accepts params of every kind', () => {
     expect(() => compileSource(`
       new =

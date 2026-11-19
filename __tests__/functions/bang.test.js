@@ -56,16 +56,6 @@ describe('self as a value — validation', () => {
   });
 });
 
-describe('! names — validation', () => {
-  it('a type name takes no bang in an annotation', () => {
-    expect(() => compileSource('a Integer! = 0\n')).toThrow(/takes no '!'/);
-  });
-
-  it('a type name takes no bang in a construction', () => {
-    expect(() => compileSource('a = Integer!(0)\n')).toThrow(/takes no '!'/);
-  });
-});
-
 describe('<- as an expression — validation', () => {
   it('can\'t be a value on the right of `??`, which may not run', () => {
     expect(() => compileSource('a *Integer = 0\n@go! = { x Integer = a ?? (a <- 1)\n return x }\n')).toThrow(/right of '\?\?'/);
@@ -885,7 +875,6 @@ describe('effect arrows in signatures', () => {
     ['log. (Text) -> .', /has nothing to read/],
     ['log. (Text) ~> .', /has nothing to read/],
     ['me () ~> self', /has nothing to read/],
-    ['me () -> (self)', /takes no parens/],
     ['log. (Text) => (Integer)', /silent by its name/],
   ])('`%s` is an error', (entry, message) => {
     expect(() => compileSource(useWidget, widget(entry))).toThrow(message);

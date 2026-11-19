@@ -161,16 +161,9 @@ function silentSuffixAt(source, i, name, line) {
   while (source[i + n] === '.') n++;
   if (n === 1) {
     const next = source[i + 1] ?? '';
-    const member = (source.slice(i + 2).match(/^[a-zA-Z_][a-zA-Z0-9_]*[!.]?/) ?? [''])[0];
-    if (member) {
-      // A member is named after a dot as on the wire: a public one bare.
-      if (next === '#') throw new Error(`'${name}.#${member}' — a private name is never reached through an address, only by name in its own scope (line ${line})`);
-      if (next === '@') throw new Error(`'${name}.@${member}' — a public member takes no '@' after a dot: write '${name}.${member}' (line ${line})`);
-    }
     return /[a-zA-Z_]/.test(next) ? 0 : 1;
   }
   if (n === 2) throw new Error(`Unexpected '..' after '${name}' (line ${line})`);
-  if (n >= 4) throw new Error(`'${name}${'.'.repeat(n)}' — the ellipsis absorbs a silent name's dot: write '${name}...' (line ${line})`);
   return 0;
 }
 
@@ -516,17 +509,6 @@ export function tokenize(source) {
     // `Svc::Point`, `C::total`. Distinct from the
     // `:name` named-param sigil and the bare `COLON` separator below.
     if (source[i] === ':' && source[i + 1] === ':') {
-      // After `::` a name is written bare, as declared.
-      const sigil = source[i + 2];
-      const member = (source.slice(i + 3).match(/^[a-zA-Z_][a-zA-Z0-9_]*[!.]?/) ?? [''])[0];
-      if ((sigil === '@' || sigil === '#') && member) {
-        const line = tokens.filter(t => t.type === 'NEWLINE').length + 1;
-        const prev = tokens[tokens.length - 1];
-        const at = tokens[tokens.length - 2]?.type === 'AT' ? '@' : '';
-        const name = prev?.type === 'IDENT' || prev?.type === 'KEYWORD' ? at + prev.value : '';
-        if (sigil === '#') throw new Error(`'${name}::#${member}' — a private name is never reached through an address, only by name in its own scope (line ${line})`);
-        throw new Error(`'${name}::@${member}' — a public member is reached through a dot: write '${name}.${member}' (line ${line})`);
-      }
       tokens.push({ type: 'DCOLON' });
       i += 2;
       continue;
@@ -593,11 +575,6 @@ export function tokenize(source) {
 
     // @name — public function sigil
     if (source[i] === '@') { tokens.push({ type: 'AT' }); i++; continue; }
-
-    // $name — deprecated state variable syntax
-    if (source[i] === '$') {
-      throw new Error(`'$' state variables are deprecated (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1}). Use '*Type' declarations instead.`);
-    }
 
     // &name — function reference
     if (source[i] === '&') {
@@ -667,7 +644,8 @@ export function tokenize(source) {
     }
     if (source[i] === '|') { tokens.push({ type: 'PIPE' }); i++; continue; }
 
-    i++; // skip unknown characters
+    if (source[i] === '\r' || source[i] === '﻿') { i++; continue; }
+    throw new Error(`Unexpected character '${source[i]}' (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
   }
 
   tokens.push({ type: 'EOF' });

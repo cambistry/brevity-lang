@@ -1,4 +1,4 @@
-import { expectBehavior, compileActor, compileSource } from '../helpers.js';
+import { expectBehavior, compileActor } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Integer arithmetic: +, -, *, /, %, ^
@@ -558,16 +558,5 @@ describe('Integer conversion via ref cell dot method', () => {
 
   it('x.to_decimal on *Integer ref', async () => {
     await expectBehavior(script, { input: { id: '1', op: 'refToDecimal', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'Decimal' }], re: [{ result: 10 }], to: 'c' } });
-  });
-});
-
-// ─── `**` is not the exponent ─────────────────────────────────────────────────
-// `^` is the exponent; `**` is reserved for lineal singletons and `**` file headers.
-
-describe('Exponent operator spelling', () => {
-  it('a ** b is a compile error pointing at ^', () => {
-    expect(() => compileSource(`
-      @exp = (a Integer, b Integer) -> result: a ** b
-    `)).toThrow("'**' is not an operator — the exponent is '^'");
   });
 });

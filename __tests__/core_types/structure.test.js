@@ -13,22 +13,22 @@ describe('structure — runtime', () => {
         ...args as Object
 
     // Object destructuring
-    @namedTwo    = (...args) :a, :b = args    return result: a
-    @namedOne    = (...args) :a = args         return result: a
-    @namedParen  = (...args) (:a, :b) = args   return result: a
-    @posTwo      = (...args) a, b = args       return result: a
-    @posIndex    = (...args) a = args[0]       return result: a
-    @posParen    = (...args) (a, b) = args     return result: a
-    @posTrailing = (...args) (a,) = args       return result: a
-    @mixedThree  = (...args) a, b, :c = args   return result: a
-    @mixedParen  = (...args) (a, b, :c) = args return result: c
-    @keyMap      = (...args) a: x = args       return result: x
-    @keyMapParen = (...args) (a: x) = args     return result: x
+    @namedTwo    = (...args) :a, :b = args;    return result: a
+    @namedOne    = (...args) :a = args;         return result: a
+    @namedParen  = (...args) (:a, :b) = args;   return result: a
+    @posTwo      = (...args) a, b = args;       return result: a
+    @posIndex    = (...args) a = args[0];       return result: a
+    @posParen    = (...args) (a, b) = args;     return result: a
+    @posTrailing = (...args) (a,) = args;       return result: a
+    @mixedThree  = (...args) a, b, :c = args;   return result: a
+    @mixedParen  = (...args) (a, b, :c) = args; return result: c
+    @keyMap      = (...args) a: x = args;       return result: x
+    @keyMapParen = (...args) (a: x) = args;     return result: x
 
     // Object accessors
-    @accessFirst  = (...args) x = args[0]   return result: x
-    @accessSecond = (...args) x = args[1]   return result: x
-    @accessNamed  = (...args) x = args["a"] return result: x
+    @accessFirst  = (...args) x = args[0];   return result: x
+    @accessSecond = (...args) x = args[1];   return result: x
+    @accessNamed  = (...args) x = args["a"]; return result: x
 
     // Object type call
     @constructSingle

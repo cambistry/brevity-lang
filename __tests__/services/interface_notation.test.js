@@ -142,35 +142,25 @@ describe('service document — entry forms', () => {
   });
 });
 
-describe('service document — retired forms are rejected', () => {
-  it('entry colon', () => {
-    expect(() => parseInterface('{ f: (Integer) -> (Text) }')).toThrow(/entry colon is retired/);
-    expect(() => parseInterface('{ val: *Integer }')).toThrow(/entry colon is retired/);
-    expect(() => parseInterface('{ set label: (Text) }')).toThrow(/entry colon is retired/);
-  });
-
+describe('service document — invalid forms are rejected', () => {
   it('::Name (…) is not an entry', () => {
     expect(() => parseInterface('{ ::Point (x Integer) }')).toThrow(/^Unrecognized interface entry '::Point \(x Integer\)'$/);
   });
 
-  it('*( … ) -> { … } constructor', () => {
-    expect(() => parseInterface('{ Box: *() -> { get: () -> (Integer) } }')).toThrow(/entry colon is retired/);
-  });
-
-  it('| between overloads', () => {
-    expect(() => parseInterface('{ f (Integer) -> (Text) | (Text) -> (Text) }')).toThrow(/overloads go on separate lines/);
-  });
-
-  it('unparenthesized return', () => {
-    expect(() => parseInterface('{ size () -> Integer }')).toThrow(/return must be parenthesized/);
-  });
-
   it('constructor without a body', () => {
-    expect(() => parseInterface('{ Text (Node++) }')).toThrow(/missing return.*'-> \*\{\}'/);
+    expect(() => parseInterface('{ Text (Node) }')).toThrow(/missing return.*'-> \*\{\}'/);
   });
 
   it('duplicate constructor', () => {
     expect(() => parseInterface('{ A () -> *{}\n  A (Integer) -> *{} }')).toThrow(/more than once/);
+  });
+
+  it('a return that is no return form', () => {
+    expect(() => parseInterface('{ size () -> Integer }')).toThrow("Interface entry 'size': unexpected 'Integer'");
+  });
+
+  it('a definition that is no type', () => {
+    expect(() => parseInterface('{ val: *Integer }')).toThrow("Interface entry 'val': Expected type name, got COLON ''");
   });
 });
 
@@ -334,30 +324,11 @@ describe('constructor profiles in source', () => {
     expect(p['ping.']).toHaveLength(1);
   });
 
-  it('retired: Alias *( … ) -> { … }', () => {
-    expect(() => extract('use Thing = "thing.bv" as *(a: Integer) -> { get: () -> (value: Integer) }\n@go = -> 1\n'))
-      .toThrow(/retired/);
-  });
-
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
     expect(() => compileSrc(`use Thing = "thing.bv"
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
 @go = -> 1
 `)).not.toThrow();
-  });
-
-  it('retired: as *( … ) -> { … }', () => {
-    expect(() => extract(`use Thing = "thing.bv"
-Coerced = Thing as *(a: Integer) -> { get: () -> (value: Integer) }
-@go = -> 1
-`)).toThrow(/retired/);
-  });
-
-  it('service constraint entries drop the colon', () => {
-    expect(() => extract(`use Store = "store.bv" as { get (key: Text) -> (value: Text) }
-db = Store as { @get: (key: Text) -> (value: Text) }
-@go = -> 1
-`)).toThrow(/entry colon is retired/);
   });
 
   it('::Name (…) in source is unrecognized syntax', () => {
@@ -393,7 +364,20 @@ describe('service document — param and return fields', () => {
     expect(p['move.'][0].params).toEqual([{ name: 'p', type: 'Geom::Point', positional: false }]);
   });
 
-  it('retired: prefix-colon fields', () => {
-    expect(() => parseInterface('{ first (:selector Text) -> (Element) }')).toThrow(/Prefix-colon field ':selector' is retired/);
+  it('`:name` in a param list is colon destructuring', () => {
+    expect(() => parseInterface('{ first (:selector Text) -> (Element) }'))
+      .toThrow("':selector' is colon destructuring, which a param list doesn't take — a named param is 'selector: Text'");
+  });
+
+  it('a param type that does not parse', () => {
+    expect(() => parseInterface('{ first (Text of) -> (Element) }')).toThrow("In '(Text of)': Expected type name, got EOF ''");
+  });
+
+  it('a return type that does not parse', () => {
+    expect(() => parseInterface('{ first (Text) -> (Element Element) }')).toThrow("In '(Element Element)': Unexpected token in a type: IDENT 'Element'");
+  });
+
+  it('a setter type that does not parse', () => {
+    expect(() => parseInterface('{ set label (Text |) }')).toThrow("Interface entry 'set label': Unexpected token in a type: PIPE ''");
   });
 });

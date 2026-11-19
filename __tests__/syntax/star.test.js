@@ -82,15 +82,6 @@ describe('class (params) *{...} — delimited with-params', () => {
     `)).not.toThrow();
   });
 
-  it('rejects retired *(params) { body }', () => {
-    expect(() => compileSource(`
-      Counter = *(start Integer) {
-        @get = -> value: start
-      }
-      @test = -> 1
-    `)).toThrow(/is retired/);
-  });
-
   it('rejects `=` immediately before `*{`', () => {
     expect(() => compileSource(`
       Bad = (x Integer) = *{
@@ -317,18 +308,6 @@ describe('class — lineal header with params', () => {
     `)).toThrow();
   });
 
-  it('rejects the retired `=` closer after params', () => {
-    expect(() => compileSource(`
-      Counter =
-        *
-        start Integer
-        =
-        @get = -> value: start
-        .
-      @test = -> 1
-    `)).toThrow(/closed by '\*' alone on its line/);
-  });
-
   it('rejects lineal params without a leading `=`', () => {
     expect(() => compileSource(`
       Counter
@@ -417,18 +396,6 @@ describe('class (...) *{...} — subclass forms', () => {
       Greeting = Base ++ *{ "hello" }
       @test = -> 1
     `)).not.toThrow();
-  });
-
-  it('Sub = (name Base ++ params) *{ body }  (the retired wrap form)', () => {
-    expect(() => compileSource(`
-      Base = (x Integer) *{
-        @x = -> v: x
-      }
-      Wrap = (base Base ++ y Integer) *{
-        @y = -> v: y
-      }
-      @test = -> 1
-    `)).toThrow("In 'Wrap', the wrapped parent 'base Base' is retired — write 'Wrap = Base ++ …'");
   });
 
   it('Sub = Base ++ (params) *{ body } reaches the parent layer with super', () => {
@@ -520,13 +487,6 @@ describe('file-level header — lineal', () => {
     `)).not.toThrow();
   });
 
-  it('rejects retired *( deps ) header', () => {
-    expect(() => compileSource(`
-      *( value: Integer ) {
-        @get = -> :value
-      }
-    `)).toThrow(/file headers are retired/);
-  });
 });
 
 describe('hard error — old `<...>` syntax', () => {

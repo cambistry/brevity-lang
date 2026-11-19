@@ -7,7 +7,6 @@ import { compileSource, expectBehavior, createActor, expectActorBehavior } from 
 //                       otherwise the param's local (untyped)
 // A type name in scope is reserved: no param may share it. In scope: built-ins,
 // the file's `::` types and classes, and every name the header binds.
-// A single name in parens (`key: (local)`) is retired.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('named param — rename', () => {
@@ -117,14 +116,9 @@ describe('type names are reserved', () => {
   });
 });
 
-describe('single name in parens — retired', () => {
-  it.each([
-    ['f = (key: (k) Integer) { k }', "'key: (k)' is retired — write 'key: k Integer'"],
-    ['f = (key: (k)) { k }', "'key: (k)' is retired — write 'key: k'"],
-    ['W = (child: (inner) *) *{ @x = -> 1 }', "'child: (inner)' is retired — write 'child: inner *'"],
-    ['C = (@label: (l) Text) *{ @x = -> 1 }', "'label: (l)' is retired — write 'label: l Text'"],
-  ])('%s', (src, message) => {
-    expect(() => compileSource(`${src}\n@test = -> 1\n`)).toThrow(message);
+describe('single name in parens', () => {
+  it('alone, it is the type: `key: (k)` is a named param typed `(k)`', () => {
+    expect(() => compileSource('f = (key: (k)) { k }\n@test = -> 1\n')).not.toThrow();
   });
 
   it('a function-typed param keeps its parens', () => {

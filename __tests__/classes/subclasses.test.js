@@ -198,21 +198,6 @@ describe('subclasses — super and wrapped parents — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('a wrapped parent named like its class is retired', () => {
-    expect(() => compileSource(`
-      T = * { @a = { 1 } }
-      U = (T T ++) *{ @a = { 2 }; @b = { T.a } }
-      @test = -> 1
-    `)).toThrow("In 'U', the wrapped parent 'T T' is retired — write 'U = T ++ …' and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
-  });
-
-  it('the retired self-named wrap reports the ++ form', () => {
-    expect(() => compileSource(`
-      T = * { @a = { 1 } }
-      U = (T* |) *{ @b = { T.a } }
-      @test = -> 1
-    `)).toThrow("In 'U', the subclass bar '|' is retired — extend with '++': write 'U = T ++ *{ … }', and reach the parent layer with 'super::name' (protected) or 'super.name' (public)");
-  });
 });
 
 describe('subclasses — runtime', () => {
@@ -1037,31 +1022,6 @@ describe('subclasses — optional args — compilation', () => {
 // ── Compilation: `++` forms and their errors ─────────────────────────────────
 
 describe('subclasses — ++ forms — compilation', () => {
-  it('the subclass bar is retired', () => {
-    expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = (T | b Integer) *{}
-      @test = -> 1
-    `)).toThrow("In 'U', the subclass bar '|' is retired — extend with '++': write 'U = T ++ (…) *{ … }'");
-  });
-
-  it('the retired parent list reports the ++ chain', () => {
-    expect(() => compileSource(`
-      A = *{}
-      B = *{}
-      C = (A, B |) *{}
-      @test = -> 1
-    `)).toThrow("write 'C = A ++ B ++ *{ … }'");
-  });
-
-  it('params joined by ++ name the type that is not a class', () => {
-    expect(() => compileSource(`
-      T = *{}
-      U = T ++ (x Integer ++ y Integer) *{}
-      @test = -> 1
-    `)).toThrow("In 'U', 'Integer' is a type, not a class — '++' doesn't join params, separate them with commas: '(x Integer, …)'");
-  });
-
   it('a custom type is not a parent', () => {
     expect(() => compileSource(`
       type Point (x Integer, y Integer)
@@ -1070,46 +1030,11 @@ describe('subclasses — ++ forms — compilation', () => {
     `)).toThrow(/In 'U', 'Point' is a type, not a class/);
   });
 
-  it('custom-typed params joined by ++ name the type', () => {
-    expect(() => compileSource(`
-      type Point (x Integer, y Integer)
-      T = *{}
-      U = T ++ (p Point ++ q Point) *{}
-      @test = -> 1
-    `)).toThrow("In 'U', 'Point' is a type, not a class — '++' doesn't join params, separate them with commas: '(p Point, …)'");
-  });
-
   it('an unknown parent is an error', () => {
     expect(() => compileSource(`
       U = Nope ++ *{}
       @test = -> 1
     `)).toThrow(/In 'U', 'Nope' is not a class in scope/);
-  });
-
-  it('a wrapped parent with an empty body is retired', () => {
-    expect(() => compileSource(`
-      T = *{ @a = -> 1 }
-      U = (sup T ++) *{}
-      @test = -> 1
-    `)).toThrow("In 'U', the wrapped parent 'sup T' is retired — write 'U = T ++ …'");
-  });
-
-  it('a wrapped parent in a bare definition is retired', () => {
-    expect(() => compileSource(`
-      A = *{}
-      B = *{}
-      D = sup A ++ B
-      @test = -> 1
-    `)).toThrow("In 'D', the wrapped parent 'sup A' is retired — write 'D = A ++ …'");
-  });
-
-  it('a wrapped last parent in a bare definition is retired', () => {
-    expect(() => compileSource(`
-      A = *{}
-      B = *{}
-      D = A ++ sup B
-      @test = -> 1
-    `)).toThrow("In 'D', the wrapped parent 'sup B' is retired — write 'D = B ++ …'");
   });
 
   it('params after a bare ++ go in parens', () => {

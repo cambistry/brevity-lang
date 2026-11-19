@@ -343,9 +343,4 @@ describe('params document — read back as constructor params', () => {
     expect(() => compile(consumer('Svc()'), { remotes: typedRemotes })).toThrow(/missing: limit/);
   });
 
-  it('rejects the retired *( … ) params document', () => {
-    expect(() => compile(consumer('Svc("a", limit: 3)'), {
-      remotes: [{ path: 'svc.bv', params: '*(\n  Text\n)', service: remote.service }],
-    })).toThrow(/'\*\( … \)' is retired/);
-  });
 });

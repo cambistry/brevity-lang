@@ -299,7 +299,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     // `Self` in expression position resolves to the class wire address.
     // fileName is enforced by validate() whenever the AST uses Self as a value.
-    if (expr.name === 'Self') return `Value::String(${JSON.stringify('#<' + quoteToken(G.ctx.fileName) + '>')}.to_string())`;
+    if (expr.name === 'class') return `Value::String(${JSON.stringify('#<' + quoteToken(G.ctx.fileName) + '>')}.to_string())`;
     // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
     if (isDependencyValue(G.ctx, expr.name, typeEnv)) return `Value::String(${JSON.stringify('#<' + G.ctx.depAddress(expr.name) + '>')}.to_string())`;
     return rustSsaResolve(expr.name);
@@ -816,7 +816,7 @@ ${subRegLines.join('\n')}
     if (dotObjName && expr.object.type === 'RefRead') {
       const decl = G.ctx.stateVarDecls?.find(d => d.name === dotObjName);
       const t = decl?.typeName;
-      const isSelfBearing = typeof t === 'string' && t.split('|').some(m => m.trim() === 'Self');
+      const isSelfBearing = typeof t === 'string' && t.split('|').some(m => m.trim() === 'class');
       if (isSelfBearing) {
         // The enclosing class (the one whose handler we're inside). When
         // codegening child class handlers, ctx.childStatePrefix is set to

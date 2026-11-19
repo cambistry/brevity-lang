@@ -252,7 +252,7 @@ describe('reference fields — silent-call ordering check', () => {
     expect(() => compileSource(`
       type Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed, flag: Boolean) {
-        if flag ok: Boolean = m.check("maybe")
+        if flag { ok: Boolean = m.check("maybe") }
         m.push...
         return result: 1
       }

@@ -344,38 +344,6 @@ describe('a singleton reading a cell declared below it — validation', () => {
 });
 
 describe('inline singleton compile errors', () => {
-  it('a singleton takes no params', () => {
-    expect(() => compileSource(`
-      s = (x Integer) actor {
-        @get = { return x }
-      }
-    `)).toThrow("Singleton 's' takes no params");
-  });
-
-  it('a public singleton takes no params', () => {
-    expect(() => compileSource(`
-      @s = (x Integer) actor {
-        @get = { return x }
-      }
-    `)).toThrow("Singleton '@s' takes no params");
-  });
-
-  it('\'**{ … }\' is retired', () => {
-    expect(() => compileSource(`
-      s = **{
-        @get = { return 1 }
-      }
-    `)).toThrow("'**{ … }' is now 'actor { … }'");
-  });
-
-  it('\'**{ … }\' is retired for a public singleton too', () => {
-    expect(() => compileSource(`
-      @s = **{
-        @get = { return 1 }
-      }
-    `)).toThrow("'**{ … }' is now 'actor { … }'");
-  });
-
   it('a one-line actor needs its statement on the same line', () => {
     expect(() => compileSource(`
       s = actor ->

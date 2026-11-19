@@ -179,14 +179,6 @@ describe('silent functions — runtime', () => {
     );
   });
 
-  it('silent function — empty lineal body — `-> .` in a named function is an error naming the fix', () => {
-    expect(() => compileSource(`
-      fireArrow
-        =
-        -> .
-      @go = -> 1
-    `)).toThrow(/name it 'fireArrow\.' and drop the '\.'/);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -264,26 +264,7 @@ describe('constructor delimited form — optional args — runtime', () => {
 // Retired `*(params) { body }` forms — the `*` now marks the body.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('constructor delimited form — retired forms', () => {
-  it('Cls = *(params) { body } is a parse error', () => {
-    expect(() => compileSource(`
-      T = *(a Integer) { @get = -> v: a }
-    `)).toThrow(/is retired/);
-  });
-
-  it('Cls = *(params) with no body is a parse error', () => {
-    expect(() => compileSource(`
-      T = *(a Integer)
-      @test = -> 1
-    `)).toThrow(/is retired/);
-  });
-
-  it('Cls = *() { body } is a parse error', () => {
-    expect(() => compileSource(`
-      T = *() { @get = -> v: 1 }
-    `)).toThrow(/is retired/);
-  });
-
+describe('constructor delimited form — invalid forms', () => {
   it('Cls = * with no body opener (no params, no body) is a parse error', () => {
     expect(() => compileSource(`
       T = *
@@ -291,19 +272,6 @@ describe('constructor delimited form — retired forms', () => {
     `)).toThrow();
   });
 
-  it('@Cls = *(params) { body } public-form is a parse error', () => {
-    expect(() => compileSource(`
-      @T = *(a Integer) { @get = -> v: a }
-    `)).toThrow(/is retired/);
-  });
-
-  it('Sub = *(T |) -> expr (ingest) is a parse error', () => {
-    expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = *(T |) -> "hello"
-      @test = -> 1
-    `)).toThrow(/is retired/);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

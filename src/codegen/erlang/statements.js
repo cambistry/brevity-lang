@@ -330,7 +330,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       // Self(args) — recursive spawn. Bind to a freshly-spawned PID running
       // ?MODULE:start_internal/1; dot-call dispatch routes via direct
       // {bv_dispatch, ...} Erlang messages.
-      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'Self') {
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && s.value.callee.name === 'class') {
         const argList = s.value.args.map(a => genExpr(ctx, a, typeEnv, stmtCtx)).join(', ');
         lines.push(`${I}${varName} = spawn(?MODULE, start_internal, [[${argList}]]),`);
         sCtx.selfSpawnedRefs?.add(s.name);

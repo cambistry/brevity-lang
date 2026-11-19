@@ -71,7 +71,7 @@ export function lowerAs(ast) {
   let seq = 0;
 
   const isCtorCall = (e) => e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier'
-    && (classes.has(e.callee.name) || deps.has(e.callee.name) || e.callee.name === 'Self');
+    && (classes.has(e.callee.name) || deps.has(e.callee.name) || e.callee.name === 'class');
   const isActorSource = (e) => isCtorCall(e) || (e?.type === 'Identifier' && (deps.has(e.name) || actorish.has(e.name)));
   const isRemoteCall = (e) => e?.type === 'DotCallExpr' || e?.type === 'DotAccessExpr'
     || (e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && members_.has(e.callee.name));
@@ -81,7 +81,7 @@ export function lowerAs(ast) {
     if (Array.isArray(node)) { node.forEach(collectActors); return; }
     if ((node.type === 'Assign' || node.type === 'TypedAssign' || node.type === 'RefDecl') && node.name && isCtorCall(node.value)) actorish.add(node.name);
     if (node.type === 'TypedAssign' && classes.has(node.typeName)) actorish.add(node.name);
-    if (node.name && node.value?.type === 'FunctionCallExpr' && (classes.has(node.value.callee?.name) || node.value.callee?.name === 'Self')) localChildren.add(node.name);
+    if (node.name && node.value?.type === 'FunctionCallExpr' && (classes.has(node.value.callee?.name) || node.value.callee?.name === 'class')) localChildren.add(node.name);
     if (node.name && classes.has(node.typeName)) localChildren.add(node.name);
     for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') collectActors(v);
   };

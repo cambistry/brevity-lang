@@ -780,7 +780,7 @@ export function genExpr(ctx, expr) {
       // Self() — construct a new actor of the enclosing class.
       // `this.constructor` resolves to the runtime class (dynamic Self),
       // so a subclass that calls Self() builds a subclass instance.
-      if (name === 'Self') {
+      if (name === 'class') {
         ctx.usesChildSend = true;
         const binding = childBinding(ctx, ctx.currentActor?.name);
         const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);

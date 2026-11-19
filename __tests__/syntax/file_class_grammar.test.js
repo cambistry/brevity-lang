@@ -54,21 +54,6 @@ describe('file-class header — delimited', () => {
 });
 
 describe('file-class header — delimited, rejected forms', () => {
-  it('*( deps ) { body } (retired) is a parse error', () => {
-    expect(() => compileSource(`
-      *( value: Integer ) {
-        @get = -> value
-      }
-    `)).toThrow(/file headers are retired/);
-  });
-
-  it('*( deps ) -> expr (retired tail form) is a parse error', () => {
-    expect(() => compileSource(`
-      *( value: Integer )
-      return value
-    `)).toThrow(/file headers are retired/);
-  });
-
   it('( deps ) *{body} followed by extra content after `}` is a parse error', () => {
     expect(() => compileSource(`
       ( value: Integer ) *{
@@ -76,29 +61,6 @@ describe('file-class header — delimited, rejected forms', () => {
       }
       @stray = -> 1
     `)).toThrow();
-  });
-});
-
-describe('headerless file-class — rejected leading openers', () => {
-  it('leading `=` at file start is a parse error', () => {
-    expect(() => compileSource(`
-      =
-      @test = -> 1
-    `)).toThrow(/no body opener/);
-  });
-
-  it('leading `{` at file start is a parse error', () => {
-    expect(() => compileSource(`
-      {
-        @test = -> 1
-      }
-    `)).toThrow(/no body opener/);
-  });
-
-  it('leading `->` at file start is a parse error', () => {
-    expect(() => compileSource(`
-      -> "no header here"
-    `)).toThrow(/no body opener/);
   });
 });
 
@@ -257,7 +219,7 @@ describe('file-class header — lineal forms, rejected variants', () => {
     expect(ast.dependencies).toEqual([]);
   });
 
-  it('*\\n params\\n = (retired `=` closer) is a parse error', () => {
+  it('*\\n params\\n = (`=` closer) is a parse error', () => {
     expect(() => compileSource(`
       *
         value Integer
