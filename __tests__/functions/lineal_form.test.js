@@ -392,7 +392,7 @@ describe('lineal function — compile errors', () => {
 const edgeCaseScript = `
   @goSilent!
     =
-    spawn fire.()
+    fire...
     return answer: "ok"
 
   fire.

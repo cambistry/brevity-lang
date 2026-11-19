@@ -98,13 +98,6 @@ function classNeedsSpawnedInstancesProgram(actor) {
   return !!actor;
 }
 
-// A class's own constructor-block children (cells holding an instance pid).
-function classChildRefs(ctx, actor) {
-  return new Set((actor.initBody || [])
-    .filter(s => (s.type === 'StateAssign' || s.type === 'RefDecl') && s.value?.type === 'FunctionCallExpr' && ctx.actorInfo?.has(s.value.callee?.name))
-    .map(s => s.name));
-}
-
 // The file's constructor-block children (cells holding an instance pid),
 // dispatched like any spawned instance. Not in a child class's own handlers.
 function fileChildRefs(ctx) {
@@ -411,7 +404,7 @@ const propTokens = (actor) => propNames(actor).map(n => wireLabel('@' + n));
 // own reader; any other name answers only from inside, or from a class declared
 // in this actor (its outer reads, bv_outer_get_). A prop's `$subscribe` is unhandled.
 function genGetClauses(fnName, actor) {
-  const inside = ['__self', '__test', '__parent', '__emit', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join('; ');
+  const inside = ['__self', '__test', '__parent', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join('; ');
   const clauses = propTokens(actor).map(t => `${fnName}({<<"$subscribe">>, ${erlString(t)}}, _Message, _Payload, _Id, _From) ->\n    {error, <<"$subscribe">>}`);
   for (const e of readEntries(actor)) {
     clauses.push(e.open
@@ -454,7 +447,7 @@ function genReadTable(actors) {
 function genSubscribePrologue(fnName, actor = null) {
   // A protected or private cell has no op of its own: from inside, its value.
   const own = actor ? readEntries(actor).filter(e => !e.open) : [];
-  const inside = ['__self', '__test', '__parent', '__emit', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join(' orelse ');
+  const inside = ['__self', '__test', '__parent', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join(' orelse ');
   const answer = own.length
     ? `case Target_ of
         ${own.map(e => `${erlString(e.token)} when ${inside} -> {ok, [get(${e.key})], null};`).join('\n        ')}
@@ -496,7 +489,7 @@ function genDispatch(ctx, publicFns, actor = null) {
   const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$subscribe')) : []), ...genSubscribePrologue('handle_op', actor), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$subscribe')) : [])];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
-    if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
+    if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
     if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
@@ -585,12 +578,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   let implicitReturn = !reply ? rawBody.filter(s => !isSilentGuard(s, hasSilent) && s.type === 'ImplicitReturn').pop() : null;
   let body = rawBody;
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && ctx.emitNames.has(lastExpr.callee.name) && ctx.emitNames.get(lastExpr.callee.name).silent;
-    if (!isSilentEmit) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
 
   // Build type check expression
@@ -885,13 +874,6 @@ function genChildHandleOp(ctx, actor) {
   const getClauses = genGetClauses(`${prefix}_handle_op`, actor);
   const clauses = [...getClauses.filter(c => c.includes('$subscribe')), ...genSubscribePrologue(`${prefix}_handle_op`, actor), ...getClauses.filter(c => !c.includes('$subscribe'))];
 
-  // Set emit names for this child actor
-  const savedEmitNames = ctx.emitNames;
-  ctx.emitNames = new Map();
-  for (const s of (actor.constructorBody || [])) {
-    if (s.type === 'EmitDecl') ctx.emitNames.set(s.name, s);
-  }
-
   const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   const childPublicFns = actor.functions.filter(f => _isPublicFn(f));
   const childPrivateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
@@ -968,40 +950,6 @@ function genChildHandleOp(ctx, actor) {
   ctx.selfSendPrefix = savedSelfSendPrefix;
   ctx._refCapturedBy = savedRefCapturedBy;
 
-  // On-handler clauses
-  const childOnHandlers = actor.functions.filter(f => f.type === 'OnHandler');
-  for (const h of childOnHandlers) {
-    const typeEnv = buildTypeEnv(h.params, h.body, ctx.typeDecls);
-    const I = '    ';
-    const hLines = [];
-    const restVars = new Set();
-    const refVars = new Set();
-    const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: classChildRefs(ctx, actor), ssaEnv: buildSSAEnv(h.body) };
-    const paramLines = genParamDestructure(h.params, I, { ctx });
-    hLines.push(...paramLines);
-    const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
-    hLines.push(...localLines);
-    // Check if on-handler has a reply (emit-with-return-value)
-    const reply = h.body.find(s => s.type === 'Reply');
-    if (reply) {
-      const replyCtx = { ...sCtx, stmtIdx: h.body.indexOf(reply) };
-      const reExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);
-      hLines.push(`${I}{ok, ${reExpr}, null}`);
-    } else {
-      hLines.push(`${I}{ok, null, null}`);
-    }
-    const innerBody = hLines.join('\n');
-    const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
-    if (sourceIsRemote) {
-      const stateRef = `get(${erlStateKey(ctx, h.source)})`;
-      const guardedBody = `    case From =:= ${stateRef} of\n        true ->\n${innerBody.split('\n').map(l => '        ' + l).join('\n')};\n        false ->\n            {ok, null, null}\n    end`;
-      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, From) ->\n${guardedBody}`);
-    } else {
-      clauses.push(`${prefix}_handle_op(${erlString(h.eventName)}, _Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`);
-    }
-  }
-
   // Auto-generate accessor clauses for child constructor params
   const childConstructorParams = actor.initParams || [];
   for (const p of childConstructorParams) {
@@ -1029,7 +977,6 @@ function genChildHandleOp(ctx, actor) {
   // Catch-all clause
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, bv_ex_key_(Op)}`);
 
-  ctx.emitNames = savedEmitNames;
   return [clauses.join(';\n') + '.', ...typedHelpers].join('\n\n');
 }
 
@@ -1041,9 +988,8 @@ function genChildInit(ctx, actor) {
   const initBody = withCellReady(actor.initBody || [], pendingCells);
   const inheritedIngests = actor._inheritedIngests || [];
 
-  const hasOnHandlers = actor.functions.some(f => f.type === 'OnHandler');
   const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
-  if (constructorParams.length === 0 && initBody.length === 0 && !hasOnHandlers && inheritedIngests.length === 0 && !hasReturnAs) return '';
+  if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const I = '    ';
   const lines = [];
@@ -1121,18 +1067,6 @@ function genChildInit(ctx, actor) {
     }
   }
 
-
-  // Subscribe to emits from wrapped children (on handlers)
-  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
-  for (const h of onHandlers) {
-    if (constructorParams.some(p => p.name === h.source)) {
-      // `on <param>.<event>`: register this instance with the emitter
-      // instance the param holds.
-      lines.push(`${I}bv_on_(get(${erlStateKey(ctx, h.source)}), ${erlString(h.eventName)}),`);
-    } else {
-      lines.push(`${I}subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> child_${name}_handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end),`);
-    }
-  }
 
   if (pendingCells.length) lines.push(`${I}bv_join_all_(),`);
   lines.push(`${I}ok.`);
@@ -1292,7 +1226,7 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       const initCall = initFn ? `child_${lowerName}_init(Args_)` : 'ok';
-      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_mod, ?MODULE),\n    put(bv_self_class_, ${erlString(lowerName)}),\n    bv_adopt_outer_(Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<:>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_swap_self_(bv_unwire_reply(Re_, Ty_), self())};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_outer_get, From_, Key_, Ref_} ->\n            bv_answer_outer_(From_, Key_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_outer_sub, From_, Key_, SubId_, Ref_} ->\n            bv_answer_outer_sub_(From_, Key_, SubId_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_notify, SubId_, Re_} ->\n            case get({pending_subscribe, SubId_}) of F_ when is_function(F_) -> F_(Re_); _ -> ok end,\n            bv_loop_${lowerName}();\n        {bv_outer_op, From_, OClass_, OOp_, OPayload_, ORef_} ->\n            bv_answer_outer_op_(From_, OClass_, OOp_, OPayload_, ORef_),\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_emit, From_, Op_, Payload_, Id_} ->\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__emit">>) end) of\n                {ok, ERe_, _} -> From_ ! {bv_reply, Id_, ERe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_on, Ev_, SubPid_, From_, Ref_} ->\n            OnSubs_ = case get({emit_subs, Ev_}) of undefined -> []; OS_ -> OS_ end,\n            put({emit_subs, Ev_}, [fun(E_, P_) -> {ok, bv_inst_emit_(SubPid_, E_, P_), null} end | OnSubs_]),\n            From_ ! {bv_reply, Ref_, ok},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
+      sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_mod, ?MODULE),\n    put(bv_self_class_, ${erlString(lowerName)}),\n    bv_adopt_outer_(Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<:>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_swap_self_(bv_unwire_reply(Re_, Ty_), self())};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_wire">>) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_outer_get, From_, Key_, Ref_} ->\n            bv_answer_outer_(From_, Key_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_outer_sub, From_, Key_, SubId_, Ref_} ->\n            bv_answer_outer_sub_(From_, Key_, SubId_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_notify, SubId_, Re_} ->\n            case get({pending_subscribe, SubId_}) of F_ when is_function(F_) -> F_(Re_); _ -> ok end,\n            bv_loop_${lowerName}();\n        {bv_outer_op, From_, OClass_, OOp_, OPayload_, ORef_} ->\n            bv_answer_outer_op_(From_, OClass_, OOp_, OPayload_, ORef_),\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 
     // Restore actorFnNames
@@ -1499,14 +1433,6 @@ function genProgram(ctx, actor, allActors, options = {}) {
     }
   }
   ctx._refCapturedBy = refCapturedBy;
-  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
-
-  // Collect emit declarations from constructorBody
-  const emitDecls = new Map();
-  for (const s of (actor.constructorBody || [])) {
-    if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
-  }
-  ctx.emitNames = emitDecls;
   const hasFns = privateFns.length > 0;
   const stateVarDecls = actor.stateVarDecls || [];
   const constructorParams = actor.initParams || [];
@@ -1609,38 +1535,6 @@ function genProgram(ctx, actor, allActors, options = {}) {
         );
       }
     }
-  }
-
-  // Generate on-handler dispatch clauses
-  for (const h of onHandlers) {
-    const typeEnv = buildTypeEnv(h.params, h.body, ctx.typeDecls);
-    const I = '    ';
-    const lines = [];
-    const restVars = new Set();
-    const refVars = new Set();
-    const childActorRefs = new Map();
-    const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: fileChildRefs(ctx), ssaEnv: buildSSAEnv(h.body) };
-    const paramLines = genParamDestructure(h.params, I, { ctx });
-    lines.push(...paramLines);
-    const localLines = genLocals(ctx, h.body, typeEnv, sCtx, I);
-    lines.push(...localLines);
-    const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
-    let replyBlock;
-    if (!hasSilent) {
-      const reply = h.body.find(s => s.type === 'Reply');
-      if (reply) {
-        const replyCtx = { ...sCtx, stmtIdx: h.body.length };
-        replyBlock = `${I}Re = ${genReplyBody(ctx, reply.fields, typeEnv, replyCtx)},\n${I}{ok, Re, null}`;
-      } else {
-        replyBlock = `${I}{ok, null, null}`;
-      }
-    } else {
-      replyBlock = `${I}{ok, null, null}`;
-    }
-    const innerBody = lines.length > 0 ? lines.join('\n') + '\n' + replyBlock : replyBlock;
-    allClauses.splice(allClauses.length - 1, 0,
-      `handle_op(${erlString(h.eventName)}, Message, Payload, _Id, <<"__emit">>) ->\n${innerBody}`,
-    );
   }
 
   // Auto-generate accessor dispatch clauses for constructor params
@@ -2019,11 +1913,6 @@ handle_result(_, _Id, _From, _OpName) ->
 
   const statefulDispatch = '';
 
-  // Generate and add on-handler subscription init lines
-  const onInitLines = onHandlers.map(h => {
-    return `    subscribe_(${erlString(h.eventName)}, fun(_EvName, _EvPayload) -> handle_op(_EvName, #{}, _EvPayload, <<"0">>, <<"__emit">>) end)`;
-  });
-  stateInitLines.push(...onInitLines);
   const stateInitSection = stateInitLines.length > 0
     ? stateInitLines.join(',\n') + ',\n'
     : '';
@@ -2206,26 +2095,6 @@ bv_held_addr_({[A_], _}) -> A_;
 bv_held_addr_(A_) -> A_.
 ` : '';
 
-  const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl')) || allActors.some(a => a.functions.some(f => f.type === 'OnHandler'));
-  const emitFns = hasEmits ? `
-subscribe_(Event, Callback) ->
-    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
-    put({emit_subs, Event}, [Callback|Subs]).
-
-emit_(Event, Payload) ->
-    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
-    lists:foreach(fun(Cb) -> Cb(Event, Payload) end, Subs),
-    null.
-
-emit_await_(Event, Payload) ->
-    Subs = case get({emit_subs, Event}) of undefined -> []; S -> S end,
-    case Subs of
-        [] -> null;
-        [Cb|_] ->
-            {ok, Re, _Ty} = Cb(Event, Payload),
-            bv_object_pack(Re)
-    end.
-` : '';
 
 
   // The wire registry. `bv_type_name/1` is the key of the type a tag names (its
@@ -2317,7 +2186,7 @@ ${genRunAs(allActors)}
 
 ${handleOpClauses.join(';\n')}.
 
-${selfSendFn}${heldSendFn}${emitFns}
+${selfSendFn}${heldSendFn}
 ${captureFn}
 
 ${hydrateFn}
@@ -2350,7 +2219,6 @@ function createErlContext() {
     lambdaCaptureKeys: [],          // process dictionary keys for captures
     currentTypeEnv: null,           // set during handler codegen for function-typed param detection
     stateVarTypeEnv: new Map(),     // state var name → type, for function-typed detection
-    emitNames: new Map(),           // emit declarations: name → EmitDecl
     childStatePrefix: '',           // set during child actor codegen for state key namespacing
     childConstructorParams: null,   // set of constructor param names (shared with parent, not prefixed)
     fnWhileCounter: 0,
@@ -2369,8 +2237,8 @@ export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
   // A class with no functions of its own still has to be constructible.
-  const _hasPublicOrOn = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName);
-  const active = ast.actors.filter(_hasPublicOrOn);
+  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || (a.declarationReturn && a.declarationReturn.typeName);
+  const active = ast.actors.filter(isActive);
   if (active.length === 0) return '';
 
   const ctx = createErlContext();

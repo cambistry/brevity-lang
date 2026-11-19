@@ -712,12 +712,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
     }
 
-    if (s.type === 'SpawnStatement') {
-      if (s.call.type === 'DotCallExpr') {
-        lines.push(`${I}${genExpr(ctx, s.call, typeEnv, stmtCtx)},`);
-      } else {
-        lines.push(`${I}${genActorFnCallExpr(ctx, s.call, typeEnv, stmtCtx)},`);
-      }
+    if (s.type === 'LaunchStatement') {
+      lines.push(`${I}${genActorFnCallExpr(ctx, s.call, typeEnv, stmtCtx)},`);
     }
 
     if (s.type === 'ListDestructure') {

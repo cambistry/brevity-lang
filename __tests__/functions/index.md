@@ -59,7 +59,7 @@ Lineal public handler:
 - Docs and function types state the effect in the arrow: `->` reads, `=>` writes,
   `~>` claims to read. `=> self` and `=> .` are the self-returning and silent forms.
 - `untracked` cells, functions and nested actors don't count as writes.
-- Silent functions cannot be used as values; use `spawn` for effect-only calls.
+- Silent functions cannot be used as values; call them with a trailing `...`.
 - Closures can capture state and can be addressable for subscription tests.
 - `&name` passes a function reference to forms such as `over` and `reduce`. A
   writing function keeps its suffix (`&bump!`, `&fire.`), and a `->` slot rejects it.

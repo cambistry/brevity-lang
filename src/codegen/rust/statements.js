@@ -1280,24 +1280,6 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
             }
           }
-        } else if (calleeName && G.ctx.emitNames.has(calleeName)) {
-          // Emit call in destructure context — emit_await returns Object
-          const tempName = `_r${G.ctx.fnTempCounter++}`;
-          const emitExpr = genRustExpr(s.source, typeEnv);
-          lines.push(`${I}let ${tempName} = BvObject::pack(&${emitExpr});`);
-          for (const item of s.pattern) {
-            if (item.discard) continue;
-            if (item.named) {
-              const accessor = `${tempName}.named.get(${JSON.stringify(item.name)}).cloned().unwrap_or(Value::Null)`;
-              lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-            } else if (item.key !== undefined) {
-              const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
-              lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-            } else if (item.positional) {
-              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
-              lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
-            }
-          }
         } else if (calleeName && G.ctx.actorFnNames.has(calleeName)) {
           const tempName = `_r${G.ctx.fnTempCounter++}`;
           const callExpr = genRustFnCallExpr(s.source, typeEnv);
@@ -2467,13 +2449,8 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         }
       }
       lines.push(`${I}if ${cond} {\n${bodyLines.join('\n')}\n${I}}`);
-    } else if (s.type === 'SpawnStatement') {
-      if (s.call.type === 'FunctionCallExpr' && s.call.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.call.callee.name)) {
-        const callExpr = genRustFnCallExpr(s.call, typeEnv);
-        lines.push(`${I}let _ = ${callExpr};`);
-      } else if (s.call.type === 'DotCallExpr') {
-        lines.push(`${I}${genRustExpr(s.call, typeEnv)};`);
-      }
+    } else if (s.type === 'LaunchStatement') {
+      lines.push(`${I}let _ = ${genRustFnCallExpr(s.call, typeEnv)};`);
     } else if (s.type === 'ExprStatement') {
       if (s.expr.type === 'OverExpr' && s.expr.fn.type === 'Function' && Array.isArray(s.expr.fn.body)) {
         // Standalone over: the results are discarded, so run the body once

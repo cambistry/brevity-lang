@@ -40,7 +40,7 @@ describe('interop — two-actor request-reply', () => {
 // ── 2. Cross-call to silent public function ──────────────────────────────────
 
 describe('interop — cross-call to silent public function', () => {
-  it('caller spawns notify and replies ack', async () => {
+  it('caller launches notify and replies ack', async () => {
     const actor = await createActor(`
       use Store = "Store" as {
         notify. (msg: Text) => .
@@ -50,7 +50,7 @@ describe('interop — cross-call to silent public function', () => {
         =
         msg: Text
         =
-        spawn Store.notify.(:msg)
+        Store.notify(:msg)...
         return ack: "ok"
     `);
     await actor.sendAsync({ id: '1', op: [[{ msg: 'hello' }], 'send_notify!'], from: 'Tester', 'ty': [[{ msg: 'Text' }]] });

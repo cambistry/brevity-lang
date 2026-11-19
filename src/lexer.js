@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'spawn', 'as', 'self', 'set', 'update', 'emit', 'on', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super', 'use']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'as', 'self', 'set', 'update', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super', 'use']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null

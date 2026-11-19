@@ -318,7 +318,7 @@ n *Integer = 0
   function itself is `&total`, never a bare name or `total as Function`.
 - **Writes are:** `<-`, `<|`, `>>` on a cell that outlives the call; a call to a `!` or
   `.` function; a dependency call its doc marks `=>`; a built-in `!` method on a cell.
-- **Not writes:** cells local to the call, an `emit`, `untracked` state, and calls on an
+- **Not writes:** cells local to the call, `untracked` state, and calls on an
   actor this function just made, if they write only that actor.
 - **An actor whose `new` writes while constructing is named `!`**, and so is the call:
   `w W = W!()`. Its actors are typed `W`.

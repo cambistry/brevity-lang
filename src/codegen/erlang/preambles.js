@@ -895,12 +895,6 @@ bv_swap_tag_(T, _) -> T.
 %% A constructor block failed: there's no actor, and whoever is constructing it is told.
 bv_init_failed_() ->
     receive {bv_init_sync, From_} -> From_ ! {bv_init_failed, self()} end.
-%% Register this process for an emitter instance's event.
-bv_on_(Pid, Ev) when is_pid(Pid) ->
-    Ref_ = make_ref(),
-    Pid ! {bv_on, Ev, self(), self(), Ref_},
-    receive {bv_reply, Ref_, _} -> ok end;
-bv_on_(_, _) -> ok.
 %% Run subscription callbacks for notifications an instance has sent us.
 bv_drain_notify_() ->
     receive
@@ -1606,15 +1600,6 @@ bv_await_wire_(Id) ->
     receive {bv_wire_reply, Id, Re_, Ty_} -> {ok, Re_, Ty_}; {bv_error, Id, Fail_} -> {failed, Fail_};
         ${serveClasses('bv_await_wire_(Id)')};
         ${asideLine('bv_await_wire_(Id)')} end.
-%% Deliver an emitted event to a subscriber instance and await its handler.
-bv_inst_emit_(Pid, Ev, Payload) ->
-    Id_ = integer_to_binary(erlang:unique_integer([positive])),
-    Pid ! {bv_emit, self(), Ev, Payload, Id_},
-    bv_await_emit_(Id_).
-bv_await_emit_(Id_) ->
-    receive {bv_reply, Id_, R_} -> R_; {bv_error, Id_, _} -> null;
-        ${serveClasses('bv_await_emit_(Id_)')};
-        ${asideLine('bv_await_emit_(Id_)')} end.
 
 %% ── Type matching ───────────────────────────────────────────────────────────
 %% A type value's tag is its address (or the alias spelling of its authority);

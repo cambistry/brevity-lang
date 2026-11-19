@@ -92,7 +92,7 @@ n *Integer = 0
 
 Calling a `!` or `.` function is a write, so its caller needs a mark too. Writes that
 don't count: cells local to the call, calls on an actor the function just made (if they
-write only that actor), `emit`, and anything `untracked` (logs, metrics, caches).
+write only that actor), and anything `untracked` (logs, metrics, caches).
 
 Signatures state the effect in the arrow, never the name: `->` reads, `=>` writes,
 `~>` claims to read. `=> self` returns self, `=> .` is silent, and `-> self` is the

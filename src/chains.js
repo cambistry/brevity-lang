@@ -282,4 +282,4 @@ export function lowerChains(program, options = {}) {
 }
 
 const STATEMENTS = new Set(['Assign', 'TypedAssign', 'ExprStatement', 'Reply', 'Return', 'ImplicitReturn', 'SetStatement',
-  'IfStatement', 'WhileStatement', 'SilentTerminator', 'RefDecl', 'DestructureAssign', 'SpawnStatement', 'ActorSetStatement', 'ActorFieldSet']);
+  'IfStatement', 'WhileStatement', 'SilentTerminator', 'RefDecl', 'DestructureAssign', 'LaunchStatement', 'ActorSetStatement', 'ActorFieldSet']);

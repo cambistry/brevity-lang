@@ -21,14 +21,24 @@ describe('silent functions — runtime', () => {
 
     @add = (a: Integer, b: Integer) -> sum: (a + b)
 
-    --- spawn + silent private function ---
+    --- launch a silent private function ---
 
-    @spawnTest!
+    @launchTest!
       =
-      spawn fire.()
+      fire...
       return answer: "ok"
 
+    @continuity!
+      =
+      fire...
+      x Integer = get()
+      return :x
+
     fire. = {}
+
+    get
+      =
+      -> 10
 
     // stateful silent functions + lambdas
     last *Text = ""
@@ -80,7 +90,7 @@ describe('silent functions — runtime', () => {
     // silent function — empty lineal body
     @spaciousEmpty!
       =
-      spawn fireEmpty.()
+      fireEmpty...
       return answer: "ok"
 
     fireEmpty.
@@ -107,10 +117,17 @@ describe('silent functions — runtime', () => {
     );
   });
 
-  it('silent public functions + type matching — spawn + silent private function — reply ok', async () => {
+  it('silent public functions + type matching — launch a silent private function — reply ok', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: 'spawnTest!', from: 'c' } },
+      { input: { id: '3', op: 'launchTest!', from: 'c' } },
       { output: { id: '3', 'ty': [{ answer: 'Text' }], re: [{ answer: 'ok' }], to: 'c' } },
+    );
+  });
+
+  it('a launch does not block subsequent statements', async () => {
+    await expectBehavior(script,
+      { input: { id: '3b', op: 'continuity!', from: 'c' } },
+      { output: { id: '3b', 'ty': [{ x: 'Integer' }], re: [{ x: 10 }], to: 'c' } },
     );
   });
 
@@ -182,17 +199,17 @@ describe('silent functions — runtime', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Side-effect spawn with busy-wait
+// Side-effect launch with busy-wait
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('silent private — side-effect spawn with __tick__', () => {
+describe('silent private — side-effect launch with __tick__', () => {
   it('dot on same line — side-effect function sets state', async () => {
     const script = `
       x *Integer = 0
 
       @test!
         =
-        spawn fire.()
+        fire...
         repeat while (x == 0) __tick__()
         return x
       fire.

@@ -435,21 +435,6 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     return 'timer:sleep(0)';
   }
 
-  // Emit invocation
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.emitNames.has(expr.callee.name)) {
-    const emitDecl = ctx.emitNames.get(expr.callee.name);
-    const eventName = erlString(expr.callee.name);
-    const emitFn = emitDecl.silent ? 'emit_' : 'emit_await_';
-    if (expr.args.length > 0) {
-      const fields = emitDecl.params.map((p, i) => {
-        const val = i < expr.args.length ? genExpr(ctx, expr.args[i], typeEnv, sCtx) : 'null';
-        return `${erlString(p.name)} => ${val}`;
-      }).join(', ');
-      return `${emitFn}(${eventName}, #{${fields}})`;
-    }
-    return `${emitFn}(${eventName}, #{})`;
-  }
-
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, waited on, so a read after it sees it.
   if (expr.type === 'OuterSet') {

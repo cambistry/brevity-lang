@@ -627,23 +627,6 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr' && expr.outerFnCall) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
-  // Emit invocation
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.emitNames.has(expr.callee.name)) {
-    const emitDecl = G.ctx.emitNames.get(expr.callee.name);
-    const eventName = expr.callee.name;
-    let payload;
-    if (expr.args.length > 0) {
-      const inserts = emitDecl.params.map((p, i) => {
-        const val = i < expr.args.length ? genRustExpr(expr.args[i], typeEnv) : 'Value::Null';
-        const t = p.type || (i < expr.args.length ? inferLiteralType(expr.args[i]) || inferExprType(expr.args[i], typeEnv) : null);
-        return `_em.insert("${p.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
-      }).join(' ');
-      payload = `{ let mut _em = Map::new(); ${inserts} Value::Object(_em) }`;
-    } else {
-      payload = 'json!({})';
-    }
-    return `self.emit_${eventName}(&${payload})`;
-  }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }

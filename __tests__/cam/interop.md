@@ -28,7 +28,7 @@ Expected behavior:
 
 ## Silent Calls
 
-Use `spawn` when calling a silent remote operation from a replying handler.
+Call a silent remote operation with a trailing `...` from a replying handler.
 Calling a silent operation counts as a write, so the handler is named with `!`:
 
 ```brevity
@@ -40,7 +40,7 @@ use Store = "Store" as {
   =
   msg: Text
   =
-  spawn Store.notify.(:msg)
+  Store.notify(:msg)...
   return ack: "ok"
 ```
 

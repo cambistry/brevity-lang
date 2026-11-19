@@ -15,7 +15,7 @@ import { checkInitOrder } from './init_order.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
-import { BUILTIN_TYPE_NAMES } from './ast.js';
+import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
@@ -1189,7 +1189,7 @@ function settleElidedDots(ast, remotesParsed) {
 }
 
 // Silence is in the name, so the call form is checked by name alone: a call
-// to a silent name (`x.ping.()`) is fire-and-forget (`...` or `spawn`), and a
+// to a silent name (`x.ping.()`) is fire-and-forget (`...`), and a
 // `...` call names a silent (or bang) member.
 function checkSilentCallForm(ast, remotesParsed = {}) {
   const calleeName = (call) => call.type === 'DotCallExpr' ? call.method
@@ -1199,16 +1199,16 @@ function checkSilentCallForm(ast, remotesParsed = {}) {
   const visit = (node, launched) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => visit(n, false)); return; }
-    if (node.type === 'SpawnStatement' || ((node.type === 'ExprStatement' || node.type === 'ImplicitReturn') && node.ellipsis)) {
-      const call = node.type === 'SpawnStatement' ? node.call : node.expr;
+    if (node.type === 'LaunchStatement' || ((node.type === 'ExprStatement' || node.type === 'ImplicitReturn') && node.ellipsis)) {
+      const call = node.type === 'LaunchStatement' ? node.call : node.expr;
       const name = calleeName(call);
       // A foreign function's name is literal, so its doc can say it's silent instead.
       const docSilent = call.type === 'DotCallExpr' && receiverDoc(call, remotesParsed)?.[call.method]?.some?.(sig => sig.silent);
-      if (node.ellipsis && name && !call.silentField && !docSilent && !name.endsWith('.') && !name.endsWith('!')) {
+      if (name && !call.silentField && !docSilent && !name.endsWith('.') && !name.endsWith('!')) {
         throw new Error(`'${shown(call)}' returns a value; '...' needs a silent '${name}.'`);
       }
       // A launched call doesn't wait for a reply, whatever made it silent.
-      if (node.ellipsis && call.type === 'DotCallExpr') call.launched = true;
+      if (call.type === 'DotCallExpr') call.launched = true;
       visit(call, true);
       return;
     }
@@ -2490,7 +2490,7 @@ function checkNamespaceConflict(actor) {
   const publicNames = new Set();
   const privateNames = new Set();
   for (const fn of actor.functions) {
-    if (!fn.name) continue; // OnHandler etc.
+    if (!fn.name) continue;
     if (fn.name.startsWith('@')) {
       publicNames.add(fn.name);
     } else {
@@ -2563,9 +2563,9 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
   }
   // A public function is silent by its name: `@write.`.
   for (const fn of actor.functions) if (fn.name?.startsWith('@') && fn.name.endsWith('.')) silentFns.add(fn.name);
-  // `call...` launches without waiting, so its callee must be silent (`spawn`
-  // stays permissive). A value-returning `fn` reached by `fn...` names it. A
-  // launch of one of this actor's own functions is a `spawn`.
+  // `call...` launches without waiting, so its callee must be silent. A
+  // value-returning `fn` reached by `fn...` names it. A launch of one of this
+  // actor's own functions becomes a LaunchStatement.
   const fnNames = new Set(actor.functions.map(f => f.name).filter(Boolean));
   const checkEllipsis = (node) => {
     if (!node || typeof node !== 'object') return;
@@ -2577,14 +2577,14 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
           const name = s.expr.callee.name;
           const plain = name.endsWith('.') ? name.slice(0, -1) : name;
           if (fnNames.has(name) || fnNames.has(plain)) {
-            node[i] = { type: 'SpawnStatement', call: s.expr, ellipsis: true };
+            node[i] = launchStatement(s.expr);
           }
         }
       }
       node.forEach(checkEllipsis);
       return;
     }
-    if (node.type === 'SpawnStatement' && node.ellipsis && node.call?.type === 'FunctionCallExpr') {
+    if (node.type === 'LaunchStatement') {
       const name = node.call.callee?.name;
       const plain = name?.endsWith('.') ? name.slice(0, -1) : name;
       if (name && !fnNames.has(name) && fnNames.has(plain)) {
@@ -3557,7 +3557,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
 
     // Constructor call validation in function bodies
-    const callExpr = s.type === 'ExprStatement' ? s.expr : s.type === 'SpawnStatement' ? s.call : s.value;
+    const callExpr = s.type === 'ExprStatement' ? s.expr : s.value;
     if (callExpr?.type === 'FunctionCallExpr' && callExpr.callee?.type === 'Identifier'
         && dependencyNames.has(callExpr.callee.name) && factoryDecls[callExpr.callee.name]) {
       validateConstructorCall(callExpr, factoryDecls, typeEnv);
@@ -3585,7 +3585,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     // ── Service coercion constraint checking ──────────────────────────
     // Check DotCallExpr on coercion aliases against the cast's constraint
     if (coercionConstraints?.size > 0) {
-      const coercionDot = s.type === 'DestructureAssign' ? s.source : (s.type === 'ExprStatement' ? s.expr : s.type === 'SpawnStatement' ? s.call : s.value);
+      const coercionDot = s.type === 'DestructureAssign' ? s.source : (s.type === 'ExprStatement' ? s.expr : s.value);
       if (coercionDot?.type === 'DotCallExpr') {
         const objName = (coercionDot.object?.type === 'Identifier' || coercionDot.object?.type === 'RefRead') ? coercionDot.object.name : null;
         if (objName && coercionConstraints.has(objName)) {
@@ -3613,7 +3613,6 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     // ── Remote call validation ──────────────────────────────────────
     // Check DotCallExpr on declared dependencies or actor-reference variables
     const dotCall = s.type === 'ExprStatement' ? s.expr
-      : s.type === 'SpawnStatement' ? s.call
       : s.type === 'DestructureAssign' ? s.source
       : s.value;
     if (dotCall?.type === 'DotCallExpr') {
@@ -4037,7 +4036,7 @@ function checkNestedBlocks(node, visible) {
     return;
   }
   if (!node || typeof node !== 'object') return;
-  if (node.type === 'Function' || node.type === 'OnHandler' || node.type === 'SubscribeCall') {
+  if (node.type === 'Function' || node.type === 'SubscribeCall') {
     checkFunctionBinds(node, visible);
     return;
   }

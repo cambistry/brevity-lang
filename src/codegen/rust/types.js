@@ -706,7 +706,6 @@ function createRustContext() {
     lambdaCounter: 0,
     lambdaHandlers: [],
     lambdaVarNames: new Set(),
-    emitNames: new Map(),
     fnTempCounter: 0,
     childStatePrefix: '',
     // Active catch labels — outermost first. Each entry:

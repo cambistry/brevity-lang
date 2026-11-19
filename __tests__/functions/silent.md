@@ -49,7 +49,7 @@ bump. = (n Integer) {
 
 A silent call ends in `...` (fire-and-forget). Right after the name the
 ellipsis absorbs the dot: `fire...`, never `fire....`. Elsewhere the dot is
-written: `bump(7)...`, `Log.write(:message)...`. `spawn fire.()` also works.
+written: `bump(7)...`, `Log.write(:message)...`.
 
 ```brevity
 @go!
@@ -80,7 +80,7 @@ last *Text = ""
 
 The tests reject these shapes:
 
-- calling a silent function without `...` (or `spawn`)
+- calling a silent function without `...`
 - `...` on a function that returns a value
 - a trailing `.` in a named function body
 - assigning the result of a silent function

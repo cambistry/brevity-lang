@@ -51,12 +51,6 @@ export const fileParam = (name, { type = null, positional = false, defaultValue 
 export const functionDecl = (name, params, body, { overloadMode = 'create', actorDef = null, emptyOverload = false } = {}) =>
   ({ type: 'FunctionDecl', name, params, body, ...(overloadMode !== 'create' && { overloadMode }), ...(actorDef && { actorDef }), ...(emptyOverload && { emptyOverload }) });
 
-export const emitDecl = (name, params, { returnType = null, silent = false } = {}) =>
-  ({ type: 'EmitDecl', name, params, returnType, silent });
-
-export const onHandler = (source, eventName, params, body) =>
-  ({ type: 'OnHandler', source, eventName, params, body });
-
 export const subscribeCall = (target, params, body, args = []) =>
   ({ type: 'SubscribeCall', target, params, body, args });
 
@@ -103,8 +97,9 @@ export const ifStatement = (cond, body) =>
 export const whileStatement = (cond, body, negated) =>
   ({ type: 'WhileStatement', cond, body, negated });
 
-export const spawnStatement = (call) =>
-  ({ type: 'SpawnStatement', call });
+// `fn...` on one of the actor's own functions: a self-send nobody waits on.
+export const launchStatement = (call) =>
+  ({ type: 'LaunchStatement', call });
 
 // ── Returns ──────────────────────────────────────────────────────────────────
 

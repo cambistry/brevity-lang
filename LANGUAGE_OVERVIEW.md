@@ -135,7 +135,6 @@ use Log = "/services/log" as {
 ```
 
 A bare `return` exits a silent function early; `return value` is an error.
-`spawn` also starts a silent operation without waiting for a reply.
 
 Parens are optional on any call with no args: `c.total`, `@total`, `bump!`,
 `c.inc!.total`, `c.inc!...`. A bare name of a function is therefore a call; the

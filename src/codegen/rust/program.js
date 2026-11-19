@@ -304,9 +304,6 @@ ${sourceArms}
     // per-instance dispatch swaps for the instance's own map.
     structFields.push('    sub_slots: std::collections::HashMap<String, Value>');
     newArgs.push('sub_slots: std::collections::HashMap::new()');
-    // Emitter instance ref → (subscriber instance ref, event) from `on` handlers.
-    structFields.push('    emit_subs: std::collections::HashMap<String, Vec<(String, String)>>');
-    newArgs.push('emit_subs: std::collections::HashMap::new()');
     // Nesting depth of per-instance dispatch, and subscription notifications
     // deferred until it returns to the host (see dispatch_sub).
     structFields.push('    inst_depth: u32');
@@ -1286,7 +1283,7 @@ fn bv_sel(addr: &str) -> String {
 // Whether a call came from outside the process, so it has tags to check.
 #[allow(dead_code)]
 fn bv_from_wire_caller(from: &str) -> bool {
-    !matches!(from, "__parent" | "__self" | "__test" | "__emit")
+    !matches!(from, "__parent" | "__self" | "__test")
 }
 
 fn bv_as_kind(v: &Value) -> String {
@@ -2339,7 +2336,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   // A class with no functions of its own still has to be constructible.
-  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || a.functions.some(f => f.type === 'OnHandler') || (a.declarationReturn && a.declarationReturn.typeName));
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || (a.declarationReturn && a.declarationReturn.typeName));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   // A public singleton is published under the actor that builds it, which needs
@@ -2508,13 +2505,6 @@ function codegenRust(ast, options = {}) {
     }
     const info = G.ctx.actorInfo.get(a.name);
     G.ctx.actorInfo.set(a.name, { ...info, actor: mergedActor });
-  }
-  // Collect emit declarations from all actors
-  G.ctx.emitNames = new Map();
-  for (const a of active) {
-    for (const s of (a.constructorBody || [])) {
-      if (s.type === 'EmitDecl') G.ctx.emitNames.set(s.name, s);
-    }
   }
   const mainActor = active.find(a => !a.name) || active[0];
   return genRustProgram(mainActor, active);

@@ -756,22 +756,6 @@ export function genExpr(ctx, expr) {
       const name = expr.callee.name;
       // __tick__ intrinsic
       if (name === '__tick__') return 'await new Promise(r => setTimeout(r, 0))';
-      // Emit invocation — route to subscribers
-      if (ctx.emitNames.has(name)) {
-        const emitDecl = ctx.emitNames.get(name);
-        const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
-        let payload = '{}';
-        if (expr.args.length > 0) {
-          // Build named payload matching emit declaration params
-          const fields = emitDecl.params.map((p, i) => {
-            const val = i < expr.args.length ? genArg(expr.args[i]) : 'null';
-            return `${JSON.stringify(p.name)}: ${val}`;
-          }).join(', ');
-          payload = `{${fields}}`;
-        }
-        const method = emitDecl.silent ? '#emit' : '#emitAwait';
-        return `await this.${method}(${JSON.stringify(name)}, ${payload})`;
-      }
       // Primitive type constructors — unwrap to the inner value
       const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean']);
       if (_primitiveTypes.has(name) && expr.args.length === 1) {

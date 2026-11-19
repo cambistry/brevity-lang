@@ -66,12 +66,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   // Trailing ExprStatement promotion
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
-    const lastExpr = rawBody[rawBody.length - 1].expr;
-    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && G.ctx.emitNames.has(lastExpr.callee.name) && G.ctx.emitNames.get(lastExpr.callee.name).silent;
-    if (!isSilentEmit) {
-      implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
-      body = rawBody.slice(0, -1);
-    }
+    implicitReturn = { type: 'ImplicitReturn', expr: rawBody[rawBody.length - 1].expr, typeName: null };
+    body = rawBody.slice(0, -1);
   }
   const typeEnv = buildTypeEnv(params, body);
   // Merge state var types for function-typed state var detection
@@ -877,7 +873,6 @@ function genRustChildDispatch(actor) {
   const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   const publicFns = actor.functions.filter(f => _isPublicFn(f));
   const privateFns = actor.functions.filter(f => f.type === 'FunctionDecl' && f.name && !_isPublicFn(f));
-  const onHandlers = actor.functions.filter(f => f.type === 'OnHandler');
   const name = actor.name.toLowerCase();
   const eCtx = undefined;
   // Class param and state types, so handler bodies see e.g. Text params as Text.
@@ -892,40 +887,6 @@ function genRustChildDispatch(actor) {
     ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true, publicFns.filter(o => o.name === h.name).length > 1)),
     ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
   ];
-  // Add on-handler arms
-  for (const h of onHandlers) {
-    const typeEnv = buildTypeEnv(h.params, h.body);
-    const I = '                ';
-    const hLines = [];
-    if (h.params.length > 0) {
-      hLines.push(`${I}let _s = BvObject::pack(payload);`);
-      for (const p of orderParamsForDefaults(h.params)) {
-        const accessor = genRustDefaulted(p, p.positional ? `_s.positional.get(0).cloned()` : `_s.named.get("${p.name}").cloned()`, typeEnv);
-        if (p.type) {
-          hLines.push(`${I}let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
-        } else {
-          hLines.push(`${I}let ${rustIdent(p.name)} = ${accessor};`);
-        }
-      }
-    }
-    const mutableVars = findMutableVars(h.body);
-    const funcAnalysis = analyzeFunctions(h.body, mutableVars, typeEnv);
-    const savedSsaScope = G.ctx.ssaScope;
-    const savedSsaCounts = G.ctx.ssaCounts;
-    const locals = genRustLocals(h.body, typeEnv, funcAnalysis, mutableVars, I, []);
-    if (locals) hLines.push(locals);
-    // Check if on-handler has a reply (emit-with-return-value)
-    const hReply = h.body.find(s => s.type === 'Reply');
-    if (hReply) {
-      const refNames = new Set();
-      hLines.push(`${I}re = Some(${genRustReBody(hReply.fields, typeEnv, refNames)});`);
-    } else {
-      hLines.push(`${I}// on-handler — silent`);
-    }
-    G.ctx.ssaScope = savedSsaScope;
-    G.ctx.ssaCounts = savedSsaCounts;
-    arms.push(`            "${h.eventName}" => {\n${hLines.join('\n')}\n            }`);
-  }
   // Auto-generate accessor arms for child constructor params
   const childConstructorParams = actor.initParams || [];
   for (const p of childConstructorParams) {
@@ -1179,13 +1140,6 @@ function genRustChildInit(actor) {
       const refName = s.ref?.name || s.ref;
       lines.push(`        self.state.insert("${stateKey(s.name)}".to_string(), self.state.get("${stateKey(refName)}").cloned().unwrap_or(Value::Null));`);
     }
-  }
-
-  // `on <param>.<event>`: register this instance with the emitter instance
-  // the param holds, so the emitter's emit reaches it.
-  for (const f of (actor.functions || []).filter(f => f.type === 'OnHandler')) {
-    if (!constructorParams.some(p => p.name === f.source)) continue;
-    lines.push(`        if let Some(_cur) = self.current_${name}_instance { let _src: Value = bv_val(${f.source}.clone()); if let Some(_s) = _src.as_str() { self.emit_subs.entry(_s.to_string()).or_insert_with(Vec::new).push((format!("${name}/{}", _cur), ${JSON.stringify(f.eventName)}.to_string())); } }`);
   }
 
   return `
@@ -1447,31 +1401,6 @@ function genRustChildMethods(allActors) {
 ${arms}
             _ => Value::Null,
         }
-    }`);
-  }
-
-  // Generate emit methods — each emit declaration gets a method that dispatches to subscribers
-  // In Rust, subscriptions are known at compile time from on-handlers
-  const allEmitDecls = new Map();
-  for (const a of childActors) {
-    for (const s of (a.constructorBody || [])) {
-      if (s.type === 'EmitDecl') allEmitDecls.set(s.name, { decl: s, actor: a });
-    }
-  }
-  // Subscribers registered themselves with the emitting instance at init
-  // (emit_subs, keyed by the emitter's instance ref).
-  for (const [eventName, { decl, actor: emitter }] of allEmitDecls) {
-    const lc = emitter.name.toLowerCase();
-    parts.push(`
-    fn emit_${eventName}(&mut self, payload: &Value) -> Value {
-        let _me = format!("${lc}/{}", self.current_${lc}_instance.unwrap_or(0));
-        let _subs: Vec<(String, String)> = self.emit_subs.get(&_me).cloned().unwrap_or_default().into_iter().filter(|(_, ev)| ev == ${JSON.stringify(eventName)}).collect();
-        let mut _first = Value::Null;
-        for (_i, (_sub, _ev)) in _subs.iter().enumerate() {
-            let _r = self.child_dispatch(_sub, _ev, payload, "", "__parent");
-            if _i == 0 { _first = _r; }
-        }
-        ${decl.silent ? 'let _ = _first; Value::Null' : '_first'}
     }`);
   }
 

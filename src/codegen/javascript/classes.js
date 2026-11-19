@@ -79,7 +79,6 @@ function createContext() {
     localInstanceVars: new Set(),
     childActorVars: new Map(),
     wrappedChildParams: new Set(),
-    emitNames: new Map(),
     lambdaCounter: 0,
     lambdaHandlers: [],
     lambdaVarNames: new Set(),
@@ -107,9 +106,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const hasSilent = rawBody.some(s => s.type === 'SilentTerminator');
   if (!reply && !implicitReturn && !hasSilent && rawBody.length > 0 && rawBody[rawBody.length - 1].type === 'ExprStatement') {
     const lastExpr = rawBody[rawBody.length - 1].expr;
-    // Don't promote silent emit calls to implicit returns
-    const isSilentEmit = lastExpr.type === 'FunctionCallExpr' && lastExpr.callee?.type === 'Identifier' && ctx.emitNames.has(lastExpr.callee.name) && ctx.emitNames.get(lastExpr.callee.name).silent;
-    if (!isSilentEmit && lastExpr.type !== 'CellNotify') {
+    if (lastExpr.type !== 'CellNotify') {
       implicitReturn = { type: 'ImplicitReturn', expr: lastExpr, typeName: null };
       body = rawBody.slice(0, -1);
     }
@@ -220,7 +217,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     condition = `${opMatch(name)}`;
   }
   // Outside, only `@name` is exposed.
-  if (isPrivate) condition += ` && (from === '__parent' || from === '__inner' || from === '__self' || from === '__test' || from === '__emit')`;
+  if (isPrivate) condition += ` && (from === '__parent' || from === '__inner' || from === '__self' || from === '__test')`;
   // set@<cell>: after mutation, replay the new value to each registered
   // subscriber using the stored id. Notification shape matches the getter
   // (positional `re` plus `ty` type tag). Additionally, for every public
@@ -372,7 +369,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const isPublicOrBuiltin = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('new@') || f.name === 'new');
   const publicFns = mergedActor.functions.filter(f => isFnDecl(f) && isPublicOrBuiltin(f));
   const privateFns = mergedActor.functions.filter(f => isFnDecl(f) && !isPublicOrBuiltin(f));
-  const onHandlers = mergedActor.functions.filter(f => f.type === 'OnHandler');
 
   // `@x(…)` names the function itself, so it routes as a private function does.
   ctx.actorFnNames = new Set([...privateFns, ...publicFns.filter(f => f.name.startsWith('@'))].map(f => f.name));
@@ -385,7 +381,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (fn.name.endsWith('.') || (hasSilent && !hasReply && !hasImplicit)) silentFnNames.add(fn.name);
   }
   const allFns = [...publicFns, ...privateFns];
-  const usesObject = allFns.some(h => h.params.length > 0) || onHandlers.some(h => h.params.length > 0);
+  const usesObject = allFns.some(h => h.params.length > 0);
   const usesTypeMatching = allFns.some(h => h.params.some(p => !p.rest));
 
   const stateVarDecls = mergedActor.stateVarDecls || [];
@@ -454,12 +450,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   for (const s of serviceCoercions) {
     ctx.wrappedChildParams.add(s.name);
   }
-  // Collect emit declarations
-  const emitDecls = new Map();
-  for (const s of (mergedActor.constructorBody || [])) {
-    if (s.type === 'EmitDecl') emitDecls.set(s.name, s);
-  }
-  ctx.emitNames = emitDecls;
   const stateVarEnv = new Map([
     // The file's names a class reads (src/outer_reads.js); its own come after, and win.
     ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor)].filter(([, t]) => t) : []),
@@ -657,34 +647,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (silentLambda) silentFnNames.add(dispatchKey);
   }
 
-  // Generate on-handler dispatch arms
-  const onParts = onHandlers.map(h => {
-    const destructure = genDestructure(ctx, h.params);
-    const { env: typeEnv } = buildTypeEnv(h.params, h.body, stateVarEnv, null, ctx.typeDecls);
-    const savedTypeEnv = ctx.currentTypeEnv;
-    ctx.currentTypeEnv = typeEnv;
-    const savedSsaScope = ctx.ssaScope;
-    const savedSsaCounts = ctx.ssaCounts;
-    const locals = genLocals(ctx, h.body, typeEnv);
-    const hasSilent = h.body.some(s => s.type === 'SilentTerminator');
-    let reLine = '';
-    if (!hasSilent) {
-      const reply = h.body.find(s => s.type === 'Reply');
-      if (reply) {
-        reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
-      }
-    }
-    ctx.ssaScope = savedSsaScope;
-    ctx.ssaCounts = savedSsaCounts;
-    ctx.currentTypeEnv = savedTypeEnv;
-    const block = `${destructure}${locals}${reLine}\n        _handled = true;`;
-    const sourceIsRemote = ctx.remoteInstanceVars.has(h.source);
-    const fromCheck = sourceIsRemote
-      ? `from === this.#${stateKey(h.source)}`
-      : 'from === "__emit"';
-    return { condition: `opName === ${JSON.stringify(h.eventName)} && ${fromCheck}`, block };
-  });
-
   // Auto-generate accessor dispatch arms for constructor params
   const accessorParts = constructorParams
     .map(p => {
@@ -719,7 +681,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     });
   }
 
-  const allParts = [...publicFnParts, ...lambdaParts, ...onParts, ...accessorParts, ...asClauseParts];
+  const allParts = [...publicFnParts, ...lambdaParts, ...accessorParts, ...asClauseParts];
   const ifChain = allParts.length > 0
     ? allParts.map(({ condition, block }, i) => {
         const kw = i === 0 ? '    if' : '    } else if';
@@ -833,13 +795,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
   }
   allInitLines.push(...coercionInitLines);
-  // Generate on-handler init lines (subscribe to child emits)
-  const onInitLines = onHandlers.map(h => {
-    return `    if (this.#${stateKey(h.source)} && this.#${stateKey(h.source)}._subscribe) this.#${stateKey(h.source)}._subscribe(${JSON.stringify(h.eventName)}, async (msg) => { await this.#dispatch(msg); });`;
-  });
-  if (onInitLines.length > 0) {
-    allInitLines.push(...onInitLines);
-  }
   const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
   // Public singletons declared directly in this actor (`@s = actor { … }`). Each is
   // published at `:s`, as an actor made by `#new` is at `:C:N`.
@@ -860,7 +815,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // A constructor block's call on another actor in this process needs the helper too.
   if (allInitLines.some(l => childCall.test(l))) ctx.usesChildSend = true;
   if (hasDeferred) allInitLines.push(`    await Promise.all(this.#_joins);`);
-  // Regenerate initMethodBody with on-handler lines
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
@@ -872,12 +826,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ? `try { ${initCall} } catch (err) { delete err.bvEx; throw err; }`
     : initCall;
 
-  const hasEmits = emitDecls.size > 0;
-  // #_cellSubs holds subscription lists keyed by target label (`@a`). Populated by
-  // the generic subscribe@X prologue in #dispatch; walked by set@X's
-  // notifyBlock to replay new values to registered subscribers. Always
-  // emitted since the dispatcher prologue references it unconditionally.
-  const hasSubscribableCells = true;
 
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
   const readsOuter = !!actor.name && ctx.readsOuter;
@@ -894,43 +842,21 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Published params: props, which `$subscribe` doesn't apply to.
   const propNames = [...new Set([...(actor.initParams || []), ...(mergedActor.initParams || [])].filter(p => p.accessor).map(p => p.accessor.replace(/^@/, '')))];
 
+  // #_cellSubs: subscription lists keyed by target label (`@a`), filled by the
+  // dispatcher's subscribe prologue and walked by set@X to replay new values.
   return `${exportKw}class${name} {
   #binding
   #pending = new Map()
   #_newPending = new Map()
-  #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
+  #_testFwd = new Map()
+  #_cellSubs = new Map()
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null
   #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
 
-  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }${hasEmits ? `
-
-  _subscribe(event, callback) {
-    if (!this.#_subscribers.has(event)) this.#_subscribers.set(event, []);
-    this.#_subscribers.get(event).push(callback);
-  }
-
-  async #emit(event, payload) {
-    const subs = this.#_subscribers.get(event) || [];
-    for (const cb of subs) {
-      const op = payload && Object.keys(payload).length > 0 ? [[payload], event] : event;
-      await cb({ op, from: '__emit' });
-    }
-  }
-
-  async #emitAwait(event, payload) {
-    const subs = this.#_subscribers.get(event) || [];
-    for (const cb of subs) {
-      const id = String(++this.#nextId);
-      const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
-      const op = payload && Object.keys(payload).length > 0 ? [[payload], event] : event;
-      cb({ id, op, from: '__emit' });
-      return p;
-    }
-    return null;
-  }` : ''}
+  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
   async #init(${[...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
 
@@ -1403,7 +1329,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }
     const _hasPayload = _rawPayload !== null && _rawPayload !== undefined &&
       (Array.isArray(_rawPayload) ? _rawPayload.length > 0 : Object.keys(_rawPayload).length > 0);
-    if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__inner' && from !== '__self' && from !== '__test' && from !== '__emit'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
+    if (_hasPayload && opName !== '$as' && !('ty' in message) && from !== '__parent' && from !== '__inner' && from !== '__self' && from !== '__test'${remoteRefChecks ? ` && ${remoteRefChecks}` : ''}) {
       this.#binding.post({ id, ex: { [opName]: 'schema_required' }, to: _replyTo });
       return;
     }

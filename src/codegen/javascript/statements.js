@@ -819,7 +819,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.type === 'TypedAssign' && typeof s.typeName === 'string' && ctx.actorNames.has(s.typeName))
       ctx.childActorVars.set(s.name, false);
   }
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'SpawnStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'LaunchStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
   const result = stmts.map(s => {
     // Value-carrying catch on RHS of (Typed)Assign — emit hoisted local first.
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'CatchExpr' && !s.value.isVoid) {
@@ -956,11 +956,8 @@ export function genLocals(ctx, body, outerEnv) {
       const needsAwait = code.includes('#childSend') || code.includes('#send(');
       return `\n        ${needsAwait ? 'await ' : ''}${code};`;
     }
-    if (s.type === 'SpawnStatement') {
+    if (s.type === 'LaunchStatement') {
       const call = s.call;
-      if (call.type === 'DotCallExpr') {
-        return `\n        ${genExpr(ctx, call)};`;
-      }
       const genArg = arg => CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
       const op = call.args.length === 0
         ? `"${wireLabel(call.callee.name)}"`

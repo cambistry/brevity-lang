@@ -1406,15 +1406,6 @@ describe('a fresh actor writes only itself — validation', () => {
     expect(() => compileSource(src)).toThrow(/'@go' writes/);
   });
 
-  it('an emit isn\'t a write', () => {
-    expect(() => compileSource('W = *{\n  emit fired() => .\n  @fire = { fired() }\n}\n@go = { return 1 }\n')).not.toThrow();
-    expect(() => compileSource('W = *{\n  emit fired() => .\n  @fire! = { fired() }\n}\n@go = { return 1 }\n')).toThrow(/'@fire!' never writes/);
-  });
-
-  it('a constructor block that emits doesn\'t need `!`', () => {
-    expect(() => compileSource('W = *{\n  emit fired() => .\n  x = fired()\n}\n@go = { return 1 }\n')).not.toThrow();
-  });
-
   it('a fresh actor of a dependency\'s class always counts', () => {
     expect(() => compileSource(`${SVC}@go = {\n  t = Svc.Thing()\n  t.poke!()\n  return 1\n}\n`)).toThrow(/'@go' writes/);
   });

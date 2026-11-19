@@ -4152,13 +4152,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           }
           body.push(AST.ifStatement(cond, ifBody));
         }
-      } else if (peek().type === 'KEYWORD' && peek().value === 'spawn') {
-        consume(); // 'spawn'
-        const expr = parseExpr();
-        if (expr.type !== 'FunctionCallExpr' && expr.type !== 'DotCallExpr') {
-          throw new Error("'spawn' requires a function call or external send");
-        }
-        body.push(AST.spawnStatement(expr ));
       } else if (
         (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
         (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN') ||
@@ -5207,65 +5200,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
         const body = parseBody();
         functions.push(AST.functionDecl('update', params, body));
-      } else if (peek().type === 'KEYWORD' && peek().value === 'emit') {
-        // emit declaration: emit fire(args) -> (ReturnType) or emit fire(args) -> .
-        consume(); // 'emit'
-        const emitName = expect('IDENT').value;
-        expect('LPAREN');
-        const params = [];
-        while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-          if (peek().type === 'COMMA') { consume(); continue; }
-          const p = parseOneParam();
-          if (p === null) break;
-          params.push(p);
-        }
-        expect('RPAREN');
-        // Parse return type: -> (Type) or -> .
-        let returnType = null;
-        let silent = false;
-        if (peek().type === '->') {
-          inSignature++;
-          const emitArrow = consume().value;
-          inSignature--;
-          if (peek().type === 'DOT' && emitArrow !== '=>') throw new Error(`'${emitArrow} .' has nothing to read — a silent emit is '=> .'`);
-          if (peek().type === 'DOT') {
-            consume();
-            silent = true;
-          } else if (peek().type === 'LPAREN') {
-            consume();
-            const retFields = [];
-            while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
-              if (peek().type === 'COMMA') { consume(); continue; }
-              const p = parseOneParam();
-              if (p) retFields.push(p);
-            }
-            expect('RPAREN');
-            returnType = retFields;
-          }
-        }
-        constructorBody.push(AST.emitDecl(emitName, params, { returnType, silent }));
-      } else if (peek().type === 'KEYWORD' && peek().value === 'on') {
-        // on handler: on firer.fire { body } or on firer.fire (params) { body }
-        consume(); // 'on'
-        const source = expect('IDENT').value;
-        expect('DOT');
-        const eventName = expect('IDENT').value;
-        let params = [];
-        if (peek().type === 'LPAREN' && isParenFunctionStart()) {
-          params = parseFunctionParamsParen();
-        }
-        skipNewlines();
-        skipArrowBeforeBrace();
-        let body;
-        if (peek().type === 'LBRACE') {
-          consume();
-          body = parseBody('RBRACE');
-          skipNewlines();
-          expect('RBRACE');
-        } else {
-          body = parseBody();
-        }
-        functions.push(AST.onHandler(source, eventName, params, body));
       } else if (fieldSetAhead()) {
         // A write to an actor's field in the constructor block: `c.n <- 1`, `C.count <- 1`.
         constructorBody.push(parseFieldSet());
@@ -6806,7 +6740,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   // A statement `call...` is a fire-and-forget launch: the statement is marked
   // so validation can require a silent callee (and turn a call to one of the
-  // actor's own functions into a `spawn`). Anywhere else a `...` call has no
+  // actor's own functions into a LaunchStatement). Anywhere else a `...` call has no
   // value to give.
   function settleFireAndForget(program) {
     const visit = (node) => {
@@ -7127,10 +7061,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(walk); return; }
-      if (node.type !== 'EmitDecl') {
-        for (const key of ['params', 'initParams']) {
-          if (Array.isArray(node[key])) for (const p of node[key]) resolve(p, node);
-        }
+      for (const key of ['params', 'initParams']) {
+        if (Array.isArray(node[key])) for (const p of node[key]) resolve(p, node);
       }
       for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
     };
@@ -7196,8 +7128,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     };
     settle(program.actors);
 
-    // Signatures with no body (a dependency's constructor profile, an emit
-    // declaration) name no locals: a lone name there is the type.
+    // Signatures with no body (a dependency's constructor profile) name no locals: a lone name there is the type.
     const clear = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(clear); return; }

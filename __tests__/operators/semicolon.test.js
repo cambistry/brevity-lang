@@ -24,9 +24,9 @@ const fnBodyScript = `
     apply!(10)
     return a: a, b: b
 
-  @spawnWhile!
+  @launchWhile!
     =
-    spawn bump.(); repeat while (a == 0) __tick__()
+    bump...; repeat while (a == 0) __tick__()
     return a
   bump.
     =
@@ -76,9 +76,9 @@ describe('semicolon — function body', () => {
     );
   });
 
-  it('function body with semicolons + spawn', async () => {
+  it('function body with semicolons + launch', async () => {
     await expectBehavior(fnBodyScript,
-      { input: { id: '1', op: 'spawnWhile!', from: 'c' } },
+      { input: { id: '1', op: 'launchWhile!', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [1], to: 'c' }) },
     );
   });

@@ -360,5 +360,5 @@ export function lowerAs(ast) {
 const BLOCKS = new Set(['body', 'then', 'else', 'thenBranch', 'elseBranch']);
 const STATEMENTS = new Set([
   'Assign', 'TypedAssign', 'RefDecl', 'DestructureAssign', 'Reply', 'Return', 'ImplicitReturn',
-  'ExprStatement', 'ListDestructure', 'StateAssign', 'SpawnStatement', 'BareTypeDecl',
+  'ExprStatement', 'ListDestructure', 'StateAssign', 'LaunchStatement', 'BareTypeDecl',
 ]);
