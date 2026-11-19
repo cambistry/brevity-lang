@@ -1420,7 +1420,7 @@ export function parse(tokensIn) {
         consume(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
         body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
-      } else if (isTypedAssignStart()) {
+      } else if (isTypedAssignStart(true)) {
         parseTypedAssign(body);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
         const name = consume().value;
@@ -1492,7 +1492,7 @@ export function parse(tokensIn) {
       consume(); // EQUALS
       const value = parseExpr();
       body.push(AST.stateAssign(name, value));
-    } else if (isTypedAssignStart()) {
+    } else if (isTypedAssignStart(true)) {
       parseTypedAssign(body);
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
       const name = consume().value;
@@ -1603,7 +1603,7 @@ export function parse(tokensIn) {
             body.push(AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined }));
           }
         }
-      } else if (isTypedAssignStart()) {
+      } else if (isTypedAssignStart(true)) {
         if (isRef(peek().value)) {
           throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to set`);
         }
@@ -3395,7 +3395,8 @@ export function parse(tokensIn) {
   function parseTypedAssign(body) {
     // name Type = expr   — typed assignment (whitespace between name and type)
     // name *Type = expr  — ref declaration (prefix `*` is the cell sigil)
-    const name = consume().value;
+    const nameTok = consume();
+    const name = nameTok.type === 'HASH_IDENT' ? '#' + nameTok.value : nameTok.value;
     const isRefDecl = peek().type === 'STAR';
     if (isRefDecl) consume(); // *
     const typeName = parseType();
@@ -3496,8 +3497,9 @@ export function parse(tokensIn) {
     }
   }
 
-  function isTypedAssignStart() {
-    if (peek().type !== 'IDENT') return false;
+  // In a function body a private name takes a type too: `#t Integer = 3`.
+  function isTypedAssignStart(privateToo = false) {
+    if (peek().type !== 'IDENT' && !(privateToo && peek().type === 'HASH_IDENT')) return false;
     let ts = pos + 1;
     // Ref-decl annotation: name *Type [...] = expr
     if (tokens[ts]?.type === 'STAR' && typeLength(ts + 1) > 0) {
@@ -3942,7 +3944,7 @@ export function parse(tokensIn) {
             body.push(AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined }));
           }
         }
-      } else if (isTypedAssignStart()) {
+      } else if (isTypedAssignStart(true)) {
         if (isRef(peek().value)) {
           throw new Error(`Cannot re-bind ref '${peek().value}' with typed assignment — use '${peek().value} <- value' to set`);
         }

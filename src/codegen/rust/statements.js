@@ -567,16 +567,30 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       const childScope = new Map(innerSsaScopeBefore);
       for (const fp of funcParams) childScope.set(fp.name, fp.name);
       for (const bs of bodyStmts) {
-        if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.name) childScope.set(bs.name, bs.name);
+        if ((bs.type === 'TypedAssign' || bs.type === 'Assign') && bs.name) childScope.set(bs.name, rustIdent(bs.name));
       }
       G.ctx.ssaScope = childScope;
       G.ctx.ssaCounts = new Map(innerSsaCountsBefore || []);
 
-      // Track nested function definitions within inlined body
+      // Track nested function definitions within inlined body. One called only as
+      // a statement's whole value (`x = g()`) is inlined there; one called anywhere
+      // else (`return g()`, `g() + 1`) stays a function value, called through it.
+      const callsOf = (name) => {
+        let n = 0;
+        const walk = (node) => {
+          if (!node || typeof node !== 'object') return;
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (node.type === 'FunctionCallExpr' && node.callee?.name === name) n++;
+          for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
+        };
+        walk(funcNode.body ?? funcNode.expr);
+        return n;
+      };
       const innerFnDefs = new Map();
       for (const bs of bodyStmts) {
         if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function') {
-          innerFnDefs.set(bs.name, bs.value);
+          const direct = bodyStmts.filter(x => (x.type === 'Assign' || x.type === 'TypedAssign') && x.value?.type === 'FunctionCallExpr' && x.value.callee?.name === bs.name).length;
+          if (direct === callsOf(bs.name)) innerFnDefs.set(bs.name, bs.value);
         }
       }
 
@@ -584,6 +598,14 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
       for (const bs of bodyStmts) {
         // Skip nested function definitions — they'll be inlined at call sites
         if ((bs.type === 'Assign' || bs.type === 'TypedAssign') && bs.value.type === 'Function' && innerFnDefs.has(bs.name)) {
+          continue;
+        }
+        // A nested function kept as a value: a handler it's called through.
+        if (bs.type === 'Assign' && bs.value.type === 'Function') {
+          const lifted = [];
+          genRustLiftedLambda(bs, bs.value, typeEnv, `${I}    `, lifted);
+          blockLines.push(...lifted);
+          childScope.set(bs.name, G.ctx.ssaScope.get(bs.name) ?? rustIdent(bs.name));
           continue;
         }
         // Handle calls to nested function definitions
@@ -1913,7 +1935,8 @@ function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
   }
   if (fnNode.expr) walkForIdents(fnNode.expr);
   // Deduplicate and filter out actor function names (those are self-sends, not captures)
-  const uniqueFreeVars = [...new Set(freeVars)].filter(v => !G.ctx.actorFnNames.has(v));
+  // An actor's own cells and constants are read where they are, not captured.
+  const uniqueFreeVars = [...new Set(freeVars)].filter(v => !G.ctx.actorFnNames.has(v) && !G.ctx.stateVarNames.has(v));
   // Store captures in actor state — resolve through OUTER scope
   // before descending into the lambda body.
   for (const v of uniqueFreeVars) {
@@ -1922,9 +1945,17 @@ function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
     const capJson = capType === 'Integer' ? intToValue(capVal) : `json!(${capVal})`;
     lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), ${capJson});`);
   }
-  if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName })) });
+  // A captured function value is a handler's name, not a number.
+  if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName, isFn: G.ctx.lambdaVarNames.has(v) })) });
   G.ctx.lambdaVarNames.add(s.name);
   lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${wireLabel(lambdaName)}".to_string());`);
+}
+
+// A cell of the class whose code this is, named bare (`c`, `@c`, `#c`), in a class.
+function rustOwnClassCell(target) {
+  if (!G.ctx.childStatePrefix) return false;
+  if (target?.type !== 'Identifier' && target?.type !== 'RefRead') return false;
+  return (G.ctx.stateVarDecls || []).some(d => d.name === target.name && d.isRef !== false);
 }
 
 // `enclosing` is the walk this is a branch of: its locals stay in scope, and the
@@ -2060,9 +2091,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               for (const a of (call.args || [])) walkRefs(a);
               return;
             }
-            // Any other call to it, with args, goes through the value.
+            // Any other call to it goes through the value.
             if (node.type === 'FunctionCallExpr') {
-              if (node.callee?.name === s.name && node.args?.length) { needsBinding = true; return; }
+              if (node.callee?.name === s.name) { needsBinding = true; return; }
               for (const a of (node.args || [])) walkRefs(a);
               return;
             }
@@ -2450,10 +2481,38 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}    }`);
         lines.push(`${I}}`);
         continue;
+      } else if (s.expr.type === 'SubscribeCall' && rustOwnClassCell(s.expr.target)) {
+        // In a class, a subscribe to one of its own cells is the instance's: the
+        // callback runs with its state in (child_<class>_dispatch_sub), on the
+        // current value now and on each write.
+        const cls = G.ctx.childStatePrefix;
+        const label = s.expr.target.name;
+        if (!G.ctx.childSubscribeSlots) G.ctx.childSubscribeSlots = new Map();
+        if (!G.ctx.childSubscribeSlots.has(cls)) G.ctx.childSubscribeSlots.set(cls, []);
+        const slots = G.ctx.childSubscribeSlots.get(cls);
+        const slot = slots.length;
+        const cellType = (G.ctx.stateVarDecls || []).find(d => d.name === label)?.typeName ?? null;
+        const params = [...(s.expr.params || [])];
+        if (params[0] && !params[0].type && cellType) params[0] = { ...params[0], type: cellType };
+        slots.push({ slot, params, body: s.expr.body });
+        const subsKey = `${cls}_cell_subs_${wireLabel(label)}`;
+        lines.push(`${I}{`);
+        lines.push(`${I}    let seq = self.send_seq.get();`);
+        lines.push(`${I}    self.send_seq.set(seq + 1);`);
+        lines.push(`${I}    let mut _subs = self.state.get("${subsKey}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`);
+        lines.push(`${I}    _subs.push(json!({ "id": seq.to_string(), "from": "__own", "slot": ${slot} }));`);
+        lines.push(`${I}    self.state.insert("${subsKey}".to_string(), Value::Array(_subs));`);
+        lines.push(`${I}    let _cur = self.state.get("${stateKey(label)}").cloned().unwrap_or(Value::Null);`);
+        lines.push(`${I}    self.child_${cls}_dispatch_sub(${slot}, &json!([_cur]));`);
+        lines.push(`${I}}`);
+        continue;
       } else if (s.expr.type === 'SubscribeCall') {
         const target = s.expr.target;
-        const isSelfTarget = target?.type === 'Identifier' &&
-          (target.name.startsWith('@') || target.name.startsWith('#'));
+        // A protected cell of our own, by its bare name, is a self-subscribe too.
+        const ownCell = (name) => (G.ctx.currentActor?.stateVarDecls || []).some(d => d.name === name)
+          && !(G.ctx.currentActor?.initParams || []).some(p => p.name === name);
+        const isSelfTarget = ((target?.type === 'Identifier' || target?.type === 'RefRead') && ownCell(target.name))
+          || (target?.type === 'Identifier' && (target.name.startsWith('@') || target.name.startsWith('#')));
         if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
           throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
         }
@@ -2726,7 +2785,9 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           const funcParams = funcNode.params || [];
           const callArgs = s.expr.args.filter(a => a.type !== 'NamedArgsBag');
           const namedArgsBagE = s.expr.args.find(a => a.type === 'NamedArgsBag');
-          const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'ImplicitReturn' && st.type !== 'Return') : [];
+          // For its effects: a tail value is a statement too, its value discarded.
+          const fnBodyStmts = funcNode.body ? funcNode.body.filter(st => st.type !== 'Return')
+            .map(st => (st.type === 'ImplicitReturn' ? { type: 'ExprStatement', expr: st.expr } : st)) : [];
           const blockLines = [];
           // Build ref param mapping: param.name → original ref name
           const refParamMap = new Map();
@@ -2796,13 +2857,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
               blockLines.push(`${I}self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+            } else if (bs.type === 'ExprStatement' && bs.expr.type === 'SubscribeCall') {
+              blockLines.push(genRustLocals([bs], typeEnv, { ...functionAnalysis, skipSet: new Set(), capturePoints: new Map() }, mutableVars, I, fns, null, sCtx));
             } else if (bs.type === 'ExprStatement') {
-              blockLines.push(`${I}${genRustExpr(bs.expr, typeEnv)};`);
+              // A discarded call's reply isn't taken apart (`.one()` would panic on none).
+              blockLines.push(`${I}${genRustExpr(bs.expr, typeEnv).replace(/\.one\(\)$/, '')};`);
             }
           }
           if (blockLines.length > 0) lines.push(blockLines.join('\n'));
         } else {
-          lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
+          lines.push(`${I}${genRustExpr(s.expr, typeEnv).replace(/\.one\(\)$/, '')};`);
         }
       } else {
         lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);

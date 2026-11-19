@@ -274,7 +274,8 @@ export function markOuterReads(program) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(n => visit(n, bound)); return; }
       // A function's params may reuse an outer name, and then mean the param.
-      if (node.type === 'FunctionDecl' || node.type === 'Function') {
+      // So may a subscribe callback's.
+      if (node.type === 'FunctionDecl' || node.type === 'Function' || node.type === 'SubscribeCall') {
         bound = new Set([...bound, ...(node.params || []).map(p => p?.name).filter(Boolean)]);
       }
       if (node.type === 'ForStatement' && node.name) bound = new Set([...bound, node.name]);

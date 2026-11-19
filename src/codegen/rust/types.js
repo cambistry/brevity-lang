@@ -633,8 +633,8 @@ function toJsonValue(expr, brevityType) {
         || expr.startsWith('bv_bigint_to_value(')
         // SSA-resolved state/ref reads: e.g. _s.positional.get(...).cloned()...
         || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))
-        // call_fn results
-        || expr.includes('.one()')) return expr;
+        // call_fn results (not arithmetic on them, `(&a + &b)`, which is a number)
+        || (expr.includes('.one()') && !expr.startsWith('(&'))) return expr;
     return intToValue(expr);
   }
   if (brevityType === 'Decimal') {

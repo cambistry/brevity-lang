@@ -69,8 +69,13 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // this actor's own handler. No outbound wire message; we call handle_op
   // inline so the prologue registers the sub and the matching @/# arm
   // produces the initial re.
-  const isSelfTarget = target?.type === 'Identifier' &&
-    (target.name.startsWith('@') || target.name.startsWith('#'));
+  // A protected cell of our own, by its bare name, is a self-subscribe too.
+  // A class instance is its own process, so its cells are as the file's are.
+  const ownCell = (name) => (ctx.childStatePrefix
+    ? ctx.stateVarNames?.has(name) && !ctx.childConstructorParams?.has(name)
+    : (ctx.stateVarDecls || []).some(d => d.name === name));
+  const isSelfTarget = ((target?.type === 'Identifier' || target?.type === 'RefRead') && ownCell(target.name))
+    || (target?.type === 'Identifier' && (target.name.startsWith('@') || target.name.startsWith('#')));
   if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
@@ -174,7 +179,8 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     // finds args at position 0.
     const tyField = (internalTyExpr ?? tyExpr) ? `, <<"ty">> => ${internalTyExpr ?? tyExpr}` : '';
     outLines.push(`${I}${V('Sub_msg_')} = #{<<"id">> => ${V('Sub_id_')}, <<"op">> => ${internalOpExpr}${tyField}},`);
-    outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = handle_op(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
+    const selfOp = ctx.childStatePrefix ? `child_${ctx.childStatePrefix}_handle_op` : 'handle_op';
+    outLines.push(`${I}{ok, ${V('Sub_init_re_')}, _} = ${selfOp}(${selectorBin}, ${V('Sub_msg_')}, ${payloadExpr}, ${V('Sub_id_')}, <<"__parent">>),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))(${V('Sub_init_re_')}),`);
   } else if (isRemoteDep) {
     // Remote wire: bare verb in op, the dependency's source and the selector as `to`.

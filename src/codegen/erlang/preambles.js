@@ -1723,7 +1723,7 @@ function erlVarName(name) {
   if (!name) return '_';
   // Private function names (#name) → Pv_name (# is not valid in Erlang identifiers)
   if (name.startsWith('#')) name = 'pv_' + name.slice(1);
-  name = name.replace(/!/g, '__w');
+  name = name.replace(/!/g, '__w').replace(/\./g, '__s');
   const base = name.charAt(0).toUpperCase() + name.slice(1);
   if (RESERVED_ERL_VARS.has(base)) return 'V_' + base;
   return base;

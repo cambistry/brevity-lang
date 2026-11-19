@@ -759,6 +759,10 @@ ${bodyLines}
                 .entry(target.to_string())
                 .or_insert_with(Vec::new)
                 .push((id.to_string(), from.to_string(), sub_args, sub_ty));
+            // A protected or private cell has no op of its own: from inside, its value.
+            if let Some((key, false)) = bv_get_key("", target) {
+                if !bv_from_wire_caller(from) { return (Some(json!([self.state.get(key).cloned().unwrap_or(Value::Null)])), None, true); }
+            }
             let rewritten = target.to_string();
             return self.handle_op(&rewritten, message, payload, from, id);
         }

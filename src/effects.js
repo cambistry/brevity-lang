@@ -418,6 +418,9 @@ export function checkEffects(ast, remotesParsed = {}) {
       walk(body, { ...pastLocals, fresh: new Set(scope.fresh) });
       scope.localFunctions.set(name, { writesOutside: !!writesOutside, writes: !!writesAny, params: node.value.params });
       if (writesOutside) scope.write(`${name}(…)`);
+      // Working out what reaches past the actor counts its own writes as its own;
+      // the name answers to every write, and is checked where those count.
+      if (scope.reachOnly) return;
       if (writesAny && !isSuffixed(name)) {
         throw new Error(`'${name}' writes (${writesAny}), so it must be named '${name}!' or '${name}.'`);
       }
@@ -484,6 +487,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           localFunctions: new Map(),
           writingParams: new Set(writingParamsOf(fn)),
           ownCallsByReach: true,
+          reachOnly: true,
           write: () => { out = true; },
           discard: () => {},
         };

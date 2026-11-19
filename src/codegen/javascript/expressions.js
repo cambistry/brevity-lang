@@ -12,7 +12,7 @@ import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS,
 
 // Map Brevity identifiers to valid JS identifiers
 export function jsIdent(rawName) {
-  const name = rawName.replace(/!$/, '$w');
+  const name = rawName.replace(/!$/, '$w').replace(/\.$/, '$s');
   if (name.startsWith('#')) return `_pv_${name.slice(1)}`;
   return name;
 }
@@ -93,10 +93,10 @@ export function domHostAddr(ctx, tag) {
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
-export function genCellNotify(ctx, cell, cellType) {
-  const value = `this.#${stateKey('@' + cell)}`;
+export function genCellNotify(ctx, cell, cellType, label = '@' + cell) {
+  const value = `this.#${stateKey(label)}`;
   const tyPart = cellType ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
-  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(wireLabel('@' + cell))}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
+  return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(wireLabel(label))}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
 }
 
 export function collectFreeVars(ctx, funcNode) {
@@ -193,7 +193,8 @@ export function collectFreeVars(ctx, funcNode) {
 export function wrapWithCapture(ctx, code, funcNode, selfName) {
   const freeVars = collectFreeVars(ctx, funcNode).filter(v => v !== selfName);
   if (freeVars.length === 0) return code;
-  return `((${freeVars.join(', ')}) => ${code})(${freeVars.join(', ')})`;
+  // Inside, a captured name is its plain JS name; outside, whatever it's bound as here.
+  return `((${freeVars.map(jsIdent).join(', ')}) => ${code})(${freeVars.map(v => ssaResolve(ctx, v)).join(', ')})`;
 }
 
 // Check if a lambda references outer refs (read or write) — these can't be lifted to dispatch handlers
@@ -296,7 +297,7 @@ export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
   const freeVars = collectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));
   const captures = freeVars.map(v => ({ name: v, lambdaName }));
   for (const v of freeVars) {
-    const fieldName = `_cap_${lambdaName}_${v}`;
+    const fieldName = `_cap_${lambdaName}_${jsIdent(v)}`;
     ctx.lambdaCaptureFields.push(fieldName);
   }
   ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: funcNode, captures });
@@ -309,7 +310,7 @@ export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
   if (freeVars.length > 0) {
     const stores = freeVars.map(v => {
       const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : ssaResolve(ctx, v);
-      return `this.#_cap_${lambdaName}_${v} = ${src}`;
+      return `this.#_cap_${lambdaName}_${jsIdent(v)} = ${src}`;
     }).join(', ');
     return `(${stores}, ${JSON.stringify(labelValue)})`;
   }
@@ -376,7 +377,7 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
 }
 
 export function genExpr(ctx, expr) {
-  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellType)})()`;
+  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellType, expr.label)})()`;
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
   }

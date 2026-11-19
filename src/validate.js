@@ -10,6 +10,7 @@ import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js
 import { resolveTypePaths, checkTypeClassConflicts } from './type_paths.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { markOuterReads } from './outer_reads.js';
+import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
@@ -1167,6 +1168,7 @@ function validateProgram(ast, options = {}) {
   lowerOwnCellWrites(ast);
   addConstructHandlers(ast);
   markOuterReads(ast);
+  markCallResultTypes(ast);
   // ── A constructor block reads a cell only below its declaration ──────
   checkInitOrder(ast);
   // Last, so every check above reads `as` as written.

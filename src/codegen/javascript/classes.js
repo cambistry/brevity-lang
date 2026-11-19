@@ -16,7 +16,7 @@ import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
   genTypeCondition, genValueCondition, genDefaultValue, stateKey,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
-  genSendNew,
+  genSendNew, jsIdent,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
@@ -602,19 +602,21 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     let block = destr;
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
-      const jsVarName = lVarName.startsWith('#') ? `_pv_${lVarName.slice(1)}` : lVarName.replace(/!$/, '$w');
+      const jsVarName = jsIdent(lVarName);
       block += `\n        const ${jsVarName} = "${wireLabel(lName)}";`;
     }
     // Load captures from private fields
     if (captures && captures.length > 0) {
       for (const cap of captures) {
-        block += `\n        const ${cap.name} = this.#_cap_${cap.lambdaName}_${cap.name};`;
+        block += `\n        const ${jsIdent(cap.name)} = this.#_cap_${cap.lambdaName}_${jsIdent(cap.name)};`;
       }
     }
     // Generate body using genFunctionBodyCode-style to support all assignment forms
+    // A silent local function (`h. = () { … }`) gives no reply, as `-> .` doesn't.
+    const silentLambda = fnNode.returnType === '.' || !!lVarName?.endsWith('.');
     if (fnNode.body) {
       const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType);
-      if (fnNode.returnType === '.') {
+      if (silentLambda) {
         // Silent lambda — no reply
         block += `\n        await (${fnCode})(_s);`;
       } else if (fnNode.returnType === '()') {
@@ -628,13 +630,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
           : `\n        re = BvObject.splat(await (${fnCode})(_s));`;
       }
     } else if (fnNode.expr) {
-      if (fnNode.returnType === '.') {
+      if (silentLambda) {
         block += `\n        ${genExpr(ctx, fnNode.expr)};`;
       } else {
         // A call's result is already a reply (`BvObject.pack(…)`): pass it on, don't
         // wrap it as one value.
         const code = genExpr(ctx, fnNode.expr);
-        block += code.startsWith('BvObject.pack(')
+        // A call through a function value (`#g(2)` of a local `#g`) is a reply too.
+        const isReply = code.startsWith('BvObject.pack(') || /^\(typeof [\w$]+ === 'string' \? BvObject\.pack\(/.test(code);
+        block += isReply
           ? `\n        re = BvObject.splat(${code});`
           : `\n        re = [${code}];`;
       }
@@ -658,7 +662,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       condition = `opName === "${dispatchKey}"`;
     }
     lambdaParts.push({ condition, block });
-    if (fnNode.returnType === '.') silentFnNames.add(dispatchKey);
+    if (silentLambda) silentFnNames.add(dispatchKey);
   }
 
   // Generate on-handler dispatch arms
@@ -1352,7 +1356,13 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (!_subs && this.#_cellSubs) { _subs = []; this.#_cellSubs.set(_target, _subs); }
       if (_subs) _subs.push({ id, from: _replyTo, args: _subArgs, route: message._route || null });
       // The first reply is the current value: the target answers its own op.
-      opName = _target;
+      opName = _target;${readable ? `
+      // A protected or private cell has no op of its own: from inside, its value.
+      const _own = this.#_readableNames()[_target];
+      if (_own && !_own.open && (from === '__self' || from === '__parent' || from === '__child' || from === '__inner')) {
+        (message._route || ((msg) => this.#binding.post({ ...msg, to: _replyTo })))({ id, re: [_own.read()] });
+        return;
+      }` : ''}
     }${readable ? `
     if (opName === '$get' && _target !== null) {
       const _cell = this.#_readableNames()[_target];

@@ -444,7 +444,16 @@ function genReadTable(actors) {
 // the op so its own arm gives the first value. Args come from the incoming op-array payload (null for no-arg
 // subscribe). Route (the JS _route callback) has no Erlang analogue — the
 // in-process path uses {pending_subscribe, Id} as before.
-function genSubscribePrologue(fnName) {
+function genSubscribePrologue(fnName, actor = null) {
+  // A protected or private cell has no op of its own: from inside, its value.
+  const own = actor ? readEntries(actor).filter(e => !e.open) : [];
+  const inside = ['__self', '__test', '__parent', '__emit', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join(' orelse ');
+  const answer = own.length
+    ? `case Target_ of
+        ${own.map(e => `${erlString(e.token)} when ${inside} -> {ok, [get(${e.key})], null};`).join('\n        ')}
+        _ -> ${fnName}(Target_, Message, Payload, Id, From)
+    end`
+    : `${fnName}(Target_, Message, Payload, Id, From)`;
   const extractArgs = `case maps:get(<<"op">>, Message, null) of
             List_ when is_list(List_), length(List_) > 1 -> case hd(List_) of [M_] when is_map(M_) -> M_; A_ -> A_ end;
             _ -> null
@@ -457,7 +466,7 @@ function genSubscribePrologue(fnName) {
     SubFrom_ = case From of <<"__bv_internal">> -> get(bv_caller_); <<"__bv_wire">> -> get(bv_caller_); _ -> From end,
     CellSubs_ = case get({cell_subs, Target_}) of undefined -> []; L_ -> L_ end,
     put({cell_subs, Target_}, CellSubs_ ++ [{Id, SubFrom_, SubArgs_, SubTy_}]),
-    ${fnName}(Target_, Message, Payload, Id, From)`,
+    ${answer}`,
   ];
 }
 
@@ -473,7 +482,7 @@ function genDispatch(ctx, publicFns, actor = null) {
     grouped.get(h.name).push(h);
   }
 
-  const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$subscribe')) : []), ...genSubscribePrologue('handle_op'), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$subscribe')) : [])];
+  const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$subscribe')) : []), ...genSubscribePrologue('handle_op', actor), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$subscribe')) : [])];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
     if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__emit">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
@@ -484,7 +493,8 @@ function genDispatch(ctx, publicFns, actor = null) {
       const hasOverloads = variants.length > 1;
       // Multiple variants or type-checked — generate pub_/priv_ helper functions
       const isWireOp = op === 'set' || op === 'update';
-      const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : 'priv';
+      // `g` and `#g` are different functions: a protected one is `prot_`.
+      const prefix = isWireOp ? 'self' : op.startsWith('@') ? 'pub' : op.startsWith('#') ? 'priv' : 'prot';
       // A silent name's trailing `.` → `__s` (`.` ends an Erlang form).
       const baseName = (isWireOp ? op : op.startsWith('@') ? op.slice(1) : op.startsWith('#') ? op.slice(1) : op).replace(/\.$/, '__s').replace(/!$/, '__w').replace(/\./g, '_d_');
       const tryFns = [];
@@ -870,7 +880,7 @@ function genChildHandleOp(ctx, actor) {
   const name = actor.name.toLowerCase();
   const prefix = `child_${name}`;
   const getClauses = genGetClauses(`${prefix}_handle_op`, actor);
-  const clauses = [...getClauses.filter(c => c.includes('$subscribe')), ...genSubscribePrologue(`${prefix}_handle_op`), ...getClauses.filter(c => !c.includes('$subscribe'))];
+  const clauses = [...getClauses.filter(c => c.includes('$subscribe')), ...genSubscribePrologue(`${prefix}_handle_op`, actor), ...getClauses.filter(c => !c.includes('$subscribe'))];
 
   // Set emit names for this child actor
   const savedEmitNames = ctx.emitNames;
@@ -1336,8 +1346,10 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
     }
   }
 
-  // Generate body using genFn-style codegen
-  const body = fnNode.body || [];
+  // Generate body using genFn-style codegen. A subscribe has no value: as the
+  // tail it's a statement, and the function gives nothing back.
+  const tailSub = (s) => s?.type === 'ImplicitReturn' && s.expr?.type === 'SubscribeCall';
+  const body = (fnNode.body || []).map(s => (tailSub(s) ? { type: 'ExprStatement', expr: s.expr } : s));
   const typeEnv = buildTypeEnv(params, body, ctx.typeDecls);
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;

@@ -50,6 +50,15 @@ function operandSrcType(node, inferredType) {
   return null;
 }
 
+// A call through a function value: the handler named in it, ours. In a class it's
+// the class's own (its dispatch, with the instance's state in).
+function callFnCode(ref, payload) {
+  const cls = G.ctx.childSelfSendPrefix;
+  return cls
+    ? `self.child_${cls}_dispatch(&(${ref}).as_str().unwrap_or("").to_string(), ${payload}, "", "__parent")`
+    : `self.call_fn(&${ref}, ${payload})`;
+}
+
 // Coerce a Rust operand expression to a target numeric type
 function coerceOperand(code, isValue, srcType, target) {
   switch (target) {
@@ -138,22 +147,26 @@ function rustDomHostAddr(tag) {
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape. A file's
-// subscribers are in `cell_subs`, and a class's in its own state.
-export function rustCellNotifyLines(cell, cellType, childPrefix = null) {
-  const cellKey = stateKey('@' + cell);
+// subscribers are in `cell_subs`, and a class's in its own state. `label` is the
+// cell's own name when it isn't the published `@cell` (a protected or private cell
+// subscribed to from inside).
+export function rustCellNotifyLines(cell, cellType, childPrefix = null, label = '@' + cell) {
+  const cellKey = stateKey(label);
   const lines = childPrefix === null
     ? [
-      `let _subs = self.cell_subs.get(${JSON.stringify(wireLabel('@' + cell))}).cloned().unwrap_or_default();`,
+      `let _subs = self.cell_subs.get(${JSON.stringify(wireLabel(label))}).cloned().unwrap_or_default();`,
       'for (_sub_id, _sub_from, _, _) in _subs {',
     ]
     : [
-      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_${wireLabel('@' + cell)}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
+      `let _subs_snapshot = self.state.get("${childPrefix}_cell_subs_${wireLabel(label)}").and_then(|v| v.as_array().cloned()).unwrap_or_default();`,
       'for _sub in &_subs_snapshot {',
       '    let _sub_id = _sub.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();',
       '    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();',
     ];
+  lines.push(`    let _cur = self.state.get("${cellKey}").cloned().unwrap_or(Value::Null);`);
+  // A subscribe the instance made itself: its callback, its state in.
+  if (childPrefix !== null) lines.push(`    if _sub_from == "__own" { let _slot = _sub.get("slot").and_then(|v| v.as_i64()).unwrap_or(-1); self.child_${childPrefix}_dispatch_sub(_slot, &json!([_cur])); continue; }`);
   lines.push(
-    `    let _cur = self.state.get("${cellKey}").cloned().unwrap_or(Value::Null);`,
     '    if _sub_from == "__parent" {',
     '        if let Some(slot_val) = self.sub_slots.get(&format!("{}", _sub_id)).cloned() {',
     '            let slot = slot_val.as_i64().unwrap_or(-1);',
@@ -176,7 +189,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'CellNotify') {
     const child = G.ctx.childStatePrefix ? G.ctx.childStatePrefix : null;
-    return `{ ${rustCellNotifyLines(expr.cell, expr.cellType, child).join(' ')} Value::Null }`;
+    return `{ ${rustCellNotifyLines(expr.cell, expr.cellType, child, expr.label ?? '@' + expr.cell).join(' ')} Value::Null }`;
   }
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
@@ -345,12 +358,12 @@ function genRustExpr(expr, typeEnv, eCtx) {
       || (expr.left.type === 'Identifier' && G.ctx.stateVarNames.has(expr.left.name))
       || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && !typeEnv.get(expr.left.name))
       || expr.left.type === 'DotAccessExpr'
-      || (expr.left.type === 'FunctionCallExpr' && (left.includes('self.call_fn(') || expr.left.outerFnCall || expr.left._precomputedValue || callYieldsValue(left)));
+      || (expr.left.type === 'FunctionCallExpr' && (left.includes('_cfr = self.') || expr.left.outerFnCall || expr.left._precomputedValue || callYieldsValue(left)));
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
       || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name))
       || expr.right.type === 'DotAccessExpr'
-      || (expr.right.type === 'FunctionCallExpr' && (right.includes('self.call_fn(') || expr.right.outerFnCall || expr.right._precomputedValue || callYieldsValue(right)));
+      || (expr.right.type === 'FunctionCallExpr' && (right.includes('_cfr = self.') || expr.right.outerFnCall || expr.right._precomputedValue || callYieldsValue(right)));
     // Slice 10: type field access (`coords.x` where `coords` is a *Point
     // state cell or a typed local) infers the field's declared type so
     // BinaryExpr can pick the right numeric coercion path.
@@ -697,7 +710,7 @@ ${subRegLines.join('\n')}
         : rustSsaResolve(calleeName);
       const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');
       if (callArgs.length === 0) {
-        return `{ let _cfr = self.call_fn(&${calleeRef}, &Value::Object(Map::new())); BvObject::pack(&_cfr).one_or_null() }`;
+        return `{ let _cfr = ${callFnCode(calleeRef, '&Value::Object(Map::new())')}; BvObject::pack(&_cfr).one_or_null() }`;
       }
       // Pre-compute nested call_fn/self_send args to avoid double &mut self borrow
       const precomputes = [];
@@ -717,7 +730,7 @@ ${subRegLines.join('\n')}
         return toJsonValue(raw, t || 'Anything');
       }).join(', ');
       const preStr = precomputes.length > 0 ? precomputes.join(' ') + ' ' : '';
-      return `{ ${preStr}let _cfr = self.call_fn(&${fnRef}, &Value::Array(vec![${argExprs}])); BvObject::pack(&_cfr).one_or_null() }`;
+      return `{ ${preStr}let _cfr = ${callFnCode(fnRef, `&Value::Array(vec![${argExprs}])`)}; BvObject::pack(&_cfr).one_or_null() }`;
     }
     const callee = genRustExpr(expr.callee, typeEnv, eCtx);
     const callArgs = (expr.args || []).filter(a => a.type !== 'NamedArgsBag');

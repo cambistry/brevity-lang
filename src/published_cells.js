@@ -29,6 +29,17 @@ export function lowerOwnCellWrites(ast) {
     // A cell of an actor this class is declared in is set by a message to it
     // (src/outer_reads.js), and that actor notifies its own subscribers.
     const outer = actor.name ? outerNamesFor(ast, actor) : new Map();
+    // A protected or private cell some code here subscribes to (`c.subscribe`):
+    // writing it tells those subscribers too.
+    const subscribed = new Set();
+    const findSubs = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(findSubs); return; }
+      const t = node.type === 'SubscribeCall' ? node.target : null;
+      if ((t?.type === 'Identifier' || t?.type === 'RefRead') && !t.name.startsWith('@') && state.get(t.name)?.isRef) subscribed.add(t.name);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') findSubs(v);
+    };
+    [actor.functions, actor.initBody, actor.constructorBody].forEach(findSubs);
     const check = (name) => {
       if (name.startsWith('@') || state.has(name) || params.has(name) || !state.get('@' + name)) return;
       throw new Error(`'${name}' isn't in scope — the published cell is '@${name}'`);
@@ -42,7 +53,11 @@ export function lowerOwnCellWrites(ast) {
           visit(s, declared);
           if (s?.type !== 'SetStatement') continue;
           if (!s.name.startsWith('@')) {
-            if (!declared.has(s.name)) check(s.name);
+            if (declared.has(s.name)) continue;
+            check(s.name);
+            if (subscribed.has(s.name)) {
+              node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name, cellType: state.get(s.name).typeName, label: s.name } });
+            }
             continue;
           }
           // A public constant (`@magic = "x"`) is state, but not a cell.

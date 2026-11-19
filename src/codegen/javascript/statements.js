@@ -25,8 +25,12 @@ export function genSubscribeCall(ctx, expr) {
   // subscription is registered in-process and the handler is invoked via a
   // self-directed receive so the initial `re` flows back through the normal
   // pending-handler path.
-  const isSelfTarget = target?.type === 'Identifier' &&
-    (target.name.startsWith('@') || target.name.startsWith('#'));
+  // A protected cell of our own, by its bare name, is a self-subscribe too.
+  const ownCell = (name) => (ctx.currentActor?.stateVarDecls || []).some(d => d.name === name)
+    && !(ctx.currentActor?.initParams || []).some(p => p.name === name);
+  const isSelfTarget = (target?.type === 'Identifier' &&
+    (target.name.startsWith('@') || target.name.startsWith('#') || ownCell(target.name)))
+    || (target?.type === 'RefRead' && ownCell(target.name));
   // Cell-handle subscribe: target is a bare identifier naming a state var
   // that holds a `{host, cell}` handle (passed in from a constructor whose
   // arg was a public @-cell of the host). Selector and routing target are
@@ -296,7 +300,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
           ctx.lambdaVarNames.add(s.name);
           const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           for (const v of freeVars) {
-            const fieldName = `_cap_${lambdaName}_${v}`;
+            const fieldName = `_cap_${lambdaName}_${jsIdent(v)}`;
             ctx.lambdaCaptureFields.push(fieldName);
             // Resolve the captured name through the OUTER scope (current
             // ctx.ssaScope) — we haven't descended into the lambda body yet.
@@ -335,6 +339,10 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       _lastTypedName = null;
       _lastSetName = null;
       code += genWhileStatement(ctx, s, '  ', outerEnv, counters);
+    } else if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'SubscribeCall') {
+      _lastTypedName = null;
+      _lastSetName = null;
+      code += genSubscribeCall(ctx, s.expr);
     } else if (s.type === 'ExprStatement') {
       // A statement call waits, unless it's launched.
       _lastTypedName = null;
@@ -391,7 +399,8 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
 // A bind inside a branch or loop. A send waits for its reply, and an Object keeps it whole.
 function branchBindValue(ctx, s) {
   const code = genExpr(ctx, s.value);
-  if (code.includes('#childSend') || code.includes('#send(')) {
+  // The value is the send itself, not arithmetic on what sends gave back.
+  if (/^this\.#(childSend|send)\(/.test(code)) {
     const reply = `BvObject.pack(await ${code})`;
     return s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`;
   }
@@ -698,7 +707,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
           const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           let captureCode = '';
           for (const v of freeVars) {
-            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
+            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${jsIdent(v)}`;
             ctx.lambdaCaptureFields.push(fieldName);
             const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n${indent}this.#${fieldName} = ${src};`;
@@ -715,7 +724,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
       let captureCode = '';
       for (const v of freeVars) {
-        const fieldName = `_cap_${lambdaName}_${v}`;
+        const fieldName = `_cap_${lambdaName}_${jsIdent(v)}`;
         ctx.lambdaCaptureFields.push(fieldName);
         const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
         captureCode += `\n${indent}this.#${fieldName} = ${src};`;
@@ -1029,7 +1038,7 @@ export function genLocals(ctx, body, outerEnv) {
           const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           let captureCode = '';
           for (const v of freeVars) {
-            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${v}`;
+            const fieldName = `_cap_${lambdaName}_ov${ctx.lambdaCounter}_${jsIdent(v)}`;
             ctx.lambdaCaptureFields.push(fieldName);
             const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
             captureCode += `\n        this.#${fieldName} = ${src};`;
@@ -1097,7 +1106,7 @@ function genLiftedLambdaBind(ctx, s, emitBinding) {
   const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
   let captureCode = '';
   for (const v of freeVars) {
-    const fieldName = `_cap_${lambdaName}_${v}`;
+    const fieldName = `_cap_${lambdaName}_${jsIdent(v)}`;
     if (!existing) ctx.lambdaCaptureFields.push(fieldName);
     const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
     captureCode += `\n        this.#${fieldName} = ${src};`;

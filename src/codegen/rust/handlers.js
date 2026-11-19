@@ -374,39 +374,43 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   return `            ${JSON.stringify(rustOpKey(name))}${guard} => {\n${lines.join('\n')}\n            }`;
 }
 
-function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
-  // Reset lambda state for this dispatch
-  G.ctx.lambdaCounter = 0;
-  G.ctx.lambdaHandlers = [];
-  G.ctx.lambdaVarNames = new Set();
+// The callbacks of the subscribes a class's code makes to its own cells
+// (src/codegen/rust/statements.js), compiled as the class's code.
+function genRustChildDispatchSub(cls) {
+  const slots = G.ctx.childSubscribeSlots?.get(cls) || [];
+  const arms = slots.map((s) => {
+    const paramName = s.params?.[0]?.name ? rustIdent(s.params[0].name) : '_sub_arg';
+    const paramType = s.params?.[0]?.type || 'Anything';
+    const bindV = convertFromValue('re.as_array().and_then(|a| a.get(0)).cloned().unwrap_or(Value::Null)', paramType);
+    const env = new Map();
+    for (const d of (G.ctx.stateVarDecls || [])) env.set(d.name, d.typeName);
+    if (s.params?.[0]?.name) env.set(s.params[0].name, paramType);
+    const savedScope = G.ctx.ssaScope;
+    const savedCounts = G.ctx.ssaCounts;
+    const body = genRustLocals(s.body, env, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '                ', new Map());
+    G.ctx.ssaScope = savedScope;
+    G.ctx.ssaCounts = savedCounts;
+    return `            ${s.slot} => {\n                let ${paramName} = ${bindV};\n${body}\n            }`;
+  });
+  return `
+    #[allow(dead_code)]
+    fn child_${cls}_dispatch_sub(&mut self, slot: i64, re: &Value) {
+        let _ = re;
+        match slot {
+${arms.join('\n')}
+            _ => {}
+        }
+    }`;
+}
 
-  // Pre-register init body lambdas so they get handler arms
-  for (const pil of preInitLambdas) {
-    G.ctx.lambdaHandlers.push({ name: pil.lambdaName, fn: pil.fn });
-  }
-
-  const allFns = [...publicFns, ...privateFns].filter(h => !h.actorDef && !h.emptyOverload);
-
-  // Group functions by name to detect overloads
-  const grouped = new Map();
-  for (const h of allFns) {
-    if (!grouped.has(h.name)) grouped.set(h.name, []);
-    grouped.get(h.name).push(h);
-  }
-
+// The arm of each lambda registered from `start` on (at call sites and before
+// init), in handle_op's shape: `re`, `ty_re`, `handled`.
+function genRustLambdaArms(start, privateFns) {
   const arms = [];
-  for (const [, variants] of grouped) {
-    const hasOverloads = variants.length > 1;
-    for (const h of variants) {
-      const arm = genRustPublicFn(h, privateFns, { hasOverloads });
-      if (arm) arms.push(arm);
-    }
-  }
-
   // Add lambda handler arms (registered during call site codegen + pre-init)
   // Use index loop since nested lambdas may add new handlers during iteration
   const lambdaEntries = [];
-  for (let li = 0; li < G.ctx.lambdaHandlers.length; li++) {
+  for (let li = start; li < G.ctx.lambdaHandlers.length; li++) {
     const lh = G.ctx.lambdaHandlers[li];
     if (lh.fn.emptyOverload) continue;
     const { name, fn: fnNode, captures } = lh;
@@ -417,7 +421,8 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     if (captures && captures.length > 0) {
       for (const cap of captures) {
         const capKey = `_cap_${cap.lambdaName}_${cap.name}`;
-        lambdaLines.push(`                let ${rustIdent(cap.name)} = ${intFromValue(`self.state.get("${capKey}").cloned().unwrap_or(Value::Null)`)};`);
+        const raw = `self.state.get("${capKey}").cloned().unwrap_or(Value::Null)`;
+        lambdaLines.push(`                let ${rustIdent(cap.name)} = ${cap.isFn ? raw : intFromValue(raw)};`);
       }
     }
 
@@ -574,6 +579,40 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
       }
     }
   }
+
+  return arms;
+}
+
+function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
+  // Reset lambda state for this dispatch
+  G.ctx.lambdaCounter = 0;
+  G.ctx.lambdaHandlers = [];
+  G.ctx.lambdaVarNames = new Set();
+
+  // Pre-register init body lambdas so they get handler arms
+  for (const pil of preInitLambdas) {
+    G.ctx.lambdaHandlers.push({ name: pil.lambdaName, fn: pil.fn });
+  }
+
+  const allFns = [...publicFns, ...privateFns].filter(h => !h.actorDef && !h.emptyOverload);
+
+  // Group functions by name to detect overloads
+  const grouped = new Map();
+  for (const h of allFns) {
+    if (!grouped.has(h.name)) grouped.set(h.name, []);
+    grouped.get(h.name).push(h);
+  }
+
+  const arms = [];
+  for (const [, variants] of grouped) {
+    const hasOverloads = variants.length > 1;
+    for (const h of variants) {
+      const arm = genRustPublicFn(h, privateFns, { hasOverloads });
+      if (arm) arms.push(arm);
+    }
+  }
+
+  arms.push(...genRustLambdaArms(0, privateFns));
 
   // Auto-generate accessor arms for constructor params
   for (const p of constructorParams) {
@@ -849,6 +888,8 @@ function genRustChildDispatch(actor) {
   for (const d of (actor.stateVarDecls || [])) if (d.typeName) classTypes.set(d.name, d.typeName);
   // The names this class reads from the actors it's declared in, typed as they declare them.
   for (const [n, t] of outerTypesOf(actor)) if (t && !classTypes.has(n)) classTypes.set(n, t);
+  // Lambdas its methods lift are its own: their arms are here, with its state in.
+  const lambdaStart = G.ctx.lambdaHandlers.length;
   const arms = [
     ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true, publicFns.filter(o => o.name === h.name).length > 1)),
     ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
@@ -912,6 +953,22 @@ function genRustChildDispatch(actor) {
     arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
 
+  // Each in handle_op's shape (`re`, `ty_re`, `handled`), run as a closure here.
+  const lambdaArms = genRustLambdaArms(lambdaStart, privateFns).map((arm) => {
+    const m = /^(\s*"[^"]*"(?: if [^\n]*?)?) => \{\n([\s\S]*)\n\s*\}$/.exec(arm);
+    if (!m) throw new Error(`unexpected lambda arm shape: ${arm.slice(0, 80)}`);
+    return `${m[1]} => {
+                let (_lre, _, _) = (|| -> (Option<Value>, Option<Value>, bool) {
+                    #[allow(unused_mut, unused_assignments)] let mut re: Option<Value> = None;
+                    #[allow(unused_mut, unused_assignments)] let mut ty_re: Option<Value> = None;
+                    #[allow(unused_mut, unused_assignments)] let mut handled = false;
+${m[2]}
+                    (re, ty_re, handled)
+                })();
+                re = _lre;
+            }`;
+  });
+  arms.push(...lambdaArms);
   arms.push('            _ => { if bv_from_wire_caller(from) { self.wire_unhandled = true; } }');
 
   return `
@@ -949,7 +1006,8 @@ function genRustChildDispatch(actor) {
         }
         let _ = id; let _ = from;
         let _ = payload;
-        let mut re: Option<Value> = None;
+        let mut re: Option<Value> = None;${lambdaArms.length ? `
+        #[allow(unused_variables)] let _s = BvObject::pack(payload);` : ''}
         match op {
 ${arms.join('\n')}
         }
@@ -1268,6 +1326,7 @@ function genRustChildMethods(allActors) {
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(mergedActor));
+    parts.push(genRustChildDispatchSub(actor.name.toLowerCase()));
     G.ctx.childSelfSendPrefix = null;
 
     // Per-instance wrappers for spawn-needing classes — swap the instance's

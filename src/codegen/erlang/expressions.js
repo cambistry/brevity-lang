@@ -175,12 +175,15 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
 }
 
 // Tell a published cell's subscribers its new value, in the getter's shape.
-export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
-  const value = `get(${erlStateKey(ctx, '@' + cell)})`;
+// `label` is the cell's own name when it isn't the published `@cell` (a
+// protected or private cell subscribed to from inside).
+export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@' + cell) {
+  const value = `get(${erlStateKey(ctx, label)})`;
   const tyPart = cellType ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
   return [
-    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(wireLabel('@' + cell))}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
-    `${I}lists:foreach(fun({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,
+    `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(wireLabel(label))}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
+    // An in-process class instance's entry is told separately.
+    `${I}lists:foreach(fun({inproc, _, _, _}) -> ok; ({SubId${sfx}_, SubFrom${sfx}_, _SubArgs${sfx}_, _SubTy${sfx}_}) ->`,
     `${I}    case SubFrom${sfx}_ of`,
     `${I}        <<"__parent">> ->`,
     // In-process subscriber: invoke the parent actor's registered fun directly,
@@ -203,7 +206,7 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '') {
 function genExpr(ctx, expr, typeEnv, sCtx) {
   if (!expr) return 'null';
   if (expr.type === 'CellNotify') {
-    const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellType, '    ', `N${ctx.ephCounter++}`);
+    const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellType, '    ', `N${ctx.ephCounter++}`, expr.label ?? '@' + expr.cell);
     return `begin\n${lines.join('\n')}\n    ok\nend`;
   }
 
@@ -1326,6 +1329,8 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
     if (innerRenames.has(name)) return innerRenames.get(name);
     // Check outer scope renames for captured/closed-over variables
     if (outerRenames && outerRenames.has(name)) return outerRenames.get(name);
+    // A local of the enclosing body, as it's bound where the fun is made.
+    if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));
     return erlVarName(name);
   }
 
@@ -1643,15 +1648,15 @@ function genOverExpr(ctx, expr, typeEnv, sCtx) {
   }
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_) -> bv_object_one(self_send(${erlOp(expr.fn.name)}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${erlOp(expr.fn.name)}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
-    fn = `fun(Item_) -> bv_object_one(self_send(${varRef}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${varRef}, [Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, expr.fn)) {
     const label = erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx);
-    fn = `fun(Item_) -> bv_object_one(self_send(${label}, [Item_])) end`;
+    fn = `fun(Item_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${label}, [Item_])) end`;
   } else {
     fn = genExpr(ctx, expr.fn, typeEnv, sCtx);
   }
@@ -1662,15 +1667,15 @@ function genReduceExpr(ctx, expr, typeEnv, sCtx) {
   const list = genExpr(ctx, expr.collection, typeEnv, sCtx);
   let fn;
   if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) {
-    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${erlOp(expr.fn.name)}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${erlOp(expr.fn.name)}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) {
     const varRef = genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx);
-    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${varRef}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${varRef}, [Acc_, Item_])) end`;
   } else if (expr.fn.type === 'FnRef') {
     fn = erlVarName(expr.fn.name);
   } else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, expr.fn)) {
     const label = erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx);
-    fn = `fun(Item_, Acc_) -> bv_object_one(self_send(${label}, [Acc_, Item_])) end`;
+    fn = `fun(Item_, Acc_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${label}, [Acc_, Item_])) end`;
   } else {
     fn = genExpr(ctx, expr.fn, typeEnv, sCtx);
   }
