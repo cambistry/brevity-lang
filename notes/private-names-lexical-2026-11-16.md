@@ -79,3 +79,17 @@ there is no access check to get wrong.
   (`class.count`). Private members are never addressable, so it never reaches them.
   Whether it gets public and protected members bare is the separate A/B question.
 - `new` stays reserved; `#new` is not a spelling of it.
+
+## Subscribe from an inner actor
+
+A class subscribing to a cell of an actor it's declared in (`c.subscribe (v) { … }`, `c` the
+file's) goes where its reads and writes go: up its chain, from inside. The owner keeps it as a
+subscriber, answers with the value now, and tells it each later write, as for any subscriber. A
+protected or private cell's writes notify when code inside the owner subscribes to it, its own or
+an inner class's; which cells those are is decided from the file.
+
+From outside, a protected or private cell isn't there to subscribe to: `$subscribe` to `:~c` is
+`{ ex: { $subscribe: 'unhandled' } }`, as `$get` is, and nothing is registered.
+
+A subscription lasts as long as the two actors; an actor can't go away yet, so there's nothing to
+tear down.

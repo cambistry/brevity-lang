@@ -2519,6 +2519,27 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}    self.child_${cls}_dispatch_sub(${slot}, &json!([_cur]));`);
         lines.push(`${I}}`);
         continue;
+      } else if (s.expr.type === 'SubscribeCall' && (s.expr.target?.type === 'Identifier' || s.expr.target?.type === 'RefRead') && s.expr.target.outer) {
+        // In a class, a subscribe to a cell of an actor it's declared in: registered
+        // there (outer_subscribe), its callback the instance's (child_<class>_sub_at),
+        // run on the current value now and on each write there.
+        const target = s.expr.target;
+        const cls = G.ctx.childStatePrefix;
+        if (!G.ctx.childSubscribeSlots) G.ctx.childSubscribeSlots = new Map();
+        if (!G.ctx.childSubscribeSlots.has(cls)) G.ctx.childSubscribeSlots.set(cls, []);
+        const slots = G.ctx.childSubscribeSlots.get(cls);
+        const slot = slots.length;
+        const params = [...(s.expr.params || [])];
+        if (params[0] && !params[0].type && target.outerType) params[0] = { ...params[0], type: target.outerType };
+        slots.push({ slot, params, body: s.expr.body });
+        const token = JSON.stringify(wireLabel(target.name));
+        lines.push(`${I}{`);
+        lines.push(`${I}    let _id = self.current_${cls}_instance.unwrap_or(0);`);
+        lines.push(`${I}    self.outer_subscribe(${target.outerLevel ?? 1}, ${token}, format!("__inst:${cls}:{}:${slot}", _id));`);
+        lines.push(`${I}    let _cur = self.outer_read(${target.outerLevel ?? 1}, ${token});`);
+        lines.push(`${I}    self.child_${cls}_dispatch_sub(${slot}, &json!([_cur]));`);
+        lines.push(`${I}}`);
+        continue;
       } else if (s.expr.type === 'SubscribeCall') {
         const target = s.expr.target;
         // A protected cell of our own, by its bare name, is a self-subscribe too.

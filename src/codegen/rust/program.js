@@ -762,6 +762,9 @@ ${bodyLines}
             };
             // Kept as in process, where a named-only call is its fields alone.
             let sub_ty = bv_inbound(message).get("ty").cloned().unwrap_or(Value::Null);
+            // A protected or private name (\`~a\`, \`#a\`) is subscribed to only from inside:
+            // from outside it isn't there, and nothing is registered.
+            if (target.starts_with('~') || target.starts_with('#')) && bv_from_wire_caller(from) { return (None, None, false); }
             self.cell_subs
                 .entry(target.to_string())
                 .or_insert_with(Vec::new)
@@ -950,6 +953,50 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         match class {
 ${[...(fileClassNeedsSelfPool ? ['            "self" => self.self_instances.get(&id),'] : []), ...(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a => `            ${JSON.stringify(a.name.toLowerCase())} => self.${a.name.toLowerCase()}_instances.get(&id),`)].join('\n')}
             _ => None,
+        }
+    }
+
+    // A class subscribing to a cell of an actor it's declared in, level actors up the
+    // chain. The file's subscribers are cell_subs; a class's are in its actor's state.
+    // An entry from "__inst:class:id:slot" is an instance's callback (bv_inst_sub_at).
+    #[allow(dead_code)]
+    fn outer_subscribe(&mut self, level: usize, token: &str, from: String) {
+        let owner = self.state.get("__outers").and_then(|v| v.as_array()).and_then(|a| a.get(level - 1)).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        if owner.is_empty() {
+            self.cell_subs.entry(token.to_string()).or_default().push((seq.to_string(), from, Value::Null, Value::Null));
+            return;
+        }
+        let class = owner.split_once('/').map(|(c, _)| c.to_string()).unwrap_or_default();
+        let key = format!("{}_cell_subs_{}", class, token);
+        let state = self.state_of_mut(&owner).unwrap_or_else(|| panic!("subscribe to {}: no actor {:?}", token, owner));
+        let mut subs = state.get(&key).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        subs.push(json!({ "id": seq.to_string(), "from": from }));
+        state.insert(key, Value::Array(subs));
+    }
+
+    #[allow(dead_code)]
+    fn state_of_mut(&mut self, owner: &str) -> Option<&mut std::collections::HashMap<String, Value>> {
+        if owner == self.state_owner { return Some(&mut self.state); }
+        if let Some(pos) = self.outer_states.iter().rposition(|(o, _)| o == owner) { return Some(&mut self.outer_states[pos].1); }
+        let (class, id) = owner.split_once('/')?;
+        let id: u32 = id.parse().ok()?;
+        match class {
+${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name) && classNeedsSpawnedInstances(a)).map(a => `            ${JSON.stringify(a.name.toLowerCase())} => self.${a.name.toLowerCase()}_instances.get_mut(&id),`).join('\n')}
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn bv_inst_sub_at(&mut self, at: &str, re: &Value) {
+        let mut parts = at.splitn(3, ':');
+        let class = parts.next().unwrap_or("").to_string();
+        let id: u32 = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let slot: i64 = parts.next().and_then(|n| n.parse().ok()).unwrap_or(-1);
+        match class.as_str() {
+${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name) && classNeedsSpawnedInstances(a)).map(a => `            ${JSON.stringify(a.name.toLowerCase())} => self.child_${a.name.toLowerCase()}_sub_at(id, slot, re),`).join('\n')}
+            _ => { let _ = (id, slot, re); }
         }
     }
 

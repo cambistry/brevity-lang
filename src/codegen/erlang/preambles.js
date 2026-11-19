@@ -5,6 +5,7 @@ import { wireLabel, intrinsicArm } from '../wire_labels.js';
 // cells, make a call to one of its dependencies, and take note of a class waiting on
 // a reply from the wire. `loop` is the wait to go back to.
 const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), ${loop};
+        {bv_outer_sub, SFrom_, SKey_, SId_, SRef_} -> bv_answer_outer_sub_(SFrom_, SKey_, SId_, SRef_), ${loop};
         {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), ${loop};
         {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(bv_lift_(CFrom_, CMsg_), CSilent_)}, ${loop};
         {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
@@ -1403,6 +1404,18 @@ bv_outer_get_(Level, Token) ->
             Owner_ ! {bv_outer_get, self(), Token, Ref_},
             receive {bv_reply, Ref_, V_} -> V_ end
     end.
+%% A class subscribing to a cell of an actor it's declared in, Level actors up the
+%% chain: that actor keeps this process as a subscriber (its writes tell it with
+%% {bv_notify, Id, [V]}), and answers with the value now.
+bv_outer_subscribe_(Level, Token, Id) ->
+    Owner_ = case bv_chain_() of [] -> bv_outer_(); C_ -> element(2, lists:nth(Level, C_)) end,
+    Ref_ = make_ref(),
+    Owner_ ! {bv_outer_sub, self(), Token, Id, Ref_},
+    receive {bv_reply, Ref_, V_} -> V_ end.
+bv_answer_outer_sub_(From, Token, Id, Ref) ->
+    Subs_ = case get({cell_subs, Token}) of undefined -> []; L_ -> L_ end,
+    put({cell_subs, Token}, Subs_ ++ [{Id, From, null, null}]),
+    From ! {bv_reply, Ref, (bv_mod_()):bv_read_(bv_my_class_(), Token)}.
 %% A write or a call from a class to an actor it's declared in, Level actors up the
 %% chain (src/outer_reads.js): Op (\`{<<"$set">>, <<"~total">>}\`, \`<<"~helper">>\`) sent to
 %% it as from inside it. It's served wherever a read is, so a class reads its own
@@ -1483,6 +1496,7 @@ bv_await_line_from_(Id) ->
         {bv_line, Id, eof} -> eof;
         {bv_line, Id, M_} -> bv_reply_kind_(M_);
         {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_line_from_(Id);
+        {bv_outer_sub, SFrom_, SKey_, SId_, SRef_} -> bv_answer_outer_sub_(SFrom_, SKey_, SId_, SRef_), bv_await_line_from_(Id);
         {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), bv_await_line_from_(Id)
     end.
 bv_await_line_loop_(Id) ->

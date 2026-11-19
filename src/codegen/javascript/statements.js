@@ -28,27 +28,28 @@ export function genSubscribeCall(ctx, expr) {
   // A protected cell of our own, by its bare name, is a self-subscribe too.
   const ownCell = (name) => (ctx.currentActor?.stateVarDecls || []).some(d => d.name === name)
     && !(ctx.currentActor?.initParams || []).some(p => p.name === name);
-  const isSelfTarget = (target?.type === 'Identifier' &&
+  const isSelfTarget = !target?.outer && (target?.type === 'Identifier' &&
     (target.name.startsWith('@') || target.name.startsWith('#') || ownCell(target.name)))
     || (target?.type === 'RefRead' && ownCell(target.name));
   // Cell-handle subscribe: target is a bare identifier naming a state var
   // that holds a `{host, cell}` handle (passed in from a constructor whose
   // arg was a public @-cell of the host). Selector and routing target are
   // both read from the handle at runtime.
-  const isCellHandleTarget = !isSelfTarget && target?.type === 'Identifier' &&
+  const isCellHandleTarget = !isSelfTarget && !target?.outer && target?.type === 'Identifier' &&
     ctx.stateVarNames?.has(target.name);
-  if (!isSelfTarget && !isCellHandleTarget &&
+  const isOuterTarget = (target?.type === 'Identifier' || target?.type === 'RefRead') && !!target.outer;
+  if (!isSelfTarget && !isCellHandleTarget && !isOuterTarget &&
       (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
     throw new Error('subscribe: target must be self (@name / #name), a cell-handle param, or <remoteOrChild>.<field>');
   }
-  const objectName = isSelfTarget || isCellHandleTarget ? null : target.object.name;
+  const objectName = isSelfTarget || isCellHandleTarget || isOuterTarget ? null : target.object.name;
   // Wire shape: op is "$subscribe"; the member is the last token of the
   // `to` address (a public member bare, `#x` private).
   const selector = '$subscribe';
   // The member's token: self uses its own label's wire name (`@x` → `x`, `#x`);
   // remote and child members are public (`x`). Cell-handle reads the cell name
   // from the runtime handle, so it's set later.
-  const toSelector = isSelfTarget ? addressToken(target.name) :
+  const toSelector = isSelfTarget || isOuterTarget ? addressToken(target.name) :
     isCellHandleTarget ? null : target.property;
   const fnCode = genFunctionBodyCode(ctx, expr.params, expr.body, null, '.');
   const pendingSetup = `
@@ -89,6 +90,16 @@ export function genSubscribeCall(ctx, expr) {
       opExpr = `[[${posVals}], ${JSON.stringify(selector)}]`;
       tyField = `, 'ty': [[${posTy}]]`;
     }
+  }
+
+  // A cell of an actor this one is declared in (src/outer_reads.js): `$subscribe` to
+  // it there, from inside, as a write or a call to it goes. That actor replies with
+  // its value now and on each write, to our pending entry.
+  if ((target?.type === 'Identifier' || target?.type === 'RefRead') && target.outer) {
+    return `{${pendingSetup}
+          const _owner = this.#chain[${target.outerLevel ?? 1} - 1];
+          queueMicrotask(() => _owner.receive({ id: _sub_id, op: ${opExpr}, to: ${JSON.stringify(':' + wireLabel(target.name))}, from: '__inner', _route: (msg) => this.receive(msg)${tyField} }));
+        }`;
   }
 
   // Self-subscribe: no wire post — deliver the subscribe directly to our own

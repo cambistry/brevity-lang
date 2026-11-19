@@ -165,6 +165,8 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null, label = 
       '    let _sub_from = _sub.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();',
     ];
   lines.push(`    let _cur = self.state.get("${cellKey}").cloned().unwrap_or(Value::Null);`);
+  // A subscribe made by an actor of a class declared in this one (outer_subscribe).
+  if (G.ctx.readsOuter) lines.push(`    if let Some(_at) = _sub_from.strip_prefix("__inst:") { self.bv_inst_sub_at(_at, &json!([_cur])); continue; }`);
   // A subscribe the instance made itself: its callback, its state in.
   if (childPrefix !== null) lines.push(`    if _sub_from == "__own" { let _slot = _sub.get("slot").and_then(|v| v.as_i64()).unwrap_or(-1); self.child_${childPrefix}_dispatch_sub(_slot, &json!([_cur])); continue; }`);
   lines.push(

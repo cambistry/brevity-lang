@@ -3,7 +3,33 @@
 // subscribers, as a `set` from outside does.
 
 import { resolveSuperclassChain } from './subclass.js';
-import { outerNamesFor } from './outer_reads.js';
+import { outerNamesFor, enclosingChain } from './outer_reads.js';
+
+// The cells of each actor (by name, null for the file) that an actor declared
+// inside it subscribes to by name (`c.subscribe`): the innermost enclosing actor
+// that declares the name owns it, unless the subscriber owns it itself.
+function subscribedFromInside(ast) {
+  const byName = new Map(ast.actors.map(a => [a.name ?? null, a]));
+  const declares = (a, name) => (a?.stateVarDecls || []).some(d => d.name === name) || (a?.initParams || []).some(p => p.name === name);
+  const out = new Map();
+  for (const actor of ast.actors.filter(a => a.name)) {
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      const t = node.type === 'SubscribeCall' ? node.target : null;
+      if ((t?.type === 'Identifier' || t?.type === 'RefRead') && !t.name.startsWith('@') && !declares(actor, t.name)) {
+        const owner = enclosingChain(ast, actor).find(o => declares(byName.get(o), t.name));
+        if (owner !== undefined) {
+          if (!out.has(owner)) out.set(owner, new Set());
+          out.get(owner).add(t.name);
+        }
+      }
+      for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v);
+    };
+    [actor.functions, actor.initBody, actor.constructorBody].forEach(visit);
+  }
+  return out;
+}
 
 // Every name a function could mean by a bare `a`, however it was declared.
 function declaredNames(fn) {
@@ -22,6 +48,7 @@ function declaredNames(fn) {
 
 export function lowerOwnCellWrites(ast) {
   const classes = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  const fromInside = subscribedFromInside(ast);
   for (const actor of ast.actors) {
     const inherited = resolveSuperclassChain(classes, actor).inheritedState || [];
     const state = new Map([...inherited, ...(actor.stateVarDecls || [])].map(v => [v.name, v]));
@@ -40,6 +67,8 @@ export function lowerOwnCellWrites(ast) {
       for (const v of Object.values(node)) if (v && typeof v === 'object') findSubs(v);
     };
     [actor.functions, actor.initBody, actor.constructorBody].forEach(findSubs);
+    // …or code in an actor declared inside this one does.
+    for (const name of fromInside.get(actor.name ?? null) || []) if (state.get(name)?.isRef) subscribed.add(name);
     const check = (name) => {
       if (name.startsWith('@') || state.has(name) || params.has(name) || !state.get('@' + name)) return;
       throw new Error(`'${name}' isn't in scope — the published cell is '@${name}'`);

@@ -1357,6 +1357,12 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
     const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
     if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
+      // A protected or private name (\`~a\`, \`#a\`) is subscribed to only from inside:
+      // from outside it isn't there, and nothing is registered.
+      if (/^[~#]/.test(_target) && !(from === '__self' || from === '__test' || from === '__parent' || from === '__child' || from === '__inner')) {
+        (message._route || ((msg) => this.#binding.post(msg)))({ id, ex: { $subscribe: 'unhandled' }, to: _replyTo });
+        return;
+      }
       const _subArgs = Array.isArray(message.op) && message.op.length > 1 ? message.op[0] : null;
       // Keyed by the wire name: \`a\`, \`~a\` and \`#a\` are different cells.
       let _subs = this.#_cellSubs?.get(_target);

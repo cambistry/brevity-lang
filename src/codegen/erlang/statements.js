@@ -2,7 +2,7 @@
 
 import { selfSlotTag } from '../../actor_values.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { addressToken, memberOp } from '../wire_labels.js';
+import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
@@ -76,17 +76,20 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const ownCell = (name) => (ctx.childStatePrefix
     ? ctx.stateVarNames?.has(name) && !ctx.childConstructorParams?.has(name)
     : (ctx.stateVarDecls || []).some(d => d.name === name));
-  const isSelfTarget = ((target?.type === 'Identifier' || target?.type === 'RefRead') && ownCell(target.name))
-    || (target?.type === 'Identifier' && (target.name.startsWith('@') || target.name.startsWith('#')));
-  if (!isSelfTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
+  // A cell of an actor this class is declared in (src/outer_reads.js): subscribed
+  // to there, as it's read (bv_outer_subscribe_).
+  const isOuterTarget = (target?.type === 'Identifier' || target?.type === 'RefRead') && !!target.outer;
+  const isSelfTarget = !isOuterTarget && (((target?.type === 'Identifier' || target?.type === 'RefRead') && ownCell(target.name))
+    || (target?.type === 'Identifier' && (target.name.startsWith('@') || target.name.startsWith('#'))));
+  if (!isSelfTarget && !isOuterTarget && (target?.type !== 'DotAccessExpr' || target.object?.type !== 'Identifier')) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
-  const objectName = isSelfTarget ? null : target.object.name;
+  const objectName = isSelfTarget || isOuterTarget ? null : target.object.name;
   // The op is "$subscribe"; its target is the member's wire name, the last
   // token of to (`a`, `#a` for self, a public member bare). Direct handle_op
   // calls dispatch on {<<"$subscribe">>, Target}.
   const wireOp = '$subscribe';
-  const toSelector = isSelfTarget ? addressToken(target.name) : memberOp(target.property);
+  const toSelector = isSelfTarget || isOuterTarget ? addressToken(target.name) : memberOp(target.property);
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
   const params = expr.params || [];
@@ -175,7 +178,10 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // first arg (so the subscribe@/# prologue pattern-matches). Remote posts
   // the bare verb on the wire, with the @field selector in the to-field.
   const selectorBin = `{<<"$subscribe">>, ${erlString(toSelector)}}`;
-  if (isSelfTarget) {
+  if (isOuterTarget) {
+    outLines.push(`${I}${V('Sub_init_re_')} = bv_outer_subscribe_(${target.outerLevel ?? 1}, ${erlString(wireLabel(target.name))}, ${V('Sub_id_')}),`);
+    outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))([${V('Sub_init_re_')}]),`);
+  } else if (isSelfTarget) {
     // Self-dispatch: call handle_op inline. Sub_msg_'s op carries the compound
     // selector too so the prologue's args extraction (hd(op) when list) still
     // finds args at position 0.

@@ -986,6 +986,8 @@ ${m[2]}
         if let Some(target) = op.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = payload.clone();
             let sub_ty = Value::Null;
+            // A protected or private name is subscribed to only from inside.
+            if (target.starts_with('~') || target.starts_with('#')) && bv_from_wire_caller(from) { self.wire_unhandled = true; return Value::Null; }
             let subs_key = format!("${name}_cell_subs_{}", target);
             let mut subs = self
                 .state
@@ -1357,6 +1359,22 @@ function genRustChildMethods(allActors) {
             if self.${lc}_next_id.get() == instance_id + 1 { self.${lc}_next_id.set(instance_id); }
             panic!("ex_response");
         }
+    }
+
+    // A subscribe's callback in one of its actors (src/codegen/rust/program.js,
+    // bv_inst_sub_at), its state in.
+    #[allow(dead_code)]
+    fn child_${lc}_sub_at(&mut self, instance_id: u32, slot: i64, re: &Value) {
+        if self.current_${lc}_instance == Some(instance_id) { self.child_${lc}_dispatch_sub(slot, re); return; }
+        ${G.ctx.readsOuter ? `let incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
+        self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
+        self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}
+        let saved_current = self.current_${lc}_instance.replace(instance_id);
+        self.child_${lc}_dispatch_sub(slot, re);
+        ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
+        self.state = saved_state;`}
+        self.${lc}_instances.insert(instance_id, new_state);
+        self.current_${lc}_instance = saved_current;
     }
 
     fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {

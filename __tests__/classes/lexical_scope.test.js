@@ -734,3 +734,97 @@ describe('boundaries — a name reused where it may be', () => {
     await expectBehavior(script, ...ask('viaParam', 6));
   });
 });
+
+// A class subscribes to a cell of an actor it's declared in, as it reads one: it
+// sees the current value, and each later write. (Private cells outside a function
+// body don't parse yet; they join when they do.)
+describe('a class subscribes to the cells of the actors it\'s declared in', () => {
+  const script = `
+    c *Integer = 1
+    @p *Integer = 10
+
+    @Watcher = *{
+      seenC *Integer = 0
+      seenP *Integer = 0
+
+      Inner = *{
+        deep *Integer = 0
+        mine *Integer = 0
+        @watch. = { c.subscribe (v Integer) { deep <- v } }
+        @watchMine. = { seenC.subscribe (v Integer) { mine <- v } }
+        @deep = { return deep }
+        @mine = { return mine }
+      }
+      inner = Inner()
+
+      @watchC. = { c.subscribe (v Integer) { seenC <- v } }
+      @watchP. = { @p.subscribe (v Integer) { seenP <- v } }
+      @watchDeep. = { inner.watch()... }
+      @watchMine. = { inner.watchMine()... }
+      @mine = {
+        x Integer = inner.mine()
+        return x
+      }
+      @setSeen! = { seenC <- 5 }
+      @seenC = { return seenC }
+      @seenP = { return seenP }
+      @deep = {
+        x Integer = inner.deep()
+        return x
+      }
+    }
+
+    @bumpC! = { c <- c + 1 }
+    @bumpP! = { @p <- @p + 1 }
+  `;
+  const watching = (watch, read, bump, before, after) => [
+    { input: { id: '1', op: '$new', to: ':Watcher', from: 'c' } },
+    { output: { id: '1', re: ['#<:Watcher:1>'], ty: [':Watcher'], to: 'c' } },
+    { input: { id: '2', op: watch, to: ':Watcher:1', from: 'c' } },
+    { input: { id: '3', op: read, to: ':Watcher:1', from: 'c' } },
+    { output: { id: '3', re: [before], ty: ['Integer'], to: 'c', from: ':Watcher:1' } },
+    { input: { id: '4', op: bump, from: 'c' } },
+    { output: { id: '4', re: ['#<:>'], ty: ['*'], to: 'c' } },
+    { input: { id: '5', op: read, to: ':Watcher:1', from: 'c' } },
+    { output: { id: '5', re: [after], ty: ['Integer'], to: 'c', from: ':Watcher:1' } },
+  ];
+
+  it('depth 1, a protected cell', async () => {
+    await expectBehavior(script, ...watching('watchC.', 'seenC', 'bumpC!', 1, 2));
+  });
+
+  it('depth 1, a public cell', async () => {
+    await expectBehavior(script, ...watching('watchP.', 'seenP', 'bumpP!', 10, 11));
+  });
+
+  it('depth 2, a protected cell', async () => {
+    await expectBehavior(script, ...watching('watchDeep.', 'deep', 'bumpC!', 1, 2));
+  });
+
+  it('depth 1, its enclosing class\'s protected cell', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '$new', to: ':Watcher', from: 'c' } },
+      { output: { id: '1', re: ['#<:Watcher:1>'], ty: [':Watcher'], to: 'c' } },
+      { input: { id: '2', op: 'watchMine.', to: ':Watcher:1', from: 'c' } },
+      { input: { id: '3', op: 'mine', to: ':Watcher:1', from: 'c' } },
+      { output: { id: '3', re: [0], ty: ['Integer'], to: 'c', from: ':Watcher:1' } },
+      { input: { id: '4', op: 'setSeen!', to: ':Watcher:1', from: 'c' } },
+      { output: { id: '4', re: ['#<:Watcher:1>'], ty: [':Watcher'], to: 'c', from: ':Watcher:1' } },
+      { input: { id: '5', op: 'mine', to: ':Watcher:1', from: 'c' } },
+      { output: { id: '5', re: [5], ty: ['Integer'], to: 'c', from: ':Watcher:1' } },
+    );
+  });
+
+  // From outside, a protected cell isn't there to subscribe to, and later writes
+  // tell nobody.
+  it('a protected cell refuses a subscribe from outside', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '$subscribe', to: ':~c', from: 'c' } },
+      { output: { id: '1', ex: { $subscribe: 'unhandled' }, to: 'c' } },
+      { input: { id: '2', op: 'bumpC!', from: 'c' } },
+      { output: { id: '2', re: ['#<:>'], ty: ['*'], to: 'c' } },
+      { input: { id: '3', op: '$subscribe', to: ':p', from: 'c' } },
+      { output: { id: '3', re: [10], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});
