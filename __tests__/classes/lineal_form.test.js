@@ -23,7 +23,7 @@ describe('lineal class grammar — accepted forms', () => {
 
   it('Cls\\n=\\n*\\nparams\\n*\\nbody . (header `=` on its own line)', () => {
     expect(() => compileSource(`
-      Box.
+      Box
         =
         *
         value Integer

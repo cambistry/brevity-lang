@@ -127,7 +127,7 @@ describe('a class reaches only the actors it is declared in', () => {
       B = *{
         @get = { return x }
       }
-    `)).toThrow(/'x' is a name of 'A', which 'B' isn't declared in/);
+    `)).toThrow("'x' is not defined");
   });
 
   it('its own inherited function wins over a sibling\'s name', () => {
@@ -154,7 +154,7 @@ describe('a class reaches only the actors it is declared in', () => {
           @get = { return y }
         }
       }
-    `)).toThrow(/'y' is a name of 'In', which 'Near' isn't declared in/);
+    `)).toThrow("'y' is not defined");
   });
 
   it('a cell of a class nested inside it is a compile error', () => {
@@ -166,7 +166,7 @@ describe('a class reaches only the actors it is declared in', () => {
 
         @get = { return y }
       }
-    `)).toThrow(/'y' is a name of 'In', which 'A' isn't declared in/);
+    `)).toThrow("'y' is not defined");
   });
 
   it('constructing a class nested in a sibling is a compile error', () => {

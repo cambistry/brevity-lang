@@ -1,5 +1,5 @@
 import { settleWriterBody } from './writer_body.js';
-import * as AST from './ast.js';
+import * as ASTNodes from './ast.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
@@ -17,13 +17,6 @@ const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ 
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
-
-// The builtin namespaces and the methods each answers when called on the name
-// itself: `Text.upper(t)`, `Math.sqrt(x)`, `Integer.to_text(n)`.
-const NAMESPACE_METHODS = {
-  Text: TEXT_METHODS, Blob: BLOB_METHODS, GraphemeText: GRAPHEME_TEXT_METHODS, List: LIST_METHODS,
-  Math: MATH_METHODS, Integer: MATH_METHODS, Float: MATH_METHODS, Decimal: MATH_METHODS,
-};
 
 // The bang form (`*x.method!(...)`) is a distinct method name from its pure
 // counterpart, not a modifier. It exists only on the receiver-ref form, and
@@ -174,6 +167,18 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   let tokens = foldSelfClass(joined);
   const fileTokens = tokens;
   let pos = 0;
+  // A name's node keeps the line it was read on (`loc`), for the errors about it
+  // (src/names.js). Passes that walk the tree skip `loc`.
+  const located = (make) => (...args) => {
+    const node = make(...args);
+    const line = tokens === fileTokens ? tokens[pos - 1]?.line : undefined;
+    if (line !== undefined) node.loc = { line };
+    return node;
+  };
+  const AST = { ...ASTNodes };
+  for (const k of ['identifier', 'refRead', 'fnRef', 'refArg', 'setStatement', 'actorSetStatement', 'actorFieldSet', 'reply', 'returnNode', 'functionCallExpr']) {
+    AST[k] = located(ASTNodes[k]);
+  }
   const functionNames = new Set();
   const fileFunctionNames = fileLevelFunctionNames(tokensIn);
   const localScopes = [new Set()];
@@ -408,9 +413,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   };
   const skipBlanks = () => { while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume(); };
   const currentScope = () => localScopes[localScopes.length - 1];
-  // Every name the file declares anywhere: a builtin namespace (`Math`) may be one.
-  const declaredAnywhere = new Set();
-  const declareLocal = (name) => { if (name) { currentScope().add(name); declaredAnywhere.add(name); } };
+  const declareLocal = (name) => { if (name) currentScope().add(name); };
 
   const isKnownLocal = (name) => localScopes.some(scope => scope.has(name));
   const addRef = (name, typeName = null) => refVarScopes[refVarScopes.length - 1].set(name, typeName);
@@ -1142,6 +1145,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
   }
 
+  // `*Type(args)`: a cell's construction. Its callee names a type.
+  function parseCellConstruction(typeName) {
+    const call = parseForwardCall(typeName);
+    call.callee.cellType = true;
+    return call;
+  }
+
   function parseForwardCall(name) {
     const args = parseCallArgs();
     appendTrailingBlocks(args, true);
@@ -1785,7 +1795,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             throw new Error(`Expected '(' after '*${typeName}'`);
           }
           addRef(name);
-          const value = parseForwardCall(typeName);
+          const value = parseCellConstruction(typeName);
           body.push(AST.refDecl(name, null, value));
         } else {
           const value = parseRHSValue();
@@ -4072,7 +4082,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             throw new Error(`Expected '(' after '*${typeName}'`);
           }
           addRef(name);
-          const value = parseForwardCall(typeName);
+          const value = parseCellConstruction(typeName);
           body.push(AST.refDecl(name, null, value));
         } else {
           const value = parseRHSValue();
@@ -5114,7 +5124,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         take(); // *
         const typeName = parseType();
         addRef(name);
-        const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
+        const value = peek().type === 'LPAREN' ? parseCellConstruction(typeName) : parseRHSValue();
         constructorBody.push(AST.refDecl(name, null, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = (val) { ... } — syntactic sugar for the <- handler
@@ -6686,42 +6696,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   actors.push(...hoistedClasses);
   resolveUseExprs();
   resolveUseValues();
-  // `Text.m(…)` etc. naming no method of that builtin. Settled once every binding is
-  // known: a file may bind `Math` itself (`use Math`), anywhere in it.
-  {
-    const bound = new Set([...declaredAnywhere, ...fileFunctionNames]);
-    for (const d of dependencies) {
-      bound.add(d.name);
-      for (const x of d.destructures || []) bound.add(x.local ?? x.name ?? x);
-    }
-    for (const a of [...actors, ...hoistedClasses]) {
-      bound.add(a.name);
-      if (typeof a.singletonOf === 'string') bound.add(a.singletonOf);
-      for (const x of [...(a.stateVarDecls || []), ...(a.initParams || []), ...(a.params || []), ...(a.functions || [])]) bound.add(x.name);
-      for (const x of a.constructorBody || []) if (x.name) bound.add(x.name);
-    }
-    for (const t of types) bound.add(t.name);
-    // Every param of every function and lambda.
-    const collectParams = (n) => {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) { n.forEach(collectParams); return; }
-      if (Array.isArray(n.params)) for (const x of n.params) if (x?.name) bound.add(x.name);
-      for (const [k, v] of Object.entries(n)) if (k !== 'loc' && v && typeof v === 'object') collectParams(v);
-    };
-    collectParams(actors);
-    collectParams(hoistedClasses);
-    const visit = (n) => {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) { n.forEach(visit); return; }
-      if (n.type === 'DotCallExpr' && n.object?.type === 'Identifier') {
-        const table = NAMESPACE_METHODS[n.object.name];
-        if (table && !table.has(n.method) && !bound.has(n.object.name)) throw new Error(`'${n.object.name}' has no method '${n.method}'`);
-      }
-      for (const [k, v] of Object.entries(n)) if (k !== 'loc' && v && typeof v === 'object') visit(v);
-    };
-    visit(actors);
-    visit(hoistedClasses);
-  }
   lowerSingletonClasses(actors, types, { fileKind });
   lowerSuperLayers(actors);
   // A nested type's owner: the path of classes from the file actor down to the
@@ -6891,11 +6865,21 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     };
     visit(program.actors);
     lowerSelfChains(program);
+    // The functions declared anywhere: a chain head that's none of them is unbound
+    // (src/names.js).
+    const declared = new Set();
+    const collect = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(collect); return; }
+      if (node.type === 'FunctionDecl' || ((node.type === 'Assign' || node.type === 'TypedAssign') && node.value?.type === 'Function')) declared.add(node.name);
+      for (const v of Object.values(node)) if (v && typeof v === 'object') collect(v);
+    };
+    collect(program.actors);
     const checkSelfChains = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(checkSelfChains); return; }
       if ((node.type === 'DotCallExpr' || node.type === 'DotAccessExpr') && node.object?.type === 'FunctionCallExpr' && node.object.callee?.name?.endsWith('!')
-          && !classNames.has(node.object.callee.name)) {
+          && !classNames.has(node.object.callee.name) && declared.has(node.object.callee.name)) {
         throw new Error(`A chain can't start from '${node.object.callee.name}(…)' here: on a function of this actor, it has to be a whole statement or value — bind it first`);
       }
       for (const v of Object.values(node)) if (v && typeof v === 'object') checkSelfChains(v);

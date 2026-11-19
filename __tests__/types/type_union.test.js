@@ -100,7 +100,7 @@ describe('General unions — valid syntax', () => {
   });
 
   it('Integer | Text in return as-clause', () => {
-    expect(() => compileSource(`@pick\n  =\n  flag Boolean\n  =\n  -> result as Integer | Text\n`)).not.toThrow();
+    expect(() => compileSource(`@pick\n  =\n  flag Boolean\n  =\n  -> 1 as Integer | Text\n`)).not.toThrow();
   });
 
   it('plural standalone in multi-member union still errors', () => {

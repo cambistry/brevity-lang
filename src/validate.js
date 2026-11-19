@@ -10,6 +10,7 @@ import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js
 import { resolveTypePaths, checkTypeClassConflicts } from './type_paths.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { markOuterReads } from './outer_reads.js';
+import { resolveNames } from './names.js';
 import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
@@ -494,6 +495,9 @@ function validateProgram(ast, options = {}) {
       dependencyNames.add(entry.local);
     }
   }
+
+  // ── Every name in value position is bound (src/names.js) ───────────────
+  resolveNames(ast);
 
   // ── Imported-type binding (slice 15) ────────────────────────────────────
   // A destructured-imported name whose remote names a type declared in the
@@ -2594,19 +2598,9 @@ function checkSilentTopLevelUsage(actor, constructorNames = new Set()) {
         throw new Error(`'${name}' returns a value; '...' needs a silent function`);
       }
     }
-    // `fire()` where only the silent `fire.` exists: name the silent call.
-    if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
-      const name = node.callee.name;
-      if (!fnNames.has(name) && fnNames.has(name + '.') && !localNames.has(name)) {
-        throw new Error(`'${name}' is not defined — the silent '${name}.' is called '${name}(…)...'`);
-      }
-    }
     for (const v of Object.values(node)) if (v && typeof v === 'object') checkEllipsis(v);
   };
-  let localNames = new Set();
   for (const fn of actor.functions) {
-    localNames = new Set((fn.params || []).map(p => p.name));
-    for (const s of fn.body) if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.name) localNames.add(s.name);
     checkEllipsis(fn.body);
   }
   if (silentFns.size === 0) return;

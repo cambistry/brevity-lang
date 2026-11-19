@@ -56,6 +56,19 @@ result Integer = double(5)
   -> x * 2
 ```
 
+## Names
+
+Every name in value position is bound, or the compile fails with
+`'x' is not defined (line N)`. A local is bound from its line on. A cell, a
+function, a class, a type and a `use` binding are bound everywhere in their
+scope, so a function may call one declared below it. A class reaches the names
+of the actors it's declared in. A param or binding shadows a builtin namespace
+(`(Math Integer)`).
+
+When a bare name is unbound but its other form is bound, the message names it:
+`'a' isn't in scope — the published cell is '@a'`, `the public function is '@h'`,
+`the function is '#h'`, or `the silent 'fire.' is called 'fire(…)...'`.
+
 ## LLM Rules
 
 - Use `//` for ordinary prose comments in generated examples.

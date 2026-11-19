@@ -154,23 +154,6 @@ export function lowerSelfChains(program) {
       ...typeNames,
       ...own.map(f => f.name),
     ]);
-    const declaredAs = (name) => {
-      if (classes.has('@' + name) || classes.get('@' + name.replace(/!$/, ''))?.sourceName === '@' + name) return `the public class is '@${name}'`;
-      if (overloads('@' + name).length) return `the public function is '@${name}'`;
-      if (overloads('#' + name).length) return `the function is '#${name}'`;
-      return null;
-    };
-    const checkBareCalls = (node, locals) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(n => checkBareCalls(n, locals)); return; }
-      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier') {
-        const { name } = node.callee;
-        const declared = /^[@#]/.test(name) || locals.has(name) || fileNames.has(name) ? null : declaredAs(name);
-        if (declared) throw new Error(`'${name}' isn't in scope — ${declared}`);
-      }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') checkBareCalls(v, locals);
-    };
-
     // A public class is `@Name` as a superclass and a type too.
     const checkTypeName = (type) => {
       if (typeof type !== 'string') return;
@@ -192,24 +175,17 @@ export function lowerSelfChains(program) {
     checkTypeNames(actor.functions);
     checkTypeNames(actor.stateVarDecls);
     checkTypeNames(actor.initBody);
-    checkBareCalls(actor.initBody, new Set());
-    checkBareCalls(actor.constructorBody, new Set());
 
     for (const fn of actor.functions || []) {
       const localFunctions = new Set();
-      const locals = new Set((fn.params || []).map(p => p.name));
       const collect = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { node.forEach(collect); return; }
         if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.value?.type === 'Function') localFunctions.add(node.name);
-        if (typeof node.name === 'string' && ['Assign', 'TypedAssign', 'RefDecl'].includes(node.type)) locals.add(node.name);
-        if (node.type === 'Function') for (const p of node.params || []) locals.add(p.name);
-        if (node.type === 'DestructureAssign') for (const item of node.pattern || []) if (item.name) locals.add(item.name);
         for (const v of Object.values(node)) if (v && typeof v === 'object') collect(v);
       };
       collect(fn.body);
       visit(fn.body, localFunctions);
-      checkBareCalls(fn.body, locals);
     }
   }
 }

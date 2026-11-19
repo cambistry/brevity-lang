@@ -171,9 +171,6 @@ export function markOuterReads(program) {
     const ownLevel = levels.get(actor.name ?? null);
     const own = actor.name ? ownLevel.names : new Map();
     const ownFunctions = ownLevel.functions;
-    // Every class's names, to say whose a name is when it's out of reach.
-    const elsewhere = (name) => [...classes.values()].find(c => c !== actor && !chain.some(l => !l.opaque && l.owner === c.name)
-      && levels.get(c.name).names.has(name));
 
     // `C.count` inside the class (src/singleton_classes.js): the members' own level,
     // whatever the actor or the levels between declare.
@@ -269,8 +266,6 @@ export function markOuterReads(program) {
       if (classes.has(node.name) || dependencies.has(node.name)) return;
       const members = opaqueOwner(node.name, 'names');
       if (members) throw notClosedOver(node.name, members);
-      const other = elsewhere(node.name);
-      if (other) throw new Error(`'${node.name}' is a name of '${other.name}', which '${actor.name}' isn't declared in`);
     };
 
     const visit = (node, bound) => {
