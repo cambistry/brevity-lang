@@ -21,6 +21,7 @@ import { CLASS_SELF } from './singleton_classes.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
+import { BUILTIN_TYPE_NAMES } from './ast.js';
 
 // The builtin namespaces and the methods each answers when called on the name
 // itself: `Text.upper(t)`, `Math.sqrt(x)`, `Integer.to_text(n)`.
@@ -101,6 +102,28 @@ function alternative(name, scope) {
   if (at === 'function') return `the public function is '@${name}'`;
   if (scope.kind('#' + name) === 'function') return `the function is '#${name}'`;
   return null;
+}
+
+// The names a file declares as types, with the builtins: what a type
+// annotation may name (src/type_names.js), and what no param may share
+// (parser.js, resolveLoneNames). A declared actor's type is its class; a
+// dependency's is the actor it injects.
+export function declaredTypeNames(program) {
+  const names = new Set(BUILTIN_TYPE_NAMES);
+  const collect = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(collect); return; }
+    if (node.type === 'TypeDecl' && node.name) names.add(node.name);
+    if (node.type === 'Actor' && Array.isArray(node.functions) && node.name) names.add(node.name);
+    if (node.type === 'ServiceCoercion' && node.name) names.add(node.name);
+    if (node.type === 'Dependency') {
+      if (node.name) names.add(node.name);
+      for (const d of node.destructures || []) if (d.local) names.add(d.local);
+    }
+    for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') collect(v);
+  };
+  collect(program);
+  return names;
 }
 
 export function resolveNames(program) {

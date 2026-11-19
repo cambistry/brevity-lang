@@ -96,7 +96,6 @@ const CHAIN_ROOTS = { ExprStatement: 'expr', ImplicitReturn: 'expr', Assign: 'va
 // caller reports any other.
 export function lowerSelfChains(program) {
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
-  const typeNames = new Set((program.types || []).map(t => t.name));
   for (const actor of program.actors) {
     const own = [...resolveSuperclassChain(classes, actor).inheritedFunctions, ...(actor.functions || [])]
       .filter(f => f.type === 'FunctionDecl' && typeof f.name === 'string' && !f.actorDef && !f.emptyOverload);
@@ -143,38 +142,6 @@ export function lowerSelfChains(program) {
       }
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, localFunctions);
     };
-
-    // `a`, `@a` and `#a` are different names, so a bare name reaches neither of the others.
-    const fileNames = new Set([
-      ...(actor.stateVarDecls || []).map(d => d.name),
-      ...(actor.initParams || []).map(p => p.name),
-      ...(actor.initBody || []).filter(s => s.name).map(s => s.name),
-      ...(program.dependencies || []).flatMap(d => [d.name, ...(Array.isArray(d.destructures) ? d.destructures.map(e => e.local) : [])]),
-      ...classes.keys(),
-      ...typeNames,
-      ...own.map(f => f.name),
-    ]);
-    // A public class is `@Name` as a superclass and a type too.
-    const checkTypeName = (type) => {
-      if (typeof type !== 'string') return;
-      for (const [word] of type.matchAll(/(?<![@\w])\w+/g)) {
-        if (classes.has('@' + word) && !classes.has(word) && !typeNames.has(word) && !fileNames.has(word)) {
-          throw new Error(`'${word}' isn't in scope — the public class is '@${word}'`);
-        }
-      }
-    };
-    const checkTypeNames = (node) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(checkTypeNames); return; }
-      checkTypeName(node.typeName);
-      for (const p of Array.isArray(node.params) ? node.params : []) checkTypeName(p?.type);
-      for (const v of Object.values(node)) if (v && typeof v === 'object') checkTypeNames(v);
-    };
-    for (const st of actor.supertypes || []) checkTypeName(st.supertype);
-    for (const p of actor.initParams || []) checkTypeName(p.type);
-    checkTypeNames(actor.functions);
-    checkTypeNames(actor.stateVarDecls);
-    checkTypeNames(actor.initBody);
 
     for (const fn of actor.functions || []) {
       const localFunctions = new Set();

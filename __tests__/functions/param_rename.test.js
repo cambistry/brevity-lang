@@ -118,7 +118,7 @@ describe('type names are reserved', () => {
 
 describe('single name in parens', () => {
   it('alone, it is the type: `key: (k)` is a named param typed `(k)`', () => {
-    expect(() => compileSource('f = (key: (k)) { key }\n@test = -> 1\n')).not.toThrow();
+    expect(() => compileSource('f = (key: (k)) { key }\n@test = -> 1\n')).toThrow("'k' is not a type");
   });
 
   it('a function-typed param keeps its parens', () => {

@@ -1,5 +1,6 @@
 import { settleWriterBody } from './writer_body.js';
 import * as ASTNodes from './ast.js';
+import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
@@ -109,6 +110,16 @@ export function parseTypeText(text) {
   return parse(tokenize(text), { typeOnly: true });
 }
 
+// The type names `text` uses, as the type grammar reads them: `Integer`,
+// `Svc::Point`, `@Pub`; not a function type's field names.
+export function typeNamesIn(text) {
+  const names = [];
+  // In a type, `class` is the class of the actor it's in.
+  const tokens = tokenize(text).map(t => t.type === 'KEYWORD' && t.value === 'class' ? { ...t, type: 'IDENT' } : t);
+  parse(tokens, { typeOnly: true, typeNamesRead: names });
+  return names;
+}
+
 // `:name` where a param is expected.
 export const colonParamError = (name, typeName) =>
   new Error(`':${name}' is colon destructuring, which a param list doesn't take — a named param is '${name}: ${typeName ?? 'Type'}'`);
@@ -162,7 +173,7 @@ export function parse(tokensIn, options = {}) {
 // (`;` lexes as NEWLINE). Consuming one is using it.
 const STRUCTURAL_TOKENS = new Set(['NEWLINE', 'BLOCK_SEP', 'DIVIDER', 'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'LBRACKET', 'RBRACKET', 'COMMA']);
 
-function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
+function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRead = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
   let tokens = foldSelfClass(joined);
   const fileTokens = tokens;
@@ -669,7 +680,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // A public class is `@Name` as a type too.
     if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
       take();
-      return '@' + take().value;
+      const name = '@' + take().value;
+      typeNamesRead?.push(name);
+      return name;
     }
     const tok = take();
     if (tok.type !== 'IDENT')
@@ -690,6 +703,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     if (peek().type === 'KEYWORD' && peek().value === 'of') {
       take(); // 'of'
+      typeNamesRead?.push(typeName);
       return `${typeName} of ${parseAtomicType(true)}`;
     }
     if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
@@ -701,6 +715,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       take(); // ::
       path += `::${take().value}`;
     }
+    typeNamesRead?.push(path);
     return path;
   }
 
@@ -7008,20 +7023,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // file's types and classes (coercions included), and every name the
   // header binds.
   function resolveLoneNames(program) {
-    const typeNames = new Set(AST.BUILTIN_TYPE_NAMES);
-    const collect = (node) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(collect); return; }
-      if (node.type === 'TypeDecl' && node.name) typeNames.add(node.name);
-      if ((node.type === 'Actor' && Array.isArray(node.functions)) && node.name) typeNames.add(node.name);
-      if (node.type === 'ServiceCoercion' && node.name) typeNames.add(node.name);
-      if (node.type === 'Dependency') {
-        if (node.name) typeNames.add(node.name);
-        for (const d of node.destructures || []) if (d.local) typeNames.add(d.local);
-      }
-      for (const v of Object.values(node)) if (v && typeof v === 'object') collect(v);
-    };
-    collect(program);
+    const typeNames = declaredTypeNames(program);
 
     const resolve = (p, owner) => {
       if (!p || typeof p !== 'object') return;

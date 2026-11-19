@@ -373,10 +373,10 @@ describe('a declared actor as a value — errors', () => {
     `)).toThrow("'k Class = C': 'k Class' takes an actor 'Class' built, and 'C' itself isn't one — write 'k Actor = C'");
   });
 
-  it('`Class` is an ordinary type name as a param type', () => {
+  it('`Class` is not a type', () => {
     expect(() => compileSource(`
       echo = (c Class) -> c
       @go = { return 1 }
-    `)).not.toThrow();
+    `)).toThrow("'Class' is not a type");
   });
 });

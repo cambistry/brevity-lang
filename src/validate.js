@@ -11,6 +11,7 @@ import { resolveTypePaths, checkTypeClassConflicts } from './type_paths.js';
 import { lowerOwnCellWrites } from './published_cells.js';
 import { markOuterReads } from './outer_reads.js';
 import { resolveNames } from './names.js';
+import { resolveTypeNames } from './type_names.js';
 import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
 import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
@@ -538,6 +539,8 @@ function validateProgram(ast, options = {}) {
   // is exported as a type. Loud failures here keep `ty` annotations and
   // codegen from silently routing to a missing target.
   validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed);
+  // ── Every name in type position is a type (src/type_names.js) ──────────
+  resolveTypeNames(ast, remotesParsed);
 
   // ── Template tags must be imported as destructured elements from a service ──
   // An XML `<tag>…</tag>` is a service-agnostic language form: it lowers to a

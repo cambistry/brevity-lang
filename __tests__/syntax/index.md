@@ -69,6 +69,18 @@ When a bare name is unbound but its other form is bound, the message names it:
 `'a' isn't in scope — the published cell is '@a'`, `the public function is '@h'`,
 `the function is '#h'`, or `the silent 'fire.' is called 'fire(…)...'`.
 
+## Type names
+
+Every name in type position is a type, or the compile fails with
+`'X' is not a type`: in annotations, params, returns, cell types, after `of`,
+in unions, in function types (not their field names), in `::` paths,
+constructor profiles and documents written in the file. A type is a builtin
+(a plural only after `of`), a `type` the file declares, a class (a writing
+class `W!` types its actors `W`), `class`, an actor a dependency injects, or a
+type or class a dependency's document declares, bare or through it
+(`Svc::Point`). With no document there is nothing to reach `Svc::Point`
+through.
+
 ## LLM Rules
 
 - Use `//` for ordinary prose comments in generated examples.
