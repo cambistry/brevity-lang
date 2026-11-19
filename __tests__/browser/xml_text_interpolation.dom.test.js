@@ -403,7 +403,7 @@ describe('non-reactive {{ expr }} — pure thunk inlining', () => {
     }));
 
     // Stub the HTML @p reply with a constructed element address
-    await actor.sendAsync({ id: pPost.id, re: '#<HTML:p:1>' });
+    await actor.sendAsync({ id: pPost.id, re: ['#<HTML:p:1>'] });
 
     // Actor continues and sends <div> with the <p> address in children
     expect(actor.posts[1]).toEqual(expect.objectContaining({

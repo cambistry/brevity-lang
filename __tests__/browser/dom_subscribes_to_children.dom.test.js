@@ -41,7 +41,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
 
     expect(dom.posts.some(m => m.op === '$subscribe')).toBe(false);
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '#<HTML:div:1>' }),
+      expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'] }),
     ]));
   });
 
@@ -66,7 +66,7 @@ describe('HTML element — subscribes to address tokens in :children', () => {
     expect(pubPosts[0].id.length).toBeGreaterThan(0);
     // Element address reply still happens.
     expect(dom.posts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: '1', re: '#<HTML:div:1>' }),
+      expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'] }),
     ]));
   });
 

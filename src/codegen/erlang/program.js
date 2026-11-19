@@ -1984,7 +1984,8 @@ bv_dispatch_(Message) ->
 ${dispatchInner}
     end.
 
-handle_result({ok, Re, TyRe}, Id, From, _OpName) when Re =/= null ->
+handle_result({ok, Re0, TyRe0}, Id, From, _OpName) when Re0 =/= null ->
+    {Re, TyRe} = bv_wrap_address_reply_(Re0, TyRe0),
     Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Re), <<"to">> => From},
     Resp = case TyRe of
         null -> Resp0;
@@ -2044,13 +2045,7 @@ handle_result(_, _Id, _From, _OpName) ->
     const checks = [...allNewVars].map(name => {
       return `case get(pending_new_${name}) of
                                 ReplyId_${name} when ReplyId_${name} =:= Re_msg_id_ ->
-                                    put(${erlStateKey(ctx, name)}, case maps:get(<<"re">>, Message, null) of
-                                        <<"#<", AddrRest_${name}/binary>> ->
-                                            AddrLen_${name} = byte_size(AddrRest_${name}) - 1,
-                                            <<AddrVal_${name}:AddrLen_${name}/binary, ">">> = AddrRest_${name},
-                                            AddrVal_${name};
-                                        _ -> maps:get(<<"from">>, Message, null)
-                                    end),
+                                    put(${erlStateKey(ctx, name)}, bv_new_reply_addr_(Message)),
                                     erase(pending_new_${name});
                                 _ -> ok
                             end`;

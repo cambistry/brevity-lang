@@ -80,6 +80,19 @@ actor. Docs move to this wording as they're touched.
 - **`k = C` with `k Box` is an error** naming `Actor`: `'k Box' takes an actor 'Box' built`.
 - **A singleton's self-return is tagged `*`**, as its value is: it's declared.
 
+## Address replies are array-wrapped
+
+A reply that carries an address is positional like every other: the address is its one
+value. `$new` replies `{ re: ['#<:Box:1>'], ty: [':Box'] }`. A self-return replies
+`{ re: ['#<:>'], ty: [':'] }` from an actor a `new` built (`:` is its class; its parent
+translates both, to `['#<:Box:1>']`, `[':Box']`), and `ty: ['*']` from a declared actor (the
+file, a singleton), which knows no `new` built it. Receiving, a `$new` reply's actor is
+`re[0]`; a bare `re` there is malformed and the construction fails.
+
+The HTML host (src/codegen/browser/runtime.js) wraps its `$new` and self-return replies too.
+Its other replies (`body`, `first`, accessors) still answer bare values, as its whole reply
+protocol does; that's its own change.
+
 ## Open
 
 - A list of declared actors is tagged `List of Actors`, the plural of its type as any list

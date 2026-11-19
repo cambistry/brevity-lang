@@ -93,7 +93,7 @@ describe('class scope — a public member through the class, nested', () => {
   it('a cell, from a method', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'rPub', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -102,7 +102,7 @@ describe('class scope — a public member through the class, nested', () => {
   it('a cell, from the constructor block', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'built', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -111,7 +111,7 @@ describe('class scope — a public member through the class, nested', () => {
   it('a cell, from a closure in a method', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'closure', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [2], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -120,7 +120,7 @@ describe('class scope — a public member through the class, nested', () => {
   it('a function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'cPubFn', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [10], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -131,7 +131,7 @@ describe('class scope — a public member through the class, trailing', () => {
   it('a cell, from a method', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'rPub', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -140,7 +140,7 @@ describe('class scope — a public member through the class, trailing', () => {
   it('a cell, from the constructor block', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'built', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -149,7 +149,7 @@ describe('class scope — a public member through the class, trailing', () => {
   it('a cell, from a closure in a method', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'closure', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [2], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -158,7 +158,7 @@ describe('class scope — a public member through the class, trailing', () => {
   it('a function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'cPubFn', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [10], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -169,11 +169,11 @@ describe('class scope — a public cell written through the class, and every act
   it('nested: <-', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '2', re: '#<:Nested:2>', ty: ':Nested', to: 'c' } },
+      { output: { id: '2', re: ['#<:Nested:2>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '3', op: 'setPub!', to: ':Nested:1', from: 'c' } },
-      { output: { id: '3', re: '#<:Nested:1>', ty: ':Nested', to: 'c', from: ':Nested:1' } },
+      { output: { id: '3', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c', from: ':Nested:1' } },
       { input: { id: '4', op: 'rPub', to: ':Nested:2', from: 'c' } },
       { output: { id: '4', re: [5], ty: ['Integer'], to: 'c', from: ':Nested:2' } },
     );
@@ -182,11 +182,11 @@ describe('class scope — a public cell written through the class, and every act
   it('trailing: <-', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '2', re: '#<:Trailing:2>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '2', re: ['#<:Trailing:2>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '3', op: 'setPub!', to: ':Trailing:1', from: 'c' } },
-      { output: { id: '3', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c', from: ':Trailing:1' } },
+      { output: { id: '3', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c', from: ':Trailing:1' } },
       { input: { id: '4', op: 'rPub', to: ':Trailing:2', from: 'c' } },
       { output: { id: '4', re: [5], ty: ['Integer'], to: 'c', from: ':Trailing:2' } },
     );
@@ -195,9 +195,9 @@ describe('class scope — a public cell written through the class, and every act
   it('nested: <|', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'updatePub!', to: ':Nested:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Nested:1>', ty: ':Nested', to: 'c', from: ':Nested:1' } },
+      { output: { id: '2', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c', from: ':Nested:1' } },
       { input: { id: '3', op: 'rPub', to: ':Nested:1', from: 'c' } },
       { output: { id: '3', re: [9], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -206,9 +206,9 @@ describe('class scope — a public cell written through the class, and every act
   it('trailing: <|', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'updatePub!', to: ':Trailing:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c', from: ':Trailing:1' } },
+      { output: { id: '2', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c', from: ':Trailing:1' } },
       { input: { id: '3', op: 'rPub', to: ':Trailing:1', from: 'c' } },
       { output: { id: '3', re: [9], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -217,9 +217,9 @@ describe('class scope — a public cell written through the class, and every act
   it('a write is seen at the class\'s address', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'setPub!', to: ':Trailing:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c', from: ':Trailing:1' } },
+      { output: { id: '2', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c', from: ':Trailing:1' } },
       { input: { id: '3', op: 'pub', to: ':Trailing', from: 'c' } },
       { output: { id: '3', re: [5], ty: ['Integer'], to: 'c', from: ':Trailing' } },
     );
@@ -228,7 +228,7 @@ describe('class scope — a public cell written through the class, and every act
   it('from the constructor block, which makes the class `!`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':Setter!', from: 'c' } },
-      { output: { id: '1', re: '#<:Setter!:1>', ty: ':Setter!', to: 'c' } },
+      { output: { id: '1', re: ['#<:Setter!:1>'], ty: [':Setter!'], to: 'c' } },
       { input: { id: '2', op: 'pub', to: ':Setter!', from: 'c' } },
       { output: { id: '2', re: [4], ty: ['Integer'], to: 'c', from: ':Setter!' } },
     );
@@ -248,7 +248,7 @@ describe('class scope — closure: the nested constructor closes over the class 
   it('reads every member bare, private included', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'bare', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [36], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -257,7 +257,7 @@ describe('class scope — closure: the nested constructor closes over the class 
   it('and so does a closure in a method', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'bareClosure', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -266,11 +266,11 @@ describe('class scope — closure: the nested constructor closes over the class 
   it('writes a member bare, and another actor sees it', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '2', re: '#<:Nested:2>', ty: ':Nested', to: 'c' } },
+      { output: { id: '2', re: ['#<:Nested:2>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '3', op: 'bareSet!', to: ':Nested:1', from: 'c' } },
-      { output: { id: '3', re: '#<:Nested:1>', ty: ':Nested', to: 'c', from: ':Nested:1' } },
+      { output: { id: '3', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c', from: ':Nested:1' } },
       { input: { id: '4', op: 'rProt', to: ':Nested:2', from: 'c' } },
       { output: { id: '4', re: [8], ty: ['Integer'], to: 'c', from: ':Nested:2' } },
     );
@@ -279,7 +279,7 @@ describe('class scope — closure: the nested constructor closes over the class 
   it('a member shadows a name of the actor the class is declared in', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'total', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [50], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -290,7 +290,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
   it('a bare name is the declaring actor\'s, not the member of that name', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'total', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [7], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -566,7 +566,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda reads a file cell', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'readCell', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [7], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -575,7 +575,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda calls a private file function', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'callPrivate', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -584,7 +584,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda calls a file function with args', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'callWithArgs', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -593,7 +593,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda mixes its param, a file cell and its class\'s own cell', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'mixed', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [108], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -602,7 +602,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda with no outer names', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'pure', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -611,9 +611,9 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda writes a file cell', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'write!', to: ':W:1', from: 'c' } },
-      { output: { id: '2', re: '#<:W:1>', ty: ':W', to: 'c', from: ':W:1' } },
+      { output: { id: '2', re: ['#<:W:1>'], ty: [':W'], to: 'c', from: ':W:1' } },
       { input: { id: '3', op: 'total', from: 'c' } },
       { output: { id: '3', re: [8], ty: ['Integer'], to: 'c' } },
     );
@@ -622,7 +622,7 @@ describe('class scope — closures in a class reach the actors it\'s declared in
   it('a lambda in a class inside a class reaches both enclosing actors', async () => {
     await expectBehavior(closures,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'inner', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [110], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );

@@ -1093,7 +1093,7 @@ describe('HTML element runtime — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [[{ children: ['Hello'] }], '$new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML:div:1>', 'ty': 'HTML:div', from: 'HTML' }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'], 'ty': ['HTML:div'], from: 'HTML' }) },
     );
   });
 
@@ -1103,7 +1103,7 @@ describe('HTML element runtime — service side', () => {
 
     await expectBehavior(dom,
       { input: { id: '1', op: [[{ children: ['Hello'] }], '$new'] } },
-      { output: expect.objectContaining({ re: '#<HTML:div:1>' }) },
+      { output: expect.objectContaining({ re: ['#<HTML:div:1>'] }) },
     );
 
     const el = await page.connectActor('HTML:div:1');
@@ -1119,11 +1119,11 @@ describe('HTML element runtime — service side', () => {
 
     await expectBehavior(domDiv,
       { input: { id: '1', op: [[{ children: ['First'] }], '$new'] } },
-      { output: expect.objectContaining({ id: '1', re: '#<HTML:div:1>', 'ty': 'HTML:div' }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'], 'ty': ['HTML:div'] }) },
       { input: { id: '2', op: [[{ children: ['Second'] }], '$new'] } },
-      { output: expect.objectContaining({ id: '2', re: '#<HTML:div:2>', 'ty': 'HTML:div' }) },
+      { output: expect.objectContaining({ id: '2', re: ['#<HTML:div:2>'], 'ty': ['HTML:div'] }) },
       { input: { id: '3', op: [[{ children: ['Third'] }], '$new'] } },
-      { output: expect.objectContaining({ id: '3', re: '#<HTML:div:3>', 'ty': 'HTML:div' }) },
+      { output: expect.objectContaining({ id: '3', re: ['#<HTML:div:3>'], 'ty': ['HTML:div'] }) },
     );
   });
 
@@ -1140,12 +1140,12 @@ describe('HTML element runtime — service side', () => {
     await domP.sendAsync({ id: '4', op: [[{ children: ['p2'] }], '$new'] });
 
     expect(domDiv.posts).toEqual([
-      expect.objectContaining({ id: '1', re: '#<HTML:div:1>', 'ty': 'HTML:div' }),
-      expect.objectContaining({ id: '3', re: '#<HTML:div:2>', 'ty': 'HTML:div' }),
+      expect.objectContaining({ id: '1', re: ['#<HTML:div:1>'], 'ty': ['HTML:div'] }),
+      expect.objectContaining({ id: '3', re: ['#<HTML:div:2>'], 'ty': ['HTML:div'] }),
     ]);
     expect(domP.posts).toEqual([
-      expect.objectContaining({ id: '2', re: '#<HTML:p:1>', 'ty': 'HTML:p' }),
-      expect.objectContaining({ id: '4', re: '#<HTML:p:2>', 'ty': 'HTML:p' }),
+      expect.objectContaining({ id: '2', re: ['#<HTML:p:1>'], 'ty': ['HTML:p'] }),
+      expect.objectContaining({ id: '4', re: ['#<HTML:p:2>'], 'ty': ['HTML:p'] }),
     ]);
   });
 
@@ -1155,7 +1155,7 @@ describe('HTML element runtime — service side', () => {
   async function makeAttached(page, tag, payload = {}) {
     const dom = await page.connectActor(`HTML:${tag}`);
     await dom.sendAsync({ id: 'n', op: Object.keys(payload).length > 0 ? [[payload], '$new'] : '$new' });
-    const elementAddr = dom.posts[0].re;
+    const elementAddr = dom.posts[0].re[0];
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -1222,7 +1222,7 @@ describe('HTML element runtime — service side', () => {
     const { el } = await makeAttached(page, 'div');
     await expectBehavior(el,
       { input: { id: 's', op: [['data-x', 'one'], 'set_attribute!'] } },
-      { output: expect.objectContaining({ re: expect.stringMatching(/^#<HTML:div:[0-9]+>$/), 'ty': 'HTML:div' }) },
+      { output: expect.objectContaining({ re: [expect.stringMatching(/^#<HTML:div:[0-9]+>$/)], 'ty': ['HTML:div'] }) },
     );
     const value = await page.evaluate(() => document.querySelector('div').getAttribute('data-x'));
     expect(value).toBe('one');
@@ -1232,7 +1232,7 @@ describe('HTML element runtime — service side', () => {
     const page = await loadPage(html);
     const { el } = await makeAttached(page, 'div', { id: 'wrap' });
     await el.sendAsync({ id: 'r', op: [['id'], 'remove_attribute!'] });
-    expect(el.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+    expect(el.posts[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
     const has = await page.evaluate(() => document.querySelector('div').hasAttribute('id'));
     expect(has).toBe(false);
   });
@@ -1263,7 +1263,7 @@ describe('HTML element runtime — service side', () => {
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('<b>hi</b>');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
   });
 
   it('set text_content via `<-` writes textContent (escapes HTML)', async () => {
@@ -1280,7 +1280,7 @@ describe('HTML element runtime — service side', () => {
     await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
     const html_ = await page.evaluate(() => document.querySelector('div').innerHTML);
     expect(html_).toBe('&lt;b&gt;raw&lt;/b&gt;');
-    expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+    expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
   });
 
   it('set on a void tag\'s content field is silently ignored (no DOM write, no reply)', async () => {
@@ -1313,7 +1313,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: '1', op: '$new' });
-      const inner = dom.posts[0].re.slice(2, -1);
+      const inner = dom.posts[0].re[0].slice(2, -1);
       const el = await page.connectActor(inner);
       await el.sendAsync({ id: 'p', op: 'parent_element' });
       expect(el.posts[0]).toEqual(expect.objectContaining({ re: null }));
@@ -1326,8 +1326,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span1Addr = sp.posts[0].re;
-      const span2Addr = sp.posts[1].re;
+      const span1Addr = sp.posts[0].re[0];
+      const span2Addr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[[span1Addr, ' middle ', span2Addr]], 'append!'] });
       await el.sendAsync({ id: 'c', op: 'children' });
       const last = el.posts[el.posts.length - 1];
@@ -1350,8 +1350,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span1Addr = sp.posts[0].re;
-      const span2Addr = sp.posts[1].re;
+      const span1Addr = sp.posts[0].re[0];
+      const span2Addr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], 'append!'] });
 
       await el.sendAsync({ id: 'fec', op: 'first_element_child' });
@@ -1372,8 +1372,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span1Addr = sp.posts[0].re;
-      const span2Addr = sp.posts[1].re;
+      const span1Addr = sp.posts[0].re[0];
+      const span2Addr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], 'append!'] });
       await el.sendAsync({ id: 'cec', op: 'child_element_count' });
       expect(el.posts[el.posts.length - 1].re).toBe(2);
@@ -1387,7 +1387,7 @@ describe('HTML element runtime — service side', () => {
 
       const dom = await page.connectActor('HTML:p');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const detachedAddr = dom.posts[0].re.slice(2, -1);
+      const detachedAddr = dom.posts[0].re[0].slice(2, -1);
       const detached = await page.connectActor(detachedAddr);
       await detached.sendAsync({ id: 'c', op: 'is_connected' });
       expect(detached.posts[0]).toEqual(expect.objectContaining({ re: false }));
@@ -1406,8 +1406,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const spanAddr = sp.posts[0].re;
-      const otherAddr = sp.posts[1].re;
+      const spanAddr = sp.posts[0].re[0];
+      const otherAddr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[{ child: spanAddr }], 'append_child!'] });
       await el.sendAsync({ id: 'c', op: [[{ other: spanAddr }], 'contains'] });
       expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: true }));
@@ -1421,8 +1421,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span1Addr = sp.posts[0].re;
-      const span2Addr = sp.posts[1].re;
+      const span1Addr = sp.posts[0].re[0];
+      const span2Addr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], 'append!'] });
 
       const span1 = await page.connectActor(span1Addr.slice(2, -1));
@@ -1497,7 +1497,7 @@ describe('HTML element runtime — service side', () => {
       const { el } = await makeAttached(page, 'div');
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
-      const spanAddr = sp.posts[0].re;
+      const spanAddr = sp.posts[0].re[0];
       // Children: [<span>, ' tail']. last_child is the trailing text node.
       await el.sendAsync({ id: 'app', op: [[[spanAddr, ' tail']], 'append!'] });
       await el.sendAsync({ id: 'lc', op: 'last_child' });
@@ -1506,7 +1506,7 @@ describe('HTML element runtime — service side', () => {
       // Now flip: text first, span last.
       const { el: el2 } = await makeAttached(page, 'div');
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span2Addr = sp.posts[1].re;
+      const span2Addr = sp.posts[1].re[0];
       await el2.sendAsync({ id: 'app', op: [[['head ', span2Addr]], 'append!'] });
       await el2.sendAsync({ id: 'lc', op: 'last_child' });
       expect(el2.posts[el2.posts.length - 1].re).toBe(span2Addr);
@@ -1517,7 +1517,7 @@ describe('HTML element runtime — service side', () => {
       const { el } = await makeAttached(page, 'div');
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
-      const spanAddr = sp.posts[0].re;
+      const spanAddr = sp.posts[0].re[0];
       // Layout: ['head ', <span>, ' tail']
       await el.sendAsync({ id: 'app', op: [[['head ', spanAddr, ' tail']], 'append!'] });
 
@@ -1546,10 +1546,10 @@ describe('HTML element runtime — service side', () => {
       // should be the outer div (not document).
       const outerDom = await page.connectActor('HTML:section');
       await outerDom.sendAsync({ id: 'o', op: '$new' });
-      const outerAddr = outerDom.posts[0].re;
+      const outerAddr = outerDom.posts[0].re[0];
       const innerDom = await page.connectActor('HTML:article');
       await innerDom.sendAsync({ id: 'i', op: '$new' });
-      const innerAddr = innerDom.posts[0].re;
+      const innerAddr = innerDom.posts[0].re[0];
       const outer = await page.connectActor(outerAddr.slice(2, -1));
       await outer.sendAsync({ id: 'app', op: [[{ child: innerAddr }], 'append_child!'] });
 
@@ -1564,8 +1564,8 @@ describe('HTML element runtime — service side', () => {
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
       await sp.sendAsync({ id: 'b', op: '$new' });
-      const span1Addr = sp.posts[0].re;
-      const span2Addr = sp.posts[1].re;
+      const span1Addr = sp.posts[0].re[0];
+      const span2Addr = sp.posts[1].re[0];
       await el.sendAsync({ id: 'app', op: [[[span1Addr, span2Addr]], 'append!'] });
 
       // span1 vs span2 → span2 is FOLLOWING (4). span1 vs span1's parent → CONTAINS+PRECEDING (10).
@@ -1644,7 +1644,7 @@ describe('HTML element runtime — service side', () => {
       const { el, elementAddr } = await makeAttached(page, 'div');
       const sp = await page.connectActor('HTML:span');
       await sp.sendAsync({ id: 'a', op: '$new' });
-      const spanAddr = sp.posts[0].re;
+      const spanAddr = sp.posts[0].re[0];
       // Children: [<span>, ' tail'] — text node sits AFTER the span.
       await el.sendAsync({ id: 'app', op: [[[spanAddr, ' tail']], 'append!'] });
       await el.sendAsync({ id: 'lc', op: 'last_child' });
@@ -1673,7 +1673,7 @@ describe('HTML element runtime — service side', () => {
       // on first traversal lookup.
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -1694,7 +1694,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ id: 's', re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
 
       // Verify the DOM took the write.
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
@@ -1710,7 +1710,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -1733,7 +1733,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
 
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('after');
@@ -1743,7 +1743,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -1762,7 +1762,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const live = await page.evaluate(() => document.querySelector('div').firstChild.nodeValue);
       expect(live).toBe('');
     });
@@ -1774,7 +1774,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const inbox = [];
       await page.register('__t_el_bare_set', m => inbox.push(m));
       await page.send({
@@ -1797,7 +1797,7 @@ describe('HTML element runtime — service side', () => {
       // Use insertAdjacentHTML to plant the whole subtree at once — none of
       // these nodes have CAM addresses yet, exercising on-demand minting.
       await dom.sendAsync({ id: 'n', op: [[{ children: ['x'] }], '$new'] });
-      const parentAddr = dom.posts[0].re;
+      const parentAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -1948,7 +1948,7 @@ describe('HTML element runtime — service side', () => {
       await dom.sendAsync({ id: 'n', op: [[{
         style: 'width: 100px; height: 80px; overflow: auto; padding: 10px; border: 2px solid black; box-sizing: content-box;',
       }], '$new'] });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2053,14 +2053,14 @@ describe('HTML element runtime — service side', () => {
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       const t = await page.evaluate(() => document.querySelector('div').scrollTop);
       expect(t).toBe(100);
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
     });
 
     it('scroll_to! moves scroll position; scroll_top reads it back', async () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'sto', op: [[{ top: 80, left: 50 }], 'scroll_to!'] });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       await el.sendAsync({ id: 'st', op: 'scroll_top' });
       await el.sendAsync({ id: 'sl', op: 'scroll_left' });
       expect(el.posts[el.posts.length - 2].re).toBe(80);
@@ -2090,14 +2090,14 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { el } = await makeMeasured(page);
       await el.sendAsync({ id: 'siv', op: 'scroll_into_view!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
     });
 
     it('focus! focuses a tabbable element; activeElement matches', async () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:input');
       await dom.sendAsync({ id: 'n', op: [[{ type: 'text' }], '$new'] });
-      const inputAddr = dom.posts[0].re;
+      const inputAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2105,7 +2105,7 @@ describe('HTML element runtime — service side', () => {
       await body.sendAsync({ id: 'a', op: [inputAddr, 'append!'] });
       const input = await page.connectActor(inputAddr.slice(2, -1));
       await input.sendAsync({ id: 'f', op: 'focus!' });
-      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(input.posts[input.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const isFocused = await page.evaluate(() => document.activeElement === document.querySelector('input'));
       expect(isFocused).toBe(true);
     });
@@ -2114,7 +2114,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:input');
       await dom.sendAsync({ id: 'n', op: [[{ type: 'text' }], '$new'] });
-      const inputAddr = dom.posts[0].re;
+      const inputAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2155,7 +2155,7 @@ describe('HTML element runtime — service side', () => {
       // Mint a sibling div for the cross-comparison.
       const dom2 = await page.connectActor('HTML:div');
       await dom2.sendAsync({ id: 'n', op: '$new' });
-      const otherAddr = dom2.posts[0].re;
+      const otherAddr = dom2.posts[0].re[0];
       await el.sendAsync({ id: 's1', op: [[{ other: elementAddr }], 'is_same_node'] });
       await el.sendAsync({ id: 's2', op: [[{ other: otherAddr }], 'is_same_node'] });
       expect(el.posts[el.posts.length - 2]).toEqual(expect.objectContaining({ re: true }));
@@ -2181,7 +2181,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2198,7 +2198,7 @@ describe('HTML element runtime — service side', () => {
       const before = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(before).toBe(2);
       await el.sendAsync({ id: 'norm', op: 'normalize!' });
-      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(el.posts[el.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const after = await page.evaluate(() => document.querySelector('div').childNodes.length);
       expect(after).toBe(1);
     });
@@ -2210,7 +2210,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:br');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const inner = dom.posts[0].re.slice(2, -1);
+      const inner = dom.posts[0].re[0].slice(2, -1);
       const inbox = [];
       await page.register('__t_void_scroll', m => inbox.push(m));
       await page.send({
@@ -2219,7 +2219,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
     });
   });
 
@@ -2230,7 +2230,7 @@ describe('HTML element runtime — service side', () => {
     async function makeWithClassList(page, payload = {}) {
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: Object.keys(payload).length > 0 ? [[payload], '$new'] : '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2261,7 +2261,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { cl } = await makeWithClassList(page);
       await cl.sendAsync({ id: 'a', op: [['foo'], 'add!'] });
-      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const cls = await page.evaluate(() => document.querySelector('div').className);
       expect(cls).toBe('foo');
       await cl.sendAsync({ id: 'c', op: [['foo'], 'contains'] });
@@ -2332,7 +2332,7 @@ describe('HTML element runtime — service side', () => {
       });
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
       await page.evaluate(() => new Promise(r => setTimeout(r, 0)));
-      expect(inbox[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(inbox[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       await cl.sendAsync({ id: 'v', op: 'value' });
       expect(cl.posts[cl.posts.length - 1]).toEqual(expect.objectContaining({ re: 'foo bar' }));
     });
@@ -2358,7 +2358,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const { ds } = await makeWithDataset(page);
       await ds.sendAsync({ id: 'p', op: [['fooBar', 'one'], 'put!'] });
-      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(ds.posts[ds.posts.length - 1]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       // camelCase ↔ kebab-case translation is the DOM proxy's job.
       const attr = await page.evaluate(() => document.querySelector('div').getAttribute('data-foo-bar'));
       expect(attr).toBe('one');
@@ -2405,7 +2405,7 @@ describe('HTML element runtime — service side', () => {
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: [[{ aria: { label: 'X' } }], '$new'] });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       const el = await page.connectActor(elementAddr.slice(2, -1));
       await el.sendAsync({ id: 'a1', op: 'aria' });
       const first = el.posts[el.posts.length - 1].re;
@@ -2510,7 +2510,7 @@ describe('HTML.div DOM render — every Element attribute lands on the element',
   async function renderAndQuery(page, tag, payload, queryFn) {
     const dom = await page.connectActor('HTML:' + tag);
     await dom.sendAsync({ id: 'n', op: Object.keys(payload).length > 0 ? [[payload], '$new'] : '$new' });
-    const elementAddr = dom.posts[0].re; // '#<HTML:<tag>:1>'
+    const elementAddr = dom.posts[0].re[0]; // '#<HTML:<tag>:1>'
 
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
@@ -2661,7 +2661,7 @@ describe('HTML.div DOM render — :hidden Boolean | Text', () => {
   async function renderHiddenDiv(page, value) {
     const dom = await page.connectActor('HTML:div');
     await dom.sendAsync({ id: 'n', op: [[{ hidden: value }], '$new'] });
-    const elementAddr = dom.posts[0].re;
+    const elementAddr = dom.posts[0].re[0];
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2697,7 +2697,7 @@ describe('HTML.div DOM render — :class Text | List of Texts', () => {
   async function renderClassDiv(page, value) {
     const dom = await page.connectActor('HTML:div');
     await dom.sendAsync({ id: 'n', op: [[{ class: value }], '$new'] });
-    const elementAddr = dom.posts[0].re;
+    const elementAddr = dom.posts[0].re[0];
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2732,7 +2732,7 @@ describe('HTML.div DOM render — :contenteditable Boolean | Text', () => {
   async function renderCeDiv(page, value) {
     const dom = await page.connectActor('HTML:div');
     await dom.sendAsync({ id: 'n', op: [[{ contenteditable: value }], '$new'] });
-    const elementAddr = dom.posts[0].re;
+    const elementAddr = dom.posts[0].re[0];
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2760,7 +2760,7 @@ describe('HTML.div DOM render — :popover Boolean | Text', () => {
   async function renderPopoverDiv(page, value) {
     const dom = await page.connectActor('HTML:div');
     await dom.sendAsync({ id: 'n', op: [[{ popover: value }], '$new'] });
-    const elementAddr = dom.posts[0].re;
+    const elementAddr = dom.posts[0].re[0];
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
     const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -2818,7 +2818,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
   async function setupElement(page, tag, attrName, attrValue) {
     const dom = await page.connectActor('HTML:' + tag);
     await dom.sendAsync({ id: 'n', op: '$new' });
-    const elementAddr = dom.posts[0].re.slice(2, -1);
+    const elementAddr = dom.posts[0].re[0].slice(2, -1);
 
     const docActor = await page.connectActor('document');
     await docActor.sendAsync({ id: 'b', op: 'body' });
@@ -3008,7 +3008,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     async function setupParentDivWithText(page, text) {
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'n', op: [[{ children: [text] }], '$new'] });
-      const elementAddr = dom.posts[0].re.slice(2, -1);
+      const elementAddr = dom.posts[0].re[0].slice(2, -1);
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -3035,7 +3035,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:textarea');
       await dom.sendAsync({ id: 'n', op: [[{ children: ['default text'] }], '$new'] });
-      const elementAddr = dom.posts[0].re.slice(2, -1);
+      const elementAddr = dom.posts[0].re[0].slice(2, -1);
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
       const bodyAddr = docActor.posts[0].re.slice(2, -1);
@@ -3068,9 +3068,9 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     async function setupParentAndChild(page) {
       const dom = await page.connectActor('HTML:div');
       await dom.sendAsync({ id: 'p', op: '$new' });
-      const parentAddr = dom.posts[0].re.slice(2, -1);
+      const parentAddr = dom.posts[0].re[0].slice(2, -1);
       await dom.sendAsync({ id: 'c', op: '$new' });
-      const childAddrWrapped = dom.posts[1].re;
+      const childAddrWrapped = dom.posts[1].re[0];
 
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });
@@ -3086,7 +3086,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent, childAddrWrapped } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'm', op: [[{ child: childAddrWrapped }], 'append_child!'] });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const childCount = await page.evaluate(() => document.querySelector('div').childElementCount);
       expect(childCount).toBe(1);
     });
@@ -3097,8 +3097,8 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const dom = await page.connectActor('HTML:span');
       await dom.sendAsync({ id: 's1', op: '$new' });
       await dom.sendAsync({ id: 's2', op: '$new' });
-      const spanA = dom.posts[0].re;
-      const spanB = dom.posts[1].re;
+      const spanA = dom.posts[0].re[0];
+      const spanB = dom.posts[1].re[0];
       await parent.sendAsync({
         id: 'm', op: [[[spanA, ' between ', spanB]], 'append!'],
       });
@@ -3115,8 +3115,8 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const dom = await page.connectActor('HTML:span');
       await dom.sendAsync({ id: 'a', op: '$new' });
       await dom.sendAsync({ id: 'b', op: '$new' });
-      const oldEl = dom.posts[0].re;
-      const newEl = dom.posts[1].re;
+      const oldEl = dom.posts[0].re[0];
+      const newEl = dom.posts[1].re[0];
       await parent.sendAsync({ id: 'attach', op: [[{ child: oldEl }], 'append_child!'] });
       await parent.sendAsync({
         id: 'swap', op: [[{ new_child: newEl, old_child: oldEl }], 'replace_child!'],
@@ -3131,8 +3131,8 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const dom = await page.connectActor('HTML:span');
       await dom.sendAsync({ id: 'a', op: '$new' });
       await dom.sendAsync({ id: 'b', op: '$new' });
-      const oldEl = dom.posts[0].re;
-      const newEl = dom.posts[1].re;
+      const oldEl = dom.posts[0].re[0];
+      const newEl = dom.posts[1].re[0];
       await parent.sendAsync({ id: 'attach', op: [[{ child: oldEl }], 'append_child!'] });
       await parent.sendAsync({ id: 'swap', op: [[newEl, oldEl], 'replace_child!'] });
       const child = await page.evaluate(() => document.querySelector('div').firstElementChild?.tagName);
@@ -3143,7 +3143,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const { parent } = await setupParentAndChild(page);
       await parent.sendAsync({ id: 'r', op: 'remove!' });
-      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: expect.stringMatching(/^#<(HTML:|document).*>$/) }));
+      expect(parent.posts[0]).toEqual(expect.objectContaining({ re: [expect.stringMatching(/^#<(HTML:|document).*>$/)] }));
       const stillThere = await page.evaluate(() => document.body.querySelector('div'));
       expect(stillThere).toBeNull();
     });
@@ -3153,7 +3153,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const { parent } = await setupParentAndChild(page);
       const dom = await page.connectActor('HTML:span');
       await dom.sendAsync({ id: 's', op: '$new' });
-      const spanAddr = dom.posts[0].re;
+      const spanAddr = dom.posts[0].re[0];
       await parent.sendAsync({ id: 'rw', op: [[[spanAddr, ' tail']], 'replace_with!'] });
       const summary = await page.evaluate(() => ({
         firstTag: document.body.firstChild?.tagName,
@@ -3187,7 +3187,7 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
       const page = await loadPage(html);
       const dom = await page.connectActor('HTML:br');
       await dom.sendAsync({ id: 'n', op: '$new' });
-      const brAddr = dom.posts[0].re.slice(2, -1);
+      const brAddr = dom.posts[0].re[0].slice(2, -1);
 
       const docActor = await page.connectActor('document');
       await docActor.sendAsync({ id: 'b', op: 'body' });

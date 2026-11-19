@@ -69,9 +69,9 @@ describe('a class writes its enclosing actor\'s cells', () => {
   it('writes a file cell', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'bump!', to: ':W:1', from: 'c' } },
-      { output: { id: '2', re: '#<:W:1>', ty: ':W', to: 'c', from: ':W:1' } },
+      { output: { id: '2', re: ['#<:W:1>'], ty: [':W'], to: 'c', from: ':W:1' } },
       { input: { id: '3', op: 'total', from: 'c' } },
       { output: { id: '3', re: [1], ty: ['Integer'], to: 'c' } },
     );
@@ -80,9 +80,9 @@ describe('a class writes its enclosing actor\'s cells', () => {
   it('writes a published file cell', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'tally!', to: ':W:1', from: 'c' } },
-      { output: { id: '2', re: '#<:W:1>', ty: ':W', to: 'c', from: ':W:1' } },
+      { output: { id: '2', re: ['#<:W:1>'], ty: [':W'], to: 'c', from: ':W:1' } },
       { input: { id: '3', op: 'tally', from: 'c' } },
       { output: { id: '3', re: [5], ty: ['Integer'], to: 'c' } },
     );
@@ -91,7 +91,7 @@ describe('a class writes its enclosing actor\'s cells', () => {
   it('reads its own write', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'readsOwnWrite!', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [100], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -100,7 +100,7 @@ describe('a class writes its enclosing actor\'s cells', () => {
   it('writes from its constructor block', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':Made!', from: 'c' } },
-      { output: { id: '1', re: '#<:Made!:1>', ty: ':Made!', to: 'c' } },
+      { output: { id: '1', re: ['#<:Made!:1>'], ty: [':Made!'], to: 'c' } },
       { input: { id: '2', op: 'total', from: 'c' } },
       { output: { id: '2', re: [7], ty: ['Integer'], to: 'c' } },
     );
@@ -109,9 +109,9 @@ describe('a class writes its enclosing actor\'s cells', () => {
   it('writes a cell of the class it\'s declared in', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':Outer', from: 'c' } },
-      { output: { id: '1', re: '#<:Outer:1>', ty: ':Outer', to: 'c' } },
+      { output: { id: '1', re: ['#<:Outer:1>'], ty: [':Outer'], to: 'c' } },
       { input: { id: '2', op: 'bump!', to: ':Outer:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Outer:1>', ty: ':Outer', to: 'c', from: ':Outer:1' } },
+      { output: { id: '2', re: ['#<:Outer:1>'], ty: [':Outer'], to: 'c', from: ':Outer:1' } },
       { input: { id: '3', op: 'n', to: ':Outer:1', from: 'c' } },
       { output: { id: '3', re: [1], ty: ['Integer'], to: 'c', from: ':Outer:1' } },
     );
@@ -122,7 +122,7 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls a private file function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'viaHelper', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [10], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -131,7 +131,7 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls a public file function', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'viaTwice', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [42], ty: ['Integer'], to: 'c', from: ':W:1' } },
     );
@@ -140,9 +140,9 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls a file function that writes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'viaInc!', to: ':W:1', from: 'c' } },
-      { output: { id: '2', re: '#<:W:1>', ty: ':W', to: 'c', from: ':W:1' } },
+      { output: { id: '2', re: ['#<:W:1>'], ty: [':W'], to: 'c', from: ':W:1' } },
       { input: { id: '3', op: 'total', from: 'c' } },
       { output: { id: '3', re: [1], ty: ['Integer'], to: 'c' } },
     );
@@ -151,7 +151,7 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls from its constructor block, after its write', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':Made!', from: 'c' } },
-      { output: { id: '1', re: '#<:Made!:1>', ty: ':Made!', to: 'c' } },
+      { output: { id: '1', re: ['#<:Made!:1>'], ty: [':Made!'], to: 'c' } },
       { input: { id: '2', op: 'seen', to: ':Made!:1', from: 'c' } },
       { output: { id: '2', re: [8], ty: ['Integer'], to: 'c', from: ':Made!:1' } },
     );
@@ -160,7 +160,7 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls from a param default', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':Defaulted', from: 'c' } },
-      { output: { id: '1', re: '#<:Defaulted:1>', ty: ':Defaulted', to: 'c' } },
+      { output: { id: '1', re: ['#<:Defaulted:1>'], ty: [':Defaulted'], to: 'c' } },
       { input: { id: '2', op: 'b', to: ':Defaulted:1', from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':Defaulted:1' } },
     );
@@ -169,9 +169,9 @@ describe('a class calls its enclosing actor\'s functions', () => {
   it('calls a private function of the class it\'s declared in', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':Outer', from: 'c' } },
-      { output: { id: '1', re: '#<:Outer:1>', ty: ':Outer', to: 'c' } },
+      { output: { id: '1', re: ['#<:Outer:1>'], ty: [':Outer'], to: 'c' } },
       { input: { id: '2', op: 'bump!', to: ':Outer:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Outer:1>', ty: ':Outer', to: 'c', from: ':Outer:1' } },
+      { output: { id: '2', re: ['#<:Outer:1>'], ty: [':Outer'], to: 'c', from: ':Outer:1' } },
       { input: { id: '3', op: 'f', to: ':Outer:1', from: 'c' } },
       { output: { id: '3', re: [101], ty: ['Integer'], to: 'c', from: ':Outer:1' } },
     );

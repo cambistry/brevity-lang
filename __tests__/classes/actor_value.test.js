@@ -217,7 +217,7 @@ describe('a declared actor as a value — from the file actor', () => {
   it('a param `b @N` takes an actor `@N` built', async () => {
     await expectActorBehavior(await actor(),
       { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: [['#<:N:1>'], 'takesBuilt'], ty: [[':N']], from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c' } },
     );
@@ -273,7 +273,7 @@ describe('a declared actor as a value — from an instance', () => {
     const a = await createActor(script, { fileName: 'c.bv' });
     await expectActorBehavior(a,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
     );
     return a;
   };

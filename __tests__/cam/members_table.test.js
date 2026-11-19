@@ -109,7 +109,7 @@ describe('a prop', () => {
 
   const made = [
     { input: { id: '0', op: [[7], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-    { output: expect.objectContaining({ id: '0', re: '#<:Box:1>' }) },
+    { output: expect.objectContaining({ id: '0', re: ['#<:Box:1>'] }) },
   ];
 
   it('is read as an op', async () => {

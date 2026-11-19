@@ -313,6 +313,9 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 
 // genInitMethod removed — init/$var syntax deprecated
 
+// An actor no `new` builds: the file, or a singleton (a class block's included).
+const declaredActor = (actor) => !actor.name || !!actor.singletonOf;
+
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
   ctx.inClass = !!actor.name;
@@ -1028,8 +1031,12 @@ ${actor.spawnable ? `
     // An actor held as a value (\`#<…>\`) answers with one: the address comes back
     // as a value too. One under us (\`#<:C>\`) is delivered to us.
     const held = typeof to === 'string' && to.startsWith('#<');
-    return new Promise(resolve => {
-      this.#_newPending.set(id, held ? (addr) => resolve(addr === null ? null : '#<' + addr + '>') : resolve);
+    return new Promise((resolve, reject) => {
+      // A reply to \`$new\` with no address as its one value is malformed.
+      const done = (addr) => addr === undefined ? reject(new Error('$new: the reply names no actor (re: ["#<…>"])'))
+        : resolve(held && addr !== null ? '#<' + addr + '>' : addr);
+      done.strict = true;
+      this.#_newPending.set(id, done);
       if (held && /^#<:/.test(to)) { this.receive({ id, op, to: _opre_unbracket(to), from: '__parent', _route: (m) => this.receive(m), ...(ty !== undefined && { ty }) }); return; }
       const _msg = { id, op, to };
       if (ty !== undefined) _msg['ty'] = ty;
@@ -1304,7 +1311,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }` : ''}
     if ('re' in message) {
       const newResolve = this.#_newPending.get(message.id);
-      if (newResolve) { const addr = typeof message.re === 'string' && message.re.startsWith('#<') && message.re.endsWith('>') ? message.re.slice(2, -1) : message.from; this.#_newPending.delete(message.id); newResolve(addr); return; }
+      if (newResolve) { this.#_newPending.delete(message.id); newResolve(_bv_new_reply_addr(message, newResolve.strict)); return; }
       const pending = this.#pending.get(message.id);
       if (pending) {
         if (pending.persistent) { pending.handler(_bv_unwire_reply(message.re, message['ty'])); return; }
@@ -1404,6 +1411,14 @@ ${ifChain}
     if (!_handled) {
       _route({ id, ex: { [opName]: 'unhandled' }, to: _replyTo });
     } else if (re !== undefined) {
+      // An address is a reply's one value, as any other is: \`re: ['#<…>']\`. A
+      // self-return is tagged with our class (\`:\`, which our parent fills in), or
+      // \`*\` when no \`new\` built us.
+      if (typeof re === 'string' && re.startsWith('#<')) {
+        if (_ty_re === undefined && re === '#<:>') _ty_re = ${JSON.stringify(declaredActor(actor) ? '*' : ':')};
+        re = [re];
+        if (typeof _ty_re === 'string') _ty_re = [_ty_re];
+      }
       const _post = { id, re${publishesClasses ? `: (message._route || from === '__self') ? re : this.#_wireOwn(re)` : ''}, to: _replyTo };
       if (_ty_re !== undefined) _post['ty'] = _ty_re;
       _route(_post);

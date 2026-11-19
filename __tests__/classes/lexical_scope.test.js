@@ -27,7 +27,7 @@ const askAt = (to, op, value, id) => [
 ];
 const build = (to, id = '1') => [
   { input: { id, op: '$new', to, from: 'c' } },
-  { output: { id, re: `#<${to}:1>`, ty: to, to: 'c' } },
+  { output: { id, re: [`#<${to}:1>`], ty: [to], to: 'c' } },
 ];
 
 // ── The file actor contains it ──────────────────────────────────────────────
@@ -203,14 +203,14 @@ describe('the file actor contains it — a function-local function', () => {
   it('writes', async () => {
     await expectBehavior(fileScript,
       { input: { id: '1', op: 'localWrite!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { output: { id: '1', re: ['#<:>'], ty: ['*'], to: 'c' } },
       ...ask('readC', 3, '2'),
     );
   });
   it('calls a writing function', async () => {
     await expectBehavior(fileScript,
       { input: { id: '1', op: 'localWriter!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { output: { id: '1', re: ['#<:>'], ty: ['*'], to: 'c' } },
       ...ask('readC', 1002, '2'),
     );
   });
@@ -237,14 +237,14 @@ describe('the file actor contains it — a branch and a loop', () => {
   it('a loop writes', async () => {
     await expectBehavior(fileScript,
       { input: { id: '1', op: 'loopWrite!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { output: { id: '1', re: ['#<:>'], ty: ['*'], to: 'c' } },
       ...ask('readC', 4, '2'),
     );
   });
   it('a branch calls a writing function', async () => {
     await expectBehavior(fileScript,
       { input: { id: '1', op: 'branchWriter!', from: 'c' } },
-      { output: { id: '1', re: '#<:>', to: 'c' } },
+      { output: { id: '1', re: ['#<:>'], ty: ['*'], to: 'c' } },
       ...ask('readC', 2002, '2'),
     );
   });
@@ -267,14 +267,14 @@ describe('the file actor contains it — a class', () => {
   it('depth 1: writes', async () => {
     await expectBehavior(fileScript, ...build(':C1'),
       { input: { id: '2', op: 'write!', to: ':C1:1', from: 'c' } },
-      { output: { id: '2', re: '#<:C1:1>', ty: ':C1', to: 'c', from: ':C1:1' } },
+      { output: { id: '2', re: ['#<:C1:1>'], ty: [':C1'], to: 'c', from: ':C1:1' } },
       ...ask('readC', 3, '3'),
     );
   });
   it('depth 1: calls a writing function', async () => {
     await expectBehavior(fileScript, ...build(':C1'),
       { input: { id: '2', op: 'writer!', to: ':C1:1', from: 'c' } },
-      { output: { id: '2', re: '#<:C1:1>', ty: ':C1', to: 'c', from: ':C1:1' } },
+      { output: { id: '2', re: ['#<:C1:1>'], ty: [':C1'], to: 'c', from: ':C1:1' } },
       ...ask('readC', 2002, '3'),
     );
   });

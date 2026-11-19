@@ -63,7 +63,7 @@ const script = `
 
 const made = (id, seed) => [
   { input: { id, op: [[seed], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-  { output: expect.objectContaining({ id, re: expect.stringMatching(/^#<:Box:\d+>$/) }) },
+  { output: expect.objectContaining({ id, re: [expect.stringMatching(/^#<:Box:\d+>$/)] }) },
 ];
 
 describe('inline singletons', () => {
@@ -104,9 +104,9 @@ describe('a class keeps a nested class\'s actor in a cell', () => {
   it('each actor constructs its own, which reads the class\'s params', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[7], '$new'], ty: [['Integer']], to: ':Shelf', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<:Shelf:\d+>$/) }) },
+      { output: expect.objectContaining({ id: '1', re: [expect.stringMatching(/^#<:Shelf:\d+>$/)] }) },
       { input: { id: '2', op: [[8], '$new'], ty: [['Integer']], to: ':Shelf', from: 'c' } },
-      { output: expect.objectContaining({ id: '2', re: expect.stringMatching(/^#<:Shelf:\d+>$/) }) },
+      { output: expect.objectContaining({ id: '2', re: [expect.stringMatching(/^#<:Shelf:\d+>$/)] }) },
       { input: { id: '3', op: 'get', to: ':Shelf:1', from: 'c' } },
       { output: expect.objectContaining({ id: '3', re: [7], to: 'c' }) },
       { input: { id: '4', op: 'get', to: ':Shelf:2', from: 'c' } },
@@ -147,7 +147,7 @@ describe('public singletons', () => {
   it('is addressed by its label', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 'bump!', to: ':s', from: 'c' } },
-      { output: { id: '1', re: '#<:s>', ty: '*', to: 'c', from: ':s' } },
+      { output: { id: '1', re: ['#<:s>'], ty: ['*'], to: 'c', from: ':s' } },
       { input: { id: '2', op: 'get', to: ':s', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':s' } },
     );
@@ -156,7 +156,7 @@ describe('public singletons', () => {
   it('is the same actor its enclosing actor calls', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 'bump!', to: ':s', from: 'c' } },
-      { output: { id: '1', re: '#<:s>', ty: '*', to: 'c', from: ':s' } },
+      { output: { id: '1', re: ['#<:s>'], ty: ['*'], to: 'c', from: ':s' } },
       { input: { id: '2', op: 'viaMain', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c' } },
     );
@@ -179,11 +179,11 @@ describe('public singletons', () => {
   it('in a class, it is addressed under each actor of the class', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-      { output: { id: '1', re: '#<:Box:1>', ty: ':Box', to: 'c' } },
+      { output: { id: '1', re: ['#<:Box:1>'], ty: [':Box'], to: 'c' } },
       { input: { id: '2', op: [[20], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-      { output: { id: '2', re: '#<:Box:2>', ty: ':Box', to: 'c' } },
+      { output: { id: '2', re: ['#<:Box:2>'], ty: [':Box'], to: 'c' } },
       { input: { id: '3', op: 'bump!', to: ':Box:1:tally', from: 'c' } },
-      { output: { id: '3', re: '#<:Box:1:tally>', ty: '*', to: 'c', from: ':Box:1:tally' } },
+      { output: { id: '3', re: ['#<:Box:1:tally>'], ty: ['*'], to: 'c', from: ':Box:1:tally' } },
       { input: { id: '4', op: 'get', to: ':Box:1:tally', from: 'c' } },
       { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: ':Box:1:tally' } },
       { input: { id: '5', op: 'get', to: ':Box:2:tally', from: 'c' } },
@@ -310,7 +310,7 @@ describe('a singleton runs its block in program order', () => {
   it('in a class, between the class\'s lines', async () => {
     await expectBehavior(ordered,
       { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<:Box:\d+>$/) }) },
+      { output: expect.objectContaining({ id: '1', re: [expect.stringMatching(/^#<:Box:\d+>$/)] }) },
       { input: { id: '2', op: 'get', to: ':Box:1', from: 'c' } },
       { output: expect.objectContaining({ id: '2', re: [30], to: 'c' }) },
     );

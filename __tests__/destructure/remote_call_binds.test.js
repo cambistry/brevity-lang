@@ -18,7 +18,7 @@ const constructed = (src) => createActor(src, {
   expects: [{ output: expect.objectContaining({ op: [[{ a: 5 }], '$new'], to: 'thing.bv' }) }],
 });
 
-const NEW_REPLY = { input: { id: '1', re: '#<Thing/1>', 'ty': 'thing.bv', from: 'thing.bv' } };
+const NEW_REPLY = { input: { id: '1', re: ['#<Thing/1>'], 'ty': ['thing.bv'], from: 'thing.bv' } };
 
 describe('remote actor (constructor-block construction)', () => {
   it('x T = r.m() binds a one-element positional reply', async () => {

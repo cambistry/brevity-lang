@@ -1004,11 +1004,11 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   const subRepCounters = { aria: 0, classlist: 0, dataset: 0 };
   const subRepsByElement = new Map(); // Element → { kind → addr }
 
-  // A node's self-return has the shape of its reply to `$new`: its address in
-  // `re`, its class in `ty`. A node's address is `HTML:kind:N`, and its
-  // class is `HTML:kind`.
+  // A node's self-return has the shape of its reply to `$new`: its address as
+  // the reply's one value, its class as its tag. A node's address is
+  // `HTML:kind:N`, and its class is `HTML:kind`.
   function selfReply(addr) {
-    return { re: '#<' + addr + '>', 'ty': addr.replace(/:[0-9]+$/, '') };
+    return { re: ['#<' + addr + '>'], 'ty': [addr.replace(/:[0-9]+$/, '')] };
   }
 
   // A public op travels bare: anything but an intrinsic (`$set`), a protected
@@ -2064,7 +2064,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
     const payload = (argsOf(op) ?? {});
     const { addr } = constructElementFromPayload(tag, payload);
     Promise.resolve().then(() => route({
-      id, re: '#<' + addr + '>', 'ty': 'HTML:' + tag, from: 'HTML', to: from,
+      id, re: ['#<' + addr + '>'], 'ty': ['HTML:' + tag], from: 'HTML', to: from,
     }));
   }
 
@@ -2198,7 +2198,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
       }
       if (opName === 'normalize!') {
         document.normalize();
-        Promise.resolve().then(() => route({ id, re: '#<document>', from: 'document', to: from }));
+        Promise.resolve().then(() => route({ id, re: ['#<document>'], 'ty': ['*'], from: 'document', to: from }));
         return;
       }
       if (opName === 'eval') {

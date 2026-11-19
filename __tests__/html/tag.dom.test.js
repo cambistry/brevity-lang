@@ -390,7 +390,7 @@ const PAGE_HTML = `<html><head>
 async function renderAndQuery(page, tag, payload, queryFn) {
   const dom = await page.connectActor('HTML:' + tag);
   await dom.sendAsync({ id: 'n', op: Object.keys(payload).length > 0 ? [[payload], '$new'] : '$new' });
-  const elementAddr = dom.posts[0].re;
+  const elementAddr = dom.posts[0].re[0];
 
   const docActor = await page.connectActor('document');
   await docActor.sendAsync({ id: 'b', op: 'body' });
@@ -418,7 +418,7 @@ describe('HTML tag DOM render — every tag lands with the right tagName', () =>
     for (const tag of ALL_TAGS) {
       const dom = await page.connectActor('HTML:' + tag);
       await dom.sendAsync({ id: 'n_' + tag, op: '$new' });
-      const elementAddr = dom.posts[0].re;
+      const elementAddr = dom.posts[0].re[0];
       await body.sendAsync({ id: 'a_' + tag, op: [elementAddr, 'append!'] });
     }
 

@@ -93,7 +93,7 @@ describe('nested class members', () => {
   it('the constructor reads a private cell of the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'n', to: ':Nested:1', from: 'c' } },
       { output: { id: '2', re: [11], ty: ['Integer'], to: 'c', from: ':Nested:1' } },
     );
@@ -102,11 +102,11 @@ describe('nested class members', () => {
   it('the class\'s actors share its cells, and write them', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: [[2], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '2', re: '#<:Nested:2>', ty: ':Nested', to: 'c' } },
+      { output: { id: '2', re: ['#<:Nested:2>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '3', op: 'bump!', to: ':Nested:1', from: 'c' } },
-      { output: { id: '3', re: '#<:Nested:1>', ty: ':Nested', to: 'c', from: ':Nested:1' } },
+      { output: { id: '3', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c', from: ':Nested:1' } },
       { input: { id: '4', op: 'count', to: ':Nested:2', from: 'c' } },
       { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: ':Nested:2' } },
     );
@@ -122,7 +122,7 @@ describe('nested class members', () => {
   it('lineal: the constructor reads a cell of the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[2], '$new'], ty: [['Integer']], to: ':Lineal', from: 'c' } },
-      { output: { id: '1', re: '#<:Lineal:1>', ty: ':Lineal', to: 'c' } },
+      { output: { id: '1', re: ['#<:Lineal:1>'], ty: [':Lineal'], to: 'c' } },
       { input: { id: '2', op: 'n', to: ':Lineal:1', from: 'c' } },
       { output: { id: '2', re: [22], ty: ['Integer'], to: 'c', from: ':Lineal:1' } },
     );
@@ -133,7 +133,7 @@ describe('trailing class members', () => {
   it('the constructor reads a published cell through the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'n', to: ':Trailing:1', from: 'c' } },
       { output: { id: '2', re: [4], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -142,11 +142,11 @@ describe('trailing class members', () => {
   it('an actor calls the class, and a later one sees it', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '1', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '2', op: 'bump!', to: ':Trailing:1', from: 'c' } },
-      { output: { id: '2', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c', from: ':Trailing:1' } },
+      { output: { id: '2', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c', from: ':Trailing:1' } },
       { input: { id: '3', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '3', re: '#<:Trailing:2>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '3', re: ['#<:Trailing:2>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '4', op: 'n', to: ':Trailing:2', from: 'c' } },
       { output: { id: '4', re: [5], ty: ['Integer'], to: 'c', from: ':Trailing:2' } },
     );
@@ -177,9 +177,9 @@ describe('trailing class members — private, one line, and in a class', () => {
   it('in a class, each actor of it has its own, which reads its params', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Shelf', from: 'c' } },
-      { output: { id: '1', re: '#<:Shelf:1>', ty: ':Shelf', to: 'c' } },
+      { output: { id: '1', re: ['#<:Shelf:1>'], ty: [':Shelf'], to: 'c' } },
       { input: { id: '2', op: [[2], '$new'], ty: [['Integer']], to: ':Shelf', from: 'c' } },
-      { output: { id: '2', re: '#<:Shelf:2>', ty: ':Shelf', to: 'c' } },
+      { output: { id: '2', re: ['#<:Shelf:2>'], ty: [':Shelf'], to: 'c' } },
       { input: { id: '3', op: [[3], 'slot'], ty: [['Integer']], to: ':Shelf:1', from: 'c' } },
       { output: { id: '3', re: [13], ty: ['Integer'], to: 'c', from: ':Shelf:1' } },
       { input: { id: '4', op: [[3], 'slot'], ty: [['Integer']], to: ':Shelf:2', from: 'c' } },
@@ -199,9 +199,9 @@ describe('a public class\'s members on the wire', () => {
   it('a write there is seen by the class\'s next actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bump!', to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing>', ty: '*', to: 'c', from: ':Trailing' } },
+      { output: { id: '1', re: ['#<:Trailing>'], ty: ['*'], to: 'c', from: ':Trailing' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
-      { output: { id: '2', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
+      { output: { id: '2', re: ['#<:Trailing:1>'], ty: [':Trailing'], to: 'c' } },
       { input: { id: '3', op: 'n', to: ':Trailing:1', from: 'c' } },
       { output: { id: '3', re: [5], ty: ['Integer'], to: 'c', from: ':Trailing:1' } },
     );
@@ -217,7 +217,7 @@ describe('a public class\'s members on the wire', () => {
   it('nested: a public member answers there too', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':Nested', from: 'c' } },
-      { output: { id: '1', re: '#<:Nested:1>', ty: ':Nested', to: 'c' } },
+      { output: { id: '1', re: ['#<:Nested:1>'], ty: [':Nested'], to: 'c' } },
       { input: { id: '2', op: 'total', to: ':Nested', from: 'c' } },
       { output: { id: '2', re: [0], ty: ['Integer'], to: 'c', from: ':Nested' } },
     );

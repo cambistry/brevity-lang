@@ -150,7 +150,7 @@ that later messages can target:
 ```
 
 ```json
-{ "id": "1", "re": "#<WebView 1>", "ty": "WebView", "from": "WebView" }
+{ "id": "1", "re": ["#<WebView:1>"], "ty": ["WebView"], "from": "WebView" }
 ```
 
 After that, ordinary messages go to the returned actor address:

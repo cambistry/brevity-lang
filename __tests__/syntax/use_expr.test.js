@@ -78,7 +78,7 @@ describe('use("…") — in a constructor block', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Thing/1>', ty: 'thing.bv', from: 'thing.bv' } },
+      { input: { id: '1', re: ['#<Thing/1>'], ty: ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'get', to: 'Thing/1' }) },
       { input: { id: '2', re: { value: 42 } } },

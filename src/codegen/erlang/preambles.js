@@ -1540,6 +1540,15 @@ bv_local_tag_(<<":", _/binary>> = T, Addr) ->
 bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];
 bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, Addr) end, M);
 bv_local_tag_(T, _) -> T.
+%% An address is a reply's one value, as any other is: re: [<<"#<…>">>], ty: [T]. A
+%% self-return with no tag is the file's, which no \`new\` built: \`*\`.
+bv_wrap_address_reply_(<<"#<", _/binary>> = A, Ty) ->
+    {[A], case Ty of
+        null when A =:= <<"#<:>">> -> [<<"*">>];
+        T_ when is_binary(T_) -> [T_];
+        T_ -> T_
+    end};
+bv_wrap_address_reply_(Re, Ty) -> {Re, Ty}.
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
@@ -1553,7 +1562,7 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 {ok, null, _} -> ok;
                 %% A self-return: we made this actor, so we name it and its class, as for #new.
                 {ok, <<"#<:>"/utf8>>, _} ->
-                    io:put_chars([json_encode(Base_#{<<"re">> => <<"#<:", Addr/binary, ">">>, <<"ty">> => bv_addr_class_(Addr)}), $\n]);
+                    io:put_chars([json_encode(Base_#{<<"re">> => [<<"#<:", Addr/binary, ">">>], <<"ty">> => [bv_addr_class_(Addr)]}), $\n]);
                 %% Its relative addresses, "me" among them, go under it.
                 {ok, V_, null} -> io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(V_, Addr))}), $\n]);
                 {ok, V_, Tag_} ->
@@ -1684,20 +1693,9 @@ match_pos_types(Arr, [T|Rest], I) ->
         false -> false
     end.
 
-%% A reply whose whole value is one actor: its address is in re, and ty, if
-%% any, is that address without its trailing number (C:N, or an opaque C/N),
-%% its class.
-bv_self_reply_(<<"#<", _/binary>> = Re, Message) when byte_size(Re) >= 3, binary_part(Re, byte_size(Re), -1) =:= <<">">> ->
-    Addr_ = binary:part(Re, 2, byte_size(Re) - 3),
-    Class_ = case re:run(Addr_, <<"[:/][0-9]+$">>) of
-        {match, [{P_, _}]} -> binary:part(Addr_, 0, P_);
-        nomatch -> Addr_
-    end,
-    case maps:find(<<"ty">>, Message) of
-        error -> [Re];
-        {ok, Class_} -> [Re];
-        _ -> Re
-    end;
+%% A reply whose whole value is one actor, [<<"#<…>">>]: the address, whatever its
+%% tag (its class, or \`*\`).
+bv_self_reply_([<<"#<", _/binary>>] = Re, _Message) -> Re;
 bv_self_reply_(Re, Message) -> (bv_mod_()):bv_unwire_reply(Re, maps:get(<<"ty">>, Message, null)).
 
 await_response_(Id) ->
@@ -1707,15 +1705,22 @@ await_response_(Id) ->
         eof -> null
     end.
 
+%% The address a reply to \`$new\` names, unbracketed: its one value, re: [<<"#<…>">>].
+%% A bare re isn't an address reply (null); one with no address names its sender.
+bv_new_reply_addr_(Message) ->
+    case maps:get(<<"re">>, Message, null) of
+        [<<"#<", _/binary>> = A_] -> bv_to_addr_(A_);
+        B_ when is_binary(B_) -> null;
+        _ -> maps:get(<<"from">>, Message, null)
+    end.
+
+%% A reply to \`$new\` with no address as its one value is malformed.
 await_new_response_(Id) ->
     case bv_await_line_(Id) of
         {re, Message} ->
-            case maps:get(<<"re">>, Message) of
-                <<"#<", Rest/binary>> ->
-                    Len = byte_size(Rest) - 1,
-                    <<Addr:Len/binary, ">">> = Rest,
-                    Addr;
-                _ -> maps:get(<<"from">>, Message, null)
+            case maps:get(<<"re">>, Message, null) of
+                B_ when is_binary(B_) -> error({ex_response, Message});
+                _ -> bv_new_reply_addr_(Message)
             end;
         _ -> null
     end.

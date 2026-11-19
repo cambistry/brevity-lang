@@ -110,7 +110,7 @@ describe('class and :: — nested and trailing', () => {
   it('nested: reads and calls from the constructor block', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: 'built', to: ':N:1', from: 'c' } },
       { output: { id: '2', re: [24], ty: ['Integer'], to: 'c', from: ':N:1' } },
       { input: { id: '3', op: 'named', to: ':N:1', from: 'c' } },
@@ -121,7 +121,7 @@ describe('class and :: — nested and trailing', () => {
   it('nested: reads and calls from a method', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: 'read', to: ':N:1', from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':N:1' } },
       { input: { id: '3', op: 'call', to: ':N:1', from: 'c' } },
@@ -132,15 +132,15 @@ describe('class and :: — nested and trailing', () => {
   it('nested: writes from a method, and another actor sees them', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '2', re: '#<:N:2>', ty: ':N', to: 'c' } },
+      { output: { id: '2', re: ['#<:N:2>'], ty: [':N'], to: 'c' } },
       { input: { id: '3', op: 'write!', to: ':N:1', from: 'c' } },
-      { output: { id: '3', re: '#<:N:1>', ty: ':N', to: 'c', from: ':N:1' } },
+      { output: { id: '3', re: ['#<:N:1>'], ty: [':N'], to: 'c', from: ':N:1' } },
       { input: { id: '4', op: 'read', to: ':N:2', from: 'c' } },
       { output: { id: '4', re: [7], ty: ['Integer'], to: 'c', from: ':N:2' } },
       { input: { id: '5', op: 'bump!', to: ':N:2', from: 'c' } },
-      { output: { id: '5', re: '#<:N:2>', ty: ':N', to: 'c', from: ':N:2' } },
+      { output: { id: '5', re: ['#<:N:2>'], ty: [':N'], to: 'c', from: ':N:2' } },
       { input: { id: '6', op: 'read', to: ':N:1', from: 'c' } },
       { output: { id: '6', re: [10], ty: ['Integer'], to: 'c', from: ':N:1' } },
     );
@@ -149,11 +149,11 @@ describe('class and :: — nested and trailing', () => {
   it('nested: reads, calls and writes from a closure in a method', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: 'closure', to: ':N:1', from: 'c' } },
       { output: { id: '2', re: [23], ty: ['Integer'], to: 'c', from: ':N:1' } },
       { input: { id: '3', op: 'closureSet!', to: ':N:1', from: 'c' } },
-      { output: { id: '3', re: '#<:N:1>', ty: ':N', to: 'c', from: ':N:1' } },
+      { output: { id: '3', re: ['#<:N:1>'], ty: [':N'], to: 'c', from: ':N:1' } },
       { input: { id: '4', op: 'read', to: ':N:1', from: 'c' } },
       { output: { id: '4', re: [7], ty: ['Integer'], to: 'c', from: ':N:1' } },
     );
@@ -162,7 +162,7 @@ describe('class and :: — nested and trailing', () => {
   it('nested: class(args) builds the class', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
-      { output: { id: '1', re: '#<:N:1>', ty: ':N', to: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
       { input: { id: '2', op: 'again', to: ':N:1', from: 'c' } },
       { output: { id: '2', re: [25], ty: ['Integer'], to: 'c', from: ':N:1' } },
     );
@@ -171,7 +171,7 @@ describe('class and :: — nested and trailing', () => {
   it('trailing: reads and calls from the constructor block', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '1', re: '#<:R:1>', ty: ':R', to: 'c' } },
+      { output: { id: '1', re: ['#<:R:1>'], ty: [':R'], to: 'c' } },
       { input: { id: '2', op: 'built', to: ':R:1', from: 'c' } },
       { output: { id: '2', re: [24], ty: ['Integer'], to: 'c', from: ':R:1' } },
       { input: { id: '3', op: 'named', to: ':R:1', from: 'c' } },
@@ -182,7 +182,7 @@ describe('class and :: — nested and trailing', () => {
   it('trailing: reads and calls from a method', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '1', re: '#<:R:1>', ty: ':R', to: 'c' } },
+      { output: { id: '1', re: ['#<:R:1>'], ty: [':R'], to: 'c' } },
       { input: { id: '2', op: 'read', to: ':R:1', from: 'c' } },
       { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':R:1' } },
       { input: { id: '3', op: 'call', to: ':R:1', from: 'c' } },
@@ -193,15 +193,15 @@ describe('class and :: — nested and trailing', () => {
   it('trailing: writes from a method, and another actor sees them', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '1', re: '#<:R:1>', ty: ':R', to: 'c' } },
+      { output: { id: '1', re: ['#<:R:1>'], ty: [':R'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '2', re: '#<:R:2>', ty: ':R', to: 'c' } },
+      { output: { id: '2', re: ['#<:R:2>'], ty: [':R'], to: 'c' } },
       { input: { id: '3', op: 'write!', to: ':R:1', from: 'c' } },
-      { output: { id: '3', re: '#<:R:1>', ty: ':R', to: 'c', from: ':R:1' } },
+      { output: { id: '3', re: ['#<:R:1>'], ty: [':R'], to: 'c', from: ':R:1' } },
       { input: { id: '4', op: 'read', to: ':R:2', from: 'c' } },
       { output: { id: '4', re: [7], ty: ['Integer'], to: 'c', from: ':R:2' } },
       { input: { id: '5', op: 'bump!', to: ':R:2', from: 'c' } },
-      { output: { id: '5', re: '#<:R:2>', ty: ':R', to: 'c', from: ':R:2' } },
+      { output: { id: '5', re: ['#<:R:2>'], ty: [':R'], to: 'c', from: ':R:2' } },
       { input: { id: '6', op: 'read', to: ':R:1', from: 'c' } },
       { output: { id: '6', re: [10], ty: ['Integer'], to: 'c', from: ':R:1' } },
     );
@@ -210,11 +210,11 @@ describe('class and :: — nested and trailing', () => {
   it('trailing: reads, calls and writes from a closure in a method', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '1', re: '#<:R:1>', ty: ':R', to: 'c' } },
+      { output: { id: '1', re: ['#<:R:1>'], ty: [':R'], to: 'c' } },
       { input: { id: '2', op: 'closure', to: ':R:1', from: 'c' } },
       { output: { id: '2', re: [23], ty: ['Integer'], to: 'c', from: ':R:1' } },
       { input: { id: '3', op: 'closureSet!', to: ':R:1', from: 'c' } },
-      { output: { id: '3', re: '#<:R:1>', ty: ':R', to: 'c', from: ':R:1' } },
+      { output: { id: '3', re: ['#<:R:1>'], ty: [':R'], to: 'c', from: ':R:1' } },
       { input: { id: '4', op: 'read', to: ':R:1', from: 'c' } },
       { output: { id: '4', re: [7], ty: ['Integer'], to: 'c', from: ':R:1' } },
     );
@@ -223,7 +223,7 @@ describe('class and :: — nested and trailing', () => {
   it('trailing: class(args) builds the class', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[1], '$new'], ty: [['Integer']], to: ':R', from: 'c' } },
-      { output: { id: '1', re: '#<:R:1>', ty: ':R', to: 'c' } },
+      { output: { id: '1', re: ['#<:R:1>'], ty: [':R'], to: 'c' } },
       { input: { id: '2', op: 'again', to: ':R:1', from: 'c' } },
       { output: { id: '2', re: [25], ty: ['Integer'], to: 'c', from: ':R:1' } },
     );
@@ -232,7 +232,7 @@ describe('class and :: — nested and trailing', () => {
   it('writes from the constructor block, which makes the class `!`', async () => {
     await expectBehavior(forms,
       { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':W!', from: 'c' } },
-      { output: { id: '1', re: '#<:W!:1>', ty: ':W!', to: 'c' } },
+      { output: { id: '1', re: ['#<:W!:1>'], ty: [':W!'], to: 'c' } },
       { input: { id: '2', op: 'read', to: ':W!:1', from: 'c' } },
       { output: { id: '2', re: [9], ty: ['Integer'], to: 'c', from: ':W!:1' } },
     );
@@ -282,7 +282,7 @@ describe('class and :: — from a subclass\'s actor', () => {
   it('reads from the constructor block and a method', async () => {
     await expectBehavior(subclass,
       { input: { id: '1', op: [[1, 5], '$new'], ty: [['Integer', 'Integer']], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'first', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [8], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '3', op: 'uProt', to: ':U:1', from: 'c' } },
@@ -295,7 +295,7 @@ describe('class and :: — from a subclass\'s actor', () => {
   it('calls, from a method and a closure in it', async () => {
     await expectBehavior(subclass,
       { input: { id: '1', op: [[1, 5], '$new'], ty: [['Integer', 'Integer']], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'uCall', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [40], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '3', op: 'uClosure', to: ':U:1', from: 'c' } },
@@ -306,7 +306,7 @@ describe('class and :: — from a subclass\'s actor', () => {
   it('the parent\'s methods, run by the subclass\'s actor', async () => {
     await expectBehavior(subclass,
       { input: { id: '1', op: [[1, 5], '$new'], ty: [['Integer', 'Integer']], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'tProt', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [2], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '3', op: 'tPub', to: ':U:1', from: 'c' } },
@@ -319,15 +319,15 @@ describe('class and :: — from a subclass\'s actor', () => {
   it('writes the parent\'s cell, and the parent\'s actors see it', async () => {
     await expectBehavior(subclass,
       { input: { id: '1', op: [[1, 5], '$new'], ty: [['Integer', 'Integer']], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':T', from: 'c' } },
-      { output: { id: '2', re: '#<:T:1>', ty: ':T', to: 'c' } },
+      { output: { id: '2', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
       { input: { id: '3', op: 'uSet!', to: ':U:1', from: 'c' } },
-      { output: { id: '3', re: '#<:U:1>', ty: ':U', to: 'c', from: ':U:1' } },
+      { output: { id: '3', re: ['#<:U:1>'], ty: [':U'], to: 'c', from: ':U:1' } },
       { input: { id: '4', op: 'tProt', to: ':T:1', from: 'c' } },
       { output: { id: '4', re: [5], ty: ['Integer'], to: 'c', from: ':T:1' } },
       { input: { id: '5', op: 'uClassSet!', to: ':U:1', from: 'c' } },
-      { output: { id: '5', re: '#<:U:1>', ty: ':U', to: 'c', from: ':U:1' } },
+      { output: { id: '5', re: ['#<:U:1>'], ty: [':U'], to: 'c', from: ':U:1' } },
       { input: { id: '6', op: 'tProt', to: ':T:1', from: 'c' } },
       { output: { id: '6', re: [6], ty: ['Integer'], to: 'c', from: ':T:1' } },
     );
@@ -542,11 +542,11 @@ describe('self::class — the same as class', () => {
   it('reads, writes and constructs through self::class', async () => {
     await expectBehavior(selfClass,
       { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: ':S', from: 'c' } },
-      { output: { id: '1', re: '#<:S:1>', ty: ':S', to: 'c' } },
+      { output: { id: '1', re: ['#<:S:1>'], ty: [':S'], to: 'c' } },
       { input: { id: '2', op: 'built', to: ':S:1', from: 'c' } },
       { output: { id: '2', re: [13], ty: ['Integer'], to: 'c', from: ':S:1' } },
       { input: { id: '3', op: 'write!', to: ':S:1', from: 'c' } },
-      { output: { id: '3', re: '#<:S:1>', ty: ':S', to: 'c', from: ':S:1' } },
+      { output: { id: '3', re: ['#<:S:1>'], ty: [':S'], to: 'c', from: ':S:1' } },
       { input: { id: '4', op: 'read', to: ':S:1', from: 'c' } },
       { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: ':S:1' } },
       { input: { id: '5', op: 'again', to: ':S:1', from: 'c' } },

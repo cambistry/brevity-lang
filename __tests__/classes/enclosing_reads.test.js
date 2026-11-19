@@ -64,7 +64,7 @@ const script = `
 
 const made = (id, n) => [
   { input: { id, op: [[n], '$new'], ty: [['Integer']], to: ':Outer', from: 'c' } },
-  { output: expect.objectContaining({ id, re: expect.stringMatching(/^#<:Outer:\d+>$/) }) },
+  { output: expect.objectContaining({ id, re: [expect.stringMatching(/^#<:Outer:\d+>$/)] }) },
 ];
 const reply = (id, value) => expect.objectContaining({ id, re: [value], to: 'c' });
 
@@ -106,7 +106,7 @@ describe('a class reads the actors it is declared in', () => {
       ...made('1', 10),
       ...made('2', 20),
       { input: { id: '3', op: 'bump!', to: ':Outer:1', from: 'c' } },
-      { output: expect.objectContaining({ id: '3', re: '#<:Outer:1>' }) },
+      { output: expect.objectContaining({ id: '3', re: ['#<:Outer:1>'] }) },
       { input: { id: '4', op: 'get', to: ':Outer:1', from: 'c' } },
       { output: reply('4', 12) },
       { input: { id: '5', op: 'get', to: ':Outer:2', from: 'c' } },

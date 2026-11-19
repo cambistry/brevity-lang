@@ -33,11 +33,12 @@ async function boundary() {
 }
 
 describe('global boundary', () => {
+  // A singleton is a declared actor: its tag is `*`, which has no self token.
   it('re, ty and from of a reply resolve the self token', async () => {
     const actor = await boundary();
-    expect(actor.posts[0]).toEqual({ id: '1', re: '#<app.bv:Box:1>', ty: 'app.bv:Box', to: 'Tester', from: 'app.bv' });
+    expect(actor.posts[0]).toEqual({ id: '1', re: ['#<app.bv:Box:1>'], ty: ['app.bv:Box'], to: 'Tester', from: 'app.bv' });
     await actor.sendAsync({ id: '2', op: 'me', to: ':Box:1:tally', from: 'Tester' });
-    expect(actor.posts[1]).toEqual({ id: '2', re: '#<app.bv:Box:1:tally>', ty: 'app.bv:Box:1:tally', to: 'Tester', from: 'app.bv:Box:1:tally' });
+    expect(actor.posts[1]).toEqual({ id: '2', re: ['#<app.bv:Box:1:tally>'], ty: ['*'], to: 'Tester', from: 'app.bv:Box:1:tally' });
   });
 
   it('a relative #<…> in the payload resolves; a global one passes through', async () => {

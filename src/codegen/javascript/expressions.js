@@ -400,9 +400,8 @@ export function genExpr(ctx, expr) {
     // children are bare strings; closure children (`{ expr }` interpolations
     // that synthesizeTemplateClosures replaced with `closure_ref`) are bare
     // `#<:@N>` address strings; nested `DomConstructor` children are
-    // pre-dispatched by `await this.#send(...)`, whose return value is an
-    // already-wrapped `#<HTML:tag:N>` address string (see classes.js:941 —
-    // #send resolves to message.re which handleDomNew sends wrapped).
+    // pre-dispatched by `await this.#send(...)`, whose reply's one value is the
+    // element's `#<HTML:tag:N>` address (handleDomNew answers `re: ['#<…>']`).
     //
     // `#{ expr }` interpolations (strinterp) are pure textual splices — they
     // merge with adjacent literal text into a single concatenated string
@@ -438,7 +437,7 @@ export function genExpr(ctx, expr) {
           const attrsInner = renderAttrs(c.attrs);
           const fields = [`children: [${childrenInner}]`];
           if (attrsInner) fields.push(attrsInner);
-          entries.push({ str: `(await this.#send([[{${fields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
+          entries.push({ str: `_bv_reply_one(await this.#send([[{${fields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, c.tag))}))` });
           continue;
         }
         throw new Error('Unexpected DomConstructor child: ' + (c && c.type));
@@ -452,7 +451,7 @@ export function genExpr(ctx, expr) {
     const attrsJs = renderAttrs(expr.attrs);
     const topFields = [`children: [${childrenJs}]`];
     if (attrsJs) topFields.push(attrsJs);
-    return `await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))})`;
+    return `_bv_reply_one(await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))}))`;
   }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.

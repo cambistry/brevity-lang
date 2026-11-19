@@ -105,3 +105,20 @@ export function _bv_unwire_packed(s, types, _bv_types) {
   }
   return out;
 }
+
+// The address a reply names, unbracketed: its one value, `re: ['#<…>']`. To `$new`
+// (`strict`), a bare `re` isn't an address reply (undefined: malformed); to a call
+// on a host that answers bare values, it's still read. A reply with no address in
+// it names the sender (`from`).
+export function _bv_new_reply_addr(message, strict) {
+  const re = message.re;
+  if (typeof re === 'string' && re.startsWith('#<') && re.endsWith('>')) return strict ? undefined : re.slice(2, -1);
+  const a = Array.isArray(re) && re.length === 1 ? re[0] : null;
+  if (typeof a === 'string' && a.startsWith('#<') && a.endsWith('>')) return a.slice(2, -1);
+  return message.from ?? null;
+}
+
+// A reply's one value: an address reply is `['#<…>']`.
+export function _bv_reply_one(re) {
+  return Array.isArray(re) && re.length === 1 ? re[0] : re;
+}

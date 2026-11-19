@@ -15,7 +15,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // The handler name is conventional, not reserved: `@class = { Self }` is an
 // ordinary public handler returning a value.
 //
-//   #new   reply: re: "#<C:1>"     ty: ":C"   (built, tagged with its maker)
+//   #new   reply: re: ["#<C:1>"]     ty: ":C"   (built, tagged with its maker)
 //   @class reply: re: ["#<c.bv>"]  ty: ["*"]  (declared, tagged `*`)
 // ═══════════════════════════════════════════════════════════════════════════════
 

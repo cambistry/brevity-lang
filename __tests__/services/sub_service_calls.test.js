@@ -163,7 +163,7 @@ describe('a call through a sub-service from a class', () => {
     const actor = await createActor(classScript, { compileOptions: { remotes } });
     await expectActorBehavior(actor,
       { input: { id: '1', op: [[10], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
-      { output: expect.objectContaining({ id: '1', re: '#<:Box:1>' }) },
+      { output: expect.objectContaining({ id: '1', re: ['#<:Box:1>'] }) },
       { input: { id: '2', op: 'get', to: ':Box:1', from: 'c' } },
       { output: expect.objectContaining({ op: 'get', to: 'svc.bv:s' }) },
     );
@@ -201,13 +201,13 @@ box = Svc.Box(5)
       compileOptions: { remotes },
       expects: [
         { output: expect.objectContaining({ op: [[5], '$new'], to: 'svc.bv:Box' }) },
-        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'svc.bv:Box', from: 'svc.bv' } },
+        { input: { id: '1', re: ['#<svc.bv:Box:1>'], ty: ['svc.bv:Box'], from: 'svc.bv' } },
       ],
     });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'local', from: 'c' } },
       { output: expect.objectContaining({ op: [[1], '$new'], to: 'svc.bv:Box' }) },
-      { input: { id: '2', re: '#<svc.bv:Box:2>', ty: 'svc.bv:Box', from: 'svc.bv' } },
+      { input: { id: '2', re: ['#<svc.bv:Box:2>'], ty: ['svc.bv:Box'], from: 'svc.bv' } },
       { output: { id: '3', op: 'get', to: 'svc.bv:Box:2:tally' } },
       { input: { id: '3', re: [4], ty: ['Integer'], from: 'svc.bv:Box:2:tally' } },
       { output: { id: 'x', re: [4], ty: ['Integer'], to: 'c' } },
@@ -219,7 +219,7 @@ box = Svc.Box(5)
       compileOptions: { remotes },
       expects: [
         { output: expect.objectContaining({ op: [[5], '$new'], to: 'svc.bv:Box' }) },
-        { input: { id: '1', re: '#<svc.bv:Box:1>', ty: 'svc.bv:Box', from: 'svc.bv' } },
+        { input: { id: '1', re: ['#<svc.bv:Box:1>'], ty: ['svc.bv:Box'], from: 'svc.bv' } },
       ],
     });
     await expectActorBehavior(actor,

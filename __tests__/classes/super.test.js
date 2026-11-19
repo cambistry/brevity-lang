@@ -70,11 +70,11 @@ describe('super — layers', () => {
   it("the parent's code sees the override, and super:: reaches the parent's", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
-      { output: { id: '1', re: '#<:T:1>', ty: ':T', to: 'c' } },
+      { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
       { input: { id: '2', op: 'a', to: ':T:1', from: 'c' } },
       { output: { id: '2', re: [101], ty: ['Integer'], to: 'c', from: ':T:1' } },
       { input: { id: '3', op: [[], '$new'], to: ':U', from: 'c' } },
-      { output: { id: '3', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '3', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '4', op: 'a', to: ':U:1', from: 'c' } },
       { output: { id: '4', re: [111], ty: ['Integer'], to: 'c', from: ':U:1' } },
     );
@@ -83,7 +83,7 @@ describe('super — layers', () => {
   it("super. reaches the parent's public function", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'pub', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [8], ty: ['Integer'], to: 'c', from: ':U:1' } },
     );
@@ -92,13 +92,13 @@ describe('super — layers', () => {
   it("a redeclared cell: the parent's code uses the subclass's, super:: the parent's own", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'readTotal', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [11], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '3', op: 'parentTotal', to: ':U:1', from: 'c' } },
       { output: { id: '3', re: [5], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '4', op: 'bumpParent!', to: ':U:1', from: 'c' } },
-      { output: { id: '4', re: '#<:U:1>', ty: ':U', to: 'c', from: ':U:1' } },
+      { output: { id: '4', re: ['#<:U:1>'], ty: [':U'], to: 'c', from: ':U:1' } },
       { input: { id: '5', op: 'parentTotal', to: ':U:1', from: 'c' } },
       { output: { id: '5', re: [105], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '6', op: 'readTotal', to: ':U:1', from: 'c' } },
@@ -109,7 +109,7 @@ describe('super — layers', () => {
   it("super:: passes args to the parent's function", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
-      { output: { id: '1', re: '#<:U:1>', ty: ':U', to: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: [[4], 'viaAdd'], ty: [['Integer']], to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [13], ty: ['Integer'], to: 'c', from: ':U:1' } },
     );
@@ -118,9 +118,9 @@ describe('super — layers', () => {
   it('a cell the subclass leaves alone is the one cell', async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':V', from: 'c' } },
-      { output: { id: '1', re: '#<:V:1>', ty: ':V', to: 'c' } },
+      { output: { id: '1', re: ['#<:V:1>'], ty: [':V'], to: 'c' } },
       { input: { id: '2', op: 'bump!', to: ':V:1', from: 'c' } },
-      { output: { id: '2', re: '#<:V:1>', ty: ':V', to: 'c', from: ':V:1' } },
+      { output: { id: '2', re: ['#<:V:1>'], ty: [':V'], to: 'c', from: ':V:1' } },
       { input: { id: '3', op: 'parentTotal', to: ':V:1', from: 'c' } },
       { output: { id: '3', re: [6], ty: ['Integer'], to: 'c', from: ':V:1' } },
     );
@@ -129,7 +129,7 @@ describe('super — layers', () => {
   it("two levels: each override's super:: is its own parent's", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':W', from: 'c' } },
-      { output: { id: '1', re: '#<:W:1>', ty: ':W', to: 'c' } },
+      { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
       { input: { id: '2', op: 'a', to: ':W:1', from: 'c' } },
       { output: { id: '2', re: [211], ty: ['Integer'], to: 'c', from: ':W:1' } },
       { input: { id: '3', op: 'parentTotal', to: ':W:1', from: 'c' } },
@@ -142,7 +142,7 @@ describe('super — layers', () => {
   it('super[T]:: picks among two parents', async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':C', from: 'c' } },
-      { output: { id: '1', re: '#<:C:1>', ty: ':C', to: 'c' } },
+      { output: { id: '1', re: ['#<:C:1>'], ty: [':C'], to: 'c' } },
       { input: { id: '2', op: 'both', to: ':C:1', from: 'c' } },
       { output: { id: '2', re: [15], ty: ['Integer'], to: 'c', from: ':C:1' } },
     );

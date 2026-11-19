@@ -96,7 +96,7 @@ describe('dependency addresses — construction', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<thing.bv:1>', ty: 'thing.bv', from: 'thing.bv' } },
+      { input: { id: '1', re: ['#<thing.bv:1>'], ty: ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'get', to: 'thing.bv:1' }) },
       { input: { id: '2', re: { value: 42 } } },
@@ -118,7 +118,7 @@ describe('dependency addresses — tags', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<thing.bv:1>', ty: 'thing.bv', from: 'thing.bv' } },
+      { input: { id: '1', re: ['#<thing.bv:1>'], ty: ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '2', op: 'give.', from: 'c' } },
       { output: expect.objectContaining({ ty: [['thing.bv']], to: 'peer.bv' }) },
     );

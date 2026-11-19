@@ -197,7 +197,7 @@ describe('a type of another file, reached through the service', () => {
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'got', from: 'c' } },
       { output: expect.objectContaining({ op: '$new', to: 'svc.bv:W' }) },
-      { input: { id: '1', re: '#<svc.bv:W:1>', ty: 'svc.bv:W', from: 'svc.bv' } },
+      { input: { id: '1', re: ['#<svc.bv:W:1>'], ty: ['svc.bv:W'], from: 'svc.bv' } },
       { output: expect.objectContaining({ op: 'get', to: 'svc.bv:W:1' }) },
       { input: { id: '2', re: [[7]], ty: ['svc.bv:W:X'], from: 'svc.bv:W:1' } },
       { output: { id: 'x', re: { result: 7 }, ty: { result: 'Integer' }, to: 'c' } },

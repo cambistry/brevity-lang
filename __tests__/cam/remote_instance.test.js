@@ -43,7 +43,7 @@ describe('remote actor — method calls after init', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<WebView/1>', 'ty': 'WebView', from: 'WebView' } },
+      { input: { id: '1', re: ['#<WebView/1>'], 'ty': ['WebView'], from: 'WebView' } },
       { input: { id: '99', op: 'open.', from: 'caller' } },
       { output: expect.objectContaining({ op: 'open.', to: 'WebView/1' }) },
     );
@@ -58,7 +58,7 @@ describe('remote actor — sequential calls to actor', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<WebView/42>', 'ty': 'WebView', from: 'WebView' } },
+      { input: { id: '1', re: ['#<WebView/42>'], 'ty': ['WebView'], from: 'WebView' } },
       { input: { id: '100', op: 'workflow!', from: 'caller' } },
       // `open.` and `close.` are silent: nothing replies, and nothing waits.
       { output: expect.objectContaining({ op: 'open.', to: 'WebView/42' }) },
@@ -92,7 +92,7 @@ describe('a call used as a statement waits for its reply', () => {
       { output: expect.objectContaining({ id: '1', op: 'ping!', to: 'svc.bv' }) },
       { input: { id: '2', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: '2', to: 'c' }) },
-      { input: { id: '1', re: '#<Svc>', from: 'svc.bv' } },
+      { input: { id: '1', re: ['#<Svc>'], from: 'svc.bv' } },
       { output: { id: '1', re: [1], 'ty': ['Integer'], to: 'c' } },
     );
   });
@@ -159,7 +159,7 @@ describe('remote actor — a reply nobody is waiting for', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<WebView/42>', 'ty': 'WebView', from: 'WebView' } },
+      { input: { id: '1', re: ['#<WebView/42>'], 'ty': ['WebView'], from: 'WebView' } },
       { input: { id: '77', re: {}, from: 'WebView/42' } },
       { input: { id: '100', op: 'status', from: 'caller' } },
       { output: expect.objectContaining({ id: '100', re: { ok: 'ready' }, to: 'caller' }) },
@@ -193,8 +193,8 @@ describe('remote actor — multiple actors', () => {
     });
     await expectActorBehavior(actor,
       // Replies in seq order: id '1' = v1, id '2' = v2
-      { input: { id: '1', re: '#<WebView/a1>', 'ty': 'WebView', from: 'WebView' } },
-      { input: { id: '2', re: '#<WebView/b1>', 'ty': 'WebView', from: 'WebView' } },
+      { input: { id: '1', re: ['#<WebView/a1>'], 'ty': ['WebView'], from: 'WebView' } },
+      { input: { id: '2', re: ['#<WebView/b1>'], 'ty': ['WebView'], from: 'WebView' } },
       // v1
       { input: { id: '10', op: 'open_a', from: 'caller' } },
       { output: expect.objectContaining({ op: 'open', to: 'WebView/a1' }) },
@@ -231,7 +231,7 @@ describe('remote actor — named class args', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: '1', re: '#<Database/1>', 'ty': 'Database', from: 'Database' } },
+      { input: { id: '1', re: ['#<Database/1>'], 'ty': ['Database'], from: 'Database' } },
       { input: { id: '99', op: 'ping', from: 'caller' } },
       { output: expect.objectContaining({ op: 'ping', to: 'Database/1' }) },
       { input: { id: '2', re: { ok: 'pong' } } },

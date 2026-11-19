@@ -31,6 +31,6 @@ describe('the page router rejects bracketed address fields', () => {
     const inbox = [];
     await page.register('caller', m => inbox.push(m));
     await page.send({ id: '1', op: [[{ children: [] }], '$new'], to: 'HTML:div', from: 'caller' });
-    expect(inbox).toEqual([expect.objectContaining({ id: '1', re: expect.stringMatching(/^#<HTML:div:\d+>$/) })]);
+    expect(inbox).toEqual([expect.objectContaining({ id: '1', re: [expect.stringMatching(/^#<HTML:div:\d+>$/)] })]);
   });
 });

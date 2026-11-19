@@ -614,6 +614,7 @@ ${[...G.ctx.stateVarNames].map(n => {
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("ex".to_string(), Value::Object(ex)); resp.insert("to".to_string(), json!(from));
                 let _ = self.binding.send(Value::Object(resp));
             } else if let Some(re_val) = re {
+                let (re_val, ty_re) = bv_wrap_address_reply(re_val, ty_re);
                 let mut resp = Map::new(); resp.insert("id".to_string(), json!(id)); resp.insert("re".to_string(), re_val); resp.insert("to".to_string(), json!(from));
                 if let Some(b) = ty_re { resp.insert("ty".to_string(), b); }
                 let _ = self.binding.send(Value::Object(resp));
@@ -626,10 +627,7 @@ ${[...G.ctx.stateVarNames].map(n => {
   const remoteNewChecks = [...allNewVars].map(name => {
     return `if let Some(pending_id) = self.state.get("_pending_new_${name}") {
                 if message.get("id") == Some(pending_id) {
-                    let addr = match message.get("re").and_then(|v| v.as_str()) {
-                        Some(s) if s.starts_with("#<") && s.ends_with('>') => Value::String(s[2..s.len()-1].to_string()),
-                        _ => message.get("from").cloned().unwrap_or(Value::Null)
-                    };
+                    let addr = bv_new_reply_addr(message);
                     self.state.insert("${stateKey(name)}".to_string(), addr);
                     self.state.remove("_pending_new_${name}");
                     return;
@@ -1037,6 +1035,7 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
                     resp.insert("to".to_string(), json!(from));
                     let _ = self.binding.send(Value::Object(resp));
                 } else if let Some(re_val) = re {
+                    let (re_val, ty_re) = bv_wrap_address_reply(re_val, ty_re);
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
                     resp.insert("re".to_string(), ${G.ctx.publicSingletons ? 'self.bv_wire_own(&re_val)' : 're_val'});
@@ -1079,6 +1078,38 @@ impl Binding {
     fn send(&self, msg: Value) -> Result<(), mpsc::SendError<Value>> {
         if msg.get("to").and_then(|t| t.as_str()) == Some("__loop") { self.looped.borrow_mut().push(msg); return Ok(()); }
         self.tx.send(msg)
+    }
+}
+
+// An address is a reply's one value, as any other is: re: ["#<…>"], ty: [t]. A
+// self-return with no tag is the file's, which no \`new\` built: \`*\`.
+#[allow(dead_code)]
+fn bv_wrap_address_reply(re: Value, ty: Option<Value>) -> (Value, Option<Value>) {
+    match &re {
+        Value::String(a) if a.starts_with("#<") => {
+            let ty = match ty {
+                Some(Value::String(t)) => Some(json!([t])),
+                None if a == "#<:>" => Some(json!(["*"])),
+                other => other,
+            };
+            (json!([re]), ty)
+        }
+        _ => (re, ty),
+    }
+}
+
+// The address a reply to \`$new\` names, unbracketed: its one value, re: ["#<…>"]. A
+// bare re isn't an address reply (null); one with no address in it names its sender.
+#[allow(dead_code)]
+fn bv_new_reply_addr(msg: &Value) -> Value {
+    let from = || msg.get("from").cloned().unwrap_or(Value::Null);
+    match msg.get("re") {
+        Some(Value::String(_)) => Value::Null,
+        Some(Value::Array(a)) if a.len() == 1 => match a[0].as_str() {
+            Some(s) if s.starts_with("#<") && s.ends_with('>') => Value::String(s[2..s.len() - 1].to_string()),
+            _ => from(),
+        },
+        _ => from(),
     }
 }
 
@@ -2048,8 +2079,8 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // A self-return: we made this actor, so we name it and its class, as for #new.
                 // A singleton is a declared actor: no \`new\` built it, so it's \`*\`.
                 Ok(v) if v == json!(child) => {
-                    resp.insert("ty".to_string(), json!(${hasPublicSingletons ? 'if self.singleton_at.contains_key(&addr) { "*".to_string() } else { bv_addr_class(&addr) }' : 'bv_addr_class(&addr)'}));
-                    resp.insert("re".to_string(), json!(format!("#<:{}>", addr)));
+                    resp.insert("ty".to_string(), json!([${hasPublicSingletons ? 'if self.singleton_at.contains_key(&addr) { "*".to_string() } else { bv_addr_class(&addr) }' : 'bv_addr_class(&addr)'}]));
+                    resp.insert("re".to_string(), json!([format!("#<:{}>", addr)]));
                 }
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
@@ -2109,7 +2140,7 @@ ${heldSingletonArms}            _ => None,
             Some(m) => {
                 let re = m.get("re").cloned().unwrap_or(Value::Null);
                 // A reply whose whole value is one actor, as await_response reads it.
-                if re.as_str().is_some_and(|t| t.starts_with("#<") && t.ends_with('>')) { return Value::Array(vec![re]); }
+                if re.as_array().is_some_and(|a| a.len() == 1 && a[0].as_str().is_some_and(|t| t.starts_with("#<") && t.ends_with('>'))) { return re; }
                 m.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, t))
             }
             None => Value::Null,
@@ -2133,11 +2164,12 @@ ${heldSingletonArms}            _ => None,
                                 // A reply whose whole value is one actor: its address is in re,
                                 // and ty, if any, is its class: the address it heads (svc.bv:Counter
                                 // of svc.bv:Counter:1; thing.bv:9 of thing.bv).
-                                let one_actor = re.as_str().and_then(|t| t.strip_prefix("#<")).and_then(|t| t.strip_suffix('>')).is_some_and(|x| {
-                                    msg.get("ty").is_none_or(|a| a.as_str().is_some_and(|c| x == c || (x.starts_with(c) && matches!(x.as_bytes().get(c.len()), Some(b':') | Some(b'/')))))
+                                let one = |v: Option<&Value>| v.and_then(|v| v.as_array()).filter(|a| a.len() == 1).and_then(|a| a[0].as_str().map(str::to_string));
+                                let one_actor = one(Some(re)).as_deref().and_then(|t| t.strip_prefix("#<")).and_then(|t| t.strip_suffix('>')).is_some_and(|x| {
+                                    msg.get("ty").is_none_or(|a| one(Some(a)).is_some_and(|c| x == c || (x.starts_with(c.as_str()) && matches!(x.as_bytes().get(c.len()), Some(b':') | Some(b'/')))))
                                 });
                                 if one_actor {
-                                    return Value::Array(vec![re.clone()]);
+                                    return re.clone();
                                 }
                                 return msg.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(re, t));
                             }
@@ -2168,10 +2200,9 @@ ${heldSingletonArms}            _ => None,
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_id == target_id {
-                            return match msg.get("re").and_then(|v| v.as_str()) {
-                                Some(s) if s.starts_with("#<") && s.ends_with('>') => Value::String(s[2..s.len()-1].to_string()),
-                                _ => msg.get("from").cloned().unwrap_or(Value::Null)
-                            };
+                            // A reply to \`$new\` with no address as its one value is malformed.
+                            if msg.get("re").is_some_and(|r| r.is_string()) { panic!("ex_response"); }
+                            return bv_new_reply_addr(&msg);
                         }
                         self.receive(&msg);
                     }
