@@ -170,10 +170,15 @@ function silentSuffixAt(source, i, name, line) {
 export function tokenize(source) {
   const tokens = [];
   let i = 0;
+  // Every token carries the line it starts on.
+  let tokStart = 0, line = 1, scanned = 0;
+  const lineAt = (k) => { for (; scanned < k; scanned++) if (source[scanned] === '\n') line++; return line; };
+  const emit = (tok) => { tok.line = lineAt(tokStart); tokens.push(tok); };
   let atLineStart = true;
   let inBlockComment = false;
 
   while (i < source.length) {
+    tokStart = i;
     // ── Block comment mode: skip everything, watch for closing toggle ────────
     if (inBlockComment) {
       if (source[i] === '\n') { atLineStart = true; i++; continue; }
@@ -202,7 +207,7 @@ export function tokenize(source) {
       while (j < source.length && (source[j] === ' ' || source[j] === '\t')) j++;
       if (j >= source.length || source[j] === '\n') {
         // bare // — block divider / stitch
-        tokens.push({ type: 'DIVIDER' });
+        emit({ type: 'DIVIDER' });
         i = j;
         if (i < source.length && source[i] === '\n') i++;
         atLineStart = true;
@@ -219,7 +224,7 @@ export function tokenize(source) {
       while (j < source.length && (source[j] === ' ' || source[j] === '\t')) j++;
       if (j < source.length && source[j] === '\n') {
         // blank or whitespace-only line → BLOCK_SEP; skip all further blank lines
-        tokens.push({ type: 'BLOCK_SEP' });
+        emit({ type: 'BLOCK_SEP' });
         i = j + 1;
         while (i < source.length) {
           if (source[i] === '\n') { i++; continue; }
@@ -229,7 +234,7 @@ export function tokenize(source) {
           break;
         }
       } else {
-        tokens.push({ type: 'NEWLINE' });
+        emit({ type: 'NEWLINE' });
         i++;
       }
       atLineStart = true;
@@ -254,7 +259,7 @@ export function tokenize(source) {
         atLineStart = true;
       } else if (dashCount >= 2 && atEOL) {
         // bare -- — block divider / stitch (leave '\n' for NEWLINE token)
-        tokens.push({ type: 'DIVIDER' });
+        emit({ type: 'DIVIDER' });
         i = k;
       } else {
         // dash comment with content: skip to end of line (leave '\n' for NEWLINE token)
@@ -370,9 +375,9 @@ export function tokenize(source) {
       i++; // closing "
       flushText();
       if (hasInterp) {
-        tokens.push({ type: 'INTERP_STRING', parts });
+        emit({ type: 'INTERP_STRING', parts });
       } else {
-        tokens.push({ type: 'STRING', value: parts.length === 0 ? '' : parts[0].value });
+        emit({ type: 'STRING', value: parts.length === 0 ? '' : parts[0].value });
       }
       continue;
     }
@@ -387,25 +392,25 @@ export function tokenize(source) {
         if (source[i] === "'") { i++; break; }
         value += source[i++];
       }
-      tokens.push({ type: 'STRING', value });
+      emit({ type: 'STRING', value });
       continue;
     }
 
     // Comparison operators (must come before single =, >, <)
     // The effect arrows of a signature: `=>` writes, `~>` purports to read. They
     // lex as arrows; the parser only accepts them in signatures.
-    if ((source[i] === '=' || source[i] === '~') && source[i+1] === '>') { tokens.push({ type: '->', value: source[i] + '>' }); i += 2; continue; }
+    if ((source[i] === '=' || source[i] === '~') && source[i+1] === '>') { emit({ type: '->', value: source[i] + '>' }); i += 2; continue; }
     // `~` is only ever part of `~>`. (On the wire it marks a protected name; in source a
     // protected name is bare.)
     if (source[i] === '~') throw new Error(`Unexpected '~' (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
-    if (source[i] === '=' && source[i+1] === '=') { tokens.push({ type: 'EQ' }); i += 2; continue; }
-    if (source[i] === '!' && source[i+1] === '=') { tokens.push({ type: 'NEQ' }); i += 2; continue; }
-    if (source[i] === '!') { tokens.push({ type: 'BANG' }); i++; continue; }
-    if (source[i] === '>' && source[i+1] === '=') { tokens.push({ type: 'GTE' }); i += 2; continue; }
-    if (source[i] === '<' && source[i+1] === '=') { tokens.push({ type: 'LTE' }); i += 2; continue; }
-    if (source[i] === '<' && source[i+1] === '-') { tokens.push({ type: 'SET' }); i += 2; continue; }
-    if (source[i] === '<' && source[i+1] === '|') { tokens.push({ type: 'UPDATE' }); i += 2; continue; }
-    if (source[i] === '>') { tokens.push({ type: 'GT' }); i++; continue; }
+    if (source[i] === '=' && source[i+1] === '=') { emit({ type: 'EQ' }); i += 2; continue; }
+    if (source[i] === '!' && source[i+1] === '=') { emit({ type: 'NEQ' }); i += 2; continue; }
+    if (source[i] === '!') { emit({ type: 'BANG' }); i++; continue; }
+    if (source[i] === '>' && source[i+1] === '=') { emit({ type: 'GTE' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '=') { emit({ type: 'LTE' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '-') { emit({ type: 'SET' }); i += 2; continue; }
+    if (source[i] === '<' && source[i+1] === '|') { emit({ type: 'UPDATE' }); i += 2; continue; }
+    if (source[i] === '>') { emit({ type: 'GT' }); i++; continue; }
     // HTML constructor (lowercase tag form): <tag>…</tag>, recursively
     // capturing nested lowercase elements. Same-tag nesting is handled
     // correctly (the old flat `indexOf('</tag>')` silently picked the
@@ -413,48 +418,48 @@ export function tokenize(source) {
     if (source[i] === '<' && source[i+1] && /[a-z]/.test(source[i+1])) {
       const el = parseDomElement(source, i);
       if (el) {
-        tokens.push({ type: 'HTML_CONSTRUCTOR', tag: el.tag, children: el.children,
+        emit({ type: 'HTML_CONSTRUCTOR', tag: el.tag, children: el.children,
           ...(el.bvBlock !== undefined ? { bvBlock: el.bvBlock } : { attrs: el.attrs }) });
         i = el.nextIdx;
         continue;
       }
     }
-    if (source[i] === '<') { tokens.push({ type: 'LT' }); i++; continue; }
+    if (source[i] === '<') { emit({ type: 'LT' }); i++; continue; }
 
     // Arrow for function types
     if (source[i] === '-' && i + 1 < source.length && source[i + 1] === '>') {
-      tokens.push({ type: '->', value: '->' });
+      emit({ type: '->', value: '->' });
       i += 2;
       continue;
     }
 
     // Equals
     if (source[i] === '=') {
-      tokens.push({ type: 'EQUALS' });
+      emit({ type: 'EQUALS' });
       i++;
       continue;
     }
 
     // Ellipsis (rest / spread)
     if (source[i] === '.' && source[i + 1] === '.' && source[i + 2] === '.') {
-      tokens.push({ type: 'ELLIPSIS' });
+      emit({ type: 'ELLIPSIS' });
       i += 3;
       continue;
     }
 
     // Dot (single, not ellipsis)
     if (source[i] === '.' && !(source[i + 1] === '.' && source[i + 2] === '.')) {
-      tokens.push({ type: 'DOT' });
+      emit({ type: 'DOT' });
       i++;
       continue;
     }
 
     // Arithmetic operators
-    if (source[i] === '+') { tokens.push({ type: 'PLUS',  value: '+' }); i++; continue; }
-    if (source[i] === '-') { tokens.push({ type: 'MINUS', value: '-' }); i++; continue; }
+    if (source[i] === '+') { emit({ type: 'PLUS',  value: '+' }); i++; continue; }
+    if (source[i] === '-') { emit({ type: 'MINUS', value: '-' }); i++; continue; }
     // `^` is the exponent. `**` is reserved for lineal singletons (the braced form
     // is `actor { }`); the parser rejects it as an operator.
-    if (source[i] === '^') { tokens.push({ type: 'POWER', value: '^' }); i++; continue; }
+    if (source[i] === '^') { emit({ type: 'POWER', value: '^' }); i++; continue; }
     if (source[i] === '*') {
       // Lineal headers require `*` (a constructor) or `**` (a lineal singleton)
       // to be the only token on its line. `alone`: nothing but whitespace on
@@ -470,9 +475,9 @@ export function tokenize(source) {
         if (f >= source.length || source[f] === '\n') tok.alone = true;
         else if (source[f] === '{') tok.aloneBeforeBrace = true;
       }
-      tokens.push(tok); i += width; continue;
+      emit(tok); i += width; continue;
     }
-    if (source[i] === '%') { tokens.push({ type: 'PERCENT', value: '%' }); i++; continue; }
+    if (source[i] === '%') { emit({ type: 'PERCENT', value: '%' }); i++; continue; }
 
     // Numeric literals (integer, decimal, or scientific/float)
     // Decimal/Integer retain exact digit strings so precision survives lex→codegen.
@@ -487,18 +492,18 @@ export function tokenize(source) {
           num += source[i++]; // E/e
           if (source[i] === '+' || source[i] === '-') num += source[i++];
           while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
-          tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
+          emit({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
         } else {
-          tokens.push({ type: 'NUMBER', numKind: 'Decimal', value: num });
+          emit({ type: 'NUMBER', numKind: 'Decimal', value: num });
         }
       } else if ((source[i] === 'E' || source[i] === 'e') &&
                  (source[i + 1] === '+' || source[i + 1] === '-' || /[0-9]/.test(source[i + 1] ?? ''))) {
         num += source[i++]; // E/e
         if (source[i] === '+' || source[i] === '-') num += source[i++];
         while (i < source.length && /[0-9]/.test(source[i])) num += source[i++];
-        tokens.push({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
+        emit({ type: 'NUMBER', numKind: 'Float', value: Number(num) });
       } else {
-        tokens.push({ type: 'NUMBER', numKind: 'Integer', value: num });
+        emit({ type: 'NUMBER', numKind: 'Integer', value: num });
       }
       continue;
     }
@@ -507,7 +512,7 @@ export function tokenize(source) {
     // `Svc::Point`, `C::total`. Distinct from the
     // `:name` named-param sigil and the bare `COLON` separator below.
     if (source[i] === ':' && source[i + 1] === ':') {
-      tokens.push({ type: 'DCOLON' });
+      emit({ type: 'DCOLON' });
       i += 2;
       continue;
     }
@@ -520,9 +525,9 @@ export function tokenize(source) {
         while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
         if (source[i] === '!' && source[i + 1] !== '=') name += source[i++];
         if (source[i] === '.' && silentSuffixAt(source, i, ':' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
-        tokens.push({ type: 'SIGIL', value: name });
+        emit({ type: 'SIGIL', value: name });
       } else {
-        tokens.push({ type: 'COLON' });
+        emit({ type: 'COLON' });
         i++;
       }
       continue;
@@ -536,19 +541,19 @@ export function tokenize(source) {
       }
       if (i < source.length && source[i] === '?') { value += source[i++]; }
       if (value === '_') {
-        tokens.push({ type: 'DISCARD' });
+        emit({ type: 'DISCARD' });
       } else if (!value.endsWith('?') && source[i] === '.' &&
                  silentSuffixAt(source, i, value, tokens.filter(t => t.type === 'NEWLINE').length + 1)) {
-        tokens.push({ type: 'IDENT', value: value + '.' });
+        emit({ type: 'IDENT', value: value + '.' });
         i++;
       } else if (!value.endsWith('?') && source[i] === '!' && source[i + 1] !== '=' && !KEYWORDS.has(value)) {
         // A `!` glued to the end of a name is part of it: the function writes.
         // A keyword keeps its own token (`.reduce!` is a built-in method).
-        tokens.push({ type: 'IDENT', value: value + '!' });
+        emit({ type: 'IDENT', value: value + '!' });
         i++;
       } else if ((value === 'untracked' || value === 'class' || value === 'super' || value === 'use') && (tokens[tokens.length - 1]?.type === 'DOT' || (value === 'use' && tokens[tokens.length - 1]?.type === 'AT') || (source[i] === ':' && source[i + 1] !== ':'))) {
         // Reserved as a name of its own: a member or a key can have this name.
-        tokens.push({ type: 'IDENT', value });
+        emit({ type: 'IDENT', value });
       } else {
         // `class` names the running actor's class, so nothing can be declared or set
         // under it: `class = …`, `class <- …`, `class *Integer = …`, `(class Integer)`.
@@ -566,13 +571,13 @@ export function tokenize(source) {
         if (value === 'super' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
           throw new Error(`'super' is reserved: it names the parent layer, so it can't be declared or set (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
         }
-        tokens.push({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
+        emit({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
       continue;
     }
 
     // @name — public function sigil
-    if (source[i] === '@') { tokens.push({ type: 'AT' }); i++; continue; }
+    if (source[i] === '@') { emit({ type: 'AT' }); i++; continue; }
 
     // &name — function reference
     if (source[i] === '&') {
@@ -581,7 +586,7 @@ export function tokenize(source) {
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
       if (name && source[i] === '.' && silentSuffixAt(source, i, '&' + name, tokens.filter(t => t.type === 'NEWLINE').length + 1)) { name += '.'; i++; }
       else if (name && source[i] === '!' && source[i + 1] !== '=') { name += '!'; i++; }
-      if (name) tokens.push({ type: 'AMPERSAND_IDENT', value: name });
+      if (name) emit({ type: 'AMPERSAND_IDENT', value: name });
       continue;
     }
 
@@ -591,8 +596,8 @@ export function tokenize(source) {
       let name = '';
       while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) name += source[i++];
       if (name && source[i] === '!' && source[i + 1] !== '=') { name += '!'; i++; }
-      if (name) tokens.push({ type: 'HASH_IDENT', value: name });
-      else tokens.push({ type: 'HASH' });
+      if (name) emit({ type: 'HASH_IDENT', value: name });
+      else emit({ type: 'HASH' });
       continue;
     }
 
@@ -602,19 +607,19 @@ export function tokenize(source) {
     // identifier is consumed by the IDENT scanner above (e.g. `started?`),
     // so these only fire when `?` stands alone.
     if (source[i] === '?' && source[i + 1] === '?') {
-      tokens.push({ type: 'NULL_COALESCE' });
+      emit({ type: 'NULL_COALESCE' });
       i += 2;
       continue;
     }
-    if (source[i] === '?') { tokens.push({ type: 'QUESTION' }); i++; continue; }
-    if (source[i] === ';') { tokens.push({ type: 'NEWLINE' }); i++; continue; }
-    if (source[i] === ',') { tokens.push({ type: 'COMMA' }); i++; continue; }
-    if (source[i] === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }
-    if (source[i] === ')') { tokens.push({ type: 'RPAREN' }); i++; continue; }
-    if (source[i] === '[') { tokens.push({ type: 'LBRACKET' }); i++; continue; }
-    if (source[i] === ']') { tokens.push({ type: 'RBRACKET' }); i++; continue; }
-    if (source[i] === '{') { tokens.push({ type: 'LBRACE' }); i++; continue; }
-    if (source[i] === '}') { tokens.push({ type: 'RBRACE' }); i++; continue; }
+    if (source[i] === '?') { emit({ type: 'QUESTION' }); i++; continue; }
+    if (source[i] === ';') { emit({ type: 'NEWLINE' }); i++; continue; }
+    if (source[i] === ',') { emit({ type: 'COMMA' }); i++; continue; }
+    if (source[i] === '(') { emit({ type: 'LPAREN' }); i++; continue; }
+    if (source[i] === ')') { emit({ type: 'RPAREN' }); i++; continue; }
+    if (source[i] === '[') { emit({ type: 'LBRACKET' }); i++; continue; }
+    if (source[i] === ']') { emit({ type: 'RBRACKET' }); i++; continue; }
+    if (source[i] === '{') { emit({ type: 'LBRACE' }); i++; continue; }
+    if (source[i] === '}') { emit({ type: 'RBRACE' }); i++; continue; }
     if (source[i] === '/') {
       const prev = tokens[tokens.length - 1]?.type;
       const isValue = prev && ['NUMBER', 'STRING', 'IDENT', 'RPAREN', 'RBRACKET'].includes(prev);
@@ -633,19 +638,20 @@ export function tokenize(source) {
           j++;
           let flags = '';
           while (j < source.length && /[gimsu]/.test(source[j])) flags += source[j++];
-          tokens.push({ type: 'REGEX', pattern, flags });
+          emit({ type: 'REGEX', pattern, flags });
           i = j;
           continue;
         }
       }
-      tokens.push({ type: 'SLASH', value: '/' }); i++; continue;
+      emit({ type: 'SLASH', value: '/' }); i++; continue;
     }
-    if (source[i] === '|') { tokens.push({ type: 'PIPE' }); i++; continue; }
+    if (source[i] === '|') { emit({ type: 'PIPE' }); i++; continue; }
 
     if (source[i] === '\r' || source[i] === '﻿') { i++; continue; }
-    throw new Error(`Unexpected character '${source[i]}' (line ${tokens.filter(t => t.type === 'NEWLINE').length + 1})`);
+    throw new Error(`Unexpected character '${source[i]}' (line ${lineAt(i)})`);
   }
 
-  tokens.push({ type: 'EOF' });
+  tokStart = source.length;
+  emit({ type: 'EOF' });
   return tokens;
 }

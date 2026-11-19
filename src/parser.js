@@ -87,7 +87,6 @@ const atTypeOfClass = (tokens, i) => {
 };
 
 function foldSelfClass(tokens) {
-  const line = (i) => tokens.slice(0, i).filter(t => t.type === 'NEWLINE').length + 1;
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -102,7 +101,7 @@ function foldSelfClass(tokens) {
         continue;
       }
       const shown = t.type === 'IDENT' || t.type === 'KEYWORD' ? `${tokens[i - 1]?.type === 'AT' ? '@' : ''}${t.value}` : 'x';
-      throw new Error(`'${shown}::class' isn't supported yet: only 'self::class' (or 'class'), the class of the running actor (line ${line(i)})`);
+      throw new Error(`'${shown}::class' isn't supported yet: only 'self::class' (or 'class'), the class of the running actor (line ${t.line})`);
     }
     out.push(t);
   }
@@ -114,7 +113,7 @@ function foldSelfClass(tokens) {
 // profile), optionally a cell (`*Type`, `&Type`), or an interface `{ … }`.
 // Throws where it doesn't parse.
 export function parseTypeText(text) {
-  parse(tokenize(text), { typeOnly: true });
+  return parse(tokenize(text), { typeOnly: true });
 }
 
 // `:name` where a param is expected.
@@ -165,6 +164,10 @@ export function parse(tokensIn, options = {}) {
   if (!seen.some(c => !c.notLayer)) return first;
   return parseOnce(tokensIn, { ...options, nameChains: { compose } });
 }
+
+// Tokens that are grammar by definition: line structure, brackets, separators
+// (`;` lexes as NEWLINE). Consuming one is using it.
+const STRUCTURAL_TOKENS = new Set(['NEWLINE', 'BLOCK_SEP', 'DIVIDER', 'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'LBRACKET', 'RBRACKET', 'COMMA']);
 
 function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
@@ -224,16 +227,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const body = [];
     while (peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE') { consume(); continue; }
-      if (peek().type === 'DOT') { consume(); continue; }
+      if (peek().type === 'DOT') { take(); continue; }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-        const name = consume().value;
-        consume(); // SET (<-) or UPDATE (<|)
+        const name = take().value;
+        take(); // SET (<-) or UPDATE (<|)
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
           const args = [{ expr: firstExpr, positional: true }];
           while (peek().type === 'COMMA') {
-            consume();
+            take();
             args.push({ expr: parseExpr(), positional: true });
           }
           body.push(AST.actorSetStatement(name, args, { updateOp: isUpdate ? '<|' : undefined }));
@@ -315,7 +318,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Consume a STRING or INTERP_STRING token and return an AST expression node.
   // Use anywhere a string-valued primary expression is accepted.
   function consumeStringExpr() {
-    const tok = consume();
+    const tok = take();
     if (tok.type === 'INTERP_STRING') return buildInterpolatedString(tok.parts);
     return AST.stringLiteral(tok.value);
   }
@@ -324,12 +327,37 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Effect arrows belong to signatures. A body's arrow is always `->`.
   let inSignature = 0;
   let ctorArrow = '->';
+  // Every token of the file is accounted for: a structural token by being
+  // consumed, any other by being taken — consumed by the code that puts its
+  // meaning in the tree. A token read and dropped, or skipped, is a parser bug
+  // (checkTokensAccounted). A rewound parse reads a token again, so only a
+  // take of its last read counts.
+  const readAt = new Int32Array(fileTokens.length);
+  const takenAt = new Int32Array(fileTokens.length);
+  const readIn = [];
+  let reads = 0;
   const consume = () => {
+    const at = pos;
     const tok = tokens[pos++];
     if (tok?.type === '->' && tok.value !== '->' && inSignature === 0) {
       throw new Error(`'${tok.value}' is only for signatures — a function body's arrow is '->'`);
     }
+    if (tokens === fileTokens && at < fileTokens.length) { readAt[at] = ++reads; readIn[at] = declCtx?.name; }
     return tok;
+  };
+  const take = () => {
+    const at = pos;
+    const tok = consume();
+    if (tokens === fileTokens && at < fileTokens.length) takenAt[at] = readAt[at];
+    return tok;
+  };
+  const checkTokensAccounted = () => {
+    for (let i = 0; i < fileTokens.length; i++) {
+      const t = fileTokens[i];
+      if (t.type === 'EOF' || (readAt[i] && (STRUCTURAL_TOKENS.has(t.type) || takenAt[i] === readAt[i]))) continue;
+      const shown = t.value !== undefined ? ` '${t.value}'` : '';
+      throw new Error(`Parser bug: ${t.type}${shown} (token ${i}, line ${t.line}) was ${readAt[i] ? 'read and dropped' : 'skipped'} in ${readIn[i] ? `'${readIn[i]}'` : 'the file'}`);
+    }
   };
   const skipNewlines = () => { while (peek().type === 'NEWLINE') consume(); };
   // Statements are separated by a line break (`;` is one). `last` is where the
@@ -393,7 +421,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Detect << (append) and >> (prepend) as two consecutive LT or GT tokens
   const peekIsAppend = () => peek().type === 'LT' && tokens[pos + 1]?.type === 'LT';
   const peekIsPrepend = () => peek().type === 'GT' && tokens[pos + 1]?.type === 'GT';
-  const consumeOverloadOp = () => { consume(); consume(); }; // eat both tokens
+  const consumeOverloadOp = () => { take(); take(); }; // eat both tokens
   // Scan from current pos to the next line/block boundary for a `>>` token pair.
   // Used to detect statement-level uses of the prepend operator (`a >> b >> *ns`)
   // so they can be parsed as expressions and desugared by pushExprOrBang.
@@ -558,12 +586,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (layer.kind === 'head' && pos !== at) break;
       if (layer.kind === 'parent') {
         if (nested || members) throw new Error(`In '${op}', a parent class comes before the constructor and singleton layers`);
-        const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+        const sigil = peek().type === 'AT' ? (take(), '@') : '';
         supertypes.push({ supertype: sigil + expect('IDENT').value });
       } else if (layer.kind === 'constructor') {
         if (nested) throw new Error(`In '${op}', a class has one constructor layer`);
         if (peek().type === 'STAR') {
-          consume(); // *
+          take(); // *
           nested = parseConstructorBody(op, false);
         } else {
           let parenSupertypes;
@@ -575,7 +603,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         members = parseTrailingMembers(op);
       }
       if (peek().type !== 'POWER') break;
-      consume(); // ^
+      take(); // ^
       if (isDefinitionEnd(pos)) break; // `V^`
     }
     nested ??= parseActorBody(() => true); // an empty body, same shape as `*{}`
@@ -589,7 +617,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   };
 
   function expect(type, value) {
-    const tok = consume();
+    const tok = take();
     if (tok.type !== type || (value !== undefined && tok.value !== value)) {
       throw new Error(`Expected ${type}${value ? ` '${value}'` : ''}, got ${tok.type} '${tok.value}'`);
     }
@@ -637,10 +665,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     // A public class is `@Name` as a type too.
     if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
-      consume();
-      return '@' + consume().value;
+      take();
+      return '@' + take().value;
     }
-    const tok = consume();
+    const tok = take();
     if (tok.type !== 'IDENT')
       throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
     const typeName = tok.value;
@@ -658,7 +686,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       return 'List of Anything'; // bare List = List of Anything (mixed elements)
     }
     if (peek().type === 'KEYWORD' && peek().value === 'of') {
-      consume(); // 'of'
+      take(); // 'of'
       return `${typeName} of ${parseAtomicType(true)}`;
     }
     if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
@@ -667,8 +695,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // A type reached through an actor — `Svc::Point`, `Class::X`, `A::B::X`.
     let path = typeName;
     while (peek().type === 'DCOLON' && tokens[pos+1]?.type === 'IDENT') {
-      consume(); // ::
-      path += `::${consume().value}`;
+      take(); // ::
+      path += `::${take().value}`;
     }
     return path;
   }
@@ -697,13 +725,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (peek().type === 'PIPE') {
       const nxt = tokens[pos + 1];
       if (nxt?.type === 'KEYWORD' && nxt.value === 'null') {
-        consume(); // |
-        consume(); // null
+        take(); // |
+        take(); // null
         result = `${result} | null`;
         continue;
       }
       if (nxt?.type === 'IDENT' || (nxt?.type === 'AT' && tokens[pos + 2]?.type === 'IDENT')) {
-        consume(); // |
+        take(); // |
         const member = parseAtomicType(false);
         result = `${result} | ${member}`;
         continue;
@@ -750,13 +778,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // name: Type — named field (trailing colon)
-        const name = consume().value;
-        consume(); // COLON
+        const name = take().value;
+        take(); // COLON
         const t = parseType();
         fields.push(`${name}: ${t}`);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
         // name Type — named field (whitespace)
-        const name = consume().value;
+        const name = take().value;
         const t = parseType();
         fields.push(`${name}: ${t}`);
       } else if (peek().type === 'IDENT') {
@@ -777,7 +805,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'NUMBER') {
-        const numTok = consume();
+        const numTok = take();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
@@ -787,17 +815,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const key = consume().value;
-        consume(); // COLON
+        const key = take().value;
+        take(); // COLON
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ key, expr, type: typeName });
       } else if (peek().type === 'IDENT') {
-        const name = consume().value;
+        const name = take().value;
         args.push({ positional: true, expr: AST.identifier(name), type: null });
       } else {
-        consume(); // skip unknown
+        throw new Error(`Unexpected token in an Object: ${peek().type} '${peek().value || ''}'`);
       }
     }
     expect('RPAREN');
@@ -813,13 +841,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const name = peek().value;
         if (tokens[pos + 1]?.type === 'COLON') {
           // name: Type — named field (trailing colon)
-          consume(); // name
-          consume(); // COLON
+          take(); // name
+          take(); // COLON
           const type = parseType();
           inputs.push({ name, type });
         } else if (tokens[pos + 1]?.type === 'IDENT') {
           // name Type — named field (whitespace)
-          consume(); // name
+          take(); // name
           const type = parseType();
           inputs.push({ name, type });
         } else {
@@ -840,14 +868,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // by function definitions. Nothing can be read from it, so it's always `=>`.
     if (peek().type === 'DOT') {
       if (arrow !== '=>') throw new Error(`'${arrow} .' has nothing to read — a silent function is '=> .'`);
-      consume();
+      take();
       return { ...AST.functionType(inputs, [], true), arrow };
     }
     // `=> self`: writes, and yields its own receiver. `-> self` is the identity
     // function. Like `.`, `self` stands alone.
     if (peek().type === 'KEYWORD' && peek().value === 'self') {
       if (arrow === '~>') throw new Error("'~> self' has nothing to read — write '=> self', or '-> self' if it's the identity function");
-      consume();
+      take();
       return { ...AST.functionType(inputs, []), returnsSelf: true, arrow };
     }
     const parseOutputs = () => {
@@ -859,13 +887,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           const name = peek().value;
           if (tokens[pos + 1]?.type === 'COLON') {
             // name: Type — named field (trailing colon)
-            consume(); // name
-            consume(); // COLON
+            take(); // name
+            take(); // COLON
             const type = parseType();
             outputs.push({ name, type });
           } else if (tokens[pos + 1]?.type === 'IDENT') {
             // name Type — named field (whitespace)
-            consume(); // name
+            take(); // name
             const type = parseType();
             outputs.push({ name, type });
           } else {
@@ -884,14 +912,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // `-> (Integer) | (Text)`: what comes back depends on the path.
     const alternatives = [outputs];
     while (peek().type === 'PIPE' && tokens[pos + 1]?.type === 'LPAREN') {
-      consume();
+      take();
       alternatives.push(parseOutputs());
     }
     const shapes = alternatives.length > 1 ? { alternatives } : {};
     // `=> (Integer) | self`: some paths yield a value and others the receiver.
     if (peek().type === 'PIPE' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1].value === 'self') {
-      consume();
-      consume();
+      take();
+      take();
       return { ...AST.functionType(inputs, outputs), ...shapes, orSelf: true, arrow };
     }
     return { ...AST.functionType(inputs, outputs), ...shapes, arrow };
@@ -994,7 +1022,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Parse a lineal trailing block: = params = body
   // Used after over/reduce when the function is in lineal form
   function parseLinealTrailingBlock() {
-    consume(); // first =
+    take(); // first =
     skipNewlines();
 
     // Parse params between the two = delimiters
@@ -1004,7 +1032,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'EQUALS' && afterNewline) {
-        consume(); // second = delimiter
+        take(); // second = delimiter
         break;
       }
       if (isParamStart()) {
@@ -1142,8 +1170,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (isNamedArgKey()) {
-        const key = consume().value;
-        consume();
+        const key = take().value;
+        take();
         namedArgs[key] = parseExpr();
         hasNamed = true;
       } else {
@@ -1164,14 +1192,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'SIGIL') {
-        const name = consume().value;
+        const name = take().value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ name, typeName, positional: false });
       } else if (isNamedArgKey()) {
         // Named arg: key: value
-        const name = consume().value;
-        consume(); // COLON
+        const name = take().value;
+        take(); // COLON
         const expr = parseExpr();
         args.push({ name, expr, typeName: null, positional: false });
       } else {
@@ -1222,11 +1250,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     expect('RPAREN');
     skipNewlines();
-    if (peek().type === '->') { inSignature++; ctorArrow = consume().value; inSignature--; skipNewlines(); }
+    if (peek().type === '->') { inSignature++; ctorArrow = take().value; inSignature--; skipNewlines(); }
     if (peek().type !== 'STAR' || tokens[pos + 1]?.type !== 'LBRACE') {
       throw new Error(`Expected '*{ ... }' service interface after constructor params ${where}`);
     }
-    consume(); // *
+    take(); // *
     return ctorParams;
   }
 
@@ -1287,7 +1315,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         throw new Error(`Cannot publish param '${tokens[pos + 1].value}' of a function — '@' marks class and file params only`);
       }
       if (peek().type === 'ELLIPSIS') {
-        consume(); // ...
+        take(); // ...
         const name = expect('IDENT').value;
         let type = null;
         if (!isParamDelim() && peekIsType()) { type = parseType(); }
@@ -1297,28 +1325,28 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // name: ... — named param (external label = `name`).
-        const name = consume().value;
-        consume(); // COLON
+        const name = take().value;
+        take(); // COLON
         if (startsRenamedParam()) {
           // name: local Type — the caller passes `name`, the body sees `local`
           params.push(parseRenamedParam(name));
         } else if (isLoneNameAfterColon()) {
           // name: X — X is a type if one is in scope, else a local (resolved
           // after parsing: see resolveLoneNames)
-          params.push({ name, type: consume().value, positional: false, typeOrLocal: true });
+          params.push({ name, type: take().value, positional: false, typeOrLocal: true });
         } else if (peek().type === 'SIGIL') {
           // name: :accessor Type — remap to a sigil-marked local alias
-          const accessor = consume().value;
+          const accessor = take().value;
           let type = null;
           if (!isParamDelim() && peekIsType()) { type = parseType(); }
           params.push({ key: name, name: accessor, type, accessor });
         } else if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
           // name: * — named ref param (wildcard, no explicit type)
-          consume();
+          take();
           params.push({ name, type: 'Anything', positional: false, ref: true });
         } else if (peek().type === 'STAR') {
           // name: *Type — named ref param with explicit type
-          consume();
+          take();
           const type = parseType();
           params.push({ name, type, positional: false, ref: true });
         } else if (peek().type === 'AMPERSAND_IDENT') {
@@ -1339,10 +1367,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           params.push({ name, type, positional: false });
         }
       } else if (peek().type === 'IDENT') {
-        const name = consume().value;
+        const name = take().value;
         // *Type — positional ref param (prefix sigil)
         if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
-          consume(); // *
+          take(); // *
           const type = parseType();
           params.push({ name, type, positional: true, ref: true });
         } else if (peek().type === 'AMPERSAND_IDENT') {
@@ -1359,7 +1387,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       // Check for = default on the last-pushed param
       if (peek().type === 'EQUALS' && params.length > 0) {
-        consume(); // =
+        take(); // =
         const dv = parseDefaultValue();
         const p = params[params.length - 1];
         if (!p.type) p.type = typeOfDefault(p, dv);
@@ -1398,15 +1426,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   // Shared default-value helpers for parseFunctionParams
   function parseDefaultLiteral() {
-    if (peek().type === 'NUMBER') return makeNumLiteral(consume());
+    if (peek().type === 'NUMBER') return makeNumLiteral(take());
     if (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER') {
-      consume(); // -
-      const tok = consume();
+      take(); // -
+      const tok = take();
       return makeNumLiteral({ ...tok, value: '-' + tok.value });
     }
-    if (peek().type === 'STRING') return AST.stringLiteral(consume().value);
-    if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(consume().value === 'true');
-    if (peek().type === 'KEYWORD' && peek().value === 'null') { consume(); return AST.nullLiteral(); }
+    if (peek().type === 'STRING') return AST.stringLiteral(take().value);
+    if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) return AST.boolLiteral(take().value === 'true');
+    if (peek().type === 'KEYWORD' && peek().value === 'null') { take(); return AST.nullLiteral(); }
     if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') { consume(); consume(); return AST.objectLiteral([]); }
     throw new Error(`Expected literal default value, got ${peek().type} '${peek().value || ''}'`);
   }
@@ -1433,16 +1461,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         continue;
       }
       if (atSelfValue()) {
-        consume(); // self
+        take(); // self
         body.push({ ...AST.returnNode(selfReturnFields()), tailValue: true });
         continue;
       }
       if (isReturnKw()) {
-        consume();
+        take();
         if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
-          consume(); body.push(AST.silentTerminator()); break;
+          take(); body.push(AST.silentTerminator()); break;
         }
         body.push(AST.returnNode(parseReplyFields(true)));
         continue;
@@ -1465,17 +1493,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         continue;
       }
       if (peek().type === 'KEYWORD' && peek().value === 'catch') {
-        consume(); // 'catch'
+        take(); // 'catch'
         body.push(AST.exprStatement(parseCatchExpr()));
         continue;
       }
       if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
         // Label invocation as a statement (bare, empty parens, or value form).
-        const tok = consume();
+        const tok = take();
         const labelName = '#' + tok.value;
         let valueExpr = null;
         if (peek().type === 'LPAREN') {
-          consume();
+          take();
           if (peek().type !== 'RPAREN') valueExpr = parseExpr();
           expect('RPAREN');
         }
@@ -1483,7 +1511,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         continue;
       }
       if (peek().type === 'KEYWORD' && peek().value === 'if') {
-        consume(); // 'if'
+        take(); // 'if'
         const _prevBare = bareFuncAllowed;
         bareFuncAllowed = false;
         const cond = parseExpr();
@@ -1497,10 +1525,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         let elseBranch = null;
         skipNewlines();
         if (peek().type === 'KEYWORD' && peek().value === 'else') {
-          consume(); // else
+          take(); // else
           skipNewlines();
           if (peek().type === 'KEYWORD' && peek().value === 'if') {
-            consume(); // if
+            take(); // if
             elseBranch = parseIfExpr();
           } else {
             elseBranch = parseIfBranch();
@@ -1511,27 +1539,27 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-        const name = consume().value;
+        const name = take().value;
         if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-        consume(); // SET (<-) or UPDATE (<|)
+        take(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
         body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
       } else if (isTypedAssignStart(true)) {
         parseTypedAssign(body);
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
-        consume(); // EQUALS
+        const name = take().value;
+        take(); // EQUALS
         declareLocal(name);
         const value = parseRHSValue();
         body.push(value.type === 'TypedValue'
           ? AST.typedAssign(name, value.typeName, value.expr)
           : AST.assign(name, value));
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
-        consume(); // EQUALS
+        const name = take().value;
+        take(); // EQUALS
         const value = parseExpr();
         body.push(AST.stateAssign(name, value));
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN') {
@@ -1545,13 +1573,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   }
 
   function parseRepeatStatement() {
-    consume(); // 'repeat'
+    take(); // 'repeat'
     const next = peek();
     if (next.type !== 'KEYWORD' || (next.value !== 'while' && next.value !== 'until')) {
       throw new Error(`Expected 'while' or 'until' after 'repeat', got ${next.type} '${next.value || ''}'`);
     }
     const negated = next.value === 'until';
-    consume(); // 'while' or 'until'
+    take(); // 'while' or 'until'
     // Optional parens around condition — detect by scanning for matching ) followed by { or stmt
     let hasParen = false;
     if (peek().type === 'LPAREN') {
@@ -1564,12 +1592,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       const after = tokens[i + 1];
       hasParen = after && (after.type === 'LBRACE' || after.type === 'DOLLAR_IDENT' || (after.type === 'IDENT' && tokens[i + 2]?.type === 'EQUALS'));
     }
-    if (hasParen) consume();
+    if (hasParen) take();
     const cond = parseExpr();
     if (hasParen) expect('RPAREN');
     if (peek().type === 'LBRACE') {
       // Block form
-      consume();
+      take();
       const body = parseWhileBody();
       expect('RBRACE');
       return AST.whileStatement(cond, body, negated);
@@ -1578,24 +1606,24 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const body = [];
     if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
       const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-      const name = consume().value;
+      const name = take().value;
       if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-      consume(); // SET (<-) or UPDATE (<|)
+      take(); // SET (<-) or UPDATE (<|)
       const value = parseExpr();
       body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
     } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-      const name = consume().value;
-      consume(); // EQUALS
+      const name = take().value;
+      take(); // EQUALS
       const value = parseExpr();
       body.push(AST.stateAssign(name, value));
     } else if (isTypedAssignStart(true)) {
       parseTypedAssign(body);
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-      const name = consume().value;
-      consume(); // EQUALS
+      const name = take().value;
+      take(); // EQUALS
       declareLocal(name);
       const value = parseRHSValue();
       body.push(value.type === 'TypedValue'
@@ -1625,7 +1653,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       if (peek().type === 'DOT') {
         if (declCtx) throw trailingDotError();
-        consume();
+        take();
         body.push(AST.silentTerminator());
         break;
       }
@@ -1641,14 +1669,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
       }
       if (atSelfValue()) {
-        consume(); // self
+        take(); // self
         body.push({ ...AST.returnNode(selfReturnFields()), tailValue: true });
       } else if (isReturnKw()) {
-        consume(); // 'return'
+        take(); // 'return'
         if (silentReturn()) { skipNewlines(); body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
-          consume(); // '.'
+          take(); // '.'
           body.push(AST.silentTerminator());
           break;
         }
@@ -1656,7 +1684,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
         // Void marker `()` as tail expression — pushes empty Return that the
         // outer braced-body normalizer collapses to returnType = '()'.
-        consume(); consume();
+        take(); take();
         body.push(AST.returnNode([]));
         break;
       } else if (fieldSetAhead()) {
@@ -1664,21 +1692,21 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         body.push(parseFieldSet());
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-        const name = consume().value;
+        const name = take().value;
         if (!isRef(name)) {
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-        consume(); // SET (<-) or UPDATE (<|)
+        take(); // SET (<-) or UPDATE (<|)
         // Check if first arg is named (key: value)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];
-          const key = consume().value; consume(); // COLON
+          const key = take().value; take(); // COLON
           args.push({ name: key, expr: parseExpr(), positional: false });
           while (peek().type === 'COMMA') {
-            consume();
+            take();
             if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-              const k = consume().value; consume(); // COLON
+              const k = take().value; take(); // COLON
               args.push({ name: k, expr: parseExpr(), positional: false });
             } else {
               args.push({ expr: parseExpr(), positional: true });
@@ -1690,9 +1718,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           if (peek().type === 'COMMA') {
             const args = [{ expr: firstExpr, positional: true }];
             while (peek().type === 'COMMA') {
-              consume();
+              take();
               if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-                const key = consume().value; consume(); // COLON
+                const key = take().value; take(); // COLON
                 args.push({ name: key, expr: parseExpr(), positional: false });
               } else {
                 args.push({ expr: parseExpr(), positional: true });
@@ -1709,7 +1737,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
-        const name = consume().value;
+        const name = take().value;
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
@@ -1742,16 +1770,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           body.push(stmt);
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
+        const name = take().value;
         if (isRef(name)) {
           throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to set`);
         }
-        consume(); // EQUALS
+        take(); // EQUALS
         declareLocal(name);
         // name = *TypeName(args) — ref constructor form (prefix `*` is the
         // cell sigil; what follows must be a scalar core type with a call).
         if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
-          consume(); // *
+          take(); // *
           const typeName = parseType();
           if (peek().type !== 'LPAREN') {
             throw new Error(`Expected '(' after '*${typeName}'`);
@@ -1781,8 +1809,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           }
         }
       } else if (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = '#' + consume().value;
-        consume(); // EQUALS
+        const name = '#' + take().value;
+        take(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') {
           functionNames.add(name);
@@ -1793,8 +1821,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           body.push(AST.assign(name, value));
         }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
-        consume(); // EQUALS
+        const name = take().value;
+        take(); // EQUALS
         const value = parseExpr();
         body.push(AST.stateAssign(name, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
@@ -1844,7 +1872,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       params = parseFunctionParamsParen();
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
       // Bare-param form: name -> expr (single generic param, no type)
-      const name = consume().value;
+      const name = take().value;
       params = [{ name, type: null, positional: true }];
     } else {
       params = []; // no-arg: { body }
@@ -1925,10 +1953,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     };
     // Explicit `->` body marker (everything except no-arg `{ ... }` lambdas).
     if (peek().type === '->') {
-      consume(); // ->
+      take(); // ->
       // Silent body: `-> .`
       if (peek().type === 'DOT') {
-        consume();
+        take();
         returnType = '.';
         readonlyParamScopes.pop();
         refVarScopes.pop();
@@ -1937,7 +1965,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       // Void body: `-> ()` (empty reply, distinct from silent)
       if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
-        consume(); consume();
+        take(); take();
         returnType = '()';
         readonlyParamScopes.pop();
         refVarScopes.pop();
@@ -1953,15 +1981,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // Mirrors Path 2b of the PIPE-form below.
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE') && isRef(tokens[pos].value)) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-        const name = consume().value;
-        consume(); // SET or UPDATE
+        const name = take().value;
+        take(); // SET or UPDATE
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
           const setArgs = [{ expr: firstExpr, positional: true }];
           while (peek().type === 'COMMA') {
-            consume();
+            take();
             if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-              const key = consume().value; consume();
+              const key = take().value; take();
               setArgs.push({ name: key, expr: parseExpr(), positional: false });
             } else {
               setArgs.push({ expr: parseExpr(), positional: true });
@@ -1969,7 +1997,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           }
           const body = [AST.actorSetStatement(name, setArgs, { updateOp: isUpdate ? '<|' : undefined })];
           skipNewlines();
-          if (peek().type === 'DOT') { consume(); returnType = '.'; }
+          if (peek().type === 'DOT') { take(); returnType = '.'; }
           readonlyParamScopes.pop();
           refVarScopes.pop();
           localScopes.pop();
@@ -1977,7 +2005,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
         const body = [AST.setStatement(name, firstExpr, { updateOp: isUpdate ? '<|' : undefined })];
         skipNewlines();
-        if (peek().type === 'DOT') { consume(); returnType = '.'; }
+        if (peek().type === 'DOT') { take(); returnType = '.'; }
         readonlyParamScopes.pop();
         refVarScopes.pop();
         localScopes.pop();
@@ -1985,9 +2013,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       const expr = parseExpr();
       skipNewlines();
-      if (peek().type === 'DOT') { consume(); returnType = '.'; }
+      if (peek().type === 'DOT') { take(); returnType = '.'; }
       else if (isTypeAttestation()) { returnType = consumeTypeAttestation(); }
-      else if (peek().type === 'COLON') { consume(); returnType = parseType(); }
+      else if (peek().type === 'COLON') { take(); returnType = parseType(); }
       readonlyParamScopes.pop();
       refVarScopes.pop();
       localScopes.pop();
@@ -2011,7 +2039,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       return AST.ifBranch({ body });
     }
     if (peek().type === '->') {
-      consume(); // ->
+      take(); // ->
       return AST.ifBranch({ body: [AST.returnNode(parseReplyFields(true))] });
     }
     const expr = parseExpr();
@@ -2033,17 +2061,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     bareFuncAllowed = false;
     const cond = parseExpr();
     bareFuncAllowed = _prevBare;
-    // Consume optional type annotation on the condition (e.g. `if 0 : Integer ...`)
-    if (isTypeAttestation()) {
-      consumeTypeAttestation();
-    }
     const thenBranch = parseIfBranch();
     skipNewlines();
     let elseBranch = null;
     if (peek().type === 'KEYWORD' && peek().value === 'else') {
-      consume(); // else
+      take(); // else
       if (peek().type === 'KEYWORD' && peek().value === 'if') {
-        consume(); // if — else-if chain
+        take(); // if — else-if chain
         elseBranch = parseIfExpr();
       } else {
         elseBranch = parseIfBranch();
@@ -2090,7 +2114,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // Parse first expression with IDENT+fn-start disambiguation
       let expr1;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isParenFunctionStart(pos+1)) {
-        expr1 = AST.identifier(consume().value );
+        expr1 = AST.identifier(take().value );
       } else {
         expr1 = parseExpr();
       }
@@ -2106,7 +2130,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // Have a comma — check if there's a second comma (3-arg form with explicit fn ref)
       let expr2;
       if (peek().type === 'IDENT' && tokens[pos+1]?.type === 'LPAREN' && isParenFunctionStart(pos+1)) {
-        expr2 = AST.identifier(consume().value );
+        expr2 = AST.identifier(take().value );
       } else {
         expr2 = parseExpr();
       }
@@ -2143,7 +2167,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // No-paren form: over collection, fn  OR  over collection [trailing-block]
       const collection = parseExpr();
       if (peek().type === 'COMMA') {
-        consume();
+        take();
         const fn = parsePrimary();
         requireFunctionRef(fn);
         return AST.overExpr(collection, fn);
@@ -2158,14 +2182,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   }
 
   function parseXmlConstructor() {
-    consume(); // <
-    const name = consume().value; // IDENT (constructor name)
+    take(); // <
+    const name = take().value; // IDENT (constructor name)
     const attrs = {};
     // Parse attributes until /> or >
     while (peek().type !== 'EOF') {
       // Self-closing: />
       if (peek().type === 'SLASH' && tokens[pos + 1]?.type === 'GT') {
-        consume(); consume(); // / >
+        take(); take(); // / >
         break;
       }
       if (peek().type === 'NEWLINE') { consume(); continue; }
@@ -2174,11 +2198,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peek().type !== 'IDENT') {
         throw new Error(`Expected attribute name or '/>' in XML tag <${name}>, got ${peek().type} '${peek().value || ''}'`);
       }
-      const attrName = consume().value;
+      const attrName = take().value;
       expect('EQUALS');
       let attrValue;
       if (peek().type === 'STRING') {
-        attrValue = AST.stringLiteral(consume().value);
+        attrValue = AST.stringLiteral(take().value);
       } else if (peek().type === 'LBRACE') {
         consume(); // {
         attrValue = parseExpr();
@@ -2218,7 +2242,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       (next.value === 'over' || next.value === 'repeat' || next.value === 'if');
     const isBlockBrace = next?.type === 'LBRACE';
     if (!isBlockKeyword && !isBlockBrace) return null;
-    consume(); // HASH_IDENT
+    take(); // HASH_IDENT
     labelStack.push(labelName);
     let body;
     try {
@@ -2244,8 +2268,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (closingName !== labelName) {
         throw new Error(`end${closingName} does not match opening ${labelName}`);
       }
-      consume(); // 'end'
-      consume(); // HASH_IDENT
+      take(); // 'end'
+      take(); // HASH_IDENT
     }
     // Determine isVoid by inspecting collected invocations (mirrors parseCatchExpr).
     const invokes = collectLabelInvokesForLabel(body, labelName);
@@ -2276,7 +2300,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     if (peek().type !== 'HASH_IDENT') {
       throw new Error(`Expected #label after 'catch', got ${peek().type} '${peek().value ?? ''}'`);
     }
-    const labelTok = consume();
+    const labelTok = take();
     const labelName = '#' + labelTok.value;
     if (labelStack.includes(labelName)) {
       throw new Error(`${labelName} shadows outer ${labelName}`);
@@ -2332,9 +2356,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   const receiverEnd = () => atPublicName() ? pos + 2
     : peek().type === 'IDENT' || atClass() ? pos + 1 : -1;
   function consumeReceiver() {
-    if (atPublicName()) { consume(); return '@' + consume().value; }
-    if (atClass()) { consume(); return CLASS_SELF; }
-    return consume().value;
+    if (atPublicName()) { take(); return '@' + take().value; }
+    if (atClass()) { take(); return CLASS_SELF; }
+    return take().value;
   }
   // `class.field <- v`, `C.field <- v`, `C::field <- v`: the receiver's name
   // and the field. After `::` the field is a protected one.
@@ -2348,10 +2372,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseFieldSet() {
     if (atSuper()) return parseSuperSet();
     const objName = consumeReceiver();
-    const isProtected = consume().type === 'DCOLON';
-    const fieldName = consume().value;
+    const isProtected = take().type === 'DCOLON';
+    const fieldName = take().value;
     const isUpdate = peek().type === 'UPDATE';
-    consume(); // SET (<-) or UPDATE (<|)
+    take(); // SET (<-) or UPDATE (<|)
     const value = parseExpr();
     const set = AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined });
     if (isProtected) set.protected = true;
@@ -2380,18 +2404,18 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseSuperReceiver() {
     const end = superEnd();
     if (end < 0) throw new Error(SUPER_NOT_A_VALUE);
-    consume(); // super
+    take(); // super
     let layer = null;
     if (peek().type === 'LBRACKET') {
-      consume();
-      const sigil = peek().type === 'AT' ? (consume(), '@') : '';
+      take();
+      const sigil = peek().type === 'AT' ? (take(), '@') : '';
       layer = sigil + expect('IDENT').value;
       expect('RBRACKET');
     }
     const sep = peek().type;
     if ((sep !== 'DCOLON' && sep !== 'DOT') || tokens[pos + 1]?.type !== 'IDENT') throw new Error(SUPER_NOT_A_VALUE);
-    consume();
-    return { layer, name: consume().value, isPublic: sep === 'DOT' };
+    take();
+    return { layer, name: take().value, isPublic: sep === 'DOT' };
   }
   function parseSuper() {
     const { layer, name, isPublic } = parseSuperReceiver();
@@ -2406,7 +2430,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   };
   function parseSuperSet() {
     const { layer, name, isPublic } = parseSuperReceiver();
-    const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+    const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
     return { type: 'SuperSet', layer, name, isPublic, value: parseExpr(), ...(updateOp && { updateOp }) };
   }
 
@@ -2463,13 +2487,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // below, because a label invocation is a control-flow leaf, not a value
     // identifier, and never participates in postfix calls/subscripts.
     if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
-      const tok = consume();
+      const tok = take();
       const labelName = '#' + tok.value;
       // Bare `#label`, empty `#label()`, or value-carrying `#label(expr)`.
       if (peek().type === 'LPAREN') {
         consume(); // LPAREN
         if (peek().type === 'RPAREN') {
-          consume();
+          take();
           return AST.labelInvoke(labelName);
         }
         const valueExpr = parseExpr();
@@ -2498,12 +2522,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
     // ── HTML literal: <tag>content</tag> ───────────────────────────────
     if (peek().type === 'HTML_LITERAL') {
-      return AST.htmlLiteral(consume().value);
+      return AST.htmlLiteral(take().value);
     }
 
     // ── HTML constructor: <tag>text{{expr}}more</tag> → DomConstructor ───
     if (peek().type === 'HTML_CONSTRUCTOR') {
-      const tok = consume();
+      const tok = take();
       if (tok.bvBlock !== undefined) {
         // Element with @decl or other Brevity attrs — parse the attr block as
         // an actor body (token-stream swap) and return AnonymousHtmlActor.
@@ -2523,7 +2547,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // a value, so the path must be followed by its construction.
     if (qualifiedAhead()) {
       const path = [consumeReceiver()];
-      while (peek().type === 'DCOLON' && tokens[pos + 1]?.type === 'IDENT') { consume(); path.push(consume().value); }
+      while (peek().type === 'DCOLON' && tokens[pos + 1]?.type === 'IDENT') { take(); path.push(take().value); }
       if (peek().type !== 'LPAREN') {
         if (path.length === 2) return { type: 'QualifiedMember', object: AST.identifier(path[0]), name: path[1] };
         throw new Error(`'${path.join('::')}' is a type, not a value`);
@@ -2532,7 +2556,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       return { type: 'TypeConstruction', typeName: path[path.length - 1], qualifier: path.slice(0, -1), args };
     }
     if (peek().type === 'IDENT' && peek().value === 'Object' && tokens[pos + 1]?.type === 'LPAREN') {
-      const tok = consume();
+      const tok = take();
       return parseObjectConstructor(tok.value);
     }
 
@@ -2540,12 +2564,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     if (peek().type === 'KEYWORD' && peek().value === 'use') {
       result = parseUseExpr();
     } else if (atClass()) {
-      consume();
+      take();
       result = AST.identifier(CLASS_SELF);
     } else if (atSuper()) {
       result = parseSuper();
     } else if (atBareBuiltinCall()) {
-      const methodName = consume().value;
+      const methodName = take().value;
       consume(); // LPAREN
       const args = [parseExpr()];
       while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
@@ -2560,20 +2584,20 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         result = AST.textMethodExpr(methodName, args);
       }
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
-      const name = consume().value;
+      const name = take().value;
       result = parseForwardCall(name);
     } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
       // *name — call-site write-capability grant on a ref cell.
       // Mirrors the *Type sigil in param position. Caller must own the cell.
       // Per notes/capability-sigils-2026-05-06.md.
-      consume(); // *
-      const name = consume().value;
+      take(); // *
+      const name = take().value;
       if (!isRef(name)) {
         throw new Error(`Cannot grant write capability — '${name}' is not a ref cell`);
       }
       result = AST.refArg(name);
     } else {
-      const tok = consume();
+      const tok = take();
       if (tok.type === 'LPAREN') {
         // Grouped expression. `(expr)?` is the presence-check operator —
         // returns Boolean. The required parens prevent collision with
@@ -2585,7 +2609,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         bareFuncAllowed = _prevBare;
         expect('RPAREN');
         if (peek().type === 'QUESTION') {
-          consume();
+          take();
           result = AST.presenceCheck(inner);
         } else {
           result = inner;
@@ -2636,7 +2660,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         // (addRef('@name') was called), produce RefRead('@name') so template
         // interpolations and expressions react to the underlying cell.
         // Otherwise it's a reference to a public handler (Identifier).
-        const name = '@' + consume().value;
+        const name = '@' + take().value;
         result = isRef(name) ? AST.refRead(name) : AST.identifier(name);
       } else if (tok.type === 'KEYWORD' && tok.value === 'self') {
         // `self` as a value: the actor's own address, `#<:>`.
@@ -2657,7 +2681,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // Subscript: expr[0] or expr["key"]
     while (peek().type === 'LBRACKET') {
       consume(); // [
-      const keyTok = consume();
+      const keyTok = take();
       expect('RBRACKET');
       if (keyTok.type === 'NUMBER') {
         result = AST.indexExpr(result, { index: keyTok.value });
@@ -2674,8 +2698,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // `args` are forwarded to the publisher's fn body per subscription;
       // `params` bind the incoming re payload on the caller side.
       if (_isSubscribe()) {
-        consume(); // DOT
-        consume(); // subscribe
+        take(); // DOT
+        take(); // subscribe
         let subArgs = [];
         let subParams = [];
         // (args) — only if next isn't a `(params) ->` / `(params) {` shape.
@@ -2686,7 +2710,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           subParams = parseFunctionParamsParen();
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
           // Bare-param form: .subscribe(args) name -> body
-          const pName = consume().value;
+          const pName = take().value;
           subParams.push({ name: pName, type: null, positional: true });
         }
         for (const p of subParams) if (p.name) declareLocal(p.name);
@@ -2697,7 +2721,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const outerDecl = declCtx;
         declCtx = null;
         if (peek().type === 'LBRACE') {
-          consume();
+          take();
           subBody = parseBody('RBRACE');
           skipNewlines();
           expect('RBRACE');
@@ -2708,10 +2732,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         result = AST.subscribeCall(result, subParams, subBody, subArgs);
         break;
       }
-      consume(); // DOT
-      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || LIST_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+      take(); // DOT
+      let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || LIST_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? take().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
-        consume(); // !
+        take(); // !
         method += '!';
       }
       const cleanMethod = method.endsWith('!') ? method.slice(0, -1) : method;
@@ -2823,7 +2847,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // (`x.m!...`). `elidedDot` lets validation drop the dot again for a
     // foreign function its doc makes silent under a plain name.
     if (peek().type === 'ELLIPSIS') {
-      consume();
+      take();
       const silent = (name) => name.endsWith('!') ? name : name + '.';
       if (result.type === 'Identifier' || result.type === 'RefRead') {
         result = AST.functionCallExpr(AST.identifier(silent(result.name)), []);
@@ -2860,7 +2884,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseExpExpr() {
     let base = parsePrimary();
     if (peek().type === 'POWER') {
-      consume();
+      take();
       return AST.binaryExpr('**', base, parseExpExpr());
     }
     return base;
@@ -2869,7 +2893,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseMulExpr() {
     let left = parseExpExpr();
     while (['STAR', 'SLASH', 'PERCENT'].includes(peek().type)) {
-      const op = consume().value;
+      const op = take().value;
       left = AST.binaryExpr(op, left, parseExpExpr());
     }
     return left;
@@ -2878,7 +2902,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseAddExpr() {
     let left = parseMulExpr();
     while (['PLUS', 'MINUS'].includes(peek().type)) {
-      const op = consume().value;
+      const op = take().value;
       left = AST.binaryExpr(op, left, parseMulExpr());
     }
     return left;
@@ -2893,12 +2917,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseExpr() {
     const inWriteRhs = tokens[pos - 1]?.type === 'SET' || tokens[pos - 1]?.type === 'UPDATE';
     if (!inWriteRhs && peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
-      const name = consume().value;
+      const name = take().value;
       if (!isRef(name)) {
         if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
         throw new Error(`Cannot set '${name}' — only '*Type' variables support '<-'`);
       }
-      const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+      const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
       return { type: 'SetExpr', name, value: parseExpr(), updateOp };
     }
     const value = parseValueExpr();
@@ -2906,7 +2930,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     if (!inWriteRhs) throw new Error("The left side of '<-' must be a cell");
     const rest = [];
     while (atWriteOp()) {
-      const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+      const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
       rest.push({ value: parseValueExpr(), updateOp });
     }
     return { type: 'SetChain', first: value, rest };
@@ -2923,13 +2947,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       return AST.binaryExpr('>>', left, parseValueExpr());
     }
     if (CMP_OPS.has(peek().type)) {
-      const tok = consume();
+      const tok = take();
       left = AST.binaryExpr(CMP_OPS.get(tok.type), left, parseAddExpr());
     }
     // Slice 11 of types-implementation-plan-2026-04-27: `??` fallback.
     // Right-associative — `a ?? b ?? c` is `a ?? (b ?? c)`.
     if (peek().type === 'NULL_COALESCE') {
-      consume();
+      take();
       left = AST.binaryExpr('??', left, parseValueExpr());
     }
     return left;
@@ -2946,12 +2970,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   // Consume type attestation (`as Type`) and return the type
   function consumeTypeAttestation() {
-    consume(); // 'as'
+    take(); // 'as'
     return parseType();
   }
 
   function parseSigilWithType() {
-    const name = consume().value; // SIGIL
+    const name = take().value; // SIGIL
     let typeName = null;
     if (isTypeAttestation()) {
       typeName = consumeTypeAttestation();
@@ -2969,7 +2993,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   function parseReplyFields(sameLine = false) {
     if (atSelfValue() && tokens[pos + 1]?.type !== 'COMMA') {
-      consume(); // self
+      take(); // self
       return selfReturnFields();
     }
     const fields = parseReplyFieldList(sameLine);
@@ -2981,7 +3005,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseReplyFieldList(sameLine) {
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
-    if (hasParen) consume();
+    if (hasParen) take();
     // Fields are separated by a comma or a line break; a field directly after
     // another, on the same line, ends the list.
     let separated = 0;
@@ -3002,7 +3026,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'NUMBER') {
-        const numTok = consume();
+        const numTok = take();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: makeNumLiteral(numTok), type: typeName, positional: true });
@@ -3010,15 +3034,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const { name, type: fieldType } = parseSigilWithType();
         fields.push({ sigil: name, type: fieldType, ref: isRef(name) });
       } else if (peek().type === 'IDENT') {
-        const name = consume().value;
+        const name = take().value;
         if (peek().type === 'KEYWORD' && peek().value === 'as') {
           // positional with as-attestation: name as Type
           const typeName = consumeTypeAttestation();
           fields.push({ name, type: typeName, positional: true });
         } else if (peek().type === 'COLON') {
-          consume();
+          take();
           // key-value: key: expr [as Type]
-          const value = atSelfValue() ? (consume(), AST.selfValue()) : parseExpr();
+          const value = atSelfValue() ? (take(), AST.selfValue()) : parseExpr();
           let fieldType = null;
           if (isTypeAttestation()) fieldType = consumeTypeAttestation();
           fields.push({ key: name, value, type: fieldType });
@@ -3027,8 +3051,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           let exprNode = AST.identifier(name);
           while (peek().type === 'LPAREN' || peek().type === 'DOT') {
             if (peek().type === 'DOT') {
-              consume(); // DOT
-              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? consume().value : expect('IDENT').value;
+              take(); // DOT
+              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? take().value : expect('IDENT').value;
               if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
                 expect('LPAREN');
                 const args = [parseExpr()];
@@ -3076,7 +3100,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             }
           }
           while (['PLUS', 'MINUS', 'STAR', 'SLASH', 'PERCENT', 'POWER'].includes(peek().type)) {
-            const tok = consume();
+            const tok = take();
             const op = tok.type === 'POWER' ? '**' : tok.value;
             exprNode = AST.binaryExpr(op, exprNode, parsePrimary());
           }
@@ -3096,17 +3120,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) {
-        const boolTok = consume();
+        const boolTok = take();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: AST.boolLiteral(boolTok.value === 'true' ), type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && peek().value === 'null') {
-        consume();
+        take();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: AST.nullLiteral(), type: typeName, positional: true });
       } else if (peek().type === 'DOLLAR_IDENT') {
-        const name = consume().value;
+        const name = take().value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: AST.stateVar(name), type: typeName, positional: true, name: '$' + name });
@@ -3117,17 +3141,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         fields.push({ expr, type: typeName, positional: true });
       } else if (peek().type === 'KEYWORD' && tokens[pos + 1]?.type === 'COLON') {
         // Keyword used as named field key: type: expr, set: expr, etc.
-        const name = consume().value;
-        consume(); // COLON
-        const value = atSelfValue() ? (consume(), AST.selfValue()) : parseExpr();
+        const name = take().value;
+        take(); // COLON
+        const value = atSelfValue() ? (take(), AST.selfValue()) : parseExpr();
         let fieldType = null;
         if (isTypeAttestation()) fieldType = consumeTypeAttestation();
         fields.push({ key: name, value, type: fieldType });
       } else if (atSelfValue()) {
-        consume(); // self
+        take(); // self
         fields.push({ expr: AST.selfValue(), type: null, positional: true });
       } else if (peek().type === 'HTML_CONSTRUCTOR') {
-        const tok = consume();
+        const tok = take();
         let domExpr;
         if (tok.bvBlock !== undefined) {
           domExpr = AST.anonymousHtmlActor(tok.tag, parseAttrBlock(tok.bvBlock), parseDomChildren(tok.children));
@@ -3138,7 +3162,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ expr: domExpr, type: typeName, positional: true });
       } else if (peek().type === 'ELLIPSIS') {
-        consume();
+        take();
         const name = expect('IDENT').value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -3174,23 +3198,23 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (!paren && peek().type === 'EQUALS') break;
 
       if (peek().type === 'SIGIL') {
-        const name = consume().value;
+        const name = take().value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         else if (peek().type === 'IDENT') typeName = parseType();
         pattern.push({ named: true, name, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
         // key-mapped: key: local [Type]  OR  named: key: Type  OR  key: _  (discard)
-        const first = consume().value;
-        consume(); // COLON
+        const first = take().value;
+        take(); // COLON
         if (isLoneNameAfterColon()) {
           // key: X — X is a type if one is in scope (named field, typed),
           // else the local the field binds to (resolved after parsing: see
           // resolveLoneNames)
-          pattern.push({ named: true, name: first, type: consume().value, typeOrLocal: true });
+          pattern.push({ named: true, name: first, type: take().value, typeOrLocal: true });
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
           // key: local Type
-          const localName = consume().value;
+          const localName = take().value;
           pattern.push({ key: first, name: localName, type: parseType() });
         } else if (peek().type === 'IDENT') {
           // key: Type — a qualified, union or `of` type
@@ -3199,7 +3223,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           // `key: _` — consumes the key so a trailing `...` skips it. Only
           // meaningful for DI-namespace destructuring; ignored by object
           // destructure since positional alignment doesn't apply.
-          consume();
+          take();
           pattern.push({ key: first, discard: true });
         } else {
           // key: (no local name, no type — just named)
@@ -3207,26 +3231,26 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
         // typed positional: a Type
-        const name = consume().value;
+        const name = take().value;
         const type = parseType();
         pattern.push({ positional: true, name, idx: positionalIdx++, type });
       } else if (peek().type === 'DISCARD') {
-        consume(); // _
+        take(); // _
         pattern.push({ discard: true, idx: positionalIdx++ });
       } else if (peek().type === 'ELLIPSIS') {
         // Spread marker for DI-namespace destructuring: `(...) = HTML`.
         // Valid only when the RHS is a DI dep; validator enforces that.
-        consume();
+        take();
         pattern.push({ spread: true });
       } else if (peek().type === 'IDENT') {
-        const name = consume().value;
+        const name = take().value;
         pattern.push({ positional: true, name, idx: positionalIdx++, type: null });
       } else {
         break;
       }
 
       if (peek().type === 'COMMA') {
-        consume();
+        take();
         // trailing comma — if next is terminator, we're done
         if (paren && peek().type === 'RPAREN') break;
         if (!paren && peek().type === 'EQUALS') break;
@@ -3261,7 +3285,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const args = [];
     while (true) {
       if (peek().type === 'NUMBER') {
-        const numTok = consume();
+        const numTok = take();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr: makeNumLiteral(numTok), type: typeName });
@@ -3271,8 +3295,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         args.push({ positional: true, expr, type: typeName });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const key = consume().value;
-        consume(); // COLON
+        const key = take().value;
+        take(); // COLON
         const expr = parseExpr();
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
@@ -3291,9 +3315,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { consume(); continue; }
       if (peek().type === 'ELLIPSIS') {
-        consume();
+        take();
         if (peek().type === 'DISCARD') {
-          consume(); pattern.push({ rest: true, discard: true });
+          take(); pattern.push({ rest: true, discard: true });
         } else {
           const name = expect('IDENT').value;
           let type = null;
@@ -3301,9 +3325,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           pattern.push({ rest: true, name, type });
         }
       } else if (peek().type === 'DISCARD') {
-        consume(); pattern.push({ discard: true });
+        take(); pattern.push({ discard: true });
       } else {
-        const name = consume().value;
+        const name = take().value;
         let type = null;
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type !== 'EQUALS') { type = parseType(); }
         pattern.push({ name, type });
@@ -3400,7 +3424,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     // Check for key-value: IDENT was the key, COLON follows (non-type)
     if (peek().type === 'COLON' && value.type === 'Identifier' && firstType === null) {
-      consume(); // COLON
+      take(); // COLON
       const kvExpr = parseExpr();
       let kvType = null;
       if (isTypeAttestation()) {
@@ -3429,12 +3453,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   function parseRHSObjectElem() {
     if (peek().type === 'SIGIL') {
-      const name = consume().value;
+      const name = take().value;
       // :name → named field, var name = key name
       return { key: name, expr: AST.identifier(name), type: null };
     }
     if (peek().type === 'NUMBER') {
-      const numTok = consume();
+      const numTok = take();
       let typeName = null;
       if (isTypeAttestation()) typeName = consumeTypeAttestation();
       return { positional: true, expr: makeNumLiteral(numTok), type: typeName };
@@ -3447,14 +3471,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     // IDENT as Type → positional typed variable
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'as') {
-      const name = consume().value;
+      const name = take().value;
       const typeName = consumeTypeAttestation();
       return { positional: true, expr: AST.identifier(name), type: typeName };
     }
     // IDENT COLON → key-value (k: expr [as Type])
     if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-      const key = consume().value;
-      consume(); // COLON
+      const key = take().value;
+      take(); // COLON
       const expr = parseExpr();
       let typeName = null;
       if (isTypeAttestation()) {
@@ -3464,7 +3488,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     // bare IDENT → positional untyped
     if (peek().type === 'IDENT') {
-      const name = consume().value;
+      const name = take().value;
       return { positional: true, expr: AST.identifier(name), type: null };
     }
     return null;
@@ -3491,21 +3515,21 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseTypedAssign(body) {
     // name Type = expr   — typed assignment (whitespace between name and type)
     // name *Type = expr  — ref declaration (prefix `*` is the cell sigil)
-    const nameTok = consume();
+    const nameTok = take();
     const name = nameTok.type === 'HASH_IDENT' ? '#' + nameTok.value : nameTok.value;
     const isRefDecl = peek().type === 'STAR';
-    if (isRefDecl) consume(); // *
+    if (isRefDecl) take(); // *
     const typeName = parseType();
     if (!isRefDecl && isRef(name)) {
       throw new Error(`Cannot re-bind ref '${name}' with typed assignment — use '${name} <- value' to set`);
     }
-    consume(); // EQUALS
+    take(); // EQUALS
     declareLocal(name);
     if (isRefDecl) addRef(name, typeName);
     let value;
     // For Object type, check if RHS starts with sigil
     if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
-      consume(); // ingest
+      take(); // ingest
       let defaultValue = null;
       if (peek().type === 'LPAREN') {
         consume(); // (
@@ -3655,9 +3679,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     return false;
   }
   function parseRenamedParam(key) {
-    const name = consume().value;
+    const name = take().value;
     if (peek().type === 'STAR') {
-      consume(); // *
+      take(); // *
       if (peek().type === 'IDENT') return { key, name, type: parseType(), positional: false, ref: true };
       return { key, name, type: 'Anything', positional: false, ref: true };
     }
@@ -3695,7 +3719,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // ── Default value helpers ─────────────────────────────────────────────
     const tryParseDefault = () => {
       if (peek().type !== 'EQUALS') return null;
-      consume(); // =
+      take(); // =
       return parseDefaultValue();
     };
     const withDefault = (param, defaultValue) => {
@@ -3708,10 +3732,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
       // @name … — published param: the class answers `@name` with its value.
       // Accessor name is the external one (the key for `@key: local Type`).
-      consume(); // AT
+      take(); // AT
       const next = tokens[pos + 1]?.type;
       const p = peek().type === 'IDENT' && (next === 'RPAREN' || next === 'COMMA' || next === 'NEWLINE' || next === 'BLOCK_SEP')
-        ? { name: consume().value, type: 'Anything', positional: true }
+        ? { name: take().value, type: 'Anything', positional: true }
         : parseOneParam();
       if (!p || p.rest) throw new Error(`Expected a param after '@'`);
       p.accessor = p.key || p.name;
@@ -3720,8 +3744,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       // name: ... — named param (external label = `name`).
-      const first = consume().value;
-      consume(); // COLON
+      const first = take().value;
+      take(); // COLON
       if (startsRenamedParam()) {
         // name: local Type — the caller passes `name`, the body sees `local`
         return withDefault(parseRenamedParam(first), tryParseDefault());
@@ -3729,16 +3753,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (isLoneNameAfterColon()) {
         // name: X — X is a type if one is in scope, else a local (resolved
         // after parsing: see resolveLoneNames)
-        return withDefault({ name: first, type: consume().value, typeOrLocal: true }, tryParseDefault());
+        return withDefault({ name: first, type: take().value, typeOrLocal: true }, tryParseDefault());
       }
       if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
         // name: * — named ref param (wildcard, no explicit type)
-        consume();
+        take();
         return withDefault({ name: first, type: 'Anything', ref: true }, tryParseDefault());
       }
       if (peek().type === 'STAR') {
         // name: *Type — named ref param with explicit type
-        consume();
+        take();
         const type = parseType();
         return withDefault({ name: first, type, ref: true }, tryParseDefault());
       }
@@ -3757,10 +3781,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       return withDefault({ name: first, type }, tryParseDefault());
     } else if (peek().type === 'IDENT') {
-      const name = consume().value;
+      const name = take().value;
       // *Type — positional ref param with explicit type
       if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
-        consume(); // *
+        take(); // *
         const type = parseType();
         return withDefault({ name, type, positional: true, ref: true }, tryParseDefault());
       }
@@ -3773,7 +3797,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peekIsParamType()) { type = parseType(); }
       return withDefault({ name, type, positional: true }, tryParseDefault());
     } else if (peek().type === 'ELLIPSIS') {
-      consume();
+      take();
       const name = expect('IDENT').value;
       let typeName = null;
       if (peekIsParamType()) { typeName = parseType(); }
@@ -3830,15 +3854,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // = as lineal form section delimiter
       if (peek().type === 'EQUALS') {
         const savedPos = pos;
-        consume();           // eat the =
+        take();           // eat the =
         skipNewlines();
-        if (peek().type === 'EQUALS') { consume(); skipNewlines(); return []; }  // = = → explicit empty params
+        if (peek().type === 'EQUALS') { take(); skipNewlines(); return []; }  // = = → explicit empty params
         if (!isParamStart()) return [];  // no params → body follows
         const params = [];
         let foundDelimiter = false;
         try {
           while (true) {
-            if (peek().type === 'EQUALS') { consume(); foundDelimiter = true; break; }  // second = ends params
+            if (peek().type === 'EQUALS') { take(); foundDelimiter = true; break; }  // second = ends params
             if (peek().type === 'EOF') break;
             if (peek().type === 'NEWLINE') { consume(); continue; }
             if (peek().type === 'COMMA') { consume(); continue; }
@@ -3853,7 +3877,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
         // Backtrack: not a valid param list, treat as no params (body follows)
         pos = savedPos;
-        consume(); // re-eat the =
+        take(); // re-eat the =
         skipNewlines();
         return [];
       }
@@ -3905,24 +3929,24 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
       if (peek().type === 'DOT') {
         if (declCtx) throw trailingDotError();
-        consume();
+        take();
         body.push(AST.silentTerminator());
         break;
       }
 
       if (atSelfValue()) {
-        consume(); // self
+        take(); // self
         body.push({ ...AST.reply(selfReturnFields()), tailValue: true });
         break;
       }
 
       // Explicit `return` statement — the value-return form.
       if (isReturnKw()) {
-        consume();
+        take();
         if (silentReturn()) { body.push(AST.silentTerminator()); break; }
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
-          consume(); // `return .` — silent
+          take(); // `return .` — silent
           body.push(AST.silentTerminator());
           break;
         }
@@ -3936,10 +3960,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // arrow one-liner / body-opener (`@get = -> x`): the single tail is the
       // implicit return.
       if (peek().type === '->' && !stopToken && body.length === 0) {
-        consume();
+        take();
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
-          consume(); // `-> .` — silent one-liner
+          take(); // `-> .` — silent one-liner
           body.push(AST.silentTerminator());
           break;
         }
@@ -3967,16 +3991,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         body.push(parseFieldSet());
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-        const name = consume().value;
-        consume(); // SET (<-) or UPDATE (<|)
+        const name = take().value;
+        take(); // SET (<-) or UPDATE (<|)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];
-          const key = consume().value; consume();
+          const key = take().value; take();
           args.push({ name: key, expr: parseExpr(), positional: false });
           while (peek().type === 'COMMA') {
-            consume();
+            take();
             if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-              const k = consume().value; consume();
+              const k = take().value; take();
               args.push({ name: k, expr: parseExpr(), positional: false });
             } else {
               args.push({ expr: parseExpr(), positional: true });
@@ -3988,9 +4012,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           if (peek().type === 'COMMA') {
             const args = [{ expr: firstExpr, positional: true }];
             while (peek().type === 'COMMA') {
-              consume();
+              take();
               if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-                const key = consume().value; consume();
+                const key = take().value; take();
                 args.push({ name: key, expr: parseExpr(), positional: false });
               } else {
                 args.push({ expr: parseExpr(), positional: true });
@@ -4007,7 +4031,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
         parseTypedAssign(body);
       } else if (isBareTypeDeclStart()) {
-        const name = consume().value;
+        const name = take().value;
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
@@ -4023,26 +4047,26 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LT' && tokens[pos + 2]?.type === 'LT') {
         // Lambda overload append: fn << |params| { body }
-        const name = consume().value;
+        const name = take().value;
         consumeOverloadOp(); // <<
         const value = parseRHSValue();
         if (value.type !== 'Function') throw new Error(`Expected function after '${name} <<', got ${value.type}`);
         body.push(AST.assign(name, Object.assign(value, { overloadMode: 'append' })));
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
+        const name = take().value;
         if (isRef(name)) {
           throw new Error(`Cannot re-bind ref '${name}' with '=' — use '${name} <- value' to set`);
         }
-        consume(); // EQUALS
+        take(); // EQUALS
         declareLocal(name);
         // name = Function() — empty overload initializer
         if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
-          consume(); consume(); consume(); // Function ( )
+          take(); take(); take(); // Function ( )
           functionNames.add(name);
           body.push(AST.assign(name, Object.assign(AST.functionNode([], []), { emptyOverload: true })));
         // name = *TypeName(args) — ref constructor form
         } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
-          consume(); // *
+          take(); // *
           const typeName = parseType();
           if (peek().type !== 'LPAREN') {
             throw new Error(`Expected '(' after '*${typeName}'`);
@@ -4072,8 +4096,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           }
         }
       } else if (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = '#' + consume().value;
-        consume(); // EQUALS
+        const name = '#' + take().value;
+        take(); // EQUALS
         const value = parseRHSValue();
         if (value.type === 'Function') {
           functionNames.add(name);
@@ -4084,14 +4108,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           body.push(AST.assign(name, value));
         }
       } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
-        const name = consume().value;
-        consume(); // EQUALS
+        const name = take().value;
+        take(); // EQUALS
         const value = parseExpr();
         body.push(AST.stateAssign(name, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'repeat') {
         body.push(parseRepeatStatement());
       } else if (peek().type === 'KEYWORD' && peek().value === 'catch') {
-        consume(); // 'catch'
+        take(); // 'catch'
         const c = parseCatchExpr();
         // Value-carrying catch wraps as ImplicitReturn so the handler reply
         // path picks up its value when the catch sits at the function tail.
@@ -4099,17 +4123,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         body.push(c.isVoid ? AST.exprStatement(c) : AST.implicitReturn(c));
       } else if (peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value)) {
         // Label invocation as a statement (bare, empty parens, or value form).
-        const tok = consume();
+        const tok = take();
         const labelName = '#' + tok.value;
         let valueExpr = null;
         if (peek().type === 'LPAREN') {
-          consume();
+          take();
           if (peek().type !== 'RPAREN') valueExpr = parseExpr();
           expect('RPAREN');
         }
         body.push(AST.exprStatement(AST.labelInvoke(labelName, valueExpr)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
-        consume(); // 'if'
+        take(); // 'if'
         const _prevBare = bareFuncAllowed;
         bareFuncAllowed = false;
         const cond = parseExpr();
@@ -4122,10 +4146,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           let elseBranch = null;
           skipNewlines();
           if (peek().type === 'KEYWORD' && peek().value === 'else') {
-            consume(); // else
+            take(); // else
             skipNewlines();
             if (peek().type === 'KEYWORD' && peek().value === 'if') {
-              consume(); // if
+              take(); // if
               elseBranch = parseIfExpr();
             } else {
               elseBranch = parseIfBranch();
@@ -4139,12 +4163,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
                  !(peek().type === '->' || (peek().type === 'KEYWORD' && peek().value === 'else'))) {
             if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
               const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
-              const pName = consume().value;
+              const pName = take().value;
               if (!isRef(pName)) {
                 if (isReadonlyParam(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
                 throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
               }
-              consume(); // SET (<-) or UPDATE (<|)
+              take(); // SET (<-) or UPDATE (<|)
               ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
             } else {
               break;
@@ -4228,8 +4252,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   }
 
   function parsePublicFunction(constructorBody) {
-    consume(); // AT
-    const opTok = consume();
+    take(); // AT
+    const opTok = take();
     let op;
     if (opTok.type === 'KEYWORD' && opTok.value === 'new') throw new Error(NEW_RESERVED_MSG);
     if (opTok.type === 'IDENT' || opTok.type === 'KEYWORD') {
@@ -4244,7 +4268,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // cell) plus the published cell's getter. The actor is addressed by its
     // label: `@name` in its enclosing actor (`main @name`), not `@C/N`.
     if (tokens[pos]?.type === 'EQUALS' && (isSingletonStart(pos + 1) || isLinealSingletonStart(pos + 1)) && !scanChain(pos + 1)) {
-      consume(); // =
+      take(); // =
       const cls = `${op}_singleton`;
       const nested = parseSingletonMembers(cls);
       const classNode = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
@@ -4264,7 +4288,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const isPublicRef = tokens[pos]?.type === 'STAR' &&
       tokens[pos + 1]?.type === 'IDENT';
     if (isPublicRef) {
-      consume(); // *
+      take(); // *
       const typeName = parseType();
       skipNewlines();
       expect('EQUALS');
@@ -4306,7 +4330,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     // construct a type in scope — checked after parsing (resolveLoneNames).
     if (peek().type === 'EQUALS') {
       const savedPos = pos;
-      consume(); // EQUALS
+      take(); // EQUALS
       skipNewlines();
       const t = peek().type;
       // Exclude `Function(...)` — that's the empty-overload initializer form.
@@ -4371,11 +4395,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
     // ── Same-line operator: = (create), or already consumed <</>>/nothing ──
     if (overloadMode === 'create' && peek().type === 'EQUALS') {
-      consume(); // eat the =
+      take(); // eat the =
 
       // ── Function() — empty overload initializer ────────────────────
       if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
-        consume(); consume(); consume(); // Function ( )
+        take(); take(); take(); // Function ( )
         return AST.functionDecl('@' + op, [], [], { emptyOverload: true });
       }
       // ── Reject non-function values: @x = "hello", @x = 42, etc. ───
@@ -4397,7 +4421,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         let _li = pos;
         while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
         if (tokens[_li]?.type === 'STAR') {
-          while (pos < _li) consume();
+          while (pos < _li) take();
         }
       }
     } else if (overloadMode === 'create' && peek().type === 'NEWLINE') {
@@ -4454,7 +4478,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
     } else if (peek().type === 'STAR') {
       // Public constructor: @Name = * { body } | @Name =\n*\n params\n*\n body
-      consume(); // *
+      take(); // *
       const { params: cParams, supertypes, nested } = parseConstructorAfterStar('@' + op);
       const actorNode = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
       if (overloadMode !== 'create') {
@@ -4468,11 +4492,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume();
       }
       if (peek().type === 'EQUALS') {
-        consume(); // first =
+        take(); // first =
         skipNewlines();
         if (peek().type === 'EQUALS') {
           // = = → explicit empty params
-          consume();
+          take();
           params = [];
         } else {
           // Try parsing params between two = delimiters, with backtracking.
@@ -4485,7 +4509,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
               if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
               if (peek().type === 'COMMA') { consume(); continue; }
               if (peek().type === 'EQUALS' && afterNewline) {
-                consume(); // second = delimiter
+                take(); // second = delimiter
                 foundDelimiter = true;
                 break;
               }
@@ -4514,19 +4538,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
     skipNewlines();
     skipArrowBeforeBrace();
-    // Delimited braced body: @op = (params) [->] { body } [: Type]
+    // Delimited braced body: @op = (params) [->] { body }
     if (peek().type === 'LBRACE') {
       consume(); // {
       const body = parseBody('RBRACE');
       skipNewlines();
       expect('RBRACE');
-      // Optional type annotation after closing brace: } : Type  or  } as Type
-      if (isTypeAttestation()) {
-        consumeTypeAttestation(); // consume but discard
-      } else if (peek().type === 'COLON') {
-        consume(); // COLON
-        parseType(); // consume but discard — public functions infer return type from reply
-      }
       return AST.functionDecl('@' + op, params, body, { overloadMode });
     }
 
@@ -4537,26 +4554,26 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // parseInitBlock removed — init/$var syntax deprecated
 
   function parseSelfAsClause() {
-    consume(); // 'self'
-    consume(); // 'as'
+    take(); // 'self'
+    take(); // 'as'
     let negated = false;
     if (peek().type === 'BANG') {
-      consume(); // '!'
+      take(); // '!'
       negated = true;
     }
     const targetType = parseType();
     if (peek().type === 'EQUALS') {
-      consume(); // '='
+      take(); // '='
     } else if (peek().type === 'NEWLINE') {
       skipNewlines();
       if (peek().type !== 'EQUALS') throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
-      consume(); // '='
+      take(); // '='
     } else {
       throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
     }
     skipNewlines();
     if (peek().type !== '->') throw new Error(`Expected '->' in 'self as' clause body`);
-    consume(); // '->'
+    take(); // '->'
     const expr = parseExpr();
     return AST.asClause(targetType, negated, expr);
   }
@@ -4623,11 +4640,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { consume(); continue; }
       let methodName;
       if (peek().type === 'AT') {
-        consume();
-        const nameTok = consume();
+        take();
+        const nameTok = take();
         methodName = '@' + nameTok.value;
       } else {
-        methodName = consume().value;
+        methodName = take().value;
       }
       expect('LPAREN');
       const params = [];
@@ -4637,20 +4654,20 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const pName = expect('IDENT').value;
         let pType = null;
         if (peek().type === 'COLON') {
-          consume();
-          if (peek().type === 'IDENT') pType = consume().value;
+          take();
+          if (peek().type === 'IDENT') pType = take().value;
         } else if (peek().type === 'IDENT') {
           // positional `name Type`
-          pType = consume().value;
+          pType = take().value;
         }
         params.push({ name: pName, type: pType });
       }
       expect('RPAREN');
       let returns = null;
       // `[->] (returns)` or `[->] .` (silent); the arrow is optional.
-      if (peek().type === 'ARROW' || peek().value === '->') consume();
+      if (peek().type === '->' && peek().value === '->') take();
       if (peek().type === 'DOT') {
-        consume();
+        take();
       } else if (peek().type === 'LPAREN') {
         expect('LPAREN');
         returns = [];
@@ -4659,10 +4676,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           const rName = expect('IDENT').value;
           let rType = null;
           if (peek().type === 'COLON') {
-            consume();
-            if (peek().type === 'IDENT') rType = consume().value;
+            take();
+            if (peek().type === 'IDENT') rType = take().value;
           } else if (peek().type === 'IDENT') {
-            rType = consume().value;
+            rType = take().value;
           }
           returns.push({ name: rName, type: rType });
         }
@@ -4693,15 +4710,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const next2 = tokens[pos + 2]?.type;
         if (next2 === 'RPAREN' || next2 === 'COMMA' || next2 === 'NEWLINE') {
           // Wildcard ref param: name *
-          const name = consume().value;
-          consume();
+          const name = take().value;
+          take();
           cParams.push({ name, type: 'Anything', positional: true, ref: true });
           continue;
         }
         if (next2 === 'IDENT') {
           // Typed ref param: name *Type [of Type ...]
-          const name = consume().value;
-          consume(); // *
+          const name = take().value;
+          take(); // *
           const type = parseType();
           cParams.push({ name, type, positional: true, ref: true });
           continue;
@@ -4709,16 +4726,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       // Positional read-only ref: name &Type
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
-        const name = consume().value;
+        const name = take().value;
         const type = consumeAmpersandTypeForParam();
         cParams.push({ name, type, positional: true, readonly: true });
         continue;
       }
       // Sigil ref: :name *Type, :name * (wildcard), :name { constraint }
       if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
-        const name = consume().value;
+        const name = take().value;
         if (peek().type === 'STAR') {
-          consume();
+          take();
           if (peek().type === 'IDENT') {
             // :name *Type — typed ref
             const type = parseType();
@@ -4737,14 +4754,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       // Sigil read-only ref: :name &Type
       if (peek().type === 'SIGIL' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
-        const name = consume().value;
+        const name = take().value;
         const type = consumeAmpersandTypeForParam();
         cParams.push({ name, type, readonly: true });
         continue;
       }
       // Inline service constraint: name { @method: ... }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
-        const name = consume().value;
+        const name = take().value;
         const constraint = parseServiceConstraint();
         cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
         continue;
@@ -4752,7 +4769,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // Bare identifier (no type annotation)
       const next1 = tokens[pos + 1]?.type;
       if (peek().type === 'IDENT' && (next1 === 'RPAREN' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
-        cParams.push({ name: consume().value, type: 'Anything', positional: true });
+        cParams.push({ name: take().value, type: 'Anything', positional: true });
         continue;
       }
       const p = parseOneParam();
@@ -4780,13 +4797,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       while (peek().type !== 'EOF') {
         if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') { consume(); continue; }
         if (isClosingStar(peek())) {
-          consume();
+          take();
           return cParams;
         }
         if (peek().type === 'IDENT' && !isParamStart()) {
           const n1 = tokens[pos + 1]?.type;
           if (n1 === 'NEWLINE' || n1 === 'BLOCK_SEP') {
-            cParams.push({ name: consume().value, type: 'Anything', positional: true });
+            cParams.push({ name: take().value, type: 'Anything', positional: true });
             continue;
           }
         }
@@ -4812,10 +4829,22 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // (`{`) or lineal (terminated by `.`/`end`). After a delimited header the
   // body must be opened by `{` or be the tail form (`->`/`return`). An empty
   // body is legal (e.g. `{}`).
+  // A lineal class body ends with `.`, or `end` with an optional `#Name` that
+  // names the class it closes: `end#Box`.
+  function endLinealClass(op) {
+    if (peek().type === 'DOT') take();
+    skipBlanks();
+    if (peek().type !== 'KEYWORD' || peek().value !== 'end') return;
+    take();
+    if (peek().type !== 'HASH_IDENT') return;
+    const closing = take().value;
+    if (closing !== op?.replace(/^@/, '')) throw new Error(`end#${closing} does not match '${op}'`);
+  }
+
   function parseConstructorBody(op, linealHeader) {
     let nested;
     if (peek().type === 'LBRACE') {
-      consume();
+      take();
       const savedStop = stopAtBlankLine;
       stopAtBlankLine = false;
       nested = parseActorBody(() => peek().type === 'RBRACE');
@@ -4831,12 +4860,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // In a lineal singleton, the blank line that ends this body ends the singleton.
       if (!(stopAtBlankLine && peek().type === 'BLOCK_SEP')) {
         skipBlanks();
-        if (peek().type === 'DOT') consume();
-        skipBlanks();
-        if (peek().type === 'KEYWORD' && peek().value === 'end') {
-          consume();
-          if (peek().type === 'HASH_IDENT') consume();
-        }
+        endLinealClass(op);
       }
     } else {
       throw new Error(`class '${op}' requires a body — use '{ ... }', a lineal header, or '-> expr'`);
@@ -4848,7 +4872,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Optional arrow before a delimited body: `(params) -> { body }` is the
   // same as `(params) { body }`.
   function skipArrowBeforeBrace() {
-    if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') consume();
+    if (peek().type === '->' && tokens[pos + 1]?.type === 'LBRACE') take();
   }
 
   // `actor { … }` or `actor -> statement` at token index `i`: an actor literal
@@ -4864,9 +4888,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // line. `cls` is its hidden class.
   function parseSingletonMembers(cls) {
     if (isActorKw(peek())) {
-      consume(); // actor
+      take(); // actor
       if (peek().type === 'LBRACE') return parseConstructorBody(cls, false);
-      consume(); // ->
+      take(); // ->
       if (['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE'].includes(peek().type)) {
         throw new Error(`'actor ->' takes a statement on the same line — or write 'actor { … }'`);
       }
@@ -4877,7 +4901,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       hoistNested(nested, cls);
       return nested;
     }
-    consume(); // **
+    take(); // **
     const savedStop = stopAtBlankLine;
     stopAtBlankLine = true;
     const nested = parseActorBody(() => false);
@@ -4926,10 +4950,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     let params = [];
     let supertypes = [];
     if (peek().type === 'LPAREN') {
-      consume();
+      take();
       ({ params, supertypes } = parseConstructorParenParams());
     }
-    if (peek().type === '->') consume();
+    if (peek().type === '->') take();
     expect('STAR');
     const nested = parseConstructorBody(op, false);
     return { params, supertypes, nested };
@@ -5021,7 +5045,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       // `untracked` marks the declaration that follows: its writes don't count.
       if (peek().type === 'KEYWORD' && peek().value === 'untracked') {
-        consume();
+        take();
         last = pos; // a prefix: the declaration it marks is the statement
         if (peek().type === 'HASH_IDENT') {
           untrackedDecls.add('#' + peek().value);
@@ -5038,13 +5062,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // (return-as); `return ()` / `-> ()` is a no-op. `->` persists here as the
       // becomes arrow; `return` is the value-return spelling.
       if (peek().type === '->' || isReturnKw()) {
-        consume(); // -> or return
+        take(); // -> or return
         if (peek().type === 'KEYWORD' && peek().value === 'self') {
-          consume(); // self
+          take(); // self
         } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
           // `-> ()` is a literal of no value in a constructor block — ignored.
           // The class constructs an actor, not a value.
-          consume(); consume();
+          take(); take();
         } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
           // Declaration return: -> expr (value for superclass ingest)
           const expr = parseExpr();
@@ -5065,36 +5089,40 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         asClauses.push(parseSelfAsClause());
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR' && tokens[pos + 2]?.type === 'IDENT' && functions.length === 0) {
         // Service block: name *Type [= value] — ref declaration before any @ functions
-        const name = consume().value;
-        consume(); // *
+        const name = take().value;
+        take(); // *
         const typeName = parseType();
         // Register the class-level ref WITH its type so handler bodies parsed
         // later can dispatch methods correctly (e.g., news.append!(t) → list).
         addRef(name, typeName);
         if (peek().type === 'EQUALS') {
-          consume();
+          take();
           const value = parseExpr();
-          if (isTypeAttestation()) { consumeTypeAttestation(); }
+          if (isTypeAttestation()) {
+            const rhsType = consumeTypeAttestation();
+            if (rhsType !== typeName) throw new Error(`Conflicting type declarations for '${name}': '${typeName}' vs '${rhsType}'`);
+            value.attestedAs = rhsType;
+          }
           constructorBody.push(AST.refDecl(name, typeName, value));
         } else {
           constructorBody.push(AST.refDecl(name, typeName, null));
         }
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'EQUALS' && tokens[pos + 2]?.type === 'STAR' && tokens[pos + 3]?.type === 'IDENT' && functions.length === 0) {
         // Service block: name = *TypeName(args) — ref constructor form
-        const name = consume().value;
-        consume(); // =
-        consume(); // *
+        const name = take().value;
+        take(); // =
+        take(); // *
         const typeName = parseType();
         addRef(name);
         const value = peek().type === 'LPAREN' ? parseForwardCall(typeName) : parseRHSValue();
         constructorBody.push(AST.refDecl(name, null, value));
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = (val) { ... } — syntactic sugar for the <- handler
-        consume(); // 'set'
+        take(); // 'set'
         declCtx = { name: 'set', builtin: true };
         let params;
         if (peek().type === 'EQUALS') {
-          consume(); // =
+          take(); // =
           if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
             params = parseFunctionParamsParen();
           } else {
@@ -5103,10 +5131,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         } else if (peek().type === 'NEWLINE') {
           consume(); // NEWLINE
           if (peek().type === 'EQUALS') {
-            consume(); // first =
+            take(); // first =
             skipNewlines();
             if (peek().type === 'EQUALS') {
-              consume(); // = = → explicit empty params
+              take(); // = = → explicit empty params
               params = [];
             } else {
               const savedPos = pos;
@@ -5117,7 +5145,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
                   if (peek().type === 'COMMA') { consume(); continue; }
-                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
                   if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
@@ -5134,7 +5162,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         skipArrowBeforeBrace();
         let body;
         if (peek().type === 'LBRACE') {
-          consume();
+          take();
           body = parseBody('RBRACE');
           skipNewlines();
           expect('RBRACE');
@@ -5143,7 +5171,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           // precedes a non-reply statement, so parseBody sees the statement.
           if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
               (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
-            consume(); // ->
+            take(); // ->
             endArrowStatementAtLine();
           }
           body = parseBody();
@@ -5151,11 +5179,11 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         functions.push(AST.functionDecl('set', params, body));
       } else if (peek().type === 'KEYWORD' && peek().value === 'update') {
         // update = (val) { ... } — syntactic sugar for the <| handler
-        consume(); // 'update'
+        take(); // 'update'
         declCtx = { name: 'update', builtin: true };
         let params;
         if (peek().type === 'EQUALS') {
-          consume(); // =
+          take(); // =
           if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
             params = parseFunctionParamsParen();
           } else {
@@ -5164,10 +5192,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         } else if (peek().type === 'NEWLINE') {
           consume(); // NEWLINE
           if (peek().type === 'EQUALS') {
-            consume(); // first =
+            take(); // first =
             skipNewlines();
             if (peek().type === 'EQUALS') {
-              consume(); // = = → explicit empty params
+              take(); // = = → explicit empty params
               params = [];
             } else {
               const savedPos = pos;
@@ -5178,7 +5206,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
                   if (peek().type === 'COMMA') { consume(); continue; }
-                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
                   if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
@@ -5195,7 +5223,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         // precedes a non-reply statement, so parseBody sees the statement.
         if (peek().type === '->' && tokens[pos + 1]?.type === 'IDENT' &&
             (tokens[pos + 2]?.type === 'SET' || tokens[pos + 2]?.type === 'UPDATE')) {
-          consume(); // ->
+          take(); // ->
           endArrowStatementAtLine();
         }
         const body = parseBody();
@@ -5210,8 +5238,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           // A class's singleton layer (`*{ … } ^ { … }`) hasn't been parsed yet, so the error
           // waits until it is: src/singleton_classes.js says which it is.
-          consume();
-          const updateOp = consume().type === 'UPDATE' ? '<|' : undefined;
+          take();
+          const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
           const set = AST.setStatement(name, parseExpr(), { updateOp });
           set.deferredError = `Cannot set '${name}' — only '*Type' variables support '<-'`;
           constructorBody.push(set);
@@ -5246,17 +5274,17 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         parseTypedAssign(constructorBody);
       } else if (isBareTypeDeclStart()) {
         // Top-level bare type declaration: name Type
-        const name = consume().value;
+        const name = take().value;
         const typeName = parseType();
         constructorBody.push(AST.typedAssign(name, typeName, null));
       } else if (peek().type === 'HASH_IDENT') {
-        const op = '#' + consume().value;
+        const op = '#' + take().value;
         declCtx = declFor(op);
 
         // ── Private function — supports same-line, delimited, and lineal
         // forms (parallels @public functions; constructor form excluded).
         if (peek().type === 'EQUALS') {
-          consume(); // =
+          take(); // =
           // Reject `<...>` — private fns aren't constructors.
           if (peek().type === 'LT') {
             throw new Error(`'${op}' is private — private functions cannot be constructors. Remove the '<...>'.`);
@@ -5277,9 +5305,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           params = parseFunctionParamsParen();
           for (const p of params) { if (p.type === null) p.type = 'Anything'; }
         } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
-          const pName = consume().value;
+          const pName = take().value;
           params = [{ name: pName, type: 'Anything', positional: true }];
-          consume(); // ->
+          take(); // ->
           const expr = parseExpr();
           let exprType = null;
           if (peek().type === 'DOT') throw trailingDotError();
@@ -5291,10 +5319,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') consume();
           }
           if (peek().type === 'EQUALS') {
-            consume(); // first =
+            take(); // first =
             skipNewlines();
             if (peek().type === 'EQUALS') {
-              consume(); // = = → explicit empty params
+              take(); // = = → explicit empty params
               params = [];
             } else {
               const savedPos = pos;
@@ -5305,7 +5333,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
                 while (peek().type !== 'EOF') {
                   if (peek().type === 'NEWLINE') { consume(); afterNewline = true; continue; }
                   if (peek().type === 'COMMA') { consume(); continue; }
-                  if (peek().type === 'EQUALS' && afterNewline) { consume(); foundDelimiter = true; break; }
+                  if (peek().type === 'EQUALS' && afterNewline) { take(); foundDelimiter = true; break; }
                   if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); afterNewline = false; continue; } }
                   break;
                 }
@@ -5358,7 +5386,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         const expr = parseExpr();
         constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {
-        const op = consume().value;
+        const op = take().value;
         declCtx = declFor(op);
         let _identOverloadMode = 'create';
 
@@ -5394,8 +5422,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             if (_identOverloadMode === 'create' && !hasOpenEquals) {
               throw new Error(`Constructor '${op}' requires '=' before '*' — write '${op} =', then '*' alone on the next line`);
             }
-            while (pos < li) consume(); // skip newlines and optional `=`
-            consume(); // *
+            while (pos < li) take(); // skip newlines and optional `=`
+            take(); // *
             const { params, supertypes, nested } = parseConstructorAfterStar(op);
             const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
@@ -5411,19 +5439,19 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         // For overload operators, only enter delimited path if next token is NOT newline
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
-          if (peek().type === 'EQUALS') consume(); // eat the = (already consumed << or >> for overloads)
+          if (peek().type === 'EQUALS') take(); // eat the = (already consumed << or >> for overloads)
           // Allow `= \n *...` / `= \n (params) *{` — the constructor may
           // start on the line after the `=`.
           if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
             let _li = pos;
             while (_li < tokens.length && (tokens[_li].type === 'NEWLINE' || tokens[_li].type === 'BLOCK_SEP')) _li++;
             if (tokens[_li]?.type === 'STAR' || isDelimitedClassStart(_li)) {
-              while (pos < _li) consume();
+              while (pos < _li) take();
             }
           }
           // ── Function() — empty overload initializer ──────────────────
           if (peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN') {
-            consume(); consume(); consume(); // Function ( )
+            take(); take(); take(); // Function ( )
             functionNames.add(op);
             functions.push(AST.functionDecl(op, [], [], { emptyOverload: true }));
             continue;
@@ -5456,7 +5484,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             } else if (_isDelimitedClass) {
               ({ params: cParams, supertypes, nested } = parseDelimitedClass(op));
             } else {
-              consume(); // *
+              take(); // *
               ({ params: cParams, supertypes, nested } = parseConstructorAfterStar(op));
             }
             const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
@@ -5483,7 +5511,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           if (!_isFnStart) {
             // ingest or ingest(default) — superclass receives subclass declaration return
             if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
-              consume(); // ingest
+              take(); // ingest
               let defaultValue = null;
               if (peek().type === 'LPAREN') {
                 consume(); // (
@@ -5498,14 +5526,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             const value = parseExpr();
             // Service coercion: name = ref as { @method: ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LBRACE') {
-              consume(); // as
+              take(); // as
               const constraint = parseServiceConstraint();
               constructorBody.push(AST.serviceCoercion(op, value, constraint));
               continue;
             }
             // Constructor coercion: name = ref as (p: Type, ...) [->] *{ method ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && ctorProfileAhead(pos + 1)) {
-              consume(); // as
+              take(); // as
               const ctorParams = parseCtorProfileParams(`in coercion of '${op}'`);
               const constraint = parseServiceConstraint();
               constructorBody.push(AST.serviceCoercion(op, value, constraint, ctorParams));
@@ -5527,9 +5555,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
             for (const p of params) { if (p.type === null) p.type = 'Anything'; }
           } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
             // Bare-param form: name -> expr (single generic param)
-            const pName = consume().value;
+            const pName = take().value;
             params = [{ name: pName, type: 'Anything', positional: true }];
-            consume(); // ->
+            take(); // ->
             // Body is a single expression to EOL — wrap as implicit return.
             const expr = parseExpr();
             let exprType = null;
@@ -5580,14 +5608,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
               (peek().type === 'DOT') ||
               (peek().type === 'KEYWORD' && peek().value === 'end'),
             );
-            // Consume . terminator or end#Name
             skipBlanks();
-            if (peek().type === 'DOT') consume();
-            skipBlanks();
-            if (peek().type === 'KEYWORD' && peek().value === 'end') {
-              consume(); // 'end'
-              if (peek().type === 'HASH_IDENT') consume(); // #Name
-            }
+            endLinealClass(op);
             hoistNested(nested, op);
             const actorNode3 = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
             if (_identOverloadMode !== 'create') {
@@ -5620,7 +5642,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         consume(); // stitch separator between top-level declarations
       } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
         // Bare `()` in constructor block is a literal of no value — ignored.
-        consume(); consume();
+        take(); take();
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                  peek().type === 'HTML_CONSTRUCTOR' ||
@@ -5796,7 +5818,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // Parse one `use` statement, handing each binding to `emit`.
   function parseUseStatement(emit) {
     const useTok = pos;
-    consume(); // use
+    take(); // use
     if (USE_END.includes(peek().type)) throw new Error(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
     const { eq, end } = scanUse(pos);
     const shown = () => `use ${showTokens(useTok + 1, end)}`;
@@ -5860,7 +5882,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     return tokens[j + 1]?.type === 'EQUALS' || tokens[j + 1]?.type === 'COMMA';
   }
   function parseUseExpr() {
-    consume(); // use
+    take(); // use
     consume(); // (
     const t = peek();
     const oneSource = `'use(…)' takes one source, a string: 'use("HTML")'`;
@@ -5877,7 +5899,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     }
     if (t.type === 'IDENT') throw new Error(`a 'use' source in an expression is a string: 'use(${JSON.stringify(t.value)})'`);
     if (t.type !== 'STRING') throw new Error(`${oneSource}, got ${t.type}`);
-    const source = consume().value;
+    const source = take().value;
     if (peek().type !== 'RPAREN') throw new Error(oneSource);
     consume(); // )
     if (peek().type === 'DCOLON') {
@@ -5968,12 +5990,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const segs = [];
     for (;;) {
       const t = peek();
-      if (t.type === 'IDENT') segs.push(consume().value);
-      else if (t.type === 'STRING') segs.push(consume().value);
+      if (t.type === 'IDENT') segs.push(take().value);
+      else if (t.type === 'STRING') segs.push(take().value);
       else if (t.type === 'INTERP_STRING') throw new Error(`A 'use' source is static: it takes no interpolation`);
       else throw new Error(`Expected a source (a name or a quoted string) in 'use', got ${t.type}${t.value != null ? ` '${t.value}'` : ''}`);
       if (peek().type !== 'DCOLON') return segs;
-      consume(); // ::
+      take(); // ::
     }
   }
 
@@ -5981,7 +6003,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // or a value's type.
   function parseUseShape() {
     if (!(peek().type === 'KEYWORD' && peek().value === 'as')) return null;
-    consume(); // as
+    take(); // as
     if (peek().type === 'LBRACE') return { interface: parseAsTypeSuffix(parseInlineIface()) };
     if (peek().type === 'LPAREN' && isCtorProfileAt(pos)) {
       ctorArrow = '->';
@@ -6009,7 +6031,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // A value's type: `Integer`, `*Integer`, `&Integer` (a cell's capability is
   // the host's to grant; the binding keeps the type).
   function parseUseType() {
-    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') { consume(); return parseType(); }
+    if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') { take(); return parseType(); }
     if (peek().type === 'AMPERSAND_IDENT') return consumeAmpersandTypeForParam();
     return parseType();
   }
@@ -6033,14 +6055,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       hasTopComma(pos, eq);
     if (isDestructure) {
       const parens = t.type === 'LPAREN';
-      if (parens) consume();
+      if (parens) take();
       const entries = parseUseDestructure(parens ? () => peek().type === 'RPAREN' : () => pos >= eq, shown);
       if (parens) expect('RPAREN');
       if (pos !== eq) throw new Error(`Unexpected ${peek().type} before '=' in '${shown()}'`);
       return { kind: 'destructure', entries };
     }
     if (t.type !== 'IDENT') throw new Error(`Expected a name or a destructure before '=' in '${shown()}', got ${t.type}`);
-    const name = consume().value;
+    const name = take().value;
     if (pos === eq) return { kind: 'name', name };
     if (peek().type === 'LBRACE' || peek().type === 'LPAREN') {
       throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '(…) -> *{ … }'}'`);
@@ -6056,19 +6078,19 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     while (!isEnd() && peek().type !== 'EOF') {
       if (peek().type === 'COMMA' || isBreakTok(peek())) { consume(); continue; }
       const t = peek();
-      if (t.type === 'ELLIPSIS') { consume(); entries.push({ spread: true }); continue; }
+      if (t.type === 'ELLIPSIS') { take(); entries.push({ spread: true }); continue; }
       if (t.type === 'SIGIL') {
-        const name = consume().value;
+        const name = take().value;
         const type = readType();
         entries.push({ local: name, remote: name, ...(type && { type }) });
         continue;
       }
       if (t.type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        const remote = consume().value;
-        consume(); // :
-        if (peek().type === 'DISCARD') { consume(); entries.push({ remote, discard: true }); continue; }
+        const remote = take().value;
+        take(); // :
+        if (peek().type === 'DISCARD') { take(); entries.push({ remote, discard: true }); continue; }
         if (peek().type !== 'IDENT') throw new Error(`Expected a local name after '${remote}:' in '${shown()}'`);
-        const local = consume().value;
+        const local = take().value;
         const type = readType();
         entries.push({ local, remote, ...(type && { type }) });
         continue;
@@ -6210,13 +6232,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   function parseTypeField() {
     let optional = false;
     if (peek().type === 'QUESTION') {
-      consume();
+      take();
       optional = true;
     }
     const fieldName = expect('IDENT').value;
     let named = false;
     if (peek().type === 'COLON') {
-      consume();
+      take();
       named = true;
     }
     const paramType = parseType();
@@ -6228,14 +6250,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
   // terminates at the first BLOCK_SEP (blank line) or EOF.
   const isTypeKw = (t = peek()) => t?.type === 'KEYWORD' && t.value === 'type';
   function parseTypeDecl() {
-    consume(); // type
+    take(); // type
     const name = expect('IDENT').value;
     const fields = [];
     if (peek().type === 'LPAREN') {
-      consume();
+      take();
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
         if (peek().type === 'COMMA' || peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
-          consume();
+          take();
           continue;
         }
         fields.push(parseTypeField());
@@ -6292,7 +6314,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     const glued = new Set(['STAR', 'DCOLON', 'ELLIPSIS', 'LPAREN']);
     const gluedBefore = new Set(['COLON', 'COMMA', 'RPAREN', 'BANG', 'DCOLON']);
     while (peek().type !== 'EOF' && !(peek().type === 'RBRACE' && depth === 0)) {
-      const tok = consume();
+      const tok = take();
       if (tok.type === 'NEWLINE' || tok.type === 'BLOCK_SEP') {
         if (depth === 0) flush();
         else { line += '\n'; prev = null; }
@@ -6312,7 +6334,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     skipNewlines();
     const types = [];
     while (peek().type === 'PIPE') {
-      consume(); // |
+      take(); // |
       skipNewlines();
       types.push(expect('IDENT').value);
       skipNewlines();
@@ -6362,7 +6384,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         //   :name Type                            → named scalar file-param
         const nextType = tokens[pos + 1]?.type;
         if (nextType === 'HASH' || ENTRY_END.includes(nextType)) {
-          const sigil = consume();
+          const sigil = take();
           path = sigil.value;
           alias = sigil.value;
           // Service dep with no destructures: commit before skipNewlines eats the terminator
@@ -6380,8 +6402,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
         // Bare-identifier dependency: `HTML: (:div)`, `HTML: :div`,
         // `Lib: L #`. (`HTML: Html` alone is a named param — see
         // isBareKeyDependency.)
-        path = consume().value;
-        consume(); // COLON
+        path = take().value;
+        take(); // COLON
       } else if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
         // Published file-param: `@name Type` / `@name: Type`
         const p = parseOneParam();
@@ -6407,9 +6429,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       // The binding: a local name (`"thing.bv": Thing #`), one member
       // (`HTML: :div`), or a destructure group (`HTML: (:div, :span)`).
       if (peek().type === 'IDENT') {
-        alias = consume().value;
+        alias = take().value;
       } else if (peek().type === 'SIGIL') {
-        const name = consume().value;
+        const name = take().value;
         destructures = [{ local: name, remote: name }];
       } else if (peek().type === 'LPAREN' && !parenGroupFollowedByArrow(pos)) {
         expect('LPAREN');
@@ -6422,22 +6444,22 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
           while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
             if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { consume(); continue; }
             if (peek().type === 'ELLIPSIS') {
-              consume();
+              take();
               destructures.push({ spread: true });
             } else if (peek().type === 'SIGIL') {
-              const name = consume().value;
+              const name = take().value;
               destructures.push({ local: name, remote: name });
             } else if (peek().type === 'IDENT') {
-              const remote = consume().value;
+              const remote = take().value;
               expect('COLON');
               if (peek().type === 'DISCARD') {
-                consume();
+                take();
                 destructures.push({ remote, discard: true });
               } else {
                 const local = expect('IDENT').value;
                 let type = null;
                 if (peek().type === 'IDENT' && peek().value?.[0] === peek().value?.[0]?.toUpperCase()) {
-                  type = consume().value;
+                  type = take().value;
                 }
                 destructures.push({ local, remote, ...(type && { type }) });
               }
@@ -6530,13 +6552,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
 
   if (typeOnly) {
     skipNewlines();
-    if (peek().type === 'STAR') consume();
-    if (peek().type === 'LBRACE') parseInlineIface();
-    else if (peek().type === 'AMPERSAND_IDENT') consumeAmpersandTypeForParam();
-    else parseType();
+    if (peek().type === 'STAR') take();
+    const type = peek().type === 'LBRACE' ? parseInlineIface()
+      : peek().type === 'AMPERSAND_IDENT' ? consumeAmpersandTypeForParam()
+      : parseType();
     skipNewlines();
     if (peek().type !== 'EOF') throw new Error(`Unexpected token in a type: ${peek().type} '${peek().value || ''}'`);
-    return null;
+    checkTokensAccounted();
+    return type;
   }
 
   while (peek().type !== 'EOF') {
@@ -6555,7 +6578,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') {
       if (headerSeen || actors.length || types.length) throw new Error(WHOLE_FILE_ACTOR_MSG);
       headerSeen = true;
-      consume(); // actor
+      take(); // actor
       parseFileHeaderBody(false);
       continue;
     }
@@ -6577,7 +6600,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       skipNewlines();
       parseFileHeaderEntries(() => peek().type === 'RPAREN');
       expect('RPAREN');
-      if (peek().type === '->') consume();
+      if (peek().type === '->') take();
       expect('STAR');
       parseFileHeaderBody(false);
       continue;
@@ -6595,13 +6618,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       headerSeen = true;
       fileKind = 'factory';
-      consume(); // *
+      take(); // *
       const savedPos = pos;
       const savedDeps = dependencies.length;
       let closed = false;
       try {
         parseFileHeaderEntries(() => isClosingStar(peek()));
-        if (isClosingStar(peek())) { consume(); closed = true; }
+        if (isClosingStar(peek())) { take(); closed = true; }
       } catch {
         // not an entry run — no-params form
       }
@@ -6624,7 +6647,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
       }
       headerSeen = true;
       fileKind = 'factory';
-      consume(); // *
+      take(); // *
       const { params, nested } = parseConstructorAfterStar('<file-class>');
       actors.push(AST.actor(null, {
         functions: nested.functions,
@@ -6719,6 +6742,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null } = {}) {
     t.name = [...t.owner, t.name].join('::');
   }
   if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
+  checkTokensAccounted();
   const result = AST.program(actors, dependencies, types);
   result.fileKind = fileKind;
   resolveLoneNames(result);
