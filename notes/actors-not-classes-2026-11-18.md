@@ -93,6 +93,20 @@ The HTML host (src/codegen/browser/runtime.js) wraps its `$new` and self-return 
 Its other replies (`body`, `first`, accessors) still answer bare values, as its whole reply
 protocol does; that's its own change.
 
+## `self` and `class`; `Self` is retired
+
+`Self` was the class of `self`. That's `class` now, and `Self` is a parse error pointing to
+it:
+
+- **`self`** is the actor's own address, `#<:>`, anywhere a value goes (not only in return
+  position): `k = self`, `[self]`, `return me: self`. A `self` slot is tagged `:`, the
+  actor's class, which its parent fills in; the file actor's own is `*`.
+- **`class`** is the class of the actor it's in: `class(args)` builds another, `k = class`
+  holds it, and in type position (`x class`, `@peer *class | null`, `*List of class`,
+  `self as !class`) it's the type of the actors that class builds. In a factory file (a
+  `*` header) it's the file's own kind, which its host builds; in a plain file, which
+  nothing builds, it's an error.
+
 ## Open
 
 - A list of declared actors is tagged `List of Actors`, the plural of its type as any list

@@ -35,9 +35,9 @@ afterAll(() => { if (_ctx.teardown) _ctx.teardown(); });
 
 // ── compileSource: extract + compile in one call ────────────────────────────
 //
-// `fileName` is folded into compile options so Self-as-value codegen sees the
+// `fileName` is folded into compile options so class-as-value codegen sees the
 // same surface as a real (filesystem-rooted) compile. Required only when the
-// source references Self as a bare value.
+// source references class as a bare value.
 
 export function compileSource(source, options = {}) {
   const { fileName, ...rest } = options;
@@ -77,7 +77,7 @@ export async function runActors(args) {
 //
 // `fileName` declares the wire path this source pretends to live at
 // (e.g. 'c.bv'). The class is provisioned with that address at construction
-// so `Self` in value position can render it. Required only when Self-as-value
+// so `class` in value position can render it. Required only when class-as-value
 // is referenced; absent that, the address is never read.
 
 export async function createActor(source, opts = {}) {

@@ -77,11 +77,30 @@ function joinOwnCellWrites(tokensIn) {
 // message it answers). `class` is reserved, so `x::class` can't be a member or a type.
 // Only `self::class` is supported for now; it folds to `class`. `class_of(x)` is retired.
 // See notes/class-scope-and-inheritance-2026-11-16.md.
+// `Self` is retired: the class of the actor it's in is `class`, and the actor is `self`.
+export const RETIRED_SELF = "'Self' is retired — the class of the actor it's in is 'class' ('class(args)', 'x class', '*List of class'), and the actor itself is 'self'";
+
+// Where `class` is a type: after a name (`x class`), `*`, `|`, `of`, or `as !`. It's
+// the class of the actor it's in, the type `Self` named (src/singleton_classes.js
+// resolves `class` in value position).
+const atTypeOfClass = (tokens, i) => {
+  const prev = tokens[i - 1];
+  if (!prev) return false;
+  if (prev.type === 'IDENT' || prev.type === 'STAR' || prev.type === 'PIPE' || prev.type === 'AMPERSAND') return true;
+  if (prev.type === 'KEYWORD' && prev.value === 'of') return true;
+  return prev.type === 'BANG' && tokens[i - 2]?.type === 'KEYWORD' && tokens[i - 2].value === 'as';
+};
+
 function foldSelfClass(tokens) {
   const line = (i) => tokens.slice(0, i).filter(t => t.type === 'NEWLINE').length + 1;
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
+    if (t.type === 'IDENT' && t.value === 'Self') throw new Error(`${RETIRED_SELF} (line ${line(i)})`);
+    if (t.type === 'KEYWORD' && t.value === 'class' && atTypeOfClass(tokens, i) && tokens[i + 1]?.type !== 'DCOLON' && tokens[i + 1]?.type !== 'DOT' && tokens[i + 1]?.type !== 'LPAREN') {
+      out.push({ ...t, type: 'IDENT', value: 'Self' });
+      continue;
+    }
     if (t.type === 'IDENT' && t.value === 'class_of' && tokens[i + 1]?.type === 'LPAREN') {
       throw new Error(`'class_of(…)' is retired: an actor's class is 'x::class', and 'class' is 'self::class' (line ${line(i)})`);
     }
@@ -2558,6 +2577,9 @@ export function parse(tokensIn) {
         // Otherwise it's a reference to a public handler (Identifier).
         const name = '@' + consume().value;
         result = isRef(name) ? AST.refRead(name) : AST.identifier(name);
+      } else if (tok.type === 'KEYWORD' && tok.value === 'self') {
+        // `self` as a value: the actor's own address, `#<:>`.
+        result = AST.selfValue();
       } else {
         throw new Error(`Unexpected token in expression: ${tok.type} '${tok.value}'`);
       }
@@ -6958,7 +6980,7 @@ export function parse(tokensIn) {
     const wrap = a.supertypes?.retiredWrap;
     if (wrap && actors.some(c => c.name === wrap.parent)) throw new Error(retiredWrapMessage(wrap.op, wrap.local, wrap.parent));
   }
-  lowerSingletonClasses(actors, types);
+  lowerSingletonClasses(actors, types, { fileKind });
   lowerSuperLayers(actors);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).

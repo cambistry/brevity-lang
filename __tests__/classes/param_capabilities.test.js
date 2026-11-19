@@ -106,4 +106,4 @@ describe('class params — file-level *List write-cap', () => {
 });
 
 // ── Inline class with collection cell — peer-list pattern is covered by
-//    classes/peer_list.test.js (the canonical *List-of-Self example).
+//    classes/peer_list.test.js (the canonical *List-of-class example).

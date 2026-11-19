@@ -1,7 +1,7 @@
 import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 
 // An actor is a value. A declared actor (an actor with a `new`, a singleton, the
-// file as `Self`) named where a value goes is its address, tagged `*`: no `new`
+// file as `self`) named where a value goes is its address, tagged `*`: no `new`
 // built it. `#<:C>` from the actor that declares it; the absolute `#<c.bv:C>` from
 // anywhere else, which can't say where the declaring actor is relative to itself.
 //
@@ -47,9 +47,9 @@ describe('a declared actor as a value — from the file actor', () => {
 
     @publicSingleton = { return @t }
 
-    @file = { return Self }
+    @file = { return self }
 
-    @named = { return n: @N, s: s, f: Self }
+    @named = { return n: @N, s: s, f: self }
 
     @same = {
       k = @N
@@ -162,12 +162,12 @@ describe('a declared actor as a value — from the file actor', () => {
     await expectActorBehavior(await actor(), ...ask('publicSingleton', ['#<:t>'], ['*']));
   });
 
-  it('the file, as `Self`', async () => {
-    await expectActorBehavior(await actor(), ...ask('file', ['#<c.bv>'], ['*']));
+  it('the file, as `self`', async () => {
+    await expectActorBehavior(await actor(), ...ask('file', ['#<:>'], ['*']));
   });
 
   it('in an object', async () => {
-    await expectActorBehavior(await actor(), ...ask('named', { n: '#<:N>', s: '#<:~s>', f: '#<c.bv>' }, { n: '*', s: '*', f: '*' }));
+    await expectActorBehavior(await actor(), ...ask('named', { n: '#<:N>', s: '#<:~s>', f: '#<:>' }, { n: '*', s: '*', f: '*' }));
   });
 
   it('compared: the same actor', async () => {
@@ -249,7 +249,7 @@ describe('a declared actor as a value — from an instance', () => {
           k = class
           return k
         }
-        @self = { return Self }
+        @me = { return self }
         @again = {
           k = class
           n = k(seed + 1)
@@ -290,8 +290,8 @@ describe('a declared actor as a value — from an instance', () => {
     await expectActorBehavior(await built(), ...ask('own', ['#<c.bv:N>'], ['*']));
   });
 
-  it('`Self` is the actor whose `new` built it', async () => {
-    await expectActorBehavior(await built(), ...ask('self', ['#<c.bv:N>'], ['*']));
+  it('`self` is the actor itself, tagged with its maker', async () => {
+    await expectActorBehavior(await built(), ...ask('me', ['#<:N:1>'], [':N']));
   });
 
   it('`k(args)` builds one', async () => {

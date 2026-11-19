@@ -2,7 +2,7 @@ import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
-import { isActorRefType, isCtorProfile, expectedTag } from '../../actor_values.js';
+import { isActorRefType, isCtorProfile, expectedTag, selfSlotTag } from '../../actor_values.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
@@ -1517,7 +1517,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push('":"'); continue; }
+    if (f.expr?.type === 'SelfValue') { posTypes.push(JSON.stringify(selfSlotTag(ctx.currentActor))); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     if (isFunctionType(t)) return null;
@@ -1528,7 +1528,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: ":"`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: ${JSON.stringify(selfSlotTag(ctx.currentActor))}`); continue; }
     if ('sigil' in f) {
       key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {

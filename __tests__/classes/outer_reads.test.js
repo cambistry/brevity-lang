@@ -235,9 +235,9 @@ describe('a class calls its own function before its file\'s', () => {
   });
 });
 
-// A file actor that Self() constructs is a file actor of its own, so a class it
+// A file actor that class() constructs is a file actor of its own, so a class it
 // constructs reads its cells, not the first file actor's.
-describe('a class constructed by a Self() actor reads that actor', () => {
+describe('a class constructed by a class() actor reads that actor', () => {
   const script = `
     *
       n Integer
@@ -256,13 +256,13 @@ describe('a class constructed by a Self() actor reads that actor', () => {
     }
 
     @spawn = {
-      child Self = Self(20)
+      child class = class(20)
       x Integer = child.read()
       return x
     }
   `;
 
-  it('reads the Self() actor\'s param and cell', async () => {
+  it('reads the class() actor\'s param and cell', async () => {
     const actor = await createActor(script, { constructorArgs: [4] });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'read', from: 'c' } },

@@ -39,7 +39,7 @@ export function publicLabel(actor) {
 
 const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = (params) *{ … } }'";
 
-export function lowerSingletonClasses(actors, types = []) {
+export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleton' } = {}) {
   // Whether `X::name` names a type declared in actor `X` (no member shares its name).
   const isType = (owners, name) => types.some(t => t.name === name && owners.includes(t.ownerClass));
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
@@ -110,7 +110,7 @@ export function lowerSingletonClasses(actors, types = []) {
   };
 
   // `class` (and `self::class`) names the class of the actor it's in.
-  for (const a of actors) resolveClassOf(a, blockClassOf);
+  for (const a of actors) resolveClassOf(a, blockClassOf, fileKind);
   // A declared actor as a value, and a name bound to one (src/actor_values.js).
   checkRetiredClass(actors);
   lowerActorValues(actors, byName);
@@ -230,7 +230,10 @@ function isInside(actor, name, byName) {
 // it's in: as a receiver (`class.count`, `class::total`): the class whose block
 // the code reaches, its own or its nearest parent's. Anywhere else it is the class
 // itself: `class(args)` builds one, as `C(args)` does, and `k = class` is its address.
-function resolveClassOf(actor, blockClassOf) {
+function resolveClassOf(actor, blockClassOf, fileKind) {
+  // A factory file (a `*` header) is built by its host: in its own code `class` is
+  // the file's kind, `Self` internally, so `class(args)` builds another.
+  const factoryFile = !actor.name && fileKind === 'factory';
   const where = () => actor.membersOf ? 'a class block' : actor.singletonOf ? 'a singleton' : 'this file';
   const isClass = actor.name && !actor.singletonOf && !actor.membersOf && actor.name !== FILE_CLASS;
   const notAClass = () => new Error(`'class' in ${where()}: it names the class of an actor built by a class, and this one isn't`);
@@ -251,6 +254,7 @@ function resolveClassOf(actor, blockClassOf) {
   });
   for (const b of bodies(actor)) walk(b, (n) => {
     if (isClassId(n)) {
+      if (factoryFile) { n.name = 'Self'; return; }
       if (!isClass) throw notAClass();
       n.name = actor.name;
     }

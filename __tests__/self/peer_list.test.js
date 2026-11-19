@@ -1,7 +1,7 @@
 import { compileActor, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// *List of Self — peers hold an actor-ref to a list of their own kind.
+// *List of class — peers hold an actor-ref to a list of their own kind.
 //
 // Each Peer is constructed with `P: peers`, where `peers` is the outer
 // list-actor. P is a live ref (shared identity, snapshot on read), so when
@@ -13,15 +13,15 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // address). No address-equality check needed at the call site.
 //
 // Coverage:
-//   - `*List of Self` as a class param type
+//   - `*List of class` as a class param type
 //   - `peers <- [Peer(...), ...]` — typed list-actor write of actor refs
 //   - `over(<remote-list-ref>)` — fetch contents from list-actor, iterate locally
 //   - Published class param (`@name: Text` → @name reply)
-//   - Self-routing via parent (one of the iterated peers is the caller itself)
+//   - class-routing via parent (one of the iterated peers is the caller itself)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SCRIPT = `
-Peer = (@name: Text, :P *List of Self) *{
+Peer = (@name: Text, :P *List of class) *{
   peers List = []
   P.subscribe (p List) { peers <- p }
   @names = { over(peers) (p) { p.name() } }
@@ -38,7 +38,7 @@ peers *List of Peer = []
 }
 `;
 
-describe('*List of Self — peers iterate a shared list-actor of their own kind', () => {
+describe('*List of class — peers iterate a shared list-actor of their own kind', () => {
   it('peers.first.names returns all three names, including the caller via self-routing', async () => {
     const compiled = await compileActor(SCRIPT);
     const actor = await compiled.spawn();

@@ -1,5 +1,6 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
+import { selfSlotTag } from '../../actor_values.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { addressToken, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
@@ -1613,7 +1614,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString(':')); continue; }
+    if (f.expr?.type === 'SelfValue') { posTypes.push(erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
     if (!t) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -1624,7 +1625,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString(':')}`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

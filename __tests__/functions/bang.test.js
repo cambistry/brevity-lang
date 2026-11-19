@@ -43,8 +43,10 @@ describe('! function — tail errors', () => {
 });
 
 describe('self as a value — validation', () => {
-  it('is an error outside return position', () => {
-    expect(() => compileSource('@go = { x = self\n return 1 }\n')).toThrow(/self/);
+  // The actor's own address, anywhere a value goes (notes/actors-not-classes-2026-11-18.md).
+  it('is a value outside return position too', () => {
+    expect(() => compileSource('@go = { x = self\n return 1 }\n')).not.toThrow();
+    expect(() => compileSource('@go = { return [self] }\n')).not.toThrow();
   });
 
   it('can be one of several return values', () => {

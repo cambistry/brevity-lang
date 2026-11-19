@@ -2,7 +2,7 @@ import { createActor } from '../helpers.js';
 
 // Scalar-type actorization — the cell-as-state-slot protocol for `*Integer`,
 // `*Text`, `*Boolean` mirrors `*Point` type actorization (type_actorization.test.js)
-// and `*List of Self` collection actorization (classes/peer_list.test.js):
+// and `*List of class` collection actorization (classes/peer_list.test.js):
 // the `*Type` cell stores a value, supports whole-cell mutation via `<-`,
 // and triggers re-emission to subscribers when the slot changes.
 //

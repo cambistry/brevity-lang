@@ -40,7 +40,7 @@ The reply is positional with the projected value:
 
 - Multiple `self as` clauses can coexist.
 - Target type selects the projection.
-- Negated catch-all form `self as !Self = -> ...` is tested.
+- Negated catch-all form `self as !class = -> ...` is tested.
 - Two-line clause syntax is tested.
 - Public handlers still work alongside projections.
 - Untyped actor references such as `g = *Greeter()` still call handlers

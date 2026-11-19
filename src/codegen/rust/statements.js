@@ -1,5 +1,5 @@
 // statements.js — Statement generation for Rust codegen
-import { isActorRefType } from '../../actor_values.js';
+import { isActorRefType, selfSlotTag } from '../../actor_values.js';
 import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { returnsOnlySelf } from '../../chains.js';
@@ -3411,7 +3411,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const posTypes = [];
   for (const f of pos) {
     // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
-    if (f.expr?.type === 'SelfValue') { posTypes.push('":"'); continue; }
+    if (f.expr?.type === 'SelfValue') { posTypes.push(JSON.stringify(selfSlotTag(G.ctx.childStatePrefix ? { name: G.ctx.childStatePrefix } : null))); continue; }
     const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
     if (!t) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -3422,7 +3422,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   const namedTypes = [];
   for (const f of named) {
     let key, t, varName;
-    if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": ":"`); continue; }
+    if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": ${JSON.stringify(selfSlotTag(G.ctx.childStatePrefix ? { name: G.ctx.childStatePrefix } : null))}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.type || typeEnv.get(f.sigil);

@@ -162,7 +162,7 @@ C = *{
 
 A final value in a `!` function is an error, because it would be discarded. So is a
 value on one path and falling off the end on another: write `return self` on the
-second. `self` is only a value in return position. On the wire a self-return is
+second. `self` is a value anywhere, the actor's own address. On the wire a self-return is
 `{ re: ['#<:>'], ty: [':'] }`: an address is a reply's one value, as any other is, and
 `#<:>` is the sender's own address in local form, `:` its class. Its parent
 promotes it, like any other local address, and adds its maker's address in `ty`:

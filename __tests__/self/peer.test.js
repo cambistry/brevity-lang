@@ -1,16 +1,16 @@
 import { compileActor, expectActorBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Self in type position — peer-shaped @-cells.
+// `class` in type position — peer-shaped @-cells.
 //
-// `@peer *Self | null = null` declares a public ref cell whose value is
+// `@peer *class | null = null` declares a public ref cell whose value is
 // either an actor of the enclosing class or null. Two actors peered to each
 // other can gossip without either side importing an interface — the class
 // definition is the contract.
 //
 // Coverage:
-//   - Self in type position (the @-cell field)
-//   - Auto-setter for Self-typed @-cells (`a.peer <- b` from outside)
+//   - `class` in type position (the @-cell field)
+//   - Auto-setter for class-typed @-cells (`a.peer <- b` from outside)
 //   - Method dispatch on a ref-cell-held actor reference (`peer.gossip!(t)`)
 //   - Gossip's intentional non-propagation: a 2-peer ring stays consistent
 //     because every add hits exactly two news lists.
@@ -20,7 +20,7 @@ const SCRIPT = `
 Chatter = * {
   news *List = []
   @news = { news }
-  @peer *Self | null = null
+  @peer *class | null = null
   @add! = (t Text) {
     news.append!(t)
     if (@peer) {
@@ -45,7 +45,7 @@ Chatter = * {
 }
 `;
 
-describe('Self — peer-shaped @-cell, two-actor gossip ring', () => {
+describe('`class` — peer-shaped @-cell, two-actor gossip ring', () => {
   it('after wiring a↔b and a.add!(X), both news lists hold [X]', async () => {
     const compiled = await compileActor(SCRIPT);
     const actor = await compiled.spawn();

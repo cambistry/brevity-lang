@@ -200,7 +200,7 @@ describe('self as — CAM message (file-level, multiple clauses)', () => {
 
 describe('self as — CAM message (file-level, negated catch-all)', () => {
   const script = `
-    self as !Self = -> 0
+    self as !class = -> 0
     @ping = -> pong: "ok" as Text
   `;
 

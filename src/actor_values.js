@@ -1,7 +1,7 @@
 import { selfAddress } from './codegen/wire_labels.js';
 
 // An actor is a value: any declared actor (an actor with a `new`, a singleton, the
-// file as `Self`) named where a value goes is its address, `ActorValue`, typed
+// file) named where a value goes is its address, `ActorValue`, typed
 // `Actor` and tagged `*` on the wire. An actor a `new` built is tagged with its
 // maker instead; that's the class relationship, the only one there is.
 //
@@ -9,7 +9,7 @@ import { selfAddress } from './codegen/wire_labels.js';
 // code writes it `#<:C>`. Code anywhere else can't always say where the declaring
 // actor is relative to itself (an instance can't name its file actor), so an actor
 // declared in the file actor is written by its absolute address, `#<c.bv:C>`, which
-// needs the file's name, as `Self` does.
+// needs the file's name. (`self`, the actor's own address, is `#<:>` anywhere.)
 //
 // A name bound to a declared actor (`k = C`) may stand for it statically:
 // `k(args)` is `C(args)`, `k.x` is `C.x` and `k::x` is `C::x`, resolved at compile
@@ -49,6 +49,10 @@ export function expectedTag(t, actors) {
   const cls = typeof t === 'string' && (actors || []).find(a => a.name === t && !a.singletonOf && !a.membersOf);
   return cls ? makerTag(t) : t;
 }
+
+// A `self` slot's tag: `:`, the actor's class, which its parent fills in; in the
+// file actor, which no `new` built and no parent translates, `*`.
+export const selfSlotTag = (actor) => (actor && actor.name ? ':' : '*');
 
 // A constructor profile, `(…) -> *{ … }`: the type of an actor with a `new`.
 export const isCtorProfile = (t) => typeof t === 'string' && /^\(.*\)\s*->\s*\*\{/s.test(t);
@@ -116,7 +120,8 @@ export function lowerActorValues(actors, byName) {
     if (!here && at !== null) throw new Error(`'${shown(d)}' as a value: an actor declared inside another actor, named from inside a third, isn't supported yet`);
     return { type: 'ActorValue', name: labelOf(d), label: selfAddress(labelOf(d)), relative: here };
   };
-  // `Self`: the actor with the `new` that built the actor it's in, or the file.
+  // `Self` (the internal name `class` takes in a factory file, and in a class): the
+  // actor with the `new` that built the actor it's in, or the file.
   // Either way it's written by its absolute address.
   const selfOf = (actor) => {
     const cls = isClass(actor) ? actor : null;
@@ -176,6 +181,8 @@ export function lowerActorValues(actors, byName) {
     // A name bound to a declared actor stands for it statically; one in a cell doesn't.
     for (const root of roots) statementLists(root, (list) => {
       for (const s of list) {
+        // `k = self` holds the actor's own address.
+        if (s?.type === 'Assign' && s.value?.type === 'SelfValue' && !s.isRef) Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE });
         if (!BINDS.has(s?.type) || s.value?.type !== 'ActorValue' || s.isRef || cells.has(s.name)) continue;
         const written = shownName(s.value.name ?? 'Self');
         if (s.type === 'TypedAssign' && !takesDeclared(s.typeName)) {
