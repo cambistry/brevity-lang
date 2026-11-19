@@ -2,8 +2,9 @@
 
 import { isDependencyValue } from '../dep_address.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { selfAddress, addressToken, memberOp, wireLabel, classAddress } from '../wire_labels.js';
+import { selfAddress, addressToken, memberOp, wireLabel, actorAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
+import { isActorRefType } from '../../actor_values.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import {
@@ -497,6 +498,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'FunctionCallExpr') {
+    const held = genHeldNewCall(ctx, expr, typeEnv, sCtx);
+    if (held) return held;
+  }
+  if (expr.type === 'FunctionCallExpr') {
     // Check if callee is function-typed — route through self_send
     if (expr.callee?.type === 'Identifier') {
       const calleeType = ctx.currentTypeEnv?.get(expr.callee.name);
@@ -831,6 +836,15 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       : genExpr(ctx, expr.object, typeEnv, sCtx);
     const method = erlString(memberOp(expr.method));
     const v2 = erlSendVars(ctx);
+    // A value may hold an actor under us (`#<:x>`): bv_held_send_ runs it here,
+    // or sends it out (src/codegen/erlang/program.js).
+    const held = !ctx.localInstanceVars?.has(dotObjName) && !(expr.method.endsWith('.') || expr.launched);
+    if (held) {
+      ctx.usesHeldSend = true;
+      if (positional.length === 0 && named.length === 0) return `bv_held_send_(${to}, ${method}, null)`;
+      const { opExpr, tyExpr } = erlArgSlots(positional, named, method, erlArgHelpers(ctx, typeEnv, sCtx));
+      return `bv_held_send_(${to}, ${opExpr}, ${tyExpr})`;
+    }
     if (positional.length === 0 && named.length === 0) {
       return `begin
         ${v2.seq} = bv_next_seq_(),
@@ -907,7 +921,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'SelfValue') return '<<"#<:>"/utf8>>';
-  if (expr.type === 'ClassValue') return erlString(classAddress(ctx.fileName, expr));
+  if (expr.type === 'ActorValue') return erlString(actorAddress(ctx.fileName, expr));
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 
@@ -1563,7 +1577,25 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
   return `fun(${paramNames}) -> ${bodyExpr} end`;
 }
 
+// An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
+// `$new` to it, answered with the new actor's address. Null for any other call.
+export function genHeldNewCall(ctx, expr, typeEnv, sCtx) {
+  if (expr.callee?.type !== 'Identifier' && expr.callee?.type !== 'RefRead') return null;
+  const t = typeEnv?.get?.(expr.callee.name) ?? ctx.currentTypeEnv?.get(expr.callee.name);
+  if (!isActorRefType(t)) return null;
+  ctx.usesHeldSend = true;
+  const recv = genExpr(ctx, expr.callee, typeEnv, sCtx);
+  const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
+  const bag = expr.args.find(a => a.type === 'NamedArgsBag');
+  const named = bag ? Object.entries(bag.fields).map(([name, e]) => ({ name, expr: e })) : [];
+  if (positional.length === 0 && named.length === 0) return `bv_held_addr_(bv_held_send_(${recv}, <<"$new">>, null))`;
+  const { opExpr, tyExpr } = erlArgSlots(positional, named, '<<"$new">>', erlArgHelpers(ctx, typeEnv, sCtx));
+  return `bv_held_addr_(bv_held_send_(${recv}, ${opExpr}, ${tyExpr}))`;
+}
+
 function genFunctionCallExpr(ctx, expr, typeEnv, sCtx) {
+  const held = genHeldNewCall(ctx, expr, typeEnv, sCtx);
+  if (held) return `[${held}]`;
   // Primitive type constructors — unwrap to the inner value (mirrors js codegen)
   if (expr.callee?.type === 'Identifier') {
     const _primitiveTypes = new Set(['Integer', 'Float', 'Text', 'Boolean', 'Decimal']);

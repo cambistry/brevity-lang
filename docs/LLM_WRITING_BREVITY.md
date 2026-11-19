@@ -11,10 +11,11 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - Plain local functions are implementation helpers.
 - `#name` is an explicitly private function.
 - `use` declares the file singleton's DI (dependencies and load-time params).
-- `Name = (...) *{ ... }` declares a class (constructs actors).
+- `Name = (...) *{ ... }` declares an actor with a `new` (which builds actors). An actor is a
+  value: `k = Name` holds its address, typed `Actor`; there is no `Class` type.
 - `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
-- `*Name(...)` constructs an actor of the named class.
+- `*Name(...)` asks the named actor's `new` for an actor.
 - Replies are explicit structures.
 
 For the runtime distinction between values and actors, see
@@ -129,7 +130,7 @@ trailing `...` (fire-and-forget). Replying methods bind their named reply fields
 
 ## Remote Actors
 
-`*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote-declared class:
+`*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote actor with a `new`:
 
 ```brevity
 use WebView = "WebView" as (path: Text) -> *{

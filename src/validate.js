@@ -22,21 +22,6 @@ import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain } from './subclass.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
 import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel, remoteMember } from './opre.js';
 
-// `Self` in value position: any Identifier with name 'Self' that isn't the
-// callee of a function call. Construction calls `Self(args)` don't trip this
-// (the Identifier sits at `callee` and we mark that position). Type-position
-// uses don't trip either, since those are string-valued `typeName` fields,
-// not Identifier AST nodes.
-export function astUsesSelfAsValue(node, inCalleePos = false) {
-  if (!node || typeof node !== 'object') return false;
-  if (Array.isArray(node)) return node.some(n => astUsesSelfAsValue(n, false));
-  if (node.type === 'Identifier' && node.name === 'Self' && !inCalleePos) return true;
-  for (const [k, v] of Object.entries(node)) {
-    if (k === 'type') continue;
-    if (astUsesSelfAsValue(v, k === 'callee')) return true;
-  }
-  return false;
-}
 
 // Only a class subscribes to its param: it does so once, when it's made, and
 // the subscription lives as long as it does. A function's call ends, so
@@ -86,15 +71,6 @@ export function validate(ast, options = {}) {
 }
 
 function validateProgram(ast, options = {}) {
-  // Self-as-value provisioning: any source that references `Self` in a value
-  // position (not callee, not type) needs a wire address baked in. We require
-  // `options.fileName` (the canonical wire path, e.g. 'c.bv'). Without it
-  // there's no address to resolve to — fail loudly here, before any backend
-  // sees the AST.
-  if (astUsesSelfAsValue(ast) && !options.fileName) {
-    throw new Error('Self in value position requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
-  }
-
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
   lowerFunctionAs(ast);
@@ -256,7 +232,7 @@ function validateProgram(ast, options = {}) {
         for (const n of node) walk(n);
         return;
       }
-      if (node.type === 'Actor' && bindsIn(node.constructorBody, from)) return;
+      if ((node.type === 'Actor' && Array.isArray(node.functions)) && bindsIn(node.constructorBody, from)) return;
       if (guard) {
         if (['Assign', 'TypedAssign', 'SetStatement', 'StateAssign', 'RefDecl'].includes(node.type) && node.name === from) throw again();
         if (node.type === 'DestructureAssign' && (node.pattern || []).some(e => e.name === from)) throw again();

@@ -4,6 +4,8 @@ import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
+import { publicLabel } from '../../singleton_classes.js';
+import { expectedTag } from '../../actor_values.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
@@ -261,6 +263,10 @@ function genFn(ctx, fn) {
       const posIdx = posAt.get(p);
       if (p.defaultValue) {
         paramLines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dvOf(p)} end,`);
+      } else if ((ctx.program?.actors || []).some(a => a.name === p.type && !a.singletonOf && !a.membersOf)) {
+        // An actor one of our classes built: from the wire it's its address,
+        // which names one we published.
+        paramLines.push(`${I}${erlVarName(p.name)} = bv_held_pid_(lists:nth(${posIdx + 1}, S_pos)),`);
       } else {
         paramLines.push(`${I}${erlVarName(p.name)} = lists:nth(${posIdx + 1}, S_pos),`);
       }
@@ -592,8 +598,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   let matchExpr = '';
   if (!skipTypeCheck) {
     if (positionalTyped.length > 0) {
-      const posTypes = positionalTyped.map(p => erlString(p.type)).join(', ');
-      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
+      const posTypes = positionalTyped.map(p => erlString(expectedTag(p.type, ctx.program?.actors))).join(', ');
+      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(expectedTag(p.type, ctx.program?.actors))}}`).join(', ');
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
         // With nothing required, a call can leave out every arg, and so every tag.
@@ -604,7 +610,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       }
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(p.type)}}`).join(', ');
+      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(expectedTag(p.type, ctx.program?.actors))}}`).join(', ');
       matchExpr = `match_types(Message, [${pairs}])`;
     }
   }
@@ -770,15 +776,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
     }
   } else if (implicitReturn) {
     const replyCtx = { ...sCtx, stmtIdx: body.length };
-    // Handler body is bare `Self` — reply with the class wire address as a
-    // bare value (mirrors #new's reply shape: bare `re`, bare `ty` tag).
-    // Skip the standard positional array wrapping.
-    const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
-      && implicitReturn.expr.name === 'Self';
-    if (isBareSelfReturn) {
-      const addr = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
-      replyBlock = `${I}{ok, ${addr}, <<"Class"/utf8>>}`;
-    } else {
+    {
       const raw = genExpr(ctx, implicitReturn.expr, typeEnv, replyCtx);
       const isCall = implicitReturn.expr.type === 'FunctionCallExpr';
       const val = isCall ? `bv_object_one(${raw})` : raw;
@@ -2158,6 +2156,56 @@ self_send(OpName, Payload) ->
     bv_object_pack(Re).
 ` : '';
 
+  // A message to an actor held as a value, by its address (src/actor_values.js).
+  // One under us (#<:x>) is ours: an actor we published, a private singleton of
+  // ours, or our own op (\`$new\` to an actor we declare). Any other address is
+  // out there: we send it and wait for the reply.
+  const heldArms = allActors.filter(a => a.singletonOf && !a.membersOf && !publicLabel(a)).map(a => {
+    const keys = [`state_b_${a.singletonOf}`, ...(a.enclosing ? [`state_${a.enclosing.toLowerCase()}_b_${a.singletonOf}`] : [])];
+    return `bv_held_at_(${erlString(selfAddress(a.singletonOf))}) -> bv_first_pid_([${keys.map(k => `get(${k})`).join(', ')}]);\n`;
+  }).join('');
+  const heldSendFn = ctx.usesHeldSend ? `
+bv_held_send_(To, Op, Ty) ->
+    case bv_held_reply_(To, Op, Ty) of
+        %% An address alone (a \`$new\` answered here) is the reply's one value.
+        <<"#<", _/binary>> = A_ -> {[A_], #{}};
+        R_ -> bv_object_pack(R_)
+    end.
+
+bv_held_reply_(To, Op, Ty) ->
+    Addr_ = bv_to_addr_(To),
+    {OpName_, Payload_} = case Op of [P_, N_] -> {N_, P_}; N_ -> {N_, #{}} end,
+    case Addr_ of
+        <<":", _/binary>> ->
+            case bv_held_at_(Addr_) of
+                Pid_ when is_pid(Pid_) -> bv_inst_call_(Pid_, OpName_, Payload_);
+                none ->
+                    case bv_route_at_(OpName_, Addr_) of
+                        {_, Pid_} -> bv_inst_call_(Pid_, OpName_, Payload_);
+                        none ->
+                            Msg_ = #{<<"op">> => Op, <<"to">> => Addr_, <<"ty">> => Ty},
+                            {ok, Re_, _} = bv_call_self_(fun() -> handle_op(bv_op_key_(OpName_, Addr_), Msg_, Payload_, <<"0">>, <<"__parent">>) end),
+                            Re_
+                    end
+            end;
+        _ ->
+            Seq_ = bv_next_seq_(),
+            Out_ = #{<<"id">> => integer_to_binary(Seq_), <<"op">> => Op, <<"to">> => Addr_},
+            io:put_chars([json_encode(case Ty of null -> Out_; _ -> Out_#{<<"ty">> => Ty} end), $\n]),
+            await_response_(integer_to_binary(Seq_))
+    end.
+
+${heldArms}bv_held_at_(_) -> none.
+
+bv_first_pid_([P_ | _]) when is_pid(P_) -> P_;
+bv_first_pid_([_ | T_]) -> bv_first_pid_(T_);
+bv_first_pid_([]) -> none.
+
+%% The address an answer to \`$new\` names: the reply's value, or its sole slot.
+bv_held_addr_({[A_], _}) -> A_;
+bv_held_addr_(A_) -> A_.
+` : '';
+
   const hasEmits = emitDecls.size > 0 || allActors.some(a => (a.constructorBody || []).some(s => s.type === 'EmitDecl')) || allActors.some(a => a.functions.some(f => f.type === 'OnHandler'));
   const emitFns = hasEmits ? `
 subscribe_(Event, Callback) ->
@@ -2269,7 +2317,7 @@ ${genRunAs(allActors)}
 
 ${handleOpClauses.join(';\n')}.
 
-${selfSendFn}${emitFns}
+${selfSendFn}${heldSendFn}${emitFns}
 ${captureFn}
 
 ${hydrateFn}

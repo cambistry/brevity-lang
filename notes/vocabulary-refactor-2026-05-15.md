@@ -1,5 +1,9 @@
 # Vocabulary refactor — Class, Actor, Object, Value (2026-05-15)
 
+> **Qualified (2026-11-18):** "Class" is no longer a noun for a kind of thing. There are actors;
+> "class" names only an actor's relationship with the `new` that built it. See
+> `notes/actors-not-classes-2026-11-18.md`.
+
 Status: **decided**, with one item (item 4) flagged as leaning rather than committed. Affects user-facing terminology across docs, prose, and source comments. AST identifiers exempted per the rule from `service-block-terminology-2026-04-16.md`.
 
 ## Motivation

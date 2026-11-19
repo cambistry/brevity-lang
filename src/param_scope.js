@@ -47,7 +47,7 @@ function scopeParams(node, outer, taken) {
     return;
   }
   if (!node || typeof node !== 'object') return;
-  if (node.type === 'Actor') {
+  if ((node.type === 'Actor' && Array.isArray(node.functions))) {
     scopeActor(node, taken);
     return;
   }

@@ -63,10 +63,13 @@ export function selfAddress(name) {
   return ':' + quote(addressToken(name));
 }
 
-// A class value's address (src/class_values.js): `#<:C>` from the file actor,
-// `#<c.bv:C>` from anywhere else.
-export function classAddress(fileName, { label, relative }) {
+// A declared actor's address as a value (src/actor_values.js): `#<:C>` from the
+// actor that declares it, `#<c.bv:C>` from anywhere else, `#<c.bv>` for the file.
+export function actorAddress(fileName, { label, relative }) {
   if (relative) return '#<' + label + '>';
-  if (!fileName) throw new Error('A class as a value outside the file actor requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
+  if (!fileName) throw new Error('A declared actor as a value outside the actor that declares it requires a fileName (e.g. compile(ast, { fileName: "c.bv" }))');
   return '#<' + quote(fileName) + label + '>';
 }
+
+// The wire tag of an actor no `new` built, and of a slot typed `Actor`.
+export const ACTOR_TAG = '*';

@@ -19,7 +19,7 @@ const SUPER_TYPES = new Set(['SuperCall', 'SuperMember', 'SuperSet']);
 const walk = (node, visit, parent = null, key = null) => {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) { node.forEach((n, i) => walk(n, visit, node, i)); return; }
-  if (node.type === 'Actor') return;
+  if ((node.type === 'Actor' && Array.isArray(node.functions))) return;
   visit(node, parent, key);
   for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') walk(v, visit, node, k);
 };
@@ -125,7 +125,7 @@ export function lowerSuperLayers(actors) {
         (U.stateVarDecls ??= []).push(h);
       }
       if (n.type === 'SuperMember') {
-        const { layer, isPublic, name: _, type: __, ...rest } = n;
+        const rest = Object.fromEntries(Object.entries(n).filter(([k]) => !['layer', 'isPublic', 'name', 'type'].includes(k)));
         for (const k of Object.keys(n)) delete n[k];
         Object.assign(n, { type: 'RefRead', name: hidden, ...rest });
       } else {

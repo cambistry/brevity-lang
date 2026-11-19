@@ -3,6 +3,7 @@
 import { erlStateKey, erlString } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
+import { isCtorProfile } from '../../actor_values.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 
@@ -12,10 +13,11 @@ import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 // Returns a plain JS string; the caller applies erlString. See
 // notes/type-authority-address-tags-2026-10-26.
 function erlTypeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its address (`:s`).
+  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
+  if (t === 'Actor' || isCtorProfile(t)) return '*';
   const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return selfAddress(singleton);
+  if (singleton) return '*';
   // An actor of a dependency's class is tagged with the class's address
   // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
   if (typeof t === 'string' && !ctx.typeDecls?.has(t) && ctx.depIsDependency?.(t)) return ctx.depAddress(t);

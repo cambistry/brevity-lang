@@ -1,6 +1,6 @@
-# Published Class Params
+# Published Constructor Params
 
-LLM orientation: class and file params are private unless published with `@`.
+LLM orientation: constructor and file params are private unless published with `@`.
 A published param gets a public accessor handler that replies with the
 param's value. The tests cover positional, named and aliased params, defaults,
 file params, the service document, and the retired accessor syntax.

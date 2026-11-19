@@ -2,7 +2,6 @@ import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
-import { astUsesSelfAsValue } from '../../validate.js';
 import { unionMembers } from '../../return_shapes.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
@@ -140,12 +139,6 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const savedSsaCounts = ctx.ssaCounts;
   const locals = genLocals(ctx, body, typeEnv);
   const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && name !== 'new' && !name.startsWith('set@') && !name.startsWith('new@');
-  // Handler body is bare `Self` — reply with the class address as a bare wire
-  // value (mirrors the #new reply shape: bare string in `re`, bare metatype
-  // tag in `ty`). Skip the standard positional array wrapping.
-  const isBareSelfReturn = !reply && implicitReturn
-    && implicitReturn.expr?.type === 'Identifier'
-    && implicitReturn.expr?.name === 'Self';
   let reLine;
   if (name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
@@ -155,8 +148,6 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     reLine = `\n        re = '#<:' + this.#_publishInstance(null, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ':';`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
-  } else if (isBareSelfReturn) {
-    reLine = `\n        re = this.constructor.classAddress;`;
   } else if (implicitReturn) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
       reLine = '';  // return comes from block branches; handled by genLocals or delegate
@@ -186,8 +177,6 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
         tyLine = `\n        _ty_re = ${tyBody};`;
       }
     }
-  } else if (isBareSelfReturn) {
-    tyLine = `\n        _ty_re = 'Class';`;
   }
   ctx.ssaScope = savedSsaScope;
   ctx.ssaCounts = savedSsaCounts;
@@ -855,9 +844,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const publicSingletons = (ctx.program?.actors || [])
     .filter(a => publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
   const publishesClasses = publishesNew || publicSingletons.length > 0;
+  // Private singletons declared directly in this actor (\`s = actor { … }\`): not
+  // published, but this actor's own sends reach them by their address (\`#<:~s>\`).
+  const heldSingletons = (ctx.program?.actors || [])
+    .filter(a => a.singletonOf && !a.membersOf && !publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
+  const heldAtCases = heldSingletons
+    .map(sg => `${JSON.stringify(selfAddress(sg.singletonOf))}: () => this.#${stateKey(sg.singletonOf)}`).join(', ');
   for (const sg of publicSingletons) {
     const label = publicLabel(sg);
-    allInitLines.push(`    this.#_publishAt(${JSON.stringify(quoteToken(addressToken(label)))}, ${JSON.stringify(selfAddress(label))}, this.#${stateKey(sg.singletonOf)});`);
+    allInitLines.push(`    this.#_publishAt(${JSON.stringify(quoteToken(addressToken(label)))}, '*', this.#${stateKey(sg.singletonOf)});`);
   }
   // A constructor block's call on another actor in this process needs the helper too.
   if (allInitLines.some(l => childCall.test(l))) ctx.usesChildSend = true;
@@ -881,12 +876,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // emitted since the dispatcher prologue references it unconditionally.
   const hasSubscribableCells = true;
 
-  // Self-as-value support: a class that references `Self` in expression
-  // position is provisioned with its wire address at definition time, read
-  // through `this.constructor.classAddress` (dynamic Self — a subclass sees
-  // its own address). Classes that never use Self as a value omit the
-  // field entirely.
-  const classUsesSelfAsValue = astUsesSelfAsValue(actor);
   // A class reads its file actor's cells by asking it (src/outer_reads.js).
   const readsOuter = !!actor.name && ctx.readsOuter;
   // The names this actor answers `$get` for, by wire name. A public cell answers
@@ -901,9 +890,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     .map(n => `${JSON.stringify(wireLabel(n))}: { read: () => this.#${stateKey(n)}, open: ${isPublicCell(n)} }`).join(', ');
   // Published params: props, which `$subscribe` doesn't apply to.
   const propNames = [...new Set([...(actor.initParams || []), ...(mergedActor.initParams || [])].filter(p => p.accessor).map(p => p.accessor.replace(/^@/, '')))];
-  const classAddressField = classUsesSelfAsValue
-    ? `\n  static classAddress = ${JSON.stringify('#<' + quoteToken(ctx.fileName) + '>')}`
-    : '';
 
   return `${exportKw}class${name} {
   #binding
@@ -912,7 +898,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_testFwd = new Map()${hasEmits ? '\n  #_subscribers = new Map()' : ''}${hasSubscribableCells ? '\n  #_cellSubs = new Map()' : ''}
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null
-  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${classAddressField}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
+  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
   constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
 
@@ -967,14 +953,23 @@ ${actor.spawnable ? `
     return instance;
   }
 ` : ''}
+  // A private singleton of ours, by its address (\`:~s\`), or null.
+  #_heldAt(addr) {
+    const held = { ${heldAtCases} };
+    return Object.hasOwn(held, addr) ? held[addr]() : null;
+  }
+
   async #send(op, to, ty) {
     const id = String(++this.#nextId);
-    // Locally-held lambda in a reply-awaiting callback field: a relative
-    // self-address (#<. @N>) names a handler on us, so dispatch it to
-    // ourselves and await the reply rather than posting outward. (See #fire.)
+    // A relative address (\`#<:x>\`) is under us: a locally-held lambda, or an
+    // actor we hold (one we declare, or built). It's delivered to us, \`to\` and
+    // all, as a held child's handle is, and we await the reply rather than
+    // posting outward. (See #fire.)
     if (typeof to === 'string' && /^#<:/.test(to)) {
       const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
-      this.#dispatch({ id, op, from: '__self' });
+      const held = this.#_heldAt(_opre_unbracket(to));
+      const msg = { id, op, from: '__parent', _route: (m) => this.receive(m), ...(ty !== undefined && { ty }) };
+      if (held) held.receive(msg); else this.receive({ ...msg, to: _opre_unbracket(to) });
       return p;
     }
     return new Promise((resolve, reject) => {
@@ -1029,9 +1024,14 @@ ${actor.spawnable ? `
 
   async #sendNew(args, to, ty) {
     const id = String(++this.#nextId);
+    const op = args === undefined ? '$new' : [args, '$new'];
+    // An actor held as a value (\`#<…>\`) answers with one: the address comes back
+    // as a value too. One under us (\`#<:C>\`) is delivered to us.
+    const held = typeof to === 'string' && to.startsWith('#<');
     return new Promise(resolve => {
-      this.#_newPending.set(id, resolve);
-      const _msg = { id, op: args === undefined ? '$new' : [args, '$new'], to };
+      this.#_newPending.set(id, held ? (addr) => resolve(addr === null ? null : '#<' + addr + '>') : resolve);
+      if (held && /^#<:/.test(to)) { this.receive({ id, op, to: _opre_unbracket(to), from: '__parent', _route: (m) => this.receive(m), ...(ty !== undefined && { ty }) }); return; }
+      const _msg = { id, op, to };
       if (ty !== undefined) _msg['ty'] = ty;
       this.#out(_msg);
     });
@@ -1209,7 +1209,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
   }
 
   // Publish an actor of ours under the tokens \`addr\`, its class tagged \`tag\`:
-  // \`C:N\` / \`:C\` for one made by \`#new\`, \`s\` / \`:s\` for a singleton.
+  // \`C:N\` / \`:C\` for one made by \`#new\`, \`s\` / \`*\` for a singleton (no \`new\` built it).
   #_publishAt(addr, tag, inst) {
     this.#_instances.set(addr, inst);
     this.#_addrOf.set(inst, addr);

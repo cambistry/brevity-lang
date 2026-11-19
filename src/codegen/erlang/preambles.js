@@ -858,19 +858,24 @@ bv_route_at_(<<"$new">>, To) when is_binary(To) ->
         none -> none
     end;
 bv_route_at_(_, To) -> bv_instance_at_(To).
-%% An actor's class tag from its address: C:N is of :C; a singleton (s, C:N:s)
-%% is its own class; N alone is of ours, : (a file with a \`*\` section).
+%% An actor's class tag from its address: C:N is of :C; N alone is of ours, :
+%% (a file with a \`new\`). A singleton (s, C:N:s) is a declared actor: no \`new\`
+%% built it, so it's \`*\`.
 bv_addr_class_(Addr) ->
     case re:run(Addr, <<"^[0-9]+$">>) of
         {match, _} -> <<":">>;
         nomatch -> bv_addr_class_named_(Addr)
     end.
 bv_addr_class_named_(Addr) ->
-    Base_ = case re:run(Addr, <<":[0-9]+$">>) of
-        {match, [{P_, _}]} -> binary:part(Addr, 0, P_);
-        nomatch -> Addr
-    end,
-    <<":", Base_/binary>>.
+    case re:run(Addr, <<":[0-9]+$">>) of
+        {match, [{P_, _}]} -> <<":", (binary:part(Addr, 0, P_))/binary>>;
+        nomatch -> <<"*">>
+    end.
+%% An actor we published, named by its address (#<:C:N>): its process. Any other
+%% value is itself.
+bv_held_pid_(<<"#<:", _/binary>> = A) ->
+    case bv_instance_at_(bv_to_addr_(A)) of {_, P_} -> P_; none -> A end;
+bv_held_pid_(V) -> V.
 %% A reply leaving for the wire names an actor we published by its address.
 bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A_ -> <<"#<:", A_/binary, ">">> end;
 bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
@@ -1591,6 +1596,11 @@ bv_await_emit_(Id_) ->
 %% the parameter spells the type as the source does (Point, Svc::Point). Both
 %% come to the type's key.
 type_member_of(Actual, Expected) when Actual =:= Expected -> true;
+%% \`*\` expects an actor, any actor: one no \`new\` built (\`*\`), or one tagged with
+%% its maker's address (\`:C\`, \`svc.bv:C\`), which isn't a type's.
+type_member_of(Actual, <<"*">>) when is_binary(Actual) ->
+    ((bv_mod_()):bv_type_name(Actual) =:= undefined) andalso
+        (Actual =:= <<"*">> orelse binary:match(Actual, [<<":">>, <<".">>]) =/= nomatch);
 type_member_of(Actual, Expected) when is_binary(Expected) ->
     An = (bv_mod_()):bv_type_name(Actual),
     case (An =/= undefined) andalso (An =:= (bv_mod_()):bv_source_key(Expected)) of

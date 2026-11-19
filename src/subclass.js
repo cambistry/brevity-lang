@@ -162,11 +162,11 @@ export function renamePublicClasses(ast) {
   const rename = (node, labels) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => rename(n, labels)); return; }
-    const inside = node.type === 'Actor' ? labelsOf(node) : labels;
+    const inside = (node.type === 'Actor' && Array.isArray(node.functions)) ? labelsOf(node) : labels;
     for (const [key, v] of Object.entries(node)) {
       if (v && typeof v === 'object') rename(v, inside);
       else if (typeof v === 'string' && v.includes('@') && !SELECTOR_KEYS.has(key)) {
-        const ownLabel = key === 'name' && node.type !== 'Actor' && inside.has(v);
+        const ownLabel = key === 'name' && !(node.type === 'Actor' && Array.isArray(node.functions)) && inside.has(v);
         if (!ownLabel) node[key] = v.replace(AT_NAME, m => renames.get(m) ?? m);
       }
     }

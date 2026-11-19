@@ -147,7 +147,7 @@ describe('public singletons', () => {
   it('is addressed by its label', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 'bump!', to: ':s', from: 'c' } },
-      { output: { id: '1', re: '#<:s>', ty: ':s', to: 'c', from: ':s' } },
+      { output: { id: '1', re: '#<:s>', ty: '*', to: 'c', from: ':s' } },
       { input: { id: '2', op: 'get', to: ':s', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':s' } },
     );
@@ -156,23 +156,23 @@ describe('public singletons', () => {
   it('is the same actor its enclosing actor calls', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 'bump!', to: ':s', from: 'c' } },
-      { output: { id: '1', re: '#<:s>', ty: ':s', to: 'c', from: ':s' } },
+      { output: { id: '1', re: '#<:s>', ty: '*', to: 'c', from: ':s' } },
       { input: { id: '2', op: 'viaMain', from: 'c' } },
       { output: { id: '2', re: [1], ty: ['Integer'], to: 'c' } },
     );
   });
 
-  it('leaves its actor as its address, tagged with its label', async () => {
+  it('leaves its actor as its address, tagged `*`', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 'who', from: 'c' } },
-      { output: { id: '1', re: ['#<:s>'], ty: [':s'], to: 'c' } },
+      { output: { id: '1', re: ['#<:s>'], ty: ['*'], to: 'c' } },
     );
   });
 
   it('reading the published cell gives its address', async () => {
     await expectBehavior(published,
       { input: { id: '1', op: 's', from: 'c' } },
-      { output: { id: '1', re: ['#<:s>'], ty: [':s'], to: 'c' } },
+      { output: { id: '1', re: ['#<:s>'], ty: ['*'], to: 'c' } },
     );
   });
 
@@ -183,13 +183,13 @@ describe('public singletons', () => {
       { input: { id: '2', op: [[20], '$new'], ty: [['Integer']], to: ':Box', from: 'c' } },
       { output: { id: '2', re: '#<:Box:2>', ty: ':Box', to: 'c' } },
       { input: { id: '3', op: 'bump!', to: ':Box:1:tally', from: 'c' } },
-      { output: { id: '3', re: '#<:Box:1:tally>', ty: ':Box:1:tally', to: 'c', from: ':Box:1:tally' } },
+      { output: { id: '3', re: '#<:Box:1:tally>', ty: '*', to: 'c', from: ':Box:1:tally' } },
       { input: { id: '4', op: 'get', to: ':Box:1:tally', from: 'c' } },
       { output: { id: '4', re: [11], ty: ['Integer'], to: 'c', from: ':Box:1:tally' } },
       { input: { id: '5', op: 'get', to: ':Box:2:tally', from: 'c' } },
       { output: { id: '5', re: [20], ty: ['Integer'], to: 'c', from: ':Box:2:tally' } },
       { input: { id: '6', op: 'who', to: ':Box:1', from: 'c' } },
-      { output: { id: '6', re: ['#<:Box:1:tally>'], ty: [':Box:1:tally'], to: 'c', from: ':Box:1' } },
+      { output: { id: '6', re: ['#<:Box:1:tally>'], ty: ['*'], to: 'c', from: ':Box:1' } },
     );
   });
 });

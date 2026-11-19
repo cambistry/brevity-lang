@@ -199,7 +199,7 @@ describe('a public class\'s members on the wire', () => {
   it('a write there is seen by the class\'s next actor', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bump!', to: ':Trailing', from: 'c' } },
-      { output: { id: '1', re: '#<:Trailing>', ty: ':Trailing', to: 'c', from: ':Trailing' } },
+      { output: { id: '1', re: '#<:Trailing>', ty: '*', to: 'c', from: ':Trailing' } },
       { input: { id: '2', op: [[1], '$new'], ty: [['Integer']], to: ':Trailing', from: 'c' } },
       { output: { id: '2', re: '#<:Trailing:1>', ty: ':Trailing', to: 'c' } },
       { input: { id: '3', op: 'n', to: ':Trailing:1', from: 'c' } },

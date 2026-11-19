@@ -122,7 +122,7 @@ export function inferExprType(expr, typeEnv) {
     case 'TypeConstruction': return expr.typeName;
     case 'AsExpr':           return expr.typeName;
     case 'PresenceCheck':    return 'Boolean';
-    case 'ClassValue':       return 'Class';
+    case 'ActorValue':       return 'Actor';
     case 'FunctionCallExpr': if (expr.resultType) return expr.resultType; break;
   }
 

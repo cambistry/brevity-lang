@@ -23,7 +23,7 @@ ${arms.join('\n')}
 // program.js — Program assembly and entry for Rust codegen
 import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
-import { addressToken, wireLabel } from '../wire_labels.js';
+import { addressToken, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import * as AST from '../../ast.js';
 import {
@@ -266,9 +266,18 @@ ${sourceArms}
   // dep construction awaits (new) need the stdin reader + main loop.
   const needsAwait = needsDotCallAwait(actor) || G.ctx.needsAwaitNew;
   const hasDotCallAwait = needsAwait;
+  // Private singletons, by address (\`:~s\`): an actor's own sends reach them by
+  // their handle (bv_held_send). A class's are in its state while it runs.
+  const heldSingletonArms = (allActors || [])
+    .filter(a => a.singletonOf && !a.membersOf && !publicLabel(a))
+    .map(a => {
+      const cls = a.enclosing ? a.enclosing.toLowerCase() : '';
+      const keys = [...new Set([stateKey(a.singletonOf), ...(cls ? [`${cls}_${stateKey(a.singletonOf)}`] : [])])];
+      return `            ${JSON.stringify(selfAddress(a.singletonOf))} => [${keys.map(k => JSON.stringify(k)).join(', ')}].iter().find_map(|k| self.state.get(*k).and_then(|v| v.as_str()).map(str::to_string)),\n`;
+    }).join('');
 
   // Actor struct fields
-  const structFields = ['    binding: mpsc::Sender<Value>'];
+  const structFields = ['    binding: Binding'];
   // newFields tracked via newArgs below
   const newArgs = [];
   // Always include state — lambda captures may use it at runtime
@@ -1061,7 +1070,19 @@ use std::str::FromStr;
 
 // With BREVITY_READY set, the actor says when it goes back to reading input, so
 // a test harness can keep one process alive and know when a message is done with.
-fn bv_ready(binding: &mpsc::Sender<Value>) {
+// What an actor sends goes out, except a reply to a message it sent itself (one to
+// an actor it holds under it, \`#<:x>\`, see bv_held_send): that reply, addressed
+// \`__loop\`, is kept for it.
+struct Binding { tx: mpsc::Sender<Value>, looped: std::cell::RefCell<Vec<Value>> }
+
+impl Binding {
+    fn send(&self, msg: Value) -> Result<(), mpsc::SendError<Value>> {
+        if msg.get("to").and_then(|t| t.as_str()) == Some("__loop") { self.looped.borrow_mut().push(msg); return Ok(()); }
+        self.tx.send(msg)
+    }
+}
+
+fn bv_ready(binding: &Binding) {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if *ON.get_or_init(|| std::env::var_os("BREVITY_READY").is_some()) {
         let _ = binding.send(json!({"ev": "ready"}));
@@ -1155,7 +1176,8 @@ fn bv_swap_self_tag(t: &Value, class: &str) -> Value {
 }
 fn bv_inst_id_opt(v: &Value) -> Option<u32> {
     if let Some(n) = v.as_u64() { return Some(n as u32); }
-    v.as_str().and_then(|s| s.rsplit('/').next()).and_then(|n| n.parse().ok())
+    // An in-process handle (\`box/1\`), or an address from the wire (\`#<:Box:1>\`).
+    v.as_str().and_then(|s| s.trim_end_matches('>').rsplit(['/', ':']).next()).and_then(|n| n.parse().ok())
 }
 fn bv_inst_id(v: &Value) -> u32 { bv_inst_id_opt(v).unwrap_or(0) }
 
@@ -1909,7 +1931,7 @@ ${structFields.join(',\n')},
 }
 
 impl Actor {
-    fn new(binding: mpsc::Sender<Value>) -> Self {
+    fn new(binding: Binding) -> Self {
         Actor { binding, ${newArgs.join(', ')} }
     }
 
@@ -2024,8 +2046,9 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 }
                 Ok(Value::Null) => return,
                 // A self-return: we made this actor, so we name it and its class, as for #new.
+                // A singleton is a declared actor: no \`new\` built it, so it's \`*\`.
                 Ok(v) if v == json!(child) => {
-                    resp.insert("ty".to_string(), json!(bv_addr_class(&addr)));
+                    resp.insert("ty".to_string(), json!(${hasPublicSingletons ? 'if self.singleton_at.contains_key(&addr) { "*".to_string() } else { bv_addr_class(&addr) }' : 'bv_addr_class(&addr)'}));
                     resp.insert("re".to_string(), json!(format!("#<:{}>", addr)));
                 }
                 // "Me" as one slot of several: the same naming, slot by slot.
@@ -2045,6 +2068,54 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
 ${dispatchBlock}
     }
 ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
+    // A message to an actor held as a value, by its address (\`to\`, unbracketed).
+    // One under us (\`:x\`) is delivered to us, as the wire's would be, and its
+    // reply kept for us; a private singleton of ours is reached by its handle. Any
+    // other address is out there: we send and wait for the reply.
+    #[allow(dead_code)]
+    fn bv_held_send(&mut self, to: String, op: Value, ty: Option<Value>) -> Value {
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let id = seq.to_string();
+        let mut msg = Map::new();
+        msg.insert("id".to_string(), json!(id));
+        msg.insert("op".to_string(), op.clone());
+        msg.insert("to".to_string(), json!(to));
+        if let Some(t) = ty { msg.insert("ty".to_string(), t); }
+        if !to.starts_with(':') {
+            let _ = self.binding.send(self.bv_lift(Value::Object(msg)));
+            return self.await_response(&id);
+        }
+${heldSingletonArms ? `        let held: Option<String> = match to.as_str() {
+${heldSingletonArms}            _ => None,
+        };
+        if let Some(child) = held {
+            let (op_name, payload) = match &op {
+                Value::Array(a) if a.len() > 1 => (a[a.len() - 1].as_str().unwrap_or("").to_string(), a[0].clone()),
+                other => (other.as_str().unwrap_or("").to_string(), json!({})),
+            };
+            self.bv_run_deferred();
+            return self.child_dispatch(&child, &op_name, &payload, "", "__parent");
+        }
+` : ''}        msg.insert("from".to_string(), json!("__loop"));
+        self.receive(&Value::Object(msg));
+        let reply = {
+            let mut looped = self.binding.looped.borrow_mut();
+            let at = looped.iter().position(|m| m.get("id").and_then(|v| v.as_str()) == Some(id.as_str()));
+            at.map(|i| looped.remove(i))
+        };
+        match reply {
+            Some(m) if m.get("ex").is_some() => panic!("ex_response"),
+            Some(m) => {
+                let re = m.get("re").cloned().unwrap_or(Value::Null);
+                // A reply whose whole value is one actor, as await_response reads it.
+                if re.as_str().is_some_and(|t| t.starts_with("#<") && t.ends_with('>')) { return Value::Array(vec![re]); }
+                m.get("ty").map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, t))
+            }
+            None => Value::Null,
+        }
+    }
+
     fn await_response(&mut self, target_id: &str) -> Value {
         loop {
             let mut buf = String::new();
@@ -2122,7 +2193,7 @@ fn main() {
             out.flush().unwrap();
         }
     });
-    let mut actor = Actor::new(tx);
+    let mut actor = Actor::new(Binding { tx, looped: std::cell::RefCell::new(Vec::new()) });
 ${constructorParams.length > 0 ? `    if let Some(args_str) = std::env::args().nth(1) {
         if let Ok(args) = serde_json::from_str::<Value>(&args_str) {
             if let Some(arr) = args.as_array() {

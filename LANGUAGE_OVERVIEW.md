@@ -19,23 +19,30 @@ For source generation patterns, use
 - `#name` defines a private function.
 - `use` declares the file singleton's DI (dependencies and load-time params);
   `use("source")` is the same in value position, scoped where it's bound.
-- `Name = (...) *{ ... }` declares a class (constructs actors).
+- `Name = (...) *{ ... }` declares an actor with a `new`, which builds actors.
 - `type Name (...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
-- `*Name(...)` constructs an actor of the named class.
+- `*Name(...)` asks the named actor's `new` for an actor.
 - Argument lists can be positional, named, or mixed on both input and return.
 
 ## Values and Actors
 
 Brevity has two runtime categories. A **value** is what a type constructs:
 pass-by-value, immutable, no address. A scalar (`5`, `"hi"`) is a value. A
-shaped datum (`Point(1, 2)`, `[1, 2, 3]`) is a value. An **actor** is what a
-class constructs: addressable, mailboxed, possibly stateful. Mutation lives on
-the actor side, in cells.
+shaped datum (`Point(1, 2)`, `[1, 2, 3]`) is a value. An **actor** is
+addressable, mailboxed, possibly stateful. Mutation lives on the actor side, in
+cells. An actor is a value too, passed as its address: `k = Box` holds the
+actor `Box`, typed `Actor`.
+
+There are no classes, only actors. An actor with a `new` builds others, and
+the actors it builds are of its class: that relationship is all "class" means.
+An actor built by `Box`'s `new` is tagged `:Box` on the wire; an actor no `new`
+built (`Box` itself, a singleton, the file) is tagged `*`. See
+[notes/actors-not-classes-2026-11-18.md](./notes/actors-not-classes-2026-11-18.md).
 
 The prefix `*` sigil promotes a value to an actor. `Point(1, 2)` is a value;
 `*Point(1, 2)` is an actor. `Integer` is a value type; `*Integer` is an actor
-cell. The same sigil marks a class body (`(params) *{ ... }`) as
+cell. The same sigil marks a constructor block (`(params) *{ ... }`) as
 actor-producing rather than value-producing.
 
 For the full vocabulary and runtime axis, see
@@ -93,7 +100,7 @@ Call sites can destructure the returned list directly:
 
 This is one of Brevity's data-piping tools. A call can pass through a
 structured bundle of positionals and names without immediately collapsing it
-into a class, record, or ad hoc value. The wire-level `op` and `re` fields use
+into an actor, record, or ad hoc value. The wire-level `op` and `re` fields use
 the same message-shaped idea.
 
 ## Surface Forms and Effects
@@ -157,7 +164,7 @@ A final value in a `!` function is an error, because it would be discarded. So i
 value on one path and falling off the end on another: write `return self` on the
 second. `self` is only a value in return position. On the wire a self-return is
 `{ re: '#<>' }`, where `#<>` is the sender's own address in local form. Its parent
-promotes it, like any other local address, and adds the class in `ty`:
+promotes it, like any other local address, and adds its maker's address in `ty`:
 `{ re: '#<. Counter 1>', ty: '. Counter' }`.
 
 A signature's arrow states its effect, in service docs and function types. A name
@@ -188,9 +195,10 @@ untracked hits *Integer = 0
 }
 ```
 
-## Classes and Dependency Context
+## Actors with a `new`, and Dependency Context
 
-A **class** constructs actors. Its body is marked with `*`:
+`Box = (params) *{ … }` declares the actor `Box`, whose `new` builds actors. The
+constructor block is marked with `*`:
 
 ```brevity
 Box = (value Integer) *{
@@ -199,7 +207,7 @@ Box = (value Integer) *{
 ```
 
 The `*` on the body marks the form as actor-producing. The `(value Integer)` is
-the class header — the params accepted at construction. The `*{ ... }` is the
+the constructor's header — the params `new` accepts. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
 The file actor is a singleton, built once at load. It needs no header: it
@@ -267,8 +275,8 @@ count *Integer = 0
 
 ## Remote Actors
 
-A remote actor binding uses `*Name(...)`. Construction calls the remote class
-— a `$new` CAM message is sent to the dependency address; the reply carries
+A remote actor binding uses `*Name(...)`. Construction asks the remote actor's
+`new` — a `$new` CAM message is sent to the dependency address; the reply carries
 the actor's address:
 
 ```brevity

@@ -1,20 +1,22 @@
-# Classes
+# Actors with a `new`
 
-LLM orientation: this directory covers actor construction — class headers,
-class params, subclassing, the parent layer (`super`), optional args, accessors, ingest,
-and remote actor surfaces. The current vocabulary is **class** (the source
-artifact) constructing an **actor** (the runtime entity).
+LLM orientation: this directory covers actor construction — constructor headers
+and params, subclassing, the parent layer (`super`), optional args, accessors, ingest,
+actors as values, and remote actor surfaces. There are no classes, only **actors**:
+`T = (…) *{ … }` declares the actor `T`, whose `new` builds others, and those are of
+class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-11-18.md).
 
-## Current Class Model
+## Current Model
 
-- A class defines an actor's shape.
-- `T = * { ... }` declares a no-arg class.
+- An actor with a `new` defines the shape of the actors it builds.
+- `T = * { ... }` declares one whose `new` takes no args.
 - `T = (x Integer, label: Text) *{ ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `label: Text = "hi"`.
-- Class params are private unless published with `@name`, which adds an accessor.
+- Constructor params are private unless published with `@name`, which adds an accessor.
 - Subclasses use `Parent ++ (own params) *{ … }`; several parents join with `++`; `D = C++` is a subclass with no changes.
 - `super::h()` / `super.a()` / `super[T]::h()` reach the parent layer (`super.test.js`); the wrapped `(sup T ++)` form is retired.
-- Remote classes use file-level DI and `*Name(...)`; see
+- An actor is a value: `k = T` holds its address, typed `Actor`, tagged `*` (actor_value.test.js).
+- Remote actors with a `new` use file-level DI and `*Name(...)`; see
   `../cam/remote_instance.md`.
 
 ## Canonical Examples
@@ -62,6 +64,6 @@ projections live.
 
 ## Documents
 
-- [Published Class Params](accessors.md)
+- [Published Constructor Params](accessors.md)
 - [Class Ingest](ingest.md)
 - [File-Level Dependency Injection](../services/dependency_injection.md)

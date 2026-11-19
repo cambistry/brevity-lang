@@ -3,10 +3,14 @@ import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferExprType } from '../../inference.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { selfAddress, wireLabel } from '../wire_labels.js';
+import { wireLabel } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
+import { isCtorProfile } from '../../actor_values.js';
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
+    // \`*\` expects an actor, any actor: one no \`new\` built (\`*\`), or one tagged
+    // with its maker's address (\`:C\`, \`svc.bv:C\`), which isn't a type's.
+    if expected == "*" { return bv_type_name(actual).is_none() && (actual == "*" || actual.contains(':') || actual.contains('.')); }
     // A type value's tag is its address (or the alias spelling of its
     // authority); the parameter spells the type as the source does (Point,
     // Svc::Point). Both come to the type's key.
@@ -423,10 +427,11 @@ export function setCtx(newCtx) { G.ctx = newCtx; }
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
-  // A singleton's class is itself: it's tagged with its address (`:s`).
+  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
+  if (t === 'Actor' || isCtorProfile(t)) return '*';
   const node = typeof t === 'string' && G.ctx.actorNodes?.get(t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return selfAddress(singleton);
+  if (singleton) return '*';
   // An actor of a dependency's class is tagged with the class's address
   // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
   if (typeof t === 'string' && !G.ctx.typeDecls?.has(t) && G.ctx.depIsDependency?.(t)) return G.ctx.depAddress(t);

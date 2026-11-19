@@ -92,12 +92,13 @@ describe('child to parent', () => {
 });
 
 describe('grandchild to child to parent', () => {
-  it('re, ty and from of a self-return gain each hop', async () => {
+  // A singleton is a declared actor, so its tag is `*` and doesn't gain a hop.
+  it('re and from of a self-return gain each hop', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: '$new', to: ':Box', from: 'c' } },
       { output: { id: '1', re: '#<:Box:1>', ty: ':Box', to: 'c' } },
       { input: { id: '2', op: 'me', to: ':Box:1:tally', from: 'c' } },
-      { output: { id: '2', re: '#<:Box:1:tally>', ty: ':Box:1:tally', to: 'c', from: ':Box:1:tally' } },
+      { output: { id: '2', re: '#<:Box:1:tally>', ty: '*', to: 'c', from: ':Box:1:tally' } },
     );
   });
 

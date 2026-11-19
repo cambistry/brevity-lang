@@ -32,6 +32,7 @@ import {
   genDotCallAwait,
   genChildDotCallAwait,
   genErlLambdaVarCall,
+  genHeldNewCall,
   genFunctionCallExpr,
   genActorFnCallExpr,
   genFunctionLiteral,
@@ -600,6 +601,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'ObjectConstructor') {
         lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
+      } else if (s.value?.type === 'FunctionCallExpr' && genHeldNewCall(ctx, s.value, typeEnv, stmtCtx)) {
+        lines.push(`${I}${varName} = ${genHeldNewCall(ctx, s.value, typeEnv, stmtCtx)},`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.lambdaVarNames.has(s.value.callee.name)) {
         lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (() => {
@@ -1439,7 +1442,11 @@ function genParamDestructure(params, indent, { ctx = null, afterBind = null } = 
     lines.push(`${I}{S_pos, S_named} = bv_object_pack(Payload),`);
   }
 
-  const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})` : expr;
+  // An actor one of our classes built arrives from the wire as its address, which
+  // names one we published: its process.
+  const builtByClass = (type) => (ctx?.program?.actors || []).some(a => a.name === type && !a.singletonOf && !a.membersOf);
+  const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})`
+    : builtByClass(type) ? `bv_held_pid_(${expr})` : expr;
   const typeEnv = new Map(params.map(p => [p.name, p.type]));
   // An expression default runs only when the arg is missing.
   const isExprDefault = p => p.defaultValue && !isLiteralDefault(p.defaultValue);

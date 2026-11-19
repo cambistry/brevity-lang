@@ -1,4 +1,5 @@
 // handlers.js — Handler and child actor generation for Rust codegen
+import { expectedTag } from '../../actor_values.js';
 import { intrinsicArm, selfAddress, wireLabel } from '../wire_labels.js';
 
 // The key a handler's match arm answers: its wire op, or for a cell or class arm
@@ -116,15 +117,15 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
     const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
     if (positionalTyped.length > 0) {
-      const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
-      const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
+      const posTypes = positionalTyped.map(p => expectedLit(p.type)).join(', ');
+      const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ');
       const typeCheck = hasOptionalTyped
         ? `${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
         : `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
       guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-      const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+      const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ')}])`;
       guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (checks.length > 0) {
       guard = ` if ${checks.join(' && ')}`;
@@ -132,8 +133,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
   } else if (positionalTyped.length > 0) {
     const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
     const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
-    const posTypes = positionalTyped.map(p => `"${p.type}"`).join(', ');
-    const namedTypes = namedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ');
+    const posTypes = positionalTyped.map(p => expectedLit(p.type)).join(', ');
+    const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ');
     if (hasOptionalTyped) {
       guard = ` if from == "__self" || from == "__test" || ${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`;
     } else {
@@ -141,7 +142,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
     }
   } else if (namedTyped.length > 0) {
     const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", "${p.type}")`).join(', ')}])`;
+    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ')}])`;
   }
 
   const lines = [];
@@ -310,15 +311,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
       }
     }
   } else if (implicitReturn && guards.length === 0) {
-    // Handler body is bare `Self` — reply with the class wire address as a
-    // bare value (mirrors #new's reply shape: bare `re`, bare `ty` tag).
-    // Skip the standard positional array wrapping.
-    const isBareSelfReturn = implicitReturn.expr.type === 'Identifier'
-      && implicitReturn.expr.name === 'Self';
-    if (isBareSelfReturn) {
-      lines.push(`                re = Some(${genRustExpr(implicitReturn.expr, typeEnv)});`);
-      lines.push(`                ty_re = Some(Value::String("Class".to_string()));`);
-    } else {
+    {
       const raw = genRustExpr(implicitReturn.expr, typeEnv);
       const retType = inferExprType(implicitReturn.expr, typeEnv);
       const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
@@ -680,6 +673,11 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
 }
 
 // With nothing required, a call can leave out every arg, and so every tag.
+// A param type's expected tag, as a Rust string literal (src/actor_values.js).
+function expectedLit(t) {
+  return JSON.stringify(expectedTag(t, [...(G.ctx.actorNodes?.values() || [])]));
+}
+
 function untaggedOk(params, message) {
   return params.some(p => !p.defaultValue && !p.rest) ? '' : `${message}.get("ty").is_none() || `;
 }
@@ -691,11 +689,11 @@ function childTagGuard({ params }, overloaded = false) {
   const typed = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
   const pos = typed.filter(p => p.positional);
   const named = typed.filter(p => !p.positional);
-  const pair = p => `("${p.key || p.name}", "${p.type}")`;
+  const pair = p => `("${p.key || p.name}", ${expectedLit(p.type)})`;
   let check;
   if (pos.length > 0) {
     const required = pos.filter(p => !p.defaultValue).length;
-    const posTypes = pos.map(p => `"${p.type}"`).join(', ');
+    const posTypes = pos.map(p => expectedLit(p.type)).join(', ');
     check = `${untaggedOk(params, 'self.wire_msg')}match_types_positional_min(&self.wire_msg, &[${posTypes}], &[${named.map(pair).join(', ')}], ${required})`;
   } else if (named.length > 0) {
     check = `match_types(&self.wire_msg, &[${named.filter(p => !p.defaultValue).map(pair).join(', ')}])`;

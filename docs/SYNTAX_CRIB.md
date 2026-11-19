@@ -60,7 +60,9 @@ count *Integer = 0
 }
 ```
 
-## Class
+## An Actor With a `new`
+
+`Box` is an actor whose `new` builds actors; the ones it builds are of class `Box`.
 
 ```brevity
 Box = (seed Integer) *{
@@ -70,12 +72,28 @@ Box = (seed Integer) *{
 }
 ```
 
+## Actors as Values
+
+An actor is a value: its address. A declared actor (`Box`, a singleton, the file) is
+tagged `*` on the wire; one a `new` built is tagged with its maker (`:Box`).
+
+```brevity
+@pass = {
+  k = Box                        // bound statically: k(1) is Box(1)
+  j Actor = echo(k)              // `Actor`: any actor
+  b = j(2)                       // `$new` to the actor j holds
+  return j
+}
+echo = (k Actor) -> k
+make = (k (seed Integer) -> *{ get () -> (value: Integer) }) -> k(1)  // its constructor profile
+```
+
 ## Extends (`++`)
 
 ```brevity
 Tagged = Box ++ (tag: Text) *{ @tag = -> tag: tag }  // parent, then params
 Both = A ++ B ++ (n Integer) *{}                   // several parents; later wins
-Plain = Box++                                      // new class, no changes
+Plain = Box++                                      // a new actor with a `new`, no changes
 Mixed = A ++ B                                     // two parents, no changes
 Extra = Box ++ *{ @more = -> 1 }                   // body, no params
 Over = Box ++ *{ h = -> super::h() + 1 }           // the parent layer's protected h
@@ -150,7 +168,7 @@ view = *WebView(path: "/main")
 
 ## `a`, `@a`, `#a`
 
-Inside an actor these are three different names, for functions and classes alike. Each may be
+Inside an actor these are three different names, for functions and declared actors alike. Each may be
 declared beside the others, and a call reaches only the one it spells. Outside, only `@a` is
 exposed: it's `@a` on the wire, and `.a` in the Brevity that calls it.
 
@@ -160,8 +178,8 @@ Box = *{ @who = -> "private" }
 @Sub = @Box ++ *{}              // superclasses and types use the same name
 
 @go = {
-  a = @Box()                     // the public class
-  b = Box()                      // the private class
+  a = @Box()                     // the public actor's new
+  b = Box()                      // the private one's
   c @Box = @Box()
   return 1
 }
@@ -171,10 +189,10 @@ status = -> "private"
 @check = { return @status() }    // @status; `status()` would be the private one
 ```
 
-## Public Class From Another File
+## A Public Actor From Another File
 
-A file's public class (`@W = *{ … }`) is constructed through the file, or imported by name.
-Bind it before use. A class named with `!` keeps the `!` at the call, and its type doesn't.
+A file's public actor with a `new` (`@W = *{ … }`) is built through the file, or imported by
+name. Bind it before use. One named with `!` keeps the `!` at the call, and its type doesn't.
 
 ```brevity
 use Svc = "svc.bv"
@@ -204,7 +222,7 @@ W = *{
 
 @y = {
   w = W()
-  a = W::X(2)                     // reached through the class
+  a = W::X(2)                     // reached through the actor W
   b = w::X(3)                     // or an actor of it
   p W::X = w.make()
   return result: p.n as Integer
@@ -300,7 +318,7 @@ n *Integer = 0
   `.` function; a dependency call its doc marks `=>`; a built-in `!` method on a cell.
 - **Not writes:** cells local to the call, an `emit`, `untracked` state, and calls on an
   actor this function just made, if they write only that actor.
-- **A class that writes while constructing is named `!`**, and so is the call:
+- **An actor whose `new` writes while constructing is named `!`**, and so is the call:
   `w W = W!()`. Its actors are typed `W`.
 - **A discarded read is an error:** `@total()` alone as a statement.
 

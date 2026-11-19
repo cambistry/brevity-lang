@@ -44,17 +44,19 @@ The split shows up in source as two different constructor shapes:
 
 - **Types** construct values. `type Point (x Integer, y Integer)` declares a
   type; `Point(1, 2)` constructs a value.
-- **Classes** construct actors. `Counter = (start Integer) *{ ... }` declares
-  a class; `Counter(0)` constructs an actor.
+- **Actors with a `new`** build actors. `Counter = (start Integer) *{ ... }`
+  declares the actor `Counter`; `Counter(0)` asks its `new` for one. The actors
+  it builds are of its class: that relationship is all "class" means.
 
 The prefix `*` sigil promotes a value to an actor at any position where the
 distinction is meaningful: `*Integer(0)` is an Integer-shaped actor cell,
-`*Point(1, 2)` is a Point-shaped actor. The same sigil marks the body of
-a class declaration (`(params) *{ ... }`), where it marks the whole form as
+`*Point(1, 2)` is a Point-shaped actor. The same sigil marks a
+constructor block (`(params) *{ ... }`), where it marks the whole form as
 producing an actor rather than a value.
 
-This is the more accurate axis than "actors are not objects." Actors are not
-values. The word "object" was always doing two jobs — naming a record-shaped
+This is the more accurate axis than "actors are not objects." An actor is never
+copied as a value is: it's passed as its address, and the address is the value
+(`k = Counter` holds the actor `Counter`). The word "object" was always doing two jobs — naming a record-shaped
 datum and naming a runtime entity with methods. CAM separates those: shaped
 data is a value, message-receiving identity is an actor.
 
@@ -65,9 +67,9 @@ For the full vocabulary, see
 
 An actor does not live in a global namespace. It is hosted by a context.
 
-That context can provide class params, dependency actors, remote service
+That context can provide constructor params, dependency actors, remote service
 interfaces, browser facilities, or parent-child routing. Brevity exposes that
-context with a top-level class/dependency boundary:
+context with `use`:
 
 ```brevity
 use Store = "/services/store" as {
@@ -140,7 +142,7 @@ and its reply can still be structured:
 ```
 
 Actor construction is also a message. The construction operation is the
-intrinsic `$new`, aimed at the class by `to`, and the reply supplies an address
+intrinsic `$new`, aimed by `to` at the actor whose `new` it is, and the reply supplies an address
 that later messages can target:
 
 ```json

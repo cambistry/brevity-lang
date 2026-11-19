@@ -9,7 +9,7 @@ crosses the wire as-is — fall out of which side of this line a thing sits on.
 
 |  | value | actor |
 |---|---|---|
-| Created by | type constructor | class constructor |
+| Created by | type constructor | an actor's `new` (or declared) |
 | Carries | content | identity |
 | Passed by | value (copy) | reference (address) |
 | Address | none | yes |
@@ -37,7 +37,7 @@ p = Point(1, 2)
 `Point` here is a type. Calling it produces a value — a shaped datum, immutable,
 addressless. Passing `p` to another function passes its content.
 
-A **class** constructs actors:
+An **actor with a `new`** builds actors:
 
 ```brevity
 Counter = (start Integer) *{
@@ -54,22 +54,29 @@ Counter = (start Integer) *{
 c = Counter(0)
 ```
 
-`Counter` here is a class. Calling it produces an actor — addressable,
-mailboxed, capable of holding mutable cells. Passing `c` to another function
-passes its address, not a copy.
+`Counter` here is an actor whose `new` builds others. Calling it produces an
+actor — addressable, mailboxed, capable of holding mutable cells — of class
+`Counter`: that relationship to its maker is all "class" means. Passing `c` to
+another function passes its address, not a copy.
+
+`Counter` itself is an actor too, and a value like any actor: `k = Counter`
+holds its address, typed `Actor`. On the wire an actor a `new` built is tagged
+with its maker (`:Counter`); a declared actor, which no `new` built (`Counter`,
+a singleton, the file), is tagged `*`. The type of an actor with a `new` is its
+constructor profile, `(start Integer) -> *{ … }`.
 
 The two declaration forms are distinguished by their prefix:
 
 - `type Name (...)` is a type declaration. No `*`.
-- `Name = (params) *{ ... }` is a class declaration. The `*` on the body marks
-  the form as actor-producing.
+- `Name = (params) *{ ... }` declares an actor with a `new`. The `*` on the body
+  marks the form as actor-producing.
 
 ## The `*` Prefix Sigil
 
 `*` is the universal "actorize" sigil. It promotes a value-side construct to an
 actor-side one. It appears in several positions, all consistent:
 
-**On a class declaration**, marking the form as actor-producing:
+**On a constructor block**, marking the form as actor-producing:
 
 ```brevity
 Counter = (start Integer) *{
@@ -161,17 +168,19 @@ where it appears.
 Earlier prose used "instance" as a softer synonym for actor and "object" as a
 loose term covering both shaped data and runtime entities. Both are gone:
 
-- "Instance" is replaced by "actor." Every class-constructed runtime entity is
-  an actor. There is no leftover role for "instance."
+- "Instance" is replaced by "actor." Every runtime entity a `new` builds is an
+  actor. There is no leftover role for "instance."
+- "Class" names only the relationship an actor has with the `new` that built
+  it. There is no kind of thing called a class, and no `Class` type.
 - "Object" no longer names a runtime category. Shaped data is a value; an
   identity that receives messages is an actor.
 
 The verb form is **construct** (not "instantiate"). The noun for the act is
-**construction**. A class *constructs* an actor; a type *constructs* a value.
+**construction**. An actor's `new` *constructs* an actor; a type *constructs* a value.
 
 ## Related Reading
 
 - [CAM](./CAM.md) — the message and context model that actors live in
 - [Language Overview](../LANGUAGE_OVERVIEW.md) — source-level shape, including
-  classes, types, and cells
+  actors with a `new`, types, and cells
 - [Syntax Crib](./SYNTAX_CRIB.md) — compact pattern sheet

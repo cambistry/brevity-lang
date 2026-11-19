@@ -116,7 +116,13 @@ export function parse(tokensIn) {
   // `enclosing` naming the class it's declared in (src/outer_reads.js).
   const hoistedClasses = [];
   const hoistNested = (nested, op) => {
-    for (const a of nested.nestedActors || []) { a.enclosing = op; hoistedClasses.push(a); }
+    for (const a of nested.nestedActors || []) {
+      a.enclosing = op;
+      // A class block's `new` is renamed to its class later (src/singleton_classes.js);
+      // which `new` this one is in is kept by its body, not its name.
+      if (op === 'new') Object.defineProperty(a, 'enclosingBody', { value: nested.functions, enumerable: false });
+      hoistedClasses.push(a);
+    }
     nested.nestedActors = [];
     // A type declared in a class's constructor block belongs to the class.
     if (op !== '<file-class>') for (const t of nested.types || []) t.ownerClass = op;
@@ -621,6 +627,15 @@ export function parse(tokensIn) {
   }
 
   function parseParenType() {
+    // A constructor profile, `(params) -> *{ iface }`: the type of an actor with a
+    // `new` (notes/actors-not-classes-2026-11-18.md).
+    if (ctorProfileAhead(pos)) {
+      const savedArrow = ctorArrow;
+      const params = parseCtorProfileParams('in a constructor profile');
+      ctorArrow = savedArrow;
+      const iface = parseInlineIface().replace(/\s*\n\s*/g, ' ');
+      return `(${params.map(p => p.positional ? `${p.name} ${p.type}` : `${p.name}: ${p.type}`).join(', ')}) -> *${iface}`;
+    }
     // Either a function signature type: (..)->(..)
     // Or an object-shaped type: (output: Text) / (Text)
     // We look ahead to see if the first paren group is followed by '->'.
@@ -5395,7 +5410,7 @@ export function parse(tokensIn) {
         const node = parsePublicFunction(constructorBody);
         if (Array.isArray(node)) {
           for (const fn of node) (fn.type === 'Actor' ? nestedActors : functions).push(fn);
-        } else if (node.type === 'Actor') {
+        } else if ((node.type === 'Actor' && Array.isArray(node.functions))) {
           nestedActors.push(node);
         } else {
           functions.push(node);
@@ -7068,11 +7083,11 @@ export function parse(tokensIn) {
       const rename = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { node.forEach(rename); return; }
-        if (node.type === 'Actor' && bangClasses.has(node.name)) {
+        if ((node.type === 'Actor' && Array.isArray(node.functions)) && bangClasses.has(node.name)) {
           node.sourceName = node.name;
           node.name = plain(node.name);
         }
-        for (const st of node.type === 'Actor' ? node.supertypes || [] : []) {
+        for (const st of (node.type === 'Actor' && Array.isArray(node.functions)) ? node.supertypes || [] : []) {
           if (bangClasses.has(`${st.supertype}!`)) throw new Error(`'${st.supertype}' is named '${st.supertype}!'`);
           if (bangClasses.has(st.supertype)) {
             st.sourceName = st.supertype;
@@ -7252,7 +7267,7 @@ export function parse(tokensIn) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(collect); return; }
       if (node.type === 'TypeDecl' && node.name) typeNames.add(node.name);
-      if (node.type === 'Actor' && node.name) typeNames.add(node.name);
+      if ((node.type === 'Actor' && Array.isArray(node.functions)) && node.name) typeNames.add(node.name);
       if (node.type === 'ServiceCoercion' && node.name) typeNames.add(node.name);
       if (node.type === 'Dependency') {
         if (node.name) typeNames.add(node.name);

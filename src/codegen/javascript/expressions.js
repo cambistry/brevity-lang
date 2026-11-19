@@ -2,10 +2,11 @@ import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferExprType } from '../../inference.js';
+import { isActorRefType, isCtorProfile, expectedTag } from '../../actor_values.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
-import { wireLabel, selfAddress, memberOp, classAddress } from '../wire_labels.js';
+import { wireLabel, selfAddress, memberOp, actorAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
@@ -956,6 +957,12 @@ export function genExpr(ctx, expr) {
       if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
       return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
     };
+    // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
+    // `$new` to it, answered with the new actor's address.
+    if ((expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
+        && isActorRefType(ctx.currentTypeEnv?.get(expr.callee.name))) {
+      return `BvObject.pack([await ${genSendNew(ctx, expr.args, genExpr(ctx, expr.callee))}])`;
+    }
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
     if (expr.callee?.type === 'Identifier') {
       const calleeName = expr.callee.name;
@@ -1168,7 +1175,7 @@ export function genExpr(ctx, expr) {
     }
   }
   if (expr.type === 'SelfValue') return '"#<:>"';
-  if (expr.type === 'ClassValue') return JSON.stringify(classAddress(ctx.fileName, expr));
+  if (expr.type === 'ActorValue') return JSON.stringify(actorAddress(ctx.fileName, expr));
   if (expr.type === 'DotAccessExpr') {
     // A sub-service (`Svc.s`) is its address (src/opre.js).
     if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);
@@ -1418,10 +1425,11 @@ export function genDefaultValue(node) {
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
-  // A singleton's class is itself: it's tagged with its address (`:s`).
+  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
+  if (t === 'Actor' || isCtorProfile(t)) return '*';
   const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
   const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return selfAddress(singleton);
+  if (singleton) return '*';
   // An actor of a dependency's class is tagged with the class's address
   // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
   if (typeof t === 'string' && !ctx.typeDecls?.has(t) && ctx.depIsDependency?.(t)) return ctx.depAddress(t);
@@ -1619,9 +1627,9 @@ export function genTypeCondition(ctx, params) {
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
   const isListOfAny = t => t === 'List of Anything' || t === 'List';
   const namedParams = params.filter(p => !p.positional && !isListOfAny(p.type));
-  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(p.type)}]`);
+  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(expectedTag(p.type, ctx.program?.actors))}]`);
   const posParams = params.filter(p => p.positional && !isListOfAny(p.type));
-  const pos = posParams.map(p => JSON.stringify(p.type));
+  const pos = posParams.map(p => JSON.stringify(expectedTag(p.type, ctx.program?.actors)));
   if (named.length === 0 && pos.length === 0) return null;
   // Count required positional params (no default value)
   const requiredPosCount = posParams.filter(p => !p.defaultValue).length;

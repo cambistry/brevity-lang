@@ -695,6 +695,9 @@ function _matchTypes(types, named, positional, requiredPos) {
   const memberOf = (actual, expected) => {
     if (actual === expected || expected === 'Anything') return true;
     const key = _bv_type_name(actual);
+    // \`*\` expects an actor, any actor: one no \`new\` built (\`*\`), or one tagged
+    // with its maker's address (\`:C\`, \`svc.bv:C\`), which isn't a type's.
+    if (expected === '*') return typeof actual === 'string' && !key && (actual === '*' || /[:.]/.test(actual));
     if (key && key === keyOf(expected)) return true;
     if (typeof expected === 'string' && expected.indexOf('|') !== -1) {
       return expected.split('|').some(m => m.trim() === actual || (key && key === keyOf(m.trim())));

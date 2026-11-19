@@ -1,9 +1,10 @@
 // expressions.js — Expression generation for Rust codegen
 import { isDependencyValue } from '../dep_address.js';
-import { addressToken, memberOp, selfAddress, wireLabel, classAddress } from '../wire_labels.js';
+import { addressToken, memberOp, selfAddress, wireLabel, actorAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferExprType, bindLocalType } from '../../inference.js';
 import { publicLabel } from '../../singleton_classes.js';
+import { isActorRefType } from '../../actor_values.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -684,6 +685,14 @@ ${subRegLines.join('\n')}
         Value::Null
     }`;
   }
+  // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
+  // `$new` to it, answered with the new actor's address.
+  if (expr.type === 'FunctionCallExpr' && (expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
+      && isActorRefType(typeEnv?.get(expr.callee.name))) {
+    G.ctx.needsAwaitNew = true;
+    const recv = genRustExpr(expr.callee, typeEnv, eCtx);
+    return `{ let _to = bv_addr_to(bv_val((${recv}).clone()).as_str().unwrap_or("")); let mut send_msg = Map::new(); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} let _op = send_msg.remove("op").unwrap_or(json!("$new")); let _ty = send_msg.remove("ty"); let _r = self.bv_held_send(_to, _op, _ty); BvObject::pack(&_r).one() }`;
+  }
   if (expr.type === 'FunctionCallExpr') {
     const calleeName = expr.callee?.name;
     const calleeType = calleeName && typeEnv ? typeEnv.get(calleeName) : null;
@@ -983,6 +992,11 @@ ${subRegLines.join('\n')}
     // Any other receiver is a value holding an address.
     const to = rustOpreTo(expr, (root) => genRustExpr(root, typeEnv, eCtx));
     const method = JSON.stringify(wireOpOf(expr));
+    // A value holding an address may name an actor under us (`#<:x>`): bv_held_send
+    // delivers it here, or sends it out (src/codegen/rust/program.js).
+    const held = expr.opre?.address?.kind !== 'static' && !(expr.method.endsWith('.') || expr.launched);
+    if (held) G.ctx.needsAwaitNew = true;
+    if (held && positional.length === 0 && named.length === 0) return `self.bv_held_send(${to}, json!(${method}), None)`;
     if (positional.length === 0 && named.length === 0) {
       return `{
         let seq = self.send_seq.get();
@@ -1030,6 +1044,7 @@ ${subRegLines.join('\n')}
       const posTy = positional.map(argTag).join(', ');
       tyExpr = `json!([[${posTy}]])`;
     }
+    if (held) return `self.bv_held_send(${to}, ${opExpr}, Some(${tyExpr}))`;
     return `{
         let seq = self.send_seq.get();
         self.send_seq.set(seq + 1);
@@ -1447,7 +1462,7 @@ ${subRegLines.join('\n')}
     throw new Error(`Unsupported Rust DotAccessExpr on ${expr.object?.type}`);
   }
   if (expr.type === 'SelfValue') return 'json!("#<:>")';
-  if (expr.type === 'ClassValue') return `json!(${JSON.stringify(classAddress(G.ctx.fileName, expr))})`;
+  if (expr.type === 'ActorValue') return `json!(${JSON.stringify(actorAddress(G.ctx.fileName, expr))})`;
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 

@@ -1,5 +1,9 @@
 # Class scope, member access and inheritance — 2026-11-16
 
+> **Superseded in part (2026-11-18):** there are no classes, only actors; "class" is an actor's
+> relationship with its `new`. The "class as a value" section and its `Class` type give way to
+> `notes/actors-not-classes-2026-11-18.md`.
+
 Records a long design discussion. Each section says whether it is **decided**, **direction**
 (agreed in principle, details open) or **open**. Not implemented unless stated elsewhere.
 

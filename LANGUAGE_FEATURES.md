@@ -15,11 +15,12 @@ notes themselves to stay explanatory rather than test-oriented.
 
 - [All test-backed notes](__tests__/README.md)
 
-## Classes
+## Actors with a `new`
 
-- [Classes Overview](__tests__/classes/index.md)
-- [Published Class Params](__tests__/classes/accessors.md)
-- [Class Ingest](__tests__/classes/ingest.md)
+- [Overview](__tests__/classes/index.md)
+- [Published Constructor Params](__tests__/classes/accessors.md)
+- [Ingest](__tests__/classes/ingest.md)
+- [Actors as Values](__tests__/classes/actor_value.test.js)
 - [File-Level Dependency Injection](__tests__/services/dependency_injection.md)
 
 ## Keywords

@@ -1,4 +1,5 @@
 // statements.js — Statement generation for Rust codegen
+import { isActorRefType } from '../../actor_values.js';
 import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { returnsOnlySelf } from '../../chains.js';
@@ -1116,10 +1117,22 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
         // Constructor-block child: dispatch through the cell's instance ref
         // and bind the sole positional.
         lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`{ let _r = ${genRustExpr(s.value, typeEnv)}; BvObject::pack(&_r).one() }`, s.typeName)};`);
+      } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
+          && heldActorValue(s.value.object, typeEnv)) {
+        // A message to an actor held as a value: its reply's sole positional.
+        lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`{ let _r = ${genRustExpr(s.value, typeEnv, sCtx)}; BvObject::pack(&_r).one() }`, s.typeName)};`);
       } else {
         handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines);
       }
       return false;
+}
+
+// A name holding an actor's address as a value: typed as an actor (`Actor`, a
+// constructor profile, an interface), or untyped and not anything else we know.
+function heldActorValue(obj, typeEnv) {
+  const t = typeEnv.get(obj.name);
+  if (isActorRefType(t) || (typeof t === 'string' && /^\*?\{/.test(t))) return true;
+  return !t && !G.ctx.actorInfo.has(obj.name) && !G.ctx.dependencyNames.has(obj.name) && !G.ctx.stateVarNames.has(obj.name);
 }
 
 // Handles DestructureAssign statements.

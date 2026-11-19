@@ -1,34 +1,22 @@
 import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Self in value position — class-as-address
+// `Self` in value position
 //
 // `Self` already works in two positions (covered by self.test.js):
 //   - Type position:        @peer *Self | null = null
 //   - Call/construct:       child = Self(args)
 //
 // This file covers a third: Self in *bare value* position. Evaluating `Self`
-// (no call) yields the class address — the same wire identity #new is sent
-// to. Its type is `Class`: a base metatype whose values are class addresses,
-// sitting alongside Integer/Text/Boolean/etc. on the ty ladder.
+// (no call) yields an actor's address: the file's, or in an actor a `new`
+// built, the actor whose `new` that is (the one `Self(args)` asks). It's a
+// declared actor, so its tag is `*`, as any actor no `new` built is
+// (__tests__/classes/actor_value.test.js, notes/actors-not-classes-2026-11-18.md).
 //
-// A class author opts in to exposing its class via an ordinary public
-// handler:
+// The handler name is conventional, not reserved: `@class = { Self }` is an
+// ordinary public handler returning a value.
 //
-//   @class = { Self }
-//
-// The handler name is conventional, not reserved. The mechanism is
-// Self-as-value; @class is just the name we use in these tests because it
-// mirrors the design sketch. (No method names are reserved by Brevity for
-// this purpose — class reflection is opt-in.)
-//
-// Wire shape on the @class reply mirrors #new's reply shape inverted:
-//   #new       reply: re: "#<C/1>"   ty: "C"        (instance addr, class metatype)
-//   @class     reply: re: "#<C>"     ty: "Class"    (class addr,    Class metatype)
-//
-// Scope of this ticket: the Self alias as a value and the wire encoding of
-// the resulting reply. Class equality, reflection over DI bindings, and any
-// caller-side use of `Class` values are out of scope.
+//   #new   reply: re: "#<C:1>"     ty: ":C"   (built, tagged with its maker)
+//   @class reply: re: ["#<c.bv>"]  ty: ["*"]  (declared, tagged `*`)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Self as value — compilation', () => {
@@ -59,10 +47,9 @@ describe('Self as value — compilation', () => {
   });
 
   it('Self-as-value without fileName fails to compile', () => {
-    // Class address must be provisioned at compile time. Sources that
-    // reference Self in value position with no file identity have nowhere
-    // for `Self` to resolve to — fail loudly rather than emit a class with
-    // an unresolvable address.
+    // The address is provisioned at compile time. With no file identity
+    // there's nowhere for `Self` to resolve to — fail loudly rather than
+    // emit an unresolvable address.
     expect(() => compileSource(`
       *
       @class = { Self }
@@ -72,21 +59,20 @@ describe('Self as value — compilation', () => {
 
 // ─── Runtime: wire shape ─────────────────────────────────────────────────────
 //
-// `fileName` declares the wire path this source pretends to live at. The
-// compiled class is provisioned with that address; `Self` in a handler body
-// reads it back out, and the reply serializes `re: "#<c.bv>"` with ty
-// "Class". In a real (filesystem-rooted) compile the path is supplied by
-// the compiler; tests stand in for that source.
+// `fileName` declares the wire path this source pretends to live at. `Self` in a
+// handler body is that address, `#<c.bv>`, tagged `*` when it's returned. In a real
+// (filesystem-rooted) compile the path is supplied by the compiler; tests stand
+// in for that source.
 
 describe('Self as value — wire shape', () => {
-  it('@class reply carries the class address with ty "Class"', async () => {
+  it('@class reply carries the file\'s address, tagged `*`', async () => {
     const actor = await createActor(`
       *
-      @class = { Self }
+      @class = { return Self }
     `, { fileName: 'c.bv' });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'class', from: 'caller' } },
-      { output: { id: '1', re: '#<c.bv>', 'ty': 'Class', to: 'caller' } },
+      { output: { id: '1', re: ['#<c.bv>'], 'ty': ['*'], to: 'caller' } },
     );
   });
 });

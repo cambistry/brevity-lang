@@ -18,12 +18,12 @@ const output = compile(ast, { target: 'js' });
 `extract()` returns:
 
 - `ast`: parsed Brevity AST
-- `interface.params`: the file-level class manifest
+- `interface.params`: the file actor's manifest
 - `interface.service`: service document for the public surface
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
 
-## File-level class params
+## File actor params
 
 A file is a singleton: its host builds it once, at load. It declares its DI
 with `use` statements, which can appear anywhere in the file, inner scopes
@@ -69,7 +69,7 @@ Typed scalar params are bindings with a type, supplied by the host at load:
 literal and is hoisted into the manifest like a statement, with one entry per
 source, shared with a `use` statement for the same source. Its binding is the
 ordinary `=` it stands in, scoped where that is written, so it works in inner
-scopes (functions, constructor blocks, nested classes), where the statement
+scopes (functions, constructor blocks, nested actors), where the statement
 doesn't:
 
 ```
@@ -85,8 +85,8 @@ destructure of a statement's dependency (`:div = HTML`) is scoped the same way.
 With no `as` and no `options.remotes` document for its source, a `use("…")` is
 a compile error.
 
-A `use` in an inner scope (a function body, a branch, a loop, a class body, a
-nested `actor { }`) is still the file's entry, granted at load whether or not
+A `use` in an inner scope (a function body, a branch, a loop, a constructor
+block, a nested `actor { }`) is still the file's entry, granted at load whether or not
 that code runs. Only its name is scoped: it binds the whole of its scope (above
 the line too, as a top-level `use` binds the whole file) and the scopes inside
 it, and shadows an outer binding of the name. Elsewhere it is unknown. Binding
@@ -101,7 +101,7 @@ several scopes is one entry and one address.
 }
 ```
 
-Inside the file, all of these entries behave like class params to the
+Inside the file, all of these entries behave like constructor params to the
 anonymous file actor. From the host side, its `use` entries are surfaced as the params
 document in `interface.params`.
 
@@ -164,7 +164,7 @@ compile(ast, {
 system needs in order to:
 
 - discover required remote services
-- distinguish service inputs from scalar class params
+- distinguish service inputs from scalar constructor params
 - render or cache a stable file-level manifest
 
 Once the host has resolved the service side, `compile()` can perform full type
