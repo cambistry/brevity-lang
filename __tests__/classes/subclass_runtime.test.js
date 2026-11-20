@@ -14,7 +14,8 @@ describe('subclass runtime — inherited method on subclass value', () => {
     T = (x Integer) *{
       @a = -> result: x as Integer
     }
-    U = T ^ (y Integer) *{
+    U = T ^ (x Integer, y Integer) *{
+      super(x)
       @b = -> result: y as Integer
     }
 

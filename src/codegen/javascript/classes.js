@@ -356,7 +356,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     functions: mergedFunctions,
   };
 
-  Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
+  Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, ctx.actorNodes));
 
   // Merge inherited ingest state var decls into the subclass
   if (inheritedIngests.length > 0) {

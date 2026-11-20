@@ -626,6 +626,7 @@ describe('boundaries', () => {
         new = (seed Integer) *{ @x = -> 1 }
       }
       D = C ^ (n Integer) *{
+        super(n)
         @get = { return count }
       }
     `)).toThrow("'count' is a member of the class 'C', and a subclass of 'C' doesn't close over its class block");

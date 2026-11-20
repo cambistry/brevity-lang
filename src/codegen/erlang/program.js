@@ -1160,7 +1160,7 @@ function genChildActorCode(ctx, actors) {
       _paramSubscriptions: paramSubInfo,
     };
 
-    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, ctx.actorNodes));
 
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {

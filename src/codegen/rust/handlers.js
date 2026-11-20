@@ -1191,7 +1191,7 @@ function genRustChildMethods(allActors) {
       _inheritedIngests: inheritedIngests,
     };
 
-    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, G.ctx.actorNodes));
 
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {

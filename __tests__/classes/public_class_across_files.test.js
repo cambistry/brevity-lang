@@ -96,11 +96,13 @@ describe('checks', () => {
     );
   });
 
-  it('a class takes its parent\'s params', () => {
-    const service = '{ Base (a: Integer) -> *{}\nSub Base ^ (b: Integer) -> *{} }';
-    const check = (args) => compileSource(`use :Sub = "svc.bv"\n@go = {\n  s = Sub(${args})\n  return 1\n}\n`, { remotes: [{ path: 'svc.bv', service }] });
-    expect(() => check('a: 1, b: 2')).not.toThrow();
-    expect(() => check('b: 2')).toThrow(/doesn't match any constructor clause/);
+  it('a class with a constructor of its own takes its own params; one without, its parent\'s', () => {
+    const service = '{ Base (a: Integer) -> *{}\nSub Base ^ (b: Integer) -> *{}\nSame Base ^ -> *{} }';
+    const check = (cls, args) => compileSource(`use :${cls} = "svc.bv"\n@go = {\n  s = ${cls}(${args})\n  return 1\n}\n`, { remotes: [{ path: 'svc.bv', service }] });
+    expect(() => check('Sub', 'b: 2')).not.toThrow();
+    expect(() => check('Sub', 'a: 1, b: 2')).toThrow(/doesn't match any constructor clause/);
+    expect(() => check('Same', 'a: 1')).not.toThrow();
+    expect(() => check('Same', 'b: 2')).toThrow(/doesn't match any constructor clause/);
   });
 
   it('a function in the doc is still a call', () => {

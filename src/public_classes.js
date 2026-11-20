@@ -42,8 +42,10 @@ const constructionArgs = (args) => {
 export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependencyNames) {
   const typesOf = (name) => remotesParsed[name]?.__types;
   const synthetic = new Set();
-  // A class's constructor takes its ancestors' params too, wherever they're declared.
+  // A subclass with a constructor of its own takes its own params only; one with
+  // none takes its parents', wherever they're declared.
   const paramsOf = (type, seen = new Set()) => {
+    if (type.ownNew) return type.initParams || [];
     const inherited = [];
     for (const st of type.supertypes || []) {
       const name = st.supertype ?? st;

@@ -2491,7 +2491,7 @@ function codegenRust(ast, options = {}) {
       functions: mergedFunctions,
       _inheritedIngests: inheritedIngests,
     };
-    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }));
+    Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, G.ctx.actorNodes));
     // Merge inherited ingest state var decls into the subclass
     if (inheritedIngests.length > 0) {
       const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));

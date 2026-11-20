@@ -160,6 +160,43 @@ export const documentManifest = `{
 // class names; `<input :value>` straddles text/number/decimal. The
 // validator's union support (parser → splitUnionMembers → isAssignable)
 // resolves any concrete arg type against any member.
+// Element's attributes. A subclass with params of its own takes only those
+// (notes/super-2026-11-19.md), so each such entry states Element's too.
+const ELEMENT_PARAMS = `    ? id: Text,
+    ? class: Text | List of Texts,
+    ? style: Text,
+    ? title: Text,
+    ? lang: Text,
+    ? dir: Text,
+    ? translate: Text,
+    ? hidden: Boolean | Text,
+    ? tabindex: Integer,
+    ? accesskey: Text,
+    ? draggable: Boolean,
+    ? contenteditable: Boolean | Text,
+    ? spellcheck: Boolean,
+    ? inert: Boolean,
+    ? autofocus: Boolean,
+    ? autocapitalize: Text,
+    ? autocorrect: Text,
+    ? inputmode: Text,
+    ? enterkeyhint: Text,
+    ? is: Text,
+    ? nonce: Text,
+    ? popover: Boolean | Text,
+    ? slot: Text,
+    ? part: Text,
+    ? exportparts: Text,
+    ? itemid: Text,
+    ? itemprop: Text,
+    ? itemref: Text,
+    ? itemscope: Boolean,
+    ? itemtype: Text,
+    ? writingsuggestions: Text,
+    ? virtualkeyboardpolicy: Text,
+    ? data: Object,
+    ? aria: Aria`;
+
 export const domManifest = `{
   Node () -> *{
     node_name () -> (Text)
@@ -209,40 +246,7 @@ export const domManifest = `{
   }
 
   Element Node ^ (
-    ? id: Text,
-    ? class: Text | List of Texts,
-    ? style: Text,
-    ? title: Text,
-    ? lang: Text,
-    ? dir: Text,
-    ? translate: Text,
-    ? hidden: Boolean | Text,
-    ? tabindex: Integer,
-    ? accesskey: Text,
-    ? draggable: Boolean,
-    ? contenteditable: Boolean | Text,
-    ? spellcheck: Boolean,
-    ? inert: Boolean,
-    ? autofocus: Boolean,
-    ? autocapitalize: Text,
-    ? autocorrect: Text,
-    ? inputmode: Text,
-    ? enterkeyhint: Text,
-    ? is: Text,
-    ? nonce: Text,
-    ? popover: Boolean | Text,
-    ? slot: Text,
-    ? part: Text,
-    ? exportparts: Text,
-    ? itemid: Text,
-    ? itemprop: Text,
-    ? itemref: Text,
-    ? itemscope: Boolean,
-    ? itemtype: Text,
-    ? writingsuggestions: Text,
-    ? virtualkeyboardpolicy: Text,
-    ? data: Object,
-    ? aria: Aria
+${ELEMENT_PARAMS}
   ) -> *{
     id () -> (Text | null)
     class () -> (Text | null)
@@ -494,7 +498,8 @@ export const domManifest = `{
     entries () -> (List of Objects)
   }
 
-  TextElement Element ^ (? children: List of Texts) -> *{
+  TextElement Element ^ (${ELEMENT_PARAMS},
+    ? children: List of Texts) -> *{
     inner_html () -> (Text)
     text_content () -> (Text)
     inner_text () -> (Text)
@@ -514,7 +519,8 @@ export const domManifest = `{
     insert_adjacent_html! (position: Text, html: Text) => self
   }
 
-  ParentElement Element ^ (? children: List) -> *{
+  ParentElement Element ^ (${ELEMENT_PARAMS},
+    ? children: List) -> *{
     inner_html () -> (Text)
     text_content () -> (Text)
     inner_text () -> (Text)
@@ -548,7 +554,8 @@ export const domManifest = `{
 
   html ParentElement ^ -> *{}
   head ParentElement ^ -> *{}
-  style TextElement ^ (? media: Text) -> *{
+  style TextElement ^ (${ELEMENT_PARAMS},
+    ? children: List of Texts, ? media: Text) -> *{
     media () -> (Text | null)
   }
   body ParentElement ^ -> *{}
@@ -571,10 +578,12 @@ export const domManifest = `{
   pre ParentElement ^ -> *{}
   hr Element ^ -> *{}
   br Element ^ -> *{}
-  blockquote ParentElement ^ (? cite: Text) -> *{
+  blockquote ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? cite: Text) -> *{
     cite () -> (Text | null)
   }
-  a ParentElement ^ (? href: Text, ? target: Text, ? rel: Text, ? download: Boolean | Text, ? type: Text, ? hreflang: Text, ? ping: Text, ? referrerpolicy: Text) -> *{
+  a ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? href: Text, ? target: Text, ? rel: Text, ? download: Boolean | Text, ? type: Text, ? hreflang: Text, ? ping: Text, ? referrerpolicy: Text) -> *{
     href () -> (Text | null)
     target () -> (Text | null)
     rel () -> (Text | null)
@@ -590,12 +599,14 @@ export const domManifest = `{
   mark ParentElement ^ -> *{}
   small ParentElement ^ -> *{}
   ul ParentElement ^ -> *{}
-  ol ParentElement ^ (? type: Text, ? start: Integer, ? reversed: Boolean) -> *{
+  ol ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? type: Text, ? start: Integer, ? reversed: Boolean) -> *{
     type () -> (Text | null)
     start () -> (Integer | null)
     reversed () -> (Boolean | null)
   }
-  li ParentElement ^ (? value: Integer) -> *{
+  li ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? value: Integer) -> *{
     value () -> (Integer | null)
   }
   dl ParentElement ^ -> *{}
@@ -605,12 +616,14 @@ export const domManifest = `{
   thead ParentElement ^ -> *{}
   tbody ParentElement ^ -> *{}
   tr ParentElement ^ -> *{}
-  td ParentElement ^ (? colspan: Integer, ? rowspan: Integer, ? headers: Text) -> *{
+  td ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? colspan: Integer, ? rowspan: Integer, ? headers: Text) -> *{
     colspan () -> (Integer | null)
     rowspan () -> (Integer | null)
     headers () -> (Text | null)
   }
-  th ParentElement ^ (? colspan: Integer, ? rowspan: Integer, ? headers: Text, ? scope: Text, ? abbr: Text) -> *{
+  th ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? colspan: Integer, ? rowspan: Integer, ? headers: Text, ? scope: Text, ? abbr: Text) -> *{
     colspan () -> (Integer | null)
     rowspan () -> (Integer | null)
     headers () -> (Text | null)
@@ -618,7 +631,8 @@ export const domManifest = `{
     abbr () -> (Text | null)
   }
   caption ParentElement ^ -> *{}
-  form ParentElement ^ (? action: Text, ? method: Text, ? target: Text, ? enctype: Text, ? autocomplete: Text, ? novalidate: Boolean, ? name: Text) -> *{
+  form ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? action: Text, ? method: Text, ? target: Text, ? enctype: Text, ? autocomplete: Text, ? novalidate: Boolean, ? name: Text) -> *{
     action () -> (Text | null)
     method () -> (Text | null)
     target () -> (Text | null)
@@ -627,7 +641,8 @@ export const domManifest = `{
     novalidate () -> (Boolean | null)
     name () -> (Text | null)
   }
-  input Element ^ (? type: Text,
+  input Element ^ (${ELEMENT_PARAMS},
+    ? type: Text,
     ? name: Text,
     ? value: Text | Integer | Decimal,
     ? placeholder: Text,
@@ -676,7 +691,8 @@ export const domManifest = `{
     width () -> (Text | null)
     size () -> (Integer | null)
   }
-  button ParentElement ^ (? type: Text, ? name: Text, ? value: Text | Integer, ? disabled: Boolean, ? form: Text, ? formaction: Text, ? formmethod: Text, ? formnovalidate: Boolean, ? formtarget: Text) -> *{
+  button ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? type: Text, ? name: Text, ? value: Text | Integer, ? disabled: Boolean, ? form: Text, ? formaction: Text, ? formmethod: Text, ? formnovalidate: Boolean, ? formtarget: Text) -> *{
     type () -> (Text | null)
     name () -> (Text | null)
     value () -> (Text | null)
@@ -687,7 +703,8 @@ export const domManifest = `{
     formnovalidate () -> (Boolean | null)
     formtarget () -> (Text | null)
   }
-  select ParentElement ^ (? name: Text, ? multiple: Boolean, ? required: Boolean, ? disabled: Boolean, ? size: Integer, ? autocomplete: Text, ? form: Text) -> *{
+  select ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? name: Text, ? multiple: Boolean, ? required: Boolean, ? disabled: Boolean, ? size: Integer, ? autocomplete: Text, ? form: Text) -> *{
     name () -> (Text | null)
     multiple () -> (Boolean | null)
     required () -> (Boolean | null)
@@ -696,13 +713,15 @@ export const domManifest = `{
     autocomplete () -> (Text | null)
     form () -> (Text | null)
   }
-  option ParentElement ^ (? value: Text | Integer | Decimal, ? selected: Boolean, ? disabled: Boolean, ? label: Text) -> *{
+  option ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? value: Text | Integer | Decimal, ? selected: Boolean, ? disabled: Boolean, ? label: Text) -> *{
     value () -> (Text | null)
     selected () -> (Boolean | null)
     disabled () -> (Boolean | null)
     label () -> (Text | null)
   }
-  textarea TextElement ^ (? name: Text, ? rows: Integer, ? cols: Integer, ? placeholder: Text, ? required: Boolean, ? disabled: Boolean, ? readonly: Boolean, ? minlength: Integer, ? maxlength: Integer, ? wrap: Text, ? autocomplete: Text, ? form: Text) -> *{
+  textarea TextElement ^ (${ELEMENT_PARAMS},
+    ? children: List of Texts, ? name: Text, ? rows: Integer, ? cols: Integer, ? placeholder: Text, ? required: Boolean, ? disabled: Boolean, ? readonly: Boolean, ? minlength: Integer, ? maxlength: Integer, ? wrap: Text, ? autocomplete: Text, ? form: Text) -> *{
     name () -> (Text | null)
     rows () -> (Integer | null)
     cols () -> (Integer | null)
@@ -716,11 +735,13 @@ export const domManifest = `{
     autocomplete () -> (Text | null)
     form () -> (Text | null)
   }
-  label ParentElement ^ (? for: Text, ? form: Text) -> *{
+  label ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? for: Text, ? form: Text) -> *{
     for () -> (Text | null)
     form () -> (Text | null)
   }
-  img Element ^ (? src: Text, ? srcset: Text, ? alt: Text, ? width: Integer | Text, ? height: Integer | Text, ? sizes: Text, ? loading: Text, ? decoding: Text, ? fetchpriority: Text, ? crossorigin: Text, ? referrerpolicy: Text, ? usemap: Text, ? ismap: Boolean) -> *{
+  img Element ^ (${ELEMENT_PARAMS},
+    ? src: Text, ? srcset: Text, ? alt: Text, ? width: Integer | Text, ? height: Integer | Text, ? sizes: Text, ? loading: Text, ? decoding: Text, ? fetchpriority: Text, ? crossorigin: Text, ? referrerpolicy: Text, ? usemap: Text, ? ismap: Boolean) -> *{
     src () -> (Text | null)
     srcset () -> (Text | null)
     alt () -> (Text | null)
@@ -735,11 +756,13 @@ export const domManifest = `{
     usemap () -> (Text | null)
     ismap () -> (Boolean | null)
   }
-  canvas ParentElement ^ (? width: Integer | Text, ? height: Integer | Text) -> *{
+  canvas ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? width: Integer | Text, ? height: Integer | Text) -> *{
     width () -> (Text | null)
     height () -> (Text | null)
   }
-  iframe ParentElement ^ (? src: Text, ? srcdoc: Text, ? name: Text, ? sandbox: Text, ? allow: Text, ? allowfullscreen: Boolean, ? loading: Text, ? referrerpolicy: Text, ? width: Integer | Text, ? height: Integer | Text) -> *{
+  iframe ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? src: Text, ? srcdoc: Text, ? name: Text, ? sandbox: Text, ? allow: Text, ? allowfullscreen: Boolean, ? loading: Text, ? referrerpolicy: Text, ? width: Integer | Text, ? height: Integer | Text) -> *{
     src () -> (Text | null)
     srcdoc () -> (Text | null)
     name () -> (Text | null)
@@ -753,12 +776,14 @@ export const domManifest = `{
   }
   figure ParentElement ^ -> *{}
   figcaption ParentElement ^ -> *{}
-  details ParentElement ^ (? open: Boolean, ? name: Text) -> *{
+  details ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? open: Boolean, ? name: Text) -> *{
     open () -> (Boolean | null)
     name () -> (Text | null)
   }
   summary ParentElement ^ -> *{}
-  dialog ParentElement ^ (? open: Boolean) -> *{
+  dialog ParentElement ^ (${ELEMENT_PARAMS},
+    ? children: List, ? open: Boolean) -> *{
     open () -> (Boolean | null)
   }
 

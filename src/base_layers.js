@@ -149,8 +149,15 @@ export function settleBaseCells(stateVarDecls, combinedInit) {
     const eff = stateVarDecls.find(e => e.name === d.baseOf);
     if (!eff || eff.declaredIn === d.baseLayer) { renames.set(d.name, d.baseOf); continue; }
     kept.push(d);
-    if (d.baseInit) {
-      const at = init.indexOf(d.baseInit);
+    // A parent's body spliced in at a `super` line is a renamed copy: look for it too.
+    if (d.baseInit && !init.some(s => s.type === 'StateAssign' && s.name === d.name)) {
+      let at = init.indexOf(d.baseInit);
+      if (at < 0) at = init.findIndex(s => s.origin === d.baseInit);
+      if (at >= 0 && init[at] !== d.baseInit) {
+        const copy = { ...structuredClone(init[at]), name: d.name };
+        init = [...init.slice(0, at + 1), copy, ...init.slice(at + 1)];
+        continue;
+      }
       const copy = { ...structuredClone(d.baseInit), name: d.name };
       init = at < 0 ? [copy, ...init] : [...init.slice(0, at + 1), copy, ...init.slice(at + 1)];
     }

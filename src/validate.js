@@ -21,6 +21,7 @@ import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
 import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
+import { buildsBase } from './super_calls.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
 import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel, remoteMember } from './opre.js';
 
@@ -740,6 +741,7 @@ function validateProgram(ast, options = {}) {
         setters: t.setters || [],
         stateVarDecls: [],
         __remote: remoteName,
+        ...(t.ownNew && { ownNew: true }),
       };
       actorByName.set(typeName, synthetic);
       manifestActors.push(synthetic);
@@ -977,8 +979,9 @@ function validateProgram(ast, options = {}) {
       const superActor = actorByName.get(st.supertype);
       if (!superActor) continue;
 
-      // Arg type override rejection: subclass params with same name must have same type
-      const superParams = new Map((superActor.initParams || []).map(p => [p.name, p]));
+      // Arg type override rejection: subclass params with same name must have same type.
+      // A class that builds its base with `super` takes none of its parent's params.
+      const superParams = new Map((buildsBase(actor) ? [] : superActor.initParams || []).map(p => [p.name, p]));
       for (const p of (actor.initParams || [])) {
         const sp = superParams.get(p.name);
         if (sp && sp.type && p.type && sp.type !== p.type) {

@@ -313,6 +313,7 @@ describe('constructor delimited form — expression defaults', () => {
       @base = -> v: 1
     }
     Sub = Base ^ (n Integer = 1 + 2) *{
+      super()
       @sum = -> total: n
     }
 
@@ -368,7 +369,7 @@ describe('constructor delimited form — expression defaults', () => {
     expect(extract(`
       @A = *{}
       @Sum = (a Integer, b Integer = 1 + 2) *{}
-      @Sub = @A ^ (n Integer = 1 + 2) *{}
+      @Sub = @A ^ (n Integer = 1 + 2) *{ super() }
     `).interface.service).toBe('{\n  A () -> *{}\n  Sum (Integer, ? Integer) -> *{}\n  Sub A ^ (? Integer) -> *{\n    ...A\n  }\n}');
   });
 

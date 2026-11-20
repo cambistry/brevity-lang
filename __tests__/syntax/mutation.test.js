@@ -192,6 +192,7 @@ function accepted(m, outcome, src) {
   }
   // A different program that compiles.
   if (m.kind === 'delete' && m.type === 'AT') return 'a name without `@` is the private name';
+  if (m.kind === 'delete' && m.type === 'COMMA' && p === 'NUMBER' && n === 'NUMBER' && /\d$/.test(src.slice(0, m.start)) && /^\d/.test(src.slice(m.start + m.text.length))) return 'a comma deleted between digits joins them into one number';
   if (m.kind === 'delete' && !SEPARATORS.includes(m.type)) return 'deleting an optional part (an annotation, a sigil, an argument, a value) leaves another program; arity isn\'t checked yet';
   if (m.kind === 'insert' && SIGILS[m.stray]) return `inserting \`${m.stray}\` makes ${SIGILS[m.stray]}`;
   if (m.kind === 'insert' && m.stray === 'zz') return 'a name inserted renames, or starts a lineal declaration';

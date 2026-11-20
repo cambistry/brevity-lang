@@ -91,8 +91,12 @@ make = (k (seed Integer) -> *{ get () -> (value: Integer) }) -> k(1)  // its con
 ## Composition (`^`)
 
 ```brevity
-Tagged = Box ^ (tag: Text) *{ @tag = -> tag: tag }   // parent, then params
-Both = A ^ B ^ (n Integer) *{}                       // several parents; later wins
+Tagged = Box ^ (value Integer, tag: Text) *{         // parent, then its own params
+  super(value)                                       // Box's constructor runs here
+  @tag = -> tag: tag
+}
+Same = Box ^ (value Integer) *{ super }              // the args as received; super() passes none
+Both = A ^ B ^ (n Integer) *{ super[A](); super[B]() }  // several parents; later wins
 Plain = Box^                                         // a new actor with a `new`, no changes
 Mixed = A ^ B                                        // two parents, no changes
 Extra = Box ^ *{ @more = -> 1 }                      // body, no params
@@ -103,7 +107,12 @@ Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor
 ```
 
 `base` is valid only before `::`, `.` or `[`, so a cell, local, param or `use` binding
-can't be named `base`; `@base`, `x.base` and a key `base:` are fine. `super` has no form.
+can't be named `base`; `@base`, `x.base` and a key `base:` are fine.
+
+A subclass with its own constructor takes its own params only and calls `super` once on
+every path (never in a loop); a base name read before that line is an error. With no
+constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`) it takes its
+parents' params. `super = …`, `super.x` and `super::x` aren't forms.
 
 ## Dependencies (`use`)
 

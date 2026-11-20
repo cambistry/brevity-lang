@@ -58,6 +58,8 @@ const layers = `
   A = *{ h = -> 1 }
   B = *{ h = -> 2 }
   @C = A ^ B ^ (k Integer) *{
+    super[A]()
+    super[B]()
     h = -> 0
     @both = {
       x Integer = base[A]::h() * 10 + base[B]::h() + k
@@ -249,19 +251,19 @@ describe('base — as a member or key', () => {
   });
 });
 
-describe('super — reserved, with no form', () => {
+describe('super — reserved: not a receiver, not settable', () => {
   const T = 'T = *{\n  h = -> 1\n  @a = { return 1 }\n}\n';
 
   it('super.x', () => {
-    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super.a() }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
+    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super.a() }\n`)).toThrow("Unexpected token in expression: DOT");
   });
 
   it('super::x', () => {
-    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super::h() }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
+    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super::h() }\n`)).toThrow("Unexpected token in expression: DCOLON");
   });
 
-  it('bare super', () => {
-    expect(() => compileSource(`${T}U = T ^ *{ @x = { s = super; return 1 } }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
+  it('super = …', () => {
+    expect(() => compileSource(`${T}U = T ^ *{ super = 1 }\n`)).toThrow("Unexpected token in expression: EQUALS");
   });
 });
 

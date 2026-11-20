@@ -6,7 +6,8 @@ import { expectBehavior } from '../helpers.js';
 // Interface render for subclass constructors
 //
 // The extracted service document now preserves the superclass relationship
-// rather than erasing it. Input side reads `Parent ^ (own)`; body side leads
+// rather than erasing it. Input side reads `Parent ^ (own)` — a constructor of its
+// own, which takes those params only — or `Parent ^` (the parent's); body side leads
 // with `...Parent` spread markers before any own methods.
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -24,7 +25,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own named param renders in the parens', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = @T ^ (y: Integer) *{}
+      @U = @T ^ (y: Integer) *{ super(x: y) }
     `);
     expect(s).toContain('U T ^ (y: Integer)');
   });
@@ -32,7 +33,7 @@ describe('subclass interface — input side', () => {
   it('subclass with own positional param renders in the parens', () => {
     const s = svc(`
       @T = (x Integer) *{ @a = -> v: x as Integer }
-      @U = @T ^ (y Integer) *{}
+      @U = @T ^ (y Integer) *{ super(y) }
     `);
     expect(s).toContain('U T ^ (Integer)');
   });
@@ -41,9 +42,24 @@ describe('subclass interface — input side', () => {
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
       @B = (b: Integer) *{ @gb = -> v: b as Integer }
-      @C = @A ^ @B ^ (c: Integer) *{}
+      @C = @A ^ @B ^ (c: Integer) *{ super[@A](a: c); super[@B](b: c) }
     `);
     expect(s).toContain('C A ^ B ^ (c: Integer)');
+  });
+
+  it('a constructor of its own with no params renders empty parens', () => {
+    const s = svc(`
+      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @U = @T ^ *{ super(x: 1) }
+    `);
+    expect(s).toContain('U T ^ () -> *{');
+  });
+
+  it('reads back which subclasses have a constructor of their own', () => {
+    const parsed = parseInterface('{\n  T (x: Integer) -> *{}\n  U T ^ () -> *{}\n  V T ^ (y: Integer) -> *{}\n  W T ^ -> *{}\n}');
+    expect(parsed.__types.U.ownNew).toBe(true);
+    expect(parsed.__types.V.ownNew).toBe(true);
+    expect(parsed.__types.W.ownNew).toBeUndefined();
   });
 
 });
@@ -60,7 +76,7 @@ describe('subclass interface — body side', () => {
   it('own methods follow the spread on separate lines', () => {
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = @T ^ (y: Integer) *{ @b = -> v: y as Integer }
+      @U = @T ^ (y: Integer) *{ super(x: y); @b = -> v: y as Integer }
     `);
     expect(s).toContain('...T');
     expect(s).toContain('b () -> (v: Integer)');
@@ -72,7 +88,7 @@ describe('subclass interface — body side', () => {
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
       @B = (b: Integer) *{ @gb = -> v: b as Integer }
-      @C = @A ^ @B ^ (c: Integer) *{}
+      @C = @A ^ @B ^ (c: Integer) *{ super[@A](a: c); super[@B](b: c) }
     `);
     expect(s).toContain('...A');
     expect(s).toContain('...B');
@@ -87,8 +103,8 @@ describe('subclass interface — chain depth', () => {
     // Consumers expand through B's own entry to resolve A's material.
     const s = svc(`
       @A = (a: Integer) *{ @ga = -> v: a as Integer }
-      @B = @A ^ (b: Integer) *{ @gb = -> v: b as Integer }
-      @C = @B ^ (c: Integer) *{ @gc = -> v: c as Integer }
+      @B = @A ^ (b: Integer) *{ super(a: b); @gb = -> v: b as Integer }
+      @C = @B ^ (c: Integer) *{ super(b: c); @gc = -> v: c as Integer }
     `);
     expect(s).toContain('C B ^ (c: Integer)');
     const cBody = s.slice(s.indexOf('C B ^'));
@@ -103,7 +119,7 @@ describe('subclass interface — parent render unchanged', () => {
     // The parent does NOT get a `...` spread — spreads only appear on children.
     const s = svc(`
       @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = @T ^ (y: Integer) *{}
+      @U = @T ^ (y: Integer) *{ super(x: y) }
     `);
     const tBody = s.slice(s.indexOf('T ('), s.indexOf('U T ^'));
     expect(tBody).toContain('a () -> (v: Integer)');
@@ -119,20 +135,21 @@ describe('subclass interface — private parent', () => {
       @a = { return 'text' }
       @k = { return 1 }
     }
-    P = @G ^ (@p: Integer) *{ @m = { return 2 } }
+    P = @G ^ (@p: Integer) *{ super(); @m = { return 2 } }
     @U = T ^ (y: Integer) *{
+      super(x: y)
       @a = { return 2 }
       @b = { return 3 }
     }
-    @V = P ^ (z: Integer) *{}
+    @V = P ^ (z: Integer) *{ super(p: z) }
 
     @go = { return 4 }
   `);
   const parsed = parseInterface(doc);
 
-  it('states inherited params and members in place, with no spread', () => {
+  it('states inherited members in place, with no spread, and only its own params', () => {
     expect(doc).toContain(
-      'U (x: Integer, y: Integer) -> *{\n    k () -> (Integer)\n    a () -> (Integer)\n    b () -> (Integer)\n  }',
+      'U (y: Integer) -> *{\n    k () -> (Integer)\n    a () -> (Integer)\n    b () -> (Integer)\n  }',
     );
   });
 
@@ -142,7 +159,7 @@ describe('subclass interface — private parent', () => {
 
   it('keeps a public ancestor behind the private parent as a spread', () => {
     expect(doc).toContain(
-      'V G ^ (p: Integer, z: Integer) -> *{\n    ...G\n    p Integer\n    m () -> (Integer)\n  }',
+      'V G ^ (z: Integer) -> *{\n    ...G\n    p Integer\n    m () -> (Integer)\n  }',
     );
   });
 
@@ -176,7 +193,7 @@ describe('subclass interface — ^ forms', () => {
     const s = svc(`
       Box = *{ @g = -> v: 1 as Integer }
       @A = *{ @ga = -> v: 1 as Integer }
-      @U = @A ^ (b Box) *{}
+      @U = @A ^ (b Box) *{ super() }
     `);
     expect(s).toContain('U A ^ (Box) -> *{');
   });
@@ -185,7 +202,7 @@ describe('subclass interface — ^ forms', () => {
     const s = svc(`
       @Box = *{ @g = -> v: 1 as Integer }
       @A = *{ @ga = -> v: 1 as Integer }
-      @U = @A ^ (b @Box) *{}
+      @U = @A ^ (b @Box) *{ super() }
     `);
     expect(s).toContain('U A ^ (Box) -> *{');
   });

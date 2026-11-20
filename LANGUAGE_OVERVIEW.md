@@ -216,8 +216,26 @@ parents are one actor, and a bare name means the bottom-most definition. `base`
 reaches the parent layer's own: `base::h()` its protected `h`, `base.get()` its
 public `@get`, `base[A]::h()` parent `A`'s when there are several. `base` is
 reserved, so it can't name a cell, local, param or `use` binding; it can still
-be a member (`@base`, `x.base`) or a key (`base: 10`). `super` is reserved with
-no meaning yet.
+be a member (`@base`, `x.base`) or a key (`base: 10`).
+
+A subclass with a constructor of its own takes its own params only, and builds
+its base with `super`: the parent's constructor runs at that line, with the args
+it passes. A base name read above the line is an error.
+
+```brevity
+Tagged = Box ^ (tag Text, value Integer) *{
+  super(value * 2)      // Box's constructor runs here
+  @tag = -> tag
+}
+Same = Box ^ (value Integer) *{ super }   // the args as received
+```
+
+Bare `super` passes the constructor's args as received, `super()` none, and
+`super[A](…)` builds parent `A` when there are several. It's called once on every
+path: not in a loop, not twice, and not on only one branch of an `if`. A subclass
+with no constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`)
+takes its parents' params. `super` can't be declared or set, and `super.x` /
+`super::x` aren't forms: those are `base.x` / `base::x`.
 
 The file actor is a singleton, built once at load. It needs no header: it
 declares its DI with `use`, anywhere in the file. A `use` in an inner scope is

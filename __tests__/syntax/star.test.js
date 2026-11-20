@@ -380,7 +380,8 @@ describe('class (...) *{...} — subclass forms', () => {
       Base = (value Integer) *{
         @get = -> result: value
       }
-      Sub = Base ^ (label Text) *{
+      Sub = Base ^ (value Integer, label Text) *{
+        super(value)
         @label = -> :label
       }
       @test = -> 1
@@ -403,7 +404,8 @@ describe('class (...) *{...} — subclass forms', () => {
       Base = (x Integer) *{
         @x = -> v: x
       }
-      Wrap = Base ^ (y Integer) *{
+      Wrap = Base ^ (x Integer, y Integer) *{
+        super(x)
         @y = -> v: y
         @both = {
           :v Integer = base.x()

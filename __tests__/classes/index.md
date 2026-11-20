@@ -13,7 +13,7 @@ class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-1
 - `T = (x Integer, label: Text) *{ ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `label: Text = "hi"`.
 - Constructor params are private unless published with `@name`, which adds an accessor.
-- Subclasses use `Parent ^ (own params) *{ … }`; several parents join with `^`; `D = C^` is a subclass with no changes.
+- Subclasses use `Parent ^ (own params) *{ super(…) … }`: a constructor of its own takes its own params only, and `super` runs the parent's constructor at that line (`super.test.js`). Bare `super` passes the args as received, `super()` none, `super[A](…)` one of several parents. Several parents join with `^`; `D = C^` is a subclass with no changes, which takes its parent's params.
 - `base::h()` / `base.a()` / `base[T]::h()` reach the parent layer (`base.test.js`).
 - An actor is a value: `k = T` holds its address, typed `Actor`, tagged `*` (actor_value.test.js).
 - Remote actors with a `new` use file-level DI and `*Name(...)`; see
@@ -30,7 +30,8 @@ Point = (x Integer, y Integer) *{
   @sum = -> total: (x + y)
 }
 
-Child = Point ^ (label: Text) *{
+Child = Point ^ (x Integer, y Integer, label: Text) *{
+  super(x, y)
   @label = -> :label
 }
 ```
@@ -46,7 +47,7 @@ projections live.
 - Optional class args and defaults.
 - Published params (`@name`) and their accessors.
 - Ingest from subclass constructor blocks.
-- Subclass arg inheritance and method override.
+- Subclass constructors: `super` forwarding, its every-path rule, and method override.
 - Protected/private function access across subclasses.
 - Wrapped superclass actors.
 - Constructor blocks run in text order: reading or writing a cell above its declaration, directly or through a call or a constructed class, is a compile error.

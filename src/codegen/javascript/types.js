@@ -362,7 +362,10 @@ function parseEntry(text) {
     const sig = parseSignature(name, parents.after.startsWith('(') ? parents.after : `() ${parents.after}`);
     if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': unexpected '${parents.after}'`);
     const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
-    return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, parents.supertypes, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
+    // Parens after the parents: a constructor of its own, which takes those params
+    // only (notes/super-2026-11-19.md). None: the parents' `new`.
+    const ownNew = parents.after.startsWith('(');
+    return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, parents.supertypes, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}), ...(ownNew && { ownNew }) };
   }
   if (rest.startsWith('(')) {
     const sig = parseSignature(name, rest);
@@ -424,8 +427,8 @@ export function parseInterface(manifestStr) {
     } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
       if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
-      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls, members } = e;
-      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}) };
+      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls, members, ownNew } = e;
+      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}), ...(ownNew && { ownNew }) };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });

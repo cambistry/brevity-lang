@@ -206,6 +206,7 @@ For browser examples, start with the tested browser and HTML/XML notes:
 - Do not invent method names; check the relevant method doc first.
 - Name a function that writes with `!` (`save!`), and a silent one with a glued `.` (`save.`), typed `=> .` and called with `...`. A trailing `.` in a body is an error.
 - In a `!` function, end with the write, or `return` the value; never a bare tail value.
-- Reach a parent's definition with `base::h()` (protected) or `base.a()` (public), not `super`, which has no form. Don't name a cell, local, param or `use` binding `base`.
+- Reach a parent's definition with `base::h()` (protected) or `base.a()` (public), not `super.a()`. Don't name a cell, local, param or `use` binding `base`.
+- A subclass with params of its own builds its base with `super(…)` in the constructor block, once, passing what the parent needs: `U = T ^ (label Text, n Integer) *{ super(n) … }`. Bare `super` passes the args as received; `super()` none; `super[A](…)` per parent when there are several. Don't read a parent's cell above the `super` line.
 - Use explicit local variables when reply typing matters.
 - Treat design notes as context. Treat test-backed docs as current behavior.

@@ -6,6 +6,8 @@ import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { lowerSingletonClasses, CLASS_SELF } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
+import { lowerSuperCalls } from './super_calls.js';
+import { resolveSuperclassChain } from './subclass.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
@@ -2396,6 +2398,26 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     if (peek().type === 'LPAREN') return { type: 'BaseCall', layer, name, isPublic, args: parseCallArgs() };
     return { type: 'BaseMember', layer, name, isPublic };
   }
+  // `super`, `super(args)`, `super[A](args)`: the current constructor or function, one
+  // layer up (notes/super-2026-11-19.md). Bare `super` passes the args as received
+  // (`args: null`). src/super_calls.js lowers it.
+  const atSuper = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'super';
+  function parseSuper() {
+    const tok = take(); // super
+    let layer = null;
+    if (peek().type === 'LBRACKET' && !peek().spaced) {
+      take();
+      const sigil = peek().type === 'AT' ? (take(), '@') : '';
+      layer = sigil + expect('IDENT').value;
+      expect('RBRACKET');
+    }
+    const next = peek();
+    if (next.type === 'DOT' || next.type === 'DCOLON' || next.type === 'EQUALS' || next.type === 'SET' || next.type === 'UPDATE') {
+      throw new Error(`Unexpected token in expression: ${next.type} '${next.value ?? ''}'`);
+    }
+    const args = next.type === 'LPAREN' ? parseCallArgs() : null;
+    return { type: 'SuperCall', layer, args, ...(tok.loc && { loc: tok.loc }) };
+  }
   // `base::total <- v`, `base.count <| f`.
   const baseSetAhead = () => {
     const at = baseEnd();
@@ -2542,6 +2564,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       result = AST.identifier(CLASS_SELF);
     } else if (atBase()) {
       result = parseBase();
+    } else if (atSuper()) {
+      result = parseSuper();
     } else if (atBareBuiltinCall()) {
       const methodName = take().value;
       consume(); // LPAREN
@@ -4985,6 +5009,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           const expr = parseExpr();
           constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
         }
+      } else if (atSuper()) {
+        // `super(args)`: the parent's constructor, run here on the base.
+        constructorBody.push(AST.exprStatement(parseExpr()));
       } else if (atClass() || atBase() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
         // `class.bump!()`, `class::h!()`, `C::h!()`, `base::h!()`: a call made while constructing.
         pushExprOrBang(constructorBody, parseExpr());
@@ -6420,6 +6447,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   resolveUseValues();
   lowerSingletonClasses(actors, types, { fileKind });
   lowerBaseLayers(actors);
+  lowerSuperCalls(actors, resolveSuperclassChain);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

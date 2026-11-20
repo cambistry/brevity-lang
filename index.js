@@ -4,6 +4,7 @@ import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate } from './src/validate.js';
 import { renamePublicClasses, validateWithSourceNames } from './src/subclass.js';
+import { buildsBase } from './src/super_calls.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
 import { returnShapes, unionMembers } from './src/return_shapes.js';
 import { runExtractPasses } from './src/extract_passes.js';
@@ -96,7 +97,9 @@ function formatConstructorSig(actor, aliasMap, purported = null, arrow = '->', s
   // parens hold only the subtype's own params (inherited params are implied by the
   // spread `...Parent` on the body side). No params: `T ^ -> *{…}`.
   const parents = supertypes.length ? `${supertypes.join(' ^ ')} ^ ` : '';
-  const input = !supertypes.length || ownParams.length ? `${parents}(${ownParams.join(', ')})` : parents.trimEnd();
+  // A subclass with a constructor of its own takes only its own params, and shows
+  // them even when there are none: `T ^ ()`.
+  const input = !supertypes.length || ownParams.length || buildsBase(actor) ? `${parents}(${ownParams.join(', ')})` : parents.trimEnd();
   // Published params (`@name Type`) read as read-only fields.
   const fieldLines = publishedParamLines(actor, aliasMap).map(l => `    ${l}`);
   const methods = (actor.functions || []).filter(f => f.name && f.name.startsWith('@'));
@@ -232,8 +235,11 @@ function withPrivateSupers(actor, privateClasses, purportedByActor) {
     }
     const flat = withPrivateSupers(parent, privateClasses, purportedByActor);
     supertypes.push(...flat.supertypes);
-    params.push(...flat.params);
-    initParams.push(...flat.initParams);
+    // A class with a constructor of its own takes none of its parent's params; the
+    // parent's published ones still read as fields.
+    const taken = buildsBase(actor) ? flat.initParams.filter(p => p.accessor) : flat.initParams;
+    if (!buildsBase(actor)) params.push(...flat.params);
+    initParams.push(...taken);
     functions.push(...flat.functions);
     for (const name of flat.purported) purported.add(name);
   }
@@ -244,6 +250,7 @@ function withPrivateSupers(actor, privateClasses, purportedByActor) {
   for (const name of purportedByActor.get(actor) || []) purported.add(name);
   return {
     supertypes,
+    ...(buildsBase(actor) && { ownNew: true }),
     params: [...params.filter(p => !ownParams.has(p.name)), ...(actor.params || [])],
     initParams: [...initParams.filter(p => !ownInit.has(p.name)), ...(actor.initParams || [])],
     functions: [...functions.filter(f => !ownNames.has(f.name)), ...(actor.functions || [])],

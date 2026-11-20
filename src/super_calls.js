@@ -1,0 +1,328 @@
+// `super` in a constructor: builds the base (notes/super-2026-11-19.md).
+//
+//   U = T ^ (label Text, n Integer) *{
+//     super(n * 2)     // T's constructor runs here, on the base
+//   }
+//
+// A subclass with a constructor of its own (params, or a `super` call) takes its own
+// params only, and passes what its parent needs through `super`. A parent built that
+// way is a layer whose params belong to it alone: in the subclass's actor they are
+// cells under names nothing in source can spell, so the parent's `n` and the
+// subclass's `n` don't meet. The parent's code is renamed to match (parentView).
+//
+// The parse leaves a `SuperInit` marker where the parent's constructor body runs,
+// after the cells that hold its args are set; the merge (withInheritedState,
+// src/subclass.js) puts the body there.
+//
+// A composition with no constructor of its own (`D = C^`, `M = A ^ B`, `U = T ^ *{ … }`
+// with no `super`) still takes its parents' params and runs their bodies first: that
+// case is open in the note.
+
+import * as AST from './ast.js';
+import { orderParamsForDefaults } from './param_defaults.js';
+
+// A public class is `@T` in the parse and `T__pub` (PUBLIC_CLASS_SUFFIX, src/subclass.js)
+// once validation renames it: the hidden name is the same either way.
+const classPart = (L) => L.name.replace(/^@/, 'P_').replace(/^(\w+)__pub(?=!?$)/, 'P_$1').replace(/[!.]$/, '');
+export const hiddenParamName = (name, L) => `${name}__arg__${classPart(L)}`;
+
+const walk = (node, visit, path = []) => {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { node.forEach(n => walk(n, visit, path)); return; }
+  if (node.type === 'Actor' && Array.isArray(node.functions)) return;
+  if (visit(node, path) === false) return;
+  const next = [...path, node];
+  for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') walk(v, visit, next);
+};
+
+const shown = (n) => `super${n.layer ? `[${n.layer}]` : ''}${n.args ? '(…)' : ''}`;
+const LOOPS = new Set(['WhileStatement', 'OverExpr', 'ReduceExpr']);
+const isFunctionNode = (n) => n.type === 'Function' || n.type === 'FunctionDecl';
+
+// Whether a class builds its base with `super`: it has a constructor of its own.
+// It's read from the lowered init, which copies of the class (an overload clause's
+// synthetic actor) carry along.
+// A class from another file's document says so with `ownNew`.
+export const buildsBase = (actor) => !!actor?.ownNew || (actor?.initBody || []).some(s => s.type === 'SuperInit');
+
+// ── Renaming a parent layer's params ───────────────────────────────────────────
+
+// Every use of the param `from` in `node`, as `to`. A function whose own params
+// include `from` shadows it.
+function renameIn(node, from, to) {
+  if (Array.isArray(node)) { node.forEach(n => renameIn(n, from, to)); return; }
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'Actor' && Array.isArray(node.functions)) return;
+  if (isFunctionNode(node) && (node.params || []).some(p => p.name === from)) return;
+  if (node.name === from && node.type !== 'FunctionDecl') {
+    node.name = to;
+    if (node.named) { delete node.named; node.key = from; }
+  }
+  if (node.objectName === from) node.objectName = to;
+  if (node.sigil === from) {
+    delete node.sigil;
+    node.key = from;
+    node.value = AST.identifier(to);
+  }
+  for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') renameIn(v, from, to);
+}
+
+// A deep copy that keeps what earlier passes left on a node out of sight (its
+// non-enumerable properties).
+function deepCopy(node, seen = new Map()) {
+  if (!node || typeof node !== 'object') return node;
+  if (seen.has(node)) return seen.get(node);
+  const out = Array.isArray(node) ? [] : Object.create(Object.getPrototypeOf(node));
+  seen.set(node, out);
+  for (const key of Reflect.ownKeys(node)) {
+    if (Array.isArray(node) && key === 'length') continue;
+    const d = Object.getOwnPropertyDescriptor(node, key);
+    if ('value' in d) d.value = deepCopy(d.value, seen);
+    Object.defineProperty(out, key, d);
+  }
+  return out;
+}
+
+// Whether `node` names any of `names`.
+function mentions(node, names) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(n => mentions(n, names));
+  if (names.has(node.name) || names.has(node.objectName) || names.has(node.sigil)) return true;
+  return Object.entries(node).some(([k, v]) => k !== 'loc' && v && typeof v === 'object' && mentions(v, names));
+}
+
+// `node` (a list) with each renamed param under its new name: an item that names
+// one is a copy. A copied statement remembers the one it came from (`origin`),
+// which settleBaseCells looks for.
+function renamedCopy(node, renames) {
+  if (!renames.size) return node;
+  const names = new Set(renames.keys());
+  const one = (item) => {
+    if (!mentions(item, names)) return item;
+    const copy = deepCopy(item);
+    for (const [from, to] of renames) renameIn(copy, from, to);
+    Object.defineProperty(copy, 'origin', { value: item.origin ?? item, configurable: true });
+    return copy;
+  };
+  return Array.isArray(node) ? node.map(one) : one(node);
+}
+
+// ── A parent layer, as a subclass that builds it sees it ───────────────────────
+
+// `chain` is resolveSuperclassChain, passed in to avoid a cycle. Validation lowers
+// the parent's code in place, so a view is taken fresh each time, never kept.
+export function parentView(actorByName, P, chain) {
+  const pc = chain(actorByName, P);
+  // The params `new` takes: its own when it builds its base or has none, else (a
+  // composition) its parents'.
+  const params = [...pc.inheritedParams.filter(p => !(P.initParams || []).some(o => o.name === p.name)), ...(P.initParams || [])];
+  const renames = new Map(params.map(p => [p.name, hiddenParamName(p.name, P)]));
+  const fns = [...pc.inheritedFunctions.filter(f => !(P.functions || []).some(o => o.name === f.name)), ...(P.functions || [])];
+  const functions = renamedCopy(fns, renames);
+  // A published param is read on the wire as `@name`: the layer keeps answering it.
+  for (const p of params) {
+    if (!p.accessor || functions.some(f => f.name === '@' + p.accessor)) continue;
+    functions.push(AST.functionDecl('@' + p.accessor, [], [AST.implicitReturn(AST.identifier(renames.get(p.name)), p.type || null)]));
+  }
+  return {
+    params: params.map(p => ({
+      ...p,
+      name: renames.get(p.name),
+      key: p.key || p.name,
+      ...(p.defaultValue && { defaultValue: renamedCopy(p.defaultValue, renames) }),
+    })),
+    sourceParams: params,
+    functions,
+    cells: params.map(p => ({ name: renames.get(p.name), typeName: p.type || 'Anything', isRef: !!p.ref })),
+    init: renamedCopy(effectiveInit(actorByName, P, chain), renames),
+  };
+}
+
+// What a class's constructor runs, its parents' parts in place: where its `super`
+// calls are, or (no constructor of its own) first.
+export function effectiveInit(actorByName, A, chain) {
+  if (!buildsBase(A)) return [...chain(actorByName, A).inheritedInit, ...(A.initBody || [])];
+  return expandSuperInits(actorByName, A, A.initBody || [], chain);
+}
+
+// `A`'s init with each `SuperInit` replaced by its parent's constructor body. A cell
+// `A` declares itself takes `A`'s initial value only.
+export function expandSuperInits(actorByName, A, init, chain) {
+  if (!init.some(s => s.type === 'SuperInit')) return init;
+  const own = new Set((A.stateVarDecls || []).filter(d => !d.baseOf).map(d => d.name));
+  const hiddenOf = new Map((A.stateVarDecls || []).filter(d => d.baseOf).map(d => [d.baseOf, d]));
+  return init.flatMap((s) => {
+    if (s.type !== 'SuperInit') return [s];
+    const P = actorByName.get(s.layer);
+    const body = parentView(actorByName, P, chain).init.filter(t => t.value?.type !== 'IngestExpr');
+    return body.flatMap((t) => {
+      if (t.type !== 'StateAssign' || !own.has(t.name)) return [t];
+      // `base::name` keeps the parent's initial value in a cell of its own.
+      const h = hiddenOf.get(t.name);
+      if (!h) return [];
+      const copy = { ...t, name: h.name };
+      Object.defineProperty(copy, 'origin', { value: t.origin ?? t, configurable: true });
+      return [copy];
+    });
+  });
+}
+
+// ── The parse: check and lower each constructor's `super` ──────────────────────
+
+export function lowerSuperCalls(actors, chain) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
+  const where = (a) => a.membersOf ? `the class block of '${a.membersOf}'` : a.singletonOf ? 'a singleton'
+    : a.name ? `'${a.name}'` : 'this file';
+
+  // A constructor overload clause (`Sub << Base ^ (…) *{ … }`) is a class of its own.
+  const clauses = actors.flatMap(a => (a.functions || []).filter(f => f.actorDef && f.name)
+    .map(f => ('name' in f.actorDef ? f.actorDef : Object.defineProperty(f.actorDef, 'name', { value: f.name, configurable: true }))));
+  for (const U of [...actors, ...clauses]) {
+    // `super` in a function: not yet.
+    walk((U.functions || []).filter(f => !f.actorDef), (n) => {
+      if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in a function of ${where(U)}: 'super' is used in a constructor block`);
+    });
+    const parents = (U.supertypes || []).map(st => st.supertype);
+    const calls = [];
+    walk(U.initBody, (n, path) => { if (n.type === 'SuperCall') calls.push({ n, path }); });
+    walk([U.declarationReturn, U.stateVarDecls], (n) => {
+      if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in ${where(U)} isn't a value: it's a statement of the constructor block`);
+    });
+    if (!calls.length && !(parents.length && isClass(U) && (U.initParams || []).length)) continue;
+    if (calls.length && (!isClass(U) || !parents.length)) {
+      throw new Error(`'${shown(calls[0].n)}' in ${where(U)}: 'super' builds the base, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
+    }
+
+    // Which parent each call builds. A message shows the call as written.
+    for (const c of calls) c.shown = shown(c.n);
+    for (const { n } of calls) {
+      if (n.layer) {
+        if (!parents.includes(n.layer)) throw new Error(`'${shown(n)}' in '${U.name}': '${n.layer}' isn't a parent of '${U.name}'`);
+      } else if (parents.length > 1) {
+        throw new Error(`'${shown(n)}' in '${U.name}' is ambiguous: '${U.name}' has parents ${parents.map(p => `'${p}'`).join(' and ')} — write ${parents.map(p => `'super[${p}](…)'`).join(' and ')}`);
+      }
+      n.layer ??= parents[0];
+    }
+
+    // Once on every path: a statement of the constructor block, never in a loop or a
+    // function, never twice.
+    for (const { n, path, shown: written } of calls) {
+      if (path.some(p => LOOPS.has(p.type) || isFunctionNode(p))) {
+        throw new Error(`'${written}' in '${U.name}' runs once: it can't be in a loop or a function`);
+      }
+      const ifs = path.filter(p => p.type === 'IfExpr' || p.type === 'IfStatement');
+      if (ifs.length) {
+        const top = ifs[0];
+        const callsIn = (b) => { let found = false; walk(b, (m) => { if (m.type === 'SuperCall' && m.layer === n.layer) found = true; }); return found; };
+        const branches = [];
+        for (let b = top; b; b = (b.else?.type === 'IfExpr' || b.else?.type === 'IfStatement') ? b.else : null) {
+          branches.push(b.then ?? b.thenBranch, (b.else?.type === 'IfExpr' || b.else?.type === 'IfStatement') ? undefined : (b.else ?? null));
+        }
+        if (branches.filter(b => b !== undefined).some(b => !b || !callsIn(b))) {
+          throw new Error(`'${written}' in '${U.name}' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too`);
+        }
+        throw new Error(`'${written}' in '${U.name}': 'super' in a branch isn't supported yet — call it as a statement of the constructor block`);
+      }
+    }
+    for (const P of parents) {
+      const mine = calls.filter(c => c.n.layer === P);
+      const named = parents.length > 1 ? `super[${P}](…)` : 'super';
+      if (mine.length > 1) throw new Error(`'${named}' in '${U.name}' is called twice: the base is built once`);
+      if (!mine.length) {
+        throw new Error(`'${U.name}' has a constructor of its own and never calls '${named}': it builds its base with '${parents.length > 1 ? named : 'super(…)'}' in the constructor block`);
+      }
+    }
+
+    // A base name read before its `super` line.
+    const ownNames = new Set([
+      ...(U.initParams || []).map(p => p.name),
+      ...(U.stateVarDecls || []).filter(d => !d.baseOf).map(d => d.name),
+      ...(U.functions || []).filter(f => !f.baseOf).map(f => f.name),
+    ]);
+    const baseNamesOf = (P) => {
+      const pc = chain(byName, P);
+      const names = new Map();
+      for (const d of [...pc.inheritedState, ...(P.stateVarDecls || []), ...pc.inheritedFunctions, ...(P.functions || [])]) {
+        if (typeof d.name === 'string' && !ownNames.has(d.name)) names.set(d.name, d.baseOf ? `base::${d.baseOf}` : d.name);
+      }
+      for (const d of U.stateVarDecls || []) if (d.baseOf) names.set(d.name, `base::${d.baseOf}`);
+      return names;
+    };
+    const init = U.initBody;
+    for (const P of parents) {
+      const at = init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
+      const names = baseNamesOf(byName.get(P));
+      const before = [...init.slice(0, at), init[at].expr.args];
+      walk(before, (m) => {
+        if (isFunctionNode(m)) return false;
+        const name = m.type === 'FunctionCallExpr' && m.callee?.type === 'Identifier' ? m.callee.name
+          : ['Identifier', 'RefRead', 'RefArg', 'FnRef', 'SetStatement', 'StateAssign'].includes(m.type) ? m.name : null;
+        if (name && names.has(name)) {
+          throw new Error(`'${names.get(name)}' in '${U.name}' is the base's, read before '${parents.length > 1 ? `super[${P}]` : 'super'}': the base is built at that line`);
+        }
+      });
+    }
+
+    // Lower each call: its args into the parent's param cells, then the marker. The
+    // constructor block keeps them as typed bindings, which are checked as any are.
+    const lowered = new Map();
+    U.initBody = init.flatMap((s) => {
+      if (s.type !== 'ExprStatement' || s.expr?.type !== 'SuperCall') return [s];
+      const { layer, args } = s.expr;
+      const P = byName.get(layer);
+      const view = parentView(byName, P, chain);
+      const binds = bindArgs(U, P, view, args);
+      lowered.set(s.expr, binds);
+      return [...binds, { type: 'SuperInit', layer }];
+    });
+    U.constructorBody = (U.constructorBody || []).flatMap((s) => {
+      const binds = s.type === 'ExprStatement' && lowered.get(s.expr);
+      if (!binds) return [s];
+      const typeOf = new Map(parentView(byName, byName.get(s.expr.layer), chain).cells.map(c => [c.name, c.typeName]));
+      return binds.map(b => AST.typedAssign(b.name, typeOf.get(b.name), b.value));
+    });
+  }
+}
+
+// `super(args)`'s args, bound to the parent's params as a call to its `new` binds
+// them: by key when named, else by place; a param left out takes its default.
+// Bare `super` passes the constructor's own args as they came.
+function bindArgs(U, P, view, args) {
+  const head = `super${(U.supertypes || []).length > 1 ? `[${P.name}]` : ''}`;
+  const call = args === null ? `'${head}' in '${U.name}' (its args as received)` : `'${head}(…)' in '${U.name}'`;
+  if (args === null) {
+    const bag = {};
+    const pos = [];
+    for (const p of U.initParams || []) {
+      if (p.positional) pos.push(AST.identifier(p.name));
+      else bag[p.key || p.name] = AST.identifier(p.name);
+    }
+    args = [...pos, ...(Object.keys(bag).length ? [AST.namedArgsBag(bag)] : [])];
+  }
+  const bagNode = args.find(a => a?.type === 'NamedArgsBag');
+  const fields = { ...(bagNode?.fields || {}) };
+  const positional = args.filter(a => a?.type !== 'NamedArgsBag');
+  const posParams = view.params.filter(p => p.positional);
+  if (positional.length > posParams.length) {
+    throw new Error(`${call}: '${P.name}' takes ${posParams.length} positional arg${posParams.length === 1 ? '' : 's'}, got ${positional.length}`);
+  }
+  const bound = new Map();
+  for (const p of view.params) {
+    if (p.key in fields) { bound.set(p, fields[p.key]); delete fields[p.key]; continue; }
+    const at = posParams.indexOf(p);
+    if (at >= 0 && at < positional.length) bound.set(p, positional[at]);
+  }
+  const extra = Object.keys(fields);
+  if (extra.length) throw new Error(`${call}: '${P.name}' has no param '${extra[0]}'`);
+  const out = [];
+  for (const p of orderParamsForDefaults(view.params)) {
+    let value = bound.get(p);
+    if (!value) {
+      if (!p.defaultValue) throw new Error(`${call}: '${P.name}' takes '${p.key}', which isn't passed`);
+      value = deepCopy(p.defaultValue);
+    }
+    out.push(AST.stateAssign(p.name, value, { isRef: !!p.ref }));
+  }
+  return out;
+}
