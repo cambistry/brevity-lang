@@ -163,7 +163,9 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
 // A call to a local function replies with a whole Object, and a return field holds one value.
 function genReturnValue(ctx, expr, typeEnv, replyCtx) {
   const code = genExpr(ctx, expr, typeEnv, replyCtx);
-  const isLocalCall = expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && ctx.lambdaVarNames.has(expr.callee.name);
+  // A call of a function here (a lambda, or the actor's own) yields its reply: the value is its one value.
+  const isLocalCall = expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier'
+    && (ctx.lambdaVarNames.has(expr.callee.name) || ctx.actorFnNames.has(expr.callee.name));
   return isLocalCall ? `bv_object_one(${code})` : code;
 }
 

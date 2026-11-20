@@ -59,3 +59,43 @@ describe('arithmetic on untyped call results', () => {
     );
   });
 });
+
+// Where nothing types the operands (a call to a function that passes its untyped
+// param back, or a recursive call, which doesn't type itself) or the result (a
+// private function's reply), the runtime picks the arithmetic: an Integer past
+// 64 bits stays whole.
+describe('arithmetic on call results nothing types', () => {
+  const script = `
+    same = (x) -> x
+    big = (n Integer) {
+      if n > 0 { return big(n - 1) }
+      return 9223372036854775807
+    }
+
+    sum = { return same(9223372036854775807) + same(1) }
+    product = { return big(2) * big(1) }
+
+    @passedBack = {
+      x Integer = sum()
+      return x
+    }
+    @recursive = {
+      x Integer = product()
+      return x
+    }
+  `;
+
+  it('a function that passes its untyped param back', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'passedBack', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [9223372036854775808n], to: 'c' }) },
+    );
+  });
+
+  it('a recursive function', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'recursive', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [85070591730234615847396907784232501249n], to: 'c' }) },
+    );
+  });
+});

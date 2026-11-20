@@ -420,6 +420,27 @@ const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 
 
 // Shared mutable state container
 export const G = { ctx: null };
+
+// A call worked out ahead into a temporary is marked on its node with that
+// temporary. The mark belongs to the handler whose code declares the temporary:
+// the same node is generated again elsewhere (as its own function's body), so a
+// handler's marks are cleared when its code is done.
+export function markPrecomputed(node, code, isValue = false) {
+  node._precomputed = code;
+  if (isValue) node._precomputedValue = true;
+  G.precomputeMarks?.push(node);
+}
+
+export function withPrecomputeScope(gen) {
+  const saved = G.precomputeMarks;
+  const marks = G.precomputeMarks = [];
+  try {
+    return gen();
+  } finally {
+    for (const n of marks) { delete n._precomputed; delete n._precomputedValue; }
+    G.precomputeMarks = saved;
+  }
+}
 export function setCtx(newCtx) { G.ctx = newCtx; }
 
 // Wire tag for a type-valued slot: `path:Name` for an imported/cross-module

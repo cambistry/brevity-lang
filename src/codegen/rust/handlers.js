@@ -14,7 +14,7 @@ import { outerNamesFor, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
 import { orderParamsForDefaults } from '../../param_defaults.js';
 import {
-  G, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
+  G, markPrecomputed, withPrecomputeScope, buildTypeEnv, inferLiteralType, rustIdent, rustSsaResolve, rustType, convertFromValue,
   toJsonValue, forceJsonWrap, stateKey, analyzeFunctions,
   findMutableVars, classNeedsSpawnedInstances,
 } from './types.js';
@@ -54,7 +54,11 @@ function outersExpr(actor) {
 
 const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
 
-function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
+function genRustPublicFn(...args) {
+  return withPrecomputeScope(() => genRustPublicFnCode(...args));
+}
+
+function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverload }, fns, { hasOverloads = false } = {}) {
   // Skip actorDef constructor clauses — dispatched via actor construction
   if (actorDef) return null;
   // Skip empty Function() initializers — no dispatch arm
@@ -246,14 +250,13 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
               const val = genRustExpr(implRet.expr, typeEnv);
               const t = implRet.expr.type === 'StringLiteral' ? 'Text' : null;
               lines.push(`                let ${tmpVar} = ${t === 'Text' ? val + '.to_string()' : val};`);
-              expr._precomputed = tmpVar;
+              markPrecomputed(expr, tmpVar);
             } else if (fnReply) {
               // Private function with explicit reply — dispatch through self_send
               const tmpVar = `_pvfn_${precomputeIdx++}`;
               const callExpr = `self.self_send("${wireLabel(calleeName)}", &Value::Object(Map::new()))`;
               lines.push(`                let ${tmpVar} = BvObject::pack(&${callExpr}).one();`);
-              expr._precomputed = tmpVar;
-              expr._precomputedValue = true;
+              markPrecomputed(expr, tmpVar, true);
             }
             return;
           }
@@ -264,9 +267,8 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             // Convert Value to scalar type for use in binary expressions
             const convert = convertFromValue(callExpr, expectedType);
             lines.push(`                let ${tmpVar} = ${convert};`);
-            expr._precomputed = tmpVar;
             // Unconverted, it is the reply's Value.
-            if (convert === callExpr) expr._precomputedValue = true;
+            markPrecomputed(expr, tmpVar, convert === callExpr);
             return;
           }
         }
@@ -289,7 +291,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
             const tmpVar = `_fncall_${precomputeIdx++}`;
             const callExpr = genRustExpr(fieldExpr, typeEnv);
             lines.push(`                let ${tmpVar} = ${callExpr};`);
-            f._precomputed = tmpVar;
+            markPrecomputed(f, tmpVar);
           }
         }
         // DotCallExpr on uses/remote targets produce multi-line blocks — hoist them out
@@ -297,7 +299,7 @@ function genRustPublicFn({ name, params, body: rawBody, actorDef, emptyOverload 
           const tmpVar = `_fncall_${precomputeIdx++}`;
           const callExpr = genRustExpr(fieldExpr, typeEnv);
           lines.push(`                let ${tmpVar} = ${callExpr};`);
-          f._precomputed = tmpVar;
+          markPrecomputed(f, tmpVar);
         }
       }
       lines.push(`                re = Some(${genRustReBody(reply.fields, typeEnv, refNames)});`);
@@ -716,7 +718,11 @@ function valueFit(params, subject) {
   return `bv_values_fit(${subject}, &[${pos.map(t => JSON.stringify(t)).join(', ')}], &[${named.map(([k, t]) => `(${JSON.stringify(k)}, ${JSON.stringify(t)})`).join(', ')}])`;
 }
 
-function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false, overloaded = false) {
+function genRustChildPublicFn(...args) {
+  return withPrecomputeScope(() => genRustChildPublicFnCode(...args));
+}
+
+function genRustChildPublicFnCode(fn, eCtx, classTypes = new Map(), isPublic = false, overloaded = false) {
   const { name, params, body: rawBody } = fn;
   const reply = rawBody.find(s => s.type === 'Reply');
   let implicitReturn = !reply ? rawBody.filter(s => s.type === 'ImplicitReturn').pop() : null;
@@ -794,7 +800,7 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
             const val = genRustExpr(implRet.expr, typeEnv);
             const t = implRet.expr.type === 'StringLiteral' ? 'Text' : null;
             lines.push(`                let ${tmpVar} = ${t === 'Text' ? val + '.to_string()' : val};`);
-            expr._precomputed = tmpVar;
+            markPrecomputed(expr, tmpVar);
           }
           return;
         }
@@ -803,9 +809,8 @@ function genRustChildPublicFn(fn, eCtx, classTypes = new Map(), isPublic = false
           const callExpr = genRustExpr(expr, typeEnv);
           const convert = convertFromValue(callExpr, expectedType);
           lines.push(`                let ${tmpVar} = ${convert};`);
-          expr._precomputed = tmpVar;
           // Unconverted, it is the reply's Value.
-          if (convert === callExpr) expr._precomputedValue = true;
+          markPrecomputed(expr, tmpVar, convert === callExpr);
           return;
         }
       }
@@ -1148,11 +1153,6 @@ ${lines.join('\n')}
     }`;
 }
 
-// Deep-clone an AST node, stripping any codegen-internal _precomputed annotations
-function deepCloneAst(node) {
-  return JSON.parse(JSON.stringify(node, (key, value) => key === '_precomputed' ? undefined : value));
-}
-
 function genRustChildMethods(allActors) {
   const childActors = allActors.filter(a => a.name && G.ctx.actorInfo.has(a.name));
   if (childActors.length === 0) return '';
@@ -1176,7 +1176,7 @@ function genRustChildMethods(allActors) {
     const ownFnNames = new Set(actor.functions.map(f => f.name));
     const mergedFunctions = [
       ...actor.functions,
-      ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')).map(f => deepCloneAst(f)),
+      ...inheritedFunctions.filter(f => !ownFnNames.has(f.name) && !f.name?.startsWith('#')),
     ];
 
     // Subscribe-on-param transform was applied as a pre-pass in program.js

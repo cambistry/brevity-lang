@@ -50,7 +50,7 @@ import { lowerChains } from '../../chains.js';
 import { fileOuterNames, hasOuterReads, readableNames, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
 import { publicLabel, FILE_CLASS } from '../../singleton_classes.js';
-import { genRustLocals } from './statements.js';
+import { genRustLocals, markExpectedTypes } from './statements.js';
 import { capturedRefs } from '../ref_captures.js';
 
 function genRustProgram(actor, allActors) {
@@ -2330,6 +2330,7 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
 
 function codegenRust(ast, options = {}) {
   lowerChains(ast);
+  markExpectedTypes(ast);
   setCtx(createRustContext());
   // Self-as-value: validate() has enforced fileName when the AST uses Self
   // as a bare value. Stash it for handlers/expressions to read.

@@ -8,7 +8,7 @@ import { isActorRefType } from '../../actor_values.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
-  G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
+  G, markPrecomputed, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
   classNeedsSpawnedInstances, rustTypeWireWrap, outerRead, rustSlotTag,
@@ -74,9 +74,6 @@ function coerceOperand(code, isValue, srcType, target) {
       return code;
     case 'BigInt':
       if (isValue) return intFromValue(code);
-      return code;
-    case 'i64':
-      if (isValue) return `${code}.as_i64().unwrap_or(0)`;
       return code;
     default:
       return code;
@@ -402,7 +399,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
     }
     // An `Anything` operand (an untyped param of a generic function) is a
     // Value whose numeric kind is only known at runtime: dispatch on it there.
-    if ((lType === 'Anything' || rType === 'Anything') && (numOps.includes(rustOp) || rustOp === '**')) {
+    const dynOp = () => {
       const l = `bv_val(&${left})`;
       const r = `bv_val(&${right})`;
       if (rustOp === '==') return `bv_eq(&${l}, &${r})`;
@@ -410,7 +407,8 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const ord = { '>': 'is_gt', '<': 'is_lt', '>=': 'is_ge', '<=': 'is_le' }[rustOp];
       if (ord) return `bv_cmp(&${l}, &${r}).${ord}()`;
       return `bv_dyn_arith(&${l}, "${rustOp}", &${r})`;
-    }
+    };
+    if ((lType === 'Anything' || rType === 'Anything') && (numOps.includes(rustOp) || rustOp === '**')) return dynOp();
     // Decimal detection — must come before integer detection
     const lIsDec = lType === 'Decimal' || expr.left.type === 'DecimalLiteral';
     const rIsDec = rType === 'Decimal' || expr.right.type === 'DecimalLiteral';
@@ -453,11 +451,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const r = coerceOperand(right, rIsValue, null, 'BigInt');
       return intPow(l, r);
     }
-    if (numOps.includes(rustOp) && (lIsValue || rIsValue)) {
-      const l = coerceOperand(left, lIsValue, null, 'i64');
-      const r = coerceOperand(right, rIsValue, null, 'i64');
-      return `(${l} ${rustOp} ${r})`;
-    }
+    // A Value whose numeric kind nothing says (a reply of an untyped call): the
+    // runtime picks the arithmetic, as for `Anything`.
+    if (numOps.includes(rustOp) && (lIsValue || rIsValue)) return dynOp();
     return `(${left} ${rustOp} ${right})`;
   }
   if (expr.type === 'IndexExpr') {
@@ -1646,7 +1642,7 @@ function precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, tmpVar
   const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
   const analysis = { fnDefs: functionAnalysis.fnDefs, skipSet: new Set(), capturePoints: new Map() };
   lines.push(genRustLocals([bind], typeEnv, analysis, findMutableVars([bind]), indent, undefined, null, enclosing));
-  expr._precomputed = `${rustSsaResolve(tmpVar)}.one()`;
+  markPrecomputed(expr, `${rustSsaResolve(tmpVar)}.one()`);
   return true;
 }
 

@@ -996,12 +996,24 @@ function genRustMemberCallAwait(call, typeEnv, I, lines) {
 
 function genRustTypedAssign(...args) {
   G.strictConvert = true;
-  expectType(args[0].value, args[0].typeName);
   try { return genRustTypedAssignBody(...args); } finally { G.strictConvert = false; }
 }
 
-// `x Integer = f() + g()`: arithmetic whose operands have no type of their own
-// (replies are Values) computes in the type it's assigned to.
+// `x Integer = f() + g()`, `return n: (a + b) as Integer`: arithmetic whose
+// operands have no type of their own (replies are Values) computes in the type
+// stated for it: a typed bind's, a reply field's, an attestation's.
+export function markExpectedTypes(node) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { node.forEach(markExpectedTypes); return; }
+  if (node.type === 'TypedAssign' || node.type === 'RefDecl') expectType(node.value, node.typeName);
+  if (node.type === 'AsExpr') expectType(node.expr, node.typeName);
+  if (node.attestedAs) expectType(node, node.attestedAs);
+  if (node.type === 'Reply' || node.type === 'Return') {
+    for (const f of node.fields || []) expectType(f.expr ?? f.value, f.type);
+  }
+  for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') markExpectedTypes(v);
+}
+
 const ARITH_OPS = new Set(['+', '-', '*', '/', '%', '**']);
 function expectType(expr, typeName) {
   if (expr?.type !== 'BinaryExpr' || !ARITH_OPS.has(expr.op) || !['Integer', 'Decimal', 'Float'].includes(typeName)) return;
