@@ -734,8 +734,10 @@ ${subRegLines.join('\n')}
     const argExprs = callArgs.map(a => genRustExpr(a, typeEnv, eCtx)).join(', ');
     return `${callee}(${argExprs})`;
   }
+  // An `if` as a value, with no type to meet: when a branch is a Value (a call's
+  // reply, a cell, a missing else), every branch is.
   if (expr.type === 'IfExpr') {
-    return genRustIfExpr(expr, typeEnv, eCtx);
+    return genRustIfExpr(expr, typeEnv, eCtx, undefined, ifYieldsValue(expr) ? 'Value' : undefined);
   }
   if (expr.type === 'StateVar') {
     return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
@@ -1545,6 +1547,17 @@ function genRustCondition(expr, typeEnv, eCtx) {
   if (expr.type === 'IntLiteral' || expr.type === 'FloatLiteral' || expr.type === 'StringLiteral') return 'true';
   if (expr.type === 'NullLiteral') return 'false';
   return raw;
+}
+
+// Whether some branch of an `if` is a Value.
+function ifYieldsValue(expr) {
+  const tail = (b) => b?.expr ?? b?.body?.findLast(st => st.type === 'ImplicitReturn')?.expr;
+  const isValue = (e) => e?.type === 'StateVar' || e?.type === 'RefRead'
+    || (e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(e.callee.name));
+  for (let b = expr; b; b = b.else?.type === 'IfExpr' ? b.else : null) {
+    if (!b.else || isValue(tail(b.then)) || (b.else.type !== 'IfExpr' && isValue(tail(b.else)))) return true;
+  }
+  return false;
 }
 
 function genRustIfExpr(expr, typeEnv, eCtx, indent, targetType) {

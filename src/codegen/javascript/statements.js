@@ -504,7 +504,7 @@ function genIfBlockStatements(ctx, body, tmpVar, _outerEnv) {
       code += genIfChain(ctx, s.expr, innerVar, _outerEnv);
     } else if (s.type === 'ImplicitReturn') {
       lastTypedName = null;
-      code += `\n        ${tmpVar} = ${genExpr(ctx, s.expr)};`;
+      code += `\n        ${tmpVar} = ${genTailValue(ctx, s.expr)};`;
     } else if (s.type === 'Return') {
       lastTypedName = null;
       code += `\n        return ${genBranchReturn(ctx, s.fields)};`;

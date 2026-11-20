@@ -918,6 +918,7 @@ function needsJsonWrap(expr) {
 function convertBranchExpr(raw, expr, targetType) {
   if (targetType === 'Value' && expr.type === 'IntLiteral') return intToValue(raw);
   if (targetType === 'Value' && needsJsonWrap(expr)) return `json!(${raw})`;
+  if (targetType === 'Value') return raw.startsWith('Value::') || raw.startsWith('json!(') || raw.startsWith('bv_val(') ? raw : `bv_val(${raw})`;
   if (targetType === 'String' && expr.type === 'StringLiteral') return `${raw}.to_string()`;
   // StateVar/RefRead return Value — convert to target type
   if ((expr.type === 'StateVar' || expr.type === 'RefRead' || (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name))) && targetType && targetType !== 'Value') {

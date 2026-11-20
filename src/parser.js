@@ -2978,6 +2978,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     return fields;
   }
 
+  const REPLY_LIST_ENDS = new Set(['NEWLINE', 'BLOCK_SEP', 'EOF', 'RBRACE', 'RPAREN', 'RBRACKET', 'DIVIDER', 'SEMICOLON']);
   function parseReplyFieldList(sameLine) {
     const fields = [];
     const hasParen = peek().type === 'LPAREN';
@@ -2994,159 +2995,36 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'reply fields'); consume(); separated = fields.length; continue; }
       if (fields.length > separated && pos === before) break;
       separated = fields.length;
-      if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
-        fields.push({ expr: parseExpr(), type: null, positional: true });
-      } else if (peek().type === 'AT' || peek().type === 'HASH_IDENT' || peek().type === 'AMPERSAND_IDENT' || atBareBuiltinCall() ||
-                 atClass() || atSuper() || (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DCOLON') ||
-                 (peek().type === 'KEYWORD' && peek().value === 'use')) {
-        const expr = parseExpr();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr, type: typeName, positional: true });
-      } else if (peek().type === 'NUMBER') {
-        const numTok = take();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: makeNumLiteral(numTok), type: typeName, positional: true });
-      } else if (peek().type === 'SIGIL') {
+      if (REPLY_LIST_ENDS.has(peek().type) || (peek().type === 'KEYWORD' && (peek().value === 'else' || peek().value === 'end'))) break;
+      if (peek().type === 'SIGIL') {
         const { name, type: fieldType } = parseSigilWithType();
         fields.push({ sigil: name, type: fieldType, ref: isRef(name) });
-      } else if (peek().type === 'IDENT') {
-        const name = take().value;
-        if (peek().type === 'KEYWORD' && peek().value === 'as') {
-          // positional with as-attestation: name as Type
-          const typeName = consumeTypeAttestation();
-          fields.push({ name, type: typeName, positional: true });
-        } else if (peek().type === 'COLON') {
-          take();
-          // key-value: key: expr [as Type]
-          const value = atSelfValue() ? (take(), AST.selfValue()) : parseExpr();
-          let fieldType = null;
-          if (isTypeAttestation()) fieldType = consumeTypeAttestation();
-          fields.push({ key: name, value, type: fieldType });
-        } else {
-          // bare positional: variable ref, function/dot-call, or binary expression with optional type
-          let exprNode = AST.identifier(name);
-          while (peek().type === 'LPAREN' || peek().type === 'DOT') {
-            if (peek().type === 'DOT') {
-              take(); // DOT
-              const method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value))) ? take().value : expect('IDENT').value;
-              if (exprNode.type === 'Identifier' && exprNode.name === 'Text' && TEXT_METHODS.has(method) && peek().type === 'LPAREN') {
-                expect('LPAREN');
-                const args = [parseExpr()];
-                while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                expect('RPAREN');
-                exprNode = method === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(method, args);
-              } else if (exprNode.type === 'Identifier' && exprNode.name === 'Blob' && BLOB_METHODS.has(method) && peek().type === 'LPAREN') {
-                expect('LPAREN');
-                const args = [parseExpr()];
-                while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                expect('RPAREN');
-                exprNode = AST.blobMethodExpr(method, args);
-              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && refType(exprNode.name) === 'Blob' && BLOB_METHODS.has(method)) {
-                const info = BLOB_METHODS.get(method);
-                const args = [AST.refRead(exprNode.name)];
-                if (info.arity[0] > 1 && peek().type === 'LPAREN') {
-                  consume(); // LPAREN
-                  args.push(parseExpr());
-                  while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                  expect('RPAREN');
-                }
-                exprNode = AST.blobMethodExpr(method, args);
-              } else if (exprNode.type === 'Identifier' && isRef(exprNode.name) && TEXT_METHODS.has(method)) {
-                const info = TEXT_METHODS.get(method);
-                const args = [AST.refRead(exprNode.name)];
-                if (info.arity[0] > 1 && peek().type === 'LPAREN') {
-                  consume(); // LPAREN
-                  args.push(parseExpr());
-                  while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-                  expect('RPAREN');
-                }
-                exprNode = method === 'size' ? AST.sizeExpr(AST.refRead(exprNode.name)) : AST.textMethodExpr(method, args);
-              } else if (peek().type === 'LPAREN') {
-                const args = parseSendArgs();
-                exprNode = AST.dotCallExpr(exprNode, method, args);
-              } else if (method.endsWith('!') || (exprNode.type === 'DotCallExpr' && exprNode.method?.endsWith('!'))) {
-                exprNode = AST.dotCallExpr(exprNode, method, []);
-              } else {
-                exprNode = AST.dotAccessExpr(exprNode, method);
-              }
-            } else {
-              const args = parseCallArgs();
-              if (exprNode.type === 'Identifier') checkFunctionArgs(args, exprNode.name);
-              exprNode = AST.functionCallExpr(exprNode, args);
-            }
-          }
-          while (['PLUS', 'MINUS', 'STAR', 'SLASH', 'PERCENT', 'POWER'].includes(peek().type)) {
-            const tok = take();
-            const op = tok.type === 'POWER' ? '**' : tok.value;
-            exprNode = AST.binaryExpr(op, exprNode, parsePrimary());
-          }
-          let typeName = null;
-          if (isTypeAttestation()) {
-            typeName = consumeTypeAttestation();
-          }
-          if (exprNode.type === 'Identifier' && typeName === null) {
-            fields.push({ name, positional: true });
-          } else {
-            fields.push({ expr: exprNode, type: typeName, positional: true });
-          }
-        }
-      } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING') {
-        const expr = consumeStringExpr();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr, type: typeName, positional: true });
-      } else if (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false')) {
-        const boolTok = take();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.boolLiteral(boolTok.value === 'true' ), type: typeName, positional: true });
-      } else if (peek().type === 'KEYWORD' && peek().value === 'null') {
-        take();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.nullLiteral(), type: typeName, positional: true });
-      } else if (peek().type === 'DOLLAR_IDENT') {
-        const name = take().value;
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: AST.stateVar(name), type: typeName, positional: true, name: '$' + name });
-      } else if (peek().type === 'LBRACKET') {
-        const expr = parseExpr();
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr, type: typeName, positional: true });
-      } else if (peek().type === 'KEYWORD' && tokens[pos + 1]?.type === 'COLON') {
-        // Keyword used as named field key: type: expr, set: expr, etc.
-        const name = take().value;
+      } else if ((peek().type === 'IDENT' || peek().type === 'KEYWORD') && tokens[pos + 1]?.type === 'COLON') {
+        // key: expr [as Type]
+        const key = take().value;
         take(); // COLON
         const value = atSelfValue() ? (take(), AST.selfValue()) : parseExpr();
         let fieldType = null;
         if (isTypeAttestation()) fieldType = consumeTypeAttestation();
-        fields.push({ key: name, value, type: fieldType });
-      } else if (atSelfValue()) {
-        take(); // self
-        fields.push({ expr: AST.selfValue(), type: null, positional: true });
-      } else if (peek().type === 'HTML_CONSTRUCTOR') {
-        const tok = take();
-        let domExpr;
-        if (tok.bvBlock !== undefined) {
-          domExpr = AST.anonymousHtmlActor(tok.tag, parseAttrBlock(tok.bvBlock), parseDomChildren(tok.children));
-        } else {
-          domExpr = AST.domConstructor(tok.tag, parseDomChildren(tok.children), parseAttrs(tok.attrs));
-        }
-        let typeName = null;
-        if (isTypeAttestation()) typeName = consumeTypeAttestation();
-        fields.push({ expr: domExpr, type: typeName, positional: true });
+        fields.push({ key, value, type: fieldType });
       } else if (peek().type === 'ELLIPSIS') {
         take();
         const name = expect('IDENT').value;
         let typeName = null;
         if (isTypeAttestation()) typeName = consumeTypeAttestation();
         fields.push({ spread: true, name, type: typeName });
+      } else if (atSelfValue()) {
+        take(); // self
+        fields.push({ expr: AST.selfValue(), type: null, positional: true });
       } else {
-        break;
+        // A positional field is an expression [as Type]; a lone name is the name's field.
+        const bare = peek().type === 'IDENT';
+        const expr = parseExpr();
+        let typeName = null;
+        if (isTypeAttestation()) typeName = consumeTypeAttestation();
+        if (bare && (expr.type === 'Identifier' || expr.type === 'RefRead')) fields.push({ name: expr.name, ...(typeName && { type: typeName }), positional: true });
+        else if (expr.type === 'StateVar') fields.push({ expr, type: typeName, positional: true, name: '$' + expr.name });
+        else fields.push({ expr, type: typeName, positional: true });
       }
     }
     if (hasParen && !closed) expect('RPAREN');

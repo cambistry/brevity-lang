@@ -1191,6 +1191,10 @@ export function genExpr(ctx, expr) {
     const obj = genExpr(ctx, expr.object);
     return `${obj}.${expr.property}`;
   }
+  // An `if` as a value: its branches run as they do in a statement, into a local.
+  if (expr.type === 'IfExpr') {
+    return `(await (async () => {\n        let _ifv = null;\n        ${ctx.genIfChain(ctx, expr, '_ifv')}\n        return _ifv;\n      })())`;
+  }
   throw new Error(`Unknown expression type: ${expr.type}`);
 }
 

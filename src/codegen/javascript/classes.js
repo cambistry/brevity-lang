@@ -18,7 +18,7 @@ import {
   genSendNew, jsIdent,
 } from './expressions.js';
 import {
-  genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall,
+  genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall, genIfChain,
 } from './statements.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { subscribedParams } from '../../call_args.js';
@@ -91,6 +91,7 @@ function createContext() {
     catchLabelCounter: 0,
     // Late-bound: wired below in codegen()
     genFunctionBodyCode: null,
+    genIfChain: null,
   };
 }
 
@@ -1369,6 +1370,7 @@ export function codegen(ast, options = {}) {
   const ctx = createContext();
   // Wire late binding for genFunctionBodyCode
   ctx.genFunctionBodyCode = genFunctionBodyCode;
+  ctx.genIfChain = genIfChain;
   // Self-as-value provisioning: validate() has already enforced that any AST
   // using Self in value position was compiled with `options.fileName`. Each
   // class that needs it picks up the address from ctx in genClass; classes

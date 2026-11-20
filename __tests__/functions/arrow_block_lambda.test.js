@@ -1,5 +1,5 @@
 import { extract } from '../../index.js';
-import { compileSource } from '../helpers.js';
+import { compileSource, expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Arrow + block lambda bodies: `(e) -> { body }` and `e -> { body }`.
@@ -126,5 +126,33 @@ describe('arrow + block lambda — compiles end to end', () => {
         v: Integer = add(2)
         return result: v
     `)).not.toThrow();
+  });
+});
+
+describe('an arrow body that is an `if`', () => {
+  const script = `
+    count = (n Integer) -> if n == 0 { 0 } else { count(n - 1) }
+    @down = -> count(3)
+    @local = {
+      size = (n Integer) -> if n > 1 { "big" } else { "small" }
+      return size(5)
+    }
+    @size = (n Integer) -> if n > 1 { "big" } else { "small" }
+  `;
+
+  it('a function\'s arrow body recurses through its branches', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'down', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [0] }) },
+    );
+  });
+
+  it('a local lambda and a handler take the branch the condition picks', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'local', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['big'] }) },
+      { input: { id: '2', op: [[1], 'size'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['small'] }) },
+    );
   });
 });
