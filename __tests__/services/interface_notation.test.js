@@ -364,9 +364,9 @@ describe('service document — param and return fields', () => {
     expect(p['move.'][0].params).toEqual([{ name: 'p', type: 'Geom::Point', positional: false }]);
   });
 
-  it('`:name` in a param list is colon destructuring', () => {
+  it('`:name` in a param list is not a param', () => {
     expect(() => parseInterface('{ first (:selector Text) -> (Element) }'))
-      .toThrow("':selector' is colon destructuring, which a param list doesn't take — a named param is 'selector: Text'");
+      .toThrow("In '(:selector Text)': Expected type name, got SIGIL 'selector'");
   });
 
   it('a param type that does not parse', () => {

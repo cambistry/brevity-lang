@@ -120,10 +120,6 @@ export function typeNamesIn(text) {
   return names;
 }
 
-// `:name` where a param is expected.
-export const colonParamError = (name, typeName) =>
-  new Error(`':${name}' is colon destructuring, which a param list doesn't take — a named param is '${name}: ${typeName ?? 'Type'}'`);
-
 // A definition that is a chain of names only, `C = A ^ B`, has the tokens of an
 // exponent, `n = x ^ y`. It composes when its head is a class in scope
 // (notes/caret-composition-2026-11-19.md). Scope is known only once the file is
@@ -1361,14 +1357,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseFunctionParamsParen() {
     expect('LPAREN');
     const params = [];
-    const isParamDelim = () => {
-      const t = peek().type;
-      return t === 'COMMA' || t === 'RPAREN' || t === 'EOF';
-    };
-    const peekIsType = () => {
-      if (peek().type === 'LPAREN') return true; // function type: (Integer) -> (Integer)
-      return peek().type === 'IDENT' || (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT');
-    };
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
@@ -1379,85 +1367,9 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       if (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT') {
         throw new Error(`Cannot publish param '${tokens[pos + 1].value}' of a function — '@' marks class and file params only`);
       }
-      if (peek().type === 'ELLIPSIS') {
-        take(); // ...
-        const name = expect('IDENT').value;
-        let type = null;
-        if (!isParamDelim() && peekIsType()) { type = parseType(); }
-        params.push({ name, type, rest: true, positional: true });
-        continue;
-      }
-      if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
-        // name: ... — named param (external label = `name`).
-        const name = take().value;
-        take(); // COLON
-        if (startsRenamedParam()) {
-          // name: local Type — the caller passes `name`, the body sees `local`
-          params.push(parseRenamedParam(name));
-        } else if (isLoneNameAfterColon()) {
-          // name: X — X is a type if one is in scope, else a local (resolved
-          // after parsing: see resolveLoneNames)
-          params.push({ name, type: take().value, positional: false, typeOrLocal: true });
-        } else if (peek().type === 'SIGIL') {
-          // name: :accessor Type — remap to a sigil-marked local alias
-          const accessor = take().value;
-          let type = null;
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          params.push({ key: name, name: accessor, type, accessor });
-        } else if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
-          // name: * — named ref param (wildcard, no explicit type)
-          take();
-          params.push({ name, type: 'Anything', positional: false, ref: true });
-        } else if (peek().type === 'STAR') {
-          // name: *Type — named ref param with explicit type
-          take();
-          const type = parseType();
-          params.push({ name, type, positional: false, ref: true });
-        } else if (peek().type === 'AMPERSAND_IDENT') {
-          // name: &Type — named read-only ref param
-          const type = consumeAmpersandTypeForParam();
-          params.push({ name, type, positional: false, readonly: true });
-        } else {
-          // name: Type | name: (no type) | name: literal (shorthand default)
-          let type = null;
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          if (!type && (peek().type === 'STRING' || peek().type === 'NUMBER' || (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER') ||
-              (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false' || peek().value === 'null')))) {
-            const dv = parseDefaultLiteral();
-            const p = { name, type: inferDefaultType(dv), positional: false, defaultValue: dv };
-            params.push(p);
-            continue;
-          }
-          params.push({ name, type, positional: false });
-        }
-      } else if (peek().type === 'IDENT') {
-        const name = take().value;
-        // *Type — positional ref param (prefix sigil)
-        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
-          take(); // *
-          const type = parseType();
-          params.push({ name, type, positional: true, ref: true });
-        } else if (peek().type === 'AMPERSAND_IDENT') {
-          // name &Type — positional read-only ref param
-          const type = consumeAmpersandTypeForParam();
-          params.push({ name, type, positional: true, readonly: true });
-        } else {
-          let type = null;
-          if (!isParamDelim() && peekIsType()) { type = parseType(); }
-          params.push({ name, type, positional: true });
-        }
-      } else {
-        break;
-      }
-      // Check for = default on the last-pushed param
-      if (peek().type === 'EQUALS' && params.length > 0) {
-        take(); // =
-        const dv = parseDefaultValue();
-        const p = params[params.length - 1];
-        if (!p.type) p.type = typeOfDefault(p, dv);
-        p.defaultValue = dv;
-      }
+      const p = parseOneParam();
+      if (!p) break;
+      params.push(p);
     }
     expect('RPAREN');
     return params;
@@ -1846,9 +1758,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
           take(); // *
           const typeName = parseType();
-          if (peek().type !== 'LPAREN') {
-            throw new Error(`Expected '(' after '*${typeName}'`);
-          }
           addRef(name);
           const value = parseCellConstruction(typeName);
           body.push(AST.refDecl(name, null, value));
@@ -3780,7 +3689,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     return false;
   }
 
+  // One param. Every param says whether it is positional: a rest param is.
   function parseOneParam() {
+    const p = parseParamForm();
+    if (p && p.positional === undefined) p.positional = !!p.rest;
+    return p;
+  }
+  function parseParamForm() {
     const isOneParamDelim = () => {
       const t = peek().type;
       return t === 'COMMA' || t === 'PIPE' || t === 'RPAREN' || t === 'GT' || t === 'EOF' || t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'DIVIDER' || t === 'EQUALS';
@@ -3814,8 +3729,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       if (!p || p.rest) throw new Error(`Expected a param after '@'`);
       p.accessor = p.key || p.name;
       return p;
-    } else if (peek().type === 'SIGIL') {
-      throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
       // name: ... — named param (external label = `name`).
       const first = take().value;
@@ -3856,10 +3769,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       return withDefault({ name: first, type }, tryParseDefault());
     } else if (peek().type === 'IDENT') {
       const name = take().value;
-      // *Type — positional ref param with explicit type
-      if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
+      // *Type — positional ref param with explicit type; * alone — any type
+      if (peek().type === 'STAR') {
         take(); // *
-        const type = parseType();
+        const type = tokens[pos]?.type === 'IDENT' ? parseType() : 'Anything';
         return withDefault({ name, type, positional: true, ref: true }, tryParseDefault());
       }
       // &Type — positional read-only ref param
@@ -3880,94 +3793,30 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     return null;
   }
 
-  function parseParams() {
-    // ── Mode 1: paren style ────────────────────────────────────────────────
-    if (peek().type === 'LPAREN') {
-      consume(); // opening paren
-      const params = [];
-      let separated = true;
-      while (true) {
-        if (peek().type === 'NEWLINE') { skipNewlines(); separated = true; }
-        if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
-        if (peek().type === 'RPAREN') break;
-        if (!isParamStart()) break;
-        if (!separated) throw new Error(`Expected ',' or a newline between params, got ${peek().type} '${peek().value || ''}'`);
-        const p = parseOneParam();
-        if (p === null) break;
-        params.push(p);
-        separated = false;
-      }
-      expect('RPAREN');
-      return params;
-    }
-
-    // ── Mode 2: same-line no-paren (sigil/ident immediately follows name) ──
-    if (isParamStart()) {
-      const params = [];
-      while (true) {
-        const t = peek().type;
-        if (t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'DIVIDER' || t === 'EOF') break;
-        if (t === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
-        if (!isParamStart()) break;
-        const p = parseOneParam();
-        if (p === null) break;
+  // A lineal declaration's params: `name`, a line break, `=`, then the params
+  // and a closing `=` (`= =` for none), or no params: the body follows the `=`.
+  // The caller has checked the opener.
+  function parseLinealParams() {
+    consume(); // the line break
+    take(); // =
+    const savedPos = pos;
+    skipNewlines();
+    if (peek().type === 'EQUALS') { take(); skipNewlines(); return []; }
+    if (!isParamStart()) return [];
+    const params = [];
+    try {
+      for (;;) {
+        if (peek().type === 'EQUALS') { take(); return params; }
+        if (peek().type === 'NEWLINE') { consume(); continue; }
+        if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
+        const p = isParamStart() ? parseOneParam() : null;
+        if (!p) break;
         params.push(p);
       }
-      // Validate: body must start on the next line, not inline
-      const t = peek().type;
-      if (t !== 'NEWLINE' && t !== 'BLOCK_SEP' && t !== 'DIVIDER' && t !== 'EOF') {
-        throw new Error(`Expected newline after no-paren param list, got ${t} '${peek().value || ''}'`);
-      }
-      return params;
-    }
-
-    // ── Mode 3: lineal form (NEWLINE immediately after name) ───────────────
-    if (peek().type === 'NEWLINE') {
-      consume(); // consume the single newline
-
-      // = as lineal form section delimiter
-      if (peek().type === 'EQUALS') {
-        const savedPos = pos;
-        take();           // eat the =
-        skipNewlines();
-        if (peek().type === 'EQUALS') { take(); skipNewlines(); return []; }  // = = → explicit empty params
-        if (!isParamStart()) return [];  // no params → body follows
-        const params = [];
-        let foundDelimiter = false;
-        try {
-          while (true) {
-            if (peek().type === 'EQUALS') { take(); foundDelimiter = true; break; }  // second = ends params
-            if (peek().type === 'EOF') break;
-            if (peek().type === 'NEWLINE') { consume(); continue; }
-            if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
-            if (isParamStart()) { const p = parseOneParam(); if (p) { params.push(p); continue; } }
-            break;
-          }
-        } catch {
-          foundDelimiter = false;
-        }
-        if (foundDelimiter) {
-          return params;
-        }
-        // Backtrack: not a valid param list, treat as no params (body follows)
-        pos = savedPos;
-        take(); // re-eat the =
-        skipNewlines();
-        return [];
-      }
-
-      if (peek().type === 'BLOCK_SEP') return []; // blank line → no params
-      if (peek().type === 'EOF') return [];
-      if (peek().type === 'DIVIDER') { consume(); return []; }
-      if (!isParamStart()) {
-        return [];  // no params — body starts on this line
-      }
-      // A param appears here without a preceding `=`. Per the lineal grammar,
-      // params require the body-opener `=` between the name and the params.
-      throw new Error(`Lineal param list must start with '=' on its own line; got ${peek().type} '${peek().value || ''}'`);
-    }
-
-    // ── Mode 4: BLOCK_SEP or anything else → no params ────────────────────
+    } catch { /* not a param list */ }
+    // Not a param list: the body follows the `=`.
+    pos = savedPos;
+    skipNewlines();
     return [];
   }
 
@@ -4142,9 +3991,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         } else if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'IDENT') {
           take(); // *
           const typeName = parseType();
-          if (peek().type !== 'LPAREN') {
-            throw new Error(`Expected '(' after '*${typeName}'`);
-          }
           addRef(name);
           const value = parseCellConstruction(typeName);
           body.push(AST.refDecl(name, null, value));
@@ -4513,7 +4359,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       // After consuming <<, allow optional newline before the definition
       // (already consumed the operator)
     } else {
-      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = (params) -> body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
     }
 
     // ── Parse definition body (shared for all overload modes) ──────────
@@ -4608,7 +4454,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     } else if (peek().type === '->' || peek().type === 'LBRACE' || peek().type === 'DOT') {
       params = []; // no params — body follows directly
     } else {
-      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = |params| body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
+      throw new Error(`Unexpected token after '@${op}'. Use '@${op} = (params) -> body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
     }
 
     skipNewlines();
@@ -4685,24 +4531,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     return false;
   }
 
-  function isActorBodyStart() {
-    // Detects whether the lineal-form body of a named `name = ... = body`
-    // declaration is an actor body (becomes a class) vs. a regular function
-    // body: the first non-blank body token is an actor-flavored marker
-    // (@method / self / set / update). Ref-decls (`name *Type = ...`) at the
-    // body opening are *not* discriminative — they appear in both body kinds —
-    // so a body opening with a ref-decl is treated as a regular function.
-    // A silent name (`fire.`) is never a class: an empty lineal body followed
-    // by the next `@handler` stays a function.
-    if (declCtx?.silent) return false;
-    let i = pos;
-    while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'BLOCK_SEP')) i++;
-    const t = tokens[i];
-    if (!t) return false;
-    return t.type === 'AT' ||
-           (t.type === 'KEYWORD' && (t.value === 'self' || t.value === 'set' || t.value === 'update'));
-  }
-
   // ── Service constraint parser ──────────────────────────────────────────────
   // Parses `{ @method: (params) -> (returns), ... }`.
   // Returns { '@method': { params: [{name, type}], returns: [{name, type}] } }.
@@ -4727,8 +4555,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
         expectListSeparator(listOpen, 'params');
         if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'params'); consume(); continue; }
-        if (peek().type === 'SIGIL') throw colonParamError(peek().value, tokens[pos + 1]?.type === 'IDENT' ? tokens[pos + 1].value : null);
-        const pName = expect('IDENT').value;
+          const pName = expect('IDENT').value;
         let pType = null;
         if (peek().type === 'COLON') {
           take();
@@ -4773,92 +4600,32 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
 
   // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
   // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
-  // Handles ref-param shortcuts.
+  // A constructor's params are a function's, and a param may also be an
+  // actor reference given its interface: `name { @method: … }`.
   function parseConstructorParenParams() {
     const cParams = [];
     skipNewlines();
-    const supertypes = [];
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
       if (!separated) {
-        throw new Error(`Expected ',' or a newline between class params, got ${peek().type} '${peek().value || ''}'`);
+        throw new Error(`Expected ',' or a newline between params, got ${peek().type} '${peek().value || ''}'`);
       }
       separated = false;
-      // Positional ref: name *Type or name * (wildcard)
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'STAR') {
-        const next2 = tokens[pos + 2]?.type;
-        if (next2 === 'RPAREN' || next2 === 'COMMA' || next2 === 'NEWLINE') {
-          // Wildcard ref param: name *
-          const name = take().value;
-          take();
-          cParams.push({ name, type: 'Anything', positional: true, ref: true });
-          continue;
-        }
-        if (next2 === 'IDENT') {
-          // Typed ref param: name *Type [of Type ...]
-          const name = take().value;
-          take(); // *
-          const type = parseType();
-          cParams.push({ name, type, positional: true, ref: true });
-          continue;
-        }
-      }
-      // Positional read-only ref: name &Type
-      if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
-        const name = take().value;
-        const type = consumeAmpersandTypeForParam();
-        cParams.push({ name, type, positional: true, readonly: true });
-        continue;
-      }
-      // Sigil ref: :name *Type, :name * (wildcard), :name { constraint }
-      if (peek().type === 'SIGIL' && (tokens[pos + 1]?.type === 'STAR' || tokens[pos + 1]?.type === 'LBRACE')) {
-        const name = take().value;
-        if (peek().type === 'STAR') {
-          take();
-          if (peek().type === 'IDENT') {
-            // :name *Type — typed ref
-            const type = parseType();
-            cParams.push({ name, type, ref: true });
-          } else {
-            // :name * — wildcard ref
-            cParams.push({ name, type: 'Anything', ref: true });
-          }
-          continue;
-        }
-        if (peek().type === 'LBRACE') {
-          const constraint = parseServiceConstraint();
-          cParams.push({ name, type: 'Anything', ref: true, constraint });
-          continue;
-        }
-      }
-      // Sigil read-only ref: :name &Type
-      if (peek().type === 'SIGIL' && tokens[pos + 1]?.type === 'AMPERSAND_IDENT') {
-        const name = take().value;
-        const type = consumeAmpersandTypeForParam();
-        cParams.push({ name, type, readonly: true });
-        continue;
-      }
-      // Inline service constraint: name { @method: ... }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LBRACE') {
         const name = take().value;
         const constraint = parseServiceConstraint();
         cParams.push({ name, type: 'Anything', positional: true, ref: true, constraint });
         continue;
       }
-      // Bare identifier (no type annotation)
-      const next1 = tokens[pos + 1]?.type;
-      if (peek().type === 'IDENT' && (next1 === 'RPAREN' || next1 === 'COMMA' || next1 === 'NEWLINE')) {
-        cParams.push({ name: take().value, type: 'Anything', positional: true });
-        continue;
-      }
       const p = parseOneParam();
-      if (p) { cParams.push(p); continue; }
-      break;
+      if (!p) break;
+      if (p.type === null) p.type = 'Anything';
+      cParams.push(p);
     }
     skipNewlines();
     expect('RPAREN');
-    return { params: cParams, supertypes };
+    return cParams;
   }
 
   // A star that closes a lineal constructor header: alone on its line, or
@@ -5028,15 +4795,14 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   // Parse `(params) [->] *{ body }` / `[->] *{ body }` (see isDelimitedClassStart).
   function parseDelimitedClass(op) {
     let params = [];
-    let supertypes = [];
     if (peek().type === 'LPAREN') {
       take();
-      ({ params, supertypes } = parseConstructorParenParams());
+      params = parseConstructorParenParams();
     }
     if (peek().type === '->') take();
     expect('STAR');
     const nested = parseConstructorBody(op, false);
-    return { params, supertypes, nested };
+    return { params, supertypes: [], nested };
   }
 
   // Dispatch after a `*` that opens a constructor. Caller has consumed `*`.
@@ -5073,6 +4839,18 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     const ownTypes = [];
     const asClauses = [];
     const constructorBody = [];
+    // `name` then, after a line break, `=`: a lineal declaration's opener.
+    const linealEqualsAhead = () => tokens[pos]?.type === 'NEWLINE' && tokens[pos + 1]?.type === 'EQUALS';
+    // A value the block emits: its declaration return.
+    const pushValueEmitter = () => {
+      const expr = parseExpr();
+      if (expr.type === 'Function' || expr.type === 'Lambda') {
+        throw new Error('Service block return-as value must not be a function');
+      }
+      let typeName = null;
+      if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
+      constructorBody.push(AST.implicitReturn(expr, typeName));
+    };
     const outerDecl = declCtx;
     refVarScopes.push(new Map()); // actor-level ref scope
     const untrackedDecls = new Set();
@@ -5197,8 +4975,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         take(); // *
         const typeName = parseType();
         addRef(name);
-        const value = peek().type === 'LPAREN' ? parseCellConstruction(typeName) : parseRHSValue();
-        constructorBody.push(AST.refDecl(name, null, value));
+        constructorBody.push(AST.refDecl(name, null, parseCellConstruction(typeName)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = (val) { ... } — syntactic sugar for the <- handler
         take(); // 'set'
@@ -5680,46 +5457,32 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           localScopes.pop();
           functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
 
-        // ── Lineal form: name params\n\nbody ────────────────────────────
-        } else {
-          const params = parseParams();
+        // A name with no `=` declares nothing: it is a value, the block's own.
+        } else if (!linealEqualsAhead()) {
+          if (_identOverloadMode !== 'create') throw new Error(`Expected '=' after '${op} <<'`);
+          pos--;
+          pushValueEmitter();
 
-          // Check if this is a named actor definition (body opens with
-          // @method / self / set / update).
-          if (isActorBodyStart()) {
-            const nested = parseActorBody(() =>
-              (peek().type === 'DOT') ||
-              (peek().type === 'KEYWORD' && peek().value === 'end'),
-            );
-            skipBlanks();
-            endLinealClass(op);
-            hoistNested(nested, op);
-            const actorNode3 = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, declarationReturn: nested.declarationReturn };
-            if (_identOverloadMode !== 'create') {
-              functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode3 }));
-            } else {
-              nestedActors.push(AST.actor(op, { ...actorNode3, overloadMode: _identOverloadMode }));
-            }
-          } else {
-            // Regular private function definition
-            const slots = new Set();
-            params.forEach((p, i) => {
-              if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
-            });
-            if (slots.size > 0) functionParamSlots.set(op, slots);
-            localScopes.push(new Set());
-            refVarScopes.push(new Map());
-            readonlyParamScopes.push(new Set());
-            for (const p of params) {
-              if (p.name) declareLocal(p.name);
-              if (p.readonly) addReadonlyParam(p.name);
-            }
-            const body = parseBody();
-            readonlyParamScopes.pop();
-            refVarScopes.pop();
-            localScopes.pop();
-            functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
+        // ── Lineal form: name [<<]\n=\n params\n=\n body ───────────────────
+        } else {
+          const params = parseLinealParams();
+          const slots = new Set();
+          params.forEach((p, i) => {
+            if (isFunctionType(p.type)) slots.add(p.positional ? i : (p.key ?? p.name));
+          });
+          if (slots.size > 0) functionParamSlots.set(op, slots);
+          localScopes.push(new Set());
+          refVarScopes.push(new Map());
+          readonlyParamScopes.push(new Set());
+          for (const p of params) {
+            if (p.name) declareLocal(p.name);
+            if (p.readonly) addReadonlyParam(p.name);
           }
+          const body = parseBody();
+          readonlyParamScopes.pop();
+          refVarScopes.pop();
+          localScopes.pop();
+          functions.push(AST.functionDecl(op, params, body, { overloadMode: _identOverloadMode }));
         }
       } else if (peek().type === 'DIVIDER') {
         consume(); // stitch separator between top-level declarations
@@ -5730,13 +5493,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
                  peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                  peek().type === 'HTML_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
-        const expr = parseExpr();
-        if (expr.type === 'Function' || expr.type === 'Lambda') {
-          throw new Error('Service block return-as value must not be a function');
-        }
-        let typeName = null;
-        if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-        constructorBody.push(AST.implicitReturn(expr, typeName));
+        pushValueEmitter();
       } else {
         if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') throw new Error(WHOLE_FILE_ACTOR_MSG);
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
@@ -5790,6 +5547,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           if (inferred) stmt.typeName = inferred;
           if (inferred && isCall(stmt.expr)) stmt.typeFromCallee = true;
         }
+        if (declarationReturn) throw new Error('A block emits one value: this one has two');
         declarationReturn = stmt;
       } else if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement' || stmt.type === 'ActorFieldSet') {
         initBody.push(stmt);

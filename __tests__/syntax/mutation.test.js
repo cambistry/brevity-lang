@@ -188,10 +188,6 @@ function accepted(m, outcome, src) {
     if (m.kind === 'delete' && m.type === 'COLON') return 'in a signature, `name: Type` is `name Type`';
     if (m.kind === 'delete' && m.type === 'IDENT' && n === 'EQUALS') return 'a param\'s type may be inferred from its default';
     if (m.type === 'STAR' || m.stray === '*') return 'a header param\'s `*` grants writes; nothing here writes it';
-    // Open questions, kept visible: decide and turn into a rule or a fix.
-    if (m.kind === 'delete' && m.type === 'EQUALS' && (p === 'IDENT' || LINE.has(p))) return 'OPEN: a declaration may leave out its `=`: `f -> x` is `f = -> x`';
-    if (m.kind === 'swap' && m.type === 'IDENT' && m.withType === 'COLON') return 'OPEN: a class param `:name *` is `name: *`';
-    if (m.kind === 'delete' && m.type === 'STAR' && LINE.has(n)) return 'OPEN: a lineal class with no params may drop its `*`';
     return null;
   }
   // A different program that compiles.
@@ -203,6 +199,7 @@ function accepted(m, outcome, src) {
   if (m.kind === 'insert' && m.stray === '=' && (p === 'EQUALS' || LINE.has(m.type))) return '`= =` is the explicit empty params, or a line opens a lineal body';
   if (m.kind === 'swap' && (m.type === 'COMMA' || m.withType === 'COMMA')) return 'a comma moved to a list\'s end is a trailing comma';
   if (LINE.has(m.type) && m.kind === 'duplicate') return 'a blank line ends a lineal body';
+  if (m.type === 'BLOCK_SEP' && m.kind === 'delete') return 'a blank line deleted joins what follows to a lineal body';
   if (LINE.has(m.type) && m.kind === 'delete' && p === 'DOT') return 'a `.` then a name on the same line is member access';
   if (LINE.has(m.type) && m.kind === 'delete' && /\/\/[^\n]*$/.test(src.slice(0, m.start))) return 'a line break deleted after a comment comments out what follows';
   if ((m.kind === 'swap' || m.kind === 'duplicate') && !SEPARATORS.includes(m.type) && !SEPARATORS.includes(m.withType ?? 'x')) return 'a swap or duplication that rearranges into another program: names, args and types reorder';

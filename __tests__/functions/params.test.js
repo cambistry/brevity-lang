@@ -149,8 +149,7 @@ describe('function params — all forms', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Named params take a trailing colon; `:name` is colon destructuring, which a
-// param list doesn't take
+// Named params take a trailing colon; a param list doesn't take `:name`
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('function params — `:name` rejected, trailing colon accepted', () => {
@@ -166,16 +165,20 @@ describe('function params — `:name` rejected, trailing colon accepted', () => 
     expect(() => compileSource('f = (a, b:) -> a + b\n')).not.toThrow();
   });
 
-  it('(:a) ->  is colon destructuring', () => {
-    expect(() => compileSource('f = (:a) -> a\n')).toThrow("':a' is colon destructuring, which a param list doesn't take — a named param is 'a: Type'");
+  it('(:a) ->  is a parse error', () => {
+    expect(() => compileSource('f = (:a) -> a\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
   });
 
-  it('(:a Integer) ->  names the type in the fix', () => {
-    expect(() => compileSource('f = (:a Integer) -> a\n')).toThrow("a named param is 'a: Integer'");
+  it('(:a Integer) ->  is a parse error', () => {
+    expect(() => compileSource('f = (:a Integer) -> a\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
   });
 
-  it('a class param', () => {
-    expect(() => compileSource('C = (:a Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("':a' is colon destructuring");
+  it('a constructor param', () => {
+    expect(() => compileSource('C = (:a Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
+  });
+
+  it('a constructor ref param', () => {
+    expect(() => compileSource('C = (:a *Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
   });
 
   it('(:a, :b) ->  prefix sigil fails', () => {

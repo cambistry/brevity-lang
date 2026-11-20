@@ -61,8 +61,22 @@ function checkRenderable(t, s, expr, typeDecls) {
   }
 }
 
+// `x as { iface }` and `x as (params) -> *{ iface }` render x as an actor: a
+// value (a scalar, a list, a Type) has no such rendering.
+function checkActorRenderable(s, typeDecls) {
+  const t = inferExprType(s.ref, new Map());
+  if (!known(t)) return;
+  const value = (m) => SCALARS.has(m) || m === 'null' || m.startsWith('List') || typeDecls.has(m);
+  if (members(t).every(value)) {
+    throw new Error(`Cannot render ${t} as an actor — no such rendering, so this 'as' can only fail`);
+  }
+}
+
 export function lowerAs(ast) {
   const typeDecls = buildTypeTable(ast);
+  for (const a of ast.actors || []) {
+    for (const s of a.constructorBody || []) if (s.type === 'ServiceCoercion') checkActorRenderable(s, typeDecls);
+  }
   const classes = new Set((ast.actors || []).filter(a => a.name).map(a => a.name));
   const deps = new Set((ast.dependencies || []).filter(d => d.type !== 'FileParam').map(d => d.name));
   const members_ = new Set((ast.dependencies || []).flatMap(d => (d.destructures || []).map(m => m.local || m.alias || m.name || m)));

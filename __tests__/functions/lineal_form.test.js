@@ -381,7 +381,7 @@ describe('lineal function — compile errors', () => {
         n Integer
         =
         -> result: (n * 2)
-    `)).toThrow(/must start with '='/);
+    `)).toThrow(/Unexpected token at top level: EQUALS/);
   });
 });
 

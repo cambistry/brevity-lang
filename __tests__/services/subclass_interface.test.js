@@ -255,11 +255,11 @@ describe('class params typed with a public class', () => {
 
 describe('params need a separator', () => {
   it('two class params with no separator are a parse error', () => {
-    expect(() => extract('@U = (a Integer b Integer) *{}')).toThrow(/Expected ',' or a newline between class params, got IDENT 'b'/);
+    expect(() => extract('@U = (a Integer b Integer) *{}')).toThrow(/Expected ',' or a newline between params, got IDENT 'b'/);
   });
 
   it('a published class param after no separator is a parse error', () => {
-    expect(() => extract('@U = (a Integer @b Integer) *{}')).toThrow(/Expected ',' or a newline between class params, got AT/);
+    expect(() => extract('@U = (a Integer @b Integer) *{}')).toThrow(/Expected ',' or a newline between params, got AT/);
   });
 
   it('two function params with no separator are a parse error', () => {

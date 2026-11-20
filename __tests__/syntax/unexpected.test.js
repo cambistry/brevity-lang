@@ -123,3 +123,31 @@ describe('unseparated input', () => {
     expect(() => compileSource('C = *{\n  @a = -> 1\n  -> }\n@f = -> 1\n')).toThrow("'->' at the end of a constructor block has nothing after it");
   });
 });
+
+// A declaration needs its `=`. A name without one is a value: the block's own,
+// which is one value, and never a function.
+describe('a name with no `=`', () => {
+  it('`f -> x` is a function value, which a block doesn\'t emit', () => {
+    expect(() => compileSource('f -> true\n')).toThrow('Service block return-as value must not be a function');
+  });
+
+  it('`f (n Integer) -> x` is a call with no comma', () => {
+    expect(() => compileSource('f (n Integer) -> n + 1\n')).toThrow("Expected ',' between args, got IDENT 'Integer'");
+  });
+
+  it('a lone name is a value, and has to be bound', () => {
+    expect(() => compileSource('count42\n')).toThrow("'count42' is not defined (line 1)");
+  });
+
+  it('a block emits one value', () => {
+    expect(() => compileSource('x = 1\nx\n\n2\n')).toThrow('A block emits one value: this one has two');
+  });
+
+  it('a lineal body that opens with `@` is a function body', () => {
+    expect(() => compileSource('Box\n  =\n  @label = -> "x"\n')).toThrow('Unexpected token in function body: AT');
+  });
+
+  it('`name = *Type` takes the type\'s args', () => {
+    expect(() => compileSource('Box = (v Integer) *{ @v = -> v }\nb = *Box Box(42)\n@go = -> 1\n')).toThrow("Expected LPAREN, got IDENT 'Box'");
+  });
+});

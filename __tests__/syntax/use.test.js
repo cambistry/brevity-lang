@@ -155,7 +155,7 @@ describe('use — the manifest', () => {
     ]);
     expect(deps('use Svc = "svc.bv" as {\n  n () -> (Integer)\n}')).toEqual(deps('use Svc = "svc.bv" as { n () -> (Integer) }'));
     expect(deps('use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }')).toEqual([
-      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', constructorParams: [{ name: 'a', type: 'Integer' }], constructorArrow: '->' }),
+      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', constructorParams: [{ name: 'a', type: 'Integer', positional: false }], constructorArrow: '->' }),
     ]);
   });
 

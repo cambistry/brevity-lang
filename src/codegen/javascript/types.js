@@ -1,6 +1,6 @@
 import { inferExprType } from '../../inference.js';
 import { fieldAcrossReturns } from '../../return_shapes.js';
-import { parseTypeText, colonParamError } from '../../parser.js';
+import { parseTypeText } from '../../parser.js';
 
 // A type as a service document writes it, parsed by the language's own type
 // grammar (src/parser.js, parseTypeText). `where` says whose type it is.
@@ -78,8 +78,6 @@ export function parseFieldList(str) {
     if (!trimmed) continue;
     let optional = false;
     if (trimmed.startsWith('? ')) { optional = true; trimmed = trimmed.slice(2).trim(); }
-    const colon = trimmed.match(/^:([A-Za-z_]\w*)\s*([\s\S]*)$/);
-    if (colon) throw colonParamError(colon[1], colon[2].trim() || null);
     // `name: Type` is named; a `::` qualifier (`Geom::Point`) is not a label.
     const named = trimmed.match(/^([A-Za-z_]\w*)\s*:(?!:)/);
     if (!named) {

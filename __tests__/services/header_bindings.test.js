@@ -24,7 +24,7 @@ describe('use bindings — forms', () => {
     expect(deps('DB = "/db" as { get (key: Text) -> (value: Text) }')[0])
       .toEqual(expect.objectContaining({ name: 'DB', iface: '{\n  get (key: Text) -> (value: Text)\n}' }));
     expect(deps('Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }')[0])
-      .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', type: 'Integer' }] }));
+      .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', type: 'Integer', positional: false }] }));
   });
 
   it(':member = Source, Source::member and member = Source::member are one binding', () => {
