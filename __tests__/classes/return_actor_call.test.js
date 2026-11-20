@@ -287,3 +287,21 @@ describe('a call on an instance inside a branch', () => {
     );
   });
 });
+describe('an actor a protected function builds and returns', () => {
+  const script = `
+    @G = *{ @kind = -> 1 }
+    @U = *{
+      mk = -> @G()
+      @make = { p = mk(); x Integer = p.kind(); return x }
+    }
+  `;
+
+  it('is messaged by the caller', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: 'make', to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+});

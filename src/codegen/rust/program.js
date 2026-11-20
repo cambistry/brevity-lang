@@ -2174,7 +2174,17 @@ ${fnMethods}${childMethodsCode}${subscribeDispatchMethod}${hasDotCallAwait ? `
     // other address is out there: we send and wait for the reply.
     #[allow(dead_code)]
     fn bv_held_send(&mut self, to: String, op: Value, ty: Option<Value>) -> Value {
-        let seq = self.send_seq.get();
+${(allActors || []).some(a => a.name && G.ctx.actorInfo?.has(a.name)) ? `        // An in-process handle ("<class>/<id>"), one a function of ours built and
+        // returned, is called directly.
+        if !to.starts_with(':') && !to.starts_with('#') && to.split_once('/').is_some_and(|(c, i)| !c.is_empty() && i.parse::<u32>().is_ok()) {
+            let (op_name, payload) = match &op {
+                Value::Array(a) if a.len() > 1 => (a[a.len() - 1].as_str().unwrap_or("").to_string(), a[0].clone()),
+                other => (other.as_str().unwrap_or("").to_string(), json!({})),
+            };
+            self.bv_run_deferred();
+            return self.child_dispatch(&to, &op_name, &payload, "", "__parent");
+        }
+` : ''}        let seq = self.send_seq.get();
         self.send_seq.set(seq + 1);
         let id = seq.to_string();
         let mut msg = Map::new();

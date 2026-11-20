@@ -26,6 +26,10 @@ import { lowerActorValues } from './actor_values.js';
 // Resolved here to the class of the actor it's in.
 export const CLASS_SELF = 'class';
 
+// `class::base` as the parser leaves it (src/parser.js, foldSelfClass): the running
+// class's parent. Nothing in source can spell it.
+export const CLASS_BASE = 'class::base';
+
 // The class of a file that declares `new =`. Nothing in source can name it.
 export const FILE_CLASS = 'new__file';
 
@@ -130,6 +134,8 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     return (a.supertypes || []).some(st => st.supertype === cls.name || extendsClass(byName.get(st.supertype), cls, seen));
   };
 
+  // `class::base` follows the running class.
+  lowerClassBase(actors, byName, extendsClass);
   // `class` (and `self::class`) names the class of the actor it's in.
   for (const a of actors) resolveClassOf(a, blockClassOf, fileKind);
   // A declared actor as a value, and a name bound to one (src/actor_values.js).
@@ -152,8 +158,13 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     // Its family: the class, its subclasses that use its block, and the classes
     // declared in either. (A subclass with a block of its own reaches this one's public
     // members as anyone does; its `::` is the error below.)
-    const family = (a) => a === cls || (extendsClass(a, cls) && a.membersInherited) || [...actors].some(f => f !== a
-      && (f === cls || (extendsClass(f, cls) && f.membersInherited)) && isInside(a, f.name, byName));
+    // A subclass whose own block extends this one's (by delegation) has it in its chain too.
+    const blockExtends = (a) => {
+      for (let b = byName.get(a.membersClass); b; b = b.blockParent ? byName.get(b.blockParent) : null) if (b.blockParent === cls.membersClass) return true;
+      return false;
+    };
+    const reaches = (a) => a === cls || (extendsClass(a, cls) && (a.membersInherited || blockExtends(a)));
+    const family = (a) => reaches(a) || [...actors].some(f => f !== a && reaches(f) && isInside(a, f.name, byName));
     for (const a of actors) if (family(a)) for (const n of spellings) lowerMemberAccess(a, n, members, isType, byName);
     // `C.count` reads the members; `C(…)` still builds a `C`.
     for (const a of actors) for (const n of spellings) renameReceivers(a, n, members.singletonOf);
@@ -232,6 +243,100 @@ export function flattenDelegatedBlocks(actors) {
   };
   for (const a of actors) flatten(a);
 }
+
+// `class::base` is the running class's parent (Ruby's self.class.superclass): in `T`'s
+// code running for a `U`, it's `T`. Each use becomes a call to a protected function
+// of its own, which the class and each class under it define against their own parent,
+// so the running class's definition answers (notes/super-2026-11-19.md):
+//
+//   class::base::h(a)   P::h(a)      class::base.f(a)   P.f(a)
+//   class::base::x      P::x         class::base.x      P.x
+//   class::base(a)      P(a)         class::base        P
+export function lowerClassBase(actors, byName, extendsClass) {
+  const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
+  const isBase = (o) => o?.type === 'Identifier' && o.name === CLASS_BASE;
+  const bodiesOf = (a) => [a.functions, a.initBody, a.constructorBody, a.declarationReturn];
+  let site = 0;
+  const parentOf = (C, user) => {
+    const parents = (C.supertypes || []).map(st => st.supertype);
+    const shownC = shownName(C);
+    if (!parents.length) throw new Error(`'class::base' in '${shownName(user)}': it's the running class's parent, and '${shownC}' has no parent`);
+    if (parents.length > 1) {
+      throw new Error(`'class::base' in '${shownName(user)}': '${shownC}' has parents ${parents.map(p => `'${shownName(byName.get(p) ?? { name: p })}'`).join(' and ')} — write the parent's name`);
+    }
+    return parents[0];
+  };
+  for (const X of actors) {
+    const sites = [];
+    for (const b of bodiesOf(X)) walk(b, (n) => {
+      if (isBase(n) || (n.type === 'TypeConstruction' && n.qualifier?.[0] === CLASS_BASE)) sites.push(n);
+      for (const k of ['object', 'callee']) if (isBase(n[k])) sites.push(n);
+    });
+    if (!sites.length) continue;
+    if (!isClass(X)) throw new Error(`'class::base' in ${X.membersOf ? `the class block of '${shownName(byName.get(X.membersOf) ?? { name: X.membersOf })}'` : X.singletonOf ? 'a singleton' : 'this file'}: it names the parent of the class of an actor built by a class, and this one isn't`);
+    // Each use once, outermost first: `class::base.f()` is one use, not two.
+    const seen = new Set();
+    const family = actors.filter(a => isClass(a) && (a === X || extendsClass(a, X)));
+    for (const n of sites) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      if (n.object) seen.add(n.object);
+      if (n.callee) seen.add(n.callee);
+      // The use as a template over the parent's name, and the args it passes.
+      let args = [];
+      let make;
+      if (n.type === 'TypeConstruction') {
+        args = n.args || [];
+        make = (P, xs) => ({ ...n, qualifier: [P, ...n.qualifier.slice(1)], args: xs });
+      } else if (n.type === 'FunctionCallExpr' && isBase(n.callee)) {
+        args = n.args || [];
+        make = (P, xs) => ({ ...n, callee: { ...n.callee, name: P }, args: xs });
+      } else if (n.type === 'DotCallExpr' && isBase(n.object)) {
+        args = n.args || [];
+        make = (P, xs) => ({ ...n, object: { ...n.object, name: P }, args: xs });
+      } else if (isBase(n.object)) {
+        make = (P) => ({ ...n, object: { ...n.object, name: P } });
+      } else if (isBase(n)) {
+        make = (P) => ({ ...n, name: P });
+      } else {
+        throw new Error("'class::base' here isn't supported yet: reach the parent's members as 'class::base::name', 'class::base.name' or 'class::base(…)'");
+      }
+      const name = `classbase__${site++}`;
+      // Params for what the use passes: positional ones by place, named ones by key.
+      const params = [];
+      const passed = args.map((a, i) => {
+        if (a?.type === 'NamedArgsBag') {
+          const fields = {};
+          for (const k of Object.keys(a.fields)) { const p = `${name}_${k}`; params.push({ name: p, positional: false, key: k }); fields[k] = AST_IDENT(p); }
+          return { type: 'NamedArgsBag', fields };
+        }
+        if (a && typeof a === 'object' && 'positional' in a && a.positional === false) {
+          const p = `${name}_${a.name}`; params.push({ name: p, positional: false, key: a.name });
+          return { ...a, expr: AST_IDENT(p) };
+        }
+        const p = `${name}_${i}`; params.push({ name: p, positional: true });
+        return a && typeof a === 'object' && 'expr' in a && a.positional ? { ...a, expr: AST_IDENT(p) } : AST_IDENT(p);
+      });
+      // The call to it passes them the same way: positional values, then the named
+      // ones in a bag.
+      const named = {};
+      const callArgs = [];
+      for (const a of args) {
+        if (a?.type === 'NamedArgsBag') Object.assign(named, a.fields);
+        else if (a && typeof a === 'object' && 'positional' in a && a.positional === false) named[a.name] = a.expr ?? AST_IDENT(a.name);
+        else callArgs.push(a && typeof a === 'object' && 'expr' in a && a.positional ? a.expr : a);
+      }
+      if (Object.keys(named).length) callArgs.push({ type: 'NamedArgsBag', fields: named });
+      for (const C of family) {
+        const P = parentOf(C, X);
+        (C.functions ||= []).push({ type: 'FunctionDecl', name, params: params.map(p => ({ ...p })), body: [{ type: 'ImplicitReturn', expr: structuredClone(make(P, passed)), typeName: null }] });
+      }
+      for (const k of Object.keys(n)) if (k !== 'loc') delete n[k];
+      Object.assign(n, { type: 'FunctionCallExpr', callee: AST_IDENT(name), args: callArgs });
+    }
+  }
+}
+const AST_IDENT = (name) => ({ type: 'Identifier', name });
 
 // The declaring actor's cell holding the singleton, `C` or `@C`, becomes `C__class`.
 // A published one loses its getter: `@C` is the class now.

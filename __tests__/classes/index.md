@@ -17,6 +17,7 @@ class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-1
 - `base::h()` / `base.a()` / `base[T]::h()` reach the parent layer (`base.test.js`).
 - In a function, `super` is the parent layer's same function: `base::h(…)` in `h`, `base.h(…)` in `@h`; bare passes the args as received (`super.test.js`).
 - A subclass's own class block extends its parent's by delegation: functions late-bound, a cell shared unless redeclared (`class_singleton.test.js`); `super` in it is the parent block's function.
+- `class::base` is the running class's parent, late-bound: `class::base::h()`, `.f()`, `(…)` (`super.test.js`).
 - An actor is a value: `k = T` holds its address, typed `Actor`, tagged `*` (actor_value.test.js).
 - Remote actors with a `new` use file-level DI and `*Name(...)`; see
   `../cam/remote_instance.md`.

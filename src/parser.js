@@ -4,7 +4,7 @@ import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses, flattenDelegatedBlocks, CLASS_SELF } from './singleton_classes.js';
+import { lowerSingletonClasses, flattenDelegatedBlocks, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
 import { resolveSuperclassChain } from './subclass.js';
@@ -86,6 +86,14 @@ function foldSelfClass(tokens) {
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
+    // `class::base`, the running class's parent, is one receiver: a name nothing in
+    // source can spell (src/singleton_classes.js, CLASS_BASE).
+    if (t.type === 'KEYWORD' && t.value === 'class' && tokens[i + 1]?.type === 'DCOLON'
+        && tokens[i + 2]?.type === 'KEYWORD' && tokens[i + 2].value === 'base' && tokens[i - 1]?.type !== 'DCOLON') {
+      out.push({ ...t, type: 'IDENT', value: CLASS_BASE });
+      i += 2;
+      continue;
+    }
     if (t.type === 'KEYWORD' && t.value === 'class' && atTypeOfClass(tokens, i) && tokens[i + 1]?.type !== 'DCOLON' && tokens[i + 1]?.type !== 'DOT' && tokens[i + 1]?.type !== 'LPAREN') {
       out.push({ ...t, type: 'IDENT', value: 'class' });
       continue;

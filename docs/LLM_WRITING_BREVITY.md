@@ -209,5 +209,6 @@ For browser examples, start with the tested browser and HTML/XML notes:
 - Reach a parent's definition with `base::h()` (protected) or `base.a()` (public), not `super.a()`. Don't name a cell, local, param or `use` binding `base`.
 - A subclass with params of its own builds its base with `super(…)` in the constructor block, once, passing what the parent needs: `U = T ^ (label Text, n Integer) *{ super(n) … }`. Bare `super` passes the args as received; `super()` none; `super[A](…)` per parent when there are several. Don't read a parent's cell above the `super` line. Leave `super` out only to re-implement the parent's whole public interface without its state.
 - In an override, `super` calls the parent's same function: bare `super` with the args as received, `super(…)` with others, `super()` with none. With several parents, `super[A](…)`. In a class block that extends its parent's, `super` is the parent block's same function.
+- `class::base` is the running class's parent: `class::base::h()`, `class::base.f()`, `class::base(…)`. With several parents, name the parent instead.
 - Use explicit local variables when reply typing matters.
 - Treat design notes as context. Treat test-backed docs as current behavior.

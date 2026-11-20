@@ -511,3 +511,100 @@ describe('super — in a class block — compile errors', () => {
     expect(compile('A = *{} ^ {\n  @f = -> 1\n}\nB = A ^ {\n  @g = -> super\n}\n')).toThrow("'super' in '@g' of");
   });
 });
+
+// `class::base` is the running class's parent: in `T`'s code running for a `U`, it's
+// `T`. `class::base::h` is the parent's class-block `h`, `class::base.f` its public
+// `@f`, `class::base(…)` a new actor of the parent class.
+const classBase = `
+  @G = *{
+    @kind = -> 1
+  } ^ {
+    h = -> 1
+    @f = -> 2
+  }
+  @T = @G ^ *{
+    @kind = -> 2
+    @who = { x Integer = class::base::h(); return x }
+    @whoPub = { x Integer = class::base.f(); return x }
+    @make = { p = class::base(); x Integer = p.kind(); return x }
+  } ^ {
+    h = -> 10
+    @f = -> 20
+  }
+  @U = @T ^ *{}
+  @N = @T ^ (m Integer) *{
+    @kind = -> 3
+    @who = { x Integer = class::base::h() + m; return x }
+    @whoPub = -> 0
+    @make = -> 0
+  }
+`;
+
+describe('class::base', () => {
+  it("is the running class's parent: G for a T, T for a U running T's code", async () => {
+    await expectBehavior(classBase,
+      { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
+      { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
+      { input: { id: '2', op: 'who', to: ':T:1', from: 'c' } },
+      { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':T:1' } },
+      { input: { id: '3', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '3', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '4', op: 'who', to: ':U:1', from: 'c' } },
+      { output: { id: '4', re: [10], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("class::base.f is the parent's public class-block @f", async () => {
+    await expectBehavior(classBase,
+      { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
+      { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
+      { input: { id: '2', op: 'whoPub', to: ':T:1', from: 'c' } },
+      { output: { id: '2', re: [2], ty: ['Integer'], to: 'c', from: ':T:1' } },
+      { input: { id: '3', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '3', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '4', op: 'whoPub', to: ':U:1', from: 'c' } },
+      { output: { id: '4', re: [20], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it('class::base(…) builds a separate actor of the parent class', async () => {
+    await expectBehavior(classBase,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: 'make', to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [2], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("a subclass with no base reaches its parent's class block", async () => {
+    await expectBehavior(classBase,
+      { input: { id: '1', op: [[5], '$new'], ty: [['Integer']], to: ':N', from: 'c' } },
+      { output: { id: '1', re: ['#<:N:1>'], ty: [':N'], to: 'c' } },
+      { input: { id: '2', op: 'who', to: ':N:1', from: 'c' } },
+      { output: { id: '2', re: [15], ty: ['Integer'], to: 'c', from: ':N:1' } },
+    );
+  });
+});
+
+describe('class::base — compile errors', () => {
+  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+
+  it('in a class with no parent', () => {
+    expect(compile('V = *{\n  @a = { x Integer = class::base::h(); return x }\n}\n'))
+      .toThrow("'class::base' in 'V': it's the running class's parent, and 'V' has no parent");
+  });
+
+  it('with two parents: write the parent\'s name', () => {
+    expect(compile('A = *{} ^ { h = -> 1 }\nB = *{}\nC = A ^ B ^ *{\n  @a = { x Integer = class::base::h(); return x }\n}\n'))
+      .toThrow("'class::base' in 'C': 'C' has parents 'A' and 'B' — write the parent's name");
+  });
+
+  it('outside a class', () => {
+    expect(compile('@a = { x Integer = class::base::h(); return x }\n'))
+      .toThrow("'class::base' in this file: it names the parent of the class of an actor built by a class, and this one isn't");
+  });
+
+  it('class.base is still a public member', () => {
+    expect(compile('T = *{} ^ { @base = -> 7 }\nU = T ^ *{\n  @a = { x Integer = class.base(); return x }\n}\n')).not.toThrow();
+  });
+});

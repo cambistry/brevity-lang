@@ -2082,6 +2082,11 @@ bv_held_send_(To, Op, Ty) ->
         R_ -> bv_object_pack(R_)
     end.
 
+%% A value that is an actor's pid (one a function of ours built and returned) is
+%% called directly.
+bv_held_reply_(To, Op, _Ty) when is_pid(To) ->
+    {OpName_, Payload_} = case Op of [P_, N_] -> {N_, P_}; N_ -> {N_, #{}} end,
+    bv_inst_call_(To, OpName_, Payload_);
 bv_held_reply_(To, Op, Ty) ->
     Addr_ = bv_to_addr_(To),
     {OpName_, Payload_} = case Op of [P_, N_] -> {N_, P_}; N_ -> {N_, #{}} end,

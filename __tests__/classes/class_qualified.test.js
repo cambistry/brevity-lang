@@ -438,11 +438,11 @@ describe('class and :: — only within the class\'s family', () => {
     `)).toThrow(/^'C::prot' — 'C' has no class block, so it has no protected members to reach$/);
   });
 
-  it('a subclass with a class block of its own isn\'t supported yet', () => {
+  it("a subclass with a class block of its own, which extends the parent's, reaches the parent's protected members", () => {
     expect(() => compileSource(`
       T = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
       U = T ^ (u Integer) *{ super(u); @r2 = { return T::prot } } ^ { other *Integer = 1 }
-    `)).toThrow(/^'T::prot' — 'U' has a class block of its own, and reaching a parent's protected members from it isn't supported yet$/);
+    `)).not.toThrow();
   });
 });
 

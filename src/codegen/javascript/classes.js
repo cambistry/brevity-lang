@@ -807,13 +807,15 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // Public singletons declared directly in this actor (`@s = actor { … }`). Each is
   // published at `:s`, as an actor made by `#new` is at `:C:N`.
   // A public class's members are published at the class's label (`:C`).
+  // A class block that extends its parent's is declared at its home, not in the parent block.
+  const declaredHere = (a) => ((a.blockParent ? a.home : a.enclosing) ?? null) === (actor.name ?? null);
   const publicSingletons = (ctx.program?.actors || [])
-    .filter(a => publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
+    .filter(a => publicLabel(a) && declaredHere(a));
   const publishesClasses = publishesNew || publicSingletons.length > 0;
   // Private singletons declared directly in this actor (\`s = actor { … }\`): not
   // published, but this actor's own sends reach them by their address (\`#<:~s>\`).
   const heldSingletons = (ctx.program?.actors || [])
-    .filter(a => a.singletonOf && !a.membersOf && !publicLabel(a) && (a.enclosing ?? null) === (actor.name ?? null));
+    .filter(a => a.singletonOf && !a.membersOf && !publicLabel(a) && declaredHere(a));
   const heldAtCases = heldSingletons
     .map(sg => `${JSON.stringify(selfAddress(sg.singletonOf))}: () => this.#${stateKey(sg.singletonOf)}`).join(', ');
   for (const sg of publicSingletons) {

@@ -263,6 +263,12 @@ redeclare is the parent block's one cell; one it redeclares is its own, and the
 parent's code running for it uses that. `super` in a block's function is the
 parent block's same function, and `base::count` the parent block's own cell.
 
+`class::base` is the running class's parent (Ruby's `self.class.superclass`): in
+`T`'s code running for a `U`, it's `T`. `class::base::h()` reaches the parent's
+class-block `h`, `class::base.f()` its public `@f`, and `class::base(…)` builds a
+separate actor of the parent class. With several parents, write the parent's name.
+`class.base` is still a public member `@base`.
+
 ```brevity
 A = *{} ^ { count *Integer = 10; @f = -> count }
 B = A ^ { count *Integer = 20; @f = { x Integer = super + 1; return x } }   // B.f() is 21
