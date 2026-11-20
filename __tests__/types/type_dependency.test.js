@@ -197,21 +197,21 @@ describe('type dependency — remote interface inference', () => {
         :result Integer = B.compute(:n)
         return answer: result
 
-      @get_base
+      @get_start
         =
-        -> base: 10 as Integer
+        -> start: 10 as Integer
     `;
     const sourceB = `
       use A = "A" as {
-        get_base () -> (base: Integer)
+        get_start () -> (start: Integer)
       }
 
       @compute
         =
         n: Integer
         =
-        :base Integer = A.get_base()
-        return result: n + base
+        :start Integer = A.get_start()
+        return result: n + start
     `;
 
     const ifaceA = extract(sourceA).interface.service;

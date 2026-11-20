@@ -113,7 +113,7 @@ describe('Box and @Box are different classes', () => {
 
     @Wrapper = @Box ^ *{
       @viaInner = {
-        t Text = super.who()
+        t Text = base.who()
         return t
       }
     }
@@ -194,7 +194,7 @@ describe('Box and @Box are different classes', () => {
   it('a file-level @Box() is held in a cell', () => reads('viaHeld', 'public'));
   it('@Box is a superclass', () => reads('pubSubWho', 'public'));
   it('Box is a separate superclass', () => reads('privSubWho', 'private'));
-  it("@Box's layer is reached through super", () => reads('wrapped', 'public'));
+  it("@Box's layer is reached through base", () => reads('wrapped', 'public'));
   it('a class\'s own @Box comes before the file\'s', () => reads('ownFunctionFirst', 'own function'));
 
   it('the doc names only the public class, without its @', () => {

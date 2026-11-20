@@ -28,8 +28,8 @@ Locals can be read from child scopes:
 ```brevity
 @go
   =
-  base Integer = 100
-  fn = (x) ->  base + x
+  offset Integer = 100
+  fn = (x) ->  offset + x
   result Integer = fn(10)
   return :result
 ```

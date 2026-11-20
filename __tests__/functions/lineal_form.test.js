@@ -150,8 +150,8 @@ describe('lineal function — runtime', () => {
     @denseSpacious
       =
       fn = (a) { a + 1 }
-      result: base Integer = square(5)
-      extra Integer = fn(base)
+      result: squared Integer = square(5)
+      extra Integer = fn(squared)
       return :extra
 
     triple

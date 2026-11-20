@@ -2289,7 +2289,7 @@ function collectRefCalls(body, refParamNames, requirements, callSites, fnParams)
 
 function collectRefCallsInNode(node, refParamNames, requirements, callSites, fnParams, body) {
   if (!node || typeof node !== 'object') return;
-  // DotCallExpr on a ref param: super.method()
+  // DotCallExpr on a ref param: p.method()
   if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier' && refParamNames.has(node.object.name)) {
     const method = node.method.startsWith('@') ? node.method : '@' + node.method;
     requirements.get(node.object.name).add(method);

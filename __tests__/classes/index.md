@@ -1,7 +1,7 @@
 # Actors with a `new`
 
 LLM orientation: this directory covers actor construction — constructor headers
-and params, subclassing, the parent layer (`super`), optional args, accessors, ingest,
+and params, subclassing, the parent layer (`base`), optional args, accessors, ingest,
 actors as values, and remote actor surfaces. There are no classes, only **actors**:
 `T = (…) *{ … }` declares the actor `T`, whose `new` builds others, and those are of
 class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-11-18.md).
@@ -14,7 +14,7 @@ class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-1
 - Params can have defaults: `x Integer = 0`, `label: Text = "hi"`.
 - Constructor params are private unless published with `@name`, which adds an accessor.
 - Subclasses use `Parent ^ (own params) *{ … }`; several parents join with `^`; `D = C^` is a subclass with no changes.
-- `super::h()` / `super.a()` / `super[T]::h()` reach the parent layer (`super.test.js`).
+- `base::h()` / `base.a()` / `base[T]::h()` reach the parent layer (`base.test.js`).
 - An actor is a value: `k = T` holds its address, typed `Actor`, tagged `*` (actor_value.test.js).
 - Remote actors with a `new` use file-level DI and `*Name(...)`; see
   `../cam/remote_instance.md`.

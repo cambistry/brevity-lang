@@ -1,4 +1,4 @@
-import { renameHidden, settleSuperCells } from './super_layers.js';
+import { renameHidden, settleBaseCells } from './base_layers.js';
 
 // Target-neutral helpers for the actor class system: subclass-chain resolution,
 // actor lookup, and (eventually) method/param table flattening for validation.
@@ -100,13 +100,13 @@ export function resolveSuperclassChain(actorByName, actor) {
 
 // A subclass actor has its own copy of the state its inherited methods use, and runs
 // its ancestors' constructor bodies before its own. A name it declares itself hides the
-// inherited one. A parent layer's cell reached with `super::` is settled here
-// (src/super_layers.js), so the functions come back too.
+// inherited one. A parent layer's cell reached with `base::` is settled here
+// (src/base_layers.js), so the functions come back too.
 export function withInheritedState(actor, { inheritedState, inheritedInit }) {
   const own = actor.stateVarDecls || [];
   const ownNames = new Set(own.map(v => v.name));
   const declared = [...inheritedState.filter(v => !ownNames.has(v.name)), ...own];
-  const settled = settleSuperCells(declared, [...inheritedInit, ...(actor.initBody || [])]);
+  const settled = settleBaseCells(declared, [...inheritedInit, ...(actor.initBody || [])]);
   const { stateVarDecls, renames } = settled;
   const stateNames = new Set(stateVarDecls.map(v => v.name));
   // The nearest class's initial value for a name is its only one.

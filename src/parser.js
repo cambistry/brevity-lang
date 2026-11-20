@@ -5,7 +5,7 @@ import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { lowerSingletonClasses, CLASS_SELF } from './singleton_classes.js';
-import { lowerSuperLayers } from './super_layers.js';
+import { lowerBaseLayers } from './base_layers.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
 const PROTECTED_SETTER_TYPES = new Set(['Integer', 'Text', 'Boolean', 'List', 'Decimal']);
@@ -2168,7 +2168,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       }
       if (peek().type === 'NEWLINE') { consume(); continue; }
       // Attribute: name="value" or name={expr}
-      if (atClass() || atSuper()) tokens[pos] = { ...tokens[pos], type: 'IDENT' };
+      if (atClass() || atBase()) tokens[pos] = { ...tokens[pos], type: 'IDENT' };
       if (peek().type !== 'IDENT') {
         throw new Error(`Expected attribute name or '/>' in XML tag <${name}>, got ${peek().type} '${peek().value || ''}'`);
       }
@@ -2338,13 +2338,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   // and the field. After `::` the field is a protected one.
   const atPublicName = () => peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT';
   const fieldSetAhead = () => {
-    if (atSuper()) return superSetAhead();
+    if (atBase()) return baseSetAhead();
     const at = receiverEnd();
     return at >= 0 && (tokens[at]?.type === 'DOT' || tokens[at]?.type === 'DCOLON') && tokens[at + 1]?.type === 'IDENT'
       && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
   };
   function parseFieldSet() {
-    if (atSuper()) return parseSuperSet();
+    if (atBase()) return parseBaseSet();
     const objName = consumeReceiver();
     const isProtected = take().type === 'DCOLON';
     const fieldName = take().value;
@@ -2363,22 +2363,22 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     return at >= 0 && tokens[at]?.type === 'DCOLON' && tokens[at + 1]?.type === 'IDENT';
   };
 
-  // `super::name`, `super.name`, `super[T]::name`: the parent layer's definition of a
-  // name, in the same actor. src/super_layers.js resolves it. `super` and `super[T]`
+  // `base::name`, `base.name`, `base[T]::name`: the parent layer's definition of a
+  // name, in the same actor. src/base_layers.js resolves it. `base` and `base[T]`
   // are valid only before `::` or `.`.
-  const atSuper = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'super';
-  // Where a `super` / `super[T]` receiver ends, or -1.
-  const superEnd = (at = pos) => {
-    if (!atSuper(at)) return -1;
+  const atBase = (at = pos) => tokens[at]?.type === 'KEYWORD' && tokens[at].value === 'base';
+  // Where a `base` / `base[T]` receiver ends, or -1.
+  const baseEnd = (at = pos) => {
+    if (!atBase(at)) return -1;
     if (tokens[at + 1]?.type !== 'LBRACKET') return at + 1;
     const n = tokens[at + 2]?.type === 'AT' ? at + 3 : at + 2;
     return tokens[n]?.type === 'IDENT' && tokens[n + 1]?.type === 'RBRACKET' ? n + 2 : -1;
   };
-  const SUPER_NOT_A_VALUE = "'super' names the parent layer, which isn't a value: write 'super::name' (protected) or 'super.name' (public), or 'super[Parent]::name'";
-  function parseSuperReceiver() {
-    const end = superEnd();
-    if (end < 0) throw new Error(SUPER_NOT_A_VALUE);
-    take(); // super
+  const BASE_NOT_A_VALUE = "'base' names the parent layer, which isn't a value: write 'base::name' (protected) or 'base.name' (public), or 'base[Parent]::name'";
+  function parseBaseReceiver() {
+    const end = baseEnd();
+    if (end < 0) throw new Error(BASE_NOT_A_VALUE);
+    take(); // base
     let layer = null;
     if (peek().type === 'LBRACKET') {
       take();
@@ -2387,25 +2387,25 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       expect('RBRACKET');
     }
     const sep = peek().type;
-    if ((sep !== 'DCOLON' && sep !== 'DOT') || tokens[pos + 1]?.type !== 'IDENT') throw new Error(SUPER_NOT_A_VALUE);
+    if ((sep !== 'DCOLON' && sep !== 'DOT') || tokens[pos + 1]?.type !== 'IDENT') throw new Error(BASE_NOT_A_VALUE);
     take();
     return { layer, name: take().value, isPublic: sep === 'DOT' };
   }
-  function parseSuper() {
-    const { layer, name, isPublic } = parseSuperReceiver();
-    if (peek().type === 'LPAREN') return { type: 'SuperCall', layer, name, isPublic, args: parseCallArgs() };
-    return { type: 'SuperMember', layer, name, isPublic };
+  function parseBase() {
+    const { layer, name, isPublic } = parseBaseReceiver();
+    if (peek().type === 'LPAREN') return { type: 'BaseCall', layer, name, isPublic, args: parseCallArgs() };
+    return { type: 'BaseMember', layer, name, isPublic };
   }
-  // `super::total <- v`, `super.count <| f`.
-  const superSetAhead = () => {
-    const at = superEnd();
+  // `base::total <- v`, `base.count <| f`.
+  const baseSetAhead = () => {
+    const at = baseEnd();
     return at >= 0 && (tokens[at]?.type === 'DOT' || tokens[at]?.type === 'DCOLON') && tokens[at + 1]?.type === 'IDENT'
       && (tokens[at + 2]?.type === 'SET' || tokens[at + 2]?.type === 'UPDATE');
   };
-  function parseSuperSet() {
-    const { layer, name, isPublic } = parseSuperReceiver();
+  function parseBaseSet() {
+    const { layer, name, isPublic } = parseBaseReceiver();
     const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
-    return { type: 'SuperSet', layer, name, isPublic, value: parseExpr(), ...(updateOp && { updateOp }) };
+    return { type: 'BaseSet', layer, name, isPublic, value: parseExpr(), ...(updateOp && { updateOp }) };
   }
 
   // An element's attr block with Brevity in it (`<div class="a" @c *Text = "x" …>`),
@@ -2414,7 +2414,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   function parseAttrBlock(source) {
     const savedTokens = tokens;
     const savedPos = pos;
-    tokens = tokenize(source).map((t, i, ts) => t.type === 'KEYWORD' && (t.value === 'class' || t.value === 'super')
+    tokens = tokenize(source).map((t, i, ts) => t.type === 'KEYWORD' && (t.value === 'class' || t.value === 'base')
       && ts[i + 1]?.type === 'EQUALS' && ts[i - 1]?.type !== 'AT' ? { ...t, type: 'IDENT' } : t);
     pos = 0;
     const savedInAttrBlock = inAttrBlock;
@@ -2540,8 +2540,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     } else if (atClass()) {
       take();
       result = AST.identifier(CLASS_SELF);
-    } else if (atSuper()) {
-      result = parseSuper();
+    } else if (atBase()) {
+      result = parseBase();
     } else if (atBareBuiltinCall()) {
       const methodName = take().value;
       consume(); // LPAREN
@@ -2654,8 +2654,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       }
       result = AST.functionCallExpr(result, args);
     }
-    // Subscript: expr[0] or expr["key"]
-    while (peek().type === 'LBRACKET') {
+    // Subscript: expr[0] or expr["key"], the `[` glued to expr.
+    while (peek().type === 'LBRACKET' && !peek().spaced) {
       consume(); // [
       const keyTok = take();
       expect('RBRACKET');
@@ -3978,7 +3978,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
         (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN') ||
         (atClass() && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT')) ||
-        atSuper() ||
+        atBase() ||
         (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'DOT') ||
         (peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'DOT')
       ) {
@@ -4985,8 +4985,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           const expr = parseExpr();
           constructorBody.push(AST.setStatement(expr.name, expr.value, { updateOp: expr.updateOp }));
         }
-      } else if (atClass() || atSuper() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
-        // `class.bump!()`, `class::h!()`, `C::h!()`, `super::h!()`: a call made while constructing.
+      } else if (atClass() || atBase() || (qualifiedAhead() && tokens[receiverEnd() + 2]?.type === 'LPAREN')) {
+        // `class.bump!()`, `class::h!()`, `C::h!()`, `base::h!()`: a call made while constructing.
         pushExprOrBang(constructorBody, parseExpr());
       } else if (((peek().type === 'AT' && tokens[pos + 1]?.type === 'IDENT' && tokens[pos + 2]?.type === 'LPAREN')
                  || (peek().type === 'HASH_IDENT' && tokens[pos + 1]?.type === 'LPAREN')
@@ -6419,7 +6419,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   resolveUseExprs();
   resolveUseValues();
   lowerSingletonClasses(actors, types, { fileKind });
-  lowerSuperLayers(actors);
+  lowerBaseLayers(actors);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

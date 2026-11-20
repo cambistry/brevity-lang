@@ -9,12 +9,12 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 // See notes/classes-as-singletons-2026-11-09.md.
 
 const script = `
-  base *Integer = 100
+  offset *Integer = 100
 
   counter = actor {
     n *Integer = 0
     @bump! = { n <- n + 1 }
-    @get = { return n + base }
+    @get = { return n + offset }
   }
 
   // One statement, to the end of its line.
@@ -243,22 +243,22 @@ describe('a public singleton in the service document', () => {
 // they are at that line, and can't read one declared below.
 // See notes/forward-reads-in-constructor-blocks-2026-11-11.md.
 const ordered = `
-  base *Integer = 100
+  offset *Integer = 100
 
   counter = actor {
-    seen Integer = base
+    seen Integer = offset
     @seen = { return seen }
-    @now = { return base }
+    @now = { return offset }
   }
 
-  base <- 200
+  offset <- 200
 
   @pub = actor {
-    seen Integer = base
+    seen Integer = offset
     @seen = { return seen }
   }
 
-  base <- 300
+  offset <- 300
 
   @seen = {
     x Integer = counter.seen()
@@ -319,13 +319,13 @@ describe('a singleton runs its block in program order', () => {
 
 describe('a singleton reading a cell declared below it — validation', () => {
   it('is an error', () => {
-    expect(() => compileSource('counter = actor {\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
-      .toThrow(/'base' is read before its declaration \(by 'counter'\) — declare 'base' above it/);
+    expect(() => compileSource('counter = actor {\n  seen Integer = offset\n  @get = { return seen }\n}\noffset *Integer = 100\n@go = { return 1 }\n'))
+      .toThrow(/'offset' is read before its declaration \(by 'counter'\) — declare 'offset' above it/);
   });
 
   it('for a public singleton too', () => {
-    expect(() => compileSource('@counter = actor {\n  seen Integer = base\n  @get = { return seen }\n}\nbase *Integer = 100\n@go = { return 1 }\n'))
-      .toThrow(/'base' is read before its declaration \(by '@counter'\)/);
+    expect(() => compileSource('@counter = actor {\n  seen Integer = offset\n  @get = { return seen }\n}\noffset *Integer = 100\n@go = { return 1 }\n'))
+      .toThrow(/'offset' is read before its declaration \(by '@counter'\)/);
   });
 
   it('in a class', () => {
@@ -339,7 +339,7 @@ describe('a singleton reading a cell declared below it — validation', () => {
   });
 
   it('its functions may refer to a cell below it', () => {
-    expect(() => compileSource('counter = actor {\n  @get = { return base }\n}\nbase *Integer = 100\n@go = { return 1 }\n')).not.toThrow();
+    expect(() => compileSource('counter = actor {\n  @get = { return offset }\n}\noffset *Integer = 100\n@go = { return 1 }\n')).not.toThrow();
   });
 });
 

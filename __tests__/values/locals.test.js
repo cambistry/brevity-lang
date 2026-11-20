@@ -57,8 +57,8 @@ describe('locals — runtime', () => {
 
       @lambdaReadParam
         =
-        base Integer = 100
-        fn = (n) ->  base + n
+        offset Integer = 100
+        fn = (n) ->  offset + n
         result Integer = fn(5)
         return :result
 
@@ -95,9 +95,9 @@ describe('locals — runtime', () => {
 
       @argInLambda
         =
-        base: Integer
+        offset: Integer
         =
-        fn = (x) ->  base + x
+        fn = (x) ->  offset + x
         result Integer = fn(10)
         return :result
 
@@ -205,7 +205,7 @@ describe('locals — runtime', () => {
 
   it('locals — header arg access — header arg read from lambda', async () => {
     await expectBehavior(script,
-      { input: { id: '3', op: [[{ base: 100 }], 'argInLambda'], 'ty': [[{ base: 'Integer' }]], from: 'c' } },
+      { input: { id: '3', op: [[{ offset: 100 }], 'argInLambda'], 'ty': [[{ offset: 'Integer' }]], from: 'c' } },
       { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 110 }], to: 'c' } },
     );
   });

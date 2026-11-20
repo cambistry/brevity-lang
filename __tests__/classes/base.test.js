@@ -1,12 +1,12 @@
 import { compileSource, expectBehavior } from '../helpers.js';
 
-// `super`: the parent layer, reached within the same actor. `super::name` is the
-// parent's protected `name`, `super.name` its public `@name`, and `super[T]::name`
+// `base`: the parent layer, reached within the same actor. `base::name` is the
+// parent's protected `name`, `base.name` its public `@name`, and `base[T]::name`
 // parent `T`'s. Inheritance is merged and late-bound: the parent's own code sees the
-// subclass's override, and `super::` is how the override reaches the parent's.
+// subclass's override, and `base::` is how the override reaches the parent's.
 //
 // A cell the subclass redeclares has the parent layer's own cell behind it, which
-// `super::name` reads and writes; the parent's code uses the subclass's.
+// `base::name` reads and writes; the parent's code uses the subclass's.
 //
 // See notes/class-scope-and-inheritance-2026-11-16.md.
 
@@ -24,20 +24,20 @@ const layers = `
   }
 
   @U = @T ^ *{
-    total *Integer = super::total + 6
-    h = -> super::h() + 10
+    total *Integer = base::total + 6
+    h = -> base::h() + 10
     @pub = {
-      x Integer = super.pub()
+      x Integer = base.pub()
       return x + 1
     }
     @parentTotal = {
-      x Integer = super::total
+      x Integer = base::total
       return x
     }
-    @bumpParent! = { super::total <- super::total + 100 }
+    @bumpParent! = { base::total <- base::total + 100 }
     add = (n Integer) -> n * 2
     @viaAdd = (n Integer) {
-      x Integer = super::add(n)
+      x Integer = base::add(n)
       y Integer = add(n)
       return x + y
     }
@@ -45,14 +45,14 @@ const layers = `
 
   @V = @T ^ *{
     @parentTotal = {
-      x Integer = super::total
+      x Integer = base::total
       return x
     }
     @bump! = { total <- total + 1 }
   }
 
   @W = @U ^ *{
-    h = -> super::h() + 100
+    h = -> base::h() + 100
   }
 
   A = *{ h = -> 1 }
@@ -60,14 +60,14 @@ const layers = `
   @C = A ^ B ^ (k Integer) *{
     h = -> 0
     @both = {
-      x Integer = super[A]::h() * 10 + super[B]::h() + k
+      x Integer = base[A]::h() * 10 + base[B]::h() + k
       return x
     }
   }
 `;
 
-describe('super — layers', () => {
-  it("the parent's code sees the override, and super:: reaches the parent's", async () => {
+describe('base — layers', () => {
+  it("the parent's code sees the override, and base:: reaches the parent's", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
       { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
@@ -80,7 +80,7 @@ describe('super — layers', () => {
     );
   });
 
-  it("super. reaches the parent's public function", async () => {
+  it("base. reaches the parent's public function", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
       { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
@@ -89,7 +89,7 @@ describe('super — layers', () => {
     );
   });
 
-  it("a redeclared cell: the parent's code uses the subclass's, super:: the parent's own", async () => {
+  it("a redeclared cell: the parent's code uses the subclass's, base:: the parent's own", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
       { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
@@ -106,7 +106,7 @@ describe('super — layers', () => {
     );
   });
 
-  it("super:: passes args to the parent's function", async () => {
+  it("base:: passes args to the parent's function", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
       { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
@@ -126,7 +126,7 @@ describe('super — layers', () => {
     );
   });
 
-  it("two levels: each override's super:: is its own parent's", async () => {
+  it("two levels: each override's base:: is its own parent's", async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[], '$new'], to: ':W', from: 'c' } },
       { output: { id: '1', re: ['#<:W:1>'], ty: [':W'], to: 'c' } },
@@ -139,7 +139,7 @@ describe('super — layers', () => {
     );
   });
 
-  it('super[T]:: picks among two parents', async () => {
+  it('base[T]:: picks among two parents', async () => {
     await expectBehavior(layers,
       { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':C', from: 'c' } },
       { output: { id: '1', re: ['#<:C:1>'], ty: [':C'], to: 'c' } },
@@ -149,7 +149,7 @@ describe('super — layers', () => {
   });
 });
 
-describe('super — errors', () => {
+describe('base — errors', () => {
   const T = `
     T = *{
       h = -> 1
@@ -158,46 +158,110 @@ describe('super — errors', () => {
     }
   `;
 
-  it('two parents defining the name need super[T]', () => {
+  it('two parents defining the name need base[T]', () => {
     expect(() => compileSource(`
       A = *{ h = -> 1 }
       B = *{ h = -> 2 }
-      C = A ^ B ^ *{ @x = { return super::h() } }
-    `)).toThrow("'super::h' in 'C' is ambiguous: 'A' and 'B' both define 'h' — write 'super[A]::h()' or 'super[B]::h()'");
+      C = A ^ B ^ *{ @x = { return base::h() } }
+    `)).toThrow("'base::h' in 'C' is ambiguous: 'A' and 'B' both define 'h' — write 'base[A]::h()' or 'base[B]::h()'");
   });
 
-  it('super[S] names a direct parent only', () => {
+  it('base[S] names a direct parent only', () => {
     expect(() => compileSource(`${T}
       U = T ^ *{}
-      V = U ^ *{ @x = { return super[T]::h() } }
-    `)).toThrow("'super[T]::h' in 'V': 'T' isn't a direct parent of 'V' — only a direct parent's layer can be named for now");
+      V = U ^ *{ @x = { return base[T]::h() } }
+    `)).toThrow("'base[T]::h' in 'V': 'T' isn't a direct parent of 'V' — only a direct parent's layer can be named for now");
   });
 
-  it('super is not a value', () => {
+  it('base is not a value', () => {
     expect(() => compileSource(`${T}
-      U = T ^ *{ @x = { s = super; return 1 } }
-    `)).toThrow("'super' names the parent layer, which isn't a value");
+      U = T ^ *{ @x = { s = base; return 1 } }
+    `)).toThrow("'base' names the parent layer, which isn't a value");
   });
 
   it('a name no parent defines', () => {
     expect(() => compileSource(`${T}
-      U = T ^ *{ @x = { return super::g() } }
-    `)).toThrow("'super::g' in 'U': 'T' has no protected 'g'");
+      U = T ^ *{ @x = { return base::g() } }
+    `)).toThrow("'base::g' in 'U': 'T' has no protected 'g'");
   });
 
-  it('super in a class with no parent', () => {
+  it('base in a class with no parent', () => {
     expect(() => compileSource(`
-      T = *{ @x = { return super::h() } }
-    `)).toThrow("'super::h' in 'T': 'super' names a parent layer, and 'T' has no parent");
+      T = *{ @x = { return base::h() } }
+    `)).toThrow("'base::h' in 'T': 'base' names a parent layer, and 'T' has no parent");
   });
 
-  it('super is reserved', () => {
-    expect(() => compileSource(`
-      @x = {
-        super = 1
-        return 1
-      }
-    `)).toThrow("'super' is reserved");
+});
+
+describe('base — reserved', () => {
+  const reserved = (line) => new RegExp(`^'base' is reserved: it names the parent layer, so it can't be declared or set \\(line ${line}\\)$`);
+
+  it('a cell named base', () => {
+    expect(() => compileSource('base *Integer = 1\n@f = -> 1\n')).toThrow(reserved(1));
+  });
+
+  it('a local named base', () => {
+    expect(() => compileSource('@f = {\n  base Integer = 1\n  return 1\n}\n')).toThrow(reserved(2));
+  });
+
+  it('an untyped local named base', () => {
+    expect(() => compileSource('@f = {\n  base = 1\n  return 1\n}\n')).toThrow(reserved(2));
+  });
+
+  it('a param named base', () => {
+    expect(() => compileSource('@f = (base Integer) -> 1\n')).toThrow(reserved(1));
+  });
+
+  it('setting base', () => {
+    expect(() => compileSource('n *Integer = 1\n@f! = { base <- 2 }\n')).toThrow(reserved(2));
+  });
+
+  it('a use binding named base', () => {
+    expect(() => compileSource('use base = "x.bv" as { n () -> (Integer) }\n@f = -> 1\n')).toThrow(reserved(1));
+  });
+});
+
+describe('base — as a member or key', () => {
+  const script = `
+    C = *{
+      @base = { return 6 }
+    }
+    @viaMember = {
+      c = C()
+      n Integer = c.base()
+      return n
+    }
+    @asKey = -> (base: 10)
+  `;
+
+  it('@base is a public function, and c.base() calls it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'viaMember', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+
+  it('base: is a named field', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'asKey', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [{ base: 10 }], to: 'c' }) },
+    );
+  });
+});
+
+describe('super — reserved, with no form', () => {
+  const T = 'T = *{\n  h = -> 1\n  @a = { return 1 }\n}\n';
+
+  it('super.x', () => {
+    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super.a() }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
+  });
+
+  it('super::x', () => {
+    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super::h() }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
+  });
+
+  it('bare super', () => {
+    expect(() => compileSource(`${T}U = T ^ *{ @x = { s = super; return 1 } }\n`)).toThrow("Unexpected token in expression: KEYWORD 'super'");
   });
 });
 

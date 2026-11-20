@@ -58,7 +58,7 @@ const script = `
     @divMixed = (a Decimal, b Integer) -> result: a / b
 
     // exponentiation
-    @exp = (base Decimal, power Integer) -> result: base ^ power
+    @exp = (radix Decimal, power Integer) -> result: radix ^ power
 
     // precision at scale
     @calc = (a Decimal, b Decimal, c Decimal) -> result: (a + b) * c

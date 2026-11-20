@@ -93,9 +93,9 @@ describe("file scalar params — compilation", () => {
     expect(() =>
       compileSource(`
       use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
-      use base Integer = base
+      use start Integer = start
 
-      t = Thing(a: base)
+      t = Thing(a: start)
 
       @go = { :value Integer = t.get(); return :value }
     `),

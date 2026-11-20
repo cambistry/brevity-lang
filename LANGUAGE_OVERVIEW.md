@@ -211,6 +211,14 @@ The `*` on the body marks the form as actor-producing. The `(value Integer)` is
 the constructor's header — the params `new` accepts. The `*{ ... }` is the
 constructor block — where state cells, handlers, and projections are declared.
 
+`^` composes: `Over = Box ^ *{ … }` has `Box` as its parent. A subclass and its
+parents are one actor, and a bare name means the bottom-most definition. `base`
+reaches the parent layer's own: `base::h()` its protected `h`, `base.get()` its
+public `@get`, `base[A]::h()` parent `A`'s when there are several. `base` is
+reserved, so it can't name a cell, local, param or `use` binding; it can still
+be a member (`@base`, `x.base`) or a key (`base: 10`). `super` is reserved with
+no meaning yet.
+
 The file actor is a singleton, built once at load. It needs no header: it
 declares its DI with `use`, anywhere in the file. A `use` in an inner scope is
 still the file's entry, but its name binds only in that scope:

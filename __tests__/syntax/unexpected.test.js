@@ -150,4 +150,16 @@ describe('a name with no `=`', () => {
   it('`name = *Type` takes the type\'s args', () => {
     expect(() => compileSource('Box = (v Integer) *{ @v = -> v }\nb = *Box Box(42)\n@go = -> 1\n')).toThrow("Expected LPAREN, got IDENT 'Box'");
   });
+
+  it('a subscript glued to its value', () => {
+    expect(() => compileSource('@f = (xs List) -> result: xs[0]\n')).not.toThrow();
+  });
+
+  it('a `[` after a space is not a subscript', () => {
+    expect(() => compileSource('@f = (xs List) -> result: xs [0]\n')).toThrow("Expected a line break or ';' after a statement, got LBRACKET ''");
+  });
+
+  it('two lists with no comma between', () => {
+    expect(() => compileSource('@f = -> result: [[1, 2] [3]]\n')).toThrow("Expected ',' between list elements, got LBRACKET ''");
+  });
 });

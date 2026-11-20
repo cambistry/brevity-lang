@@ -1,8 +1,8 @@
-// `super::name`, `super.name`, `super[T]::name`: the parent layer's definition of a name,
+// `base::name`, `base.name`, `base[T]::name`: the parent layer's definition of a name,
 // reached within the same actor (notes/class-scope-and-inheritance-2026-11-16.md).
 //
 // Inheritance is merged and late-bound: a subclass and its parents are one actor, and a
-// bare name means the bottom-most definition. `super` is how a layer reaches the one
+// bare name means the bottom-most definition. `base` is how a layer reaches the one
 // below the override.
 //
 // - A function: the parent layer's clauses are kept under a name nothing in source can
@@ -14,7 +14,7 @@
 //   class whose code reaches it, and the merge (withInheritedState, src/subclass.js)
 //   keeps it, with the parent's initializer, or folds it back into the name.
 
-const SUPER_TYPES = new Set(['SuperCall', 'SuperMember', 'SuperSet']);
+const BASE_TYPES = new Set(['BaseCall', 'BaseMember', 'BaseSet']);
 
 const walk = (node, visit, parent = null, key = null) => {
   if (!node || typeof node !== 'object') return;
@@ -32,15 +32,15 @@ export function hiddenName(name, L) {
   const pub = name.startsWith('@');
   const bare = name.replace(/^@/, '');
   const suffix = /[!.]$/.test(bare) ? bare.slice(-1) : '';
-  return `${suffix ? bare.slice(0, -1) : bare}__super${pub ? '_pub' : ''}__${classPart(L)}${suffix}`;
+  return `${suffix ? bare.slice(0, -1) : bare}__base${pub ? '_pub' : ''}__${classPart(L)}${suffix}`;
 }
 
 const shown = (n) => {
-  const head = n.layer ? `super[${n.layer}]` : 'super';
+  const head = n.layer ? `base[${n.layer}]` : 'base';
   return `${head}${n.isPublic ? '.' : '::'}${n.name}`;
 };
 
-export function lowerSuperLayers(actors) {
+export function lowerBaseLayers(actors) {
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
   const where = (a) => a.membersOf ? `the class block of '${a.membersOf}'` : a.singletonOf ? 'a singleton'
@@ -64,11 +64,11 @@ export function lowerSuperLayers(actors) {
   for (const U of actors) {
     // A node can be reached twice: the constructor block and the init share values.
     const refs = new Set();
-    for (const b of bodies(U)) walk(b, (n) => { if (SUPER_TYPES.has(n.type)) refs.add(n); });
+    for (const b of bodies(U)) walk(b, (n) => { if (BASE_TYPES.has(n.type)) refs.add(n); });
     if (!refs.size) continue;
     const parents = (U.supertypes || []).map(st => st.supertype);
     if (!isClass(U) || !parents.length) {
-      throw new Error(`'${shown([...refs][0])}' in ${where(U)}: 'super' names a parent layer, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
+      throw new Error(`'${shown([...refs][0])}' in ${where(U)}: 'base' names a parent layer, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
     }
     for (const n of refs) {
       if (n.name.startsWith('@') || n.name.startsWith('#')) throw new Error(`'${shown(n)}': after '::' or '.' a name is written bare`);
@@ -89,20 +89,20 @@ export function lowerSuperLayers(actors) {
       }
       if (found.length > 1) {
         const sep = n.isPublic ? '.' : '::';
-        const call = n.type === 'SuperCall' ? '()' : '';
-        throw new Error(`'${shown(n)}' in '${U.name}' is ambiguous: ${found.map(f => `'${f.P}'`).join(' and ')} both define '${n.name}' — write ${found.map(f => `'super[${f.P}]${sep}${n.name}${call}'`).join(' or ')}`);
+        const call = n.type === 'BaseCall' ? '()' : '';
+        throw new Error(`'${shown(n)}' in '${U.name}' is ambiguous: ${found.map(f => `'${f.P}'`).join(' and ')} both define '${n.name}' — write ${found.map(f => `'base[${f.P}]${sep}${n.name}${call}'`).join(' or ')}`);
       }
       const { L, kind } = found[0];
       const hidden = hiddenName(name, L);
       if (kind === 'function') {
-        // `super.a` is a message, as `x.a` is: a call with no args. `super::h` isn't a value.
-        if (n.type === 'SuperSet') throw new Error(`'${shown(n)}' in '${U.name}' is a function, not a cell`);
-        if (n.type !== 'SuperCall' && !n.isPublic) throw new Error(`'${shown(n)}' in '${U.name}' is a function: call it, '${shown(n)}()'`);
+        // `base.a` is a message, as `x.a` is: a call with no args. `base::h` isn't a value.
+        if (n.type === 'BaseSet') throw new Error(`'${shown(n)}' in '${U.name}' is a function, not a cell`);
+        if (n.type !== 'BaseCall' && !n.isPublic) throw new Error(`'${shown(n)}' in '${U.name}' is a function: call it, '${shown(n)}()'`);
         if (!copied.has(hidden)) {
           copied.add(hidden);
           const clauses = L.functions.filter(f => f.name === name && !f.actorDef);
           // A copy of a public function is protected: it isn't on the wire.
-          L.functions.push(...clauses.map(f => ({ ...structuredClone(f), name: hidden, superOf: name })));
+          L.functions.push(...clauses.map(f => ({ ...structuredClone(f), name: hidden, baseOf: name })));
         }
         const args = n.args ?? [];
         for (const k of Object.keys(n)) delete n[k];
@@ -110,7 +110,7 @@ export function lowerSuperLayers(actors) {
         continue;
       }
       // A cell.
-      if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in '${U.name}' is a cell, not a function`);
+      if (n.type === 'BaseCall') throw new Error(`'${shown(n)}' in '${U.name}' is a cell, not a function`);
       const decl = L.stateVarDecls.find(d => d.name === name);
       Object.defineProperty(decl, 'declaredIn', { value: L.name, configurable: true });
       for (const C of actors) for (const d of C.stateVarDecls || []) {
@@ -119,12 +119,12 @@ export function lowerSuperLayers(actors) {
       if (!(U.stateVarDecls || []).some(d => d.name === hidden)) {
         const h = { ...decl, name: hidden };
         delete h.ingest;
-        Object.defineProperty(h, 'superOf', { value: name });
-        Object.defineProperty(h, 'superLayer', { value: L.name });
-        Object.defineProperty(h, 'superInit', { value: (L.initBody || []).find(s => s.type === 'StateAssign' && s.name === name) ?? null });
+        Object.defineProperty(h, 'baseOf', { value: name });
+        Object.defineProperty(h, 'baseLayer', { value: L.name });
+        Object.defineProperty(h, 'baseInit', { value: (L.initBody || []).find(s => s.type === 'StateAssign' && s.name === name) ?? null });
         (U.stateVarDecls ??= []).push(h);
       }
-      if (n.type === 'SuperMember') {
+      if (n.type === 'BaseMember') {
         const rest = Object.fromEntries(Object.entries(n).filter(([k]) => !['layer', 'isPublic', 'name', 'type'].includes(k)));
         for (const k of Object.keys(n)) delete n[k];
         Object.assign(n, { type: 'RefRead', name: hidden, ...rest });
@@ -140,18 +140,18 @@ export function lowerSuperLayers(actors) {
 // At the merge: for each hidden cell in an actor's state, whether the parent layer's cell
 // is its own (some class at or below the layer's child redeclares the name) or the
 // actor's one cell of that name. Returns the decls and init kept, and the renames.
-export function settleSuperCells(stateVarDecls, combinedInit) {
+export function settleBaseCells(stateVarDecls, combinedInit) {
   const renames = new Map();
   const kept = [];
   let init = combinedInit;
   for (const d of stateVarDecls) {
-    if (!d.superOf) { kept.push(d); continue; }
-    const eff = stateVarDecls.find(e => e.name === d.superOf);
-    if (!eff || eff.declaredIn === d.superLayer) { renames.set(d.name, d.superOf); continue; }
+    if (!d.baseOf) { kept.push(d); continue; }
+    const eff = stateVarDecls.find(e => e.name === d.baseOf);
+    if (!eff || eff.declaredIn === d.baseLayer) { renames.set(d.name, d.baseOf); continue; }
     kept.push(d);
-    if (d.superInit) {
-      const at = init.indexOf(d.superInit);
-      const copy = { ...structuredClone(d.superInit), name: d.name };
+    if (d.baseInit) {
+      const at = init.indexOf(d.baseInit);
+      const copy = { ...structuredClone(d.baseInit), name: d.name };
       init = at < 0 ? [copy, ...init] : [...init.slice(0, at + 1), copy, ...init.slice(at + 1)];
     }
   }

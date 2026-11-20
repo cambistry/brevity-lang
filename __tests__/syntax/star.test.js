@@ -398,7 +398,7 @@ describe('class (...) *{...} — subclass forms', () => {
     `)).not.toThrow();
   });
 
-  it('Sub = Base ^ (params) *{ body } reaches the parent layer with super', () => {
+  it('Sub = Base ^ (params) *{ body } reaches the parent layer with base', () => {
     expect(() => compileSource(`
       Base = (x Integer) *{
         @x = -> v: x
@@ -406,7 +406,7 @@ describe('class (...) *{...} — subclass forms', () => {
       Wrap = Base ^ (y Integer) *{
         @y = -> v: y
         @both = {
-          :v Integer = super.x()
+          :v Integer = base.x()
           return v: v + y
         }
       }
@@ -472,9 +472,9 @@ describe('file-level header — lineal', () => {
   it('inline manifest class: (Alias) (p: Type) -> *{ iface }', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
-      use base Integer = base
+      use start Integer = start
 
-      t = Thing(a: base)
+      t = Thing(a: start)
       @go = { :value Integer = t.get(); return :value }
     `)).not.toThrow();
   });

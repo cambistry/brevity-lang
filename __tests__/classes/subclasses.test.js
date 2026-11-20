@@ -5,8 +5,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 //
 // U = T ^ *{ … }            inherit from T
 // U = T ^ (arg: Type) *{ … } inherit from T, add class args
-// super.a() / super::h()      the parent layer's public `@a` / protected `h`
-// (super.test.js covers `super` in depth.)
+// base.a() / base::h()      the parent layer's public `@a` / protected `h`
+// (base.test.js covers `base` in depth.)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Compilation: positional args ─────────────────────────────────────────────
@@ -122,23 +122,23 @@ describe('subclasses — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('the parent layer reached through super.', () => {
+  it('the parent layer reached through base.', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
       U = T ^ *{
         @a = -> result: 2
-        @b = { :result = super.a(); return :result as Integer }
+        @b = { :result = base.a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
   });
 
-  it('the parent layer named with super[T]', () => {
+  it('the parent layer named with base[T]', () => {
     expect(() => compileSource(`
       T = * { @a = -> result: 1 }
       U = T ^ *{
         @a = -> result: 2
-        @b = { :result = super[T].a(); return :result as Integer }
+        @b = { :result = base[T].a(); return :result as Integer }
       }
       @test = -> 1
     `)).not.toThrow();
@@ -189,11 +189,11 @@ describe('subclasses — private function access — compilation', () => {
 
 // ── Compilation: the parent layer, and the retired wrapped forms ─────────────
 
-describe('subclasses — super and wrapped parents — compilation', () => {
-  it('super.a reaches the parent layer', () => {
+describe('subclasses — base and wrapped parents — compilation', () => {
+  it('base.a reaches the parent layer', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
-      U = T ^ *{ @a = { 2 }; @b = { super.a } }
+      U = T ^ *{ @a = { 2 }; @b = { base.a } }
       @test = -> 1
     `)).not.toThrow();
   });
@@ -368,12 +368,12 @@ describe('subclasses — runtime', () => {
       :result = u.a()
       return :result as Integer
 
-    // subclasses — the parent layer through super. — runtime
+    // subclasses — the parent layer through base. — runtime
     T8 = * { @a = -> result: 1 }
     U8 = T8 ^ *{
       @a = -> result: 2
       @b = {
-        :result = super.a()
+        :result = base.a()
         return :result as Integer
       }
     }
@@ -390,12 +390,12 @@ describe('subclasses — runtime', () => {
       :result = u.b()
       return :result as Integer
 
-    // subclasses — the parent layer named with super[T] — runtime
+    // subclasses — the parent layer named with base[T] — runtime
     T9 = * { @a = -> result: 1 }
     U9 = T9 ^ *{
       @a = -> result: 2
       @b = {
-        :result = super[T9].a()
+        :result = base[T9].a()
         return :result as Integer
       }
     }
@@ -515,14 +515,14 @@ describe('subclasses — runtime', () => {
     U14 = T14 ^ *{
       @a = -> result: 2
       @fromT = {
-        :result = super.a()
+        :result = base.a()
         return :result as Integer
       }
     }
     V14 = U14 ^ *{
       @a = -> result: 3
       @fromU = {
-        :result = super.a()
+        :result = base.a()
         return :result as Integer
       }
     }
@@ -791,32 +791,32 @@ describe('subclasses — runtime', () => {
     );
   });
 
-  // ── Runtime: the parent layer through super. ──────────────────────────────────
+  // ── Runtime: the parent layer through base. ──────────────────────────────────
 
-  it('subclasses — super. — runtime — subclass override takes precedence', async () => {
+  it('subclasses — base. — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride8', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
-  it('subclasses — super. — runtime — super.a reaches the parent implementation', async () => {
+  it('subclasses — base. — runtime — base.a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
     );
   });
 
-  // ── Runtime: the parent layer named with super[T] ─────────────────────────────
+  // ── Runtime: the parent layer named with base[T] ─────────────────────────────
 
-  it('subclasses — super[T] — runtime — subclass override takes precedence', async () => {
+  it('subclasses — base[T] — runtime — subclass override takes precedence', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testOverride9', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
-  it('subclasses — super[T] — runtime — super[T].a reaches the parent implementation', async () => {
+  it('subclasses — base[T] — runtime — base[T].a reaches the parent implementation', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testSuperAccess9', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },
@@ -915,7 +915,7 @@ describe('subclasses — runtime', () => {
     );
   });
 
-  // ── Runtime: each layer's super. is its own parent's ──────────────────────────
+  // ── Runtime: each layer's base. is its own parent's ──────────────────────────
 
   it('subclasses — multi-level parent layers — runtime — V returns own override', async () => {
     await expectBehavior(script,
@@ -924,14 +924,14 @@ describe('subclasses — runtime', () => {
     );
   });
 
-  it("subclasses — multi-level parent layers — runtime — V's super.a is U's", async () => {
+  it("subclasses — multi-level parent layers — runtime — V's base.a is U's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromU', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 2 }], to: 'c' } },
     );
   });
 
-  it("subclasses — multi-level parent layers — runtime — V inherits U.fromT, whose super.a is T's", async () => {
+  it("subclasses — multi-level parent layers — runtime — V inherits U.fromT, whose base.a is T's", async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'testVFromT', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 1 }], to: 'c' } },

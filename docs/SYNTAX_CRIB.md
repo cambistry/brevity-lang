@@ -96,11 +96,14 @@ Both = A ^ B ^ (n Integer) *{}                       // several parents; later w
 Plain = Box^                                         // a new actor with a `new`, no changes
 Mixed = A ^ B                                        // two parents, no changes
 Extra = Box ^ *{ @more = -> 1 }                      // body, no params
-Over = Box ^ *{ h = -> super::h() + 1 }              // the parent layer's protected h
-Pick = A ^ B ^ *{ @get = -> super[A].get() }         // parent A's public @get
+Over = Box ^ *{ h = -> base::h() + 1 }               // the parent layer's protected h
+Pick = A ^ B ^ *{ @get = -> base[A].get() }          // parent A's public @get
 Counted = (n Integer) *{} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
 Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor` only begins a definition
 ```
+
+`base` is valid only before `::`, `.` or `[`, so a cell, local, param or `use` binding
+can't be named `base`; `@base`, `x.base` and a key `base:` are fine. `super` has no form.
 
 ## Dependencies (`use`)
 

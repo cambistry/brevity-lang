@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'as', 'self', 'set', 'update', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'super', 'use']);
+const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'as', 'self', 'set', 'update', 'subscribe', 'ingest', 'catch', 'untracked', 'new', 'class', 'base', 'super', 'use']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -555,7 +555,7 @@ export function tokenize(source) {
         // A keyword keeps its own token (`.reduce!` is a built-in method).
         emit({ type: 'IDENT', value: value + '!' });
         i++;
-      } else if ((value === 'untracked' || value === 'class' || value === 'super' || value === 'use') && (tokens[tokens.length - 1]?.type === 'DOT' || (value === 'use' && tokens[tokens.length - 1]?.type === 'AT') || (source[i] === ':' && source[i + 1] !== ':'))) {
+      } else if ((value === 'untracked' || value === 'class' || value === 'base' || value === 'super' || value === 'use') && (tokens[tokens.length - 1]?.type === 'DOT' || (value === 'use' && tokens[tokens.length - 1]?.type === 'AT') || (source[i] === ':' && source[i + 1] !== ':'))) {
         // Reserved as a name of its own: a member or a key can have this name.
         emit({ type: 'IDENT', value });
       } else {
@@ -571,9 +571,9 @@ export function tokenize(source) {
         if (value === 'class' && !asMember && !asType && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
           throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${lineAt(i)})`);
         }
-        // `super` names the parent layer, likewise: `super = …`, `(super Integer)`.
-        if (value === 'super' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
-          throw new Error(`'super' is reserved: it names the parent layer, so it can't be declared or set (line ${lineAt(i)})`);
+        // `base` names the parent layer, likewise: `base = …`, `(base Integer)`.
+        if (value === 'base' && !asMember && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
+          throw new Error(`'base' is reserved: it names the parent layer, so it can't be declared or set (line ${lineAt(i)})`);
         }
         emit({ type: KEYWORDS.has(value) ? 'KEYWORD' : 'IDENT', value });
       }
@@ -621,7 +621,8 @@ export function tokenize(source) {
     if (source[i] === ',') { emit({ type: 'COMMA' }); i++; continue; }
     if (source[i] === '(') { emit({ type: 'LPAREN' }); i++; continue; }
     if (source[i] === ')') { emit({ type: 'RPAREN' }); i++; continue; }
-    if (source[i] === '[') { emit({ type: 'LBRACKET' }); i++; continue; }
+    // After a space or tab, a `[` can't begin a subscript: `xs[0]` indexes, `xs [0]` doesn't.
+    if (source[i] === '[') { emit({ type: 'LBRACKET', ...(/[ \t]/.test(source[i - 1] ?? '') && { spaced: true }) }); i++; continue; }
     if (source[i] === ']') { emit({ type: 'RBRACKET' }); i++; continue; }
     if (source[i] === '{') { emit({ type: 'LBRACE' }); i++; continue; }
     if (source[i] === '}') { emit({ type: 'RBRACE' }); i++; continue; }

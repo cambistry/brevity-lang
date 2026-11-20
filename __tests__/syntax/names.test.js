@@ -82,7 +82,7 @@ describe('a name is bound by', () => {
   it('a param that shadows a builtin namespace', () => compiles('@f = (Math Integer) -> Math + 1\n'));
   it('`self`', () => compiles('@f = -> self\n'));
   it('`class`', () => compiles('C = *{ @twin = -> class() }\n@f = -> 1\n'));
-  it('`super`', () => compiles('T = *{ h = -> 1 }\nU = T ^ *{ @g = -> super::h() }\n@f = -> 1\n'));
+  it('`base`', () => compiles('T = *{ h = -> 1 }\nU = T ^ *{ @g = -> base::h() }\n@f = -> 1\n'));
 });
 
 describe('a cell is bound before its line', () => {
