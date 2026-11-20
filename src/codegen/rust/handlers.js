@@ -1404,6 +1404,24 @@ function genRustChildMethods(allActors) {
 ${arms}
             _ => Value::Null,
         }
+    }
+
+    // A call by the value holding an instance's ref: an in-process handle
+    // ("<class>/<id>") or an address ("#<:Class:id>"). The ref's class takes it, so
+    // a value typed as a class may hold a subclass's instance. \`fallback\` is the
+    // class the value is typed as.
+    #[allow(dead_code)]
+    fn child_dispatch_ref(&mut self, fallback: &str, r: &Value, op_name: &str, payload: &Value, id: &str, from: &str) -> Value {
+        let _id = bv_inst_id(r);
+        let _s = r.as_str().unwrap_or("");
+        let _class: String = if let Some((c, _)) = _s.split_once('/') { c.to_string() } else {
+            let _token = _s.trim_start_matches("#<").trim_end_matches('>').rsplit(':').nth(1).unwrap_or("");
+            match _token {
+${childActors.map(a => [...new Set([a.selector, a.sourceName?.replace(/^@/, ''), a.name].filter(Boolean))].map(t => `                ${JSON.stringify(t)} => ${JSON.stringify(a.name.toLowerCase())}.to_string(),`).join('\n')).join('\n')}
+                _ => fallback.to_string(),
+            }
+        };
+        self.child_dispatch(&format!("{}/{}", _class, _id), op_name, payload, id, from)
     }`);
   }
 

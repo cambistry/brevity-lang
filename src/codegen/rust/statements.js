@@ -12,6 +12,7 @@ import {
   G, inferLiteralType, rustIdent, mintRustSsa, rustSsaResolve, rustType, convertFromValue, toJsonValue,
   forceJsonWrap, rsStore, stateKey, findRsAsClauseMatch, substituteCaptures,
   buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances, rustTypeTag, rustTyOf, rustSlotTag, rustTypeWireWrap,
+  instDispatchAt,
 } from './types.js';
 import { isDynamicTy } from '../ty_tags.js';
 import { intToValue, valueArray } from './int_repr.js';
@@ -107,7 +108,7 @@ function handleTypedAssign_ChildActorRef(s, sCtx, I, lines) {
   const flat = sCtx.childActorRefs?.get(s.value.name);
   const childCall = flat
     ? `self.child_${flat.toLowerCase()}_dispatch("$as", &json!("${s.typeName}"), "", "__parent")`
-    : `self.child_${sCtx.selfSpawnedRefs.get(s.value.name).toLowerCase()}_dispatch_at(bv_inst_id(&${rustSsaResolve(s.value.name)}), "$as", &json!("${s.typeName}"), "", "__parent")`;
+    : `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(s.value.name).toLowerCase(), rustSsaResolve(s.value.name))}"$as", &json!("${s.typeName}"), "", "__parent")`;
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(`bv_as_reply(${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null))`, s.typeName)};`);
   return true;
 }
@@ -1388,7 +1389,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             lines.push(`${I}let ${tempName} = ${tempName}_re_opt.unwrap_or(Value::Null);`);
           } else {
             const lc = spawnClass.toLowerCase();
-            lines.push(`${I}let ${tempName} = self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent");`);
+            lines.push(`${I}let ${tempName} = self.${instDispatchAt(lc, idVar)}${method}, &${payload}, "", "__parent");`);
           }
           if (handleName) {
             lines.push(`${I}let ${mintRustSsa(handleName)}: Value = ${tempName};`);
@@ -2156,7 +2157,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       const method = JSON.stringify(memberOp(s.value.property));
       const childCall = sCtx.childActorRefs.has(objName)
         ? `self.child_${sCtx.childActorRefs.get(objName).toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`
-        : `self.child_${sCtx.selfSpawnedRefs.get(objName).toLowerCase()}_dispatch_at(bv_inst_id(&${rustSsaResolve(objName)}), ${method}, &json!({}), "", "__parent")`;
+        : `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(objName).toLowerCase(), rustSsaResolve(objName))}${method}, &json!({}), "", "__parent")`;
       const accessor = `{ let _cr = ${childCall}; let _cs = BvObject::pack(&_cr); _cs.one() }`;
       const knownType = (s.type === 'TypedAssign') ? s.typeName : typeEnv.get(s.name);
       if (knownType) {
@@ -2227,7 +2228,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const lc = sCtx.selfSpawnedRefs.get(s.name).toLowerCase();
         const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${I}self.child_${lc}_dispatch_at(bv_inst_id(&${rustSsaResolve(s.name)}), "${wireOp}", &${valueArray([val])}, "", "__parent");`);
+        lines.push(`${I}self.${instDispatchAt(lc, rustSsaResolve(s.name))}"${wireOp}", &${valueArray([val])}, "", "__parent");`);
       } else if (!G.ctx.stateVarNames.has(s.name) && !G.ctx.refNames?.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor references support '<-'`);
       } else if (s.value?.type === 'Function') {
@@ -2368,7 +2369,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const wireOp = s.updateOp === '<|' ? '$update' : '$set';
         const dispatch = (payload) => isFlatChild
           ? `self.child_${sCtx.childActorRefs.get(s.name).toLowerCase()}_dispatch("${wireOp}", ${payload}, "", "__parent")`
-          : `self.child_${sCtx.selfSpawnedRefs.get(s.name).toLowerCase()}_dispatch_at(bv_inst_id(&${rustSsaResolve(s.name)}), "${wireOp}", ${payload}, "", "__parent")`;
+          : `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(s.name).toLowerCase(), rustSsaResolve(s.name))}"${wireOp}", ${payload}, "", "__parent")`;
         const posArgExprs = s.args.filter(a => a.positional).map(a => {
           const raw = genRustExpr(a.expr, typeEnv);
           const t = inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv);
@@ -2411,7 +2412,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}let _ = self.handle_op_at(bv_inst_id(&${idVar}), "${internalSetSelector}", &json!({}), &Value::Array(vec![${valWrapped}]), "__parent", "");`);
         } else {
           const lc = spawnClass.toLowerCase();
-          lines.push(`${I}self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), "${internalSetSelector}", &Value::Array(vec![${valWrapped}]), "", "__parent");`);
+          lines.push(`${I}self.${instDispatchAt(lc, idVar)}"${internalSetSelector}", &Value::Array(vec![${valWrapped}]), "", "__parent");`);
         }
       } else if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.objectName)) {
         const actorName = sCtx.childActorRefs.get(s.objectName);
@@ -2774,7 +2775,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}let _ = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", "");`);
         } else {
           const lc = spawnClass.toLowerCase();
-          lines.push(`${I}self.child_${lc}_dispatch_at(bv_inst_id(&${idVar}), ${method}, &${payload}, "", "__parent");`);
+          lines.push(`${I}self.${instDispatchAt(lc, idVar)}${method}, &${payload}, "", "__parent");`);
         }
       } else if (s.expr.type === 'DotCallExpr' && (() => {
         const dotObjName = s.expr.object.type === 'RefRead' ? s.expr.object.name : (s.expr.object.type === 'Identifier' ? s.expr.object.name : null);

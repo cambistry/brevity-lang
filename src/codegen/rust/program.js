@@ -34,6 +34,7 @@ import {
   needsDotCallAwait,
   rustIdent, convertFromValue, stateKey, classNeedsSpawnedInstances, classRefersToSelf,
   rustTypeTag,
+  instDispatchAt,
 } from './types.js';
 import {
   genRustExpr, genRustFnMethod, genRustFnCallExpr,
@@ -548,7 +549,7 @@ ${getClauses}
                             let _ = self.binding.send(Value::Object(resp));
                         } else if let Some(sv) = test.get("set") {
                             let p = if sv.is_array() { sv.clone() } else if sv.is_object() { sv.clone() } else { json!([sv]) };
-                            self.child_${r.prefix}_dispatch_at(bv_inst_id(&_r), "$set", &p, "", "__parent");
+                            self.${instDispatchAt(r.prefix, '_r')}"$set", &p, "", "__parent");
                         }
                         return;
                     }`;

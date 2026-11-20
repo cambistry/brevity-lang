@@ -1,5 +1,5 @@
 import { renameHidden, settleBaseCells } from './base_layers.js';
-import { buildsBase, parentView, effectiveInit, expandSuperInits } from './super_calls.js';
+import { buildsBase, hasNoBase, parentView, effectiveInit, expandSuperInits } from './super_calls.js';
 
 // Target-neutral helpers for the actor class system: subclass-chain resolution,
 // actor lookup, and (eventually) method/param table flattening for validation.
@@ -42,6 +42,8 @@ export function resolveSuperclassChain(actorByName, actor) {
   for (const st of supertypes) {
     const superActor = actorByName?.get(st.supertype);
     if (!superActor) continue;
+    // No base for this parent: none of its layer is in the actor.
+    if (hasNoBase(actor, st.supertype)) continue;
 
     const parentChain = resolveSuperclassChain(actorByName, superActor);
     // A class that builds its base with `super` takes none of its parent's params,

@@ -17,6 +17,7 @@
 // that names it.
 
 import { resolveSuperclassChain } from './subclass.js';
+import { noBaseParents } from './super_calls.js';
 import { CLASS_SELF } from './singleton_classes.js';
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
@@ -95,6 +96,10 @@ function actorNames(actor, classes) {
 
 // What an unbound `name` might have meant, as the rest of a message.
 function alternative(name, scope) {
+  for (let sc = scope; sc; sc = sc.parent) {
+    const from = sc.noBase?.get(name);
+    if (from) return `it's '${from.parent}''s, and '${from.actor}' has no base for '${from.parent}' (it never calls 'super'): define it in '${from.actor}'`;
+  }
   if (/^[@#]/.test(name)) return null;
   const at = scope.kind('@' + name);
   if (at === 'cell') return `the published cell is '@${name}'`;
@@ -154,6 +159,15 @@ export function resolveNames(program) {
     const parent = actor?.name ? scopeOf(classes.get(actor.enclosing) ?? actors.find(a => !a.name)) : global;
     const scope = new Scope(parent);
     if (actor) for (const [kind, name] of actorNames(actor, classes)) scope.add(kind, name);
+    // A parent the class builds no base for: its names aren't the class's.
+    for (const P of noBaseParents(actor)) {
+      const parent = classes.get(P);
+      if (!parent) continue;
+      const { inheritedFunctions, inheritedState } = resolveSuperclassChain(classes, parent);
+      for (const d of [...(parent.functions || []), ...inheritedFunctions, ...(parent.stateVarDecls || []), ...inheritedState]) {
+        if (typeof d.name === 'string' && !scope.kinds.has(d.name)) (scope.noBase ??= new Map()).set(d.name, { parent: P, actor: actor.name });
+      }
+    }
     actorScopes.set(key, scope);
     return scope;
   };

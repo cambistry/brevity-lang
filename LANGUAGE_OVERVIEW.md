@@ -232,7 +232,12 @@ Same = Box ^ (value Integer) *{ super }   // the args as received
 
 Bare `super` passes the constructor's args as received, `super()` none, and
 `super[A](…)` builds parent `A` when there are several. It's called once on every
-path: not in a loop, not twice, and not on only one branch of an `if`. A subclass
+path, or on none: not in a loop, not twice, and not on only one branch of an `if`.
+A constructor that never calls it builds no base: the parent's state isn't there
+and its constructor doesn't run. That's legal only when the subclass defines the
+parent's whole public interface (each public function and cell, by name and
+arity), so it still stands in for the parent; it can't use the parent's other
+names, `super`, `base::` or `base.`. The parent's class block is still reachable. A subclass
 with no constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`)
 takes its parents' params.
 

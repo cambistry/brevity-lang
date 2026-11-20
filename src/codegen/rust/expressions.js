@@ -12,6 +12,7 @@ import {
   resolveVarExpr, forceJsonWrap, convertBranchExpr, isBoolExpr,
   buildTypeEnv, findMutableVars, analyzeFunctions, rsStore, stateKey,
   classNeedsSpawnedInstances, rustTypeWireWrap, outerRead, rustSlotTag,
+  instDispatchAt,
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
@@ -870,7 +871,7 @@ ${subRegLines.join('\n')}
           const namedInserts = namedC.map(a => `_nm.insert("${a.name}".to_string(), ${wrapArgC(a.expr || { type: 'Identifier', name: a.name })});`).join(' ');
           payloadC = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
         }
-        return classCall(t.toLowerCase(), `bv_inst_id(&${cell})`, JSON.stringify(wireOpOf(expr)), payloadC, expr);
+        return classCall(t.toLowerCase(), cell, JSON.stringify(wireOpOf(expr)), payloadC, expr);
       }
     }
     // Spawn-needing actor: the var holds a u32 instance id; dispatch
@@ -898,7 +899,7 @@ ${subRegLines.join('\n')}
       if (spawnClass === '__self__') {
         return `{ let (re, ty, _) = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", ""); let re = re.unwrap_or(Value::Null); ty.map_or_else(|| re.clone(), |t| bv_unwire_reply(&re, &t)) }`;
       }
-      return classCall(spawnClass.toLowerCase(), `bv_inst_id(&${idVar})`, method, payload, expr);
+      return classCall(spawnClass.toLowerCase(), idVar, method, payload, expr);
     }
     const isRemoteInst = dotObjName && G.ctx.remoteInstanceVars.has(dotObjName);
     // Local instance vars are bound by `t = Thing(args)` inside a handler
@@ -1416,7 +1417,7 @@ ${subRegLines.join('\n')}
     if (expr.object?.type === 'Identifier' && eCtx?.selfSpawnedRefs?.has(expr.object.name) && eCtx.selfSpawnedRefs.get(expr.object.name) !== '__self__') {
       const lc = eCtx.selfSpawnedRefs.get(expr.object.name).toLowerCase();
       const method = JSON.stringify(memberOp(expr.property));
-      return `self.child_${lc}_dispatch_at(bv_inst_id(&${rustSsaResolve(expr.object.name)}), ${method}, &json!({}), "", "__parent")`;
+      return `self.${instDispatchAt(lc, rustSsaResolve(expr.object.name))}${method}, &json!({}), "", "__parent")`;
     }
     // Slice 5 (Rust target): field access on a typed object. The object
     // is a TypeConstruction directly or a typed local whose runtime value
@@ -2030,11 +2031,12 @@ export function rustOpreTo(expr, gen) {
 // isn't waited for: it's queued and runs once this turn ends (bv_run_deferred), not
 // inside it. A call that waits first lets what's queued run, so a class takes its
 // messages in the order they were sent.
-function classCall(lc, instExpr, method, payload, expr) {
+// `ref` is the value holding the instance's ref.
+function classCall(lc, ref, method, payload, expr) {
   if (expr.method.endsWith('.') || expr.launched) {
-    return `{ let _inst = ${instExpr}; let _p = ${payload}; self.bv_deferred.push_back(Box::new(move |s: &mut Actor| { let _ = s.child_${lc}_dispatch_at(_inst, ${method}, &_p, "", "__parent"); })); Value::Null }`;
+    return `{ let _inst = ${ref}.clone(); let _p = ${payload}; self.bv_deferred.push_back(Box::new(move |s: &mut Actor| { let _ = s.${instDispatchAt(lc, '_inst')}${method}, &_p, "", "__parent"); })); Value::Null }`;
   }
-  return `{ let _inst = ${instExpr}; let _p = ${payload}; self.bv_run_deferred(); self.child_${lc}_dispatch_at(_inst, ${method}, &_p, "", "__parent") }`;
+  return `{ let _inst = ${ref}.clone(); let _p = ${payload}; self.bv_run_deferred(); self.${instDispatchAt(lc, '_inst')}${method}, &_p, "", "__parent") }`;
 }
 
 // A call's wire op: the lowered one (`$get` for a cell read, src/opre.js), else

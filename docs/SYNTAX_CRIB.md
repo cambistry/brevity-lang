@@ -111,7 +111,9 @@ Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor
 can't be named `base`; `@base`, `x.base` and a key `base:` are fine.
 
 A subclass with its own constructor takes its own params only and calls `super` once on
-every path (never in a loop); a base name read before that line is an error. With no
+every path (never in a loop); a base name read before that line is an error. Never
+calling it builds no base, which needs the parent's whole public interface defined in
+the subclass (by name and arity). With no
 constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`) it takes its
 parents' params. `super = …`, `super.x` and `super::x` aren't forms.
 

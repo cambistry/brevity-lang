@@ -156,9 +156,9 @@ describe('super — in a constructor — compile errors', () => {
       .toThrow("'super' in 'U' is called twice: the base is built once");
   });
 
-  it('never, in a constructor of its own', () => {
+  it("never, in a constructor of its own that doesn't define the parent's interface", () => {
     expect(compile(`${T}U = T ^ (n Integer) *{\n  @x = -> 1\n}\n`))
-      .toThrow("'U' has a constructor of its own and never calls 'super': it builds its base with 'super(…)' in the constructor block");
+      .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@seen' (0 args)");
   });
 
   it('bare super with two parents', () => {
@@ -168,9 +168,8 @@ describe('super — in a constructor — compile errors', () => {
       .toThrow("'super(…)' in 'C' is ambiguous");
   });
 
-  it('one of two parents never built', () => {
-    expect(compile(`${AB}C = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n`))
-      .toThrow("'C' has a constructor of its own and never calls 'super[B](…)'");
+  it('one of two parents never built, with no interface to define, is no base for it', () => {
+    expect(compile(`${AB}C = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n`)).not.toThrow();
   });
 
   it('super[X] for a class that is not a parent', () => {
@@ -341,5 +340,106 @@ describe('super — in a function — compile errors', () => {
   it("bare super in a lambda whose param hides the function's", () => {
     expect(compile(`${T}U = T ^ *{\n  h = (n Integer) {\n    g = (n Integer) -> super\n    return g(1)\n  }\n}\n`))
       .toThrow("Bare 'super' in 'h' of 'U': the param 'n' of a function inside it hides h's — pass the args: 'super(…)'");
+  });
+});
+
+// A constructor that never calls `super` builds no base: the parent's state isn't
+// there and its constructor doesn't run. It's legal only when the subclass defines
+// the parent's whole public interface, by name and arity.
+const noBase = `
+  @T = (n Integer) *{
+    k Integer = 10 / n
+    @total *Integer = 0
+    @get = { return k }
+    @add = (x Integer) -> x + k
+  } ^ {
+    prot *Integer = 2
+  }
+  @U = @T ^ (m Integer) *{
+    @total *Integer = m
+    @get = { return m }
+    @add = (x Integer) { y Integer = x + m; return y }
+    @fromBlock = { x Integer = @T::prot + m; return x }
+  }
+  take = (t @T) { x Integer = t.get(); return x }
+  @viaParent = { u = @U(4); x Integer = take(u); return x }
+`;
+
+describe('super — never called: no base', () => {
+  it("builds with none of the parent's state, and doesn't run its constructor", async () => {
+    await expectBehavior(noBase,
+      { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: 'get', to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [4], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { input: { id: '3', op: [[1], 'add'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '3', re: [5], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("reaches the parent's class block", async () => {
+    await expectBehavior(noBase,
+      { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: 'fromBlock', to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it('is still accepted where the parent is expected', async () => {
+    await expectBehavior(noBase,
+      { input: { id: '1', op: 'viaParent', from: 'c' } },
+      { output: { id: '1', re: [4], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});
+
+describe('super — never called: no base — compile errors', () => {
+  const T = 'T = (n Integer) *{\n  count *Integer = n\n  @total *Integer = 0\n  h = -> n + 1\n  @get = { return count }\n  @add = (x Integer) -> x + 1\n}\n';
+  const full = '  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n';
+  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+
+  it('the whole public interface, defined, compiles', () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}}\n`)).not.toThrow();
+  });
+
+  it('a public function missing, or with another arity', () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n}\n`))
+      .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@add' (1 arg)");
+    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = -> 2\n}\n`))
+      .toThrow("missing: '@add' (1 arg)");
+  });
+
+  it('a public cell missing', () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n}\n`))
+      .toThrow("missing: '@total' (a cell)");
+  });
+
+  it('per parent, when there are several', () => {
+    expect(compile('A = *{ @a = -> 1 }\nB = *{ @b = -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n'))
+      .toThrow("'C' never calls 'super[B](…)', so it has no base for 'B', and must define the whole public interface of 'B'; missing: '@b' (0 args)");
+    expect(compile('A = *{ @a = -> 1 }\nB = *{ @b = -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n  @b = -> 3\n}\n')).not.toThrow();
+  });
+
+  it("a protected name of the parent's that the subclass doesn't define", () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @p = { x Integer = h(); return x }\n}\n`))
+      .toThrow("'h' isn't in scope — it's 'T''s, and 'U' has no base for 'T' (it never calls 'super'): define it in 'U'");
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @p = { return count }\n}\n`))
+      .toThrow("'count' isn't in scope — it's 'T''s");
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  h = -> 9\n  @p = { x Integer = h(); return x }\n}\n`)).not.toThrow();
+  });
+
+  it('super, base:: and base. in its functions', () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) { y Integer = super(x); return y }\n}\n`))
+      .toThrow("'super(…)' in '@add' of 'U': 'U' has no base for 'T' (it never calls 'super(…)')");
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @q = { x Integer = base::h(); return x }\n}\n`))
+      .toThrow("'base::h' in 'U': 'U' has no base for 'T'");
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @q = { x Integer = base.get(); return x }\n}\n`))
+      .toThrow("'base.get' in 'U': 'U' has no base for 'T'");
+  });
+
+  it('super on some paths but not all is still an error', () => {
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  x Integer = if m > 0 {\n    super(m)\n    1\n  } else {\n    2\n  }\n}\n`))
+      .toThrow("needs an 'else' that calls it too");
   });
 });

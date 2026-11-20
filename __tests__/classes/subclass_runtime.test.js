@@ -298,3 +298,23 @@ describe('subclass runtime — inherited state', () => {
     );
   });
 });
+
+describe("subclass runtime — a subclass's actor where its parent is expected", () => {
+  const script = `
+    @T = *{
+      @get = { return 1 }
+    }
+    @U = @T ^ *{
+      @get = { return 4 }
+    }
+    take = (t @T) { x Integer = t.get(); return x }
+    @viaParent = { u = @U(); x Integer = take(u); return x }
+  `;
+
+  it("a call on it runs the subclass's override", async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'viaParent', from: 'c' } },
+      { output: { id: '1', re: [4], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});

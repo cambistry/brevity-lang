@@ -421,6 +421,20 @@ const RUST_KEYWORDS = new Set(['fn', 'let', 'mut', 'ref', 'type', 'use', 'mod', 
 // Shared mutable state container
 export const G = { ctx: null };
 
+// A call into an instance of class `lc` by the value holding its ref, as the start
+// of a \`self.…(op, payload, id, from)\` call. A class with subclasses may be holding
+// one of theirs, so the ref picks the class (child_dispatch_ref); else it's direct.
+export function instDispatchAt(lc, refExpr) {
+  const actors = G.ctx?.actorNodes;
+  const under = (a, seen = new Set()) => {
+    if (!a || seen.has(a)) return false;
+    seen.add(a);
+    return (a.supertypes || []).some(st => st.supertype.toLowerCase() === lc || under(actors.get(st.supertype), seen));
+  };
+  const extended = actors && [...actors.values()].some(a => under(a));
+  return extended ? `child_dispatch_ref(${JSON.stringify(lc)}, &${refExpr}, ` : `child_${lc}_dispatch_at(bv_inst_id(&${refExpr}), `;
+}
+
 // A call worked out ahead into a temporary is marked on its node with that
 // temporary. The mark belongs to the handler whose code declares the temporary:
 // the same node is generated again elsewhere (as its own function's body), so a

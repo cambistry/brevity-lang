@@ -97,6 +97,10 @@ export function lowerBaseLayers(actors) {
         throw new Error(`'${shown(n)}' in '${U.name}' is ambiguous: ${found.map(f => `'${f.P}'`).join(' and ')} both define '${n.name}' — write ${found.map(f => `'base[${f.P}]${sep}${n.name}${call}'`).join(' or ')}`);
       }
       const { L, kind } = found[0];
+      // Which parent each reaches, kept for the check that the class has a base for
+      // it (src/super_calls.js).
+      if (!Object.hasOwn(U, 'baseRefs')) Object.defineProperty(U, 'baseRefs', { value: [], configurable: true });
+      U.baseRefs.push({ P: found[0].P, shown: shown(n), superIn: n.superIn });
       const hidden = hiddenName(name, L);
       if (kind === 'function') {
         // `base.a` is a message, as `x.a` is: a call with no args. `base::h` isn't a value.

@@ -41,7 +41,8 @@ const isFunctionNode = (n) => n.type === 'Function' || n.type === 'FunctionDecl'
 
 // Whether a class builds its base with `super`: it has a constructor of its own.
 // It's read from the lowered init, which copies of the class (an overload clause's
-// synthetic actor) carry along.
+// synthetic actor) carry along. A parent the constructor never builds has a marker
+// with `none`: the class has no base for it.
 // A class from another file's document says so with `ownNew`.
 export const buildsBase = (actor) => !!actor?.ownNew || (actor?.initBody || []).some(s => s.type === 'SuperInit');
 
@@ -138,6 +139,53 @@ export function parentView(actorByName, P, chain) {
   };
 }
 
+export const hasNoBase = (actor, P) => (actor?.initBody || []).some(s => s.type === 'SuperInit' && s.none && s.layer === P);
+export const noBaseParents = (actor) => (actor?.initBody || []).filter(s => s.type === 'SuperInit' && s.none).map(s => s.layer);
+
+// The public interface of `P`: each public function's arities, and its public cells.
+function publicInterface(actorByName, P, chain) {
+  const pc = chain(actorByName, P);
+  const fns = new Map();
+  const add = (name, arity) => (fns.get(name) ?? fns.set(name, new Set()).get(name)).add(arity);
+  const own = new Set((P.functions || []).map(f => f.name));
+  for (const f of [...pc.inheritedFunctions.filter(f => !own.has(f.name)), ...(P.functions || [])]) {
+    if (typeof f.name !== 'string' || !f.name.startsWith('@') || f.actorDef || f.emptyOverload || f.baseOf) continue;
+    add(f.name, (f.params || []).some(p => p.rest) ? 'any' : (f.params || []).length);
+  }
+  const params = [...pc.inheritedParams, ...(P.initParams || [])];
+  for (const p of params) if (p.accessor) add('@' + p.accessor, 0);
+  const cells = new Set([...pc.inheritedState, ...(P.stateVarDecls || [])].filter(d => d.name?.startsWith('@') && !d.baseOf).map(d => d.name));
+  return { fns, cells };
+}
+
+// What of `P`'s public interface `U` doesn't define, by name and arity. What `U` has
+// from the parents it builds counts.
+function missingInterface(actorByName, U, P, builtParents, chain) {
+  const want = publicInterface(actorByName, P, chain);
+  const have = { fns: new Map(), cells: new Set((U.stateVarDecls || []).filter(d => !d.baseOf).map(d => d.name)) };
+  const add = (name, arity) => (have.fns.get(name) ?? have.fns.set(name, new Set()).get(name)).add(arity);
+  for (const f of U.functions || []) {
+    if (typeof f.name === 'string' && !f.actorDef && !f.baseOf) add(f.name, (f.params || []).some(p => p.rest) ? 'any' : (f.params || []).length);
+  }
+  for (const p of U.initParams || []) if (p.accessor) add('@' + p.accessor, 0);
+  for (const B of builtParents) {
+    const b = publicInterface(actorByName, B, chain);
+    for (const [name, arities] of b.fns) for (const a of arities) add(name, a);
+    for (const c of b.cells) have.cells.add(c);
+  }
+  // A cell is read as a function with no args, and stands in for one.
+  const hasArity = (name, a) => have.fns.get(name)?.has(a) || (a === 0 && have.cells.has(name));
+  const missing = [];
+  for (const [name, arities] of want.fns) {
+    if (want.cells.has(name)) continue;
+    for (const a of [...arities].sort()) {
+      if (!hasArity(name, a)) missing.push(`'${name}' (${a === 'any' ? 'a rest param' : `${a} arg${a === 1 ? '' : 's'}`})`);
+    }
+  }
+  for (const c of want.cells) if (!have.cells.has(c) && !have.fns.get(c)?.has(0)) missing.push(`'${c}' (a cell)`);
+  return missing;
+}
+
 // What a class's constructor runs, its parents' parts in place: where its `super`
 // calls are, or (no constructor of its own) first.
 export function effectiveInit(actorByName, A, chain) {
@@ -153,7 +201,9 @@ export function expandSuperInits(actorByName, A, init, chain) {
   const hiddenOf = new Map((A.stateVarDecls || []).filter(d => d.baseOf).map(d => [d.baseOf, d]));
   return init.flatMap((s) => {
     if (s.type !== 'SuperInit') return [s];
-    const P = actorByName.get(s.layer);
+    const P = actorByName?.get(s.layer);
+    // A backend leaves out a class with nothing in it.
+    if (s.none || !P) return [];
     const body = parentView(actorByName, P, chain).init.filter(t => t.value?.type !== 'IngestExpr');
     return body.flatMap((t) => {
       if (t.type !== 'StateAssign' || !own.has(t.name)) return [t];
@@ -242,6 +292,7 @@ export function lowerSuperCalls(actors, chain) {
       n.layer ??= parents[0];
     }
 
+    const noBase = [];
     // Once on every path: a statement of the constructor block, never in a loop or a
     // function, never twice.
     for (const { n, path, shown: written } of calls) {
@@ -266,8 +317,20 @@ export function lowerSuperCalls(actors, chain) {
       const mine = calls.filter(c => c.n.layer === P);
       const named = parents.length > 1 ? `super[${P}](…)` : 'super';
       if (mine.length > 1) throw new Error(`'${named}' in '${U.name}' is called twice: the base is built once`);
-      if (!mine.length) {
-        throw new Error(`'${U.name}' has a constructor of its own and never calls '${named}': it builds its base with '${parents.length > 1 ? named : 'super(…)'}' in the constructor block`);
+      if (!mine.length) noBase.push(P);
+    }
+    // No `super` for a parent: no base. The subclass stands in for the parent only if
+    // it defines the parent's whole public interface.
+    const built = parents.filter(P => !noBase.includes(P));
+    for (const P of noBase) {
+      const named = parents.length > 1 ? `super[${P}](…)` : 'super(…)';
+      const missing = missingInterface(byName, U, byName.get(P), built.map(b => byName.get(b)), chain);
+      if (missing.length) {
+        throw new Error(`'${U.name}' never calls '${named}', so it has no base for '${P}', and must define the whole public interface of '${P}'; missing: ${missing.join(', ')}`);
+      }
+      const refs = (U.baseRefs || []).filter(r => r.P === P);
+      if (refs.length) {
+        throw new Error(`'${refs[0].shown}' in ${refs[0].superIn ? `'${refs[0].superIn}' of ` : ''}'${U.name}': '${U.name}' has no base for '${P}' (it never calls '${named}')`);
       }
     }
 
@@ -287,7 +350,7 @@ export function lowerSuperCalls(actors, chain) {
       return names;
     };
     const init = U.initBody;
-    for (const P of parents) {
+    for (const P of built) {
       const at = init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
       const names = baseNamesOf(byName.get(P));
       const before = [...init.slice(0, at), init[at].expr.args];
@@ -313,6 +376,8 @@ export function lowerSuperCalls(actors, chain) {
       lowered.set(s.expr, binds);
       return [...binds, { type: 'SuperInit', layer }];
     });
+    // A parent with no base: none of its layer is merged (resolveSuperclassChain).
+    U.initBody.unshift(...noBase.map(layer => ({ type: 'SuperInit', layer, none: true })));
     U.constructorBody = (U.constructorBody || []).flatMap((s) => {
       const binds = s.type === 'ExprStatement' && lowered.get(s.expr);
       if (!binds) return [s];
