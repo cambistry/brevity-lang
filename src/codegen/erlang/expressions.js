@@ -1785,7 +1785,9 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
   for (let si = 0; si < body.length; si++) {
     const s = body[si];
     if (s.type === 'ImplicitReturn') {
-      lines.push(genInner(s.expr));
+      // A call's reply is its one value, as in the expression form.
+      const v = genInner(s.expr);
+      lines.push(s.expr?.type === 'FunctionCallExpr' ? `bv_object_one(${v})` : v);
       lastAssignVar = null;
       continue;
     }

@@ -106,6 +106,25 @@ describe('if — runtime', () => {
         result Integer | null = if true 42
         return :result
 
+      // A braced body's tail is its value: an \`if\` there too.
+      @tailIf = (n Integer) {
+        if n == 0 { "zero" } else { "more" }
+      }
+
+      @tailIfCall = (n Integer) {
+        if n == 0 { 0 } else { twice(n) }
+      }
+
+      twice = (n Integer) -> n * 2
+
+      @tailIfLambda = {
+        size = (n Integer) {
+          if n > 1 { "big" } else { "small" }
+        }
+        s Text = size(5)
+        return s
+      }
+
       @fnCallInIf
         =
         x Integer = 5
@@ -717,6 +736,29 @@ describe('if — runtime', () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'blockForm', from: 'c' } },
       { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'abc' }], to: 'c' } },
+    );
+  });
+
+  it('if/else expression — a braced body that ends in an if replies with its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[0], 'tailIf'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['zero'], to: 'c' }) },
+      { input: { id: '2', op: [[3], 'tailIf'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '2', re: ['more'], to: 'c' }) },
+    );
+  });
+
+  it('if/else expression — a braced body that ends in an if replies with a call\'s value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], 'tailIfCall'], 'ty': [['Integer']], from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: [6], to: 'c' }) },
+    );
+  });
+
+  it('if/else expression — a lambda\'s braced body that ends in an if returns its value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'tailIfLambda', from: 'c' } },
+      { output: expect.objectContaining({ id: '1', re: ['big'], to: 'c' }) },
     );
   });
 

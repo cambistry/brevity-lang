@@ -104,10 +104,11 @@ function fileChildRefs(ctx) {
   return new Set(ctx.childStatePrefix ? [] : (ctx.childVarToActor?.keys() || []));
 }
 
-function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet) {
+// `tail`: the guard that ends the body, whose branches reply with their own tail value.
+function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet, tail = null) {
   const replyCtx = { ...sCtx, stmtIdx: 99999 };
 
-  function genBranchBody(branchBody, indent, scope) {
+  function genBranchBody(branchBody, indent, scope, isTail) {
     const branchGuards = branchBody.filter(s =>
       s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr),
     );
@@ -119,27 +120,33 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
       return buildLevel(branchGuards, 0, indent, branchFinal, scope);
     }
     const termRet = branchBody.find(s => s.type === 'Return');
-    return termRet ? makeRet(termRet.fields, scope) : null;
+    if (termRet) return makeRet(termRet.fields, scope);
+    const last = branchBody[branchBody.length - 1];
+    if (isTail && last?.type === 'ImplicitReturn') return makeRet([{ expr: last.expr, type: last.typeName ?? null, positional: true }], scope);
+    return null;
   }
 
   // Writes and calls: what a branch does before it returns or falls through.
   // The rest of the branch reads through `scope`, which sees what these bind.
-  function genBranch(branchBody, indent, outer, otherwise) {
+  function genBranch(branchBody, indent, outer, otherwise, isTail) {
+    const last = branchBody[branchBody.length - 1];
     const effects = branchBody.filter(s => s.type !== 'Return' &&
-      !(s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr)));
+      !(s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasErlBlockBodies(s.expr)) &&
+      !(isTail && s === last && s.type === 'ImplicitReturn'));
     const stmtIdx = outer.stmtIdx + 1;
     const ssaEnv = branchSSAEnv(ctx, effects, outer.stmtIdx, outer.ssaEnv);
     const code = effects.length ? genLocals(ctx, effects, outer.typeEnv, { ...outer, stmtIdx, ssaEnv, inBranch: true }, indent).map(l => `${l.trim()}\n${indent}`).join('') : '';
     const branchEnv = new Map(outer.typeEnv);
     for (const s of effects) if (s.type === 'TypedAssign' || s.type === 'Assign') bindLocalType(branchEnv, s);
     const scope = { ...outer, stmtIdx: stmtIdx + effects.length, ssaEnv, typeEnv: branchEnv };
-    return code + (genBranchBody(branchBody, indent, scope) ?? otherwise());
+    return code + (genBranchBody(branchBody, indent, scope, isTail) ?? otherwise());
   }
 
-  function buildLevel(guardsList, idx, indent, fallthrough, scope) {
+  function buildLevel(guardsList, idx, indent, fallthrough, scope, inTail = false) {
     if (idx >= guardsList.length) return fallthrough();
     const ii = indent + '    ';
     const { expr: ifExpr } = guardsList[idx];
+    const isTail = inTail || (tail !== null && guardsList[idx] === tail);
     const condExpr = genExpr(ctx, ifExpr.cond, scope.typeEnv, scope);
 
     const thenBody = ifExpr.then?.body || [];
@@ -147,11 +154,11 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet)
     const elseBody = elseBranch?.body || [];
 
     const next = () => buildLevel(guardsList, idx + 1, ii, fallthrough, scope);
-    const trueExpr = genBranch(thenBody, ii, scope, next);
+    const trueExpr = genBranch(thenBody, ii, scope, next, isTail);
     const falseExpr = elseBranch?.type === 'IfExpr'
-      ? buildLevel([{ expr: elseBranch }], 0, ii, next, scope)
+      ? buildLevel([{ expr: elseBranch }], 0, ii, next, scope, isTail)
       : elseBranch
-      ? genBranch(elseBody, ii, scope, next)
+      ? genBranch(elseBody, ii, scope, next, isTail)
       : next();
 
     return `case is_truthy(${condExpr}) of\n${ii}true -> ${trueExpr};\n${ii}false -> ${falseExpr}\n${indent}end`;
@@ -333,7 +340,7 @@ function genFn(ctx, fn) {
       }
     }
 
-    retExpr = buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet);
+    retExpr = buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet, body[body.length - 1]);
   } else if (reply) {
     const fnReplyCtx = { ...sCtx, stmtIdx: body.length };
     const pos = reply.fields.filter(f => f.positional);
@@ -755,7 +762,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       makeFinalRet = () => `${finalRetPrefix}${I}{ok, null, null}`;
     }
 
-    replyBlock = `${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet)}`;
+    replyBlock = `${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet, body[body.length - 1])}`;
   } else if (reply) {
     const isSpread = reply.fields.some(f => f.spread && !f.localObject);
     if (isSpread) {
@@ -1337,7 +1344,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
       } else {
         makeFinalRet = () => '{ok, null, null}';
       }
-      lines.push(`${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet)}`);
+      lines.push(`${I}${buildErlCaseChain(ctx, erlGuards, typeEnv, sCtx, I, makeRet, makeFinalRet, body[body.length - 1])}`);
     } else if (reply) {
       const replyCtx = { ...sCtx, stmtIdx: body.length };
       const replyExpr = genReplyBody(ctx, reply.fields, typeEnv, replyCtx);

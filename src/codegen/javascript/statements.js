@@ -370,7 +370,8 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
         const tmpVar = `_if${counters.ifIdx++}`;
         const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv).replace(/\n {8}/g, '\n  ');
         code += `\n  let ${tmpVar} = null;\n  ${chainCode}`;
-        if (!hasBlockBodies(s.expr)) {
+        // The body's tail is its value; a branch that returns has returned.
+        if (!hasBlockBodies(s.expr) || s === body[body.length - 1]) {
           code += `\n  return BvObject.pack([${tmpVar}]);`;
         }
       } else if (declaredReturnType === '.') {
@@ -945,6 +946,8 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
       const tmpVar = `_if${counters.ifIdx++}`;
       const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv);
+      // The body's tail: its value is the reply (classes.js reads it).
+      if (s === body[body.length - 1]) ctx.tailIfVar = tmpVar;
       return `\n        let ${tmpVar} = null;\n        ${chainCode}`;
     }
     if (s.type === 'ExprStatement') {

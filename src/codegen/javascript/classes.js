@@ -92,6 +92,7 @@ function createContext() {
     // Late-bound: wired below in codegen()
     genFunctionBodyCode: null,
     genIfChain: null,
+    tailIfVar: null,
   };
 }
 
@@ -135,7 +136,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   // at end.
   const savedSsaScope = ctx.ssaScope;
   const savedSsaCounts = ctx.ssaCounts;
+  ctx.tailIfVar = null;
   const locals = genLocals(ctx, body, typeEnv);
+  const tailIf = ctx.tailIfVar;
   const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && name !== 'new' && !name.startsWith('set@') && !name.startsWith('new@');
   let reLine;
   if (name.startsWith('new@')) {
@@ -148,7 +151,8 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (implicitReturn) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
-      reLine = '';  // return comes from block branches; handled by genLocals or delegate
+      // genLocals ran the branches into a local; a branch that returns has replied.
+      reLine = tailIf ? `\n        re = [${tailIf}];` : '';
     } else if (implicitReturn.expr?.type === 'CatchExpr') {
       // Value-carrying catch as the handler tail — locals already emitted the
       // labeled block + result temp; consume it here. Void catch produces no
@@ -286,13 +290,16 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   const savedSsaCounts = ctx.ssaCounts;
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
+  ctx.tailIfVar = null;
   const locals = genLocals(ctx, body, typeEnv);
+  const tailIf = ctx.tailIfVar;
   let reLine;
   if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: true })};`;
   } else if (implicitReturn) {
     if (implicitReturn.expr?.type === 'IfExpr' && hasBlockBodies(implicitReturn.expr)) {
-      reLine = '';  // return comes from block branches, already handled by genLocals
+      // genLocals ran the branches into a local; a branch that returns has replied.
+      reLine = tailIf ? `\n        re = [${tailIf}];` : '';
     } else {
       reLine = `\n        re = [${genTailValue(ctx, implicitReturn.expr)}];`;
     }
