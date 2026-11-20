@@ -1,5 +1,8 @@
 # `base` is the parent layer; `super` is held for later — 2026-11-19
 
+> **Superseded in part (2026-11-19):** `super` now has a meaning, and `class::base` is adopted,
+> in `notes/super-2026-11-19.md`. The `base` rename stands.
+
 Decided in discussion. Renames the `super` of `class-scope-and-inheritance-2026-11-16.md`
 ("Parent outside the params; `super`", decided 2026-11-17). Everything that section decides
 stands, under the new word.
