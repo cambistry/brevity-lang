@@ -434,3 +434,56 @@ describe('class members in the service document', () => {
     expect(doc.__types.C.members.__fields.count).toEqual({ type: 'Integer', cell: true, readOnly: false });
   });
 });
+
+// A subclass with a class block of its own extends its parent's block by delegation
+// (notes/class-scope-and-inheritance-2026-11-16.md): the parent block's functions layer
+// under its own, late-bound; a cell it doesn't redeclare is the parent block's one cell;
+// one it redeclares is its own, and the parent's code running for it uses that.
+const delegated = `
+  A = *{} ^ {
+    count *Integer = 10
+    shared *Integer = 5
+    @pub *Integer = 1
+    @f = { x Integer = count + g(); return x }
+    g = -> 1
+    @readShared = { return shared }
+  }
+  B = A ^ {
+    count *Integer = 20
+    g = -> 100
+    @own = { return count }
+    @bump! = { shared <- shared + 1 }
+  }
+  @inherited = { x Integer = B.f(); return x }
+  @own = { x Integer = B.own(); return x }
+  @parentStill = { x Integer = A.f(); return x }
+  @pub = { x Integer = B.pub; return x }
+  @shared! = { B.bump!(); x Integer = A.readShared(); return x }
+`;
+
+describe('class blocks inherit by delegation', () => {
+  it("an inherited function runs for the extending block, late-bound, with the cell it redeclares", async () => {
+    await expectBehavior(delegated,
+      { input: { id: '1', op: 'inherited', from: 'c' } },
+      { output: { id: '1', re: [120], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("the block's own function reads its own cell; the parent block is unchanged", async () => {
+    await expectBehavior(delegated,
+      { input: { id: '1', op: 'own', from: 'c' } },
+      { output: { id: '1', re: [20], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'parentStill', from: 'c' } },
+      { output: { id: '2', re: [11], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("a cell it doesn't redeclare is the parent block's: read, and written", async () => {
+    await expectBehavior(delegated,
+      { input: { id: '1', op: 'pub', from: 'c' } },
+      { output: { id: '1', re: [1], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'shared!', from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});

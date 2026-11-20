@@ -925,6 +925,21 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         Value::Array(chain)
     }
 
+    // The same with several blocks first, innermost first: a class block extending its
+    // parent's is declared in it (src/singleton_classes.js). Each is in the home's cell.
+    #[allow(dead_code)]
+    fn outers_with_blocks(&self, enclosing: &str, home: &str, tokens: &[&str]) -> Value {
+        let class_of = |o: &str| -> String { match o.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } };
+        if class_of(&self.state_owner) == enclosing { return self.outers_for(enclosing); }
+        let mut chain = match self.outers_for(home) { Value::Array(a) => a, _ => Vec::new() };
+        let owner = chain.first().and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let heads: Vec<Value> = tokens.iter().map(|token| bv_get_key(&class_of(&owner), token)
+            .and_then(|(key, _)| self.state_of(&owner).and_then(|st| st.get(key)).cloned())
+            .unwrap_or_else(|| panic!("class built before its members, {} in {:?}", token, owner))).collect();
+        chain.splice(0..0, heads);
+        Value::Array(chain)
+    }
+
     // A class reading a cell of an actor it's declared in, level actors up the chain
     // (src/outer_reads.js). That actor's state is in self.state, set aside while one of
     // its classes runs, or in its pool. Construction runs in text order, so the cell

@@ -1370,6 +1370,26 @@ bv_await_(Id) ->
 %% The same for a class whose constructor closes over its members: built in their
 %% actor, it is any class's; built in its home (or a class inside it), the members'
 %% actor, from the home's cell Token, comes first.
+%% The same with several blocks first, innermost first: a class block extending its
+%% parent's is declared in it (src/singleton_classes.js). Blocks is [{Class, Token}], each
+%% read from the home's cell.
+bv_outer_ctx_with_blocks_(Enclosing, Home, Blocks) ->
+    case bv_my_class_() of
+        Enclosing -> bv_outer_ctx_(Enclosing);
+        _ ->
+            {Outer_, Ref_, Chain_} = bv_outer_ctx_(Home),
+            [{HomeClass_, HomePid_} | _] = Chain_,
+            Read_ = fun(Token) ->
+                case HomePid_ =:= self() of
+                    true -> (bv_mod_()):bv_read_(HomeClass_, Token);
+                    false ->
+                        MRef_ = make_ref(),
+                        HomePid_ ! {bv_outer_get, self(), Token, MRef_},
+                        receive {bv_reply, MRef_, V_} -> V_ end
+                end
+            end,
+            {Outer_, Ref_, [{C_, Read_(T_)} || {C_, T_} <- Blocks] ++ Chain_}
+    end.
 bv_outer_ctx_with_members_(Enclosing, Home, Token) ->
     case bv_my_class_() of
         Enclosing -> bv_outer_ctx_(Enclosing);

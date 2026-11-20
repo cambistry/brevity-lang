@@ -100,6 +100,27 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     a.enclosing = parent.membersClass;
     a.membersOpaque = true;
   }
+  // A subclass with a class block of its own extends its nearest parent's block by
+  // delegation (notes/class-scope-and-inheritance-2026-11-16.md): the block's actor
+  // takes the parent block's functions as a parent layer, late-bound, and is declared
+  // inside the parent block, so a cell it doesn't redeclare is the parent block's one
+  // cell, read and written there. A cell it redeclares is its own, and the parent's
+  // code running for it uses that. The parent block's initializers don't run again.
+  for (const a of actors.filter(a => ownBlock(a) && (a.supertypes || []).length)) {
+    const found = [...new Set(a.supertypes.map(st => blockOf(byName.get(st.supertype))).filter(Boolean))];
+    if (found.length > 1) throw new Error(`'${shownName(a)}' has more than one parent with a class block ('${found.map(shownName).join("', '")}'), and which one it extends isn't settled yet`);
+    if (!found.length) continue;
+    const block = byName.get(a.membersClass);
+    const parentBlock = byName.get(found[0].membersClass);
+    const homeOfBlock = (b) => ('home' in b ? b.home : b.enclosing) ?? null;
+    if (homeOfBlock(block) !== homeOfBlock(parentBlock)) {
+      throw new Error(`'${shownName(a)}' extends '${shownName(found[0])}', which has a class block, and is declared somewhere else than it — that isn't supported yet`);
+    }
+    block.supertypes = [{ supertype: parentBlock.name, delegated: true }];
+    block.blockParent = parentBlock.name;
+    block.home = block.enclosing ?? null;
+    block.enclosing = parentBlock.name;
+  }
   // The class whose block code in `a` reaches: its own, or its nearest parent's.
   const blockClassOf = (a) => ownBlock(a) ?? (a.membersInherited ? byName.get(a.membersInherited) : null);
   // Whether `a` is in `cls`'s family: a subclass of it, at any depth.
@@ -133,7 +154,7 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     // members as anyone does; its `::` is the error below.)
     const family = (a) => a === cls || (extendsClass(a, cls) && a.membersInherited) || [...actors].some(f => f !== a
       && (f === cls || (extendsClass(f, cls) && f.membersInherited)) && isInside(a, f.name, byName));
-    for (const a of actors) if (family(a)) for (const n of spellings) lowerMemberAccess(a, n, members, isType);
+    for (const a of actors) if (family(a)) for (const n of spellings) lowerMemberAccess(a, n, members, isType, byName);
     // `C.count` reads the members; `C(…)` still builds a `C`.
     for (const a of actors) for (const n of spellings) renameReceivers(a, n, members.singletonOf);
   }
@@ -173,6 +194,43 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     }
     if (callsNew(a)) throw new Error(`'new(…)' builds the class of the singleton it's in, and '${a.name ?? 'this file'}' isn't one with 'new'`);
   }
+}
+
+// A class block extending its parent's (`blockParent`): a copy of each of the parent
+// block's functions the block doesn't define, so it runs as the block, late-bound:
+// a cell the block redeclares is its own, any other is the parent block's (the block
+// is declared inside it). A layer's clauses for a name replace the parent's together.
+// Runs once `base` and `super` are lowered, so a parent's function they reach is in
+// the copy too. Parents first, so a parent block has its own parent's by then.
+export function flattenDelegatedBlocks(actors) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const done = new Set();
+  const flatten = (block) => {
+    if (!block?.blockParent || done.has(block)) return;
+    done.add(block);
+    const parent = byName.get(block.blockParent);
+    flatten(parent);
+    const own = new Set((block.functions || []).map(f => f.name));
+    const ownCells = new Set((block.stateVarDecls || []).map(d => d.name));
+    // A cell's accessors stay with the block that declares it.
+    const accessorOf = (f) => f.cellGetter ? f.name : f.name?.match(/^(?:set|update|subscribe)([@.])(.+)$/)?.slice(1).join('').replace(/^\./, '');
+    const add = (f) => {
+      Object.defineProperty(f, 'inheritedFrom', { value: parent.name, configurable: true });
+      (block.functions ||= []).push(f);
+    };
+    for (const f of parent.functions || []) {
+      if (own.has(f.name)) continue;
+      const cell = accessorOf(f);
+      if (cell && !ownCells.has(cell)) continue;
+      add(structuredClone(f));
+    }
+    // A public cell of the parent block's, read through this one: the parent block answers.
+    for (const d of parent.stateVarDecls || []) {
+      if (typeof d.name !== 'string' || !d.name.startsWith('@') || ownCells.has(d.name) || own.has(d.name)) continue;
+      add({ type: 'FunctionDecl', name: d.name, params: [], body: [{ type: 'ImplicitReturn', expr: { type: 'Identifier', name: d.name, viaClass: parent.name }, typeName: d.typeName ?? null }] });
+    }
+  };
+  for (const a of actors) flatten(a);
 }
 
 // The declaring actor's cell holding the singleton, `C` or `@C`, becomes `C__class`.
@@ -298,11 +356,20 @@ function checkQualified(actor, byName, extendsClass, isType) {
 
 // What the members declare, by source name: cells and functions, public (`@x`),
 // protected (bare) and private (`#x`). A published cell's getter is the cell.
-function memberNames(members) {
-  const cells = new Set((members.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string'));
-  const fns = new Set((members.functions || []).filter(f => !f.cellGetter && !cells.has(f.name)).map(f => f.name)
-    .filter(n => typeof n === 'string' && !/^(set|update|new|subscribe)@/.test(n)));
-  return { cells, fns };
+// A block that extends its parent's (`blockParent`) has the parent block's members too;
+// `owner` says which block declares each cell.
+function memberNames(members, byName = null) {
+  const owner = new Map();
+  const fns = new Set();
+  for (let b = members; b; b = b.blockParent && byName ? byName.get(b.blockParent) : null) {
+    for (const d of b.stateVarDecls || []) if (typeof d.name === 'string' && !owner.has(d.name)) owner.set(d.name, b.name);
+    for (const f of b.functions || []) {
+      if (typeof f.name === 'string' && !f.cellGetter && !/^(set|update|new|subscribe)@/.test(f.name)) fns.add(f.name);
+    }
+  }
+  const cells = new Set(owner.keys());
+  for (const c of cells) fns.delete(c);
+  return { cells, fns, owner };
 }
 
 // `C.x` in the class, or in a class inside it, reaches the members' public names:
@@ -311,8 +378,8 @@ function memberNames(members) {
 // the nested form is; a function stays a message to the class. Anything else after the
 // dot (a protected or private member, or nothing) is an error.
 // See notes/class-scope-and-inheritance-2026-11-16.md.
-function lowerMemberAccess(actor, from, members, isType) {
-  const { cells, fns } = memberNames(members);
+function lowerMemberAccess(actor, from, members, isType, byName) {
+  const { cells, fns, owner } = memberNames(members, byName);
   const isC = (o) => o && (o.type === 'Identifier' || o.type === 'RefRead') && o.name === from;
   const shown = from.replace(/^@/, '').replace(/[!.]$/, '');
   const noPublic = (x) => new Error(`No public member '${x}' in '${shown}'`);
@@ -326,12 +393,12 @@ function lowerMemberAccess(actor, from, members, isType) {
   for (const b of bodies(actor)) walk(b, (n) => {
     if (n.type === 'ActorFieldSet' && n.objectName === from && n.protected) {
       if (!cells.has(n.fieldName)) throw protectedError(n.objectWritten, n.fieldName);
-      replace(n, { type: 'SetStatement', name: n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: via });
+      replace(n, { type: 'SetStatement', name: n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: owner.get(n.fieldName) ?? via });
     } else if (n.type === 'QualifiedMember' && isC(n.object)) {
       if (isType([from, members.name, members.membersOf], n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a type, not a value`);
       if (fns.has(n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a function: call it, '${n.object.written ?? shown}::${n.name}()'`);
       if (!cells.has(n.name)) throw protectedError(n.object.written, n.name);
-      replace(n, { type: 'Identifier', name: n.name, viaClass: via });
+      replace(n, { type: 'Identifier', name: n.name, viaClass: owner.get(n.name) ?? via });
     } else if (n.type === 'TypeConstruction' && n.qualifier?.length === 1 && n.qualifier[0] === from
                && (fns.has(n.typeName) || isPublic(n.typeName) || cells.has(n.typeName))) {
       // A type of the class keeps its construction: a type name is reserved, so no
@@ -340,9 +407,9 @@ function lowerMemberAccess(actor, from, members, isType) {
       replace(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name: n.typeName }, args: n.args, viaClass: via });
     } else if (n.type === 'ActorFieldSet' && n.objectName === from) {
       if (!cells.has('@' + n.fieldName)) throw noPublic(n.fieldName);
-      replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: via });
+      replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: owner.get('@' + n.fieldName) ?? via });
     } else if (n.type === 'DotAccessExpr' && isC(n.object)) {
-      if (cells.has('@' + n.property)) replace(n, { type: 'Identifier', name: '@' + n.property, viaClass: via });
+      if (cells.has('@' + n.property)) replace(n, { type: 'Identifier', name: '@' + n.property, viaClass: owner.get('@' + n.property) ?? via });
       else if (!fns.has('@' + n.property)) throw noPublic(n.property);
     } else if (n.type === 'DotCallExpr' && isC(n.object) && n.method !== 'new') {
       if (!fns.has('@' + n.method) && !cells.has('@' + n.method)) throw noPublic(n.method);

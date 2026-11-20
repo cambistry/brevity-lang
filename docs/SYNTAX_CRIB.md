@@ -102,6 +102,7 @@ Mixed = A ^ B                                        // two parents, no changes
 Extra = Box ^ *{ @more = -> 1 }                      // body, no params
 Over = Box ^ *{ h = -> base::h() + 1 }               // the parent layer's protected h
 Again = Box ^ *{ h = (n Integer) -> super * 10 }     // in h, super is base::h(n); in @h, base.h(…)
+Blocked = Box ^ { @f = { x Integer = super + 1; return x } }  // a block extends the parent's block: super is its f
 Pick = A ^ B ^ *{ @get = -> base[A].get() }          // parent A's public @get
 Counted = (n Integer) *{} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
 Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor` only begins a definition

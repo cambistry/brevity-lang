@@ -69,7 +69,8 @@ export function lowerBaseLayers(actors) {
     for (const b of bodies(U)) walk(b, (n) => { if (BASE_TYPES.has(n.type)) refs.add(n); });
     if (!refs.size) continue;
     const parents = (U.supertypes || []).map(st => st.supertype);
-    if (!isClass(U) || !parents.length) {
+    // A class block that extends its parent's has that block as its parent layer.
+    if (!(isClass(U) || U.blockParent) || !parents.length) {
       const n = [...refs][0];
       const what = n.superCall ? `'super' calls '${n.superIn}' one layer up` : `'base' names a parent layer`;
       throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}${where(U)}: ${what}, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
@@ -119,6 +120,15 @@ export function lowerBaseLayers(actors) {
       }
       // A cell.
       if (n.type === 'BaseCall') throw new Error(`'${shown(n)}' in '${U.name}' is a cell, not a function`);
+      // A parent block's cell is in that block, a live actor: read and written there.
+      if (U.blockParent) {
+        const rest = Object.fromEntries(Object.entries(n).filter(([k]) => !['layer', 'isPublic', 'name', 'type', 'value', 'updateOp', 'superCall', 'superIn'].includes(k)));
+        const { value, updateOp } = n;
+        const set = n.type === 'BaseSet';
+        for (const k of Object.keys(n)) delete n[k];
+        Object.assign(n, set ? { type: 'SetStatement', name, value, ...(updateOp && { updateOp }), viaClass: L.name } : { type: 'Identifier', name, viaClass: L.name, ...rest });
+        continue;
+      }
       const decl = L.stateVarDecls.find(d => d.name === name);
       Object.defineProperty(decl, 'declaredIn', { value: L.name, configurable: true });
       for (const C of actors) for (const d of C.stateVarDecls || []) {

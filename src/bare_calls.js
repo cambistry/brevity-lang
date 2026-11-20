@@ -93,7 +93,8 @@ export function lowerBareCalls(ast) {
           }
           return node;
         }
-        if (node.type === 'Identifier') return asCall(node.name, node) ?? node;
+        // A name read at a class block's level (src/singleton_classes.js) is its cell.
+        if (node.type === 'Identifier') return node.viaClass ? node : asCall(node.name, node) ?? node;
         if ((node.type === 'Reply' || node.type === 'Return') && Array.isArray(node.fields)) {
           for (const f of node.fields) {
             if (f?.positional && f.name && !f.expr && !f.spread) {

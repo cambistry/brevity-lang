@@ -251,8 +251,14 @@ export function lowerFunctionSupers(actors) {
             : positional;
         }
         const isPublic = f.name.startsWith('@');
+        // In a class block, `super[A]` names the class whose block is the parent block.
+        let layer = written.match(/^super\[([^\]]+)\]/)?.[1] ?? null;
+        if (layer && U.blockParent && !parents.includes(layer)) {
+          const cls = actors.find(a => a.name === layer && a.membersClass === U.blockParent);
+          if (cls) layer = U.blockParent;
+        }
         for (const k of Object.keys(n)) delete n[k];
-        Object.assign(n, { type: 'BaseCall', layer: written.match(/^super\[([^\]]+)\]/)?.[1] ?? null, name: isPublic ? f.name.slice(1) : f.name, isPublic, args, superCall: written, superIn: f.name });
+        Object.assign(n, { type: 'BaseCall', layer, name: isPublic ? f.name.slice(1) : f.name, isPublic, args, superCall: written, superIn: f.name });
       });
     }
   }

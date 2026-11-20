@@ -181,6 +181,7 @@ function accepted(m, outcome, src) {
     if (m.kind === 'delete' && m.type === 'EQUALS' && (p === 'EQUALS' || n === 'EQUALS' || LINE.has(p) && ty(m.next) === 'EQUALS')) return '`= =` is the explicit empty params';
     if (m.kind === 'delete' && m.type === 'HASH_IDENT' && m.prev === 'KEYWORD:end') return '`end`\'s label is optional';
     if (m.kind === 'insert' && m.stray === ',' && (['RPAREN', 'RBRACE', 'RBRACKET', 'EQUALS'].includes(m.type) || LINE.has(m.type))) return 'a trailing comma';
+    if (m.kind === 'swap' && m.type === 'COMMA' && (m.withType === 'RBRACKET' || m.withType === 'RPAREN' || m.withType === 'RBRACE')) return 'a trailing comma moved past its bracket is still a trailing comma';
     if (m.kind === 'insert' && m.stray === '->' && ['LBRACE', 'STAR'].includes(m.type)) return '`->` before a body is optional';
     if (m.kind === 'delete' && m.type === '->' && (n === 'LBRACE' || n === 'LPAREN' || n === 'STAR')) return '`->` before a body or a signature\'s returns is optional';
     if (m.kind === 'delete' && m.type === 'KEYWORD' && m.text === 'return') return n === 'SIGIL' ? 'a sigil tail is its reply: `:x` is `return :x`' : '`return` is optional before a tail value';

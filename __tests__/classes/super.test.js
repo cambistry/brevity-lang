@@ -443,3 +443,71 @@ describe('super — never called: no base — compile errors', () => {
       .toThrow("needs an 'else' that calls it too");
   });
 });
+
+// `super` in a class block: the parent block's same function, run for the extending
+// block, late-bound. A class block that extends another always has a base.
+const blocks = `
+  A = *{} ^ {
+    count *Integer = 10
+    shared *Integer = 5
+    @f = { return 1 }
+    h = (n Integer) -> n + count
+    @useH = (n Integer) { x Integer = h(n); return x }
+    @readShared = { return shared }
+  }
+  B = A ^ {
+    count *Integer = 20
+    @f = { x Integer = super + 1; return x }
+    h = (n Integer) { x Integer = super * 10; return x }
+    @parentCount = { x Integer = base::count; return x }
+  }
+  C = B ^ {
+    @f = { x Integer = super + 100; return x }
+  }
+  @publicSuper = { x Integer = B.f(); return x }
+  @protectedSuper = { x Integer = B.useH(1); return x }
+  @parentCount = { x Integer = B.parentCount(); return x }
+  @twoLevels = { x Integer = C.f(); return x }
+`;
+
+describe('super — in a class block', () => {
+  it('public: the parent block\'s @f', async () => {
+    await expectBehavior(blocks,
+      { input: { id: '1', op: 'publicSuper', from: 'c' } },
+      { output: { id: '1', re: [2], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("protected, bare: the parent block's h, which reads the cell the block redeclares", async () => {
+    await expectBehavior(blocks,
+      { input: { id: '1', op: 'protectedSuper', from: 'c' } },
+      { output: { id: '1', re: [210], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("base:: reads the parent block's own cell", async () => {
+    await expectBehavior(blocks,
+      { input: { id: '1', op: 'parentCount', from: 'c' } },
+      { output: { id: '1', re: [10], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("two levels: each block's super is its own parent block's", async () => {
+    await expectBehavior(blocks,
+      { input: { id: '1', op: 'twoLevels', from: 'c' } },
+      { output: { id: '1', re: [102], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});
+
+describe('super — in a class block — compile errors', () => {
+  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+
+  it('in a block with no parent block', () => {
+    expect(compile('A = *{} ^ {\n  @f = -> super\n}\n')).toThrow("'super' in '@f' of the class block of 'A': 'super' calls '@f' one layer up, and it has none");
+  });
+
+  it("a function the parent block doesn't define", () => {
+    expect(compile('A = *{} ^ {\n  @f = -> 1\n}\nB = A ^ {\n  @g = -> super\n}\n')).toThrow("'super' in '@g' of");
+  });
+});

@@ -44,10 +44,19 @@ const isOwnCallStatement = (s) => isOwnCall(s, G.ctx.actorFnNames);
 // The actors a new actor of `actor` reads from, from whoever is constructing it. A
 // class whose constructor closes over its members (src/singleton_classes.js) reads
 // them first: their actor, in its home's cell `C__class`, then the home's chain.
+//
+// A class block that extends its parent's (src/singleton_classes.js) reads the parent
+// block first, and its parent, each in the home's cell; so does a class whose block it is.
 function outersExpr(actor) {
   const enclosing = (actor.enclosing ?? '').toLowerCase();
-  const members = actor.membersClass && actor.enclosing === actor.membersClass
-    ? (G.ctx.actorInfo?.get(actor.membersClass)?.actor ?? G.ctx.actorInfo?.get(actor.membersClass)) : null;
+  const actorOf = (name) => G.ctx.actorInfo?.get(name)?.actor ?? G.ctx.actorInfo?.get(name);
+  const members = actor.membersClass && actor.enclosing === actor.membersClass ? actorOf(actor.membersClass) : null;
+  const first = members ?? (actor.blockParent && actor.enclosing === actor.blockParent ? actorOf(actor.blockParent) : null);
+  if (first?.blockParent || (first && actor.blockParent)) {
+    const tokens = [];
+    for (let b = first; b; b = b.blockParent ? actorOf(b.blockParent) : null) tokens.push(JSON.stringify(wireLabel(b.singletonOf)));
+    return `self.outers_with_blocks(${JSON.stringify(enclosing)}, ${JSON.stringify((actor.home ?? '').toLowerCase())}, &[${tokens.join(', ')}])`;
+  }
   if (!members) return `self.outers_for(${JSON.stringify(enclosing)})`;
   return `self.outers_with_members(${JSON.stringify(enclosing)}, ${JSON.stringify((actor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel(members.singletonOf))})`;
 }

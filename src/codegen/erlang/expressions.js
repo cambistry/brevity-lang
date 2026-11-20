@@ -1118,9 +1118,20 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
 // actors it's declared in, taken from ours (src/outer_reads.js).
 // A class whose constructor closes over its members (src/singleton_classes.js) reads
 // them first: their actor, in its home's cell `C__class`, then the home's chain.
+//
+// A class block that extends its parent's (src/singleton_classes.js) reads the parent
+// block first, and its parent, each in the home's cell; so does a class whose block it is.
 export function erlOuterCtx(ctx, cls) {
-  const node = ctx.actorInfo?.get(cls)?.actor ?? ctx.program?.actors?.find(a => a.name === cls);
+  const actorOf = (name) => ctx.actorInfo?.get(name)?.actor ?? ctx.program?.actors?.find(a => a.name === name);
+  const node = actorOf(cls);
   const enclosing = node?.enclosing ?? '';
+  const first = node?.membersClass && node.enclosing === node.membersClass ? actorOf(node.membersClass)
+    : node?.blockParent && node.enclosing === node.blockParent ? actorOf(node.blockParent) : null;
+  if (first?.blockParent || (first && node.blockParent)) {
+    const blocks = [];
+    for (let b = first; b; b = b.blockParent ? actorOf(b.blockParent) : null) blocks.push(`{${erlString(b.name.toLowerCase())}, ${erlString(wireLabel(b.singletonOf))}}`);
+    return `bv_outer_ctx_with_blocks_(${erlString(enclosing.toLowerCase())}, ${erlString((node.home ?? '').toLowerCase())}, [${blocks.join(', ')}])`;
+  }
   if (node?.membersClass && node.enclosing === node.membersClass) {
     const members = ctx.actorInfo?.get(node.membersClass)?.actor ?? ctx.program?.actors?.find(a => a.name === node.membersClass);
     return `bv_outer_ctx_with_members_(${erlString(enclosing.toLowerCase())}, ${erlString((node.home ?? '').toLowerCase())}, ${erlString(wireLabel(members.singletonOf))})`;

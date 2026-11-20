@@ -256,6 +256,18 @@ Over = Box ^ *{
 With several parents, write `super[A](…)`. `super` can't be declared or set, and
 `super.x` / `super::x` aren't forms: those are `base.x` / `base::x`.
 
+A class's members block (`C = (…) *{ … } ^ { members }`) is its class block. A
+subclass with a block of its own extends its parent's block by delegation: the
+parent block's functions layer under its own, late-bound; a cell it doesn't
+redeclare is the parent block's one cell; one it redeclares is its own, and the
+parent's code running for it uses that. `super` in a block's function is the
+parent block's same function, and `base::count` the parent block's own cell.
+
+```brevity
+A = *{} ^ { count *Integer = 10; @f = -> count }
+B = A ^ { count *Integer = 20; @f = { x Integer = super + 1; return x } }   // B.f() is 21
+```
+
 The file actor is a singleton, built once at load. It needs no header: it
 declares its DI with `use`, anywhere in the file. A `use` in an inner scope is
 still the file's entry, but its name binds only in that scope:

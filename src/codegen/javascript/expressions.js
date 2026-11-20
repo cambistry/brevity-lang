@@ -30,6 +30,18 @@ export function jsIdent(rawName) {
 // A class whose constructor closes over its members (src/singleton_classes.js) is
 // built where it is declared, its home, and reads its members first: the chain is
 // the members' actor, held in the home's cell `C__class`, then the home's.
+//
+// A class block that extends its parent's (src/singleton_classes.js) is declared in the
+// parent block: its chain starts with the parent block, and that block's parent, each
+// held in the home's cell. So does the chain of a class whose block that is.
+export function blockHeads(actorNodes, node) {
+  const heads = [];
+  let b = node?.membersClass && node.enclosing === node.membersClass ? actorNodes.get(node.membersClass)
+    : node?.blockParent && node.enclosing === node.blockParent ? actorNodes.get(node.blockParent) : null;
+  for (; b; b = b.blockParent ? actorNodes.get(b.blockParent) : null) heads.push(b);
+  return heads;
+}
+
 export function childBinding(ctx, cls) {
   if (!ctx.readsOuter) return '{post: (msg) => this.receive(msg)}';
   const outer = ctx.inClass ? 'this.#outer' : 'this';
@@ -37,11 +49,11 @@ export function childBinding(ctx, cls) {
   const node = cls && ctx.actorNodes?.get(cls);
   let enclosing = node?.enclosing ?? null;
   let head = null;
-  if (node?.membersClass && enclosing === node.membersClass && enclosing !== here) {
+  const heads = blockHeads(ctx.actorNodes, node);
+  if (heads.length && enclosing !== here) {
     enclosing = node.home ?? null;
-    const cell = ctx.actorNodes.get(node.membersClass)?.singletonOf;
     const level = enclosingChain(ctx.program, ctx.currentActor).indexOf(enclosing) + 1;
-    head = enclosing === here ? `this.#${stateKey(cell)}` : `(await this.#outerRead(${JSON.stringify(wireLabel(cell))}, ${level}))`;
+    head = heads.map(b => enclosing === here ? `this.#${stateKey(b.singletonOf)}` : `(await this.#outerRead(${JSON.stringify(wireLabel(b.singletonOf))}, ${level}))`).join(', ');
   }
   let chain;
   if (!ctx.inClass) chain = '[this]';

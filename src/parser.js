@@ -4,7 +4,7 @@ import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses, CLASS_SELF } from './singleton_classes.js';
+import { lowerSingletonClasses, flattenDelegatedBlocks, CLASS_SELF } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
 import { resolveSuperclassChain } from './subclass.js';
@@ -6449,6 +6449,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   lowerFunctionSupers(actors);
   lowerBaseLayers(actors);
   lowerSuperCalls(actors, resolveSuperclassChain);
+  flattenDelegatedBlocks(actors);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

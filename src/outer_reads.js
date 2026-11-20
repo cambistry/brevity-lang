@@ -327,7 +327,9 @@ export function markOuterReads(program) {
     };
 
     for (const fn of actor.functions || []) {
-      if (/^(set|update|new|subscribe)@/.test(fn.name ?? '')) continue;
+      // A cell's own setter sets its own cell. One a class block took from its parent's
+      // (src/singleton_classes.js) sets the parent block's, unless the block redeclares it.
+      if (/^(set|update|new|subscribe)@/.test(fn.name ?? '') && !fn.inheritedFrom) continue;
       visit(fn, new Set());
     }
     visit(actor.initBody, new Set());
