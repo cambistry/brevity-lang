@@ -159,6 +159,10 @@ one, except for timing and the parent's availability.
 
 ## Open questions
 
+> **Partly answered (2026-11-20):** `opre-extend-and-as-2026-11-20.md` decides the protocol for
+> one parent layer: `$extend` carrying the child's override table, `from` as identity (no facet
+> address), and `as` marking a delegated call. Grandparents, policy and instance layers stay open.
+
 - **Opre:** how a message says "run this as X" (a self or acting-as header beside `to` and
   `from`). `from-names-calling-scope-2026-11-14.md` is nearby but different: `from` says where a
   reply goes, this says whose definitions win.
