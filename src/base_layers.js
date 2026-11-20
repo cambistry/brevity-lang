@@ -35,7 +35,9 @@ export function hiddenName(name, L) {
   return `${suffix ? bare.slice(0, -1) : bare}__base${pub ? '_pub' : ''}__${classPart(L)}${suffix}`;
 }
 
+// A `super` in a function is shown as written (src/super_calls.js).
 const shown = (n) => {
+  if (n.superCall) return n.superCall;
   const head = n.layer ? `base[${n.layer}]` : 'base';
   return `${head}${n.isPublic ? '.' : '::'}${n.name}`;
 };
@@ -68,7 +70,9 @@ export function lowerBaseLayers(actors) {
     if (!refs.size) continue;
     const parents = (U.supertypes || []).map(st => st.supertype);
     if (!isClass(U) || !parents.length) {
-      throw new Error(`'${shown([...refs][0])}' in ${where(U)}: 'base' names a parent layer, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
+      const n = [...refs][0];
+      const what = n.superCall ? `'super' calls '${n.superIn}' one layer up` : `'base' names a parent layer`;
+      throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}${where(U)}: ${what}, and ${isClass(U) ? `'${U.name}' has no parent` : 'it has none'}`);
     }
     for (const n of refs) {
       if (n.name.startsWith('@') || n.name.startsWith('#')) throw new Error(`'${shown(n)}': after '::' or '.' a name is written bare`);
@@ -85,7 +89,7 @@ export function lowerBaseLayers(actors) {
       if (!found.length) {
         const what = `${n.isPublic ? 'public' : 'protected'} '${n.name}'`;
         const whose = n.layer || parents.length === 1 ? `'${n.layer ?? parents[0]}' has no ${what}` : `no parent of '${U.name}' has a ${what}`;
-        throw new Error(`'${shown(n)}' in '${U.name}': ${whose}`);
+        throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}'${U.name}': ${whose}`);
       }
       if (found.length > 1) {
         const sep = n.isPublic ? '.' : '::';

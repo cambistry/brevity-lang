@@ -205,3 +205,141 @@ describe('super — in a constructor — compile errors', () => {
     expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = -> super::h()\n}\n`)).toThrow('Unexpected token in expression: DCOLON');
   });
 });
+
+// `super` in a function: the base's same function. `super(args)` in `h` is
+// `base::h(args)`, in `@h` it's `base.h(args)`.
+const functions = `
+  @T = *{
+    h = (n Integer) -> n + 1
+    @useH = (n Integer) { x Integer = h(n); return x }
+    @a = (x Integer) -> x * 2
+    @c = (x Integer) { y Integer = h(x); return y }
+    @d = (x Integer = 3) -> x
+    @e = (x Integer = 3) -> x
+    @nm = (k: Integer) -> k
+    @o = (x Integer) -> 1
+    @o << (x Text) -> 2
+    @lam = (x Integer) -> x + 7
+  }
+  @U = @T ^ *{
+    h = (n Integer) -> super * 10
+    @a = (x Integer) { y Integer = super(x + 1); return y }
+    @c = (x Integer) { y Integer = super(x) + 1000; return y }
+    @d = (x Integer = 3) { y Integer = super() + 100; return y }
+    @e = (x Integer = 3) { y Integer = super + 100; return y }
+    @nm = (k: Integer) { y Integer = super + 1; return y }
+    @o = (x Integer) { y Integer = super("t") + 10; return y }
+    @lam = (x Integer) {
+      f = () -> super
+      y Integer = f()
+      return y
+    }
+  }
+  @V = @U ^ *{
+    h = (n Integer) -> super + 3
+  }
+`;
+
+describe('super — in a function', () => {
+  it('protected, bare: the parent layer\'s h with the args as received, late-bound', async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[4], 'useH'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [50], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it('public, with args', async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[4], 'a'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [10], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("the parent's function, run through super, uses the subclass's overrides", async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[1], 'c'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [1020], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it('super() passes none, so the parent takes its default; bare super passes the args', async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[5], 'd'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [103], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { input: { id: '3', op: [[5], 'e'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '3', re: [105], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { input: { id: '4', op: [[{ k: 1 }], 'nm'], ty: [[{ k: 'Integer' }]], to: ':U:1', from: 'c' } },
+      { output: { id: '4', re: [2], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("dispatches over the parent's clauses", async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[1], 'o'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [12], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("in a lambda, super is the enclosing function's", async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: [[1], 'lam'], ty: [['Integer']], to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [8], ty: ['Integer'], to: 'c', from: ':U:1' } },
+    );
+  });
+
+  it("two levels: each layer's super is its own parent's", async () => {
+    await expectBehavior(functions,
+      { input: { id: '1', op: [[], '$new'], to: ':V', from: 'c' } },
+      { output: { id: '1', re: ['#<:V:1>'], ty: [':V'], to: 'c' } },
+      { input: { id: '2', op: [[4], 'useH'], ty: [['Integer']], to: ':V:1', from: 'c' } },
+      { output: { id: '2', re: [53], ty: ['Integer'], to: 'c', from: ':V:1' } },
+    );
+  });
+});
+
+describe('super — in a function — compile errors', () => {
+  const T = 'T = *{\n  h = (n Integer) -> n + 1\n  @a = (x Integer) -> x * 2\n}\n';
+  const AB = 'A = *{ @f = -> 1 }\nB = *{ @f = -> 2 }\n';
+  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+
+  it('in a function no parent defines', () => {
+    expect(compile(`${T}U = T ^ *{\n  @z = -> super\n}\n`)).toThrow("'super' in '@z' of 'U': 'T' has no public 'z'");
+    expect(compile(`${T}U = T ^ *{\n  k = -> super()\n}\n`)).toThrow("'super(…)' in 'k' of 'U': 'T' has no protected 'k'");
+  });
+
+  it('in a class with no parent, or the file', () => {
+    expect(compile('V = *{\n  @f = -> super\n}\n')).toThrow("'super' in '@f' of 'V': 'super' calls '@f' one layer up, and 'V' has no parent");
+    expect(compile('@f = -> super\n')).toThrow("'super' in '@f' of this file: 'super' calls '@f' one layer up, and it has none");
+  });
+
+  it('bare super, or super(…), with two parents', () => {
+    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = -> super\n}\n`)).toThrow("'super' in '@f' of 'C' is ambiguous: 'C' has parents 'A' and 'B' — write 'super[A](…)' or 'super[B](…)'");
+    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = -> super()\n}\n`)).toThrow("'super(…)' in '@f' of 'C' is ambiguous");
+  });
+
+  it('super[A](…) picks a direct parent, and only a direct one', () => {
+    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = { x Integer = super[A]() + super[B](); return x }\n}\n`)).not.toThrow();
+    expect(compile('A = *{ @f = -> 1 }\nB = A ^ *{}\nC = B ^ *{\n  @f = -> super[A]()\n}\n')).toThrow("'super[A](…)' in 'C': 'A' isn't a direct parent of 'C'");
+  });
+
+  it('in a private function', () => {
+    expect(compile(`${T}U = T ^ *{\n  #h = -> super\n}\n`)).toThrow("'super' in '#h' of 'U': a private function has no parent layer");
+  });
+
+  it("bare super in a lambda whose param hides the function's", () => {
+    expect(compile(`${T}U = T ^ *{\n  h = (n Integer) {\n    g = (n Integer) -> super\n    return g(1)\n  }\n}\n`))
+      .toThrow("Bare 'super' in 'h' of 'U': the param 'n' of a function inside it hides h's — pass the args: 'super(…)'");
+  });
+});

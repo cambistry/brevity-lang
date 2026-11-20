@@ -6,7 +6,7 @@ import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { lowerSingletonClasses, CLASS_SELF } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
-import { lowerSuperCalls } from './super_calls.js';
+import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
 import { resolveSuperclassChain } from './subclass.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
@@ -6446,6 +6446,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   resolveUseExprs();
   resolveUseValues();
   lowerSingletonClasses(actors, types, { fileKind });
+  lowerFunctionSupers(actors);
   lowerBaseLayers(actors);
   lowerSuperCalls(actors, resolveSuperclassChain);
   // A nested type's owner: the path of classes from the file actor down to the

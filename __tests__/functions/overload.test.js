@@ -585,6 +585,28 @@ describe('overload — runtime', () => {
 // Calling an empty overload is unhandled.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+describe("overload — a class's protected function, by type — runtime", () => {
+  const script = `
+    @T = *{
+      p = (x Integer) -> 1
+      p << (x Text) -> 2
+      @byInteger = { y Integer = p(5); return y }
+      @byText = { y Integer = p("t"); return y }
+    }
+  `;
+
+  it('each call takes the clause its arg fits', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
+      { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
+      { input: { id: '2', op: 'byInteger', to: ':T:1', from: 'c' } },
+      { output: { id: '2', re: [1], ty: ['Integer'], to: 'c', from: ':T:1' } },
+      { input: { id: '3', op: 'byText', to: ':T:1', from: 'c' } },
+      { output: { id: '3', re: [2], ty: ['Integer'], to: 'c', from: ':T:1' } },
+    );
+  });
+});
+
 describe('Function() — empty overload — compilation', () => {
   it('Function() compiles', () => {
     expect(() => compileSource(`

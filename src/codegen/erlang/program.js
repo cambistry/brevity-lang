@@ -937,11 +937,23 @@ function genChildHandleOp(ctx, actor) {
     const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlExKey(op)}}`);
     clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
   }
-  // Add private function dispatch clauses for child actor
-  for (const h of childPrivateFns) {
-    if (isPrivateOp(h.name)) clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlExKey(h.name)}}`);
-    const inner = genPublicFnInner(ctx, h, { skipTypeCheck: true });
-    clauses.push(`${prefix}_handle_op(${erlOp(h.name)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+  // Add private function dispatch clauses for child actor. An overloaded one tries
+  // each clause in turn, as a public one does.
+  const privateByName = new Map();
+  for (const h of childPrivateFns) privateByName.set(h.name, [...(privateByName.get(h.name) || []), h]);
+  for (const [op, variants] of privateByName) {
+    if (isPrivateOp(op)) clauses.push(`${prefix}_handle_op(${erlOp(op)}, _Message, _Payload, _Id, <<"__bv_wire">>) ->\n    {error, ${erlExKey(op)}}`);
+    if (variants.length === 1) {
+      const inner = genPublicFnInner(ctx, variants[0], { skipTypeCheck: true });
+      clauses.push(`${prefix}_handle_op(${erlOp(op)}, _Message, Payload, _Id, _From) ->\n${inner}`);
+      continue;
+    }
+    const names = variants.map((_, i) => `${prefix}_clause_${typedHelpers.length}_${i}`);
+    variants.forEach((h, i) => {
+      typedHelpers.push(`${names[i]}(Message, Payload, _Id, _From) ->\n${genPublicFnInner(ctx, h, { hasOverloads: true, instance: true })}.`);
+    });
+    const chain = names.reduceRight((next, fnName) => `    case ${fnName}(Message, Payload, _Id, _From) of\n        nomatch ->\n    ${next};\n        Result -> Result\n    end`, `    {error, ${erlExKey(op)}}`);
+    clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${chain}`);
   }
   // A lambda made in this class's functions is called through its dispatch, as its
   // functions are, and runs as the class's actor. (One with overloads of the same

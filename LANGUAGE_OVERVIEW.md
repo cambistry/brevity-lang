@@ -234,8 +234,22 @@ Bare `super` passes the constructor's args as received, `super()` none, and
 `super[A](…)` builds parent `A` when there are several. It's called once on every
 path: not in a loop, not twice, and not on only one branch of an `if`. A subclass
 with no constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`)
-takes its parents' params. `super` can't be declared or set, and `super.x` /
-`super::x` aren't forms: those are `base.x` / `base::x`.
+takes its parents' params.
+
+In a function, `super` calls the parent layer's same function: in `h` it's
+`base::h(…)`, in `@h` `base.h(…)`, with the same arg rules. It dispatches over the
+parent's clauses, and the parent's code it runs still uses the subclass's
+overrides. In a lambda inside `h`, `super` is `h`'s.
+
+```brevity
+Over = Box ^ *{
+  h = (n Integer) -> super * 10        // Box's h with n
+  @get = -> super() + 1                // Box's @get, with no args
+}
+```
+
+With several parents, write `super[A](…)`. `super` can't be declared or set, and
+`super.x` / `super::x` aren't forms: those are `base.x` / `base::x`.
 
 The file actor is a singleton, built once at load. It needs no header: it
 declares its DI with `use`, anywhere in the file. A `use` in an inner scope is

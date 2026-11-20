@@ -167,6 +167,47 @@ export function expandSuperInits(actorByName, A, init, chain) {
   });
 }
 
+// ── `super` in a function: the base's same function ────────────────────────────
+
+// In function `h`, `super(args)` is `base::h(args)`, and in `@h` it's `base.h(args)`:
+// the same BaseCall the `base` forms make (src/base_layers.js), which resolves it.
+// Bare `super` passes the function's args as received. In a lambda inside `h`,
+// `super` is `h`'s.
+export function lowerFunctionSupers(actors) {
+  for (const U of actors) {
+    const parents = (U.supertypes || []).map(st => st.supertype);
+    for (const f of U.functions || []) {
+      if (f.actorDef || typeof f.name !== 'string') continue;
+      walk(f.body, (n, path) => {
+        if (n.type !== 'SuperCall') return;
+        const written = shown(n);
+        const where = U.membersOf ? `the class block of '${U.membersOf}'` : U.singletonOf ? 'a singleton' : U.name ? `'${U.name}'` : 'this file';
+        if (f.name.startsWith('#')) throw new Error(`'${written}' in '${f.name}' of ${where}: a private function has no parent layer`);
+        if (!n.layer && parents.length > 1) {
+          throw new Error(`'${written}' in '${f.name}' of '${U.name}' is ambiguous: '${U.name}' has parents ${parents.map(p => `'${p}'`).join(' and ')} — write ${parents.map(p => `'super[${p}](…)'`).join(' or ')}`);
+        }
+        let args = n.args;
+        if (args === null) {
+          // A function inside `h` with a param of the same name hides h's.
+          for (const inner of path.filter(isFunctionNode)) {
+            const hidden = (inner.params || []).find(q => (f.params || []).some(p => p.name === q.name));
+            if (hidden) throw new Error(`Bare 'super' in '${f.name}' of ${where}: the param '${hidden.name}' of a function inside it hides ${f.name}'s — pass the args: 'super(…)'`);
+          }
+          if ((f.params || []).some(p => p.rest)) throw new Error(`Bare 'super' in '${f.name}' of ${where}: a rest param isn't passed on as received yet — pass the args: 'super(…)'`);
+          const positional = (f.params || []).filter(p => p.positional !== false).map(p => AST.identifier(p.name));
+          const named = (f.params || []).filter(p => p.positional === false);
+          args = named.length
+            ? [...positional, AST.namedArgsBag(Object.fromEntries(named.map(p => [p.key || p.name, AST.identifier(p.name)])))]
+            : positional;
+        }
+        const isPublic = f.name.startsWith('@');
+        for (const k of Object.keys(n)) delete n[k];
+        Object.assign(n, { type: 'BaseCall', layer: written.match(/^super\[([^\]]+)\]/)?.[1] ?? null, name: isPublic ? f.name.slice(1) : f.name, isPublic, args, superCall: written, superIn: f.name });
+      });
+    }
+  }
+}
+
 // ── The parse: check and lower each constructor's `super` ──────────────────────
 
 export function lowerSuperCalls(actors, chain) {
@@ -179,10 +220,6 @@ export function lowerSuperCalls(actors, chain) {
   const clauses = actors.flatMap(a => (a.functions || []).filter(f => f.actorDef && f.name)
     .map(f => ('name' in f.actorDef ? f.actorDef : Object.defineProperty(f.actorDef, 'name', { value: f.name, configurable: true }))));
   for (const U of [...actors, ...clauses]) {
-    // `super` in a function: not yet.
-    walk((U.functions || []).filter(f => !f.actorDef), (n) => {
-      if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in a function of ${where(U)}: 'super' is used in a constructor block`);
-    });
     const parents = (U.supertypes || []).map(st => st.supertype);
     const calls = [];
     walk(U.initBody, (n, path) => { if (n.type === 'SuperCall') calls.push({ n, path }); });

@@ -867,7 +867,10 @@ function genRustChildPublicFnCode(fn, eCtx, classTypes = new Map(), isPublic = f
   G.ctx.ssaCounts = savedSsaCounts;
 
   // Outside, only `@name` is exposed.
-  return `            ${JSON.stringify(rustOpKey(name))}${isPublic ? childTagGuard(fn, overloaded) : ' if !bv_from_wire_caller(from)'} => {\n${lines.join('\n')}\n            }`;
+  // A protected one is called from inside only; overloaded, its values pick the clause.
+  const fit = !isPublic && overloaded ? valueFit(fn.params || [], '&BvObject::pack(payload)') : null;
+  const privateGuard = fit ? ` if !bv_from_wire_caller(from) && ${fit}` : ' if !bv_from_wire_caller(from)';
+  return `            ${JSON.stringify(rustOpKey(name))}${isPublic ? childTagGuard(fn, overloaded) : privateGuard} => {\n${lines.join('\n')}\n            }`;
 }
 
 function tagWireReply(tyBody) {
@@ -890,7 +893,7 @@ function genRustChildDispatch(actor) {
   const lambdaStart = G.ctx.lambdaHandlers.length;
   const arms = [
     ...publicFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, true, publicFns.filter(o => o.name === h.name).length > 1)),
-    ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes)),
+    ...privateFns.map(h => genRustChildPublicFn(h, eCtx, classTypes, false, privateFns.filter(o => o.name === h.name).length > 1)),
   ];
   // Auto-generate accessor arms for child constructor params
   const childConstructorParams = actor.initParams || [];
