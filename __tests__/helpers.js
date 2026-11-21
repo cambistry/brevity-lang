@@ -163,6 +163,34 @@ export async function runActors(actors, { messages = [] } = {}) {
   return net;
 }
 
+// ── expectLocalAndRemote: a parent here, and in another file ────────────────
+//
+// The same steps against `local`, a file that declares its parents itself, and
+// against `child`, whose parents are in `parent`, another file it `use`s at `path`
+// (compiled against that file's published doc, the two run with runActors). Each
+// input goes to the file; each output is checked against both: what the file posts,
+// and what the pair posts to no actor of it. See notes/opre-extend-and-as-2026-11-20.md
+// ("The semantics are layers, local parents included").
+//
+//   await expectLocalAndRemote({ local, parent, child },
+//     { input: { id: '1', op: 'go', from: 'c' } },
+//     { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
+//   );
+
+export async function expectLocalAndRemote({ local, parent, child, path = 'svc' }, ...steps) {
+  await expectActorBehavior(await createActor(local), ...steps);
+  const net = await runActors({
+    [path]: { source: parent },
+    main: { source: child, compileOptions: { remotes: [{ path, service: extract(parent).interface.service }] } },
+  });
+  let seen = 0;
+  for (const { input, output } of steps) {
+    if (input) await net.send('main', input);
+    else expect(net.external[seen++]).toEqual(output);
+  }
+  expect(net.external.length).toBe(seen);
+}
+
 // ── createActor: compile once, send many ────────────────────────────────────
 //
 // `expects` runs an expectActorBehavior-shaped step list with the cursor

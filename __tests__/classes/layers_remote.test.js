@@ -62,7 +62,7 @@ const child = `
     h = -> 9
   }
   @get = { u = @U(5); x Integer = u.get(); return x }
-  @cells! = { u = @U(5); u.poke!(); u.bump!(); a Integer = u.cnt(); b Integer = u.get(); return a * 100 + b }
+  @cells = { u = @U(5); u.poke!(); u.bump!(); a Integer = u.cnt(); b Integer = u.get(); return a * 100 + b }
   @levels = { u = @U(5); x Integer = u.gee(); return x }
   @param = { u = @U(5); x Integer = u.n(); return x }
   @bare = { u = @Bare(n: 5); x Integer = u.get(); return x }
@@ -135,7 +135,7 @@ describe('the child of a parent class in another file', () => {
       ],
     });
     await expectActorBehavior(actor,
-      { input: { id: 'x', op: 'cells!', from: 'c' } },
+      { input: { id: 'x', op: 'cells', from: 'c' } },
       { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
       { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
       { output: { id: '7', op: '$get', to: 'svc:T:1:~count', from: ':U:1' } },
@@ -390,7 +390,7 @@ describe('the two files together', () => {
       svc: { source: parent },
       main: { source: child, compileOptions: { remotes: [{ path: 'svc', service: extract(parent).interface.service }] } },
     });
-    await net.send('main', { id: 'x', op: 'cells!', from: 'c' });
+    await net.send('main', { id: 'x', op: 'cells', from: 'c' });
     expect(net.external).toEqual([{ id: 'x', re: [1222], ty: ['Integer'], to: 'c' }]);
   });
 });

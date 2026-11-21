@@ -464,7 +464,10 @@ export function checkEffects(ast, remotesParsed = {}) {
 
     // Whether each of this actor's functions writes past it: its own cells, and its
     // own functions that don't, are its own. Says whether anything changed.
-    const allState = new Set([...stateNames, ...(resolveSuperclassChain(classes, actor).inheritedState || []).map(d => d.name.replace(/^@/, ''))]);
+    // A cell an instance inherits from a parent in another file is its own too, at its
+    // layer, as one from a parent here is.
+    const layerCells = actor.membersOf ? [] : (actor.forwardCells || []).map(c => c.name.replace(/^@/, ''));
+    const allState = new Set([...stateNames, ...(resolveSuperclassChain(classes, actor).inheritedState || []).map(d => d.name.replace(/^@/, '')), ...layerCells]);
     const ownCells = new Set([...allState, ...[...allState].map(n => '@' + n)]);
     const reachPass = () => {
       let changed = false;
