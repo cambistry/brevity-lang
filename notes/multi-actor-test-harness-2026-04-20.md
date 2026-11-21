@@ -1,5 +1,12 @@
 # Multi-actor test harness proposal (2026-04-20)
 
+> **Superseded (2026-11-20):** `runActors` is one target-independent helper in
+> `__tests__/helpers.js`, built on each target's live `createActor` (Rust and Erlang
+> keep a live process now, with an idle signal per message). It routes posts by the
+> head token of `to`, globalizes relative addresses as a boundary does, and pumps
+> until nothing moves. No per-target subprocess piping is needed; the runners'
+> own `runActors` (JS, browser) are gone.
+
 Follow-up note. Captures a future design for a cross-target `runActors` helper, deferred in favor of manual shepherding for the one or two tests that currently need it.
 
 ## Context

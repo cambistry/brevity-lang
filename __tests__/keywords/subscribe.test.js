@@ -212,13 +212,9 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Interop — two separately compiled actors, manually shepherded.
 //
-// Rather than relying on a runActors-style auto-wiring harness (JS-only
-// today), the test spawns publisher and subscriber independently and
-// routes messages between them in the test body. Works on any target whose
-// single-actor harness (createActor) supports sendAsync + posts inspection.
-//
-// See notes/multi-actor-test-harness-2026-04-20.md for why a dedicated
-// multi-actor runner is deferred.
+// The test spawns publisher and subscriber independently and routes messages
+// between them in the test body, so each step's wire shape is asserted. For
+// wiring by name, see runActors (helpers.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('subscribe — interop (two actors, manually shepherded)', () => {

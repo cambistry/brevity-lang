@@ -106,9 +106,5 @@ export default {
       };
     },
 
-    async runActors(_ctx, { actors, messages }) {
-      const posts = await callHarness('runActors', { actors, messages });
-      return posts.map(normalizeBigInts);
-    },
   },
 };

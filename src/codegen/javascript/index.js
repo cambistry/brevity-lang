@@ -1,6 +1,5 @@
 export { codegen, parseInterface } from './classes.js';
 import { codegen } from './classes.js';
-import { _opre_split as split, _opre_join as join, _opre_quote as quote, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -121,67 +120,6 @@ export default {
           };
         },
       };
-    },
-
-    async runActors(ctx, { actors, messages }) {
-      const external = [];
-      const instances = {};
-      for (const [name, { source, exportName, compileOptions }] of Object.entries(actors)) {
-        instances[name] = { Actor: await loadModule(ctx.extract, ctx.compile, source, exportName, compileOptions) };
-      }
-      // Parse the `to` wire field into { alias, selector }: the head token
-      // names a peer, the rest is relative to it. A relative address (`:x`)
-      // names no peer. Forms: "#<alias rest>", "alias rest", "alias".
-      const unescAddr = (s) => s.replace(/\\(\\|>)/g, (_, c) => c);
-      const parseTo = (toStr) => {
-        if (typeof toStr !== 'string') return { alias: null, selector: null };
-        const bracketed = toStr.startsWith('#<') && toStr.endsWith('>');
-        const tokens = split(bracketed ? unescAddr(toStr.slice(2, -1)) : toStr);
-        if (tokens.length === 0 || tokens[0] === null) return { alias: null, selector: toStr };
-        return { alias: tokens[0], selector: tokens.length > 1 ? join([null, ...tokens.slice(1)]) : null };
-      };
-      for (const [name, inst] of Object.entries(instances)) {
-        // Each peer sits at the global boundary: what it sends relative to
-        // itself (`:x`) is `name x` on the way out. Anything else is global
-        // and passes through.
-        const self = quote(name);
-        const globalize = (v) => {
-          if (typeof v === 'string') return mapBracketed(v, (a) => resolve(a, self));
-          if (Array.isArray(v)) return v.map(globalize);
-          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalize(x)]));
-          return v;
-        };
-        // `ty` has no brackets: a relative tag (`.`, `:Box`, `:Point`) is
-        // resolved whole.
-        const globalizeTy = (v) => {
-          if (typeof v === 'string') return resolve(v, self);
-          if (Array.isArray(v)) return v.map(globalizeTy);
-          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalizeTy(x)]));
-          return v;
-        };
-        inst.binding = {
-          post(msg) {
-            const { alias, selector } = parseTo(msg.to);
-            const target = alias;
-            if (target && instances[target]) {
-              const from = msg.from ? resolve(msg.from, self) : self;
-              const { ty, ...rest } = msg;
-              // Deliver with `to` rewritten relative to the receiver (the alias
-              // resolves to the receiver = self, so the head collapses).
-              const forwarded = { ...globalize(rest), ...('ty' in msg ? { ty: globalizeTy(ty) } : {}), to: selector || undefined, from };
-              instances[target].instance.receive(forwarded);
-            } else {
-              external.push(normalizeBigInts(msg));
-            }
-          },
-        };
-        inst.instance = await inst.Actor.create(inst.binding);
-      }
-      for (const [target, msg] of messages) {
-        instances[target].instance.receive(msg);
-        await tick();
-      }
-      return external;
     },
   },
 };

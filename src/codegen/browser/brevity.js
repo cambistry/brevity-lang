@@ -176,33 +176,6 @@ async function spawnCompiled({ compiledId, args = [] }) {
   return id;
 }
 
-async function runActors({ actors, messages }) {
-  const external = [];
-  const instances = {};
-  for (const [name, { source, compileOptions }] of Object.entries(actors)) {
-    const ActorClass = await compileAndLoad(source, compileOptions);
-    instances[name] = { ActorClass };
-  }
-  for (const [name, inst] of Object.entries(instances)) {
-    inst.binding = {
-      post(msg) {
-        const to = msg.to;
-        if (to && instances[to]) {
-          instances[to].instance.receive({ ...msg, from: name });
-        } else {
-          external.push(msg);
-        }
-      },
-    };
-    inst.instance = await inst.ActorClass.create(inst.binding);
-  }
-  for (const [target, msg] of messages) {
-    instances[target].instance.receive(msg);
-    await tick();
-  }
-  return external.map(normalizeBigInts);
-}
-
 // Reset state between test invocations that want full isolation. Tests
 // generally don't call this; handles just accumulate and are GC'd when the
 // page is torn down at worker shutdown.
@@ -221,7 +194,6 @@ globalThis.__bv_harness__ = {
   drainPosts,
   compileActor,
   spawnCompiled,
-  runActors,
   reset,
 };
 

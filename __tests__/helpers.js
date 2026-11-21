@@ -3,6 +3,7 @@ import { readdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { extract, compile } from '../index.js';
+import { _opre_split as _opreSplit, _opre_join as _opreJoin, _opre_quote as _opreQuote, _opre_resolve as _opreResolve, _opre_map_bracketed as _opreMap } from '../src/codegen/opre_tokens.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -61,10 +62,89 @@ export async function runActor(args) {
 }
 
 // ── runActors: multi-actor primitive ────────────────────────────────────────
+//
+// Several actors, each a separately compiled source spawned live (createActor),
+// wired to each other by name: what one posts to `name…` is delivered to the actor
+// of that name, and anything else is external. Every target runs it the same way.
+//
+//   const net = await runActors({ svc: { source, compileOptions }, main: { … } });
+//   await net.send('main', { id: '1', op: 'go', from: 'c' });
+//   net.external   // what was posted to no actor of the network, in order
+//
+// Each actor sits at the global boundary, as a file actor does: what it sends
+// relative to itself (`:x`, in `from`, in a payload's addresses, in `ty`) is
+// `name:x` on the way out; the receiver gets `to` relative to itself (`:rest`).
+// `messages` ([[name, msg], …]) are sent in order first. See
+// notes/multi-actor-test-harness-2026-04-20.md.
 
-export async function runActors(args) {
-  if (_runner.runActors) return _runner.runActors(_ctx, args);
-  throw new Error(`Target '${_targetName}' does not support multi-actor tests`);
+export async function runActors(actors, { messages = [] } = {}) {
+  const names = Object.keys(actors);
+  const live = {};
+  for (const name of names) {
+    const { source, compileOptions = {}, fileName } = actors[name];
+    live[name] = await createActor(source, { compileOptions, ...(fileName !== undefined && { fileName }) });
+  }
+  const seen = Object.fromEntries(names.map(n => [n, 0]));
+  const external = [];
+  const globalize = (v, self) => {
+    if (typeof v === 'string') return _opreMap(v, (a) => _opreResolve(a, self));
+    if (Array.isArray(v)) return v.map(x => globalize(x, self));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalize(x, self)]));
+    return v;
+  };
+  const globalizeTy = (v, self) => {
+    if (typeof v === 'string') return _opreResolve(v, self);
+    if (Array.isArray(v)) return v.map(x => globalizeTy(x, self));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, globalizeTy(x, self)]));
+    return v;
+  };
+  // Route what each actor posted since last time; true if anything moved.
+  const pump = async () => {
+    let moved = false;
+    for (const name of names) {
+      const actor = live[name];
+      while (seen[name] < actor.posts.length) {
+        const msg = actor.posts[seen[name]++];
+        moved = true;
+        const tokens = typeof msg.to === 'string' && !msg.to.startsWith(':') ? _opreSplit(msg.to) : [];
+        const target = tokens.length && Object.hasOwn(live, tokens[0]) ? tokens[0] : null;
+        if (!target) { external.push(msg); continue; }
+        const self = _opreQuote(name);
+        const { from, ty, as } = msg;
+        const rest = { ...msg };
+        for (const k of ['to', 'from', 'ty', 'as']) delete rest[k];
+        const forwarded = {
+          ...globalize(rest, self),
+          ...(tokens.length > 1 && { to: _opreJoin([null, ...tokens.slice(1)]) }),
+          from: from ? _opreResolve(from, self) : self,
+          ...(as !== undefined && { as: _opreResolve(as, self) }),
+          ...(ty !== undefined && { ty: globalizeTy(ty, self) }),
+        };
+        await live[target].sendAsync(forwarded);
+      }
+    }
+    return moved;
+  };
+  // Until nothing moves for a few turns: an in-process target may still be working.
+  const settle = async () => {
+    for (let idle = 0; idle < 3;) {
+      if (await pump()) { idle = 0; continue; }
+      idle++;
+      await new Promise(r => setTimeout(r, 0));
+    }
+  };
+  await settle();
+  const net = {
+    external,
+    actors: live,
+    async send(name, msg) {
+      if (!Object.hasOwn(live, name)) throw new Error(`runActors: no actor '${name}'`);
+      await live[name].sendAsync(msg);
+      await settle();
+    },
+  };
+  for (const [name, msg] of messages) await net.send(name, msg);
+  return net;
 }
 
 // ── createActor: compile once, send many ────────────────────────────────────
