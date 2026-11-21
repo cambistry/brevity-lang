@@ -25,8 +25,11 @@ ${arms.join('\n')}
 // (notes/opre-extend-and-as-2026-11-20.md).
 function genBlockInfoFn(actors) {
   const strs = (xs) => `&[${xs.map(x => JSON.stringify(x)).join(', ')}]`;
-  const arms = actors.filter(a => a.membersOf && a.name).map(a => {
-    const self = selfAddress(publicLabel(a) ?? a.singletonOf);
+  const extensible = (a) => a.name && (a.membersOf || a.isPublic || a.remoteLayers?.length);
+  const ownerArms = actors.filter(a => a.name && a.inheritedOwners && Object.keys(a.inheritedOwners).length).flatMap(a =>
+    Object.entries(a.inheritedOwners).map(([n, o]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(n)}) => Some(${JSON.stringify(o)}),`));
+  const arms = actors.filter(extensible).map(a => {
+    const self = a.membersOf ? selfAddress(publicLabel(a) ?? a.singletonOf) : '';
     const base = a.blockParent ? actors.find(b => b.name === a.blockParent) : null;
     const baseSelf = a.remoteBase ? a.remoteBase.address : base ? selfAddress(publicLabel(base) ?? base.singletonOf) : '';
     const own = [...new Set((a.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
@@ -41,17 +44,29 @@ function genBlockInfoFn(actors) {
   });
   const tyArms = actors.filter(a => a.name && a.inheritedTys).flatMap(a => Object.entries(a.inheritedTys).map(([n, t]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(n)}) => Some(json!(${JSON.stringify(t)})),`));
   // And what its own functions reply, for a call that runs one in a context.
-  const ownTyArms = actors.filter(a => a.name && a.membersOf).flatMap(a => {
+  const ownTyArms = actors.filter(a => a.name && (a.membersOf || a.isPublic || a.remoteLayers?.length)).flatMap(a => {
     const byName = new Map();
     for (const f of a.functions || []) if (typeof f.name === 'string' && !f.cellGetter && !/^(set|update|subscribe|new)[@.#]/.test(f.name)) (byName.get(f.name) ?? byName.set(f.name, []).get(f.name)).push(f);
     return [...byName].filter(([, fs]) => fs.length === 1).map(([n, [f]]) => [n, replyTy(f)]).filter(([, t]) => t)
       .map(([n, t]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(wireLabel(n))}) => Some(json!(${JSON.stringify(t)})),`);
   });
+  // A class with a block of its own records its extenders there.
+  const classExtArms = actors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && !(a.membersClass && !a.membersInherited)).map(a => `        ${JSON.stringify(quoteToken(a.selector ?? ''))} => Some(${strs(a.instanceNames || [])}),`);
   return `// The tag of what an inherited function replies, by its parent's source or doc.
 #[allow(dead_code)]
 fn bv_inherited_ty(class: &str, op: &str) -> Option<Value> {
     match (class, op) {
 ${tyArms.join('\n')}
+        _ => None,
+    }
+}
+
+// A published class of ours, by its label: what its instances declare, which an
+// extender in another file may name.
+#[allow(dead_code)]
+fn bv_class_ext(selector: &str) -> Option<&'static [&'static str]> {
+    match selector {
+${classExtArms.join('\n')}
         _ => None,
     }
 }
@@ -62,6 +77,15 @@ fn bv_fn_ty(class: &str, op: &str) -> Option<Value> {
     match (class, op) {
 ${ownTyArms.join('\n')}
         _ => bv_inherited_ty(class, op),
+    }
+}
+
+// The parent an inherited function of a class with layers is from.
+#[allow(dead_code)]
+fn bv_inherited_owner(class: &str, op: &str) -> Option<&'static str> {
+    match (class, op) {
+${ownerArms.join('\n')}
+        _ => None,
     }
 }
 
@@ -350,7 +374,7 @@ ${sourceArms}
   // dep construction awaits (new) need the stdin reader + main loop.
   const needsAwait = needsDotCallAwait(actor) || G.ctx.needsAwaitNew;
   // A class block may call, and be called back, across the wire.
-  const hasBlocks = (allActors || []).some(a => a.membersOf);
+  const hasBlocks = (allActors || []).some(a => a.membersOf || a.isPublic || a.remoteLayers?.length);
   const hasDotCallAwait = needsAwait || hasBlocks;
   // Private singletons, by address (\`:~s\`): an actor's own sends reach them by
   // their handle (bv_held_send). A class's are in its state while it runs.
@@ -465,6 +489,12 @@ ${sourceArms}
 
   // State initialization lines (run in main before message loop)
   const stateInitLines = [];
+  // A class of ours whose parent is in another file: its \`$extend\` there, first.
+  for (const a of (allActors || []).filter(x => x.remoteLayers?.length && !x.membersOf)) {
+    for (const L of a.remoteLayers) {
+      stateInitLines.push(`    let _ = actor.bv_wire_call(${JSON.stringify(L.address)}, "$extend", &json!([{ "block": [], "instance": ${JSON.stringify(a.instanceTables?.[L.name] || [])} }]), ${JSON.stringify(':' + quoteToken(a.selector ?? ''))}, None, true);`);
+    }
+  }
   if (mainActorStateful) {
     const initTypeEnv = new Map();
     for (const d of (actor.stateVarDecls || [])) {
@@ -482,7 +512,7 @@ ${sourceArms}
         stateInitLines.push(`    let _ = ${genRustFnCallExpr(s.expr, initTypeEnv).replace(/\bself\./g, 'actor.')};`);
         continue;
       }
-      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
+      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
         // A write or a call in the constructor block, generated as in a function body.
         const lines = genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '        ', new Map());
         stateInitLines.push(`    {\n${lines.replace(/\bself\./g, 'actor.')}\n    }`);
@@ -978,6 +1008,12 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         self.outer_states.push((prev_owner, prev));
     }
 
+    // The file's own state, whichever actor's is in (a call can arrive while one waits).
+    #[allow(dead_code)]
+    fn bv_file_state(&mut self) -> &mut std::collections::HashMap<String, Value> {
+        if self.outer_states.is_empty() { &mut self.state } else { &mut self.outer_states[0].1 }
+    }
+
     fn leave_state(&mut self) -> std::collections::HashMap<String, Value> {
         let (owner, prev) = self.outer_states.pop().unwrap_or_default();
         self.state_owner = owner;
@@ -1081,12 +1117,15 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         self.await_response(&id)
     }
 
-    fn bv_base_read(&mut self, token: &str) -> Value {
-        let class = self.bv_my_class();
-        let remote = bv_block_remote(&class);
+    fn bv_base_read(&mut self, token: &str) -> Value { self.bv_base_read_of(token, None) }
+
+    // A cell we inherit, at our base: a block's, or the layer for the parent it's from.
+    #[allow(dead_code)]
+    fn bv_base_read_of(&mut self, token: &str, owner: Option<&str>) -> Value {
+        let remote = self.bv_remote(owner);
         if !remote.is_empty() {
-            let (_, _, self_label, _, _, _, _) = bv_block_info(&class);
-            let r = self.bv_wire_call(remote, &format!("$get {}", token), &json!({}), self_label, None, true);
+            let me = self.bv_self();
+            let r = self.bv_wire_call(&remote, &format!("$get {}", token), &json!({}), &me, None, true);
             return r.as_array().and_then(|a| a.first()).cloned().unwrap_or(r);
         }
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1095,17 +1134,78 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
     }
 
     #[allow(dead_code)]
-    fn bv_base_set(&mut self, token: &str, value: Value) {
-        let class = self.bv_my_class();
-        let remote = bv_block_remote(&class);
+    fn bv_base_set(&mut self, token: &str, value: Value) { self.bv_base_set_of(token, value, None) }
+
+    #[allow(dead_code)]
+    fn bv_base_set_of(&mut self, token: &str, value: Value, owner: Option<&str>) {
+        let remote = self.bv_remote(owner);
         if !remote.is_empty() {
-            let (_, _, self_label, _, _, _, _) = bv_block_info(&class);
-            let _ = self.bv_wire_call(remote, &format!("$set {}", token), &Value::Array(vec![value]), self_label, None, false);
+            let me = self.bv_self();
+            let _ = self.bv_wire_call(&remote, &format!("$set {}", token), &Value::Array(vec![value]), &me, None, false);
             return;
         }
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let owner = self.bv_holder_of(&base, token);
         let _ = self.send_to_owner(&owner, &format!("$set {}", token), &Value::Array(vec![value]));
+    }
+
+    // Our address, as a class block's is known or an instance's was published.
+    #[allow(dead_code)]
+    fn bv_self(&self) -> String {
+        if let Some(at) = self.state.get("__self_at").and_then(|v| v.as_str()) { return at.to_string(); }
+        let (_, _, self_label, _, _, _, _) = bv_block_info(&self.bv_my_class());
+        self_label.to_string()
+    }
+
+    // Our base in another actor: a block's parent block, or an instance's layer (for
+    // the parent \`owner\` names, else its first). Empty: none, or here.
+    #[allow(dead_code)]
+    fn bv_remote(&self, owner: Option<&str>) -> String {
+        let block = bv_block_remote(&self.bv_my_class());
+        if !block.is_empty() { return block.to_string(); }
+        match self.state.get("__layers").and_then(|v| v.as_object()) {
+            Some(m) => owner.and_then(|o| m.get(o)).or_else(|| m.values().next()).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            None => String::new(),
+        }
+    }
+
+    // Whether \`from\` is our base: a callback from it.
+    #[allow(dead_code)]
+    fn bv_is_base(&self, from: &str) -> bool {
+        let (_, _, _, _, base_label, _, _) = bv_block_info(&self.bv_my_class());
+        if !base_label.is_empty() && from == base_label { return true; }
+        self.state.get("__layers").and_then(|v| v.as_object()).is_some_and(|m| m.values().any(|v| v.as_str() == Some(from)))
+    }
+
+    // The context we run in: the call's, or a layer's, its whole life.
+    #[allow(dead_code)]
+    fn bv_ctx(&self) -> Value {
+        match self.state.get("__ctx") { Some(c) => c.clone(), None => self.state.get("__layer_ctx").cloned().unwrap_or(Value::Null) }
+    }
+
+    // \`super(args)\` for a parent in another file: \`$new\` there, \`as\` us, makes our layer
+    // and runs its constructor; we keep its address, for that parent.
+    #[allow(dead_code)]
+    fn bv_new_layer(&mut self, parent: &str, address: &str, payload: &Value, ty: &Value) {
+        let me = self.bv_self();
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let id = seq.to_string();
+        let has_args = payload.as_array().is_some_and(|a| !a.is_empty());
+        let mut msg = Map::new();
+        msg.insert("id".to_string(), json!(id.clone()));
+        msg.insert("op".to_string(), if has_args { json!([payload, "$new"]) } else { json!("$new") });
+        if has_args { msg.insert("ty".to_string(), ty.clone()); }
+        msg.insert("to".to_string(), json!(address));
+        msg.insert("from".to_string(), json!(me.clone()));
+        msg.insert("as".to_string(), json!(me));
+        let _ = self.binding.send(Value::Object(msg));
+        let re = self.await_response(&id);
+        let at = re.as_array().and_then(|a| a.first()).cloned().unwrap_or(re);
+        let at = at.as_str().map(|s| s.trim_start_matches("#<").trim_end_matches('>').to_string()).unwrap_or_default();
+        let mut layers = self.state.get("__layers").and_then(|v| v.as_object().cloned()).unwrap_or_default();
+        layers.insert(parent.to_string(), json!(at));
+        self.state.insert("__layers".to_string(), Value::Object(layers));
     }
 
     // \`$extend\` to the class block \`owner\`: \`from\`'s override table, checked against
@@ -1134,6 +1234,8 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         }
         let st = self.state_of_mut(owner).unwrap_or_else(|| panic!("$extend: no actor {:?}", owner));
         let mut recs = st.get("__extenders").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        // One record per context: a \`$extend\` again replaces it.
+        recs.retain(|r| !(r.get("from").and_then(|v| v.as_str()) == Some(from) && r.get("as").and_then(|v| v.as_str()) == Some(as_)));
         recs.push(json!({ "from": from, "as": as_, "table": table, "owner": from_owner }));
         st.insert("__extenders".to_string(), Value::Array(recs));
     }
@@ -1166,36 +1268,41 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
 
     #[allow(dead_code)]
     fn bv_ctx_has(&self, name: &str) -> bool {
-        self.state.get("__ctx").and_then(|c| c.get("table")).and_then(|t| t.as_array()).map(|t| t.iter().any(|n| n.as_str() == Some(name))).unwrap_or(false)
+        self.bv_ctx().get("table").and_then(|t| t.as_array()).map(|t| t.iter().any(|n| n.as_str() == Some(name))).unwrap_or(false)
     }
 
     // A call of one of our functions: at the extender that overrides it, here (in the
     // same context), or at our base (one we inherit, or \`super\` when \`direct\`).
     #[allow(dead_code)]
-    fn bv_ctx_send(&mut self, op: &str, payload: &Value, direct: bool) -> Value {
+    fn bv_ctx_send(&mut self, op: &str, payload: &Value, direct: bool) -> Value { self.bv_ctx_send_of(op, payload, direct, None) }
+
+    #[allow(dead_code)]
+    fn bv_ctx_send_of(&mut self, op: &str, payload: &Value, direct: bool, owner: Option<&str>) -> Value {
         let class = self.bv_my_class();
-        let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null);
+        let ctx = self.bv_ctx();
         if !direct && self.bv_ctx_has(op) { return self.bv_callback(&ctx, op, payload); }
-        let (_, _, self_label, _, _, inherited, _) = bv_block_info(&class);
+        let (_, _, _, _, _, inherited, _) = bv_block_info(&class);
         if !direct && !inherited.contains(&op) { let me = self.state_owner.clone(); return self.run_as(&me, op, payload); }
-        let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or(self_label).to_string();
-        let remote = bv_block_remote(&class);
-        if !remote.is_empty() { return self.bv_wire_call(remote, op, payload, self_label, Some(&as_), true); }
+        let me = self.bv_self();
+        let as_ = ctx.get("as").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| me.clone());
+        let owner = owner.map(String::from).or_else(|| bv_inherited_owner(&class, op).map(String::from));
+        let remote = self.bv_remote(owner.as_deref());
+        if !remote.is_empty() { return self.bv_wire_call(&remote, op, payload, &me, Some(&as_), true); }
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        self.bv_deliver(&base, op, payload, self_label, &as_)
+        self.bv_deliver(&base, op, payload, &me, &as_)
     }
 
     #[allow(dead_code)]
     fn bv_callback(&mut self, ctx: &Value, op: &str, payload: &Value) -> Value {
         let owner = ctx.get("owner").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let (_, _, self_label, _, _, _, _) = bv_block_info(&self.bv_my_class());
+        let me = self.bv_self();
         let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or("").to_string();
         // An extender in another actor: across the wire, to its address.
         if owner.is_empty() {
             let to = ctx.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            return self.bv_wire_call(&to, op, payload, self_label, Some(&as_), !op.starts_with("$set "));
+            return self.bv_wire_call(&to, op, payload, &me, Some(&as_), !op.starts_with("$set "));
         }
-        self.bv_deliver(&owner, op, payload, self_label, &as_)
+        self.bv_deliver(&owner, op, payload, &me, &as_)
     }
 
     // A cell an extender may redeclare: there when the context says so, else ours.
@@ -1204,7 +1311,7 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
 
     #[allow(dead_code)]
     fn bv_ctx_get(&mut self, name: &str) -> Value {
-        let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null);
+        let ctx = self.bv_ctx();
         let r = self.bv_callback(&ctx, &format!("$get {}", name), &json!({}));
         r.as_array().and_then(|a| a.first()).cloned().unwrap_or(r)
     }
@@ -1212,10 +1319,13 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
     // A write to a cell an extender may redeclare: there, ours (through its own
     // \`$set\`), or our base's for one we inherit.
     #[allow(dead_code)]
-    fn bv_ctx_set(&mut self, name: &str, value: Value, inherited: bool) {
+    fn bv_ctx_set(&mut self, name: &str, value: Value, inherited: bool) { self.bv_ctx_set_of(name, value, inherited, None) }
+
+    #[allow(dead_code)]
+    fn bv_ctx_set_of(&mut self, name: &str, value: Value, inherited: bool, owner: Option<&str>) {
         let op = format!("$set {}", name);
-        if self.bv_ctx_has(name) { let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null); let _ = self.bv_callback(&ctx, &op, &Value::Array(vec![value])); return; }
-        if inherited { self.bv_base_set(name, value); return; }
+        if self.bv_ctx_has(name) { let ctx = self.bv_ctx(); let _ = self.bv_callback(&ctx, &op, &Value::Array(vec![value])); return; }
+        if inherited { self.bv_base_set_of(name, value, owner); return; }
         let me = self.state_owner.clone();
         let _ = self.run_as(&me, &op, &Value::Array(vec![value]));
     }
@@ -1244,22 +1354,30 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
     #[allow(dead_code)]
     fn bv_admit_call(&mut self, op: &str, payload: &Value, from: &str, as_: &str) -> Value {
         let class = self.bv_my_class();
-        let (_, _, self_label, _, base_label, _, own) = bv_block_info(&class);
+        let (_, _, _, _, _, _, own) = bv_block_info(&class);
+        let me = self.bv_self();
         let name = op.split_once(' ').map(|(_, t)| t.to_string()).unwrap_or_else(|| op.to_string());
+        // From the instance that built us as its layer: run in its context, always.
+        if let Some(lc) = self.state.get("__layer_ctx").cloned() {
+            if lc.get("from").and_then(|v| v.as_str()) == Some(from) && lc.get("as").and_then(|v| v.as_str()) == Some(as_) {
+                return self.bv_dispatch_ctx(op, payload, lc);
+            }
+        }
         let recs = self.state.get("__extenders").and_then(|v| v.as_array().cloned()).unwrap_or_default();
         let in_table = |r: &Value| r.get("table").and_then(|t| t.as_array()).map(|t| t.iter().any(|n| n.as_str() == Some(name.as_str()))).unwrap_or(false);
-        if !base_label.is_empty() && from == base_label {
-            if as_ == self_label { return self.bv_dispatch_ctx(op, payload, Value::Null); }
+        if self.bv_is_base(from) {
+            if as_ == me { return self.bv_dispatch_ctx(op, payload, Value::Null); }
             let rec = recs.iter().find(|r| r.get("as").and_then(|v| v.as_str()) == Some(as_)).cloned().unwrap_or_else(|| panic!("{}", "bv_as:unknown_context"));
             if in_table(&rec) { return self.bv_callback(&rec, op, payload); }
             return self.bv_dispatch_ctx(op, payload, rec);
         }
         let rec = recs.iter().find(|r| r.get("from").and_then(|v| v.as_str()) == Some(from) && r.get("as").and_then(|v| v.as_str()) == Some(as_)).cloned().unwrap_or_else(|| panic!("{}", "bv_as:unknown_context"));
-        if !op.starts_with('$') && !own.contains(&op) && !base_label.is_empty() {
-            let remote = bv_block_remote(&class);
-            if !remote.is_empty() { return self.bv_wire_call(remote, op, payload, self_label, Some(as_), true); }
-            let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            return self.bv_deliver(&base, op, payload, self_label, as_);
+        if !op.starts_with('$') && !own.contains(&op) {
+            let remote = self.bv_remote(bv_inherited_owner(&class, op));
+            if !remote.is_empty() { return self.bv_wire_call(&remote, op, payload, &me, Some(as_), true); }
+            if let Some(base) = self.state.get("__base").and_then(|v| v.as_str()).map(String::from) {
+                return self.bv_deliver(&base, op, payload, &me, as_);
+            }
         }
         self.bv_dispatch_ctx(op, payload, rec)
     }
@@ -1276,6 +1394,7 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
     // Whether \`from\` is a recorded extender of the block we're running, or under one.
     #[allow(dead_code)]
     fn bv_is_extender(&self, from: &str) -> bool {
+        if self.state.get("__layer_ctx").and_then(|c| c.get("from")).and_then(|v| v.as_str()) == Some(from) { return true; }
         self.state.get("__extenders").and_then(|v| v.as_array()).map(|a| a.iter().any(|r| {
             let k = r.get("from").and_then(|v| v.as_str()).unwrap_or("");
             !k.is_empty() && (from == k || from.starts_with(&format!("{}:", k)))
@@ -2477,8 +2596,64 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
 ` : ''}            let _ = self.binding.send(Value::Object(resp));
             return;
         }
-        let payload = raw_payload.unwrap_or(json!({}));${publishesClasses ? `
+        let payload = raw_payload.unwrap_or(json!({}));${(allActors || []).some(a => a.isPublic && !a.membersOf && !a.singletonOf) ? `
+        // A class of ours extended from another file (its \`instance\` section), or a
+        // layer built for one there, \`$new\` with \`as\` from an actor under a recorded
+        // extender (notes/opre-extend-and-as-2026-11-20.md, "Instance layers").
+        if let Some(t) = op_name.strip_prefix("$extend ") {
+            if let Some(names) = bv_class_ext(t) {
+                let arg = payload.as_array().and_then(|a| a.first()).unwrap_or(&payload).clone();
+                let instance = arg.get("instance").cloned().unwrap_or(json!([]));
+                let ok = instance.as_array().is_some_and(|a| a.iter().all(|n| n.as_str().is_some_and(|n| names.contains(&n))));
+                let mut resp = Map::new();
+                resp.insert("id".to_string(), json!(id));
+                resp.insert("to".to_string(), json!(from));
+                if ok {
+                    let key = format!("__class_ext_{}", t);
+                    let mut recs = self.bv_file_state().get(&key).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+                    recs.push(json!({ "from": from, "as": message.get("as").cloned().unwrap_or(json!(from)), "instance": instance }));
+                    self.bv_file_state().insert(key, Value::Array(recs));
+                    resp.insert("re".to_string(), json!([]));
+                } else {
+                    resp.insert("ex".to_string(), json!({ "$extend": "unknown_name" }));
+                }
+                let _ = self.binding.send(Value::Object(resp));
+                return;
+            }
+        }
+        if let Some(t) = op_name.strip_prefix("$new ") {
+            if let (Some(_), Some(as_)) = (bv_class_ext(t), message.get("as").and_then(|v| v.as_str())) {
+                let under = |k: &str| from == k || from.starts_with(&format!("{}:", k));
+                let recs = self.bv_file_state().get(&format!("__class_ext_{}", t)).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+                match recs.iter().find(|r| r.get("from").and_then(|v| v.as_str()).is_some_and(under)) {
+                    Some(rec) => { self.bv_file_state().insert("__pending_layer".to_string(), json!({ "from": from, "as": as_, "table": rec.get("instance").cloned().unwrap_or(json!([])), "owner": "" })); }
+                    None => {
+                        let mut resp = Map::new();
+                        resp.insert("id".to_string(), json!(id));
+                        resp.insert("ex".to_string(), json!({ "$new": "unknown_context" }));
+                        resp.insert("to".to_string(), json!(from));
+                        let _ = self.binding.send(Value::Object(resp));
+                        return;
+                    }
+                }
+            }
+        }` : ''}${publishesClasses ? `
         if let Some(addr) = _inst_addr {
+            // A layer, to anyone but the actor that built it, isn't there.
+            if message.get("op").is_some() {
+                if let Some(owner) = self.bv_file_state().get(&format!("__layer_owner_{}", addr)).cloned() {
+                    if owner.as_str() != Some(from) {
+                        let mut ex = Map::new();
+                        ex.insert(wire_op.clone(), json!("unhandled"));
+                        let mut resp = Map::new();
+                        resp.insert("id".to_string(), json!(id));
+                        resp.insert("ex".to_string(), Value::Object(ex));
+                        resp.insert("to".to_string(), json!(from));
+                        let _ = self.binding.send(Value::Object(resp));
+                        return;
+                    }
+                }
+            }
             let (class, inst) = addr.split_once(':').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             // Only a public class is published, and its identifier has this suffix.
@@ -2728,7 +2903,9 @@ function codegenRust(ast, options = {}) {
   // to know whose state is current (state_owner).
   // A file class's actors are published at `N` and found, as a singleton is, by address.
   G.ctx.publicSingletons = ast.actors.some(a => publicLabel(a) || a.name === FILE_CLASS);
-  G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons;
+  // An actor that may be extended, or extends one in another file, runs as a class
+  // that reaches the actors around it (its delegation runtime is there).
+  G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons || ast.actors.some(a => a.membersOf || a.isPublic || a.remoteLayers?.length);
   G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();

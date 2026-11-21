@@ -249,9 +249,9 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     const arg = params.length > 0 ? '_s' : 'BvObject.pack(payload)';
     // A silent function sends no reply, early exit or not.
     if (rawBody.some(s => s.type === 'SilentTerminator')) {
-      return { condition, block: `${destructure}\n        await this.#${jsName}Fn(${arg});\n        _handled = true;` };
+      return { condition, block: `${destructure}\n        await this.#${jsName}Fn(${arg}${ctx.inBlock ? ', _ctx' : ''});\n        _handled = true;` };
     }
-    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg});\n        re = BvObject.splat(_fnResult);${delegatedTyLine(ctx, rawBody, tyLine, typeEnv)}\n        _handled = true;` };
+    return { condition, block: `${destructure}\n        const _fnResult = await this.#${jsName}Fn(${arg}${ctx.inBlock ? ', _ctx' : ''});\n        re = BvObject.splat(_fnResult);${delegatedTyLine(ctx, rawBody, tyLine, typeEnv)}\n        _handled = true;` };
   }
   return { condition, block: `${destructure}${locals}${reLine}${tyLine}${notifyBlock}\n        _handled = true;` };
 }
@@ -310,7 +310,8 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
   ctx.ssaCounts = savedSsaCounts;
   ctx.currentTypeEnv = savedTypeEnv;
   const jsName = methodNameFor(name);
-  return `  async #${jsName}Fn(_s) {${destructure}${locals}
+  // In an actor that runs in a context, the call's goes along (blockExtension).
+  return `  async #${jsName}Fn(_s${ctx.inBlock ? ', _ctx = null' : ''}) {${destructure}${locals}
     let re;${reLine}
     return ${reply?.fields?.[0]?.selfReturn ? genPackedReturn(ctx, reply.fields, typeEnv) : reply?.fields?.some(f => f.localObject) ? 'Object.assign(BvObject.pack(re), { forwarded: true })' : 'BvObject.pack(re)'};
   }`;
@@ -336,13 +337,21 @@ const declaredActor = (actor) => !actor.name || !!actor.singletonOf;
 //   them to its base.
 function blockExtension(ctx, actor) {
   const node = (ctx.program?.actors || []).find(a => a.name === actor.name);
-  if (!node?.membersOf) return null;
+  // A class block; a published class, whose instances may be built as a layer for a
+  // class in another file; a class whose parent is in another file, which builds a
+  // layer there and delegates to it (notes/opre-extend-and-as-2026-11-20.md).
+  const isBlock = !!node?.membersOf;
+  const layers = node && !isBlock ? (node.remoteLayers || []) : [];
+  const layerable = !!node && !isBlock && !!node.isPublic;
+  if (!isBlock && !layers.length && !layerable) return null;
   const byName = new Map(ctx.program.actors.filter(a => a.name).map(a => [a.name, a]));
   // A parent block in another file is a remote actor, known by its doc.
   const remote = node.remoteBase ?? null;
   const base = node.blockParent ? (byName.get(node.blockParent) ?? (remote && { remote })) : null;
   const label = (b) => selfAddress(publicLabel(b) ?? b.singletonOf);
-  const self = label(node);
+  const self = isBlock ? label(node) : null;
+  // Our address as code: a block's is known; an instance's, as it's published.
+  const SELF = isBlock ? JSON.stringify(self) : 'this.#_selfAt';
   const baseSelf = remote ? remote.address : base ? label(base) : null;
   const names = node.extensionNames || [];
   const remoteNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
@@ -351,14 +360,23 @@ function blockExtension(ctx, actor) {
   // The \`instance\` section the class's \`$extend\` carries, and what our class's
   // instances declare, which an extender's may name.
   const instanceTable = node.overrideTable?.instance || [];
-  const instanceNames = byName.get(node.membersOf)?.instanceNames || [];
+  const instanceNames = isBlock ? byName.get(node.membersOf)?.instanceNames || [] : [];
   const forwards = (node.forwardCells || []).map(c => wireLabel(c.name));
   // What it inherits (a call for one goes to its base), and what it defines.
   const inheritedFns = (node.forwardFns || []).map(wireLabel);
   const ownFns = [...new Set((node.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
   const J = JSON.stringify;
-  const fields = `\n  #_extenders = new Map()\n  #_relays = new Map()${base ? (remote ? `\n  #base = { receive: (m) => this.#_wireSend({ ...m, to: ${J(remote.address)} + (m.to ?? '') }) }` : '\n  #base = null') : ''}`;
-  const methods = `  // Whether \`from\` is a recorded extender, or an actor under one.
+  const owners = node.inheritedOwners || {};
+  const fields = `\n  #_extenders = new Map()\n  #_relays = new Map()${base ? (remote ? `\n  #base = { receive: (m) => this.#_wireSend({ ...m, to: ${J(remote.address)} + (m.to ?? '') }) }` : '\n  #base = null') : ''}${!isBlock ? `\n  #_selfAt = null\n  #_layerCtx = null${layers.length ? '\n  #_layers = {}' : ''}` : ''}`;
+  // The base a name goes to: a block's one; an instance's layer for the parent it's from.
+  const baseFor = isBlock ? () => 'this.#base' : (owner) => `this.#_layerBase(${owner})`;
+  const hasBase = !!base || layers.length > 0;
+  // Whether a message's \`from\` is our base: a callback from it.
+  const fromBase = (f) => isBlock ? `(${J(baseSelf)} !== null && ${f} === ${J(baseSelf)})` : layers.length ? `Object.values(this.#_layers).includes(${f})` : 'false';
+  const methods = `  // What extends us, for our class's \`$new\` of a layer.
+  _extenderRecords() { return [...this.#_extenders.values()]; }
+
+  // Whether \`from\` is a recorded extender, or an actor under one.
   #_isExtender(from) {
     if (typeof from !== 'string') return false;
     for (const { from: k } of this.#_extenders.values()) if (from === k || from.startsWith(k + ':')) return true;
@@ -394,31 +412,34 @@ function blockExtension(ctx, actor) {
     if (message.as !== undefined) {
       const as = message.as;
       // A callback from our base, for us or an extender of ours.
-      if (${J(baseSelf)} !== null && message.from === ${J(baseSelf)}) {
-        if (as === ${J(self)}) return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: null };
+      if (${fromBase('message.from')}) {
+        if (as === ${SELF}) return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: null };
         const rec = [...this.#_extenders.values()].find(r => r.as === as);
         if (!rec) return fail('unknown_context');
-        if (rec.table.includes(name)) { this.#_relay(message, rec.send, { from: ${J(self)}, as }, route, replyTo); return null; }
+        if (rec.table.includes(name)) { this.#_relay(message, rec.send, { from: ${SELF}, as }, route, replyTo); return null; }
         return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
       }
+      ${!isBlock ? `// From the instance that built us as its layer: run in its context, always.
+      if (this.#_layerCtx && message.from === this.#_layerCtx.from && as === this.#_layerCtx.as) return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: this.#_layerCtx };` : ''}
       // A delegated call from an extender: run as its delegate, for the context it names.
       const rec = this.#_extenders.get(JSON.stringify([message.from, as]));
       if (!rec) return fail('unknown_context');
-      ${base ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => this.#base.receive(m), { to: undefined, from: ${J(self)}, as }, route, replyTo); return null; }` : ''}
+      ${hasBase ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => ${baseFor(`${J(owners)}[name]`)}.receive(m), { to: undefined, from: ${SELF}, as }, route, replyTo); return null; }` : ''}
       return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
     }
     if ((opName === '$get' || opName === '$set') && typeof target === 'string') {
       const inside = ['__self', '__test', '__parent', '__child', '__inner'].includes(message.from);
-      const extender = !inside && this.#_isExtender(message.from);
+      // A recorded extender, or the instance that built us as its layer.
+      const extender = !inside && (this.#_isExtender(message.from)${!isBlock ? ' || (this.#_layerCtx !== null && message.from === this.#_layerCtx.from)' : ''});
       if (${J(forwards)}.includes(target) && (inside || extender)) {
-        ${base ? `this.#_relay(message, (m) => this.#base.receive(m), { to: ':' + target, from: ${J(self)} }, route, replyTo);
+        ${hasBase ? `this.#_relay(message, (m) => ${baseFor('null')}.receive(m), { to: ':' + target, from: ${SELF} }, route, replyTo);
         return null;` : 'return message;'}
       }
       if (extender && target.startsWith('~')) return { ...message, from: '__inner', _replyTo: replyTo };
     }
-    ${base ? `// A name we don't define but inherit: our base runs it, for us.
+    ${hasBase ? `// A name we don't define but inherit: our base runs it, for us.
     if (isCall && !${J(ownFns)}.includes(name) && ${J(inheritedFns)}.includes(name)) {
-      this.#_relay(message, (m) => this.#base.receive(m), { to: undefined, from: ${J(self)}, as: ${J(self)} }, route, replyTo);
+      this.#_relay(message, (m) => ${baseFor(`${J(owners)}[name]`)}.receive(m), { to: undefined, from: ${SELF}, as: ${SELF} }, route, replyTo);
       return null;
     }` : ''}
     return message;
@@ -439,7 +460,7 @@ function blockExtension(ctx, actor) {
     // Callbacks for this context go to the extender, as replies to it do: across the
     // wire, as from us, for one in another actor.
     const send = message._route ? (m) => message._route(m) : (m) => this.#_wireSend({ ...m, to: message.from + (m.to ?? '') });
-    this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table, send });${base ? `
+    this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table, instance, send });${base ? `
     try { await this.#_extend(as, [...new Set([...${J(table)}, ...table.filter(n => ${J(baseNames)}.includes(n))])]); }
     catch (ex) { route({ id: message.id, ex: { $extend: ex?.$extend ?? 'error' }, to: replyTo }); return; }` : ''}
     route({ id: message.id, re: [], to: replyTo });
@@ -447,23 +468,23 @@ function blockExtension(ctx, actor) {
 
   // A call of one of our functions, in a context: at the extender that overrides it,
   // here (in the same context), or at our base, for one we inherit or \`super\`.
-  async #_ctxSend(ctx, op, direct = false) {
+  async #_ctxSend(ctx, op, direct = false, owner = null) {
     const name = Array.isArray(op) ? op[op.length - 1] : op;
-    if (!direct && ctx && ctx.table.includes(name)) return this.#_await((m) => ctx.send(m), { op, from: ${J(self)}, as: ctx.as });
+    if (!direct && ctx && ctx.table.includes(name)) return this.#_await((m) => ctx.send(m), { op, from: ${SELF}, as: ctx.as });
     if (!direct && !${J(inheritedFns)}.includes(name)) {
       const id = String(++this.#nextId);
       const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
       await this.#dispatch({ id, op, from: '__self', _ctx: ctx });
       return p;
     }
-    ${base ? `return this.#_await((m) => this.#base.receive(m), { op, from: ${J(self)}, as: ctx ? ctx.as : ${J(self)} });` : `throw new Error('no base to run ' + name);`}
+    ${hasBase ? `return this.#_await((m) => ${baseFor(`(owner ?? ${J(owners)}[name])`)}.receive(m), { op, from: ${SELF}, as: ctx ? ctx.as : ${SELF} });` : `throw new Error('no base to run ' + name);`}
   }
 
   // A message to another actor, across the wire, as from us.
   #_wireSend(m) {
     const { _route, ...msg } = m;
-    if (this.#outer) { this.#outer.receive({ ...msg, from: '__child', _asFrom: ${J(self)}, _route: _route || (() => {}) }); return; }
-    this.#binding.post({ ...msg, from: ${J(self)} });
+    if (this.#outer) { this.#outer.receive({ ...msg, from: '__child', _asFrom: ${SELF}, _route: _route || (() => {}) }); return; }
+    this.#binding.post({ ...msg, from: ${SELF} });
   }
 
   // A message sent for its reply.
@@ -478,47 +499,143 @@ function blockExtension(ctx, actor) {
   // A cell an extender may redeclare: read there when the context says so.
   async #_ctxGet(ctx, name, own) {
     if (ctx && ctx.table.includes(name)) {
-      const v = await this.#_await((m) => ctx.send(m), { op: '$get', to: ':' + name, from: ${J(self)}, as: ctx.as });
+      const v = await this.#_await((m) => ctx.send(m), { op: '$get', to: ':' + name, from: ${SELF}, as: ctx.as });
       return Array.isArray(v) ? v[0] : v;
     }
     return own();
   }
 
   // And written there; otherwise ours (through its own \`$set\`), or our base's.
-  async #_ctxSet(ctx, name, value, inherited = false) {
+  async #_ctxSet(ctx, name, value, inherited = false, owner = null) {
     if (ctx && ctx.table.includes(name)) {
-      const msg = { id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, as: ctx.as, _route: () => {} };
+      const msg = { id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${SELF}, as: ctx.as, _route: () => {} };
       queueMicrotask(() => ctx.send(msg));
       return;
     }
-    ${base ? `if (inherited) { this.#_baseSet(name, value); return; }` : ''}
-    await this.#dispatch({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: '__self', _route: () => {} });
+    ${hasBase ? `if (inherited) { this.#_baseSet(name, value, owner); return; }` : ''}
+    await this.#dispatch({ id: '.' + (++this.#localId), op: [[value], '$set'], to: ':' + name, from: '__self', _route: () => {} });
   }
-${base ? `
-  // Register with our base: for ourselves, or (\`as\`) an extender of ours.
-  #_extend(as = null, table = ${J(table)}) {
-    const arg = { block: table, ...(as === null && ${J(instanceTable)}.length && { instance: ${J(instanceTable)} }) };
-    return this.#_await((m) => this.#base.receive(m), { op: [[arg], '$extend'], from: ${J(self)}, ...(as !== null && { as }) });
+${!isBlock && layers.length ? `
+  // The layer we built for a parent in another file, as a base.
+  #_layerBase(owner) {
+    const at = this.#_layers[owner ?? Object.keys(this.#_layers)[0]];
+    return { receive: (m) => this.#_wireSend({ ...m, to: at + (m.to ?? '') }) };
   }
 
+  // \`super(args)\` for a parent in another file: \`$new\` there, \`as\` us, makes our layer
+  // and runs its constructor; its reply is the layer's address.
+  async #_newLayer(address, op, ty) {
+    const re = await this.#_await((m) => this.#_wireSend(m), { op, ty, to: address, from: ${SELF}, as: ${SELF} });
+    const v = Array.isArray(re) ? re[0] : re;
+    return typeof v === 'string' ? _opre_unbracket(v) : v;
+  }
+` : ''}${hasBase ? `
   // A cell we inherit, read at our base.
-  async #_baseRead(name) {
-    const v = await this.#_await((m) => this.#base.receive(m), { op: '$get', to: ':' + name, from: ${J(self)} });
+  async #_baseRead(name, owner = null) {
+    const v = await this.#_await((m) => ${baseFor('owner')}.receive(m), { op: '$get', to: ':' + name, from: ${SELF} });
     return Array.isArray(v) ? v[0] : v;
   }
 
   // A write to a cell we inherit, sent to our base.
-  #_baseSet(name, value) {
-    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, ty: [['Anything']], _route: () => {} }));
+  #_baseSet(name, value, owner = null) {
+    queueMicrotask(() => ${baseFor('owner')}.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${SELF}, ty: [['Anything']], _route: () => {} }));
+  }
+` : ''}${base ? `
+  // Register with our base: for ourselves, or (\`as\`) an extender of ours.
+  #_extend(as = null, table = ${J(table)}) {
+    const arg = { block: table, ...(as === null && ${J(instanceTable)}.length && { instance: ${J(instanceTable)} }) };
+    return this.#_await((m) => this.#base.receive(m), { op: [[arg], '$extend'], from: ${SELF}, ...(as !== null && { as }) });
   }
 ` : ''}
 `;
-  return { fields, methods, base: !!base, remote: !!remote };
+  return { fields, methods, base: !!base, remote: !!remote, isBlock, layerable, layers };
+}
+
+// The file actor's side of instance layers (notes/opre-extend-and-as-2026-11-20.md,
+// "Instance layers"):
+// - a class of ours whose parent is in another file: the class's \`$extend\` there, as
+//   the file starts (its \`instance\` section); its actors are published as they're
+//   made, so their layer's callbacks reach them while they're built;
+// - a published class of ours: a \`$extend\` to it from another file is recorded (a
+//   class with a block records it there), and \`$new\` with \`as\` from an actor under a
+//   recorded extender builds a layer, in that actor's context.
+function homeExtension(ctx) {
+  const actors = ctx.program?.actors || [];
+  const children = actors.filter(a => a.remoteLayers?.length && !a.membersOf);
+  const published = actors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf);
+  if (!children.length && !published.length) return null;
+  const J = JSON.stringify;
+  const selectorOf = (a) => a.selector ?? (a.sourceName ?? a.name).replace(/^@/, '');
+  const birth = Object.fromEntries([...children, ...published].map(a => [a.name, { selector: selectorOf(a), early: !!a.remoteLayers?.length }]));
+  const classes = Object.fromEntries(published.map(a => [selectorOf(a), { instanceNames: a.instanceNames || [], block: !!(a.membersClass && !a.membersInherited) }]));
+  const initLines = children.flatMap(a => a.remoteLayers.map(L =>
+    `    await this.#_classExtend(${J(selectorOf(a))}, ${J(L.address)}, ${J(a.instanceTables?.[L.name] || [])});`));
+  const fields = '\n  #_classExt = new Map()\n  #_pendingLayer = null';
+  const methods = `  // What a class of ours being built gets: published as it's made, for one that
+  // builds a layer; for a layer, the context it runs in.
+  #_birth(cls) {
+    const layer = this.#_pendingLayer;
+    this.#_pendingLayer = null;
+    const b = ${J(birth)}[cls];
+    if (!b || (!layer && !b.early)) return {};
+    // A layer is its builder's alone: no one else reaches it.
+    return { created: (i) => { const at = this.#_publishInstance(b.selector, i); if (layer) this.#_layerOwner.set(at, layer.from); return at; }, ...(layer && { layerCtx: layer }) };
+  }
+
+  // A class of ours extends one in another file: its \`$extend\` there, waited for.
+  #_classExtend(selector, address, instance) {
+    const id = String(++this.#nextId);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
+      this.#binding.post({ id, op: [[{ block: [], instance }], '$extend'], to: address, from: ':' + _opre_quote(selector) });
+    });
+  }
+
+  // \`$extend\` to a class of ours (one with no block; a block records its own), and
+  // \`$new\` with \`as\`. Anything else goes on to dispatch.
+  #_classHandshake(message, opName, target, from, replyTo) {
+    const classes = ${J(classes)};
+    if (target === null || !Object.hasOwn(classes, target)) return false;
+    const route = message._route || ((m) => this.#binding.post(m));
+    if (opName === '$extend' && !classes[target].block) {
+      const arg = Array.isArray(message.op) && Array.isArray(message.op[0]) ? message.op[0][0] : null;
+      const instance = arg && arg.instance !== undefined ? arg.instance : [];
+      if (!Array.isArray(instance) || !instance.every(n => classes[target].instanceNames.includes(n))) {
+        route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo });
+        return true;
+      }
+      const recs = this.#_classExt.get(target) ?? [];
+      recs.push({ from, as: message.as ?? from, instance });
+      this.#_classExt.set(target, recs);
+      route({ id: message.id, re: [], to: replyTo });
+      return true;
+    }
+    if (opName === '$new' && message.as !== undefined) {
+      const under = (k) => typeof from === 'string' && (from === k || from.startsWith(k + ':'));
+      const recs = classes[target].block ? (this.#_instances.get(target)?._extenderRecords?.() ?? []) : (this.#_classExt.get(target) ?? []);
+      const rec = recs.find(r => under(r.from));
+      if (!rec) { route({ id: message.id, ex: { $new: 'unknown_context' }, to: replyTo }); return true; }
+      // Its callbacks go to the actor that built it, across the wire.
+      const owner = from;
+      this.#_pendingLayer = { from: owner, as: message.as, table: rec.instance || [], send: (m) => { const { _route, ...w } = m; this.#binding.post({ ...w, to: owner + (m.to ?? '') }); } };
+    }
+    return false;
+  }
+
+`;
+  return { fields, methods, initLines };
 }
 
 function genClass(ctx, actor, exportKw, remotes = null) {
-  // A class block's functions run in the context of a delegated call (blockExtension).
-  ctx.inBlock = !!(ctx.program?.actors || []).find(a => a.name === actor.name)?.membersOf;
+  // A class block's functions run in the context of a delegated call, and so do a
+  // published class's, built as a layer, and a class's whose parent is in another
+  // file (blockExtension).
+  {
+    const node = (ctx.program?.actors || []).find(a => a.name === actor.name);
+    ctx.inBlock = !!node && (!!node.membersOf || !!node.isPublic || !!node.remoteLayers?.length);
+    // The file builds its classes with what homeExtension gives them.
+    ctx.canBirth = !actor.name && (ctx.program?.actors || []).some(a => (a.isPublic && !a.membersOf && !a.singletonOf) || a.remoteLayers?.length);
+  }
   // Reset lambda state for this class
   ctx.inClass = !!actor.name;
   ctx.currentActor = actor;
@@ -1024,8 +1141,12 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   if (hasDeferred) allInitLines.push(`    await Promise.all(this.#_joins);`);
   // A class block that extends another registers with it before its own block runs.
   const ext = blockExtension(ctx, actor);
+  // The file's side of instance layers: its classes' handshakes, and its layers.
+  const homeExt = !actor.name ? homeExtension(ctx) : null;
+  if (homeExt?.initLines.length) allInitLines.unshift(...homeExt.initLines);
   if (ext?.base) allInitLines.unshift('    await this.#_extend();');
-  if (ext) allInitLines.unshift('    const _ctx = null;');
+  // A layer runs in the context of the instance that built it, its constructor too.
+  if (ext) allInitLines.unshift(ext.isBlock ? '    const _ctx = null;' : '    const _ctx = this.#_layerCtx;');
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
@@ -1061,11 +1182,14 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_newPending = new Map()
   #_testFwd = new Map()
   #_cellSubs = new Map()
-  #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
+  #nextId = 0
+  // Ids for calls that never leave us (to an actor we hold, to ourselves): apart from
+  // the wire's, so the ids we post run 1, 2, 3, … on every target.
+  #localId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_layerOwner = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null
-  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()\n  #_selfFwd = new Map()' : ''}${ext ? ext.fields : ''}
+  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()\n  #_selfFwd = new Map()' : ''}${homeExt ? homeExt.fields : ''}${ext ? ext.fields : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base && !ext.remote ? ' this.#base = binding.base ?? null;' : ''} }
+  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base && !ext.remote ? ' this.#base = binding.base ?? null;' : ''}${ext && !ext.isBlock ? ' this.#_layerCtx = binding.layerCtx ?? null;' : ''} }
 
   _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
@@ -1073,7 +1197,10 @@ ${fieldSection ? fieldSection + '\n' : ''}
 
   static async create(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
     const instance = new this(binding);
-    if (binding.created) binding.created(instance);
+    ${ext && !ext.isBlock ? `// Published as it's made, its address its own: a layer's callbacks reach it while
+    // it's built.
+    const _at = binding.created ? binding.created(instance) : undefined;
+    if (typeof _at === 'string') instance.#_selfAt = ':' + _at;` : 'if (binding.created) binding.created(instance);'}
     ${initCallLine}
     return instance;
   }
@@ -1185,7 +1312,7 @@ ${actor.spawnable ? `
     // A self-return from a remote yields an address, not a handle: \`to\` is
     // the address itself (#out drops the brackets that mark it as a value).
     if (typeof child === 'string') return this.#send(op, child);
-    const id = String(++this.#nextId);
+    const id = '.' + (++this.#localId);
     return new Promise((resolve, reject) => {
       // A child's self-return arrives untranslated. We're its parent, so the
       // translation is ours: its self address \`#<:>\` means this handle,
@@ -1205,7 +1332,7 @@ ${actor.spawnable ? `
   // any that comes is dropped.
   #childFire(child, op) {
     if (typeof child === 'string') { this.#fire(op, child.startsWith('#<') && child.endsWith('>') ? child.slice(2, -1) : child); return; }
-    child.receive({ id: String(++this.#nextId), op, from: '__parent', _route: () => {} });
+    child.receive({ id: '.' + (++this.#localId), op, from: '__parent', _route: () => {} });
   }
 
   // A call on the result of a call. The receiver is whatever the first call
@@ -1353,10 +1480,12 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     return p;
   }
 
-${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
+${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it's reached through here,
   // and we translate what it sends, as a parent does.
   // \`cls\` null is our own class (a file that declares \`new\`): \`N\`, tagged \`:\`.
   #_publishInstance(cls, inst) {
+    // Published once: as it's made (a class that builds a layer), or when \`new\` replies.
+    if (this.#_addrOf.has(inst)) return this.#_addrOf.get(inst);
     const n = (this.#_instanceSeq.get(cls) || 0) + 1;
     this.#_instanceSeq.set(cls, n);
     if (cls === null) return this.#_publishAt(String(n), ':', inst);
@@ -1447,7 +1576,10 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       const _isNew = (Array.isArray(message.op) ? message.op[message.op.length - 1] : message.op) === '$new';
       for (let _n = Math.min(2, _toks.length); _n > 0; _n--) {
         if (_isNew && _n === _toks.length) continue;
-        const _inst = this.#_instances.get(_opre_join(_toks.slice(0, _n)));
+        const _at = _opre_join(_toks.slice(0, _n));
+        const _inst = this.#_instances.get(_at);
+        // A layer, to anyone but the actor that built it, isn't there.
+        if (_inst && 'op' in message && this.#_layerOwner.has(_at) && message.from !== this.#_layerOwner.get(_at)) break;
         if (_inst) { _inst.receive({ ...message, to: _toks.length > _n ? _opre_join([null, ..._toks.slice(_n)]) : undefined }); return; }
       }
     }` : ''}
@@ -1516,13 +1648,15 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
   async #dispatch(message) {
     const { id } = message;${ext ? `
     // The context a delegated call runs in: an extender's record, or none.
-    const _ctx = message._ctx ?? null;` : ''}
+    const _ctx = ${ext.isBlock ? 'message._ctx ?? null' : "'_ctx' in message ? message._ctx : this.#_layerCtx"};` : ''}
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
     // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
     // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
-    const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;
+    const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;${homeExt ? `
+    // A class of ours extended from another file, or a layer built for one there.
+    if (this.#_classHandshake(message, opName, _target, from, _replyTo)) return;` : ''}
     if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
       // A protected or private name (\`~a\`, \`#a\`) is subscribed to only from inside:
       // from outside it isn't there, and nothing is registered.

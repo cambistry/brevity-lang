@@ -627,8 +627,18 @@ ${subRegLines.join('\n')}
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
     const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
     const w = JSON.stringify(wireLabel(expr.name));
-    if (expr.ctxCell && G.ctx.inBlock) return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_ctx_set(${w}, _v, ${!!expr.outerBase}); }`;
-    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_base_set(${w}, _v); }`;
+    const owner = expr.outerClass ? `Some(${JSON.stringify(expr.outerClass)})` : 'None';
+    if (expr.ctxCell && G.ctx.inBlock) return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_ctx_set_of(${w}, _v, ${!!expr.outerBase}, ${owner}); }`;
+    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_base_set_of(${w}, _v, ${owner}); }`;
+  }
+  // \`super(args)\` for a parent in another file: its layer, built there.
+  if (expr.type === 'RemoteNew') {
+    const pos = expr.args.filter(a => a.positional);
+    const named = expr.args.filter(a => !a.positional);
+    const val = (a) => toJsonValue(genRustExpr(a.value, typeEnv), a.type || inferExprType(a.value, typeEnv) || 'Anything');
+    const items = [...pos.map(val), ...(named.length ? [`{ let mut _nm = Map::new(); ${named.map(a => `_nm.insert(${JSON.stringify(a.key)}.to_string(), ${val(a)});`).join(' ')} Value::Object(_nm) }`] : [])];
+    const tys = [...pos.map(a => `json!(${JSON.stringify(a.type ?? 'Anything')})`), ...(named.length ? [`json!({ ${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type ?? 'Anything')}`).join(', ')} })`] : [])];
+    return `{ let _p = Value::Array(vec![${items.join(', ')}]); let _t = json!([Value::Array(vec![${tys.join(', ')}])]); self.bv_new_layer(${JSON.stringify(expr.layer)}, ${JSON.stringify(expr.address)}, &_p, &_t); }`;
   }
   if (expr.type === 'OuterSet') {
     const op = `${expr.updateOp === '<|' ? '$update' : '$set'} ${wireLabel(expr.name)}`;
@@ -1848,7 +1858,7 @@ function genRustFnCallExpr(expr, typeEnv) {
     ? `bv_call_self(|| self.outer_send(${expr.outerLevel}, "${wireLabel(calleeName)}", ${payload}))`
     // In a class block, a call resolves through the call's context.
     : G.ctx.childSelfSendPrefix && G.ctx.inBlock
-    ? `bv_call_self(|| self.bv_ctx_send("${wireLabel(calleeName)}", ${payload}, ${expr.inheritedCall === 'direct'}))`
+    ? `bv_call_self(|| self.bv_ctx_send_of("${wireLabel(calleeName)}", ${payload}, ${expr.inheritedCall === 'direct'}, ${expr.inheritedFrom ? `Some(${JSON.stringify(expr.inheritedFrom)})` : 'None'}))`
     : G.ctx.childSelfSendPrefix
     ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${wireLabel(calleeName)}", ${payload}, "", "__parent"))`
     : `bv_call_self(|| self.self_send("${wireLabel(calleeName)}", ${payload}))`);

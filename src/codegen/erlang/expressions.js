@@ -310,7 +310,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.ctxCell && ctx.inBlock && !sCtx?.noCtx) {
     return `bv_ctx_get_(${erlString(expr.ctxCell)}, fun() -> ${genExpr(ctx, expr, typeEnv, { ...(sCtx || {}), noCtx: true })} end)`;
   }
-  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `bv_base_get_(${erlString(wireLabel(expr.name))})`;
+  // For a class with two layers, at the one of the parent it's from.
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `bv_base_get_(${erlString(wireLabel(expr.name))}${expr.outerClass ? `, ${erlString(expr.outerClass)}` : ''})`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
     // `$get` to the owner's name, by its wire token (bv_read_ in program.js).
     return `bv_outer_get_(${expr.outerLevel ?? 1}, ${erlString(wireLabel(expr.name))})`;
@@ -447,8 +448,17 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'OuterSet' && (expr.outerBase || expr.outerSelf)) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
     const w = erlString(wireLabel(expr.name));
-    if (expr.ctxCell && ctx.inBlock) return `bv_ctx_set_(${w}, ${genExpr(ctx, expr.value, typeEnv, sCtx)}, ${!!expr.outerBase})`;
-    return `bv_base_set_(${w}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}])`;
+    const owner = expr.outerClass ? erlString(expr.outerClass) : 'undefined';
+    if (expr.ctxCell && ctx.inBlock) return `bv_ctx_set_(${w}, ${genExpr(ctx, expr.value, typeEnv, sCtx)}, ${!!expr.outerBase}, ${owner})`;
+    return `bv_base_set_(${w}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}], ${owner})`;
+  }
+  // \`super(args)\` for a parent in another file: its layer, built there (\`$new\`, \`as\` us).
+  if (expr.type === 'RemoteNew') {
+    const pos = expr.args.filter(a => a.positional);
+    const named = expr.args.filter(a => !a.positional);
+    const items = [...pos.map(a => genExpr(ctx, a.value, typeEnv, sCtx)), ...(named.length ? [`#{${named.map(a => `${erlString(a.key)} => ${genExpr(ctx, a.value, typeEnv, sCtx)}`).join(', ')}}`] : [])];
+    const tys = [...pos.map(a => erlString(a.type ?? 'Anything')), ...(named.length ? [`#{${named.map(a => `${erlString(a.key)} => ${erlString(a.type ?? 'Anything')}`).join(', ')}}`] : [])];
+    return `bv_new_layer_(${erlString(expr.layer)}, ${erlString(expr.address)}, [${items.join(', ')}], [[${tys.join(', ')}]])`;
   }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';

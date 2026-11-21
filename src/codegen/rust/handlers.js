@@ -948,7 +948,7 @@ ${m[2]}
   arms.push('            _ => { if bv_from_wire_caller(from) { self.wire_unhandled = true; } }');
 
   return `
-    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {${actor.membersOf ? `
+    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {${actor.membersOf || actor.isPublic || actor.remoteLayers?.length ? `${actor.membersOf ? `
         // A class block (notes/opre-extend-and-as-2026-11-20.md): \`$extend\` records an
         // extender, which may then reach our protected cells; a cell we inherit is
         // answered at our base.
@@ -966,7 +966,7 @@ ${m[2]}
             let as_ = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| from.to_string());
             self.bv_extend_at(&owner, from, &as_, &table, "");
             return json!([]);
-        }
+        }` : ''}
         // A delegated call from the wire names its context.
         if bv_from_wire_caller(from) {
             if let Some(a) = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from) {
@@ -1101,7 +1101,7 @@ function genRustChildInit(actor) {
     } else if (isOwnCallStatement(s)) {
       // A call to the class's own function, run while constructing.
       lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
+    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
@@ -1161,7 +1161,7 @@ function genRustChildInit(actor) {
     for (const s of postIngestBody) {
       if (isOwnCallStatement(s)) {
         lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet'))) {
+      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
@@ -1333,8 +1333,9 @@ function genRustChildMethods(allActors) {
 
     // Set child self-send prefix so a call to the class's own function routes through child dispatch
     G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
-    // A class block's functions run in the context of a delegated call.
-    G.ctx.inBlock = !!actor.membersOf;
+    // A class block's functions run in the context of a delegated call, and so do a
+    // published class's (built as a layer) and a class's whose parent is in another file.
+    G.ctx.inBlock = !!actor.membersOf || !!actor.isPublic || !!actor.remoteLayers?.length;
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(mergedActor));
@@ -1357,6 +1358,20 @@ function genRustChildMethods(allActors) {
         incoming.insert("__outers".to_string(), outers);${mergedActor.blockParent && !mergedActor.remoteBase ? `
         // A class block that extends another holds it as its base.
         incoming.insert("__base".to_string(), self.bv_block_in_home(${JSON.stringify((mergedActor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel((G.ctx.actorInfo?.get(mergedActor.blockParent)?.actor ?? G.ctx.actorInfo?.get(mergedActor.blockParent))?.singletonOf))}));` : ''}
+${mergedActor.isPublic || mergedActor.remoteLayers?.length ? `
+        // Published as it's made, its address its own, for one that builds a layer, or
+        // is one: the other's callbacks reach it while it's built. A layer runs in the
+        // context of the instance that built it (\`__pending_layer\`, from its file).
+        let _pending = self.bv_file_state().remove("__pending_layer");
+        if ${mergedActor.remoteLayers?.length ? 'true' : '_pending.is_some()'} {
+            let _addr = format!("${quoteToken(mergedActor.selector ?? '')}:{}", instance_id);
+            self.published_instances.insert(_addr.clone());
+            self.lift_of.insert(format!("${lc}/{}", instance_id), _addr.clone());
+            incoming.insert("__self_at".to_string(), json!(format!(":{}", _addr)));
+            // A layer is its builder's alone: no one else reaches it.
+            if let Some(p) = &_pending { let f = p.get("from").cloned().unwrap_or(Value::Null); self.bv_file_state().insert(format!("__layer_owner_{}", _addr), f); }
+        }
+        if let Some(p) = _pending { incoming.insert("__layer_ctx".to_string(), p); }` : ''}
         self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}
         let saved_current = self.current_${lc}_instance.replace(instance_id);
@@ -1392,7 +1407,7 @@ function genRustChildMethods(allActors) {
         self.current_${lc}_instance = saved_current;
     }
 
-    fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {${mergedActor.membersOf ? `
+    fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {${mergedActor.membersOf || mergedActor.isPublic || mergedActor.remoteLayers?.length ? `
         // A class block waiting on another actor (a delegated call) is answered in
         // its state where that is: a callback for it comes while it waits.
         let owner = format!("${lc}/{}", instance_id);

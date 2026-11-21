@@ -8,7 +8,8 @@ const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answe
         {bv_outer_sub, SFrom_, SKey_, SId_, SRef_} -> bv_answer_outer_sub_(SFrom_, SKey_, SId_, SRef_), ${loop};
         {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), ${loop};
         {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(bv_lift_(CFrom_, CMsg_), CSilent_)}, ${loop};
-        {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop}`;
+        {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop};
+        {bv_birth, BFrom_, BSel_, BEarly_, BRef_} -> bv_answer_birth_(BFrom_, BSel_, BEarly_, BRef_), ${loop}`;
 
 // A wait on something other than the wire. A line that comes meanwhile goes to the
 // class waiting on it, or is kept for the file actor's own loop.
@@ -754,8 +755,8 @@ bv_want_line_() ->
             put(bv_line_ref_, Ref_);
         _ -> ok
     end.
-%% A line has come. A reply a class is waiting on goes to that class (taken); the
-%% file actor gets anything else.
+%% A line has come. A reply a class is waiting on goes to that class (handed); the
+%% file actor gets anything else (a blank line is taken).
 bv_take_line_(Ref, Data) ->
     case get(bv_line_ref_) of
         Ref ->
@@ -774,7 +775,7 @@ bv_take_line_(Ref, Data) ->
                                 Pid_ when is_pid(Pid_) ->
                                     put(bv_line_waiters_, get(bv_line_waiters_) - 1),
                                     Pid_ ! {bv_line, Id_, Message_},
-                                    taken;
+                                    handed;
                                 _ -> {line, Message_}
                             end
                     end
@@ -791,15 +792,23 @@ bv_add_line_waiter_(Pid, Id) ->
 bv_line_waiters_() -> case get(bv_line_waiters_) of undefined -> 0; N_ -> N_ end.
 %% A line that came while the file actor waited on something else: it keeps it for
 %% its own loop, and asks for another if a class is still waiting.
+%% A line handed to a class while we answer a delegated call or callback: the next is
+%% asked for once that answer is out (as the answer ends), so whoever reads our output
+%% sees what the line led to before we ask for more.
 bv_line_aside_(Ref, Data) ->
-    case bv_take_line_(Ref, Data) of
+    Took_ = bv_take_line_(Ref, Data),
+    case Took_ of
         taken -> ok;
+        handed -> ok;
         %% A delegated call or a callback (\`as\`) is answered now: the class block it's
         %% for may be what this wait is waiting on (notes/opre-extend-and-as-2026-11-20.md).
-        {line, #{<<"op">> := _, <<"as">> := _} = M_} -> (bv_mod_()):dispatch(M_);
+        {line, #{<<"op">> := _, <<"as">> := _} = M_} ->
+            put(bv_answering_, bv_answering_() + 1),
+            try (bv_mod_()):dispatch(M_) after put(bv_answering_, bv_answering_() - 1) end;
         L_ -> put(bv_line_q_, bv_line_q_() ++ [L_])
     end,
-    case bv_line_waiters_() > 0 of true -> bv_want_line_(); false -> ok end.
+    case bv_line_waiters_() > 0 andalso not (Took_ =:= handed andalso bv_answering_() > 0) of true -> bv_want_line_(); false -> ok end.
+bv_answering_() -> case get(bv_answering_) of undefined -> 0; N_ -> N_ end.
 bv_line_q_() -> case get(bv_line_q_) of undefined -> []; Q_ -> Q_ end.
 bv_is_reply_(M) -> maps:is_key(<<"re">>, M) orelse maps:is_key(<<"ex">>, M).
 bv_reply_kind_(M) -> case maps:is_key(<<"re">>, M) of true -> {re, M}; false -> {ex, M} end.
@@ -815,6 +824,39 @@ bv_landed_(Id) -> put(bv_launched_, lists:delete(Id, bv_launched_())).
 %% An actor made by \`#new\` has its own address, kept here so it can be reached.
 %% Its address relative to us is #<:C:N>.
 bv_publish_(Class, Pid) ->
+    %% Published once: as it's made (a class that builds a layer, or is one), or here.
+    case get({bv_addr_of, Pid}) of
+        undefined -> bv_publish_new_(Class, Pid);
+        At_ -> <<"#<:", At_/binary, ">">>
+    end.
+%% An actor of ours being built asks for its address (bv_birth_ask_): published at once
+%% for one that builds a layer (Early) or is one (a pending layer context, which it
+%% takes). Else it's published when \`new\` replies.
+bv_answer_birth_(From, Sel, Early, Ref) ->
+    Layer_ = erase(bv_pending_layer_),
+    case Early orelse Layer_ =/= undefined of
+        false -> From ! {bv_reply, Ref, {none, undefined}};
+        true ->
+            N_ = case get({bv_inst_seq, Sel}) of undefined -> 1; C_ -> C_ + 1 end,
+            put({bv_inst_seq, Sel}, N_),
+            Addr_ = <<Sel/binary, ":", (integer_to_binary(N_))/binary>>,
+            put({bv_instance, Addr_}, From),
+            put({bv_addr_of, From}, Addr_),
+            put(bv_published_, [{Addr_, From} | bv_published_()]),
+            %% A layer is its builder's alone: no one else reaches it.
+            case Layer_ of {Owner_, _, _, _} -> put({bv_layer_owner, Addr_}, Owner_); _ -> ok end,
+            From ! {bv_reply, Ref, {Addr_, Layer_}}
+    end.
+bv_layer_hidden_(Addr, From) ->
+    case get({bv_layer_owner, Addr}) of undefined -> false; Owner_ -> Owner_ =/= From end.
+bv_birth_ask_(Sel, Early) ->
+    Ref_ = make_ref(),
+    bv_outer_() ! {bv_birth, self(), Sel, Early, Ref_},
+    receive {bv_reply, Ref_, {Addr_, Layer_}} ->
+        case Addr_ of none -> ok; _ -> put(bv_self_at_, <<":", Addr_/binary>>) end,
+        case Layer_ of undefined -> ok; _ -> put(bv_layer_ctx_, Layer_) end
+    end.
+bv_publish_new_(Class, Pid) ->
     N_ = case get({bv_inst_seq, Class}) of undefined -> 1; C_ -> C_ + 1 end,
     put({bv_inst_seq, Class}, N_),
     Addr_ = <<Class/binary, ":", (integer_to_binary(N_))/binary>>,
@@ -1482,9 +1524,11 @@ bv_forwards_(Token) ->
     {_, _, _, Fwd_, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
     get(bv_base_) =/= undefined andalso lists:member(Token, Fwd_).
 bv_is_extender_(From) when is_binary(From) ->
-    Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
-    lists:any(fun({K_, _, _, _}) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end, Recs_);
+    case get(bv_layer_ctx_) of {From, _, _, _} -> true; _ -> bv_is_recorded_(From) end;
 bv_is_extender_(_) -> false.
+bv_is_recorded_(From) ->
+    Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
+    lists:any(fun({K_, _, _, _}) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end, Recs_).
 %% From (as As) extends us with Table, recorded if every name in it is ours. A
 %% block with a base registers it there too, with the names either of us overrides
 %% in the base's terms.
@@ -1507,7 +1551,8 @@ bv_extend_here_(From, As, Table, Pid) ->
                     bv_extend_at_(Base_, Self_, As, Own_ ++ [N_ || N_ <- Table, lists:member(N_, BaseNames_), not lists:member(N_, Own_)])
             end,
             case Up_ of
-                ok -> put(bv_extenders_, (case get(bv_extenders_) of undefined -> []; L_ -> L_ end) ++ [{From, As, Table, Pid}]), ok;
+                %% One record per context: a \`$extend\` again replaces it.
+                ok -> put(bv_extenders_, [R_ || {F_, A_, _, _} = R_ <- (case get(bv_extenders_) of undefined -> []; L_ -> L_ end), not (F_ =:= From andalso A_ =:= As)] ++ [{From, As, Table, Pid}]), ok;
                 E_ -> E_
             end
     end.
@@ -1515,18 +1560,57 @@ bv_extend_here_(From, As, Table, Pid) ->
 %% address and what it declares, by its doc): every message to it is a wire
 %% message, written by the block itself, as from its own address, and waited for
 %% in a loop that keeps answering the wire and the blocks around it.
-bv_remote_() -> case (bv_mod_()):bv_block_remote_(bv_my_class_()) of {A_, _} -> A_; _ -> <<>> end.
-bv_wire_call_(To, Op, Payload, As, Wait) ->
-    {_, _, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+bv_remote_() -> bv_remote_(undefined).
+%% Our base in another actor: a block's parent block, or an instance's layer (for the
+%% parent Owner names, else its first). <<>>: none, or here.
+bv_remote_(Owner) ->
+    case (bv_mod_()):bv_block_remote_(bv_my_class_()) of
+        {A_, _} when A_ =/= <<>> -> A_;
+        _ ->
+            Layers_ = case get(bv_layers_) of undefined -> #{}; L_ -> L_ end,
+            case maps:get(Owner, Layers_, undefined) of
+                undefined -> case maps:values(Layers_) of [V_ | _] -> V_; [] -> <<>> end;
+                V_ -> V_
+            end
+    end.
+%% Our address: a block's is known; an instance's, as it was published.
+bv_self_() ->
+    case get(bv_self_at_) of
+        undefined -> {_, _, S_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()), S_;
+        S_ -> S_
+    end.
+%% Whether From is our base: a callback from it.
+bv_is_base_(From) ->
+    {_, _, _, _, BaseSelf_, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    (BaseSelf_ =/= <<>> andalso From =:= BaseSelf_)
+        orelse lists:member(From, maps:values(case get(bv_layers_) of undefined -> #{}; L_ -> L_ end)).
+%% The context we run in: the call's, or a layer's, its whole life.
+bv_cur_ctx_() -> case get(bv_ctx_) of undefined -> get(bv_layer_ctx_); C_ -> C_ end.
+%% \`super(args)\` for a parent in another file: \`$new\` there, \`as\` us, makes our layer
+%% and runs its constructor; we keep its address, for that parent.
+bv_new_layer_(Parent, Address, Payload, Ty) ->
+    Self_ = bv_self_(),
+    Re_ = bv_wire_call_(Address, <<"$new">>, Payload, Self_, true, Ty),
+    At_ = case Re_ of [V_ | _] -> V_; V_ -> V_ end,
+    put(bv_layers_, maps:put(Parent, bv_to_addr_(At_), case get(bv_layers_) of undefined -> #{}; L_ -> L_ end)),
+    ok.
+bv_wire_call_(To, Op, Payload, As, Wait) -> bv_wire_call_(To, Op, Payload, As, Wait, undefined).
+bv_wire_call_(To, Op, Payload, As, Wait, TyOver) ->
+    Self_ = bv_self_(),
     {WOp_, To_} = case Op of {O_, T_} -> {O_, <<To/binary, ":", T_/binary>>}; _ -> {Op, To} end,
     HasArgs_ = (is_list(Payload) andalso Payload =/= []) orelse (is_map(Payload) andalso map_size(Payload) > 0),
     OpV_ = case HasArgs_ of false -> WOp_; true when is_list(Payload) -> [Payload, WOp_]; true -> [[Payload], WOp_] end,
     Seq_ = bv_next_seq_(),
     Id_ = integer_to_binary(Seq_),
     Base_ = #{<<"id">> => Id_, <<"op">> => OpV_, <<"to">> => To_, <<"from">> => Self_},
-    %% \`$extend\`'s table is data, untyped, as the note writes it.
-    %% A message with \`as\` is the delegation's, untyped, as \`$extend\`'s table is.
-    Ty_ = case HasArgs_ andalso WOp_ =/= <<"$extend">> andalso As =:= undefined of true -> #{<<"ty">> => [[<<"Anything">> || _ <- (case Payload of L_ when is_list(L_) -> L_; _ -> [x] end)]]}; false -> #{} end,
+    %% A message with \`as\` is the delegation's, untyped, as \`$extend\`'s table is;
+    %% one whose tags are given (\`$new\` for a layer) carries them.
+    Ty_ = case {HasArgs_, TyOver} of
+        {true, undefined} when WOp_ =/= <<"$extend">>, As =:= undefined -> #{<<"ty">> => [[<<"Anything">> || _ <- (case Payload of L_ when is_list(L_) -> L_; _ -> [x] end)]]};
+        {true, undefined} -> #{};
+        {true, _} -> #{<<"ty">> => TyOver};
+        _ -> #{}
+    end,
     Msg_ = maps:merge(maps:merge(Base_, Ty_), case As of undefined -> #{}; _ -> #{<<"as">> => As} end),
     case Wait of
         true -> bv_outer_() ! {bv_await_line, self(), Id_};
@@ -1573,8 +1657,9 @@ bv_extend_self_(HomeToken) ->
     put(bv_base_, Base_),
     {_, Table_, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
     case bv_extend_at_(Base_, Self_, Self_, Table_) of ok -> ok; {error, R_} -> error({bv_as, R_}) end.
-bv_base_get_(Token) ->
-    case bv_remote_() of
+bv_base_get_(Token) -> bv_base_get_(Token, undefined).
+bv_base_get_(Token, Owner) ->
+    case bv_remote_(Owner) of
         <<>> -> bv_base_get_local_(Token);
         RA_ -> case bv_wire_call_(RA_, {<<"$get">>, Token}, [], undefined, true) of [V_ | _] -> V_; V_ -> V_ end
     end.
@@ -1582,8 +1667,9 @@ bv_base_get_local_(Token) ->
     Ref_ = make_ref(),
     get(bv_base_) ! {bv_outer_get, self(), Token, Ref_},
     receive {bv_reply, Ref_, V_} -> V_ end.
-bv_base_set_(Token, Payload) ->
-    case bv_remote_() of
+bv_base_set_(Token, Payload) -> bv_base_set_(Token, Payload, undefined).
+bv_base_set_(Token, Payload, Owner) ->
+    case bv_remote_(Owner) of
         <<>> -> bv_base_set_local_(Token, Payload);
         RA_ -> bv_wire_call_(RA_, {<<"$set">>, Token}, Payload, undefined, false), ok
     end.
@@ -1618,28 +1704,33 @@ bv_admit_(_, _) -> pass.
 %% context's table resolves at the extender, by a callback to it (from us, with the
 %% same As); anything else is the block's own, or its base's. A block waiting on
 %% one of these keeps answering them, so the two sides can call each other back.
-bv_ctx_has_(Name) -> case get(bv_ctx_) of {_, _, T_, _} -> lists:member(Name, T_); _ -> false end.
+bv_ctx_has_(Name) -> case bv_cur_ctx_() of {_, _, T_, _} -> lists:member(Name, T_); _ -> false end.
 bv_ctx_self_send(Op, Payload) -> bv_ctx_self_send(Op, Payload, false).
 bv_ctx_direct_self_send(Op, Payload) -> bv_ctx_self_send(Op, Payload, true).
 bv_ctx_self_send(Op, Payload, Direct) ->
-    {_, _, Self_, _, _, Inh_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
-    Ctx_ = get(bv_ctx_),
-    case (not Direct) andalso bv_ctx_has_(Op) of
-        true -> bv_object_pack(bv_callback_(Ctx_, Op, Payload));
-        false ->
-            case (not Direct) andalso not lists:member(Op, Inh_) of
-                true -> bv_object_pack(bv_run_own_(Op, Payload));
-                false ->
-                    As_ = case Ctx_ of {_, A_, _, _} -> A_; _ -> Self_ end,
-                    bv_object_pack(bv_to_base_(Op, Payload, Self_, As_))
-            end
-    end.
+    {_, _, _, _, _, Inh_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    Self_ = bv_self_(),
+    Ctx_ = bv_cur_ctx_(),
+    %% A call that fails fails the caller's call, as any self-call does (bv_call_self_).
+    bv_object_pack(bv_call_self_(fun() ->
+        case (not Direct) andalso bv_ctx_has_(Op) of
+            true -> bv_callback_(Ctx_, Op, Payload);
+            false ->
+                case (not Direct) andalso not lists:member(Op, Inh_) of
+                    true -> bv_run_own_(Op, Payload);
+                    false ->
+                        As_ = case Ctx_ of {_, A_, _, _} -> A_; _ -> Self_ end,
+                        bv_to_base_(Op, Payload, Self_, As_)
+                end
+        end
+    end)).
 %% A call for a name we inherit, from anyone: our base runs it, for us.
 bv_inherited_op_(Op, Payload) ->
-    {_, _, Self_, _, _, Inh_, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    {_, _, _, _, _, Inh_, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    Self_ = bv_self_(),
     case lists:member(Op, Inh_) andalso not lists:member(Op, Own_) of
         true ->
-            As_ = case get(bv_ctx_) of {_, A_, _, _} -> A_; _ -> Self_ end,
+            As_ = case bv_cur_ctx_() of {_, A_, _, _} -> A_; _ -> Self_ end,
             {ok, bv_to_base_(Op, Payload, Self_, As_), (bv_mod_()):bv_inherited_ty_(bv_my_class_(), Op)};
         false -> {error, bv_ex_key_(Op)}
     end.
@@ -1650,7 +1741,8 @@ bv_run_own_(Op, Payload) ->
     end.
 %% A delegated call to our base, here or across the wire.
 bv_to_base_(Op, Payload, Self, As) ->
-    case bv_remote_() of
+    Owner_ = case is_binary(Op) of true -> (bv_mod_()):bv_inherited_owner_(bv_my_class_(), Op); false -> undefined end,
+    case bv_remote_(Owner_) of
         <<>> -> bv_deliver_(get(bv_base_), Op, Payload, Self, As);
         RA_ -> bv_wire_call_(RA_, Op, Payload, As, true)
     end.
@@ -1658,18 +1750,19 @@ bv_to_base_(Op, Payload, Self, As) ->
 bv_callback_({From_, As_, _, undefined}, Op, Payload) ->
     bv_wire_call_(From_, Op, Payload, As_, case Op of {<<"$set">>, _} -> false; _ -> true end);
 bv_callback_({_, As_, _, Pid_}, Op, Payload) when is_pid(Pid_) ->
-    {_, _, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
-    bv_deliver_(Pid_, Op, Payload, Self_, As_);
+    bv_deliver_(Pid_, Op, Payload, bv_self_(), As_);
 bv_callback_(_, _, _) -> error({bv_as, <<"a callback to an extender in another actor isn't supported yet">>}).
 bv_ctx_get_(Name, Own) ->
     case bv_ctx_has_(Name) of
-        true -> case bv_callback_(get(bv_ctx_), {<<"$get">>, Name}, []) of [V_ | _] -> V_; V_ -> V_ end;
+        true -> case bv_callback_(bv_cur_ctx_(), {<<"$get">>, Name}, []) of [V_ | _] -> V_; V_ -> V_ end;
         false -> Own()
     end.
-bv_ctx_set_(Name, V, Inherited) ->
+bv_ctx_set_(Name, V, Inherited) -> bv_ctx_set_(Name, V, Inherited, undefined).
+%% Owner: the parent the cell is from, for a class with two layers.
+bv_ctx_set_(Name, V, Inherited, Owner) ->
     case bv_ctx_has_(Name) of
-        true -> bv_callback_(get(bv_ctx_), {<<"$set">>, Name}, [V]), ok;
-        false when Inherited -> bv_base_set_(Name, [V]);
+        true -> bv_callback_(bv_cur_ctx_(), {<<"$set">>, Name}, [V]), ok;
+        false when Inherited -> bv_base_set_(Name, [V], Owner);
         false -> bv_run_own_({<<"$set">>, Name}, [V]), ok
     end.
 bv_deliver_(Pid, Op, Payload, From, As) ->
@@ -1690,10 +1783,17 @@ bv_answer_deleg_(Pid, Op, Payload, From, As, Ref) ->
 %% A delegated call (from an extender) or a callback (from our base): run in its
 %% context, or passed on.
 bv_admit_call_(Op, Payload, From, As) ->
-    {_, _, Self_, _, BaseSelf_, _, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    case get(bv_layer_ctx_) of
+        %% From the instance that built us as its layer: run in its context, always.
+        {LF_, LA_, _, _} = LC_ when LF_ =:= From, LA_ =:= As -> bv_run_ctx_(Op, Payload, LC_);
+        _ -> bv_admit_call_ext_(Op, Payload, From, As)
+    end.
+bv_admit_call_ext_(Op, Payload, From, As) ->
+    {_, _, _, _, _, _, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    Self_ = bv_self_(),
     Name_ = case Op of {_, T_} -> T_; _ -> Op end,
     Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
-    case BaseSelf_ =/= <<>> andalso From =:= BaseSelf_ of
+    case bv_is_base_(From) of
         true when As =:= Self_ -> bv_run_ctx_(Op, Payload, undefined);
         true ->
             case [R_ || {_, A_, _, _} = R_ <- Recs_, A_ =:= As] of
@@ -1708,7 +1808,7 @@ bv_admit_call_(Op, Payload, From, As) ->
             case [R_ || {F_, A_, _, _} = R_ <- Recs_, F_ =:= From, A_ =:= As] of
                 [] -> error({bv_as, <<"unknown_context">>});
                 [Rec_ | _] ->
-                    case is_binary(Op) andalso not lists:member(Op, Own_) andalso (get(bv_base_) =/= undefined orelse bv_remote_() =/= <<>>) of
+                    case is_binary(Op) andalso not lists:member(Op, Own_) andalso (get(bv_base_) =/= undefined orelse bv_remote_(undefined) =/= <<>>) of
                         true -> bv_to_base_(Op, Payload, Self_, As);
                         false -> bv_run_ctx_(Op, Payload, Rec_)
                     end
@@ -1718,6 +1818,33 @@ bv_run_ctx_(Op, Payload, Ctx) ->
     Prev_ = get(bv_ctx_),
     put(bv_ctx_, Ctx),
     try bv_run_own_(Op, Payload) after put(bv_ctx_, Prev_) end.
+%% \`$extend\` to a class of ours from another file (its \`instance\` section names
+%% only our instances' names), recorded; \`$new\` with \`as\` from an actor under a
+%% recorded extender builds a layer, in that actor's context (bv_pending_layer_).
+bv_class_extend_(Sel, Names, Message, Payload, From) ->
+    Arg_ = case Payload of [A_ | _] -> A_; A_ -> A_ end,
+    Inst_ = case is_map(Arg_) of true -> maps:get(<<"instance">>, Arg_, []); false -> [] end,
+    case is_list(Inst_) andalso lists:all(fun(N_) -> lists:member(N_, Names) end, Inst_) of
+        false -> error({bv_as, <<"unknown_name">>});
+        true ->
+            Recs_ = case get({bv_class_ext_, Sel}) of undefined -> []; R_ -> R_ end,
+            put({bv_class_ext_, Sel}, Recs_ ++ [{From, maps:get(<<"as">>, Message, From), Inst_}]),
+            {ok, [], null}
+    end.
+%% A class of ours (From is its label) extends one at Address in another file: its
+%% \`$extend\` there, waited for; an \`ex\` fails our construction.
+bv_class_handshake_(From, Address, Inst) ->
+    Id_ = integer_to_binary(bv_next_seq_()),
+    Msg_ = #{<<"id">> => Id_, <<"op">> => [[#{<<"block">> => [], <<"instance">> => Inst}], <<"$extend">>], <<"to">> => Address, <<"from">> => From},
+    io:put_chars([json_encode(Msg_), $\n]),
+    await_response_(Id_),
+    ok.
+bv_class_layer_(Sel, Message, From) ->
+    Under_ = fun(K_) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end,
+    case [R_ || {K_, _, _} = R_ <- (case get({bv_class_ext_, Sel}) of undefined -> []; L_ -> L_ end), Under_(K_)] of
+        [] -> error({bv_as, <<"unknown_context">>});
+        [{_, _, Inst_} | _] -> put(bv_pending_layer_, {From, maps:get(<<"as">>, Message), Inst_, undefined}), ok
+    end.
 bv_wire_op_({Op_, _}) -> Op_;
 bv_wire_op_(Op_) -> Op_.
 bv_block_extend_wire_(From, Msg, Payload) ->
@@ -1789,7 +1916,7 @@ bv_await_line_loop_(Id) ->
         {io_reply, LRef_, LData_} ->
             case bv_take_line_(LRef_, LData_) of
                 eof -> eof;
-                taken -> bv_want_line_(), bv_await_line_loop_(Id);
+                T_ when T_ =:= taken; T_ =:= handed -> bv_want_line_(), bv_await_line_loop_(Id);
                 {line, M_} ->
                     MsgId_ = maps:get(<<"id">>, M_, <<>>),
                     case maps:is_key(<<"re">>, M_) of
@@ -1815,7 +1942,7 @@ bv_next_line_() ->
             receive
                 {io_reply, LRef_, LData_} ->
                     case bv_take_line_(LRef_, LData_) of
-                        taken -> bv_next_line_();
+                        T_ when T_ =:= taken; T_ =:= handed -> bv_next_line_();
                         L_ -> L_
                     end;
                 {bv_reply, LId_, _} -> bv_landed_(LId_), bv_next_line_();
@@ -2132,6 +2259,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

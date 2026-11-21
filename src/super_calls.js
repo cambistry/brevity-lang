@@ -290,6 +290,11 @@ export function lowerSuperCalls(actors, chain) {
     // Which parent each call builds. A message shows the call as written.
     for (const c of calls) c.shown = shown(c.n);
     for (const { n } of calls) {
+      // A parent in another file stands as its placeholder (src/singleton_classes.js).
+      if (n.layer && !parents.includes(n.layer)) {
+        const st = (U.supertypes || []).find(t => t.sourceName === n.layer && byName.get(t.supertype)?.remoteStub);
+        if (st) n.layer = st.supertype;
+      }
       if (n.layer) {
         if (!parents.includes(n.layer)) throw new Error(`'${shown(n)}' in '${U.name}': '${n.layer}' isn't a parent of '${U.name}'`);
       } else if (parents.length > 1) {
@@ -380,6 +385,14 @@ export function lowerSuperCalls(actors, chain) {
       const view = parentView(byName, P, chain);
       const binds = bindArgs(U, P, view, args);
       lowered.set(s.expr, binds);
+      // A parent in another file: its layer is an actor there, built by \`$new\` with
+      // \`as\`, which runs its constructor; this line waits for it
+      // (notes/opre-extend-and-as-2026-11-20.md, "Instance layers").
+      if (P.remoteStub) {
+        const byParam = new Map(view.params.map(p => [p.name, p]));
+        const passed = binds.map(b => ({ key: byParam.get(b.name).key, positional: byParam.get(b.name).positional, type: byParam.get(b.name).type ?? null, value: b.value }));
+        return [{ type: 'ExprStatement', expr: { type: 'RemoteNew', layer, address: P.remoteAddress, args: passed } }];
+      }
       return [...binds, { type: 'SuperInit', layer }];
     });
     // A parent with no base: none of its layer is merged (resolveSuperclassChain).
@@ -427,6 +440,8 @@ function bindArgs(U, P, view, args) {
   for (const p of orderParamsForDefaults(view.params)) {
     let value = bound.get(p);
     if (!value) {
+      // A param a parent in another file defaults: its own default, there.
+      if (p.remoteOptional) continue;
       if (!p.defaultValue) throw new Error(`${call}: '${P.name}' takes '${p.key}', which isn't passed`);
       value = deepCopy(p.defaultValue);
     }

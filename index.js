@@ -484,11 +484,29 @@ export function settleOverrideTables(ast) {
   // The `instance` section: for each parent, its instances' names that the class's
   // instances supply in place of its own: what the class declares, and what a later
   // parent supplies (the later parent winning).
+  // A parent in another file, by its doc's entry: its instances' doc.
+  const remoteInstanceDoc = (entry) => {
+    const doc = {};
+    for (const f of entry.functions || []) (doc[f.name] ??= []).push({ params: f.params || [], returns: f.returns ?? null, effect: f.effect });
+    if (entry.fields) doc.__fields = entry.fields;
+    if (entry.instanceProtected) doc.__protected = entry.instanceProtected;
+    return doc;
+  };
+  for (const cls of ast.actors.filter(isClass)) {
+    if (!cls.remoteLayers?.length) continue;
+    const mine = parseInterface(instanceDocument(ast, cls, aliasMap, purportedByActor, { own: true }));
+    const tables = {};
+    for (const L of cls.remoteLayers) {
+      const addr = L.address.split(':');
+      tables[L.name] = overrides(mine, remoteInstanceDoc(L.doc), `'${shown(cls.name)}'`, `'${addr.pop()}' (in '${addr.join(':')}')`);
+    }
+    Object.defineProperty(cls, 'instanceTables', { value: tables, configurable: true, enumerable: false });
+  }
   for (const cls of ast.actors.filter(isClass)) {
     const parents = (cls.supertypes || []).map(st => byName.get(st.supertype)).filter(p => p && isClass(p));
     if (!parents.length) continue;
     const mine = parseInterface(instanceDocument(ast, cls, aliasMap, purportedByActor, { own: true }));
-    const tables = {};
+    const tables = { ...(cls.instanceTables || {}) };
     parents.forEach((P, i) => {
       const theirs = parseInterface(instanceDocument(ast, P, aliasMap, purportedByActor));
       const table = overrides(mine, theirs, `'${shown(cls.name)}'`, `'${shown(P.name)}'`);

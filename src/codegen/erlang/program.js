@@ -435,6 +435,14 @@ function genRunAs(actors) {
   return clauses.sort((x, y) => x.startsWith('bv_run_as_(_') - y.startsWith('bv_run_as_(_')).join(';\n') + '.';
 }
 
+// An actor that runs its functions in a context (notes/opre-extend-and-as-2026-11-20.md):
+// a class block, a published class (built as a layer for an extender in another file),
+// and a class whose parent is in another file (it builds layers there).
+const isExtensible = (a) => !!a.name && (!!a.membersOf || !!a.isPublic || !!a.remoteLayers?.length);
+
+// A class's label: what it's published as.
+const selectorOf = (a) => a.selector ?? (a.sourceName ?? a.name).replace(/^@/, '');
+
 // What each actor's names read as, for an outer read answered by bv_answer_outer_:
 // the same table `$get` reads.
 // Each class block's {Names, Table, Self, Forwards} and the class of its base, for
@@ -442,12 +450,17 @@ function genRunAs(actors) {
 function genBlockInfo(actors, ctx = {}) {
   const bins = (xs) => `[${xs.map(erlString).join(', ')}]`;
   const blocks = actors.filter(a => a.membersOf && a.name);
+  // A class block, and a class whose actors run in a context: a published one (built
+  // as a layer) or one whose parent is in another file (it builds layers).
+  const extensible = actors.filter(isExtensible);
   const label = (b) => selfAddress(publicLabel(b) ?? b.singletonOf);
-  const info = blocks.map(a => {
+  const info = extensible.map(a => {
     const base = a.blockParent ? actors.find(b => b.name === a.blockParent) : null;
     const own = [...new Set((a.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
     const baseSelf = a.remoteBase ? a.remoteBase.address : base ? label(base) : '';
-    return `bv_block_info_(${erlString(a.name.toLowerCase())}) -> {${bins(a.extensionNames || [])}, ${bins(a.overrideTable?.block || [])}, ${erlString(label(a))}, ${bins((a.forwardCells || []).map(c => wireLabel(c.name)))}, ${erlString(baseSelf)}, ${bins((a.forwardFns || []).map(wireLabel))}, ${bins(own)}}`;
+    // An instance's own address is the one it's published at (bv_self_at_).
+    const self = a.membersOf ? label(a) : '';
+    return `bv_block_info_(${erlString(a.name.toLowerCase())}) -> {${bins(a.extensionNames || [])}, ${bins(a.overrideTable?.block || [])}, ${erlString(self)}, ${bins((a.forwardCells || []).map(c => wireLabel(c.name)))}, ${erlString(baseSelf)}, ${bins((a.forwardFns || []).map(wireLabel))}, ${bins(own)}}`;
   });
   info.push('bv_block_info_(_) -> {[], [], <<>>, [], <<>>, [], []}');
   const bases = blocks.filter(a => a.blockParent && !a.remoteBase).map(a => `bv_block_base_class_(${erlString(a.name.toLowerCase())}) -> ${erlString(a.blockParent.toLowerCase())}`);
@@ -457,21 +470,23 @@ function genBlockInfo(actors, ctx = {}) {
   const tys = actors.filter(a => a.name && a.inheritedTys).flatMap(a => Object.entries(a.inheritedTys).map(([n, t]) => `bv_inherited_ty_(${erlString(a.name.toLowerCase())}, ${erlString(n)}) -> ${erlTy(t)}`));
   tys.push('bv_inherited_ty_(_, _) -> null');
   // And what its own functions reply, for a call that runs one in a context.
-  const ownTys = blocks.flatMap(a => {
+  const ownTys = extensible.flatMap(a => {
     const byName = new Map();
     for (const f of a.functions || []) if (typeof f.name === 'string' && !f.cellGetter && !/^(set|update|subscribe|new)[@.#]/.test(f.name)) (byName.get(f.name) ?? byName.set(f.name, []).get(f.name)).push(f);
     return [...byName].filter(([, fs]) => fs.length === 1).map(([n, [f]]) => [n, replyTy(f)]).filter(([, t]) => t)
       .map(([n, t]) => `bv_fn_ty_(${erlString(a.name.toLowerCase())}, ${erlString(wireLabel(n))}) -> ${erlTy(t)}`);
   });
   ownTys.push('bv_fn_ty_(C_, O_) -> bv_inherited_ty_(C_, O_)');
-  tys.push(...[]);
+  // The parent an inherited function of a class with two layers is from.
+  const owners = actors.filter(a => a.name && a.inheritedOwners).flatMap(a => Object.entries(a.inheritedOwners).map(([n, o]) => `bv_inherited_owner_(${erlString(a.name.toLowerCase())}, ${erlString(n)}) -> ${erlString(o)}`));
+  owners.push('bv_inherited_owner_(_, _) -> undefined');
   const instances = blocks.map(a => `bv_block_instance_(${erlString(a.name.toLowerCase())}) -> {${bins(a.overrideTable?.instance || [])}, ${bins(actors.find(c => c.name === a.membersOf)?.instanceNames || [])}}`);
   instances.push('bv_block_instance_(_) -> {[], []}');
   const remotes = blocks.filter(a => a.remoteBase).map(a => `bv_block_remote_(${erlString(a.name.toLowerCase())}) -> {${erlString(a.remoteBase.address)}, ${bins(docNames(a.remoteBase.doc))}}`);
   remotes.push('bv_block_remote_(_) -> {<<>>, []}');
-  const wireIns = blocks.filter(a => (ctx.actorInfo?.has(a.name))).map(a => `bv_wire_in_(${erlString(a.name.toLowerCase())}, F_, O_, M_, P_, I_) -> bv_wire_in_${a.name.toLowerCase()}(F_, O_, M_, P_, I_)`);
+  const wireIns = extensible.filter(a => (ctx.actorInfo?.has(a.name))).map(a => `bv_wire_in_(${erlString(a.name.toLowerCase())}, F_, O_, M_, P_, I_) -> bv_wire_in_${a.name.toLowerCase()}(F_, O_, M_, P_, I_)`);
   wireIns.push('bv_wire_in_(_, _, _, _, _, _) -> ok');
-  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
+  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${owners.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
 }
 
 function genReadTable(actors) {
@@ -955,8 +970,11 @@ function genChildHandleOp(ctx, actor) {
     ctx.selfSendPrefix = prefix;
   }
   // A class block's functions run in the context of a delegated call.
+  // So do a published class's, built as a layer, and a class's whose parent is in
+  // another file.
+  const node = (ctx.program?.actors || []).find(a => a.name === actor.name) ?? actor;
   const savedInBlock = ctx.inBlock;
-  ctx.inBlock = !!actor.membersOf;
+  ctx.inBlock = isExtensible(node);
 
   // A name with typed params or overloads tries each clause in its own function,
   // so a call from outside falls through to `unhandled` when its tags fit none.
@@ -1038,7 +1056,8 @@ function genChildHandleOp(ctx, actor) {
 
   // Catch-all clause
   // A class block answers a name it inherits by delegating it to its base.
-  if (actor.membersOf && actor.blockParent) {
+  // So does a class whose parent is in another file, at its layer there.
+  if ((actor.membersOf && actor.blockParent) || (!node.membersOf && node.remoteLayers?.length)) {
     clauses.push(`${prefix}_handle_op(Op, _Message, Payload, _Id, _From) when is_binary(Op) ->\n    bv_inherited_op_(Op, Payload)`);
   }
   clauses.push(`${prefix}_handle_op(Op, _Message, _Payload, _Id, _From) ->\n    {error, bv_ex_key_(Op)}`);
@@ -1292,9 +1311,15 @@ function genChildActorCode(ctx, actors) {
     if (classNeedsSpawnedInstancesProgram(mergedActor)) {
       const lowerName = name.toLowerCase();
       // A class block that extends another registers with it before its own block runs.
-      const blockNode = mergedActor.membersOf ? (ctx.program?.actors || []).find(a => a.name === mergedActor.name) ?? mergedActor : null;
-      const baseBlock = blockNode?.blockParent ? (ctx.program?.actors || []).find(a => a.name === blockNode.blockParent) : null;
+      // So does a class whose actors run in a context: it answers the wire as a block does.
+      const node = (ctx.program?.actors || []).find(a => a.name === mergedActor.name) ?? mergedActor;
+      const blockNode = isExtensible(node) ? node : null;
+      const baseBlock = blockNode?.membersOf && blockNode.blockParent ? (ctx.program?.actors || []).find(a => a.name === blockNode.blockParent) : null;
+      // An actor of a class that builds a layer, or is built as one, has its address
+      // (and a layer its context) before its constructor runs (bv_birth_ask_).
+      const selector = selectorOf(node);
       const initCall = [
+        ...(blockNode && !node.membersOf ? [`bv_birth_ask_(${erlString(quoteToken(selector))}, ${!!node.remoteLayers?.length})`] : []),
         ...(baseBlock ? [`bv_extend_self_(${erlString(wireLabel(baseBlock.singletonOf))})`] : []),
         ...(blockNode?.remoteBase ? ['bv_extend_remote_()'] : []),
         ...(initFn ? [`child_${lowerName}_init(Args_)`] : []),
@@ -1559,6 +1584,18 @@ function genProgram(ctx, actor, allActors, options = {}) {
 
   // Generate all function dispatch clauses (public + private via self-send)
   const allClauses = genDispatch(ctx, [...publicFns, ...privateFns], actor);
+  // A published class of ours with no block of its own, extended from another file:
+  // its \`$extend\` (the \`instance\` section) is recorded, and \`$new\` with \`as\` from an
+  // actor under a recorded extender builds a layer, in that actor's context
+  // (notes/opre-extend-and-as-2026-11-20.md, "Instance layers").
+  const homeClasses = allActors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && !(a.membersClass && !a.membersInherited));
+  allClauses.unshift(...homeClasses.flatMap(a => {
+    const sel = erlString(selectorOf(a));
+    return [
+      `handle_op({<<"$extend">>, ${sel}}, Message, Payload, _Id, From) ->\n    bv_class_extend_(${sel}, [${(a.instanceNames || []).map(erlString).join(', ')}], Message, Payload, maps:get(<<"from">>, Message, From))`,
+      `handle_op({<<"$new">>, ${sel}} = Op_, #{<<"as">> := _} = Message, Payload, Id, From) when not is_map_key(bv_layer_, Message) ->\n    bv_class_layer_(${sel}, Message, maps:get(<<"from">>, Message, From)),\n    handle_op(Op_, Message#{bv_layer_ => true}, Payload, Id, From)`,
+    ];
+  }));
 
   // Generate lambda handler clauses (registered during codegen above)
   // Use index loop since nested lambdas may add new handlers during iteration
@@ -1640,6 +1677,13 @@ function genProgram(ctx, actor, allActors, options = {}) {
 
   // Generate state initialization lines (run at startup before read_loop)
   const stateInitLines = [];
+  // A class of ours whose parent is in another file: its \`$extend\` there (its
+  // \`instance\` section), waited for, as the file starts.
+  for (const a of allActors.filter(x => x.remoteLayers?.length && !x.membersOf)) {
+    for (const L of a.remoteLayers) {
+      stateInitLines.push(`    bv_class_handshake_(${erlString(':' + quoteToken(selectorOf(a)))}, ${erlString(L.address)}, [${(a.instanceTables?.[L.name] || []).map(erlString).join(', ')}])`);
+    }
+  }
   // A cell set from a call to the file's own function holds the reply's one value.
   const soleValueOf = (s, val) => (s.soleValue && s.value.type !== 'AsExpr' ? `bv_object_one(${val})` : val);
   // The constructor block runs in source order, once every param is set
@@ -1884,7 +1928,8 @@ ${testTypeClauses || '                _ -> null'};
         Lst when is_list(Lst), length(Lst) > 0 -> true;
         _ -> false
     end,
-    case HasPayload andalso not maps:is_key(<<"ty">>, Message) of
+    %% \`$extend\`'s table is data, untyped.
+    case HasPayload andalso not maps:is_key(<<"ty">>, Message) andalso bv_ex_key_(OpName) =/= <<"$extend">> of
         true ->
             Ex = #{bv_ex_key_(OpName) => <<"schema_required">>},
             Resp = #{<<"id">> => Id, <<"ex">> => Ex, <<"to">> => From},
@@ -1953,7 +1998,12 @@ bv_dispatch_(Message) ->
     %% Reaching an actor we published, the target is what follows its address.
     To_ = maps:get(<<"to">>, Message, null),
     case bv_route_at_(OpName0, To_) of
-        {InstAddr_, InstPid_} -> bv_forward_(InstPid_, InstAddr_, bv_op_key_under_(OpName0, To_, InstAddr_), Message, bv_unwire_payload(Message, Payload), Id, From);
+        {InstAddr_, InstPid_} ->
+            %% A layer, to anyone but the actor that built it, isn't there.
+            case bv_layer_hidden_(InstAddr_, From) of
+                true -> io:put_chars([json_encode(#{<<"id">> => Id, <<"ex">> => #{bv_ex_key_(bv_op_key_(OpName0, To_)) => <<"unhandled">>}, <<"to">> => From}), $\n]);
+                false -> bv_forward_(InstPid_, InstAddr_, bv_op_key_under_(OpName0, To_, InstAddr_), Message, bv_unwire_payload(Message, Payload), Id, From)
+            end;
         none ->
     OpName = bv_op_key_(OpName0, To_),
 ${dispatchInner}

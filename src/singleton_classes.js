@@ -231,8 +231,11 @@ export function lowerInheritedBlockCells(actors) {
     return out;
   };
   const SCALAR = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float']);
-  for (const block of actors.filter(a => a.blockParent)) {
-    const up = ancestors(block);
+  // A class whose parent is in another file reaches its layer the same way: the
+  // parent's placeholder is its base (addRemoteParents).
+  const remoteParents = (a) => (a.supertypes || []).map(st => byName.get(st.supertype)).filter(p => p?.remoteStub && !p.membersOf);
+  for (const block of actors.filter(a => a.blockParent || (!a.membersOf && remoteParents(a).length))) {
+    const up = block.blockParent ? ancestors(block) : remoteParents(block);
     const upNames = new Set(up.map(b => b.name));
     const own = new Set((block.stateVarDecls || []).map(d => d.name));
     const inherited = new Map();
@@ -242,7 +245,7 @@ export function lowerInheritedBlockCells(actors) {
       if (d.name.startsWith('#')) { if (!privates.has(d.name)) privates.set(d.name, b); continue; }
       if (!inherited.has(d.name)) inherited.set(d.name, { decl: d, owner: b.name });
     }
-    block.enclosing = block.home ?? null;
+    if (block.blockParent) block.enclosing = block.home ?? null;
     Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, isRef: !!decl.isRef })), configurable: true });
     // The cell a use names: an inherited one, or (`base::x`, `A::x`) an ancestor's.
     const resolve = (node, bound) => {
@@ -344,28 +347,25 @@ export function addRemoteParents(actors, dependencies, remotes) {
     const members = cls.members;
     const stubName = `${name}__remote`;
     const address = `${quoteToken(info.path)}:${quoteToken(info.remote)}`;
-    const stubClass = { type: 'Actor', name: stubName, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], remoteStub: true };
+    const stubClass = { type: 'Actor', name: stubName, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], remoteStub: true, remoteAddress: address, remoteDoc: cls };
     Object.defineProperty(stubClass, 'sourceName', { value: name, configurable: true });
+    // Its `new`'s params, by the doc: a published one is a prop (`n Integer`).
+    const props = new Set(Object.entries(cls.fields || {}).filter(([, f]) => !f.cell).map(([n]) => n));
+    stubClass.initParams = (cls.initParams || []).map((p, i) => ({
+      name: p.name ?? `p${i}`, key: p.name ?? `p${i}`, type: p.type, positional: p.positional !== false,
+      ...(p.optional && { remoteOptional: true }), ...(p.name && props.has(p.name) && { accessor: p.name }),
+    }));
+    if (cls.ownNew) stubClass.ownNew = true;
+    const publicFns = {};
+    for (const f of cls.functions || []) if (!props.has(f.name)) (publicFns[f.name] ??= []).push(f);
+    // A published param is read as an op, \`n\`: its layer answers it.
+    for (const n of props) stubClass.functions.push({ type: 'FunctionDecl', name: '@' + n, params: [], body: [] });
+    fillStub(stubClass, publicFns, Object.fromEntries(Object.entries(cls.fields || {}).filter(([, f]) => f.cell)), cls.instanceProtected || {});
     stubs.push(stubClass);
     if (members) {
       const block = { type: 'Actor', name: `${stubName}_block`, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], singletonOf: `${name}__class`, remoteStub: true, remoteAddress: address, remoteDoc: members };
-      const fields = { ...(members.__fields || {}) };
-      const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [], remoteReturns: sig.returns ?? null });
-      for (const [n, sigs] of Object.entries(members)) {
-        if (n.startsWith('__')) continue;
-        if (fields[n]) {
-          block.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: fields[n].type, isRef: !fields[n].readOnly });
-          block.functions.push({ ...fn('@' + n, sigs[0]), cellGetter: true });
-        } else for (const sig of sigs) block.functions.push(fn('@' + n, sig));
-      }
-      const prot = members.__protected || {};
-      for (const [n, sigs] of Object.entries(prot)) {
-        if (n.startsWith('__')) continue;
-        const bare = n.replace(/^~/, '');
-        const f = prot.__fields?.[n];
-        if (f) block.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, isRef: !f.readOnly });
-        else for (const sig of sigs) block.functions.push(fn(bare, sig));
-      }
+      const sigs = Object.fromEntries(Object.entries(members).filter(([n]) => !n.startsWith('__')));
+      fillStub(block, sigs, members.__fields || {}, members.__protected || {});
       stubClass.membersClass = block.name;
       block.membersOf = stubName;
       stubs.push(block);
@@ -375,7 +375,39 @@ export function addRemoteParents(actors, dependencies, remotes) {
     }
   }
   actors.push(...stubs);
+  // A diamond of instance layers isn't supported yet: two parents that extend one
+  // class would each build their own layer of it (the note's "Several parents").
+  for (const a of actors) {
+    const remote = (a.supertypes || []).map(st => stubs.find(x => x.name === st.supertype && !x.membersOf)).filter(Boolean);
+    if (remote.length < 2) continue;
+    const seen = new Map();
+    for (const P of remote) for (const anc of (P.remoteDoc?.supertypes || []).map(st => st.supertype)) {
+      if (seen.has(anc)) throw new Error(`'${(a.sourceName ?? a.name).replace(/^@/, '')}' extends '${seen.get(anc)}' and '${P.sourceName}', which both extend '${anc}': a diamond of instance layers isn't supported yet`);
+      seen.set(anc, P.sourceName);
+    }
+  }
   return stubs;
+}
+
+// A placeholder's members, by its doc: public functions and cells, and protected
+// ones (`~`). Bodies are empty: nothing is generated for it.
+function fillStub(stub, publicSigs, fields, prot) {
+  const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [], remoteReturns: sig.returns ?? null });
+  for (const [n, sigs] of Object.entries(publicSigs)) {
+    if (n.startsWith('__')) continue;
+    const field = fields[n];
+    if (field) {
+      stub.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: field.type, isRef: !field.readOnly });
+      stub.functions.push({ ...fn('@' + n, { params: [], returns: sigs[0]?.returns }), cellGetter: true });
+    } else for (const sig of sigs) stub.functions.push(fn('@' + n, sig));
+  }
+  for (const [n, sigs] of Object.entries(prot)) {
+    if (n.startsWith('__')) continue;
+    const bare = n.replace(/^~/, '');
+    const f = prot.__fields?.[n];
+    if (f) stub.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, isRef: !f.readOnly });
+    else for (const sig of sigs) stub.functions.push(fn(bare, sig));
+  }
 }
 
 // The placeholders go once the parse has lowered the blocks extending them; each
@@ -394,6 +426,15 @@ export function dropRemoteParents(actors, stubs) {
     const remote = (a.supertypes || []).filter(st => gone.has(st.supertype));
     if (!remote.length) continue;
     Object.defineProperty(a, 'remoteSupertypes', { value: remote, configurable: true });
+    // Its layers in another file, one per parent there that it builds with \`super\`
+    // (no \`super\`, no layer).
+    const built = new Set((a.initBody || []).filter(st => st.type === 'ExprStatement' && st.expr?.type === 'RemoteNew').map(st => st.expr.layer));
+    if (!a.membersOf && built.size) {
+      a.remoteLayers = remote.filter(st => built.has(st.supertype)).map(st => {
+        const stub = stubs.find(x => x.name === st.supertype);
+        return { name: stub.name, sourceName: st.sourceName, address: stub.remoteAddress, doc: stub.remoteDoc };
+      });
+    }
     a.supertypes = a.supertypes.filter(st => !gone.has(st.supertype));
   }
   for (let i = actors.length - 1; i >= 0; i--) if (gone.has(actors[i].name)) actors.splice(i, 1);
@@ -423,10 +464,21 @@ export function replyTy(fn) {
 export function lowerBlockDelegation(actors) {
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const isAccessor = (f) => typeof f.name !== 'string' || /^(set|update|subscribe|new)[@.#]/.test(f.name);
-  for (const block of actors.filter(a => a.membersOf)) {
+  // Every actor is extensible for now: a class block, and a published class, whose
+  // instances may be built as a layer for a class in another file. A class whose
+  // parent is in another file delegates to its layer.
+  const remoteParents = (a) => (a.supertypes || []).map(st => byName.get(st.supertype)).filter(p => p?.remoteStub && !p.membersOf);
+  const publishedClass = (a) => typeof a.name === 'string' && a.name.startsWith('@') && !a.singletonOf && !a.membersOf;
+  for (const block of actors.filter(a => !a.remoteStub && (a.membersOf || publishedClass(a) || remoteParents(a).length))) {
     const ownFns = new Set((block.functions || []).map(f => f.name));
     const inherited = new Map();
-    for (let b = byName.get(block.blockParent); b; b = b.blockParent ? byName.get(b.blockParent) : null) {
+    for (const p of block.membersOf ? [] : remoteParents(block)) {
+      for (const f of p.functions || []) {
+        if (isAccessor(f) || f.name.startsWith('#') || ownFns.has(f.name) || inherited.has(f.name)) continue;
+        inherited.set(f.name, p.name);
+      }
+    }
+    for (let b = block.membersOf ? byName.get(block.blockParent) : null; b; b = b.blockParent ? byName.get(b.blockParent) : null) {
       for (const f of b.functions || []) {
         if (isAccessor(f) || f.name.startsWith('#') || f.baseOf || f.actorDef || ownFns.has(f.name) || inherited.has(f.name)) continue;
         inherited.set(f.name, b.name);
@@ -438,6 +490,8 @@ export function lowerBlockDelegation(actors) {
       const decls = (byName.get(owner)?.functions || []).filter(f => f.name === n);
       return [wireLabelOf(n), decls.length === 1 ? replyTy(decls[0]) : null];
     }).filter(([, t]) => t));
+    // Which parent each inherited function is from: its layer, for a class with two.
+    if (!block.membersOf) block.inheritedOwners = Object.fromEntries([...inherited].map(([n, owner]) => [wireLabelOf(n), owner]));
     const ownCells = new Set((block.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string' && !n.startsWith('#') && !n.includes('__')));
     const visit = (node, bound) => {
       if (!node || typeof node !== 'object') return;

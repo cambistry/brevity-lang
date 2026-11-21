@@ -68,7 +68,9 @@ export function childBinding(ctx, cls) {
   // A class block that extends another holds it as its base, built in the same home.
   const base = node?.blockParent && ctx.actorNodes?.get(node.blockParent);
   const baseField = base && (node.home ?? null) === here ? `, base: this.#${stateKey(base.singletonOf)}` : '';
-  return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}${baseField}}`;
+  // A class the file publishes as it's made, or builds as a layer (homeExtension).
+  const birth = ctx.canBirth && node && !node.membersOf && (node.isPublic || node.remoteLayers?.length) ? `, ...this.#_birth(${JSON.stringify(cls)})` : '';
+  return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}${baseField}${birth}}`;
 }
 
 export function stateKey(name) {
@@ -476,7 +478,16 @@ export function genExpr(ctx, expr) {
     const own = genExpr({ ...ctx, noCtx: true }, expr);
     return `(await this.#_ctxGet(_ctx, ${JSON.stringify(expr.ctxCell)}, async () => ${own}))`;
   }
-  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `(await this.#_baseRead(${JSON.stringify(wireLabel(expr.name))}))`;
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `(await this.#_baseRead(${JSON.stringify(wireLabel(expr.name))}, ${JSON.stringify(expr.outerClass ?? null)}))`;
+  // \`super(args)\` for a parent in another file: its layer, built there.
+  if (expr.type === 'RemoteNew') {
+    const pos = expr.args.filter(a => a.positional);
+    const named = expr.args.filter(a => !a.positional);
+    const list = [...pos.map(a => genExpr(ctx, a.value)), ...(named.length ? [`{ ${named.map(a => `${JSON.stringify(a.key)}: ${genExpr(ctx, a.value)}`).join(', ')} }`] : [])];
+    const tys = [...pos.map(a => JSON.stringify(a.type ?? 'Anything')), ...(named.length ? [`{ ${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type ?? 'Anything')}`).join(', ')} }`] : [])];
+    const op = list.length ? `[[${list.join(', ')}], '$new']` : `'$new'`;
+    return `this.#_layers[${JSON.stringify(expr.layer)}] = await this.#_newLayer(${JSON.stringify(expr.address)}, ${op}, ${list.length ? `[[${tys.join(', ')}]]` : 'undefined'})`;
+  }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
   if (expr.type === 'Identifier' && isDependencyValue(ctx, expr.name, ctx.currentTypeEnv)) return JSON.stringify('#<' + ctx.depAddress(expr.name) + '>');
@@ -759,7 +770,8 @@ export function genExpr(ctx, expr) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
     const w = JSON.stringify(wireLabel(expr.name));
     if (expr.outerSelf) return `await this.#_ctxSet(_ctx, ${w}, ${genExpr(ctx, expr.value)})`;
-    return expr.ctxCell && ctx.inBlock ? `await this.#_ctxSet(_ctx, ${w}, ${genExpr(ctx, expr.value)}, true)` : `this.#_baseSet(${w}, ${genExpr(ctx, expr.value)})`;
+    const owner = JSON.stringify(expr.outerClass ?? null);
+    return expr.ctxCell && ctx.inBlock ? `await this.#_ctxSet(_ctx, ${w}, ${genExpr(ctx, expr.value)}, true, ${owner})` : `this.#_baseSet(${w}, ${genExpr(ctx, expr.value)}, ${owner})`;
   }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
@@ -942,7 +954,7 @@ export function genExpr(ctx, expr) {
           : `[[${expr.args.map(genArg).join(', ')}], "${wireLabel(name)}"]`;
         // In a class block, a call resolves through the call's context: at an extender
         // that overrides it, here, or at the base for one it inherits (blockExtension).
-        if (ctx.inBlock) return `BvObject.pack(await this.#_ctxSend(_ctx, ${op}, ${expr.inheritedCall === 'direct'}))`;
+        if (ctx.inBlock) return `BvObject.pack(await this.#_ctxSend(_ctx, ${op}, ${expr.inheritedCall === 'direct'}, ${JSON.stringify(expr.inheritedFrom ?? null)}))`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // A class in another file, constructed in place.

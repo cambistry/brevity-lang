@@ -120,7 +120,7 @@ export function lowerBaseLayers(actors) {
         if (n.type !== 'BaseCall' && !n.isPublic) throw new Error(`'${shown(n)}' in '${U.name}' is a function: call it, '${shown(n)}()'`);
         // A parent block is a live actor: its function runs there, for this block
         // (a delegated call, src/singleton_classes.js), as `super` there does.
-        if (U.blockParent) {
+        if (U.blockParent || L.remoteStub) {
           const args = n.args ?? [];
           for (const k of Object.keys(n)) delete n[k];
           Object.assign(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args, inheritedCall: 'direct', inheritedFrom: L.name });
@@ -140,7 +140,8 @@ export function lowerBaseLayers(actors) {
       // A cell.
       if (n.type === 'BaseCall') throw new Error(`'${shown(n)}' in '${U.name}' is a cell, not a function`);
       // A parent block's cell is in that block, a live actor: read and written there.
-      if (U.blockParent) {
+      // So is a cell of a parent layer in another file.
+      if (U.blockParent || L.remoteStub) {
         const rest = Object.fromEntries(Object.entries(n).filter(([k]) => !['layer', 'isPublic', 'name', 'type', 'value', 'updateOp', 'superCall', 'superIn'].includes(k)));
         const { value, updateOp } = n;
         const set = n.type === 'BaseSet';
