@@ -241,6 +241,21 @@ names, `super`, `base::` or `base.`. The parent's class block is still reachable
 with no constructor of its own (`Box^`, `A ^ B`, `Box ^ *{ … }` with no `super`)
 takes its parents' params.
 
+The parent's constructor body runs at the `super` line (first, for a subclass with
+no constructor of its own), and may reach the subclass through late-bound names. A
+path from it to a cell declared below that line is a compile error, followed through
+calls and overrides, and across parents: one parent's body can't reach, through the
+child, a cell of a parent built below it.
+
+```brevity
+T = *{ got Integer = probe(); probe = -> 0 }
+U = T ^ (k Integer) *{
+  super()
+  marker Integer = k     // error: T's body calls probe at the super line
+  probe = -> marker      // fix: declare marker above super
+}
+```
+
 In a function, `super` calls the parent layer's same function: in `h` it's
 `base::h(…)`, in `@h` `base.h(…)`, with the same arg rules. It dispatches over the
 parent's clauses, and the parent's code it runs still uses the subclass's

@@ -28,6 +28,9 @@
 // its construction.
 // See notes/forward-reads-in-constructor-blocks-2026-11-11.md.
 
+import { resolveSuperclassChain } from './subclass.js';
+import { buildsBase, parentView } from './super_calls.js';
+
 // The names a constructor-block statement declares.
 function declaredNames(s) {
   switch (s.type) {
@@ -227,6 +230,59 @@ export function checkInitOrder(ast) {
         const by = statementLabel(s);
         const through = via ? `, through '${via}'` : '';
         throw new Error(`'${name}' is used before '${waitsOn[0]}' is declared, and its construction reads '${waitsOn[0]}' (by ${by}${through}) — use '${name}' below '${waitsOn[0]}'`);
+      }
+    });
+  }
+  checkMergedOrder(actors);
+}
+
+// A subclass's construction as the merge runs it (src/subclass.js): its own lines, with
+// each parent's constructor body at its `super` line (or first, for a composition with
+// no constructor of its own), and its functions late-bound, its own definitions winning.
+// The parent's code may reach the subclass through those late-bound names, so a path
+// from a line to a cell declared below it is an error across layers too: a parent's
+// body calling an override that reads a cell below `super`, or one parent's body
+// reaching, through the child, a cell of another parent built below it.
+// See notes/opre-extend-and-as-2026-11-20.md ("Instance layers": construction order).
+function checkMergedOrder(actors) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const shownName = (a) => (a.sourceName ?? a.name ?? '').replace(/^@/, '').replace(/__pub$/, '').replace(/[!.]$/, '');
+  const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
+  for (const U of actors) {
+    if (!isClass(U) || !(U.supertypes || []).some(st => !st.delegated && byName.has(st.supertype))) continue;
+    const built = buildsBase(U);
+    // Each statement, with the parent whose body it comes from.
+    const from = new Map();
+    const lines = built
+      ? (U.initBody || []).flatMap((s) => {
+        if (s.type !== 'SuperInit') return [s];
+        const P = byName.get(s.layer);
+        if (s.none || !P) return [];
+        const body = parentView(byName, P, resolveSuperclassChain).init;
+        for (const t of body) from.set(t, P);
+        return body;
+      })
+      : (() => {
+        const inherited = resolveSuperclassChain(byName, U).inheritedInit;
+        for (const t of inherited) from.set(t, null);
+        return [...inherited, ...(U.initBody || [])];
+      })();
+    if (!from.size) continue;
+    const own = new Set((U.functions || []).map(f => f.name));
+    const functions = [...resolveSuperclassChain(byName, U).inheritedFunctions.filter(f => !own.has(f.name)), ...(U.functions || [])];
+    const reader = makeReader({ ...U, functions }, { nestedClass: () => null, constructionReads: () => ({ own: new Map(), writes: new Map(), outer: [] }) });
+    const declaredAt = new Map();
+    lines.forEach((s, i) => { for (const n of declaredNames(s)) if (!declaredAt.has(n)) declaredAt.set(n, i); });
+    lines.forEach((s, i) => {
+      if (!from.has(s)) return;
+      const early = (name) => { const at = declaredAt.get(name); return at !== undefined && at >= i; };
+      const r = reader.readsOf(s);
+      for (const [verb, uses] of [['read', r.own], ['written', r.writes]]) for (const [name, via] of uses) {
+        if (!early(name)) continue;
+        const P = from.get(s);
+        const at = P ? `the body of '${shownName(P)}', run at ${(U.supertypes || []).length > 1 ? `'super[${shownName(P)}]'` : "'super'"}` : `the body of a parent of '${shownName(U)}', run first`;
+        const through = via ? `, through '${via}'` : '';
+        throw new Error(`'${name}' in '${shownName(U)}' is ${verb} before its declaration (by ${at}${through}) — declare '${name}' above that line`);
       }
     });
   }
