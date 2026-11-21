@@ -118,6 +118,14 @@ export function lowerBaseLayers(actors) {
         // `base.a` is a message, as `x.a` is: a call with no args. `base::h` isn't a value.
         if (n.type === 'BaseSet') throw new Error(`'${shown(n)}' in '${U.name}' is a function, not a cell`);
         if (n.type !== 'BaseCall' && !n.isPublic) throw new Error(`'${shown(n)}' in '${U.name}' is a function: call it, '${shown(n)}()'`);
+        // A parent block is a live actor: its function runs there, for this block
+        // (a delegated call, src/singleton_classes.js), as `super` there does.
+        if (U.blockParent) {
+          const args = n.args ?? [];
+          for (const k of Object.keys(n)) delete n[k];
+          Object.assign(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args, inheritedCall: 'direct', inheritedFrom: L.name });
+          continue;
+        }
         if (!copied.has(hidden)) {
           copied.add(hidden);
           const clauses = L.functions.filter(f => f.name === name && !f.actorDef);

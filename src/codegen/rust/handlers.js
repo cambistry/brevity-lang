@@ -956,12 +956,21 @@ ${m[2]}
             let owner = self.state_owner.clone();
             let arg = payload.as_array().and_then(|a| a.first()).unwrap_or(payload);
             let table = arg.get("block").cloned().unwrap_or(Value::Null);
-            self.bv_extend_at(&owner, from, from, &table);
+            self.bv_extend_at(&owner, from, from, &table, "");
             return json!([]);
+        }
+        // A delegated call from the wire names its context.
+        if bv_from_wire_caller(from) {
+            if let Some(a) = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from) { return self.bv_admit_call(op, payload, from, &a); }
+        }
+        // A name we don't define but inherit: our base runs it, for us.
+        {
+            let (_, _, _, _, _, inherited, own) = bv_block_info(${JSON.stringify(name)});
+            if !op.starts_with('$') && !own.contains(&op) && inherited.contains(&op) { return self.bv_ctx_send(op, payload, false); }
         }
         let from = if bv_from_wire_caller(from) && (op.starts_with("$get ~") || op.starts_with("$set ~")) && self.bv_is_extender(from) { "__parent" } else { from };
         {
-            let (_, _, _, forwards) = bv_block_info(${JSON.stringify(name)});
+            let (_, _, _, forwards, _, _, _) = bv_block_info(${JSON.stringify(name)});
             let inside = !bv_from_wire_caller(from) || self.bv_is_extender(from);
             if let Some(t) = op.strip_prefix("$get ") { if inside && forwards.contains(&t) { return json!([self.bv_base_read(t)]); } }
             if let Some(t) = op.strip_prefix("$set ") { if inside && forwards.contains(&t) { let v = payload.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null); self.bv_base_set(t, v); return Value::Null; } }
@@ -1306,11 +1315,14 @@ function genRustChildMethods(allActors) {
 
     // Set child self-send prefix so a call to the class's own function routes through child dispatch
     G.ctx.childSelfSendPrefix = actor.name.toLowerCase();
+    // A class block's functions run in the context of a delegated call.
+    G.ctx.inBlock = !!actor.membersOf;
     const init = genRustChildInit(mergedActor);
     if (init) parts.push(init);
     parts.push(genRustChildDispatch(mergedActor));
     parts.push(genRustChildDispatchSub(actor.name.toLowerCase()));
     G.ctx.childSelfSendPrefix = null;
+    G.ctx.inBlock = false;
 
     // Per-instance wrappers for spawn-needing classes — swap the instance's
     // state HashMap into self.state, run the existing init/dispatch (which

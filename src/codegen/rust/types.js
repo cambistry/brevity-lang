@@ -756,7 +756,9 @@ function createRustContext() {
 function outerRead(expr) {
   // `$get` to the owner's name, by its wire token (bv_get_key in program.js).
   // A cell a class block inherits is read at its base (src/singleton_classes.js).
-  const read = expr.outerBase ? `self.bv_base_read(${JSON.stringify(wireLabel(expr.name))})`
+  const w = JSON.stringify(wireLabel(expr.name));
+  const read = expr.outerBase && expr.ctxCell && G.ctx.inBlock ? `(if self.bv_ctx_has(${w}) { self.bv_ctx_get(${w}) } else { self.bv_base_read(${w}) })`
+    : expr.outerBase ? `self.bv_base_read(${JSON.stringify(wireLabel(expr.name))})`
     : `self.outer_read(${expr.outerLevel ?? 1}, ${JSON.stringify(wireLabel(expr.name))})`;
   // A ref read is a Value here, as a class's own cell is.
   if (expr.type === 'RefRead') return read;

@@ -305,6 +305,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   // A cell a class's construction waits on has its value (src/init_order.js).
   if (expr.type === 'CellReady') return `bv_cell_ready_(${erlString(wireLabel(expr.name))})`;
   // A cell a class block inherits is read at its base (src/singleton_classes.js).
+  // In a class block's function, a cell an extender may redeclare is read there
+  // when the call's context says so.
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.ctxCell && ctx.inBlock && !sCtx?.noCtx) {
+    return `bv_ctx_get_(${erlString(expr.ctxCell)}, fun() -> ${genExpr(ctx, expr, typeEnv, { ...(sCtx || {}), noCtx: true })} end)`;
+  }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `bv_base_get_(${erlString(wireLabel(expr.name))})`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
     // `$get` to the owner's name, by its wire token (bv_read_ in program.js).
@@ -439,15 +444,17 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, waited on, so a read after it sees it.
-  if (expr.type === 'OuterSet' && expr.outerBase) {
+  if (expr.type === 'OuterSet' && (expr.outerBase || expr.outerSelf)) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
-    return `bv_base_set_(${erlString(wireLabel(expr.name))}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}])`;
+    const w = erlString(wireLabel(expr.name));
+    if (expr.ctxCell && ctx.inBlock) return `bv_ctx_set_(${w}, ${genExpr(ctx, expr.value, typeEnv, sCtx)}, ${!!expr.outerBase})`;
+    return `bv_base_set_(${w}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}])`;
   }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
     return `outer_self_send(${expr.outerLevel}, {${erlString(op)}, ${erlString(wireLabel(expr.name))}}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}], false)`;
   }
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && (ctx.actorFnNames.has(expr.callee.name) || expr.outerFnCall)) {
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && (ctx.actorFnNames.has(expr.callee.name) || expr.outerFnCall || expr.inheritedCall)) {
     return genActorFnCallExpr(ctx, expr, typeEnv, sCtx);
   }
 
@@ -1288,8 +1295,10 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
     const args = inner.slice(inner.indexOf('(') + 1, -1);
     return `outer_self_send(${expr.outerLevel}, ${args}, ${silent})`;
   }
-  // Use child-specific self_send when inside child actor context
-  const selfSendFn = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
+  // Use child-specific self_send when inside child actor context. In a class block,
+  // a call resolves through the call's context (bv_ctx_self_send).
+  const selfSendFn = ctx.inBlock ? (expr.inheritedCall === 'direct' ? 'bv_ctx_direct_self_send' : 'bv_ctx_self_send')
+    : ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
   // Self-send: call through dispatch, return Object
   if (expr.args.length === 0) {
     return `${selfSendFn}(${erlOp(name)}, #{})`;

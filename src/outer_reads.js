@@ -108,7 +108,7 @@ function classOwnNames(classes, actor) {
 // getter is the cell, so it isn't one.
 function functionNames(classes, actor, cells) {
   const own = actor.name ? resolveSuperclassChain(classes, actor).inheritedFunctions : [];
-  return new Set([...(actor.functions || []), ...own]
+  return new Set([...(actor.functions || []), ...own, ...(actor.forwardFns || []).map(name => ({ name }))]
     .map(f => f.name)
     .filter(n => typeof n === 'string' && !/^(set|update|new|subscribe)@/.test(n) && !cells.has(n)));
 }

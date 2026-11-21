@@ -27,13 +27,16 @@ function genBlockInfoFn(actors) {
   const strs = (xs) => `&[${xs.map(x => JSON.stringify(x)).join(', ')}]`;
   const arms = actors.filter(a => a.membersOf && a.name).map(a => {
     const self = selfAddress(publicLabel(a) ?? a.singletonOf);
-    return `        ${JSON.stringify(a.name.toLowerCase())} => (${strs(a.extensionNames || [])}, ${strs(a.overrideTable?.block || [])}, ${JSON.stringify(self)}, ${strs((a.forwardCells || []).map(c => wireLabel(c.name)))}),`;
+    const base = a.blockParent ? actors.find(b => b.name === a.blockParent) : null;
+    const baseSelf = base ? selfAddress(publicLabel(base) ?? base.singletonOf) : '';
+    const own = [...new Set((a.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
+    return `        ${JSON.stringify(a.name.toLowerCase())} => (${strs(a.extensionNames || [])}, ${strs(a.overrideTable?.block || [])}, ${JSON.stringify(self)}, ${strs((a.forwardCells || []).map(c => wireLabel(c.name)))}, ${JSON.stringify(baseSelf)}, ${strs((a.forwardFns || []).map(wireLabel))}, ${strs(own)}),`;
   });
   return `#[allow(dead_code)]
-fn bv_block_info(class: &str) -> (&'static [&'static str], &'static [&'static str], &'static str, &'static [&'static str]) {
+fn bv_block_info(class: &str) -> (&'static [&'static str], &'static [&'static str], &'static str, &'static [&'static str], &'static str, &'static [&'static str], &'static [&'static str]) {
     match class {
 ${arms.join('\n')}
-        _ => (&[], &[], "", &[]),
+        _ => (&[], &[], "", &[], "", &[], &[]),
     }
 }
 `;
@@ -1006,22 +1009,22 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
     // extender with it too, as \`as_\`, with the names it or the extender overrides in
     // the base's terms. See notes/opre-extend-and-as-2026-11-20.md.
     #[allow(dead_code)]
-    fn bv_extend_at(&mut self, owner: &str, from: &str, as_: &str, table: &Value) {
+    fn bv_extend_at(&mut self, owner: &str, from: &str, as_: &str, table: &Value, from_owner: &str) {
         let class = owner.split_once('/').map(|(c, _)| c).unwrap_or("").to_string();
-        let (names, own_table, self_label, _) = bv_block_info(&class);
+        let (names, own_table, self_label, _, _, _, _) = bv_block_info(&class);
         let list: Vec<String> = table.as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default();
         if table.as_array().is_none() || list.iter().any(|n| !names.contains(&n.as_str())) { panic!("{}", "bv_as:unknown_name"); }
         let base = self.state_of(owner).and_then(|st| st.get("__base")).and_then(|v| v.as_str()).map(String::from);
         if let Some(base) = base {
             let base_class = base.split_once('/').map(|(c, _)| c).unwrap_or("").to_string();
-            let (base_names, _, _, _) = bv_block_info(&base_class);
+            let (base_names, _, _, _, _, _, _) = bv_block_info(&base_class);
             let mut up: Vec<Value> = own_table.iter().map(|n| json!(n)).collect();
             for n in &list { if base_names.contains(&n.as_str()) && !own_table.contains(&n.as_str()) { up.push(json!(n)); } }
-            self.bv_extend_at(&base, self_label, as_, &Value::Array(up));
+            self.bv_extend_at(&base, self_label, as_, &Value::Array(up), owner);
         }
         let st = self.state_of_mut(owner).unwrap_or_else(|| panic!("$extend: no actor {:?}", owner));
         let mut recs = st.get("__extenders").and_then(|v| v.as_array().cloned()).unwrap_or_default();
-        recs.push(json!({ "from": from, "as": as_, "table": table }));
+        recs.push(json!({ "from": from, "as": as_, "table": table, "owner": from_owner }));
         st.insert("__extenders".to_string(), Value::Array(recs));
     }
 
@@ -1029,9 +1032,115 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
     #[allow(dead_code)]
     fn bv_extend_self(&mut self, class: &str) {
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let (_, table, self_label, _) = bv_block_info(class);
+        let (_, table, self_label, _, _, _, _) = bv_block_info(class);
         let table = Value::Array(table.iter().map(|n| json!(n)).collect());
-        self.bv_extend_at(&base, self_label, self_label, &table);
+        let me = self.state_owner.clone();
+        self.bv_extend_at(&base, self_label, self_label, &table, &me);
+    }
+
+    // ── Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call") ──
+    // A delegated call runs the block's own definition in a context: an extender's
+    // record, kept in the running block's state (\`__ctx\`) for the call. A name in
+    // the context's table resolves at the extender, by a callback to it (\`from\` us,
+    // with the same \`as\`); anything else is the block's own, or its base's.
+    #[allow(dead_code)]
+    fn bv_my_class(&self) -> String { match self.state_owner.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } }
+
+    #[allow(dead_code)]
+    fn bv_ctx_has(&self, name: &str) -> bool {
+        self.state.get("__ctx").and_then(|c| c.get("table")).and_then(|t| t.as_array()).map(|t| t.iter().any(|n| n.as_str() == Some(name))).unwrap_or(false)
+    }
+
+    // A call of one of our functions: at the extender that overrides it, here (in the
+    // same context), or at our base (one we inherit, or \`super\` when \`direct\`).
+    #[allow(dead_code)]
+    fn bv_ctx_send(&mut self, op: &str, payload: &Value, direct: bool) -> Value {
+        let class = self.bv_my_class();
+        let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null);
+        if !direct && self.bv_ctx_has(op) { return self.bv_callback(&ctx, op, payload); }
+        let (_, _, self_label, _, _, inherited, _) = bv_block_info(&class);
+        if !direct && !inherited.contains(&op) { let me = self.state_owner.clone(); return self.run_as(&me, op, payload); }
+        let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or(self_label).to_string();
+        self.bv_deliver(&base, op, payload, self_label, &as_)
+    }
+
+    #[allow(dead_code)]
+    fn bv_callback(&mut self, ctx: &Value, op: &str, payload: &Value) -> Value {
+        let owner = ctx.get("owner").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if owner.is_empty() { panic!("{}", "bv_as:a callback to an extender in another actor isn't supported yet"); }
+        let (_, _, self_label, _, _, _, _) = bv_block_info(&self.bv_my_class());
+        let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        self.bv_deliver(&owner, op, payload, self_label, &as_)
+    }
+
+    #[allow(dead_code)]
+    fn bv_ctx_get(&mut self, name: &str) -> Value {
+        let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null);
+        let r = self.bv_callback(&ctx, &format!("$get {}", name), &json!({}));
+        r.as_array().and_then(|a| a.first()).cloned().unwrap_or(r)
+    }
+
+    // A write to a cell an extender may redeclare: there, ours (through its own
+    // \`$set\`), or our base's for one we inherit.
+    #[allow(dead_code)]
+    fn bv_ctx_set(&mut self, name: &str, value: Value, inherited: bool) {
+        let op = format!("$set {}", name);
+        if self.bv_ctx_has(name) { let ctx = self.state.get("__ctx").cloned().unwrap_or(Value::Null); let _ = self.bv_callback(&ctx, &op, &Value::Array(vec![value])); return; }
+        if inherited { self.bv_base_set(name, value); return; }
+        let me = self.state_owner.clone();
+        let _ = self.run_as(&me, &op, &Value::Array(vec![value]));
+    }
+
+    // A message from the block \`from\` (\`as\` a context) to the block \`owner\`, run there.
+    #[allow(dead_code)]
+    fn bv_deliver(&mut self, owner: &str, op: &str, payload: &Value, from: &str, as_: &str) -> Value {
+        let (op, payload, from, as_) = (op.to_string(), payload.clone(), from.to_string(), as_.to_string());
+        self.bv_run_in(owner, move |s| s.bv_admit_call(&op, &payload, &from, &as_))
+    }
+
+    // Run f in owner's state, wherever that is: running, set aside, or in its pool.
+    #[allow(dead_code)]
+    fn bv_run_in(&mut self, owner: &str, f: impl FnOnce(&mut Self) -> Value) -> Value {
+        if owner == self.state_owner { return f(self); }
+        let st = match self.state_of_mut(owner) { Some(st) => std::mem::take(st), None => panic!("delegated call: no actor {:?}", owner) };
+        self.enter_state(owner.to_string(), st);
+        let outcome = catch_unwind(AssertUnwindSafe(|| f(self)));
+        let st = self.leave_state();
+        if let Some(slot) = self.state_of_mut(owner) { *slot = st; }
+        match outcome { Ok(v) => v, Err(e) => std::panic::resume_unwind(e) }
+    }
+
+    // A delegated call (from an extender) or a callback (from our base), in our
+    // state: run in its context, or passed on.
+    #[allow(dead_code)]
+    fn bv_admit_call(&mut self, op: &str, payload: &Value, from: &str, as_: &str) -> Value {
+        let class = self.bv_my_class();
+        let (_, _, self_label, _, base_label, _, own) = bv_block_info(&class);
+        let name = op.split_once(' ').map(|(_, t)| t.to_string()).unwrap_or_else(|| op.to_string());
+        let recs = self.state.get("__extenders").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let in_table = |r: &Value| r.get("table").and_then(|t| t.as_array()).map(|t| t.iter().any(|n| n.as_str() == Some(name.as_str()))).unwrap_or(false);
+        if !base_label.is_empty() && from == base_label {
+            if as_ == self_label { return self.bv_dispatch_ctx(op, payload, Value::Null); }
+            let rec = recs.iter().find(|r| r.get("as").and_then(|v| v.as_str()) == Some(as_)).cloned().unwrap_or_else(|| panic!("{}", "bv_as:unknown_context"));
+            if in_table(&rec) { return self.bv_callback(&rec, op, payload); }
+            return self.bv_dispatch_ctx(op, payload, rec);
+        }
+        let rec = recs.iter().find(|r| r.get("from").and_then(|v| v.as_str()) == Some(from) && r.get("as").and_then(|v| v.as_str()) == Some(as_)).cloned().unwrap_or_else(|| panic!("{}", "bv_as:unknown_context"));
+        if !op.starts_with('$') && !own.contains(&op) && !base_label.is_empty() {
+            let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            return self.bv_deliver(&base, op, payload, self_label, as_);
+        }
+        self.bv_dispatch_ctx(op, payload, rec)
+    }
+
+    #[allow(dead_code)]
+    fn bv_dispatch_ctx(&mut self, op: &str, payload: &Value, ctx: Value) -> Value {
+        let prev = self.state.insert("__ctx".to_string(), ctx);
+        let me = self.state_owner.clone();
+        let outcome = catch_unwind(AssertUnwindSafe(|| self.run_as(&me, op, payload)));
+        match prev { Some(p) => { self.state.insert("__ctx".to_string(), p); } None => { self.state.remove("__ctx"); } }
+        match outcome { Ok(v) => v, Err(e) => std::panic::resume_unwind(e) }
     }
 
     // Whether \`from\` is a recorded extender of the block we're running, or under one.

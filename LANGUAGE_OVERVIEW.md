@@ -272,11 +272,17 @@ With several parents, write `super[A](…)`. `super` can't be declared or set, a
 `super.x` / `super::x` aren't forms: those are `base.x` / `base::x`.
 
 A class's members block (`C = (…) *{ … } ^ { members }`) is its class block. A
-subclass with a block of its own extends its parent's block by delegation: the
-parent block's functions layer under its own, late-bound; a cell it doesn't
-redeclare is the parent block's one cell; one it redeclares is its own, and the
-parent's code running for it uses that. `super` in a block's function is the
-parent block's same function, and `base::count` the parent block's own cell.
+subclass with a block of its own extends its parent's block by delegation: the two
+are separate actors, and the parent's functions aren't copied. As it's built, the
+block registers with the parent block (`$extend`, with the parent's names it
+overrides or redeclares). A call to it for a function it doesn't define runs at the
+parent, for it (`as`): late-bound, so the parent's code uses the block's overrides
+and the cells it redeclares, by calling back to it. A cell it doesn't redeclare is
+the parent block's one cell, read and written there; one it redeclares is its own.
+`super` in a block's function, and `base::h()`, run the parent block's same function
+for it; `base::count` is the parent block's own cell; `A.f()` named explicitly runs
+as the parent, with the parent's own names. An actor of the class reaches an
+inherited block cell through its own class's block, which forwards it.
 
 `class::base` is the running class's parent (Ruby's `self.class.superclass`): in
 `T`'s code running for a `U`, it's `T`. `class::base::h()` reaches the parent's

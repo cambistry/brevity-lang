@@ -177,7 +177,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           return;
         // A write to a cell a class block inherits, set at its base.
         case 'OuterSet':
-          if (node.outerBase) scope.write(`${node.name} ${node.updateOp || '<-'} …`);
+          if (node.outerBase || node.outerSelf) scope.write(`${node.name} ${node.updateOp || '<-'} …`);
           walk(node.value, scope);
           return;
         case 'ActorFieldSet':

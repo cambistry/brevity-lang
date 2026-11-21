@@ -799,6 +799,8 @@ function validateProgram(ast, options = {}) {
       if (fn.name?.startsWith('@')) flat.add(fn.name);
     }
     for (const n of accessorsFor(inheritedParams)) flat.add(n);
+    // A class block answers what it inherits, by delegating it (src/singleton_classes.js).
+    for (const n of actor.forwardFns || []) if (n.startsWith('@')) flat.add(n);
     actorMethodsFlat.set(actor.name, flat);
   }
   // Fold in methods and accessors from overload clauses (`Name << (..) *{}` / `Name >> (..) *{}`).

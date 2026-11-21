@@ -87,6 +87,8 @@ function actorNames(actor, classes) {
   for (const d of [...(actor.stateVarDecls || []), ...(inheritedState || [])]) names.push(['cell', d.name]);
   // A class block's inherited cells, read at its base (src/singleton_classes.js).
   for (const c of actor.forwardCells || []) names.push(['cell', c.name]);
+  // And its inherited functions, which its base runs for it.
+  for (const f of actor.forwardFns || []) names.push(['function', f]);
   for (const p of [...(actor.initParams || []), ...(actor.params || []), ...(inheritedParams || [])]) {
     names.push(['value', p.name]);
     if (p.accessor) names.push(['value', '@' + p.accessor.replace(/^@/, '')]);

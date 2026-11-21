@@ -33,7 +33,7 @@ export function markCallResultTypes(ast) {
       const arith = node.type === 'BinaryExpr' || node.type === 'UnaryExpr';
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, arith);
       if (!operand || node.type !== 'FunctionCallExpr' || node.callee?.type !== 'Identifier' || node.resultType) return;
-      const owner = node.outerFnCall ? byName.get(node.outerClass ?? null) : actor;
+      const owner = node.inheritedFrom ? byName.get(node.inheritedFrom) : node.outerFnCall ? byName.get(node.outerClass ?? null) : actor;
       if (!owner) return;
       const t = typeOf(owner, node.callee.name);
       if (t) node.resultType = t;

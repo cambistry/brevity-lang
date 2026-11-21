@@ -145,7 +145,21 @@ function mergeInto(acc, more, callee) {
 export function checkInitOrder(ast) {
   const actors = ast.actors || [];
   const readers = new Map();
-  const reader = (a) => { if (!readers.has(a)) readers.set(a, makeReader(a, ctx)); return readers.get(a); };
+  // A class block runs what it inherits at its base, late-bound: its own functions,
+  // then the blocks it extends', nearest first (src/singleton_classes.js).
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const lateBound = (a) => {
+    if (!a.blockParent) return a;
+    const functions = [...(a.functions || [])];
+    const have = new Set(functions.map(f => f.name));
+    for (let b = byName.get(a.blockParent); b; b = b.blockParent ? byName.get(b.blockParent) : null) {
+      const layer = (b.functions || []).filter(f => !have.has(f.name));
+      functions.push(...layer);
+      for (const f of layer) have.add(f.name);
+    }
+    return { ...a, functions };
+  };
+  const reader = (a) => { if (!readers.has(a)) readers.set(a, makeReader(lateBound(a), ctx)); return readers.get(a); };
   const enclosingName = (a) => typeof a.enclosing === 'string' ? a.enclosing : a.enclosing?.name;
   const building = new Set();
   const ctx = {

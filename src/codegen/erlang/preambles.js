@@ -1476,28 +1476,28 @@ bv_answer_own_(From, Token, Ref) ->
 %% its extenders. \`$extend\` records an extender (bv_extenders_), which may then
 %% reach the block's protected cells. bv_block_info_ is {Names, Table, Self, Forwards}.
 bv_forwards_(Token) ->
-    {_, _, _, Fwd_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    {_, _, _, Fwd_, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
     get(bv_base_) =/= undefined andalso lists:member(Token, Fwd_).
 bv_is_extender_(From) when is_binary(From) ->
     Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
-    lists:any(fun({K_, _, _}) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end, Recs_);
+    lists:any(fun({K_, _, _, _}) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end, Recs_);
 bv_is_extender_(_) -> false.
 %% From (as As) extends us with Table, recorded if every name in it is ours. A
 %% block with a base registers it there too, with the names either of us overrides
 %% in the base's terms.
-bv_extend_here_(From, As, Table) ->
-    {Names_, Own_, Self_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+bv_extend_here_(From, As, Table, Pid) ->
+    {Names_, Own_, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
     case is_list(Table) andalso lists:all(fun(N_) -> lists:member(N_, Names_) end, Table) of
         false -> {error, <<"unknown_name">>};
         true ->
             Up_ = case get(bv_base_) of
                 undefined -> ok;
                 Base_ ->
-                    {BaseNames_, _, _, _} = (bv_mod_()):bv_block_info_((bv_mod_()):bv_block_base_class_(bv_my_class_())),
+                    {BaseNames_, _, _, _, _, _, _} = (bv_mod_()):bv_block_info_((bv_mod_()):bv_block_base_class_(bv_my_class_())),
                     bv_extend_at_(Base_, Self_, As, Own_ ++ [N_ || N_ <- Table, lists:member(N_, BaseNames_), not lists:member(N_, Own_)])
             end,
             case Up_ of
-                ok -> put(bv_extenders_, (case get(bv_extenders_) of undefined -> []; L_ -> L_ end) ++ [{From, As, Table}]), ok;
+                ok -> put(bv_extenders_, (case get(bv_extenders_) of undefined -> []; L_ -> L_ end) ++ [{From, As, Table, Pid}]), ok;
                 E_ -> E_
             end
     end.
@@ -1506,7 +1506,7 @@ bv_extend_at_(Pid, From, As, Table) ->
     Pid ! {bv_extend, self(), From, As, Table, Ref_},
     receive {bv_reply, Ref_, ok} -> ok; {bv_error, Ref_, R_} -> {error, R_} end.
 bv_answer_extend_(Pid, From, As, Table, Ref) ->
-    case bv_extend_here_(From, As, Table) of
+    case bv_extend_here_(From, As, Table, Pid) of
         ok -> Pid ! {bv_reply, Ref, ok};
         {error, R_} -> Pid ! {bv_error, Ref, R_}
     end.
@@ -1517,7 +1517,7 @@ bv_extend_self_(HomeToken) ->
     HomePid_ ! {bv_outer_get, self(), HomeToken, Ref_},
     Base_ = receive {bv_reply, Ref_, V_} -> V_ end,
     put(bv_base_, Base_),
-    {_, Table_, Self_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    {_, Table_, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
     case bv_extend_at_(Base_, Self_, Self_, Table_) of ok -> ok; {error, R_} -> error({bv_as, R_}) end.
 bv_base_get_(Token) ->
     Ref_ = make_ref(),
@@ -1531,6 +1531,11 @@ bv_base_set_(Token, Payload) ->
 %% extender; a protected cell, from an extender (inside); anything else (pass).
 bv_block_wire_(Op, Msg, Payload) ->
     WFrom_ = maps:get(<<"from">>, Msg, null),
+    case maps:is_key(<<"as">>, Msg) andalso bv_wire_op_(Op) =/= <<"$extend">> of
+        true -> {reply, bv_admit_call_(Op, Payload, WFrom_, maps:get(<<"as">>, Msg))};
+        false -> bv_block_wire_op_(Op, Msg, Payload, WFrom_)
+    end.
+bv_block_wire_op_(Op, Msg, Payload, WFrom_) ->
     case Op of
         {<<"$extend">>, _} -> bv_block_extend_wire_(WFrom_, Msg, Payload);
         <<"$extend">> -> bv_block_extend_wire_(WFrom_, Msg, Payload);
@@ -1542,12 +1547,109 @@ bv_block_wire_(Op, Msg, Payload) ->
     end.
 bv_admit_(<<"~", _/binary>>, From) -> case bv_is_extender_(From) of true -> inside; false -> pass end;
 bv_admit_(_, _) -> pass.
+%% ── Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call") ──
+%% A delegated call runs the block's own definition in a context: an extender's
+%% record {From, As, Table, Pid}, kept (bv_ctx_) for the call. A name in the
+%% context's table resolves at the extender, by a callback to it (from us, with the
+%% same As); anything else is the block's own, or its base's. A block waiting on
+%% one of these keeps answering them, so the two sides can call each other back.
+bv_ctx_has_(Name) -> case get(bv_ctx_) of {_, _, T_, _} -> lists:member(Name, T_); _ -> false end.
+bv_ctx_self_send(Op, Payload) -> bv_ctx_self_send(Op, Payload, false).
+bv_ctx_direct_self_send(Op, Payload) -> bv_ctx_self_send(Op, Payload, true).
+bv_ctx_self_send(Op, Payload, Direct) ->
+    {_, _, Self_, _, _, Inh_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    Ctx_ = get(bv_ctx_),
+    case (not Direct) andalso bv_ctx_has_(Op) of
+        true -> bv_object_pack(bv_callback_(Ctx_, Op, Payload));
+        false ->
+            case (not Direct) andalso not lists:member(Op, Inh_) of
+                true -> bv_object_pack(bv_run_own_(Op, Payload));
+                false ->
+                    As_ = case Ctx_ of {_, A_, _, _} -> A_; _ -> Self_ end,
+                    bv_object_pack(bv_deliver_(get(bv_base_), Op, Payload, Self_, As_))
+            end
+    end.
+%% A call for a name we inherit, from anyone: our base runs it, for us.
+bv_inherited_op_(Op, Payload) ->
+    {_, _, Self_, _, _, Inh_, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    case lists:member(Op, Inh_) andalso not lists:member(Op, Own_) of
+        true ->
+            As_ = case get(bv_ctx_) of {_, A_, _, _} -> A_; _ -> Self_ end,
+            {ok, bv_deliver_(get(bv_base_), Op, Payload, Self_, As_), null};
+        false -> {error, bv_ex_key_(Op)}
+    end.
+bv_run_own_(Op, Payload) ->
+    case (bv_mod_()):bv_run_as_(bv_my_class_(), Op, Payload) of
+        {ok, Re_, Ty_} -> (bv_mod_()):bv_unwire_reply(Re_, Ty_);
+        {error, _} -> error({bv_as, <<"unhandled">>})
+    end.
+bv_callback_({_, As_, _, Pid_}, Op, Payload) when is_pid(Pid_) ->
+    {_, _, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    bv_deliver_(Pid_, Op, Payload, Self_, As_);
+bv_callback_(_, _, _) -> error({bv_as, <<"a callback to an extender in another actor isn't supported yet">>}).
+bv_ctx_get_(Name, Own) ->
+    case bv_ctx_has_(Name) of
+        true -> case bv_callback_(get(bv_ctx_), {<<"$get">>, Name}, []) of [V_ | _] -> V_; V_ -> V_ end;
+        false -> Own()
+    end.
+bv_ctx_set_(Name, V, Inherited) ->
+    case bv_ctx_has_(Name) of
+        true -> bv_callback_(get(bv_ctx_), {<<"$set">>, Name}, [V]), ok;
+        false when Inherited -> bv_base_set_(Name, [V]);
+        false -> bv_run_own_({<<"$set">>, Name}, [V]), ok
+    end.
+bv_deliver_(Pid, Op, Payload, From, As) ->
+    Ref_ = make_ref(),
+    Pid ! {bv_deleg, self(), Op, Payload, From, As, Ref_},
+    bv_await_deleg_(Ref_).
+bv_await_deleg_(Ref) ->
+    receive {bv_reply, Ref, V_} -> V_; {bv_error, Ref, F_} -> error({bv_as, F_});
+        {bv_deleg, P_, Op_, Pl_, F_, A_, R_} -> bv_answer_deleg_(P_, Op_, Pl_, F_, A_, R_), bv_await_deleg_(Ref);
+        {bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answer_outer_(OFrom_, OKey_, ORef_), bv_await_deleg_(Ref);
+        {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), bv_await_deleg_(Ref)
+    end.
+bv_answer_deleg_(Pid, Op, Payload, From, As, Ref) ->
+    case bv_guard_(fun() -> bv_admit_call_(Op, Payload, From, As) end) of
+        {bv_failed, F_} -> Pid ! {bv_error, Ref, F_};
+        Re_ -> Pid ! {bv_reply, Ref, Re_}
+    end.
+%% A delegated call (from an extender) or a callback (from our base): run in its
+%% context, or passed on.
+bv_admit_call_(Op, Payload, From, As) ->
+    {_, _, Self_, _, BaseSelf_, _, Own_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    Name_ = case Op of {_, T_} -> T_; _ -> Op end,
+    Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
+    case BaseSelf_ =/= <<>> andalso From =:= BaseSelf_ of
+        true when As =:= Self_ -> bv_run_ctx_(Op, Payload, undefined);
+        true ->
+            case [R_ || {_, A_, _, _} = R_ <- Recs_, A_ =:= As] of
+                [] -> error({bv_as, <<"unknown_context">>});
+                [{_, _, Table_, _} = Rec_ | _] ->
+                    case lists:member(Name_, Table_) of
+                        true -> bv_callback_(Rec_, Op, Payload);
+                        false -> bv_run_ctx_(Op, Payload, Rec_)
+                    end
+            end;
+        false ->
+            case [R_ || {F_, A_, _, _} = R_ <- Recs_, F_ =:= From, A_ =:= As] of
+                [] -> error({bv_as, <<"unknown_context">>});
+                [Rec_ | _] ->
+                    case is_binary(Op) andalso not lists:member(Op, Own_) andalso get(bv_base_) =/= undefined of
+                        true -> bv_deliver_(get(bv_base_), Op, Payload, Self_, As);
+                        false -> bv_run_ctx_(Op, Payload, Rec_)
+                    end
+            end
+    end.
+bv_run_ctx_(Op, Payload, Ctx) ->
+    Prev_ = get(bv_ctx_),
+    put(bv_ctx_, Ctx),
+    try bv_run_own_(Op, Payload) after put(bv_ctx_, Prev_) end.
 bv_wire_op_({Op_, _}) -> Op_;
 bv_wire_op_(Op_) -> Op_.
 bv_block_extend_wire_(From, Msg, Payload) ->
     Arg_ = case Payload of [A_ | _] -> A_; A_ -> A_ end,
     Table_ = case is_map(Arg_) of true -> maps:get(<<"block">>, Arg_, null); false -> null end,
-    case bv_extend_here_(From, maps:get(<<"as">>, Msg, From), Table_) of ok -> {reply, []}; {error, R_} -> {fail, R_} end.
+    case bv_extend_here_(From, maps:get(<<"as">>, Msg, From), Table_, undefined) of ok -> {reply, []}; {error, R_} -> {fail, R_} end.
 bv_cell_ready_(Token) ->
     Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
     [From_ ! {bv_reply, Ref_, (bv_mod_()):bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],

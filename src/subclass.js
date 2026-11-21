@@ -44,9 +44,9 @@ export function resolveSuperclassChain(actorByName, actor) {
     if (!superActor) continue;
     // No base for this parent: none of its layer is in the actor.
     if (hasNoBase(actor, st.supertype)) continue;
-    // A class block extending its parent's: the parse copied the parent block's
-    // functions in (flattenDelegatedBlocks, src/singleton_classes.js), and its cells
-    // stay in it, a live actor.
+    // A class block extending its parent's: the parent block is a live actor, which
+    // runs its functions for it (lowerBlockDelegation, src/singleton_classes.js) and
+    // holds its cells.
     if (st.delegated) continue;
 
     const parentChain = resolveSuperclassChain(actorByName, superActor);

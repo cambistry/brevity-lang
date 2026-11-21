@@ -1,3 +1,4 @@
+import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
 import { lowerActorValues } from './actor_values.js';
 // Class singletons: a class whose class block holds members of its own.
 //
@@ -207,42 +208,6 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
   }
 }
 
-// A class block extending its parent's (`blockParent`): a copy of each of the parent
-// block's functions the block doesn't define, so it runs as the block, late-bound:
-// a cell the block redeclares is its own, any other is the parent block's (the block
-// is declared inside it). A layer's clauses for a name replace the parent's together.
-// Runs once `base` and `super` are lowered, so a parent's function they reach is in
-// the copy too. Parents first, so a parent block has its own parent's by then.
-export function flattenDelegatedBlocks(actors) {
-  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
-  const done = new Set();
-  const flatten = (block) => {
-    if (!block?.blockParent || done.has(block)) return;
-    done.add(block);
-    const parent = byName.get(block.blockParent);
-    flatten(parent);
-    const own = new Set((block.functions || []).map(f => f.name));
-    const ownCells = new Set((block.stateVarDecls || []).map(d => d.name));
-    // A cell's accessors stay with the block that declares it.
-    const accessorOf = (f) => f.cellGetter ? f.name : f.name?.match(/^(?:set|update|subscribe)([@.])(.+)$/)?.slice(1).join('').replace(/^\./, '');
-    const add = (f) => {
-      Object.defineProperty(f, 'inheritedFrom', { value: parent.name, configurable: true });
-      (block.functions ||= []).push(f);
-    };
-    for (const f of parent.functions || []) {
-      if (own.has(f.name)) continue;
-      const cell = accessorOf(f);
-      if (cell && !ownCells.has(cell)) continue;
-      add(structuredClone(f));
-    }
-    // A public cell of the parent block's, read through this one: the parent block answers.
-    for (const d of parent.stateVarDecls || []) {
-      if (typeof d.name !== 'string' || !d.name.startsWith('@') || ownCells.has(d.name) || own.has(d.name)) continue;
-      add({ type: 'FunctionDecl', name: d.name, params: [], body: [{ type: 'ImplicitReturn', expr: { type: 'Identifier', name: d.name, viaClass: parent.name }, typeName: d.typeName ?? null }] });
-    }
-  };
-  for (const a of actors) flatten(a);
-}
 
 // A class block extending its parent's isn't declared inside it: it is declared in its
 // home, and holds the parent block as its base. A cell of an ancestor block's that the
@@ -347,6 +312,103 @@ export function lowerInheritedBlockCells(actors) {
     for (const f of block.functions || []) visit(f, new Set());
     for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) visit(b, new Set());
     for (const p of block.initParams || []) if (p.defaultValue) visit(p.defaultValue, new Set());
+  }
+}
+
+// Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call"): a class
+// block's functions aren't copied into the blocks that extend it. A block's call of a
+// function it inherits is a delegated call to its base (`inheritedCall`: 'late', or
+// 'direct' for `super` / `base::h()`, which skips the block's own overrides); a call
+// for a name it doesn't define goes there too. The base runs its own definition for
+// the caller's context, and each public or protected name it reaches resolves through
+// that context's override table. So a block's function body marks the cells it reads
+// and writes that an extender may redeclare (`ctxCell`, the wire name); its calls of
+// its own functions resolve at run time. The functions a block inherits are its
+// `forwardFns`, by source name.
+export function lowerBlockDelegation(actors) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const isAccessor = (f) => typeof f.name !== 'string' || /^(set|update|subscribe|new)[@.#]/.test(f.name);
+  for (const block of actors.filter(a => a.membersOf)) {
+    const ownFns = new Set((block.functions || []).map(f => f.name));
+    const inherited = new Map();
+    for (let b = byName.get(block.blockParent); b; b = b.blockParent ? byName.get(b.blockParent) : null) {
+      for (const f of b.functions || []) {
+        if (isAccessor(f) || f.name.startsWith('#') || f.baseOf || f.actorDef || ownFns.has(f.name) || inherited.has(f.name)) continue;
+        inherited.set(f.name, b.name);
+      }
+    }
+    Object.defineProperty(block, 'forwardFns', { value: [...inherited.keys()], configurable: true });
+    const ownCells = new Set((block.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string' && !n.startsWith('#') && !n.includes('__')));
+    const visit = (node, bound) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visit(n, bound)); return; }
+      if (node.type === 'Actor' && Array.isArray(node.functions)) return;
+      if (node.type === 'FunctionDecl' || node.type === 'Function' || node.type === 'SubscribeCall') {
+        bound = new Set([...bound, ...(node.params || []).map(p => p?.name).filter(Boolean)]);
+      }
+      if (node.type === 'ForStatement' && node.name) bound = new Set([...bound, node.name]);
+      if (Array.isArray(node.body)) {
+        const locals = node.body.filter(st => (st?.type === 'Assign' || st?.type === 'TypedAssign' || st?.type === 'RefDecl') && typeof st.name === 'string').map(st => st.name);
+        if (locals.length) bound = new Set([...bound, ...locals]);
+      }
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && !bound.has(node.callee.name)) {
+        const name = node.callee.name;
+        if (!node.inheritedCall && !ownFns.has(name) && inherited.has(name)) {
+          node.inheritedCall = 'late';
+          node.inheritedFrom = inherited.get(name);
+        }
+      }
+      if ((node.type === 'Identifier' || node.type === 'RefRead') && typeof node.name === 'string' && !bound.has(node.name)
+          && !node.viaClass && (node.outerBase || ownCells.has(node.name))) {
+        node.ctxCell = wireLabelOf(node.name);
+        return;
+      }
+      // A write to one of its own cells: an extender may redeclare it, so it's made
+      // through the cell's own `$set`, or at the extender (src/codegen/*).
+      if (node.type === 'SetStatement' && ownCells.has(node.name) && !bound.has(node.name)) {
+        const decl = block.stateVarDecls.find(d => d.name === node.name);
+        const type = decl.typeName ?? null;
+        if (node.updateOp === '<|' && !['Integer', 'Text', 'Boolean', 'Decimal', 'Float'].includes(type)) {
+          throw new Error(`'${node.name} <|' in a function of a class block isn't supported yet: write '${node.name} <- …'`);
+        }
+        const { name, value } = node;
+        visit(value, bound);
+        for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
+        node.type = 'ExprStatement';
+        node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, outerType: type, ctxCell: wireLabelOf(name) };
+        return;
+      }
+      if (node.type === 'OuterSet' && node.outerBase) node.ctxCell = wireLabelOf(node.name);
+      if (node.type === 'Reply' || node.type === 'Return') {
+        node.fields = (node.fields || []).map(f => {
+          if (f.positional && !f.expr && !f.value && typeof f.name === 'string' && ownCells.has(f.name) && !bound.has(f.name)) {
+            const { name, ...rest } = f;
+            return { ...rest, positional: true, expr: { type: 'Identifier', name } };
+          }
+          if (typeof f.sigil === 'string' && !f.expr && !f.value && ownCells.has(f.sigil) && !bound.has(f.sigil)) {
+            const { sigil, ...rest } = f;
+            delete rest.ref;
+            return { ...rest, key: sigil.replace(/^[@#]/, ''), value: { type: 'Identifier', name: sigil } };
+          }
+          return f;
+        });
+      }
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v, bound);
+    };
+    // A cell's accessors and the block's constructor run as the block itself.
+    for (const f of block.functions || []) if (!isAccessor(f) && !f.cellGetter) visit(f, new Set());
+    // Its initializers call what it inherits as itself.
+    const calls = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(calls); return; }
+      if (node.type === 'Actor' && Array.isArray(node.functions)) return;
+      if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Identifier' && !node.inheritedCall && !ownFns.has(node.callee.name) && inherited.has(node.callee.name)) {
+        node.inheritedCall = 'late';
+        node.inheritedFrom = inherited.get(node.callee.name);
+      }
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') calls(v);
+    };
+    for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) calls(b);
   }
 }
 

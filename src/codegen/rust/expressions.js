@@ -294,6 +294,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'NullLiteral') return 'Value::Null';
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return outerRead(expr);
   if (expr.type === 'Identifier') {
+    // In a class block's function, a cell an extender may redeclare is read there
+    // when the call's context says so.
+    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `(if self.bv_ctx_has(${JSON.stringify(expr.ctxCell)}) { self.bv_ctx_get(${JSON.stringify(expr.ctxCell)}) } else { self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null) })`;
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     // `Self` in expression position resolves to the class wire address.
     // fileName is enforced by validate() whenever the AST uses Self as a value.
@@ -620,10 +623,12 @@ ${subRegLines.join('\n')}
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it.
   // A cell a class block inherits is set at its base (src/singleton_classes.js).
-  if (expr.type === 'OuterSet' && expr.outerBase) {
+  if (expr.type === 'OuterSet' && (expr.outerBase || expr.outerSelf)) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
     const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
-    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_base_set(${JSON.stringify(wireLabel(expr.name))}, _v); }`;
+    const w = JSON.stringify(wireLabel(expr.name));
+    if (expr.ctxCell && G.ctx.inBlock) return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_ctx_set(${w}, _v, ${!!expr.outerBase}); }`;
+    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_base_set(${w}, _v); }`;
   }
   if (expr.type === 'OuterSet') {
     const op = `${expr.updateOp === '<|' ? '$update' : '$set'} ${wireLabel(expr.name)}`;
@@ -633,7 +638,7 @@ ${subRegLines.join('\n')}
   if (expr.type === 'FunctionCallExpr' && expr.outerFnCall) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(expr.callee.name)) {
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && (G.ctx.actorFnNames.has(expr.callee.name) || expr.inheritedCall)) {
     return `${genRustFnCallExpr(expr, typeEnv)}.one()`;
   }
   // Destructured member call → route to source service
@@ -746,6 +751,7 @@ ${subRegLines.join('\n')}
     return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
+    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `(if self.bv_ctx_has(${JSON.stringify(expr.ctxCell)}) { self.bv_ctx_get(${JSON.stringify(expr.ctxCell)}) } else { self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null) })`;
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }
@@ -1840,6 +1846,9 @@ function genRustFnCallExpr(expr, typeEnv) {
   const selfSendCall = (payload) => (expr.outerFnCall
     // A function of an actor this class is declared in (src/outer_reads.js).
     ? `bv_call_self(|| self.outer_send(${expr.outerLevel}, "${wireLabel(calleeName)}", ${payload}))`
+    // In a class block, a call resolves through the call's context.
+    : G.ctx.childSelfSendPrefix && G.ctx.inBlock
+    ? `bv_call_self(|| self.bv_ctx_send("${wireLabel(calleeName)}", ${payload}, ${expr.inheritedCall === 'direct'}))`
     : G.ctx.childSelfSendPrefix
     ? `bv_call_self(|| self.child_${G.ctx.childSelfSendPrefix}_dispatch("${wireLabel(calleeName)}", ${payload}, "", "__parent"))`
     : `bv_call_self(|| self.self_send("${wireLabel(calleeName)}", ${payload}))`);

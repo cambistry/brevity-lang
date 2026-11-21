@@ -339,12 +339,18 @@ function blockExtension(ctx, actor) {
   if (!node?.membersOf) return null;
   const byName = new Map(ctx.program.actors.filter(a => a.name).map(a => [a.name, a]));
   const base = node.blockParent ? byName.get(node.blockParent) : null;
-  const self = selfAddress(publicLabel(node) ?? node.singletonOf);
+  const label = (b) => selfAddress(publicLabel(b) ?? b.singletonOf);
+  const self = label(node);
+  const baseSelf = base ? label(base) : null;
   const names = node.extensionNames || [];
   const baseNames = base?.extensionNames || [];
   const table = node.overrideTable?.block || [];
   const forwards = (node.forwardCells || []).map(c => wireLabel(c.name));
-  const fields = `\n  #_extenders = new Map()${base ? '\n  #base = null' : ''}`;
+  // What it inherits (a call for one goes to its base), and what it defines.
+  const inheritedFns = (node.forwardFns || []).map(wireLabel);
+  const ownFns = [...new Set((node.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
+  const fields = `\n  #_extenders = new Map()\n  #_relays = new Map()${base ? '\n  #base = null' : ''}`;
+  const J = JSON.stringify;
   const methods = `  // Whether \`from\` is a recorded extender, or an actor under one.
   #_isExtender(from) {
     if (typeof from !== 'string') return false;
@@ -352,30 +358,61 @@ function blockExtension(ctx, actor) {
     return false;
   }
 
-  // \`$extend\`, and a recorded extender's protected cell ops; a cell this block
-  // inherits, forwarded to its base. Anything else goes on to dispatch.
+  // A message on to another actor, its reply relayed back as it comes.
+  #_relay(message, send, fields, route, replyTo) {
+    const id = String(++this.#nextId);
+    this.#_relays.set(id, (reply) => { const { _route, _replyTo, ...r } = reply; route({ ...r, id: message.id, to: replyTo }); });
+    const { _route, _replyTo, _ctx, ...rest } = message;
+    queueMicrotask(() => send({ ...rest, ...fields, id, _route: (m) => this.receive(m) }));
+  }
+
+  // Before dispatch: \`$extend\`; a recorded extender's protected cell ops; a cell we
+  // inherit, forwarded to our base; a delegated call (\`as\`), or a callback from our
+  // base, run in its context or passed on; a call for a name we inherit, delegated.
   #_admit(message) {
     const opName = typeof message.op === 'string' ? message.op : Array.isArray(message.op) ? message.op[message.op.length - 1] : null;
     if (opName === null) return message;
     const target = _bv_local_tokens(message.to).pop() ?? null;
     const route = message._route || ((m) => this.#binding.post(m));
     const replyTo = message._replyTo || message.from;
+    const fail = (why) => { route({ id: message.id, ex: { [opName]: why }, to: replyTo }); return null; };
     if (opName === '$extend' && target === null) {
       this.#_onExtend(message, route, replyTo);
       return null;
     }
+    // What the message names: a cell's for a cell op, else its op.
+    const name = (opName === '$get' || opName === '$set') ? target : opName;
+    const isCall = !opName.startsWith('$');
+    if (message.as !== undefined) {
+      const as = message.as;
+      // A callback from our base, for us or an extender of ours.
+      if (${J(baseSelf)} !== null && message.from === ${J(baseSelf)}) {
+        if (as === ${J(self)}) return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: null };
+        const rec = [...this.#_extenders.values()].find(r => r.as === as);
+        if (!rec) return fail('unknown_context');
+        if (rec.table.includes(name)) { this.#_relay(message, rec.send, { from: ${J(self)}, as }, route, replyTo); return null; }
+        return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
+      }
+      // A delegated call from an extender: run as its delegate, for the context it names.
+      const rec = this.#_extenders.get(JSON.stringify([message.from, as]));
+      if (!rec) return fail('unknown_context');
+      ${base ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => this.#base.receive(m), { from: ${J(self)}, as }, route, replyTo); return null; }` : ''}
+      return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
+    }
     if ((opName === '$get' || opName === '$set') && typeof target === 'string') {
       const inside = ['__self', '__test', '__parent', '__child', '__inner'].includes(message.from);
-      const extender = !inside && target.startsWith('~') && this.#_isExtender(message.from);
-      if (${JSON.stringify(forwards)}.includes(target) && (inside || extender || this.#_isExtender(message.from))) {
-        ${base ? `const id = String(++this.#nextId);
-        if (opName === '$get') this.#pending.set(id, { resolve: (v) => route({ id: message.id, re: v, to: replyTo }), reject: (ex) => route({ id: message.id, ex, to: replyTo }) });
-        const { _route, _replyTo, ...rest } = message;
-        queueMicrotask(() => this.#base.receive({ ...rest, id, to: ':' + target, from: ${JSON.stringify(self)}, _route: (m) => this.receive(m) }));
+      const extender = !inside && this.#_isExtender(message.from);
+      if (${J(forwards)}.includes(target) && (inside || extender)) {
+        ${base ? `this.#_relay(message, (m) => this.#base.receive(m), { to: ':' + target, from: ${J(self)} }, route, replyTo);
         return null;` : 'return message;'}
       }
-      if (extender) return { ...message, from: '__inner', _replyTo: replyTo };
+      if (extender && target.startsWith('~')) return { ...message, from: '__inner', _replyTo: replyTo };
     }
+    ${base ? `// A name we don't define but inherit: our base runs it, for us.
+    if (isCall && !${J(ownFns)}.includes(name) && ${J(inheritedFns)}.includes(name)) {
+      this.#_relay(message, (m) => this.#base.receive(m), { from: ${J(self)}, as: ${J(self)} }, route, replyTo);
+      return null;
+    }` : ''}
     return message;
   }
 
@@ -383,36 +420,74 @@ function blockExtension(ctx, actor) {
   async #_onExtend(message, route, replyTo) {
     const arg = Array.isArray(message.op) && Array.isArray(message.op[0]) ? message.op[0][0] : null;
     const table = arg && Array.isArray(arg.block) ? arg.block : null;
-    const names = ${JSON.stringify(names)};
+    const names = ${J(names)};
     if (!table || !table.every(n => names.includes(n))) { route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo }); return; }
     const as = message.as ?? message.from;
-    this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table });${base ? `
-    try { await this.#_extend(as, [...new Set([...${JSON.stringify(table)}, ...table.filter(n => ${JSON.stringify(baseNames)}.includes(n))])]); }
+    // Callbacks for this context go to the extender, as replies to it do.
+    const send = message._route ? (m) => message._route(m) : (m) => { const { _route, ...wire } = m; this.#binding.post({ ...wire, to: message.from }); };
+    this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table, send });${base ? `
+    try { await this.#_extend(as, [...new Set([...${J(table)}, ...table.filter(n => ${J(baseNames)}.includes(n))])]); }
     catch (ex) { route({ id: message.id, ex: { $extend: ex?.$extend ?? 'error' }, to: replyTo }); return; }` : ''}
     route({ id: message.id, re: [], to: replyTo });
   }
-${base ? `
-  // Register with our base: for ourselves, or (\`as\`) an extender of ours.
-  #_extend(as = null, table = ${JSON.stringify(table)}) {
+
+  // A call of one of our functions, in a context: at the extender that overrides it,
+  // here (in the same context), or at our base, for one we inherit or \`super\`.
+  async #_ctxSend(ctx, op, direct = false) {
+    const name = Array.isArray(op) ? op[op.length - 1] : op;
+    if (!direct && ctx && ctx.table.includes(name)) return this.#_await((m) => ctx.send(m), { op, from: ${J(self)}, as: ctx.as });
+    if (!direct && !${J(inheritedFns)}.includes(name)) {
+      const id = String(++this.#nextId);
+      const p = new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
+      await this.#dispatch({ id, op, from: '__self', _ctx: ctx });
+      return p;
+    }
+    ${base ? `return this.#_await((m) => this.#base.receive(m), { op, from: ${J(self)}, as: ctx ? ctx.as : ${J(self)} });` : `throw new Error('no base to run ' + name);`}
+  }
+
+  // A message sent for its reply.
+  #_await(send, msg) {
     const id = String(++this.#nextId);
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
-      queueMicrotask(() => this.#base.receive({ id, op: [[{ block: table }], '$extend'], ty: [[{ block: 'Object' }]], from: ${JSON.stringify(self)}, ...(as !== null && { as }), _route: (m) => this.receive(m) }));
+      queueMicrotask(() => send({ ...msg, id, _route: (m) => this.receive(m) }));
     });
+  }
+
+  // A cell an extender may redeclare: read there when the context says so.
+  async #_ctxGet(ctx, name, own) {
+    if (ctx && ctx.table.includes(name)) {
+      const v = await this.#_await((m) => ctx.send(m), { op: '$get', to: ':' + name, from: ${J(self)}, as: ctx.as });
+      return Array.isArray(v) ? v[0] : v;
+    }
+    return own();
+  }
+
+  // And written there; otherwise ours (through its own \`$set\`), or our base's.
+  async #_ctxSet(ctx, name, value, inherited = false) {
+    if (ctx && ctx.table.includes(name)) {
+      const msg = { id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, as: ctx.as, _route: () => {} };
+      queueMicrotask(() => ctx.send(msg));
+      return;
+    }
+    ${base ? `if (inherited) { this.#_baseSet(name, value); return; }` : ''}
+    await this.#dispatch({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: '__self', _route: () => {} });
+  }
+${base ? `
+  // Register with our base: for ourselves, or (\`as\`) an extender of ours.
+  #_extend(as = null, table = ${J(table)}) {
+    return this.#_await((m) => this.#base.receive(m), { op: [[{ block: table }], '$extend'], ty: [[{ block: 'Object' }]], from: ${J(self)}, ...(as !== null && { as }) });
   }
 
   // A cell we inherit, read at our base.
   async #_baseRead(name) {
-    const id = String(++this.#nextId);
-    return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
-      queueMicrotask(() => this.#base.receive({ id, op: '$get', to: ':' + name, from: ${JSON.stringify(self)}, _route: (m) => this.receive(m) }));
-    });
+    const v = await this.#_await((m) => this.#base.receive(m), { op: '$get', to: ':' + name, from: ${J(self)} });
+    return Array.isArray(v) ? v[0] : v;
   }
 
   // A write to a cell we inherit, sent to our base.
   #_baseSet(name, value) {
-    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${JSON.stringify(self)}, _route: () => {} }));
+    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, _route: () => {} }));
   }
 ` : ''}
 `;
@@ -420,6 +495,8 @@ ${base ? `
 }
 
 function genClass(ctx, actor, exportKw, remotes = null) {
+  // A class block's functions run in the context of a delegated call (blockExtension).
+  ctx.inBlock = !!(ctx.program?.actors || []).find(a => a.name === actor.name)?.membersOf;
   // Reset lambda state for this class
   ctx.inClass = !!actor.name;
   ctx.currentActor = actor;
@@ -926,6 +1003,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // A class block that extends another registers with it before its own block runs.
   const ext = blockExtension(ctx, actor);
   if (ext?.base) allInitLines.unshift('    await this.#_extend();');
+  if (ext) allInitLines.unshift('    const _ctx = null;');
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
@@ -1386,14 +1464,18 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (proxy) { proxy.receive(message); return; }
     }
     // A reply nobody is waiting for, such as one to a silent call, has nothing to run.
-    if (!('op' in message) && ('re' in message || 'ex' in message)) return;${ext ? `
+    ${ext ? `// A reply to a message we passed on goes back where that one came from.
+    if (!('op' in message) && this.#_relays.has(message.id)) { const relay = this.#_relays.get(message.id); this.#_relays.delete(message.id); relay(message); return; }
+    ` : ''}if (!('op' in message) && ('re' in message || 'ex' in message)) return;${ext ? `
     message = this.#_admit(message);
     if (!message) return;` : ''}
     this.#dispatch(message);
   }
 
   async #dispatch(message) {
-    const { id } = message;
+    const { id } = message;${ext ? `
+    // The context a delegated call runs in: an extender's record, or none.
+    const _ctx = message._ctx ?? null;` : ''}
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];

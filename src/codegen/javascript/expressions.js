@@ -470,6 +470,12 @@ export function genExpr(ctx, expr) {
     if (attrsJs) topFields.push(attrsJs);
     return `_bv_reply_one(await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))}))`;
   }
+  // In a class block's function, a cell an extender may redeclare is read there when
+  // the call's context says so (blockExtension, classes.js).
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.ctxCell && ctx.inBlock && !ctx.noCtx) {
+    const own = genExpr({ ...ctx, noCtx: true }, expr);
+    return `(await this.#_ctxGet(_ctx, ${JSON.stringify(expr.ctxCell)}, async () => ${own}))`;
+  }
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `(await this.#_baseRead(${JSON.stringify(wireLabel(expr.name))}))`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
@@ -747,9 +753,13 @@ export function genExpr(ctx, expr) {
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, as a closure's write goes to its enclosing scope.
   // A cell a class block inherits is set at its base (src/singleton_classes.js).
-  if (expr.type === 'OuterSet' && expr.outerBase) {
+  // In a class block's function, a cell an extender may redeclare is written at the
+  // extender when the call's context says so (blockExtension, classes.js).
+  if (expr.type === 'OuterSet' && (expr.outerBase || expr.outerSelf)) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
-    return `this.#_baseSet(${JSON.stringify(wireLabel(expr.name))}, ${genExpr(ctx, expr.value)})`;
+    const w = JSON.stringify(wireLabel(expr.name));
+    if (expr.outerSelf) return `await this.#_ctxSet(_ctx, ${w}, ${genExpr(ctx, expr.value)})`;
+    return expr.ctxCell && ctx.inBlock ? `await this.#_ctxSet(_ctx, ${w}, ${genExpr(ctx, expr.value)}, true)` : `this.#_baseSet(${w}, ${genExpr(ctx, expr.value)})`;
   }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
@@ -922,7 +932,7 @@ export function genExpr(ctx, expr) {
         return `await ${name}.create(${binding})`;
       }
       // Self-send: a call to this actor's function goes through dispatch
-      if (ctx.actorFnNames.has(name)) {
+      if (ctx.actorFnNames.has(name) || expr.inheritedCall) {
         const genArg = arg => {
           if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
           return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
@@ -930,6 +940,9 @@ export function genExpr(ctx, expr) {
         const op = expr.args.length === 0
           ? `"${wireLabel(name)}"`
           : `[[${expr.args.map(genArg).join(', ')}], "${wireLabel(name)}"]`;
+        // In a class block, a call resolves through the call's context: at an extender
+        // that overrides it, here, or at the base for one it inherits (blockExtension).
+        if (ctx.inBlock) return `BvObject.pack(await this.#_ctxSend(_ctx, ${op}, ${expr.inheritedCall === 'direct'}))`;
         return `BvObject.pack(await this.#selfSend(${op}))`;
       }
       // A class in another file, constructed in place.
