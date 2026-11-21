@@ -567,8 +567,8 @@ function homeExtension(ctx) {
   const J = JSON.stringify;
   const selectorOf = (a) => a.selector ?? (a.sourceName ?? a.name).replace(/^@/, '');
   const birth = Object.fromEntries([...children, ...published].map(a => [a.name, { selector: selectorOf(a), early: !!a.remoteLayers?.length }]));
-  const classes = Object.fromEntries(published.map(a => [selectorOf(a), { instanceNames: a.instanceNames || [], block: !!(a.membersClass && !a.membersInherited) }]));
-  const initLines = children.flatMap(a => a.remoteLayers.map(L =>
+  const classes = Object.fromEntries(published.map(a => [selectorOf(a), { instanceNames: a.instanceNames || [], block: !!a.membersClass }]));
+  const initLines = children.flatMap(a => a.remoteLayers.filter(L => !L.viaBlock).map(L =>
     `    await this.#_classExtend(${J(selectorOf(a))}, ${J(L.address)}, ${J(a.instanceTables?.[L.name] || [])});`));
   const fields = '\n  #_classExt = new Map()\n  #_pendingLayer = null';
   const methods = `  // What a class of ours being built gets: published as it's made, for one that

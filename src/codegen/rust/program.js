@@ -51,7 +51,12 @@ function genBlockInfoFn(actors) {
       .map(([n, t]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(wireLabel(n))}) => Some(json!(${JSON.stringify(t)})),`);
   });
   // A class with a block of its own records its extenders there.
-  const classExtArms = actors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && !(a.membersClass && !a.membersInherited)).map(a => `        ${JSON.stringify(quoteToken(a.selector ?? ''))} => Some(${strs(a.instanceNames || [])}),`);
+  const classExtArms = actors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && !a.membersClass).map(a => `        ${JSON.stringify(quoteToken(a.selector ?? ''))} => Some(${strs(a.instanceNames || [])}),`);
+  // One with a block records its extenders there: the block's cell in the file.
+  const classBlockArms = actors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && a.membersClass).map(a => {
+    const block = actors.find(b => b.name === a.membersClass);
+    return `        ${JSON.stringify(quoteToken(a.selector ?? ''))} => Some(${JSON.stringify(wireLabel(block?.singletonOf ?? ''))}),`;
+  });
   return `// The tag of what an inherited function replies, by its parent's source or doc.
 #[allow(dead_code)]
 fn bv_inherited_ty(class: &str, op: &str) -> Option<Value> {
@@ -67,6 +72,15 @@ ${tyArms.join('\n')}
 fn bv_class_ext(selector: &str) -> Option<&'static [&'static str]> {
     match selector {
 ${classExtArms.join('\n')}
+        _ => None,
+    }
+}
+
+// A published class of ours with a block, by its label: the block's cell token.
+#[allow(dead_code)]
+fn bv_class_block(selector: &str) -> Option<&'static str> {
+    match selector {
+${classBlockArms.join('\n')}
         _ => None,
     }
 }
@@ -491,7 +505,7 @@ ${sourceArms}
   const stateInitLines = [];
   // A class of ours whose parent is in another file: its \`$extend\` there, first.
   for (const a of (allActors || []).filter(x => x.remoteLayers?.length && !x.membersOf)) {
-    for (const L of a.remoteLayers) {
+    for (const L of a.remoteLayers.filter(L => !L.viaBlock)) {
       stateInitLines.push(`    let _ = actor.bv_wire_call(${JSON.stringify(L.address)}, "$extend", &json!([{ "block": [], "instance": ${JSON.stringify(a.instanceTables?.[L.name] || [])} }]), ${JSON.stringify(':' + quoteToken(a.selector ?? ''))}, None, true);`);
     }
   }
@@ -2622,9 +2636,14 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
             }
         }
         if let Some(t) = op_name.strip_prefix("$new ") {
-            if let (Some(_), Some(as_)) = (bv_class_ext(t), message.get("as").and_then(|v| v.as_str())) {
+            // A class with a block: the block's records (its \`$extend\` carried the section).
+            let block_recs = bv_class_block(t).map(|tok| {
+                let owner = self.bv_block_in_home("", tok).as_str().unwrap_or("").to_string();
+                self.state_of(&owner).and_then(|st| st.get("__extenders")).and_then(|v| v.as_array().cloned()).unwrap_or_default()
+            });
+            if let (true, Some(as_)) = (bv_class_ext(t).is_some() || block_recs.is_some(), message.get("as").and_then(|v| v.as_str())) {
                 let under = |k: &str| from == k || from.starts_with(&format!("{}:", k));
-                let recs = self.bv_file_state().get(&format!("__class_ext_{}", t)).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+                let recs = match &block_recs { Some(r) => r.clone(), None => self.bv_file_state().get(&format!("__class_ext_{}", t)).and_then(|v| v.as_array().cloned()).unwrap_or_default() };
                 match recs.iter().find(|r| r.get("from").and_then(|v| v.as_str()).is_some_and(under)) {
                     Some(rec) => { self.bv_file_state().insert("__pending_layer".to_string(), json!({ "from": from, "as": as_, "table": rec.get("instance").cloned().unwrap_or(json!([])), "owner": "" })); }
                     None => {

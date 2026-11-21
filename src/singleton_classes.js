@@ -47,6 +47,30 @@ export function publicLabel(actor) {
 
 const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = (params) *{ … } }'";
 
+// An empty class block for \`a\`, as the parser makes one for \`^ { }\`: an actor, its
+// singleton, and the cell holding it in the actor \`a\` is declared in, built just
+// after the parent's block (\`parentBlock\`'s cell) so it can register there.
+function addImplicitBlock(actors, byName, a, parentBlock) {
+  const bare = a.name.replace(/^[@#]/, '');
+  const blockName = `${bare}_singleton`;
+  const cell = `${bare}__class`;
+  const declarer = actors.find(x => (x.name ?? null) === (a.enclosing ?? null));
+  const make = () => ({ type: 'FunctionCallExpr', callee: { type: 'Identifier', name: blockName }, args: [] });
+  declarer.stateVarDecls.push({ name: cell, typeName: blockName, typeFromCallee: true, isRef: false });
+  const place = (body, st) => {
+    if (!body) return;
+    const at = body.findIndex(x => x.name === parentBlock?.singletonOf);
+    body.splice(at + 1, 0, st);
+  };
+  place(declarer.initBody, { type: 'StateAssign', name: cell, value: make() });
+  place(declarer.constructorBody, { type: 'TypedAssign', name: cell, typeName: null, value: make() });
+  const block = { type: 'Actor', name: blockName, params: [], functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], asClauses: [], supertypes: [], declarationReturn: null, singletonOf: cell, membersOf: a.name, ...(a.enclosing !== undefined && { enclosing: a.enclosing }) };
+  Object.defineProperty(block, 'implicitBlock', { value: true, configurable: true, enumerable: false });
+  actors.push(block);
+  byName.set(blockName, block);
+  a.membersClass = blockName;
+}
+
 export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleton' } = {}) {
   // Whether `X::name` names a type declared in actor `X` (no member shares its name).
   const isType = (owners, name) => types.some(t => t.name === name && owners.includes(t.ownerClass));
@@ -81,32 +105,30 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     renameCalls(members, 'new', className);
   }
 
-  // A subclass with no class block of its own uses its nearest parent's (the
-  // delegated rule, notes/class-scope-and-inheritance-2026-11-16.md): its actors have
-  // that block first in their chain, as the parent's do, and reach it as the
-  // parent's trailing constructor does, through `T.` and `T::`.
-  const ownBlock = (a) => a?.membersClass && !a.membersInherited ? a : null;
+  // A class's block, if it has one. An implicit one (below) is transparent to a
+  // block that extends through it: that block's base is the nearest written one.
+  const ownBlock = (a) => a?.membersClass ? a : null;
   const blockOf = (a, seen = new Set()) => {
     if (!a || seen.has(a)) return null;
     seen.add(a);
-    if (ownBlock(a)) return a;
+    if (ownBlock(a) && !byName.get(a.membersClass)?.implicitBlock) return a;
     const found = [...new Set((a.supertypes || [])
       .map(st => blockOf(byName.get(st.supertype), seen)).filter(Boolean))];
     if (found.length > 1) throw new Error(`'${shownName(a)}' has more than one parent with a class block ('${found.map(shownName).join("', '")}'), and which one it uses isn't settled yet`);
     return found[0] ?? null;
   };
-  for (const a of actors.filter(a => a.name && (a.supertypes || []).length && !a.membersClass)) {
+  // A class with no class block of its own has an empty one, as if it wrote `^ { }`
+  // (`C = () *{}` makes an empty class singleton): notional, no actor, unless a parent
+  // has a block, which is then its base, here or in another file
+  // (notes/implicit-class-block-2026-11-21.md).
+  for (const a of actors.filter(a => a.name && (a.supertypes || []).length && !a.membersClass && !a.membersOf && !a.singletonOf && !a.remoteStub)) {
     const parent = blockOf(a);
     if (!parent) continue;
     const parentHome = 'home' in parent ? parent.home : parent.enclosing ?? null;
     if ((a.enclosing ?? null) !== (parentHome ?? null)) {
       throw new Error(`'${shownName(a)}' extends '${shownName(parent)}', which has a class block, and is declared somewhere else than it — that isn't supported yet`);
     }
-    a.membersClass = parent.membersClass;
-    a.membersInherited = parent.name;
-    a.home = a.enclosing ?? null;
-    a.enclosing = parent.membersClass;
-    a.membersOpaque = true;
+    addImplicitBlock(actors, byName, a, byName.get(parent.membersClass));
   }
   // A subclass with a class block of its own extends its nearest parent's block by
   // delegation (notes/class-scope-and-inheritance-2026-11-16.md): the block's actor
@@ -130,7 +152,7 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     block.enclosing = parentBlock.name;
   }
   // The class whose block code in `a` reaches: its own, or its nearest parent's.
-  const blockClassOf = (a) => ownBlock(a) ?? (a.membersInherited ? byName.get(a.membersInherited) : null);
+  const blockClassOf = (a) => ownBlock(a);
   // Whether `a` is in `cls`'s family: a subclass of it, at any depth.
   const extendsClass = (a, cls, seen = new Set()) => {
     if (!a || seen.has(a)) return false;
@@ -145,7 +167,7 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
   // A declared actor as a value, and a name bound to one (src/actor_values.js).
   lowerActorValues(actors, byName);
 
-  for (const cls of actors.filter(a => a.membersClass && !a.membersInherited)) {
+  for (const cls of actors.filter(a => a.membersClass)) {
     const members = byName.get(cls.membersClass);
     // Trailing: its actors still have the members first in their chain, so they can
     // message them as from inside the class, but no bare name reaches them.
@@ -167,7 +189,7 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
       for (let b = byName.get(a.membersClass); b; b = b.blockParent ? byName.get(b.blockParent) : null) if (b.blockParent === cls.membersClass) return true;
       return false;
     };
-    const reaches = (a) => a === cls || (extendsClass(a, cls) && (a.membersInherited || blockExtends(a)));
+    const reaches = (a) => a === cls || (extendsClass(a, cls) && blockExtends(a));
     const family = (a) => reaches(a) || [...actors].some(f => f !== a && reaches(f) && isInside(a, f.name, byName));
     for (const a of actors) if (family(a)) for (const n of spellings) lowerMemberAccess(a, n, members, isType, byName);
     // `C.count` reads the members; `C(…)` still builds a `C`.
@@ -179,13 +201,17 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
   // A trailing constructor block's bare write to a class-block member is the same
   // scope error, reported before anything else can complain about the write.
   for (const a of actors) {
-    const members = a.membersOpaque ? byName.get(a.membersClass) : null;
+    // A class's own block, or for one with no block of its own, the nearest written
+    // one its implicit block's base chain reaches: a member declared there.
+    const ownMembers = a.membersOpaque ? byName.get(a.membersClass) : null;
+    let members = ownMembers;
+    while (members?.implicitBlock && members.blockParent && byName.get(members.blockParent)) members = byName.get(members.blockParent);
     const own = new Set([...(a.stateVarDecls || []), ...(a.initParams || [])].map(d => d.name));
     const memberCell = (name) => members && !own.has(name) && memberNames(members).cells.has(name);
     const notClosedOver = (name) => {
-      const cls = a.name.replace(/^@/, '').replace(/[!.]$/, '');
+      const cls = members !== ownMembers ? shownName(byName.get(members.membersOf) ?? { name: members.membersOf }) : a.name.replace(/^@/, '').replace(/[!.]$/, '');
       const reach = name.startsWith('@') ? `: reach it as '${cls}.${name.slice(1)}'` : '';
-      const outside = a.membersInherited ? `a subclass of '${shownName(byName.get(a.membersInherited) ?? { name: a.membersInherited })}'` : 'a trailing constructor';
+      const outside = members !== ownMembers ? `a subclass of '${cls}'` : 'a trailing constructor';
       return new Error(`'${name}' is a member of the class '${cls}', and ${outside} doesn't close over its class block${reach}`);
     };
     for (const b of [a.initBody, a.constructorBody]) walk(b, (n) => {

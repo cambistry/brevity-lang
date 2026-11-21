@@ -499,6 +499,13 @@ export function settleOverrideTables(ast) {
     for (const L of cls.remoteLayers) {
       const addr = L.address.split(':');
       tables[L.name] = overrides(mine, remoteInstanceDoc(L.doc), `'${shown(cls.name)}'`, `'${addr.pop()}' (in '${addr.join(':')}')`);
+      // A parent there with a class block: our block's \`$extend\` to it speaks for the
+      // class, carrying the section, in place of a handshake of its own.
+      const block = cls.membersClass ? byName.get(cls.membersClass) : null;
+      if (block?.remoteBase?.address === L.address) {
+        L.viaBlock = true;
+        if (block.overrideTable && tables[L.name].length) block.overrideTable.instance = tables[L.name];
+      }
     }
     Object.defineProperty(cls, 'instanceTables', { value: tables, configurable: true, enumerable: false });
   }
@@ -519,7 +526,7 @@ export function settleOverrideTables(ast) {
     Object.defineProperty(cls, 'instanceTables', { value: tables, configurable: true, enumerable: false });
     // A class block's `$extend` speaks for the class: it carries the section for the
     // class whose block it extends.
-    const block = cls.membersClass && !cls.membersInherited ? byName.get(cls.membersClass) : null;
+    const block = cls.membersClass ? byName.get(cls.membersClass) : null;
     const parentBlock = block?.blockParent ? byName.get(block.blockParent) : null;
     const instance = parentBlock ? tables[parentBlock.membersOf] : null;
     if (block?.overrideTable && instance?.length) block.overrideTable.instance = instance;

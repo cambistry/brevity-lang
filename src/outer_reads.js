@@ -194,11 +194,14 @@ export function markOuterReads(program) {
       const l = chain.find(l => l.opaque && l[kind].has(name));
       return l ? classes.get(l.owner) : null;
     };
-    // A subclass that uses its parent's class block (`D = C ^ …`) is outside the
-    // block, as a trailing constructor is: neither closes over it.
-    const outside = actor.membersInherited ? `a subclass of '${actor.membersInherited.replace(/^@/, '').replace(/__pub$/, '')}'` : 'a trailing constructor';
-    const notClosedOver = (name, members) => {
+    // A trailing constructor doesn't close over its class's block, nor does a subclass
+    // with no block of its own over its parent's (its implicit one's base): named as
+    // the block that declares the member.
+    const notClosedOver = (name, block) => {
+      let members = block;
+      while (members.implicitBlock && members.blockParent && classes.get(members.blockParent)) members = classes.get(members.blockParent);
       const cls = members.membersOf.replace(/^@/, '');
+      const outside = members !== block ? `a subclass of '${cls}'` : 'a trailing constructor';
       if (name.startsWith('#')) return new Error(`'${name}' is private to the class block of '${cls}', and ${outside} doesn't close over it`);
       const reach = name.startsWith('@') ? `: reach it as '${cls}.${name.slice(1)}'` : '';
       return new Error(`'${name}' is a member of the class '${cls}', and ${outside} doesn't close over its class block${reach}`);

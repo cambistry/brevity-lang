@@ -9,7 +9,8 @@ const serveClasses = (loop) => `{bv_outer_get, OFrom_, OKey_, ORef_} -> bv_answe
         {bv_outer_op, PFrom_, PClass_, POp_, PPayload_, PRef_} -> bv_answer_outer_op_(PFrom_, PClass_, POp_, PPayload_, PRef_), ${loop};
         {bv_outer_call, CFrom_, CMsg_, CSilent_, CRef_} -> CFrom_ ! {bv_reply, CRef_, bv_outer_send_(bv_lift_(CFrom_, CMsg_), CSilent_)}, ${loop};
         {bv_await_line, WPid_, WId_} -> bv_add_line_waiter_(WPid_, WId_), ${loop};
-        {bv_birth, BFrom_, BSel_, BEarly_, BRef_} -> bv_answer_birth_(BFrom_, BSel_, BEarly_, BRef_), ${loop}`;
+        {bv_birth, BFrom_, BSel_, BEarly_, BRef_} -> bv_answer_birth_(BFrom_, BSel_, BEarly_, BRef_), ${loop};
+        {bv_class_ext_rec, XSel_, XFrom_, XAs_, XInst_} -> bv_class_ext_rec_(XSel_, XFrom_, XAs_, XInst_), ${loop}`;
 
 // A wait on something other than the wire. A line that comes meanwhile goes to the
 // class waiting on it, or is kept for the file actor's own loop.
@@ -1839,6 +1840,10 @@ bv_class_handshake_(From, Address, Inst) ->
     io:put_chars([json_encode(Msg_), $\n]),
     await_response_(Id_),
     ok.
+%% A record from a class block of ours: one per context, a \`$extend\` again replacing it.
+bv_class_ext_rec_(Sel, From, As, Inst) ->
+    Recs_ = case get({bv_class_ext_, Sel}) of undefined -> []; R_ -> R_ end,
+    put({bv_class_ext_, Sel}, [R_ || {F_, A_, _} = R_ <- Recs_, not (F_ =:= From andalso A_ =:= As)] ++ [{From, As, Inst}]).
 bv_class_layer_(Sel, Message, From) ->
     Under_ = fun(K_) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end,
     case [R_ || {K_, _, _} = R_ <- (case get({bv_class_ext_, Sel}) of undefined -> []; L_ -> L_ end), Under_(K_)] of
@@ -1856,7 +1861,17 @@ bv_block_extend_wire_(From, Msg, Payload) ->
         _ -> false
     end,
     Table_ = case is_map(Arg_) andalso InstOk_ of true -> maps:get(<<"block">>, Arg_, null); false -> null end,
-    case bv_extend_here_(From, maps:get(<<"as">>, Msg, From), Table_, undefined) of ok -> {reply, []}; {error, R_} -> {fail, R_} end.
+    As_ = maps:get(<<"as">>, Msg, From),
+    case bv_extend_here_(From, As_, Table_, undefined) of
+        ok ->
+            %% Its \`instance\` section goes to our file, which builds our class's layers:
+            %% before our reply, so it has it by then.
+            {_, _, Self_, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+            Sel_ = case Self_ of <<":", S_/binary>> -> S_; S_ -> S_ end,
+            bv_outer_() ! {bv_class_ext_rec, Sel_, From, As_, maps:get(<<"instance">>, Arg_, [])},
+            {reply, []};
+        {error, R_} -> {fail, R_}
+    end.
 bv_cell_ready_(Token) ->
     Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
     [From_ ! {bv_reply, Ref_, (bv_mod_()):bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],

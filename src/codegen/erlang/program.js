@@ -1588,11 +1588,13 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // its \`$extend\` (the \`instance\` section) is recorded, and \`$new\` with \`as\` from an
   // actor under a recorded extender builds a layer, in that actor's context
   // (notes/opre-extend-and-as-2026-11-20.md, "Instance layers").
-  const homeClasses = allActors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf && !(a.membersClass && !a.membersInherited));
+  // One with a block of its own: its block records the \`$extend\`, and tells us.
+  const homeClasses = allActors.filter(a => a.isPublic && !a.membersOf && !a.singletonOf);
   allClauses.unshift(...homeClasses.flatMap(a => {
     const sel = erlString(selectorOf(a));
+    const withBlock = !!a.membersClass;
     return [
-      `handle_op({<<"$extend">>, ${sel}}, Message, Payload, _Id, From) ->\n    bv_class_extend_(${sel}, [${(a.instanceNames || []).map(erlString).join(', ')}], Message, Payload, maps:get(<<"from">>, Message, From))`,
+      ...(withBlock ? [] : [`handle_op({<<"$extend">>, ${sel}}, Message, Payload, _Id, From) ->\n    bv_class_extend_(${sel}, [${(a.instanceNames || []).map(erlString).join(', ')}], Message, Payload, maps:get(<<"from">>, Message, From))`]),
       `handle_op({<<"$new">>, ${sel}} = Op_, #{<<"as">> := _} = Message, Payload, Id, From) when not is_map_key(bv_layer_, Message) ->\n    bv_class_layer_(${sel}, Message, maps:get(<<"from">>, Message, From)),\n    handle_op(Op_, Message#{bv_layer_ => true}, Payload, Id, From)`,
     ];
   }));
@@ -1680,7 +1682,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   // A class of ours whose parent is in another file: its \`$extend\` there (its
   // \`instance\` section), waited for, as the file starts.
   for (const a of allActors.filter(x => x.remoteLayers?.length && !x.membersOf)) {
-    for (const L of a.remoteLayers) {
+    for (const L of a.remoteLayers.filter(L => !L.viaBlock)) {
       stateInitLines.push(`    bv_class_handshake_(${erlString(':' + quoteToken(selectorOf(a)))}, ${erlString(L.address)}, [${(a.instanceTables?.[L.name] || []).map(erlString).join(', ')}])`);
     }
   }

@@ -3,7 +3,7 @@ import { expectLocalAndRemote } from '../helpers.js';
 // A parent in another file behaves as one in the same file: each case runs both ways,
 // the child's code the same in both. Class blocks (`V = K ^ { … }`) and instance
 // layers (`U = T ^ (…) *{ super(…) … }`): overrides, a redeclared cell, `super`,
-// `base::`, a parent named explicitly, two parents. See
+// `base::`, a parent named explicitly, two parents, a parent class with a block. See
 // notes/opre-extend-and-as-2026-11-20.md ("The semantics are layers, local parents
 // included").
 
@@ -32,6 +32,15 @@ const parents = `
   }
   B = (b Integer) *{
     @hb = { x Integer = b * 10; return x }
+  }
+  C = (@n: Integer) *{
+    count *Integer = n
+    step = -> 1
+    @get = { x Integer = count + step(); return x }
+  } ^ {
+    total *Integer = 3
+    @all = { x Integer = total * 10 + step(); return x }
+    step = -> 1
   }
 `;
 
@@ -64,6 +73,10 @@ const children = `
     step = { x Integer = super() + 5; return x }
     @viaBase = { x Integer = base::step() * 100; return x }
   }
+  @Y = C ^ (k Integer) *{
+    super(n: k)
+    step = -> 10
+  }
   @AB = A ^ B ^ (k Integer) *{
     super[A](k)
     super[B](k + 1)
@@ -83,6 +96,8 @@ const children = `
   @bare = { u = @Bare(n: 5); x Integer = u.get(); return x }
   @redeclared = { u = @R(5); x Integer = u.get(); return x }
   @layerBase = { u = @R(5); x Integer = u.viaBase(); return x }
+  @yGet = { y = @Y(5); x Integer = y.get(); return x }
+  @yAll = { x Integer = @Y.all(); return x }
   @parents = { u = @AB(3); a Integer = u.ha(); b Integer = u.hb(); return a * 100 + b }
 `;
 
@@ -113,6 +128,15 @@ const parent = `
   @B = (b Integer) *{
     @hb = { x Integer = b * 10; return x }
   }
+  @C = (@n: Integer) *{
+    count *Integer = n
+    step = -> 1
+    @get = { x Integer = count + step(); return x }
+  } ^ {
+    total *Integer = 3
+    @all = { x Integer = total * 10 + step(); return x }
+    step = -> 1
+  }
 `;
 
 const pair = {
@@ -123,6 +147,7 @@ const pair = {
   use :T = "svc"
   use :A = "svc"
   use :B = "svc"
+  use :C = "svc"
 ` + children,
 };
 
@@ -174,6 +199,15 @@ describe('a parent here, and in another file', () => {
       { output: { id: '3', re: [100], ty: ['Integer'], to: 'c' } },
       { input: { id: '4', op: 'parents', from: 'c' } },
       { output: { id: '4', re: [940], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it("a parent class with a block: the instance's layer, and the parent block's code for the child's block", async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'yGet', from: 'c' } },
+      { output: { id: '1', re: [15], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'yAll', from: 'c' } },
+      { output: { id: '2', re: [31], ty: ['Integer'], to: 'c' } },
     );
   });
 });

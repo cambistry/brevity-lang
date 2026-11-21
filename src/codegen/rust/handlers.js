@@ -965,6 +965,13 @@ ${m[2]}
             }
             let as_ = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| from.to_string());
             self.bv_extend_at(&owner, from, &as_, &table, "");
+            // Its \`instance\` section, kept with the record: a layer for an actor under it
+            // resolves through it.
+            if let Some(inst) = arg.get("instance").cloned() {
+                if let Some(Value::Array(recs)) = self.state_of_mut(&owner).and_then(|st| st.get_mut("__extenders")) {
+                    if let Some(Value::Object(last)) = recs.last_mut() { last.insert("instance".to_string(), inst); }
+                }
+            }
             return json!([]);
         }` : ''}
         // A delegated call from the wire names its context.
