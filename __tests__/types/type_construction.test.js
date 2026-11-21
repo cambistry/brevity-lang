@@ -50,6 +50,12 @@ describe('type declaration — parser', () => {
       { type: 'TypeField', name: 'ok',    paramType: 'Boolean' },
     ]);
   });
+
+  it('lineal: the fields start on the line below the name', () => {
+    expect(extract('type Point\n  x Integer\n  y Integer\n\n@go = -> 1\n').ast.types[0].fields.map(f => f.name)).toEqual(['x', 'y']);
+    expect(() => extract('type Point  x Integer\n  y Integer\n\n@go = -> 1\n'))
+      .toThrow("'type Point': its fields go on the lines below it, or in parens: 'type Point (…)' (line 1)");
+  });
 });
 
 // Slice 2: each declared type has a canonical home in its file. Validation

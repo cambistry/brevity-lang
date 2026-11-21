@@ -314,7 +314,9 @@ const singletonIn = (ast, owner, name) =>
 // A public singleton is a sub-service: `name { members }`, its members one level
 // in. `depth` is the indent of the line it starts on.
 function formatSingletonBlock(ast, cls, aliasMap, purportedByActor, depth) {
-  const members = [...ownTypes(ast, cls).map(formatTypeDecl), ...publicMemberLines(ast, cls, aliasMap, purportedByActor, depth + 2)];
+  const members = [...ownTypes(ast, cls).map(formatTypeDecl),
+    ...(cls.membersOf ? [...blockPublicLines(ast, cls, aliasMap, purportedByActor, depth + 2), ...protectedMemberLines(ast, cls, aliasMap, purportedByActor)]
+      : publicMemberLines(ast, cls, aliasMap, purportedByActor, depth + 2))];
   if (members.length === 0) return '{}';
   const pad = ' '.repeat(depth + 2);
   return `{\n${members.map(l => pad + l).join('\n')}\n${' '.repeat(depth)}}`;
@@ -361,6 +363,135 @@ function publicMemberLines(ast, actor, aliasMap, purportedByActor, depth) {
   return lines;
 }
 
+// ── The extension doc ────────────────────────────────────────────────────────
+//
+// Every actor is extensible for now, so a class block's doc also lists what an
+// extender may use and override: its protected functions (`~h (Integer) -> (Integer)`)
+// and protected cells (`~count *Integer`, `~limit &Integer` for one that isn't `*`),
+// beside its public members. A block that extends another presents the composite: its
+// own names, then what it inherits that it doesn't redefine.
+// See notes/opre-extend-and-as-2026-11-20.md ("The extension doc").
+
+// The name of a cell's generated accessor, or null.
+const accessorCell = (f) => f.cellGetter ? f.name : f.name?.match(/^(?:set|update|subscribe)[@.#]/) ? f.name : null;
+
+// A block's protected functions and cells, composite over the blocks it extends.
+function protectedMembers(ast, block) {
+  const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  const fns = new Map();
+  const cells = new Map();
+  for (let b = block; b; b = b.blockParent ? byName.get(b.blockParent) : null) {
+    const here = new Map();
+    for (const f of b.functions || []) {
+      if (typeof f.name !== 'string' || /^[@#]/.test(f.name) || f.inheritedFrom || f.baseOf || f.actorDef || accessorCell(f) || f.name.includes('__')) continue;
+      if (!fns.has(f.name) && !cells.has(f.name)) (here.get(f.name) ?? here.set(f.name, []).get(f.name)).push(f);
+    }
+    for (const [name, clauses] of here) fns.set(name, clauses);
+    for (const d of b.stateVarDecls || []) {
+      if (typeof d.name !== 'string' || /^[@#]/.test(d.name) || d.baseOf || d.name.includes('__')) continue;
+      if (!fns.has(d.name) && !cells.has(d.name)) cells.set(d.name, d);
+    }
+  }
+  return { fns, cells };
+}
+
+// A block's public members, composite: its own, then those of the block it extends
+// that it doesn't define.
+function blockPublicLines(ast, block, aliasMap, purportedByActor, depth) {
+  const own = publicMemberLines(ast, { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom) }, aliasMap, purportedByActor, depth);
+  const parent = block.blockParent && ast.actors.find(a => a.name === block.blockParent);
+  if (!parent) return own;
+  const entryName = (line) => line.match(/^(?:untracked )?(?:set )?([^\s(]+)/)?.[1];
+  const names = new Set(own.map(entryName));
+  return [...own, ...blockPublicLines(ast, parent, aliasMap, purportedByActor, depth).filter(l => !names.has(entryName(l)))];
+}
+
+function protectedMemberLines(ast, block, aliasMap, purportedByActor) {
+  const { fns, cells } = protectedMembers(ast, block);
+  const purported = purportedByActor.get(block);
+  return [
+    ...[...cells.values()].map(d => `~${d.name} ${d.isRef ? '*' : '&'}${d.typeName ? resolveType(d.typeName, aliasMap) : 'Anything'}`),
+    ...[...fns].flatMap(([name, clauses]) => clauses.map(f => `~${name} ${formatPublicFnSig(f, aliasMap, purported)}`)),
+  ];
+}
+
+// A class block's extension doc: its public and protected members, as the
+// `^ { … }` part of its class's entry in the service doc.
+function blockDocument(ast, block, aliasMap, purportedByActor, { own = false } = {}) {
+  const view = own ? { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom), blockParent: null } : block;
+  const lines = [...blockPublicLines(ast, view, aliasMap, purportedByActor, 0), ...protectedMemberLines(ast, view, aliasMap, purportedByActor)];
+  return `{\n${lines.join('\n')}\n}`;
+}
+
+// The parent's public and protected names a block overrides (a function) or
+// redeclares (a cell), in the parent's terms: wire names, `~` on protected ones.
+// Built from the parent block's extension doc, never its source, so a parent known
+// only by its doc is the same case. A clash with the parent's declaration is the
+// child's compile error.
+export function settleOverrideTables(ast) {
+  const aliasMap = buildAliasMap(ast.dependencies);
+  const purportedByActor = purportedFunctions(ast, parseInterface);
+  const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  const shown = (name) => (byName.get(name)?.sourceName ?? name ?? '').replace(/^@/, '').replace(/__pub$/, '');
+  for (const block of ast.actors) {
+    if (!block.blockParent) continue;
+    const parent = byName.get(block.blockParent);
+    const theirs = parseInterface(blockDocument(ast, parent, aliasMap, purportedByActor));
+    const mine = parseInterface(blockDocument(ast, block, aliasMap, purportedByActor, { own: true }));
+    const where = `the class block of '${shown(block.membersOf)}'`;
+    const parentWhere = `the class block of '${shown(parent.membersOf)}'`;
+    const table = [];
+    const check = (label, source, my, their) => {
+      if (!their) return;
+      const myCell = !!my.field;
+      const theirCell = !!their.field;
+      if (myCell !== theirCell) {
+        throw new Error(`'${source}' in ${where} is a ${myCell ? 'cell' : 'function'}, and in ${parentWhere}, which it extends, '${source}' is a ${theirCell ? 'cell' : 'function'}`);
+      }
+      if (myCell) {
+        if (!sameType(my.field.type, their.field.type)) {
+          throw new Error(`'${source}' in ${where} is a ${my.field.type}, and in ${parentWhere}, which it extends, a ${their.field.type}`);
+        }
+      } else {
+        for (const sig of my.sigs) {
+          const match = their.sigs.find(t => t.params.length === sig.params.length);
+          if (!match) {
+            const arities = [...new Set(their.sigs.map(t => t.params.length))].join(' or ');
+            throw new Error(`'${source}' in ${where} takes ${sig.params.length} arg${sig.params.length === 1 ? '' : 's'}, and in ${parentWhere}, which it extends, ${arities}`);
+          }
+          sig.params.forEach((p, i) => {
+            const q = match.params[i];
+            if (!sameType(p.type, q.type)) throw new Error(`'${source}' in ${where}: its arg ${i + 1} is a ${p.type}, and in ${parentWhere}, which it extends, a ${q.type}`);
+          });
+          const [r, q] = [sig.returns, match.returns];
+          if (r && q && (r.length !== q.length || r.some((x, i) => !sameType(x.type, q[i].type)))) {
+            const fmt = (xs) => `(${xs.map(x => x.type).join(', ')})`;
+            throw new Error(`'${source}' in ${where} replies ${fmt(r)}, and in ${parentWhere}, which it extends, ${fmt(q)}`);
+          }
+        }
+      }
+      table.push(label);
+    };
+    const entry = (doc, name) => doc[name] ? { sigs: doc[name], field: doc.__fields?.[name] } : null;
+    for (const name of Object.keys(mine).filter(k => !k.startsWith('__'))) check(name, '@' + name, entry(mine, name), entry(theirs, name));
+    const prot = (doc, name) => (doc.__protected?.[name] ? { sigs: doc.__protected[name], field: doc.__protected.__fields?.[name] } : null);
+    for (const name of Object.keys(mine.__protected || {}).filter(k => !k.startsWith('__'))) check(name, name.slice(1), prot(mine, name), prot(theirs, name));
+    Object.defineProperty(block, 'overrideTable', { value: { block: table }, configurable: true, enumerable: false });
+  }
+}
+
+// Two types in a signature agree: the same, or either one unknown.
+const sameType = (a, b) => !a || !b || a === b || a === 'Anything' || b === 'Anything';
+
+// Each class block's override table, by class name: for tests.
+export function overrideTables(source) {
+  const { ast } = extract(source);
+  settleOverrideTables(ast);
+  const out = {};
+  for (const a of ast.actors) if (a.overrideTable) out[(a.membersOf ?? a.name).replace(/^@/, '')] = a.overrideTable;
+  return out;
+}
+
 export function extract(source) {
   if (typeof source !== 'string') {
     throw new TypeError('extract expects a string');
@@ -385,6 +516,7 @@ export function erlangRuntime() {
 }
 
 export function compile(ast, options = {}) {
+  settleOverrideTables(ast);
   renamePublicClasses(ast);
   validateWithSourceNames(validate, ast, options);
   const name = options.target || process.env.BREVITY_TARGET || 'js';

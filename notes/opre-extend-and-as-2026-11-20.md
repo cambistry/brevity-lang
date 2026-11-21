@@ -13,7 +13,7 @@ parent's protected names; the parent's code, run for the child, uses the child's
 
 ```js
 // child class → parent class, once: the child's overrides, in the parent's terms
-{ op: [[{ block: ['timeout', '~h'], instance: ['~step'] }], '$extend'], to: 'Svc:T', from: ':' }
+{ op: [[{ block: ['~timeout', '~h'], instance: ['~step'] }], '$extend'], to: 'Svc:T', from: ':' }
 { re: [], to: ':' }                                    // accepted (or an `ex` reply)
 
 // a delegated call: run T's @connect, for the sender
@@ -97,7 +97,7 @@ W.connect()   →  T's @connect, for W: timeout 5 (W's), h 2 (V's)
   still talks only to `V`.
 
   ```js
-  { op: [[{ block: ['timeout', '~h'] }], '$extend'], to: 'Svc:T', from: ':', as: '<W>' }
+  { op: [[{ block: ['~timeout', '~h'] }], '$extend'], to: 'Svc:T', from: ':', as: '<W>' }
   ```
 
 - **Callbacks go to `from`, with the same `as`.** `T`, running for `(V, W)`, asks `V` for

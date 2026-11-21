@@ -323,6 +323,13 @@ function parseConstructor(name, supertypes, paramsInner, bodyInner) {
 }
 
 function parseEntry(text) {
+  // `~name …`: a protected member, in a class block's extension doc. What an
+  // extender may use and override; no caller can.
+  if (text.startsWith('~')) {
+    const e = parseEntry(text.slice(1));
+    if (e.kind !== 'function' && e.kind !== 'field') throw new Error(`Interface entry '${text}': only a function or a cell is protected`);
+    return { ...e, name: '~' + e.name, protected: true };
+  }
   // `untracked name …`: callers don't count this entry's writes. `untracked (…)` is
   // a function named `untracked`, which `@untracked` can declare.
   const prefixed = text.match(/^untracked\s+([A-Za-z_][\s\S]*)$/);
@@ -420,6 +427,15 @@ export function parseInterface(manifestStr) {
   const result = {};
   const inner = manifestStr.trim().replace(/^\{/, '').replace(/\}$/, '');
   for (const e of parseEntries(inner)) {
+    // A protected entry reads as a document of its own: callers never see it.
+    if (e.protected) {
+      const prot = result.__protected ??= {};
+      (prot[e.name] ??= []).push(e.kind === 'field'
+        ? { params: [], returns: [{ name: null, type: e.type, positional: true }] }
+        : { params: e.params, returns: e.returns, effect: e.effect });
+      if (e.kind === 'field') (prot.__fields ??= {})[e.name] = fieldRecord(e);
+      continue;
+    }
     if (e.untracked) (result.__untracked = result.__untracked || []).push(e.name);
     if (e.kind === 'type') {
       result.__typeDecls = result.__typeDecls || {};

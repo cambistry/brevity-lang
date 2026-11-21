@@ -6022,6 +6022,10 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       }
       expect('RPAREN');
     } else {
+      // Lineal: the fields start on the line below the name.
+      if (!['NEWLINE', 'BLOCK_SEP', 'EOF'].includes(peek().type)) {
+        throw new Error(`'type ${name}': its fields go on the lines below it, or in parens: 'type ${name} (…)' (line ${peek().line})`);
+      }
       while (peek().type === 'NEWLINE') consume();
       let last = -1;
       while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && !isTypeKw()) {

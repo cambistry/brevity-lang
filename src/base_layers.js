@@ -45,7 +45,10 @@ const shown = (n) => {
 export function lowerBaseLayers(actors) {
   const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
-  const where = (a) => a.membersOf ? `the class block of '${a.membersOf}'` : a.singletonOf ? 'a singleton'
+  const shownName = (name) => (byName.get(name)?.sourceName ?? name ?? '').replace(/^@/, '').replace(/__pub$/, '').replace(/[!.]$/, '');
+  // A parent block by its actor's name, or a class whose block it would be.
+  const blockOf = (name) => `the class block of '${shownName(byName.get(name)?.membersOf ?? name)}'`;
+  const where = (a) => a.membersOf ? `the class block of '${shownName(a.membersOf)}'` : a.singletonOf ? 'a singleton'
     : a.name ? `'${a.name}'` : 'this file';
 
   // A name in class `C`'s view: `C`'s own declaration, else its parents', the later
@@ -69,6 +72,14 @@ export function lowerBaseLayers(actors) {
     for (const b of bodies(U)) walk(b, (n) => { if (BASE_TYPES.has(n.type)) refs.add(n); });
     if (!refs.size) continue;
     const parents = (U.supertypes || []).map(st => st.supertype);
+    // A subclass's class block always has a base: its parent's block, empty when the
+    // parent has none. Nothing is in an empty one.
+    const emptyBase = !U.blockParent && U.membersOf && (byName.get(U.membersOf)?.supertypes || []).map(st => st.supertype);
+    if (emptyBase?.length) {
+      const n = [...refs][0];
+      const P = n.layer ?? emptyBase[0];
+      throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}${where(U)}: ${blockOf(P)} has no ${n.isPublic ? 'public' : 'protected'} '${n.name}' — '${shownName(P)}' has no class block`);
+    }
     // A class block that extends its parent's has that block as its parent layer.
     if (!(isClass(U) || U.blockParent) || !parents.length) {
       const n = [...refs][0];
@@ -89,8 +100,8 @@ export function lowerBaseLayers(actors) {
       }
       if (!found.length) {
         const what = `${n.isPublic ? 'public' : 'protected'} '${n.name}'`;
-        const whose = n.layer || parents.length === 1 ? `'${n.layer ?? parents[0]}' has no ${what}` : `no parent of '${U.name}' has a ${what}`;
-        throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}'${U.name}': ${whose}`);
+        const whose = n.layer || parents.length === 1 ? `${U.blockParent ? blockOf(n.layer ?? parents[0]) : `'${n.layer ?? parents[0]}'`} has no ${what}` : `no parent of '${U.name}' has a ${what}`;
+        throw new Error(`'${shown(n)}' in ${n.superIn ? `'${n.superIn}' of ` : ''}${U.blockParent ? where(U) : `'${U.name}'`}: ${whose}`);
       }
       if (found.length > 1) {
         const sep = n.isPublic ? '.' : '::';
