@@ -956,6 +956,13 @@ ${m[2]}
             let owner = self.state_owner.clone();
             let arg = payload.as_array().and_then(|a| a.first()).unwrap_or(payload);
             let table = arg.get("block").cloned().unwrap_or(Value::Null);
+            // Its \`instance\` section names our class's instances' names only.
+            let (_, instance_names) = bv_block_instance(${JSON.stringify(name)});
+            match arg.get("instance") {
+                None => {}
+                Some(Value::Array(a)) if a.iter().all(|n| n.as_str().is_some_and(|n| instance_names.contains(&n))) => {}
+                _ => panic!("{}", "bv_as:unknown_name"),
+            }
             let as_ = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| from.to_string());
             self.bv_extend_at(&owner, from, &as_, &table, "");
             return json!([]);

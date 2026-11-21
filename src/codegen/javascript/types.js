@@ -300,7 +300,17 @@ function parseConstructor(name, supertypes, paramsInner, bodyInner) {
   const services = {};
   const fields = {};
   const typeDecls = {};
+  const instanceProtected = {};
   for (const e of parseEntries(bodyInner)) {
+    // A protected member of its instances (`~step …`): what an extender may use and
+    // override; no caller can.
+    if (e.protected) {
+      (instanceProtected[e.name] ??= []).push(e.kind === 'field'
+        ? { params: [], returns: [{ name: null, type: e.type, positional: true }] }
+        : { params: e.params, returns: e.returns, effect: e.effect });
+      if (e.kind === 'field') (instanceProtected.__fields ??= {})[e.name] = fieldRecord(e);
+      continue;
+    }
     if (e.kind === 'function') {
       functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}) });
     } else if (e.kind === 'field') {
@@ -319,7 +329,7 @@ function parseConstructor(name, supertypes, paramsInner, bodyInner) {
       throw new Error(`Interface entry '${e.name}': a ${e.kind} cannot be declared inside constructor '${name}'`);
     }
   }
-  return { supertypes, initParams, functions, setters, ...(Object.keys(services).length ? { services } : {}), ...(Object.keys(fields).length ? { fields } : {}), ...(Object.keys(typeDecls).length ? { typeDecls } : {}) };
+  return { supertypes, initParams, functions, setters, ...(Object.keys(services).length ? { services } : {}), ...(Object.keys(fields).length ? { fields } : {}), ...(Object.keys(typeDecls).length ? { typeDecls } : {}), ...(Object.keys(instanceProtected).length ? { instanceProtected } : {}) };
 }
 
 function parseEntry(text) {
@@ -443,8 +453,8 @@ export function parseInterface(manifestStr) {
     } else if (e.kind === 'constructor') {
       result.__types = result.__types || {};
       if (result.__types[e.name]) throw new Error(`Interface declares constructor '${e.name}' more than once`);
-      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls, members, ownNew } = e;
-      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}), ...(ownNew && { ownNew }) };
+      const { effect, supertypes, initParams, functions, setters, services, fields, typeDecls, members, ownNew, instanceProtected } = e;
+      result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}), ...(ownNew && { ownNew }), ...(instanceProtected ? { instanceProtected } : {}) };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });

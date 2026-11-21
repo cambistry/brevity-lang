@@ -348,6 +348,10 @@ function blockExtension(ctx, actor) {
   const remoteNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
   const baseNames = remote ? remoteNames(remote.doc) : base?.extensionNames || [];
   const table = node.overrideTable?.block || [];
+  // The \`instance\` section the class's \`$extend\` carries, and what our class's
+  // instances declare, which an extender's may name.
+  const instanceTable = node.overrideTable?.instance || [];
+  const instanceNames = byName.get(node.membersOf)?.instanceNames || [];
   const forwards = (node.forwardCells || []).map(c => wireLabel(c.name));
   // What it inherits (a call for one goes to its base), and what it defines.
   const inheritedFns = (node.forwardFns || []).map(wireLabel);
@@ -423,8 +427,13 @@ function blockExtension(ctx, actor) {
   async #_onExtend(message, route, replyTo) {
     const arg = Array.isArray(message.op) && Array.isArray(message.op[0]) ? message.op[0][0] : null;
     const table = arg && Array.isArray(arg.block) ? arg.block : null;
+    const instance = arg && arg.instance !== undefined ? arg.instance : [];
     const names = ${J(names)};
-    if (!table || !table.every(n => names.includes(n))) { route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo }); return; }
+    const instanceNames = ${J(instanceNames)};
+    if (!table || !table.every(n => names.includes(n)) || !Array.isArray(instance) || !instance.every(n => instanceNames.includes(n))) {
+      route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo });
+      return;
+    }
     const as = message.as ?? message.from;
     // Callbacks for this context go to the extender, as replies to it do: across the
     // wire, as from us, for one in another actor.
@@ -487,7 +496,8 @@ function blockExtension(ctx, actor) {
 ${base ? `
   // Register with our base: for ourselves, or (\`as\`) an extender of ours.
   #_extend(as = null, table = ${J(table)}) {
-    return this.#_await((m) => this.#base.receive(m), { op: [[{ block: table }], '$extend'], ty: [[{ block: 'Object' }]], from: ${J(self)}, ...(as !== null && { as }) });
+    const arg = { block: table, ...(as === null && ${J(instanceTable)}.length && { instance: ${J(instanceTable)} }) };
+    return this.#_await((m) => this.#base.receive(m), { op: [[arg], '$extend'], ty: [[{ block: 'Object' }]], from: ${J(self)}, ...(as !== null && { as }) });
   }
 
   // A cell we inherit, read at our base.

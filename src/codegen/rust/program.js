@@ -35,7 +35,21 @@ function genBlockInfoFn(actors) {
   const remoteArms = actors.filter(a => a.membersOf && a.name && a.remoteBase).map(a => `        ${JSON.stringify(a.name.toLowerCase())} => ${JSON.stringify(a.remoteBase.address)},`);
   const docNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
   const remoteNameArms = actors.filter(a => a.membersOf && a.name && a.remoteBase).map(a => `        ${JSON.stringify(a.name.toLowerCase())} => ${strs(docNames(a.remoteBase.doc))},`);
-  return `// A class block whose base is in another file: the base's address, else "".
+  const instanceArms = actors.filter(a => a.membersOf && a.name).map(a => {
+    const cls = actors.find(c => c.name === a.membersOf);
+    return `        ${JSON.stringify(a.name.toLowerCase())} => (${strs(a.overrideTable?.instance || [])}, ${strs(cls?.instanceNames || [])}),`;
+  });
+  return `// A class block's \`instance\` section (what its class's instances override in its
+// parent's), and what its class's instances declare, which an extender may name.
+#[allow(dead_code)]
+fn bv_block_instance(class: &str) -> (&'static [&'static str], &'static [&'static str]) {
+    match class {
+${instanceArms.join('\n')}
+        _ => (&[], &[]),
+    }
+}
+
+// A class block whose base is in another file: the base's address, else "".
 #[allow(dead_code)]
 fn bv_block_remote(class: &str) -> &'static str {
     match class {
@@ -1104,7 +1118,12 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         let table = Value::Array(table.iter().map(|n| json!(n)).collect());
         // A base in another file: \`$extend\` across the wire, waited for.
         let remote = bv_block_remote(class);
-        if !remote.is_empty() { let _ = self.bv_wire_call(remote, "$extend", &json!([{ "block": table }]), self_label, None, true); return; }
+        if !remote.is_empty() {
+            let (instance, _) = bv_block_instance(class);
+            let arg = if instance.is_empty() { json!({ "block": table }) } else { json!({ "block": table, "instance": instance }) };
+            let _ = self.bv_wire_call(remote, "$extend", &json!([arg]), self_label, None, true);
+            return;
+        }
         let me = self.state_owner.clone();
         self.bv_extend_at(&base, self_label, self_label, &table, &me);
     }

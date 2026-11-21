@@ -453,11 +453,13 @@ function genBlockInfo(actors, ctx = {}) {
   const bases = blocks.filter(a => a.blockParent && !a.remoteBase).map(a => `bv_block_base_class_(${erlString(a.name.toLowerCase())}) -> ${erlString(a.blockParent.toLowerCase())}`);
   bases.push('bv_block_base_class_(_) -> <<>>');
   const docNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
+  const instances = blocks.map(a => `bv_block_instance_(${erlString(a.name.toLowerCase())}) -> {${bins(a.overrideTable?.instance || [])}, ${bins(actors.find(c => c.name === a.membersOf)?.instanceNames || [])}}`);
+  instances.push('bv_block_instance_(_) -> {[], []}');
   const remotes = blocks.filter(a => a.remoteBase).map(a => `bv_block_remote_(${erlString(a.name.toLowerCase())}) -> {${erlString(a.remoteBase.address)}, ${bins(docNames(a.remoteBase.doc))}}`);
   remotes.push('bv_block_remote_(_) -> {<<>>, []}');
   const wireIns = blocks.filter(a => (ctx.actorInfo?.has(a.name))).map(a => `bv_wire_in_(${erlString(a.name.toLowerCase())}, F_, O_, M_, P_, I_) -> bv_wire_in_${a.name.toLowerCase()}(F_, O_, M_, P_, I_)`);
   wireIns.push('bv_wire_in_(_, _, _, _, _, _) -> ok');
-  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
+  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
 }
 
 function genReadTable(actors) {

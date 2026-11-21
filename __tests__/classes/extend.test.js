@@ -33,6 +33,11 @@ const blocks = `
   } ^ {
     @k = -> 1
   }
+  @I = *{
+    step = -> 1
+  } ^ {
+    c *Integer = 0
+  }
   @shared! = { @B.inc!(); @B.bump!(); x Integer = @A.read(); return x }
   @mine = { x Integer = @B.mine(); return x }
   @limits = { a Integer = @A.lim(); b Integer = @B.lim(); return a * 100 + b }
@@ -98,6 +103,15 @@ describe('$extend — the record', () => {
       { output: { id: '1', ex: { $extend: 'unknown_name' }, to: 'c', from: ':A' } },
       { input: { id: '2', op: '$get', to: ':A:~count', from: 'c' } },
       { output: { id: '2', ex: { $get: 'unhandled' }, to: 'c', from: ':A' } },
+    );
+  });
+
+  it("an instance section naming a name the class's instances don't declare fails", async () => {
+    await expectBehavior(blocks,
+      { input: { id: '1', op: [[{ block: [], instance: ['~nope'] }], '$extend'], to: ':I', from: 'c' } },
+      { output: { id: '1', ex: { $extend: 'unknown_name' }, to: 'c', from: ':I' } },
+      { input: { id: '2', op: [[{ block: ['~c'], instance: ['~step'] }], '$extend'], to: ':I', from: 'c' } },
+      { output: { id: '2', re: [], to: 'c', from: ':I' } },
     );
   });
 

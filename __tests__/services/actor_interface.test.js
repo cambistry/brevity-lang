@@ -106,8 +106,8 @@ describe('class interface — private methods excluded', () => {
   it('private method does not appear in actor interface', () => {
     const { interface: iface } = extract(`
       @Document = (content: Text) *{
-        helper = (t Text) -> r: t as Text
-        @title = -> helper(content) as Text
+        #helper = (t Text) -> r: t as Text
+        @title = -> #helper(content) as Text
       }
     `);
     expect(iface.service).toBe(
@@ -428,7 +428,7 @@ describe('class interface — return paths', () => {
 
   it('inside a class', () => {
     const doc = docOf('@C = *{\n  n *Integer = 0\n  @go! = (b Boolean) {\n    n <- 1\n    if b { return 1 }\n    return self\n  }\n}\n');
-    expect(doc).toBe('{\n  C () -> *{\n    go! (Boolean) => (Integer) | self\n  }\n}');
+    expect(doc).toBe('{\n  C () -> *{\n    go! (Boolean) => (Integer) | self\n    ~n *Integer\n  }\n}');
     const [sig] = parseInterface(doc).__types.C.functions;
     expect(sig.returnsSelf).toBe(true);
     expect(sig.returns.map(r => r.type)).toEqual(['Integer']);

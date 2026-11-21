@@ -1547,7 +1547,11 @@ bv_block_await_(Id) ->
     end.
 bv_extend_remote_() ->
     {_, Table_, _, _, _, _, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
-    bv_wire_call_(bv_remote_(), <<"$extend">>, [#{<<"block">> => Table_}], undefined, true),
+    Arg_ = case (bv_mod_()):bv_block_instance_(bv_my_class_()) of
+        {[], _} -> #{<<"block">> => Table_};
+        {Inst_, _} -> #{<<"block">> => Table_, <<"instance">> => Inst_}
+    end,
+    bv_wire_call_(bv_remote_(), <<"$extend">>, [Arg_], undefined, true),
     ok.
 bv_extend_at_(Pid, From, As, Table) ->
     Ref_ = make_ref(),
@@ -1715,7 +1719,13 @@ bv_wire_op_({Op_, _}) -> Op_;
 bv_wire_op_(Op_) -> Op_.
 bv_block_extend_wire_(From, Msg, Payload) ->
     Arg_ = case Payload of [A_ | _] -> A_; A_ -> A_ end,
-    Table_ = case is_map(Arg_) of true -> maps:get(<<"block">>, Arg_, null); false -> null end,
+    {_, InstNames_} = (bv_mod_()):bv_block_instance_(bv_my_class_()),
+    %% Its \`instance\` section names our class's instances' names only.
+    InstOk_ = case is_map(Arg_) andalso maps:get(<<"instance">>, Arg_, []) of
+        I_ when is_list(I_) -> lists:all(fun(N_) -> lists:member(N_, InstNames_) end, I_);
+        _ -> false
+    end,
+    Table_ = case is_map(Arg_) andalso InstOk_ of true -> maps:get(<<"block">>, Arg_, null); false -> null end,
     case bv_extend_here_(From, maps:get(<<"as">>, Msg, From), Table_, undefined) of ok -> {reply, []}; {error, R_} -> {fail, R_} end.
 bv_cell_ready_(Token) ->
     Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
@@ -2119,6 +2129,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

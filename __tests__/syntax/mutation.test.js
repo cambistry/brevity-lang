@@ -177,7 +177,8 @@ function accepted(m, outcome, src) {
       if (n === 'DOT' || p === 'DOT') return 'a lineal body\'s `.` may end its last line';
     }
     if (m.type === 'EQUALS' && m.kind === 'duplicate') return '`= =` is the explicit empty params';
-    if (m.kind === 'insert' && m.stray === '=' && (p === 'EQUALS' || m.type === 'EQUALS')) return '`= =` is the explicit empty params';
+    // The same AST: the `=` after a lineal `=`, its line break between, can only be the empty params.
+    if (m.kind === 'insert' && m.stray === '=' && (p === 'EQUALS' || m.type === 'EQUALS' || LINE.has(p))) return '`= =` is the explicit empty params';
     if (m.kind === 'delete' && m.type === 'EQUALS' && (p === 'EQUALS' || n === 'EQUALS' || LINE.has(p) && ty(m.next) === 'EQUALS')) return '`= =` is the explicit empty params';
     if (m.kind === 'delete' && m.type === 'HASH_IDENT' && m.prev === 'KEYWORD:end') return '`end`\'s label is optional';
     if (m.kind === 'insert' && m.stray === ',' && (['RPAREN', 'RBRACE', 'RBRACKET', 'EQUALS'].includes(m.type) || LINE.has(m.type))) return 'a trailing comma';

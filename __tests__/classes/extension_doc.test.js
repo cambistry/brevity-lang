@@ -142,3 +142,81 @@ describe('an empty base — compile errors', () => {
       .toThrow("'super' in '@g' of the class block of 'B': the class block of 'A' has no public 'g'");
   });
 });
+
+// The instance section: a class's instances' protected members, inline in its
+// `*{ … }`, composite; published params are public members. The child's `instance`
+// table is computed from it, per parent, the later parent winning.
+const instances = `
+  @T = (@n: Integer) *{
+    count *Integer = 0
+    step = -> 1
+    @f = -> 2
+    #p = -> 3
+  }
+`;
+
+describe('the instance section', () => {
+  it("lists a class's instances' protected functions and cells, never private ones", () => {
+    expect(extract(`${instances}@go = -> 1\n`).interface.service).toContain(
+      '  T (n: Integer) -> *{\n    n Integer\n    f () -> (Integer)\n    ~count *Integer\n    ~step () -> (Integer)\n  }');
+  });
+
+  it('a class that extends another presents the composite', () => {
+    expect(extract(`${instances}@U = @T ^ (k Integer) *{\n  super(n: k)\n  j = -> 5\n}\n@go = -> 1\n`).interface.service).toContain(
+      '  U T ^ (Integer) -> *{\n    ...T\n    ~count *Integer\n    ~step () -> (Integer)\n    ~j () -> (Integer)\n  }');
+  });
+
+  it('reads back: protected entries apart from what a caller sees', () => {
+    const doc = parseInterface('{\n  T (n: Integer) -> *{\n    n Integer\n    f () -> (Integer)\n    ~count *Integer\n    ~step () -> (Integer)\n  }\n}');
+    const T = doc.__types.T;
+    expect(T.functions.map(f => f.name)).toEqual(['n', 'f']);
+    expect(Object.keys(T.instanceProtected)).toEqual(['~count', '__fields', '~step']);
+    expect(T.instanceProtected.__fields).toEqual({ '~count': { type: 'Integer', cell: true, readOnly: false } });
+  });
+});
+
+describe('the instance table', () => {
+  const tables = (source) => overrideTables(`${source}@go = -> 1\n`);
+
+  it("the parent's names the class overrides or redeclares", () => {
+    expect(tables(`${instances}@U = @T ^ (k Integer) *{\n  super(n: k)\n  step = -> 2\n  count *Integer = 3\n  @f = -> 9\n  j = -> 1\n}\n`))
+      .toEqual({ U: { instance: { T: ['f', '~count', '~step'] } } });
+  });
+
+  it("with two parents, a name the later one supplies is in the earlier one's table", () => {
+    const A = 'A = *{\n  h = -> 1\n  g = -> 0\n}\n';
+    const B = 'B = *{\n  h = -> 2\n  k = -> 0\n}\n';
+    expect(tables(`${A}${B}C = A ^ B ^ *{\n  super[A]()\n  super[B]()\n  g = -> 7\n}\n`))
+      .toEqual({ C: { instance: { A: ['~g', '~h'] } } });
+  });
+
+  it('a class block carries its class\'s section', () => {
+    const P = 'P = *{\n  step = -> 1\n} ^ {\n  h = -> 1\n}\n';
+    expect(tables(`${P}Q = P ^ *{\n  super()\n  step = -> 2\n} ^ {\n  h = -> 3\n}\n`))
+      .toEqual({ Q: { block: ['~h'], instance: { P: ['~step'] } } });
+  });
+});
+
+describe('the instance table — compile errors', () => {
+  const compile = (source) => () => compileSource(`T = *{\n  count *Integer = 0\n  step = (x Integer) -> x\n}\n${source}@go = -> 1\n`);
+
+  it('another arity', () => {
+    expect(compile('U = T ^ *{\n  super()\n  step = (x Integer, y Integer) -> x\n}\n'))
+      .toThrow("'step' in 'U' takes 2 args, and in 'T', which it extends, 1");
+  });
+
+  it("another param's type", () => {
+    expect(compile('U = T ^ *{\n  super()\n  step = (x Text) -> 1\n}\n'))
+      .toThrow("'step' in 'U': its arg 1 is a Text, and in 'T', which it extends, a Integer");
+  });
+
+  it('a cell redeclared as a function', () => {
+    expect(compile('U = T ^ *{\n  super()\n  count = -> 1\n}\n'))
+      .toThrow("'count' in 'U' is a function, and in 'T', which it extends, 'count' is a cell");
+  });
+
+  it('a cell of another type', () => {
+    expect(compile('U = T ^ *{\n  super()\n  count *Text = "x"\n}\n'))
+      .toThrow("'count' in 'U' is a Text, and in 'T', which it extends, a Integer");
+  });
+});
