@@ -47,7 +47,7 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
 
 let _moduleSeq = 0;
 async function loadModule(extract, compile, source, exportName = 'default', compileOptions = {}) {
-  const { ast } = extract(source);
+  const { ast } = extract(source, { remotes: compileOptions.remotes });
   const output = compile(ast, { ...compileOptions, target: 'js' });
   // Append unique comment to bust data: URL import cache
   const unique = output + `\n// _seq${_moduleSeq++}`;
@@ -81,9 +81,23 @@ export default {
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const posts = [];
       const pending = [];
-      const binding = { post: msg => posts.push(normalizeBigInts(msg)) };
-      const instance = await Actor.create(binding, ...args);
+      // Construction may wait on a reply from another actor (a class block's
+      // \`$extend\`): the actor is live as soon as it exists, so it's handed back
+      // once construction finishes or settles waiting. A failure later is kept, and
+      // thrown at the next send.
+      let instance = null;
+      let failed = null;
+      const binding = { post: msg => posts.push(normalizeBigInts(msg)), created: (i) => { instance = i; } };
+      const ready = Actor.create(binding, ...args);
+      ready.catch((err) => { failed = err; });
+      await Promise.race([ready, (async () => { for (let i = 0; i < 20; i++) await tick(); })()]);
+      if (failed) throw failed;
+      let built = false;
+      ready.then(() => { built = true; }, () => { built = true; });
       return {
+        get failed() { return failed; },
+        // Whether construction has finished (or failed): it may be waiting on a reply.
+        get built() { return built; },
         send(msg) { pending.push(msg); },
         async sendAsync(msg) {
           pending.push(msg);

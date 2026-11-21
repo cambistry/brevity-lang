@@ -95,6 +95,13 @@ export function lowerRemoteCalls(ast, remotesParsed = {}) {
   const sourceOf = dependencyAddresses(ast);
   // Names a header destructure binds (`(:Counter)`) aren't the alias.
   for (const d of ast.dependencies || []) for (const e of d.destructures || []) dependencies.delete(e.local);
+  // A class a destructure binds (`use :T = "svc"`) is reached at `svc:T`, its class
+  // block, which its doc's \`^ { … }\` describes.
+  const classes = new Map();
+  for (const d of ast.dependencies || []) for (const e of d.destructures || []) {
+    const cls = remotesParsed[d.name]?.__types?.[e.remote ?? e.local];
+    if (cls) classes.set(e.local, { tokens: [sourceOf.get(d.name) ?? d.name, e.remote ?? e.local], doc: cls.members ?? null, label: e.local, dep: d.name });
+  }
 
   // An actor of a dependency's class: its document, for a path through it.
   const constructed = (value) => (value?.type === 'FunctionCallExpr' && value.callee?.type === 'Identifier'
@@ -116,6 +123,7 @@ export function lowerRemoteCalls(ast, remotesParsed = {}) {
       lowerScope(fn.body, {
         remotesParsed,
         isDep: (name) => dependencies.has(name) && !counts.has(name) && !cells.has(name) && !params.has(name),
+        classRoot: (name) => (!counts.has(name) && !cells.has(name) && !params.has(name) ? classes.get(name) ?? null : null),
         foldable: (name) => counts.get(name) === 1,
         constructed,
         cellInstance: (name) => (counts.has(name) ? null : cellInstances.get(name) || null),
@@ -127,7 +135,7 @@ export function lowerRemoteCalls(ast, remotesParsed = {}) {
   lowerScope(ast, { remotesParsed, isDep: (name) => dependencies.has(name), foldable: () => false, onlyNew: true, sourceOf });
 }
 
-function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => null, cellInstance = () => null, onlyNew = false, sourceOf = new Map() }) {
+function lowerScope(body, { remotesParsed, isDep, classRoot = () => null, foldable, constructed = () => null, cellInstance = () => null, onlyNew = false, sourceOf = new Map() }) {
   // Locals bound once to a static address: name → { tokens, doc, label, dep }.
   const statics = new Map();
   // Locals bound once to an actor of a dependency's class: name → its document.
@@ -143,7 +151,7 @@ function lowerScope(body, { remotesParsed, isDep, foldable, constructed = () => 
       // The first token is the dependency's source; `label` and `dep` stay its name.
       return { tokens: [sourceOf.get(root.name) ?? root.name], doc, label: root.name, dep: root.name };
     }
-    return statics.get(root.name) || null;
+    return statics.get(root.name) || classRoot(root.name);
   };
 
   // `Svc.s` (value position): an address only when the document says each

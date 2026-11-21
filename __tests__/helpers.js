@@ -43,7 +43,7 @@ afterAll(() => { if (_ctx.teardown) _ctx.teardown(); });
 export function compileSource(source, options = {}) {
   const { fileName, ...rest } = options;
   const compileOptions = fileName === undefined ? rest : { ...rest, fileName };
-  const { ast, interface: iface } = extract(source);
+  const { ast, interface: iface } = extract(source, { remotes: compileOptions.remotes });
   const output = compile(ast, compileOptions);
   return { output, interface: iface };
 }
@@ -74,8 +74,15 @@ export async function runActor(args) {
 // Each actor sits at the global boundary, as a file actor does: what it sends
 // relative to itself (`:x`, in `from`, in a payload's addresses, in `ty`) is
 // `name:x` on the way out; the receiver gets `to` relative to itself (`:rest`).
-// `messages` ([[name, msg], …]) are sent in order first. See
+// `messages` ([[name, msg], …]) are sent in order first. A send to an actor whose
+// construction failed throws. See
 // notes/multi-actor-test-harness-2026-04-20.md.
+
+const _opreInbound = (address, name) => {
+  const head = _opreQuote(name);
+  if (address === head) return ':';
+  return typeof address === 'string' && address.startsWith(head + ':') ? address.slice(head.length) : address;
+};
 
 export async function runActors(actors, { messages = [] } = {}) {
   const names = Object.keys(actors);
@@ -85,6 +92,7 @@ export async function runActors(actors, { messages = [] } = {}) {
     live[name] = await createActor(source, { compileOptions, ...(fileName !== undefined && { fileName }) });
   }
   const seen = Object.fromEntries(names.map(n => [n, 0]));
+  const failures = {};
   const external = [];
   const globalize = (v, self) => {
     if (typeof v === 'string') return _opreMap(v, (a) => _opreResolve(a, self));
@@ -117,19 +125,24 @@ export async function runActors(actors, { messages = [] } = {}) {
           ...globalize(rest, self),
           ...(tokens.length > 1 && { to: _opreJoin([null, ...tokens.slice(1)]) }),
           from: from ? _opreResolve(from, self) : self,
-          ...(as !== undefined && { as: _opreResolve(as, self) }),
+          // An address under the receiver comes in relative to it, as it went out.
+          ...(as !== undefined && { as: _opreInbound(_opreResolve(as, self), target) }),
           ...(ty !== undefined && { ty: globalizeTy(ty, self) }),
         };
-        await live[target].sendAsync(forwarded);
+        // A delivery the receiver fails on (it exits): it takes nothing more.
+        if (failures[target]) continue;
+        try { await live[target].sendAsync(forwarded); } catch (err) { failures[target] = err; }
       }
     }
     return moved;
   };
   // Until nothing moves for a few turns: an in-process target may still be working.
+  // An actor still being built (waiting on a reply, a target that says so) isn't idle.
+  const building = () => names.some(n => live[n].built === false);
   const settle = async () => {
-    for (let idle = 0; idle < 3;) {
+    for (let idle = 0, turns = 0; idle < 3 && turns < 10000; turns++) {
       if (await pump()) { idle = 0; continue; }
-      idle++;
+      if (!building()) idle++;
       await new Promise(r => setTimeout(r, 0));
     }
   };
@@ -137,8 +150,11 @@ export async function runActors(actors, { messages = [] } = {}) {
   const net = {
     external,
     actors: live,
+    // An actor whose construction failed takes no message: the send throws.
     async send(name, msg) {
       if (!Object.hasOwn(live, name)) throw new Error(`runActors: no actor '${name}'`);
+      const failed = failures[name] ?? live[name].failed;
+      if (failed) throw new Error(`runActors: '${name}' failed: ${failed?.message ?? failed}`);
       await live[name].sendAsync(msg);
       await settle();
     },

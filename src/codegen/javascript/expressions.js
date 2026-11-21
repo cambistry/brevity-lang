@@ -8,7 +8,7 @@ import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { wireLabel, selfAddress, memberOp, actorAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
-import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken, _opre_split as _opre_split_tokens } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Map Brevity identifiers to valid JS identifiers
@@ -1102,6 +1102,22 @@ export function genExpr(ctx, expr) {
       return `this.#childSendChain(${genExpr(ctx, expr.object)}, ${op})`;
     }
     const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
+    // A class from another file (`use :T = "svc"`), called on: its class block, at
+    // its address there.
+    const classMember = expr.object.type === 'Identifier' && !ctx.stateVarNames.has(dotObjName) && !ctx.ssaScope?.get(dotObjName)
+      ? ctx.destructuredClasses?.get(dotObjName) : null;
+    if (classMember) {
+      const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
+      const positional = expr.args.filter(a => a.positional);
+      const named = expr.args.filter(a => !a.positional);
+      const wireMethod = JSON.stringify(memberOp(expr.method));
+      const posVals = positional.map(genArgVal).join(', ');
+      const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
+      const op = positional.length && named.length ? `[[${posVals}, {${namedFields}}], ${wireMethod}]`
+        : named.length ? `[[{${namedFields}}], ${wireMethod}]` : positional.length ? `[[${posVals}], ${wireMethod}]` : wireMethod;
+      const to = JSON.stringify(joinAddress([..._opre_split_tokens(classMember.service), classMember.remote]));
+      return expr.method.endsWith('.') || expr.launched ? `this.#fire(${op}, ${to})` : `this.#send(${op}, ${to})`;
+    }
     const isRemote = dotObjName && ctx.remoteInstanceVars.has(dotObjName);
     const isChild = !isRemote && (expr.object.type === 'RefRead' ||
       (expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorNames.has(expr.object.callee.name)) ||

@@ -1,3 +1,5 @@
+import { parseInterface as parseRemoteDoc } from './codegen/javascript/types.js';
+import { _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
 import { lowerActorValues } from './actor_values.js';
 // Class singletons: a class whose class block holds members of its own.
@@ -313,6 +315,87 @@ export function lowerInheritedBlockCells(actors) {
     for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) visit(b, new Set());
     for (const p of block.initParams || []) if (p.defaultValue) visit(p.defaultValue, new Set());
   }
+}
+
+// A parent class from another file (`B = A ^ { … }` with `A` from `use`), known only by
+// its published doc: its class block is a remote actor at `<dependency>:A`. For the
+// parse, it stands as a placeholder pair of actors, the class and its block, built from
+// the doc's `^ { … }` section (public and `~` protected members), so a block extending
+// it is lowered as for a local parent; then the placeholders go, and what the child
+// needs of its parent is kept on its block (`remoteBase`). Nothing is generated for
+// them. See notes/opre-extend-and-as-2026-11-20.md.
+export function addRemoteParents(actors, dependencies, remotes) {
+  const stubs = [];
+  if (!remotes?.length) return stubs;
+  const used = new Map();
+  for (const d of dependencies || []) {
+    if (d.type !== 'Dependency' || !d.path) continue;
+    const doc = remotes.find(r => r.path === d.path)?.service;
+    if (!doc) continue;
+    for (const ds of d.destructures || []) used.set(ds.local ?? ds.name, { path: d.path, remote: ds.remote ?? ds.name, doc });
+  }
+  const local = new Set(actors.filter(a => a.name).map(a => a.name));
+  for (const [name, info] of used) {
+    if (local.has(name) || !actors.some(a => (a.supertypes || []).some(st => st.supertype === name))) continue;
+    const parsed = parseRemoteDoc(info.doc);
+    const cls = parsed?.__types?.[info.remote];
+    if (!cls) continue;
+    const members = cls.members;
+    const stubName = `${name}__remote`;
+    const address = `${quoteToken(info.path)}:${quoteToken(info.remote)}`;
+    const stubClass = { type: 'Actor', name: stubName, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], remoteStub: true };
+    Object.defineProperty(stubClass, 'sourceName', { value: name, configurable: true });
+    stubs.push(stubClass);
+    if (members) {
+      const block = { type: 'Actor', name: `${stubName}_block`, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], singletonOf: `${name}__class`, remoteStub: true, remoteAddress: address, remoteDoc: members };
+      const fields = { ...(members.__fields || {}) };
+      const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [] });
+      for (const [n, sigs] of Object.entries(members)) {
+        if (n.startsWith('__')) continue;
+        if (fields[n]) {
+          block.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: fields[n].type, isRef: !fields[n].readOnly });
+          block.functions.push({ ...fn('@' + n, sigs[0]), cellGetter: true });
+        } else for (const sig of sigs) block.functions.push(fn('@' + n, sig));
+      }
+      const prot = members.__protected || {};
+      for (const [n, sigs] of Object.entries(prot)) {
+        if (n.startsWith('__')) continue;
+        const bare = n.replace(/^~/, '');
+        const f = prot.__fields?.[n];
+        if (f) block.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, isRef: !f.readOnly });
+        else for (const sig of sigs) block.functions.push(fn(bare, sig));
+      }
+      stubClass.membersClass = block.name;
+      block.membersOf = stubName;
+      stubs.push(block);
+    }
+    for (const a of actors) for (const st of a.supertypes || []) {
+      if (st.supertype === name) { st.supertype = stubName; st.sourceName ??= name; }
+    }
+  }
+  actors.push(...stubs);
+  return stubs;
+}
+
+// The placeholders go once the parse has lowered the blocks extending them; each
+// child block keeps its remote parent's address and doc.
+export function dropRemoteParents(actors, stubs) {
+  if (!stubs.length) return;
+  const gone = new Set(stubs.map(s => s.name));
+  for (const a of actors) {
+    if (!a.blockParent || !gone.has(a.blockParent)) continue;
+    const base = stubs.find(s => s.name === a.blockParent);
+    a.remoteBase = { address: base.remoteAddress, doc: base.remoteDoc };
+  }
+  // A supertype that names one is in another file: a class extends it only through
+  // its block for now (instance layers aren't built yet).
+  for (const a of actors) {
+    const remote = (a.supertypes || []).filter(st => gone.has(st.supertype));
+    if (!remote.length) continue;
+    Object.defineProperty(a, 'remoteSupertypes', { value: remote, configurable: true });
+    a.supertypes = a.supertypes.filter(st => !gone.has(st.supertype));
+  }
+  for (let i = actors.length - 1; i >= 0; i--) if (gone.has(actors[i].name)) actors.splice(i, 1);
 }
 
 // Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call"): a class

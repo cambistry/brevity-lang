@@ -956,7 +956,8 @@ ${m[2]}
             let owner = self.state_owner.clone();
             let arg = payload.as_array().and_then(|a| a.first()).unwrap_or(payload);
             let table = arg.get("block").cloned().unwrap_or(Value::Null);
-            self.bv_extend_at(&owner, from, from, &table, "");
+            let as_ = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| from.to_string());
+            self.bv_extend_at(&owner, from, &as_, &table, "");
             return json!([]);
         }
         // A delegated call from the wire names its context.
@@ -1336,7 +1337,7 @@ function genRustChildMethods(allActors) {
         ${G.ctx.readsOuter ? `// The actors it's declared in, taken from whoever is constructing it.
         let outers = ${outersExpr(mergedActor)};
         let mut incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
-        incoming.insert("__outers".to_string(), outers);${mergedActor.blockParent ? `
+        incoming.insert("__outers".to_string(), outers);${mergedActor.blockParent && !mergedActor.remoteBase ? `
         // A class block that extends another holds it as its base.
         incoming.insert("__base".to_string(), self.bv_block_in_home(${JSON.stringify((mergedActor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel((G.ctx.actorInfo?.get(mergedActor.blockParent)?.actor ?? G.ctx.actorInfo?.get(mergedActor.blockParent))?.singletonOf))}));` : ''}
         self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
@@ -1374,7 +1375,14 @@ function genRustChildMethods(allActors) {
         self.current_${lc}_instance = saved_current;
     }
 
-    fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {
+    fn child_${lc}_dispatch_at(&mut self, instance_id: u32, op: &str, payload: &Value, id: &str, from: &str) -> Value {${mergedActor.membersOf ? `
+        // A class block waiting on another actor (a delegated call) is answered in
+        // its state where that is: a callback for it comes while it waits.
+        let owner = format!("${lc}/{}", instance_id);
+        if owner == self.state_owner || self.outer_states.iter().any(|(o, _)| *o == owner) {
+            let (op, payload, id, from) = (op.to_string(), payload.clone(), id.to_string(), from.to_string());
+            return self.bv_run_in(&owner, move |s| s.child_${lc}_dispatch(&op, &payload, &id, &from));
+        }` : ''}
         ${G.ctx.readsOuter ? `let incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
         self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}

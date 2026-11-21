@@ -400,25 +400,45 @@ function protectedMembers(ast, block) {
 function blockPublicLines(ast, block, aliasMap, purportedByActor, depth) {
   const own = publicMemberLines(ast, { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom) }, aliasMap, purportedByActor, depth);
   const parent = block.blockParent && ast.actors.find(a => a.name === block.blockParent);
-  if (!parent) return own;
   const entryName = (line) => line.match(/^(?:untracked )?(?:set )?([^\s(]+)/)?.[1];
   const names = new Set(own.map(entryName));
-  return [...own, ...blockPublicLines(ast, parent, aliasMap, purportedByActor, depth).filter(l => !names.has(entryName(l)))];
+  const inherited = parent ? blockPublicLines(ast, parent, aliasMap, purportedByActor, depth)
+    : block.remoteBase ? remoteDocLines(block.remoteBase.doc).filter(l => !l.startsWith('~')) : [];
+  return [...own, ...inherited.filter(l => !names.has(entryName(l)))];
+}
+
+// A parent block in another file, by its published doc (src/singleton_classes.js,
+// addRemoteParents): its entries, as lines of a doc.
+function remoteDocLines(doc) {
+  const sig = (s) => `(${(s.params || []).map(p => p.positional === false ? `${p.name}: ${p.type}` : p.type).join(', ')}) ${s.effect === 'write' ? '=>' : '->'} (${(s.returns || []).map(r => r.name ? `${r.name}: ${r.type}` : r.type).join(', ')})`;
+  const entries = (part, prefix) => Object.entries(part || {}).filter(([n]) => !n.startsWith('__')).flatMap(([n, sigs]) => {
+    const f = part.__fields?.[n];
+    if (f) return [`${prefix}${n.replace(/^~/, '')} ${f.readOnly ? '&' : '*'}${f.type}`];
+    return sigs.map(x => `${prefix}${n.replace(/^~/, '')} ${sig(x)}`);
+  });
+  return [...entries(doc, ''), ...entries(doc.__protected, '~')];
 }
 
 function protectedMemberLines(ast, block, aliasMap, purportedByActor) {
   const { fns, cells } = protectedMembers(ast, block);
   const purported = purportedByActor.get(block);
-  return [
+  const lines = [
     ...[...cells.values()].map(d => `~${d.name} ${d.isRef ? '*' : '&'}${d.typeName ? resolveType(d.typeName, aliasMap) : 'Anything'}`),
     ...[...fns].flatMap(([name, clauses]) => clauses.map(f => `~${name} ${formatPublicFnSig(f, aliasMap, purported)}`)),
   ];
+  // What a block whose parent is in another file inherits from it, by its doc.
+  let top = block;
+  const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  while (top.blockParent && byName.get(top.blockParent)) top = byName.get(top.blockParent);
+  if (!top.remoteBase) return lines;
+  const have = new Set([...cells.keys(), ...fns.keys()].map(n => `~${n}`));
+  return [...lines, ...remoteDocLines(top.remoteBase.doc).filter(l => l.startsWith('~') && !have.has(l.split(' ')[0]))];
 }
 
 // A class block's extension doc: its public and protected members, as the
 // `^ { … }` part of its class's entry in the service doc.
 function blockDocument(ast, block, aliasMap, purportedByActor, { own = false } = {}) {
-  const view = own ? { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom), blockParent: null } : block;
+  const view = own ? { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom), blockParent: null, remoteBase: null } : block;
   const lines = [...blockPublicLines(ast, view, aliasMap, purportedByActor, 0), ...protectedMemberLines(ast, view, aliasMap, purportedByActor)];
   return `{\n${lines.join('\n')}\n}`;
 }
@@ -443,10 +463,12 @@ export function settleOverrideTables(ast) {
   for (const block of ast.actors) {
     if (!block.blockParent) continue;
     const parent = byName.get(block.blockParent);
-    const theirs = parseInterface(blockDocument(ast, parent, aliasMap, purportedByActor));
+    // A parent in another file is known by its published doc only.
+    const theirs = parent ? parseInterface(blockDocument(ast, parent, aliasMap, purportedByActor)) : block.remoteBase?.doc;
+    if (!theirs) continue;
     const mine = parseInterface(blockDocument(ast, block, aliasMap, purportedByActor, { own: true }));
     const where = `the class block of '${shown(block.membersOf)}'`;
-    const parentWhere = `the class block of '${shown(parent.membersOf)}'`;
+    const parentWhere = parent ? `the class block of '${shown(parent.membersOf)}'` : `the class block of '${(block.remoteBase.address.split(':').pop())}' (in '${block.remoteBase.address.split(':')[0]}')`;
     const table = [];
     const check = (label, source, my, their) => {
       if (!their) return;
@@ -499,12 +521,14 @@ export function overrideTables(source) {
   return out;
 }
 
-export function extract(source) {
+// \`remotes\` (\`[{ path, service }]\`, as compile takes): the docs of the files this one
+// uses, for what the parse needs of them (a parent class from another file).
+export function extract(source, { remotes = null } = {}) {
   if (typeof source !== 'string') {
     throw new TypeError('extract expects a string');
   }
   const tokens = tokenize(source);
-  const ast = parse(tokens);
+  const ast = parse(tokens, { remotes });
   runExtractPasses(ast);
   return {
     ast,

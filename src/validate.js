@@ -4151,6 +4151,9 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
       });
     }
   }
+  // A class's own members (its class block's doc, `^ { … }`): `T.f()` on a class
+  // from another file is a call to its block.
+  if (!sigs) sigs = parsed.__types?.[actorName]?.members?.[methodName] ?? null;
   if (!sigs) {
     const opNames = Object.keys(parsed).filter(k => !k.startsWith('__'));
     const typeMethods = parsed.__types?.[actorName]?.functions?.map(f => f.name) || [];

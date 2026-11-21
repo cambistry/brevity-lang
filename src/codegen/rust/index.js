@@ -104,7 +104,7 @@ export default {
     },
 
     async runActor(ctx, { source, compileOptions = {}, receive }) {
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
@@ -116,7 +116,7 @@ export default {
     },
 
     async createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,
@@ -126,7 +126,7 @@ export default {
     },
 
     compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'rust' });
       const bin = ctx.buildOrCached({
         rustCode: output, rustDir: ctx.rustDir, rustSrc: ctx.rustSrc, buildBinaryPath: ctx.binaryPath,

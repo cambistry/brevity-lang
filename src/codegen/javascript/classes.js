@@ -338,19 +338,22 @@ function blockExtension(ctx, actor) {
   const node = (ctx.program?.actors || []).find(a => a.name === actor.name);
   if (!node?.membersOf) return null;
   const byName = new Map(ctx.program.actors.filter(a => a.name).map(a => [a.name, a]));
-  const base = node.blockParent ? byName.get(node.blockParent) : null;
+  // A parent block in another file is a remote actor, known by its doc.
+  const remote = node.remoteBase ?? null;
+  const base = node.blockParent ? (byName.get(node.blockParent) ?? (remote && { remote })) : null;
   const label = (b) => selfAddress(publicLabel(b) ?? b.singletonOf);
   const self = label(node);
-  const baseSelf = base ? label(base) : null;
+  const baseSelf = remote ? remote.address : base ? label(base) : null;
   const names = node.extensionNames || [];
-  const baseNames = base?.extensionNames || [];
+  const remoteNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
+  const baseNames = remote ? remoteNames(remote.doc) : base?.extensionNames || [];
   const table = node.overrideTable?.block || [];
   const forwards = (node.forwardCells || []).map(c => wireLabel(c.name));
   // What it inherits (a call for one goes to its base), and what it defines.
   const inheritedFns = (node.forwardFns || []).map(wireLabel);
   const ownFns = [...new Set((node.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
-  const fields = `\n  #_extenders = new Map()\n  #_relays = new Map()${base ? '\n  #base = null' : ''}`;
   const J = JSON.stringify;
+  const fields = `\n  #_extenders = new Map()\n  #_relays = new Map()${base ? (remote ? `\n  #base = { receive: (m) => this.#_wireSend({ ...m, to: ${J(remote.address)} + (m.to ?? '') }) }` : '\n  #base = null') : ''}`;
   const methods = `  // Whether \`from\` is a recorded extender, or an actor under one.
   #_isExtender(from) {
     if (typeof from !== 'string') return false;
@@ -396,7 +399,7 @@ function blockExtension(ctx, actor) {
       // A delegated call from an extender: run as its delegate, for the context it names.
       const rec = this.#_extenders.get(JSON.stringify([message.from, as]));
       if (!rec) return fail('unknown_context');
-      ${base ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => this.#base.receive(m), { from: ${J(self)}, as }, route, replyTo); return null; }` : ''}
+      ${base ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => this.#base.receive(m), { to: undefined, from: ${J(self)}, as }, route, replyTo); return null; }` : ''}
       return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
     }
     if ((opName === '$get' || opName === '$set') && typeof target === 'string') {
@@ -410,7 +413,7 @@ function blockExtension(ctx, actor) {
     }
     ${base ? `// A name we don't define but inherit: our base runs it, for us.
     if (isCall && !${J(ownFns)}.includes(name) && ${J(inheritedFns)}.includes(name)) {
-      this.#_relay(message, (m) => this.#base.receive(m), { from: ${J(self)}, as: ${J(self)} }, route, replyTo);
+      this.#_relay(message, (m) => this.#base.receive(m), { to: undefined, from: ${J(self)}, as: ${J(self)} }, route, replyTo);
       return null;
     }` : ''}
     return message;
@@ -423,8 +426,9 @@ function blockExtension(ctx, actor) {
     const names = ${J(names)};
     if (!table || !table.every(n => names.includes(n))) { route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo }); return; }
     const as = message.as ?? message.from;
-    // Callbacks for this context go to the extender, as replies to it do.
-    const send = message._route ? (m) => message._route(m) : (m) => { const { _route, ...wire } = m; this.#binding.post({ ...wire, to: message.from }); };
+    // Callbacks for this context go to the extender, as replies to it do: across the
+    // wire, as from us, for one in another actor.
+    const send = message._route ? (m) => message._route(m) : (m) => this.#_wireSend({ ...m, to: message.from + (m.to ?? '') });
     this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table, send });${base ? `
     try { await this.#_extend(as, [...new Set([...${J(table)}, ...table.filter(n => ${J(baseNames)}.includes(n))])]); }
     catch (ex) { route({ id: message.id, ex: { $extend: ex?.$extend ?? 'error' }, to: replyTo }); return; }` : ''}
@@ -443,6 +447,13 @@ function blockExtension(ctx, actor) {
       return p;
     }
     ${base ? `return this.#_await((m) => this.#base.receive(m), { op, from: ${J(self)}, as: ctx ? ctx.as : ${J(self)} });` : `throw new Error('no base to run ' + name);`}
+  }
+
+  // A message to another actor, across the wire, as from us.
+  #_wireSend(m) {
+    const { _route, ...msg } = m;
+    if (this.#outer) { this.#outer.receive({ ...msg, from: '__child', _asFrom: ${J(self)}, _route: _route || (() => {}) }); return; }
+    this.#binding.post({ ...msg, from: ${J(self)} });
   }
 
   // A message sent for its reply.
@@ -491,7 +502,7 @@ ${base ? `
   }
 ` : ''}
 `;
-  return { fields, methods, base: !!base };
+  return { fields, methods, base: !!base, remote: !!remote };
 }
 
 function genClass(ctx, actor, exportKw, remotes = null) {
@@ -1041,9 +1052,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_cellSubs = new Map()
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null
-  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}${ext ? ext.fields : ''}
+  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()\n  #_selfFwd = new Map()' : ''}${ext ? ext.fields : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base ? ' this.#base = binding.base ?? null;' : ''} }
+  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base && !ext.remote ? ' this.#base = binding.base ?? null;' : ''} }
 
   _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
@@ -1285,8 +1296,17 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
 
 ` : ''}${!actor.name && ctx.readsOuter ? `  // A class of this file calling one of our dependencies: we make the call as our
   // own, and pass its reply back.
+  // A class block speaks for itself across the wire (\`$extend\`, a delegated call, a
+  // callback): its address, under ours, is the message's \`from\` (\`_asFrom\`).
   #_outerCall(message) {
-    const { _route, _silent, from, id: childId, ...call } = message;
+    const { _route, _silent, from, _asFrom, id: childId, ...call } = message;
+    // Its own id, so the reply, to its address, is routed to it as it is.
+    if (_asFrom) {
+      // Its reply may come before it's published (it's still being built).
+      if (!_silent && _route) this.#_selfFwd.set(_asFrom + '|' + childId, _route);
+      this.#binding.post({ ...call, id: childId, from: _asFrom });
+      return;
+    }
     const id = String(++this.#nextId);
     if (!_silent) this.#_outerFwd.set(id, { route: _route, id: childId });
     this.#binding.post({ ...call, id });
@@ -1390,7 +1410,15 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
         (message._route || ((msg) => this.#binding.post(msg)))({ id: message.id, ex: { [_op]: 'bad_address' }, to: _opre_unbracket(message.from) });
       }
       return;
-    }${actor.spawnable ? `
+    }${!actor.name && ctx.readsOuter ? `
+    // A reply to a class of ours that spoke for itself (\`_asFrom\`).
+    if (!('op' in message) && typeof message.to === 'string' && this.#_selfFwd.has(message.to + '|' + message.id)) {
+      const route = this.#_selfFwd.get(message.to + '|' + message.id);
+      this.#_selfFwd.delete(message.to + '|' + message.id);
+      const { to: _to, ...reply } = message;
+      route(reply);
+      return;
+    }` : ''}${actor.spawnable ? `
     // Still being constructed: a request waits; a reply is what construction waits on.
     if (this.#_starting && ('op' in message || message.test || message.cam)) {
       const later = () => this.receive(message);
@@ -1416,7 +1444,7 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       cb(message);
       return;
     }${!actor.name && ctx.readsOuter ? `
-    if (message.from === '__child' && message.op !== '$get' && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
+    if (message.from === '__child' && (message.op !== '$get' || message._asFrom) && typeof message.to === 'string' && message._route) { this.#_outerCall(message); return; }
     if (('re' in message || 'ex' in message) && this.#_outerFwd.has(message.id)) {
       const fwd = this.#_outerFwd.get(message.id);
       this.#_outerFwd.delete(message.id);
@@ -1754,6 +1782,8 @@ export function codegen(ast, options = {}) {
   }
   // destructuredMembers: localName → { service: the dependency's wire address, remote: remoteName }
   ctx.destructuredMembers = new Map();
+  // A class a destructure binds: its block is at \`service:remote\`.
+  ctx.destructuredClasses = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
   // factory address of whichever service the tag was destructured from. Keyed by
   // the REMOTE element name (so an alias like `(div: D)` still renders `<div>`).
@@ -1769,6 +1799,7 @@ export function codegen(ast, options = {}) {
           continue;
         }
         if (!entry.isClass) ctx.destructuredMembers.set(entry.local, { service: ctx.depAddress(d.name), remote: entry.remote });
+        else ctx.destructuredClasses.set(entry.local, { service: ctx.depAddress(d.name), remote: entry.remote });
         ctx.dependencyNames.add(entry.local);
         if (entry.remote && !ctx.templateTagHost.has(entry.remote)) {
           ctx.templateTagHost.set(entry.remote, ctx.depSource(d.name));

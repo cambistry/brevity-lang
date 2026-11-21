@@ -219,7 +219,7 @@ export default {
     async runActor(ctx, { source, compileOptions = {}, receive }) {
       const seq = ctx.compileSeq;
       const moduleName = `brevity_actor_${seq}`;
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'erlang', moduleName });
       const compileDir = join(ctx.erlDir, `comp${seq}`);
       mkdirSync(compileDir, { recursive: true });
@@ -258,7 +258,7 @@ export default {
     async createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const seq = ctx.compileSeq;
       const moduleName = `brevity_actor_${seq}`;
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'erlang', moduleName });
       const compileDir = join(ctx.erlDir, `inst${seq}`);
       mkdirSync(compileDir, { recursive: true });
@@ -303,7 +303,7 @@ export default {
     async compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const seq = ctx.compileSeq;
       const moduleName = `brevity_actor_${seq}`;
-      const { ast } = ctx.extract(source);
+      const { ast } = ctx.extract(source, { remotes: compileOptions.remotes });
       const output = ctx.compile(ast, { ...compileOptions, target: 'erlang', moduleName });
       const compileDir = join(ctx.erlDir, `comp${seq}`);
       mkdirSync(compileDir, { recursive: true });

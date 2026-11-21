@@ -4,7 +4,7 @@ import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
-import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
+import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, addRemoteParents, dropRemoteParents, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
 import { resolveSuperclassChain } from './subclass.js';
@@ -179,7 +179,7 @@ export function parse(tokensIn, options = {}) {
 // (`;` lexes as NEWLINE). Consuming one is using it.
 const STRUCTURAL_TOKENS = new Set(['NEWLINE', 'BLOCK_SEP', 'DIVIDER', 'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'LBRACKET', 'RBRACKET', 'COMMA']);
 
-function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRead = null } = {}) {
+function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRead = null, remotes = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
   let tokens = foldSelfClass(joined);
   const fileTokens = tokens;
@@ -6457,12 +6457,15 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
   actors.push(...hoistedClasses);
   resolveUseExprs();
   resolveUseValues();
+  // A parent class from another file, known by its published doc.
+  const remoteStubs = addRemoteParents(actors, dependencies, remotes);
   lowerSingletonClasses(actors, types, { fileKind });
   lowerFunctionSupers(actors);
   lowerBaseLayers(actors);
   lowerSuperCalls(actors, resolveSuperclassChain);
   lowerInheritedBlockCells(actors);
   lowerBlockDelegation(actors);
+  dropRemoteParents(actors, remoteStubs);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path

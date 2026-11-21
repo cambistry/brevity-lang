@@ -28,11 +28,32 @@ function genBlockInfoFn(actors) {
   const arms = actors.filter(a => a.membersOf && a.name).map(a => {
     const self = selfAddress(publicLabel(a) ?? a.singletonOf);
     const base = a.blockParent ? actors.find(b => b.name === a.blockParent) : null;
-    const baseSelf = base ? selfAddress(publicLabel(base) ?? base.singletonOf) : '';
+    const baseSelf = a.remoteBase ? a.remoteBase.address : base ? selfAddress(publicLabel(base) ?? base.singletonOf) : '';
     const own = [...new Set((a.functions || []).map(f => f.name).filter(n => typeof n === 'string').map(wireLabel))];
     return `        ${JSON.stringify(a.name.toLowerCase())} => (${strs(a.extensionNames || [])}, ${strs(a.overrideTable?.block || [])}, ${JSON.stringify(self)}, ${strs((a.forwardCells || []).map(c => wireLabel(c.name)))}, ${JSON.stringify(baseSelf)}, ${strs((a.forwardFns || []).map(wireLabel))}, ${strs(own)}),`;
   });
-  return `#[allow(dead_code)]
+  const remoteArms = actors.filter(a => a.membersOf && a.name && a.remoteBase).map(a => `        ${JSON.stringify(a.name.toLowerCase())} => ${JSON.stringify(a.remoteBase.address)},`);
+  const docNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
+  const remoteNameArms = actors.filter(a => a.membersOf && a.name && a.remoteBase).map(a => `        ${JSON.stringify(a.name.toLowerCase())} => ${strs(docNames(a.remoteBase.doc))},`);
+  return `// A class block whose base is in another file: the base's address, else "".
+#[allow(dead_code)]
+fn bv_block_remote(class: &str) -> &'static str {
+    match class {
+${remoteArms.join('\n')}
+        _ => "",
+    }
+}
+
+// And what that base declares, by its doc.
+#[allow(dead_code)]
+fn bv_block_remote_names(class: &str) -> &'static [&'static str] {
+    match class {
+${remoteNameArms.join('\n')}
+        _ => &[],
+    }
+}
+
+#[allow(dead_code)]
 fn bv_block_info(class: &str) -> (&'static [&'static str], &'static [&'static str], &'static str, &'static [&'static str], &'static str, &'static [&'static str], &'static [&'static str]) {
     match class {
 ${arms.join('\n')}
@@ -288,7 +309,9 @@ ${sourceArms}
   // Either remote-instance method-call awaits (existing) or function-body
   // dep construction awaits (new) need the stdin reader + main loop.
   const needsAwait = needsDotCallAwait(actor) || G.ctx.needsAwaitNew;
-  const hasDotCallAwait = needsAwait;
+  // A class block may call, and be called back, across the wire.
+  const hasBlocks = (allActors || []).some(a => a.membersOf);
+  const hasDotCallAwait = needsAwait || hasBlocks;
   // Private singletons, by address (\`:~s\`): an actor's own sends reach them by
   // their handle (bv_held_send). A class's are in its state while it runs.
   const heldSingletonArms = (allActors || [])
@@ -962,18 +985,6 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         Value::Array(chain)
     }
 
-    // A class block that extends another holds it as its base: the block in the
-    // home's cell (token), built before it.
-    #[allow(dead_code)]
-    fn bv_block_in_home(&self, home: &str, token: &str) -> Value {
-        let class_of = |o: &str| -> String { match o.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } };
-        let chain = match self.outers_for(home) { Value::Array(a) => a, _ => Vec::new() };
-        let owner = chain.first().and_then(|v| v.as_str()).unwrap_or("").to_string();
-        bv_get_key(&class_of(&owner), token)
-            .and_then(|(key, _)| self.state_of(&owner).and_then(|st| st.get(key)).cloned())
-            .unwrap_or_else(|| panic!("class block built before the block it extends, {} in {:?}", token, owner))
-    }
-
     // The actor holding the cell \`token\` that \`owner\` answers: itself, or a class
     // block it inherits the cell from, through its base (src/singleton_classes.js).
     #[allow(dead_code)]
@@ -989,9 +1000,53 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         }
     }
 
+${hasBlocks ? `    // A class block that extends another holds it as its base: the block in the
+    // home's cell (token), built before it.
+    #[allow(dead_code)]
+    fn bv_block_in_home(&self, home: &str, token: &str) -> Value {
+        let class_of = |o: &str| -> String { match o.split_once('/') { Some(("self", _)) | None => String::new(), Some((c, _)) => c.to_string() } };
+        let chain = match self.outers_for(home) { Value::Array(a) => a, _ => Vec::new() };
+        let owner = chain.first().and_then(|v| v.as_str()).unwrap_or("").to_string();
+        bv_get_key(&class_of(&owner), token)
+            .and_then(|(key, _)| self.state_of(&owner).and_then(|st| st.get(key)).cloned())
+            .unwrap_or_else(|| panic!("class block built before the block it extends, {} in {:?}", token, owner))
+    }
+
     // A cell a class block inherits, read and written at its base.
     #[allow(dead_code)]
-    fn bv_base_read(&self, token: &str) -> Value {
+    // A message to another actor across the wire, as from the class block we're
+    // running (\`from\`, under our address), waited for unless \`wait\` is false. \`op\`
+    // is an arm key: "$get ~x" goes to \`to:~x\`.
+    #[allow(dead_code)]
+    fn bv_wire_call(&mut self, to: &str, op: &str, payload: &Value, from: &str, as_: Option<&str>, wait: bool) -> Value {
+        let seq = self.send_seq.get();
+        self.send_seq.set(seq + 1);
+        let id = seq.to_string();
+        let (wire_op, to) = match op.split_once(' ') { Some((o, t)) => (o.to_string(), format!("{}:{}", to, t)), None => (op.to_string(), to.to_string()) };
+        let has_args = match payload { Value::Array(a) => !a.is_empty(), Value::Object(m) => !m.is_empty(), _ => false };
+        let mut msg = Map::new();
+        msg.insert("id".to_string(), json!(id.clone()));
+        msg.insert("op".to_string(), if !has_args { json!(wire_op) } else if payload.is_array() { json!([payload, wire_op]) } else { json!([[payload], wire_op]) });
+        if has_args {
+            let arity = payload.as_array().map(|a| a.len()).unwrap_or(1);
+            msg.insert("ty".to_string(), json!([vec![json!("Anything"); arity]]));
+        }
+        msg.insert("to".to_string(), json!(to));
+        msg.insert("from".to_string(), json!(from));
+        if let Some(a) = as_ { msg.insert("as".to_string(), json!(a)); }
+        let _ = self.binding.send(Value::Object(msg));
+        if !wait { return Value::Null; }
+        self.await_response(&id)
+    }
+
+    fn bv_base_read(&mut self, token: &str) -> Value {
+        let class = self.bv_my_class();
+        let remote = bv_block_remote(&class);
+        if !remote.is_empty() {
+            let (_, _, self_label, _, _, _, _) = bv_block_info(&class);
+            let r = self.bv_wire_call(remote, &format!("$get {}", token), &json!({}), self_label, None, true);
+            return r.as_array().and_then(|a| a.first()).cloned().unwrap_or(r);
+        }
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let owner = self.bv_holder_of(&base, token);
         self.owner_read(&owner, token)
@@ -999,6 +1054,13 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
 
     #[allow(dead_code)]
     fn bv_base_set(&mut self, token: &str, value: Value) {
+        let class = self.bv_my_class();
+        let remote = bv_block_remote(&class);
+        if !remote.is_empty() {
+            let (_, _, self_label, _, _, _, _) = bv_block_info(&class);
+            let _ = self.bv_wire_call(remote, &format!("$set {}", token), &Value::Array(vec![value]), self_label, None, false);
+            return;
+        }
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let owner = self.bv_holder_of(&base, token);
         let _ = self.send_to_owner(&owner, &format!("$set {}", token), &Value::Array(vec![value]));
@@ -1014,6 +1076,12 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         let (names, own_table, self_label, _, _, _, _) = bv_block_info(&class);
         let list: Vec<String> = table.as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default();
         if table.as_array().is_none() || list.iter().any(|n| !names.contains(&n.as_str())) { panic!("{}", "bv_as:unknown_name"); }
+        let remote = bv_block_remote(&class);
+        if !remote.is_empty() {
+            let base_names = bv_block_remote_names(&class);
+            let up: Vec<Value> = own_table.iter().map(|n| json!(n)).chain(list.iter().filter(|n| base_names.contains(&n.as_str()) && !own_table.contains(&n.as_str())).map(|n| json!(n))).collect();
+            let _ = self.bv_wire_call(remote, "$extend", &json!([{ "block": up }]), self_label, Some(as_), true);
+        }
         let base = self.state_of(owner).and_then(|st| st.get("__base")).and_then(|v| v.as_str()).map(String::from);
         if let Some(base) = base {
             let base_class = base.split_once('/').map(|(c, _)| c).unwrap_or("").to_string();
@@ -1034,6 +1102,9 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let (_, table, self_label, _, _, _, _) = bv_block_info(class);
         let table = Value::Array(table.iter().map(|n| json!(n)).collect());
+        // A base in another file: \`$extend\` across the wire, waited for.
+        let remote = bv_block_remote(class);
+        if !remote.is_empty() { let _ = self.bv_wire_call(remote, "$extend", &json!([{ "block": table }]), self_label, None, true); return; }
         let me = self.state_owner.clone();
         self.bv_extend_at(&base, self_label, self_label, &table, &me);
     }
@@ -1060,17 +1131,23 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         if !direct && self.bv_ctx_has(op) { return self.bv_callback(&ctx, op, payload); }
         let (_, _, self_label, _, _, inherited, _) = bv_block_info(&class);
         if !direct && !inherited.contains(&op) { let me = self.state_owner.clone(); return self.run_as(&me, op, payload); }
-        let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or(self_label).to_string();
+        let remote = bv_block_remote(&class);
+        if !remote.is_empty() { return self.bv_wire_call(remote, op, payload, self_label, Some(&as_), true); }
+        let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         self.bv_deliver(&base, op, payload, self_label, &as_)
     }
 
     #[allow(dead_code)]
     fn bv_callback(&mut self, ctx: &Value, op: &str, payload: &Value) -> Value {
         let owner = ctx.get("owner").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if owner.is_empty() { panic!("{}", "bv_as:a callback to an extender in another actor isn't supported yet"); }
         let (_, _, self_label, _, _, _, _) = bv_block_info(&self.bv_my_class());
         let as_ = ctx.get("as").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        // An extender in another actor: across the wire, to its address.
+        if owner.is_empty() {
+            let to = ctx.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            return self.bv_wire_call(&to, op, payload, self_label, Some(&as_), !op.starts_with("$set "));
+        }
         self.bv_deliver(&owner, op, payload, self_label, &as_)
     }
 
@@ -1128,6 +1205,8 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         }
         let rec = recs.iter().find(|r| r.get("from").and_then(|v| v.as_str()) == Some(from) && r.get("as").and_then(|v| v.as_str()) == Some(as_)).cloned().unwrap_or_else(|| panic!("{}", "bv_as:unknown_context"));
         if !op.starts_with('$') && !own.contains(&op) && !base_label.is_empty() {
+            let remote = bv_block_remote(&class);
+            if !remote.is_empty() { return self.bv_wire_call(remote, op, payload, self_label, Some(as_), true); }
             let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
             return self.bv_deliver(&base, op, payload, self_label, as_);
         }
@@ -1152,7 +1231,7 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         })).unwrap_or(false)
     }
 
-    // A class reading a cell of an actor it's declared in, level actors up the chain
+` : ''}    // A class reading a cell of an actor it's declared in, level actors up the chain
     // (src/outer_reads.js). That actor's state is in self.state, set aside while one of
     // its classes runs, or in its pool. Construction runs in text order, so the cell
     // is declared by the time a class reads it; one that isn't is a codegen bug, not
@@ -2336,7 +2415,7 @@ ${publishesClasses ? `        // An actor made by \`#new\` has its own address (
             let whole = segs.join(":");
             (1..=segs.len()).rev().map(|j| segs[..j].join(":")).find(|a| self.published_instances.contains(a)${hasPublicSingletons ? ' || (self.singleton_at.contains_key(a) && !(wire_op == "$new" && *a == whole))' : ''})
         });
-` : ''}        if has_payload && message.get("ty").is_none() && wire_op != "$extend" {
+` : ''}        if has_payload && message.get("ty").is_none() && wire_op != "$extend" && message.get("as").is_none() {
             let mut ex = Map::new();
             ex.insert(wire_op.clone(), json!("schema_required"));
             let mut resp = Map::new();
