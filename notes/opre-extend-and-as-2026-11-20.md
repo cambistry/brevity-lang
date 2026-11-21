@@ -158,6 +158,24 @@ W.connect()   →  T's @connect, for W: timeout 5 (W's), h 2 (V's)
 - The layer is that instance's alone: it isn't published, and no one else can reach it.
 - An unreachable parent needs nothing new: `super`'s `$new` fails, so the child isn't built, and
   a delegated call fails as any call to an unreachable dependency does.
+- **The semantics are layers, local parents included.** A compiler may merge a local parent's
+  layer into the child's actor as an optimization, so long as nothing observable differs. The
+  cases that could differ already agree: a redeclared cell used by the parent's code, `base::`
+  reaching the parent's own cell, construction order, and the diamond (an error).
+- **No `super`, no base.** An instance constructor that never calls `super` has no layer, and
+  sends no `$new`. Using the missing base (`super`, `base`, a name of the parent's the child
+  doesn't define) is a compile error (`super-2026-11-19.md`, "No base").
+- **A subclass's class block always has a base:** its parent's block, which is empty when the
+  parent has no class block (`U = T ^ { @f = … }`, `T` with no class methods). A root class's
+  block has no base. An empty base is notional: no actor, no names, so there's nothing to
+  `$extend` or delegate to (`super` in such a block is the compile error it is for any name the
+  parent block doesn't define), and `$extend` goes only to a parent block that exists. An empty
+  block between two others is transparent: in `W ^ V ^ T` with only `T` and `W` having blocks,
+  `W`'s block extends `T`'s.
+- **Construction order is checked at compile time.** The parent's constructor body runs in the
+  layer at the `super` line, and may reach the child through late-bound names; a path that can
+  reach a child's cell before its line is a compile error, followed through calls and
+  overrides, the parent's body included.
 - Delegated calls and `~` access between an instance and its layer follow the same rules as
   between blocks.
 
@@ -169,6 +187,9 @@ W.connect()   →  T's @connect, for W: timeout 5 (W's), h 2 (V's)
   no `as`.
 - A cell `B` doesn't redeclare is read and written at `A` (`$get` / `$set` of `~name`); one it
   redeclares is `B`'s, and `A`'s code running for `B` reaches it at `B`.
+- An instance of class `B` reaches a block cell `B` inherits (`B::count`, `class::count`) through
+  `B`'s block, which forwards it to `A`: the instance's chain holds its own class's block, not
+  `A`'s, so nobody talks past their direct parent.
 - `base::h()` is `super` named explicitly: a delegated call of `A`'s `h`.
 
 ## Phase 1
