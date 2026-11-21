@@ -304,6 +304,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   // A cell a class's construction waits on has its value (src/init_order.js).
   if (expr.type === 'CellReady') return `bv_cell_ready_(${erlString(wireLabel(expr.name))})`;
+  // A cell a class block inherits is read at its base (src/singleton_classes.js).
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `bv_base_get_(${erlString(wireLabel(expr.name))})`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) {
     // `$get` to the owner's name, by its wire token (bv_read_ in program.js).
     return `bv_outer_get_(${expr.outerLevel ?? 1}, ${erlString(wireLabel(expr.name))})`;
@@ -437,6 +439,10 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, waited on, so a read after it sees it.
+  if (expr.type === 'OuterSet' && expr.outerBase) {
+    if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
+    return `bv_base_set_(${erlString(wireLabel(expr.name))}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}])`;
+  }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
     return `outer_self_send(${expr.outerLevel}, {${erlString(op)}, ${erlString(wireLabel(expr.name))}}, [${genExpr(ctx, expr.value, typeEnv, sCtx)}], false)`;

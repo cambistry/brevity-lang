@@ -321,6 +321,104 @@ function genFnMethod(ctx, { name, params, body: rawBody }, stateVarEnv = null) {
 // An actor no `new` builds: the file, or a singleton (a class block's included).
 const declaredActor = (actor) => !actor.name || !!actor.singletonOf;
 
+// A class block, as an actor others extend and that may extend another
+// (notes/opre-extend-and-as-2026-11-20.md):
+//
+// - `$extend` from an extender: its override table, checked against what the block
+//   declares (an `ex` if it names anything else), recorded by `(from, as)`. A block
+//   with a base registers the extender with it too, `as` the extender, with the names
+//   either of them overrides in the base's terms.
+// - A recorded extender, or anything under its address, may `$get` / `$set` the block's
+//   protected cells: it is admitted as from inside. No one else is.
+// - A block with a base holds it (`binding.base`), sends it `$extend` before its own
+//   block runs, and reads and writes the cells it inherits there, as `from` its own
+//   address. It answers those cells for its family and its extenders by forwarding
+//   them to its base.
+function blockExtension(ctx, actor) {
+  const node = (ctx.program?.actors || []).find(a => a.name === actor.name);
+  if (!node?.membersOf) return null;
+  const byName = new Map(ctx.program.actors.filter(a => a.name).map(a => [a.name, a]));
+  const base = node.blockParent ? byName.get(node.blockParent) : null;
+  const self = selfAddress(publicLabel(node) ?? node.singletonOf);
+  const names = node.extensionNames || [];
+  const baseNames = base?.extensionNames || [];
+  const table = node.overrideTable?.block || [];
+  const forwards = (node.forwardCells || []).map(c => wireLabel(c.name));
+  const fields = `\n  #_extenders = new Map()${base ? '\n  #base = null' : ''}`;
+  const methods = `  // Whether \`from\` is a recorded extender, or an actor under one.
+  #_isExtender(from) {
+    if (typeof from !== 'string') return false;
+    for (const { from: k } of this.#_extenders.values()) if (from === k || from.startsWith(k + ':')) return true;
+    return false;
+  }
+
+  // \`$extend\`, and a recorded extender's protected cell ops; a cell this block
+  // inherits, forwarded to its base. Anything else goes on to dispatch.
+  #_admit(message) {
+    const opName = typeof message.op === 'string' ? message.op : Array.isArray(message.op) ? message.op[message.op.length - 1] : null;
+    if (opName === null) return message;
+    const target = _bv_local_tokens(message.to).pop() ?? null;
+    const route = message._route || ((m) => this.#binding.post(m));
+    const replyTo = message._replyTo || message.from;
+    if (opName === '$extend' && target === null) {
+      this.#_onExtend(message, route, replyTo);
+      return null;
+    }
+    if ((opName === '$get' || opName === '$set') && typeof target === 'string') {
+      const inside = ['__self', '__test', '__parent', '__child', '__inner'].includes(message.from);
+      const extender = !inside && target.startsWith('~') && this.#_isExtender(message.from);
+      if (${JSON.stringify(forwards)}.includes(target) && (inside || extender || this.#_isExtender(message.from))) {
+        ${base ? `const id = String(++this.#nextId);
+        if (opName === '$get') this.#pending.set(id, { resolve: (v) => route({ id: message.id, re: v, to: replyTo }), reject: (ex) => route({ id: message.id, ex, to: replyTo }) });
+        const { _route, _replyTo, ...rest } = message;
+        queueMicrotask(() => this.#base.receive({ ...rest, id, to: ':' + target, from: ${JSON.stringify(self)}, _route: (m) => this.receive(m) }));
+        return null;` : 'return message;'}
+      }
+      if (extender) return { ...message, from: '__inner', _replyTo: replyTo };
+    }
+    return message;
+  }
+
+  // An extender's override table: recorded if every name in it is one of ours.
+  async #_onExtend(message, route, replyTo) {
+    const arg = Array.isArray(message.op) && Array.isArray(message.op[0]) ? message.op[0][0] : null;
+    const table = arg && Array.isArray(arg.block) ? arg.block : null;
+    const names = ${JSON.stringify(names)};
+    if (!table || !table.every(n => names.includes(n))) { route({ id: message.id, ex: { $extend: 'unknown_name' }, to: replyTo }); return; }
+    const as = message.as ?? message.from;
+    this.#_extenders.set(JSON.stringify([message.from, as]), { from: message.from, as, table });${base ? `
+    try { await this.#_extend(as, [...new Set([...${JSON.stringify(table)}, ...table.filter(n => ${JSON.stringify(baseNames)}.includes(n))])]); }
+    catch (ex) { route({ id: message.id, ex: { $extend: ex?.$extend ?? 'error' }, to: replyTo }); return; }` : ''}
+    route({ id: message.id, re: [], to: replyTo });
+  }
+${base ? `
+  // Register with our base: for ourselves, or (\`as\`) an extender of ours.
+  #_extend(as = null, table = ${JSON.stringify(table)}) {
+    const id = String(++this.#nextId);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
+      queueMicrotask(() => this.#base.receive({ id, op: [[{ block: table }], '$extend'], ty: [[{ block: 'Object' }]], from: ${JSON.stringify(self)}, ...(as !== null && { as }), _route: (m) => this.receive(m) }));
+    });
+  }
+
+  // A cell we inherit, read at our base.
+  async #_baseRead(name) {
+    const id = String(++this.#nextId);
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve: (v) => resolve(Array.isArray(v) ? v[0] : v), reject });
+      queueMicrotask(() => this.#base.receive({ id, op: '$get', to: ':' + name, from: ${JSON.stringify(self)}, _route: (m) => this.receive(m) }));
+    });
+  }
+
+  // A write to a cell we inherit, sent to our base.
+  #_baseSet(name, value) {
+    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${JSON.stringify(self)}, _route: () => {} }));
+  }
+` : ''}
+`;
+  return { fields, methods, base: !!base };
+}
+
 function genClass(ctx, actor, exportKw, remotes = null) {
   // Reset lambda state for this class
   ctx.inClass = !!actor.name;
@@ -825,6 +923,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // A constructor block's call on another actor in this process needs the helper too.
   if (allInitLines.some(l => childCall.test(l))) ctx.usesChildSend = true;
   if (hasDeferred) allInitLines.push(`    await Promise.all(this.#_joins);`);
+  // A class block that extends another registers with it before its own block runs.
+  const ext = blockExtension(ctx, actor);
+  if (ext?.base) allInitLines.unshift('    await this.#_extend();');
   const finalInitBody = allInitLines.length > 0
     ? `\n${allInitLines.join('\n')}\n  `
     : ' ';
@@ -862,9 +963,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #_cellSubs = new Map()
   #nextId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
   #_remoteRoutes = null
-  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}
+  #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()' : ''}${ext ? ext.fields : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''} }
+  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base ? ' this.#base = binding.base ?? null;' : ''} }
 
   _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
@@ -1129,7 +1230,7 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     return child;
   }
 
-` : ''}  async #selfSend(op) {
+` : ''}${ext ? ext.methods : ''}  async #selfSend(op) {
     const _opName = Array.isArray(op) ? op[op.length - 1] : op;
     const id = String(++this.#nextId);${[...silentFnNames].some(n => !intrinsicArm(n)) ? `
     if (${JSON.stringify([...silentFnNames].filter(n => !intrinsicArm(n)).map(wireLabel))}.includes(_opName)) {
@@ -1285,7 +1386,9 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
       if (proxy) { proxy.receive(message); return; }
     }
     // A reply nobody is waiting for, such as one to a silent call, has nothing to run.
-    if (!('op' in message) && ('re' in message || 'ex' in message)) return;
+    if (!('op' in message) && ('re' in message || 'ex' in message)) return;${ext ? `
+    message = this.#_admit(message);
+    if (!message) return;` : ''}
     this.#dispatch(message);
   }
 

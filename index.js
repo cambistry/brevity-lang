@@ -433,6 +433,13 @@ export function settleOverrideTables(ast) {
   const purportedByActor = purportedFunctions(ast, parseInterface);
   const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   const shown = (name) => (byName.get(name)?.sourceName ?? name ?? '').replace(/^@/, '').replace(/__pub$/, '');
+  // What each block declares, by wire name: what a `$extend` to it may name.
+  for (const block of ast.actors) {
+    if (!block.membersOf) continue;
+    const doc = parseInterface(blockDocument(ast, block, aliasMap, purportedByActor));
+    const names = [...Object.keys(doc).filter(k => !k.startsWith('__')), ...Object.keys(doc.__protected || {}).filter(k => !k.startsWith('__'))];
+    Object.defineProperty(block, 'extensionNames', { value: names, configurable: true, enumerable: false });
+  }
   for (const block of ast.actors) {
     if (!block.blockParent) continue;
     const parent = byName.get(block.blockParent);

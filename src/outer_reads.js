@@ -60,7 +60,12 @@ export function propNames(actor) {
 export function enclosingChain(program, actor) {
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
   const chain = [];
-  for (let at = actor; at?.enclosing; at = classes.get(at.enclosing)) chain.push(at.enclosing);
+  for (let at = actor; at?.enclosing; at = classes.get(at.enclosing)) {
+    chain.push(at.enclosing);
+    // A class block that extends another isn't declared in it, but an actor whose
+    // chain holds the block holds the blocks it extends next (src/singleton_classes.js).
+    for (let b = classes.get(classes.get(at.enclosing)?.blockParent); b; b = classes.get(b.blockParent)) chain.push(b.name);
+  }
   chain.push(null);
   return chain;
 }
@@ -92,6 +97,8 @@ function classOwnNames(classes, actor) {
   for (const p of inheritedParams) add(p.name, p.type, true, p.ref);
   for (const d of actor.stateVarDecls || []) add(d.name, d.typeName, false, d.isRef);
   for (const d of inheritedState || []) add(d.name, d.typeName, false, d.isRef);
+  // A class block answers the cells it inherits, by forwarding them to its base.
+  for (const c of actor.forwardCells || []) add(c.name, c.typeName, false, c.isRef);
   // A write in the constructor block (`total <- 1`) names a cell; it doesn't declare one.
   for (const s of actor.initBody || []) if (s.type !== 'SetStatement' && s.type !== 'ActorSetStatement') add(s.name, s.typeName, false, s.isRef);
   return names;
@@ -166,7 +173,11 @@ export function markOuterReads(program) {
     // bare name reaches them: their level is opaque, and only `C.count` (`viaClass`)
     // reads it.
     const opaque = new Set();
-    for (let at = actor; at?.enclosing; at = classes.get(at.enclosing)) if (at.membersOpaque) opaque.add(at.enclosing);
+    for (let at = actor; at?.enclosing; at = classes.get(at.enclosing)) {
+      if (!at.membersOpaque) continue;
+      opaque.add(at.enclosing);
+      for (let b = classes.get(classes.get(at.enclosing)?.blockParent); b; b = classes.get(b.blockParent)) opaque.add(b.name);
+    }
     const chain = actor.name ? enclosingChain(program, actor).map(owner => ({ ...levels.get(owner), opaque: opaque.has(owner) })) : [];
     const ownLevel = levels.get(actor.name ?? null);
     const own = actor.name ? ownLevel.names : new Map();
@@ -289,6 +300,8 @@ export function markOuterReads(program) {
           && !own.has(dep) && !bound.has(dep) && !chain.some(l => l.owner !== null && l.names.has(dep))) {
         node.outerCall = true;
       }
+      // A block's inherited cell is read at its base (src/singleton_classes.js).
+      if (node.outerBase) return;
       if (actor.name && node.type === 'Identifier' && node.viaClass) {
         const found = viaClassAt(node);
         if (found) { mark(node, found); return; }
@@ -343,6 +356,8 @@ export function markOuterReads(program) {
 export function outerNamesFor(program, actor) {
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
   const names = new Map();
+  // A class block's inherited cells, read at its base (src/singleton_classes.js).
+  for (const c of actor.forwardCells || []) names.set(c.name, c.typeName ?? null);
   for (const owner of enclosingChain(program, actor)) {
     for (const [n, { type }] of levelOf(program, classes, owner).names) if (!names.has(n)) names.set(n, type);
   }

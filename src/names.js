@@ -85,6 +85,8 @@ function actorNames(actor, classes) {
   const names = [];
   const { inheritedParams, inheritedFunctions, inheritedState } = actor.name ? resolveSuperclassChain(classes, actor) : {};
   for (const d of [...(actor.stateVarDecls || []), ...(inheritedState || [])]) names.push(['cell', d.name]);
+  // A class block's inherited cells, read at its base (src/singleton_classes.js).
+  for (const c of actor.forwardCells || []) names.push(['cell', c.name]);
   for (const p of [...(actor.initParams || []), ...(actor.params || []), ...(inheritedParams || [])]) {
     names.push(['value', p.name]);
     if (p.accessor) names.push(['value', '@' + p.accessor.replace(/^@/, '')]);
@@ -227,7 +229,7 @@ export function resolveNames(program) {
         return;
       case 'Identifier':
         // `C.count` inside a class names C's members; `*T(…)`'s callee is a type.
-        if (!node.viaClass && !node.cellType) check(node.name, scope, node);
+        if (!node.viaClass && !node.cellType && !node.outerBase) check(node.name, scope, node);
         return;
       case 'FunctionCallExpr':
         // `f...` calls the silent `f.`, or a local holding a silent function
@@ -246,7 +248,7 @@ export function resolveNames(program) {
         }
         break;
       case 'RefRead': case 'FnRef': case 'RefArg':
-        check(node.name, scope, node);
+        if (!node.outerBase) check(node.name, scope, node);
         return;
       case 'SetStatement': case 'ActorSetStatement':
         check(node.name, scope, node);

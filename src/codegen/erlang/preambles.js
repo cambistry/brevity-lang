@@ -1445,7 +1445,13 @@ outer_self_send(Level, Op, Payload, Silent) ->
         true -> bv_object_pack([]);
         false -> receive {bv_reply, Ref_, V_} -> bv_object_pack(V_); {bv_error, Ref_, _} -> error(bv_call_failed) end
     end.
-bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
+bv_answer_outer_op_(From, _Class, {<<"$set">>, Token} = Op, Payload, Ref) when Token =/= null ->
+    case bv_forwards_(Token) of
+        true -> get(bv_base_) ! {bv_outer_op, From, (bv_mod_()):bv_block_base_class_(bv_my_class_()), Op, Payload, Ref};
+        false -> bv_answer_own_op_(From, _Class, Op, Payload, Ref)
+    end;
+bv_answer_outer_op_(From, Class, Op, Payload, Ref) -> bv_answer_own_op_(From, Class, Op, Payload, Ref).
+bv_answer_own_op_(From, Class, Op, Payload, Ref) ->
     case bv_guard_(fun() -> (bv_mod_()):bv_run_as_(Class, Op, Payload) end) of
         {ok, Re_, Ty_} -> From ! {bv_reply, Ref, (bv_mod_()):bv_unwire_reply(Re_, Ty_)};
         {bv_failed, Fail_} -> From ! {bv_error, Ref, Fail_};
@@ -1455,10 +1461,93 @@ bv_answer_outer_op_(From, Class, Op, Payload, Ref) ->
 %% (bv_read_). A cell that a class's construction waits on isn't declared yet: the
 %% read is held until its line runs (src/init_order.js).
 bv_answer_outer_(From, Token, Ref) ->
+    case bv_forwards_(Token) of
+        true -> get(bv_base_) ! {bv_outer_get, From, Token, Ref};
+        false -> bv_answer_own_(From, Token, Ref)
+    end.
+bv_answer_own_(From, Token, Ref) ->
     case get({bv_pending_, Token}) of
         undefined -> From ! {bv_reply, Ref, (bv_mod_()):bv_read_(bv_my_class_(), Token)};
         Waiting_ -> put({bv_pending_, Token}, [{From, Ref} | Waiting_])
     end.
+%% ── Class blocks (notes/opre-extend-and-as-2026-11-20.md) ─────────────────
+%% A class block that extends another holds it as its base (bv_base_), reads and
+%% writes the cells it inherits there, and forwards them there for its family and
+%% its extenders. \`$extend\` records an extender (bv_extenders_), which may then
+%% reach the block's protected cells. bv_block_info_ is {Names, Table, Self, Forwards}.
+bv_forwards_(Token) ->
+    {_, _, _, Fwd_} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    get(bv_base_) =/= undefined andalso lists:member(Token, Fwd_).
+bv_is_extender_(From) when is_binary(From) ->
+    Recs_ = case get(bv_extenders_) of undefined -> []; L_ -> L_ end,
+    lists:any(fun({K_, _, _}) -> From =:= K_ orelse (byte_size(From) > byte_size(K_) andalso binary:part(From, 0, byte_size(K_) + 1) =:= <<K_/binary, ":">>) end, Recs_);
+bv_is_extender_(_) -> false.
+%% From (as As) extends us with Table, recorded if every name in it is ours. A
+%% block with a base registers it there too, with the names either of us overrides
+%% in the base's terms.
+bv_extend_here_(From, As, Table) ->
+    {Names_, Own_, Self_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    case is_list(Table) andalso lists:all(fun(N_) -> lists:member(N_, Names_) end, Table) of
+        false -> {error, <<"unknown_name">>};
+        true ->
+            Up_ = case get(bv_base_) of
+                undefined -> ok;
+                Base_ ->
+                    {BaseNames_, _, _, _} = (bv_mod_()):bv_block_info_((bv_mod_()):bv_block_base_class_(bv_my_class_())),
+                    bv_extend_at_(Base_, Self_, As, Own_ ++ [N_ || N_ <- Table, lists:member(N_, BaseNames_), not lists:member(N_, Own_)])
+            end,
+            case Up_ of
+                ok -> put(bv_extenders_, (case get(bv_extenders_) of undefined -> []; L_ -> L_ end) ++ [{From, As, Table}]), ok;
+                E_ -> E_
+            end
+    end.
+bv_extend_at_(Pid, From, As, Table) ->
+    Ref_ = make_ref(),
+    Pid ! {bv_extend, self(), From, As, Table, Ref_},
+    receive {bv_reply, Ref_, ok} -> ok; {bv_error, Ref_, R_} -> {error, R_} end.
+bv_answer_extend_(Pid, From, As, Table, Ref) ->
+    case bv_extend_here_(From, As, Table) of
+        ok -> Pid ! {bv_reply, Ref, ok};
+        {error, R_} -> Pid ! {bv_error, Ref, R_}
+    end.
+%% Our block, as it's built: its base is the block in its home's cell HomeToken.
+bv_extend_self_(HomeToken) ->
+    HomePid_ = case bv_chain_() of [] -> bv_outer_(); [{_, P_} | _] -> P_ end,
+    Ref_ = make_ref(),
+    HomePid_ ! {bv_outer_get, self(), HomeToken, Ref_},
+    Base_ = receive {bv_reply, Ref_, V_} -> V_ end,
+    put(bv_base_, Base_),
+    {_, Table_, Self_, _} = (bv_mod_()):bv_block_info_(bv_my_class_()),
+    case bv_extend_at_(Base_, Self_, Self_, Table_) of ok -> ok; {error, R_} -> error({bv_as, R_}) end.
+bv_base_get_(Token) ->
+    Ref_ = make_ref(),
+    get(bv_base_) ! {bv_outer_get, self(), Token, Ref_},
+    receive {bv_reply, Ref_, V_} -> V_ end.
+bv_base_set_(Token, Payload) ->
+    Ref_ = make_ref(),
+    get(bv_base_) ! {bv_outer_op, self(), (bv_mod_()):bv_block_base_class_(bv_my_class_()), {<<"$set">>, Token}, Payload, Ref_},
+    receive {bv_reply, Ref_, _} -> ok; {bv_error, Ref_, _} -> error(bv_call_failed) end.
+%% A message from the wire to a class block: \`$extend\`; a cell it inherits, from an
+%% extender; a protected cell, from an extender (inside); anything else (pass).
+bv_block_wire_(Op, Msg, Payload) ->
+    WFrom_ = maps:get(<<"from">>, Msg, null),
+    case Op of
+        {<<"$extend">>, _} -> bv_block_extend_wire_(WFrom_, Msg, Payload);
+        <<"$extend">> -> bv_block_extend_wire_(WFrom_, Msg, Payload);
+        {<<"$get">>, T_} ->
+            case bv_forwards_(T_) andalso bv_is_extender_(WFrom_) of true -> {reply, [bv_base_get_(T_)]}; false -> bv_admit_(T_, WFrom_) end;
+        {<<"$set">>, T_} ->
+            case bv_forwards_(T_) andalso bv_is_extender_(WFrom_) of true -> bv_base_set_(T_, Payload), {reply, null}; false -> bv_admit_(T_, WFrom_) end;
+        _ -> pass
+    end.
+bv_admit_(<<"~", _/binary>>, From) -> case bv_is_extender_(From) of true -> inside; false -> pass end;
+bv_admit_(_, _) -> pass.
+bv_wire_op_({Op_, _}) -> Op_;
+bv_wire_op_(Op_) -> Op_.
+bv_block_extend_wire_(From, Msg, Payload) ->
+    Arg_ = case Payload of [A_ | _] -> A_; A_ -> A_ end,
+    Table_ = case is_map(Arg_) of true -> maps:get(<<"block">>, Arg_, null); false -> null end,
+    case bv_extend_here_(From, maps:get(<<"as">>, Msg, From), Table_) of ok -> {reply, []}; {error, R_} -> {fail, R_} end.
 bv_cell_ready_(Token) ->
     Waiting_ = case erase({bv_pending_, Token}) of undefined -> []; W_ -> W_ end,
     [From_ ! {bv_reply, Ref_, (bv_mod_()):bv_read_(bv_my_class_(), Token)} || {From_, Ref_} <- lists:reverse(Waiting_)],
@@ -1581,7 +1670,7 @@ bv_wrap_reply_(Re, Ty) ->
 %% A call from outside: its tags are checked, and its reply keeps its tag.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
-    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) of
+    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) andalso bv_wire_op_(Op) =/= <<"$extend">> of
         true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => <<"schema_required">>}}), $\n]);
         false ->
             Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},
@@ -1861,6 +1950,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

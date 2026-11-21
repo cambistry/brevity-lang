@@ -36,8 +36,10 @@ export function jsIdent(rawName) {
 // held in the home's cell. So does the chain of a class whose block that is.
 export function blockHeads(actorNodes, node) {
   const heads = [];
-  let b = node?.membersClass && node.enclosing === node.membersClass ? actorNodes.get(node.membersClass)
-    : node?.blockParent && node.enclosing === node.blockParent ? actorNodes.get(node.blockParent) : null;
+  // Its own class's block first: a cell read goes there, and that block forwards what
+  // it inherits. The blocks it extends follow, for a call of a function of theirs
+  // (`G::h()`, as `class::base::h()` is), which runs there.
+  let b = node?.membersClass && node.enclosing === node.membersClass ? actorNodes.get(node.membersClass) : null;
   for (; b; b = b.blockParent ? actorNodes.get(b.blockParent) : null) heads.push(b);
   return heads;
 }
@@ -63,7 +65,10 @@ export function childBinding(ctx, cls) {
     chain = at <= 0 ? 'this.#chain' : `this.#chain.slice(${at})`;
   }
   if (head) chain = chain.startsWith('[') ? `[${head}, ${chain.slice(1)}` : `[${head}, ...${chain}]`;
-  return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}}`;
+  // A class block that extends another holds it as its base, built in the same home.
+  const base = node?.blockParent && ctx.actorNodes?.get(node.blockParent);
+  const baseField = base && (node.home ?? null) === here ? `, base: this.#${stateKey(base.singletonOf)}` : '';
+  return `{post: (msg) => this.receive(msg), outer: ${outer}, chain: ${chain}${baseField}}`;
 }
 
 export function stateKey(name) {
@@ -465,6 +470,7 @@ export function genExpr(ctx, expr) {
     if (attrsJs) topFields.push(attrsJs);
     return `_bv_reply_one(await this.#send([[{${topFields.join(', ')}}], "$new"], ${JSON.stringify(domHostAddr(ctx, expr.tag))}))`;
   }
+  if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outerBase) return `(await this.#_baseRead(${JSON.stringify(wireLabel(expr.name))}))`;
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && expr.outer) return `(await this.#outerRead(${JSON.stringify(wireLabel(expr.name))}, ${expr.outerLevel ?? 1}))`;
   // A dependency as a value is its address (src/codegen/dep_address.js), as `Self` is.
   if (expr.type === 'Identifier' && isDependencyValue(ctx, expr.name, ctx.currentTypeEnv)) return JSON.stringify('#<' + ctx.depAddress(expr.name) + '>');
@@ -740,6 +746,11 @@ export function genExpr(ctx, expr) {
   }
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, as a closure's write goes to its enclosing scope.
+  // A cell a class block inherits is set at its base (src/singleton_classes.js).
+  if (expr.type === 'OuterSet' && expr.outerBase) {
+    if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
+    return `this.#_baseSet(${JSON.stringify(wireLabel(expr.name))}, ${genExpr(ctx, expr.value)})`;
+  }
   if (expr.type === 'OuterSet') {
     const op = expr.updateOp === '<|' ? '$update' : '$set';
     return `this.#_up(${expr.outerLevel}).receive({ id: String(++this.#nextId), op: [[${genExpr(ctx, expr.value)}], ${JSON.stringify(op)}], to: ${JSON.stringify(':' + wireLabel(expr.name))}, _route: () => {} })`;

@@ -244,6 +244,112 @@ export function flattenDelegatedBlocks(actors) {
   for (const a of actors) flatten(a);
 }
 
+// A class block extending its parent's isn't declared inside it: it is declared in its
+// home, and holds the parent block as its base. A cell of an ancestor block's that the
+// block doesn't redeclare is read and written at the base, as `$get` / `$set` of its
+// wire name (`~count`), with the block as `from`: the base answers it, or forwards it
+// to its own base. Each use is marked as an outer read (or an `OuterSet`) with
+// `outerBase`, which the targets send to the base instead of up the chain. `base::x`
+// (and `A::x` in the block) is the same read: the parent's cell, whatever the block
+// redeclares. The cells a block inherits are its `forwardCells`: it answers them for
+// its own family and its extenders, by forwarding them to its base.
+// See notes/opre-extend-and-as-2026-11-20.md ("$extend", "In Brevity").
+export function lowerInheritedBlockCells(actors) {
+  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  const shownName = (a) => (a.sourceName ?? a.name ?? '').replace(/^@/, '').replace(/__pub$/, '').replace(/[!.]$/, '');
+  const ancestors = (block) => {
+    const out = [];
+    for (let b = byName.get(block.blockParent); b; b = b.blockParent ? byName.get(b.blockParent) : null) out.push(b);
+    return out;
+  };
+  const SCALAR = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float']);
+  for (const block of actors.filter(a => a.blockParent)) {
+    const up = ancestors(block);
+    const upNames = new Set(up.map(b => b.name));
+    const own = new Set((block.stateVarDecls || []).map(d => d.name));
+    const inherited = new Map();
+    const privates = new Map();
+    for (const b of up) for (const d of b.stateVarDecls || []) {
+      if (typeof d.name !== 'string' || own.has(d.name) || d.name.includes('__')) continue;
+      if (d.name.startsWith('#')) { if (!privates.has(d.name)) privates.set(d.name, b); continue; }
+      if (!inherited.has(d.name)) inherited.set(d.name, { decl: d, owner: b.name });
+    }
+    block.enclosing = block.home ?? null;
+    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, isRef: !!decl.isRef })), configurable: true });
+    // The cell a use names: an inherited one, or (`base::x`, `A::x`) an ancestor's.
+    const resolve = (node, bound) => {
+      if (typeof node.name !== 'string') return null;
+      if (node.viaClass) {
+        if (!upNames.has(node.viaClass)) return null;
+        const found = inherited.get(node.name);
+        if (found) return found;
+        // The base's own cell, where the block redeclares it.
+        for (const b of up) {
+          const d = (b.stateVarDecls || []).find(e => e.name === node.name);
+          if (d) return { decl: d, owner: b.name };
+        }
+        return null;
+      }
+      if (bound.has(node.name)) return null;
+      const priv = privates.get(node.name);
+      if (priv) throw new Error(`'${node.name}' is private to the class block of '${shownName(byName.get(priv.membersOf) ?? priv)}', and the class block of '${shownName(byName.get(block.membersOf) ?? block)}', which extends it, can't reach it`);
+      return inherited.get(node.name) ?? null;
+    };
+    const mark = (node, found) => {
+      delete node.viaClass;
+      Object.assign(node, { outer: true, outerBase: true, outerLevel: 1, outerClass: found.owner, outerParam: false, outerType: found.decl.typeName ?? null });
+      return node;
+    };
+    const visit = (node, bound) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => visit(n, bound)); return; }
+      if (node.type === 'Actor' && Array.isArray(node.functions)) return;
+      if (node.type === 'FunctionDecl' || node.type === 'Function' || node.type === 'SubscribeCall') {
+        bound = new Set([...bound, ...(node.params || []).map(p => p?.name).filter(Boolean)]);
+      }
+      if (node.type === 'ForStatement' && node.name) bound = new Set([...bound, node.name]);
+      if (Array.isArray(node.body)) {
+        const locals = node.body.filter(st => (st?.type === 'Assign' || st?.type === 'TypedAssign' || st?.type === 'RefDecl') && typeof st.name === 'string').map(st => st.name);
+        if (locals.length) bound = new Set([...bound, ...locals]);
+      }
+      if ((node.type === 'Identifier' || node.type === 'RefRead') && !node.outerBase) {
+        const found = resolve(node, bound);
+        if (found) { mark(node, found); return; }
+      }
+      if (node.type === 'SetStatement') {
+        const found = resolve(node, bound);
+        if (found) {
+          if (!found.decl.isRef) throw new Error(`Cannot set '${node.name}' — it's a cell of the class block of '${shownName(byName.get(byName.get(found.owner)?.membersOf) ?? { name: found.owner })}' that isn't '*', so it can't be set`);
+          const { name, value, updateOp } = node;
+          for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
+          node.type = 'ExprStatement';
+          const type = found.decl.typeName ?? null;
+          node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner, outerType: type };
+          visit(value, bound);
+          return;
+        }
+      }
+      if (node.type === 'Reply' || node.type === 'Return') {
+        node.fields = (node.fields || []).map(f => {
+          if (f.positional && !f.expr && !f.value && typeof f.name === 'string') {
+            const found = resolve({ name: f.name }, bound);
+            if (found) { const { name, ...rest } = f; return { ...rest, positional: true, expr: mark({ type: 'Identifier', name }, found) }; }
+          }
+          if (typeof f.sigil === 'string' && !f.expr && !f.value) {
+            const found = resolve({ name: f.sigil }, bound);
+            if (found) { const { sigil, ...rest } = f; delete rest.ref; return { ...rest, key: sigil.replace(/^[@#]/, ''), value: mark({ type: 'Identifier', name: sigil }, found) }; }
+          }
+          return f;
+        });
+      }
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v, bound);
+    };
+    for (const f of block.functions || []) visit(f, new Set());
+    for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) visit(b, new Set());
+    for (const p of block.initParams || []) if (p.defaultValue) visit(p.defaultValue, new Set());
+  }
+}
+
 // `class::base` is the running class's parent (Ruby's self.class.superclass): in `T`'s
 // code running for a `U`, it's `T`. Each use becomes a call to a protected function
 // of its own, which the class and each class under it define against their own parent,
@@ -490,6 +596,21 @@ function lowerMemberAccess(actor, from, members, isType, byName) {
   const noPublic = (x) => new Error(`No public member '${x}' in '${shown}'`);
   const replace = (n, next) => { for (const k of Object.keys(n)) if (k !== 'loc') delete n[k]; Object.assign(n, next); };
   const via = members.name;
+  // An actor of a class reaches a block cell through its own class's block, which
+  // forwards it to the block that holds it: nobody talks past their direct parent.
+  // That's the cell its own block sees, so a qualifier that sees another one (a block
+  // between redeclares it) isn't reachable that way yet.
+  const ownBlock = actor.membersClass && !actor.membersOf && byName ? actor.membersClass : null;
+  const cellVia = (name, written) => {
+    const at = owner.get(name) ?? via;
+    if (!ownBlock || ownBlock === at) return at;
+    const mine = memberNames(byName.get(ownBlock), byName).owner.get(name);
+    if (mine !== at) {
+      const cls = shownBlock(byName, ownBlock);
+      throw new Error(`'${written}' in '${shownBlock(byName, null, actor)}': the class block of '${cls}' redeclares '${name}', and reaching another block's '${name}' from an actor of '${cls}' isn't supported yet`);
+    }
+    return ownBlock;
+  };
   // After `::`, a name is bare: a protected member.
   const isPublic = (x) => cells.has('@' + x) || fns.has('@' + x);
   const protectedError = (written, x, call = '') => isPublic(x)
@@ -498,12 +619,12 @@ function lowerMemberAccess(actor, from, members, isType, byName) {
   for (const b of bodies(actor)) walk(b, (n) => {
     if (n.type === 'ActorFieldSet' && n.objectName === from && n.protected) {
       if (!cells.has(n.fieldName)) throw protectedError(n.objectWritten, n.fieldName);
-      replace(n, { type: 'SetStatement', name: n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: owner.get(n.fieldName) ?? via });
+      replace(n, { type: 'SetStatement', name: n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: cellVia(n.fieldName, `${n.objectWritten ?? shown}::${n.fieldName}`) });
     } else if (n.type === 'QualifiedMember' && isC(n.object)) {
       if (isType([from, members.name, members.membersOf], n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a type, not a value`);
       if (fns.has(n.name)) throw new Error(`'${n.object.written ?? shown}::${n.name}' is a function: call it, '${n.object.written ?? shown}::${n.name}()'`);
       if (!cells.has(n.name)) throw protectedError(n.object.written, n.name);
-      replace(n, { type: 'Identifier', name: n.name, viaClass: owner.get(n.name) ?? via });
+      replace(n, { type: 'Identifier', name: n.name, viaClass: cellVia(n.name, `${n.object.written ?? shown}::${n.name}`) });
     } else if (n.type === 'TypeConstruction' && n.qualifier?.length === 1 && n.qualifier[0] === from
                && (fns.has(n.typeName) || isPublic(n.typeName) || cells.has(n.typeName))) {
       // A type of the class keeps its construction: a type name is reserved, so no
@@ -512,15 +633,20 @@ function lowerMemberAccess(actor, from, members, isType, byName) {
       replace(n, { type: 'FunctionCallExpr', callee: { type: 'Identifier', name: n.typeName }, args: n.args, viaClass: via });
     } else if (n.type === 'ActorFieldSet' && n.objectName === from) {
       if (!cells.has('@' + n.fieldName)) throw noPublic(n.fieldName);
-      replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: owner.get('@' + n.fieldName) ?? via });
+      replace(n, { type: 'SetStatement', name: '@' + n.fieldName, value: n.value, ...(n.updateOp && { updateOp: n.updateOp }), viaClass: cellVia('@' + n.fieldName, `${shown}.${n.fieldName}`) });
     } else if (n.type === 'DotAccessExpr' && isC(n.object)) {
-      if (cells.has('@' + n.property)) replace(n, { type: 'Identifier', name: '@' + n.property, viaClass: owner.get('@' + n.property) ?? via });
+      if (cells.has('@' + n.property)) replace(n, { type: 'Identifier', name: '@' + n.property, viaClass: cellVia('@' + n.property, `${shown}.${n.property}`) });
       else if (!fns.has('@' + n.property)) throw noPublic(n.property);
     } else if (n.type === 'DotCallExpr' && isC(n.object) && n.method !== 'new') {
       if (!fns.has('@' + n.method) && !cells.has('@' + n.method)) throw noPublic(n.method);
     }
   });
 }
+
+const shownBlock = (byName, blockName, actor = null) => {
+  const a = actor ?? byName.get(byName.get(blockName)?.membersOf) ?? { name: blockName };
+  return (a.sourceName ?? a.name ?? '').replace(/^@/, '').replace(/__pub$/, '').replace(/[!.]$/, '');
+};
 
 function callsNew(actor) {
   let found = false;

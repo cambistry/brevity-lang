@@ -619,6 +619,12 @@ ${subRegLines.join('\n')}
   }
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it.
+  // A cell a class block inherits is set at its base (src/singleton_classes.js).
+  if (expr.type === 'OuterSet' && expr.outerBase) {
+    if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
+    const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
+    return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_base_set(${JSON.stringify(wireLabel(expr.name))}, _v); }`;
+  }
   if (expr.type === 'OuterSet') {
     const op = `${expr.updateOp === '<|' ? '$update' : '$set'} ${wireLabel(expr.name)}`;
     const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';

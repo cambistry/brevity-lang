@@ -175,6 +175,11 @@ export function checkEffects(ast, remotesParsed = {}) {
           escapeNames(node.value ?? node.args, scope);
           walk(node.value ?? node.args, scope);
           return;
+        // A write to a cell a class block inherits, set at its base.
+        case 'OuterSet':
+          if (node.outerBase) scope.write(`${node.name} ${node.updateOp || '<-'} …`);
+          walk(node.value, scope);
+          return;
         case 'ActorFieldSet':
           if (!scope.fresh.has(node.objectName) && !untrackedNames.has(node.objectName.replace(/^@/, ''))) {
             scope.write(`${node.objectName}.${node.fieldName} <- …`);

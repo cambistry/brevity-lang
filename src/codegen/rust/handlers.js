@@ -948,7 +948,24 @@ ${m[2]}
   arms.push('            _ => { if bv_from_wire_caller(from) { self.wire_unhandled = true; } }');
 
   return `
-    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {
+    fn child_${name}_dispatch(&mut self, op: &str, payload: &Value, id: &str, from: &str) -> Value {${actor.membersOf ? `
+        // A class block (notes/opre-extend-and-as-2026-11-20.md): \`$extend\` records an
+        // extender, which may then reach our protected cells; a cell we inherit is
+        // answered at our base.
+        if op == "$extend" || op.starts_with("$extend ") {
+            let owner = self.state_owner.clone();
+            let arg = payload.as_array().and_then(|a| a.first()).unwrap_or(payload);
+            let table = arg.get("block").cloned().unwrap_or(Value::Null);
+            self.bv_extend_at(&owner, from, from, &table);
+            return json!([]);
+        }
+        let from = if bv_from_wire_caller(from) && (op.starts_with("$get ~") || op.starts_with("$set ~")) && self.bv_is_extender(from) { "__parent" } else { from };
+        {
+            let (_, _, _, forwards) = bv_block_info(${JSON.stringify(name)});
+            let inside = !bv_from_wire_caller(from) || self.bv_is_extender(from);
+            if let Some(t) = op.strip_prefix("$get ") { if inside && forwards.contains(&t) { return json!([self.bv_base_read(t)]); } }
+            if let Some(t) = op.strip_prefix("$set ") { if inside && forwards.contains(&t) { let v = payload.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null); self.bv_base_set(t, v); return Value::Null; } }
+        }` : ''}
         // \`$get\` to one of our names (bv_get_key): a public cell answers anyone,
         // through its own reader; any other name only from inside or a class
         // declared in us.
@@ -1307,12 +1324,14 @@ function genRustChildMethods(allActors) {
         ${G.ctx.readsOuter ? `// The actors it's declared in, taken from whoever is constructing it.
         let outers = ${outersExpr(mergedActor)};
         let mut incoming = self.${lc}_instances.remove(&instance_id).unwrap_or_default();
-        incoming.insert("__outers".to_string(), outers);
+        incoming.insert("__outers".to_string(), outers);${mergedActor.blockParent ? `
+        // A class block that extends another holds it as its base.
+        incoming.insert("__base".to_string(), self.bv_block_in_home(${JSON.stringify((mergedActor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel((G.ctx.actorInfo?.get(mergedActor.blockParent)?.actor ?? G.ctx.actorInfo?.get(mergedActor.blockParent))?.singletonOf))}));` : ''}
         self.enter_state(format!("${lc}/{}", instance_id), incoming);` : `let saved_state = std::mem::take(&mut self.state);
         self.state = self.${lc}_instances.remove(&instance_id).unwrap_or_default();`}
         let saved_current = self.current_${lc}_instance.replace(instance_id);
         self.inst_depth += 1;
-        let outcome = catch_unwind(AssertUnwindSafe(|| { ${init ? `self.child_${lc}_init(args);` : 'let _ = args;'} }));
+        let outcome = catch_unwind(AssertUnwindSafe(|| { ${mergedActor.blockParent ? `self.bv_extend_self(${JSON.stringify(lc)}); ` : ''}${init ? `self.child_${lc}_init(args);` : 'let _ = args;'} }));
         ${G.ctx.readsOuter ? 'let new_state = self.leave_state();' : `let new_state = std::mem::take(&mut self.state);
         self.state = saved_state;`}
         if outcome.is_ok() { self.${lc}_instances.insert(instance_id, new_state); }
