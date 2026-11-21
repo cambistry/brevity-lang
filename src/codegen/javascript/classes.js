@@ -368,7 +368,8 @@ function blockExtension(ctx, actor) {
   // A message on to another actor, its reply relayed back as it comes.
   #_relay(message, send, fields, route, replyTo) {
     const id = String(++this.#nextId);
-    this.#_relays.set(id, (reply) => { const { _route, _replyTo, ...r } = reply; route({ ...r, id: message.id, to: replyTo }); });
+    // The reply is ours to send: its \`from\` is the actor we passed it to.
+    this.#_relays.set(id, (reply) => { const { _route, _replyTo, from: _from, ...r } = reply; route({ ...r, id: message.id, to: replyTo }); });
     const { _route, _replyTo, _ctx, ...rest } = message;
     queueMicrotask(() => send({ ...rest, ...fields, id, _route: (m) => this.receive(m) }));
   }
@@ -497,7 +498,7 @@ ${base ? `
   // Register with our base: for ourselves, or (\`as\`) an extender of ours.
   #_extend(as = null, table = ${J(table)}) {
     const arg = { block: table, ...(as === null && ${J(instanceTable)}.length && { instance: ${J(instanceTable)} }) };
-    return this.#_await((m) => this.#base.receive(m), { op: [[arg], '$extend'], ty: [[{ block: 'Object' }]], from: ${J(self)}, ...(as !== null && { as }) });
+    return this.#_await((m) => this.#base.receive(m), { op: [[arg], '$extend'], from: ${J(self)}, ...(as !== null && { as }) });
   }
 
   // A cell we inherit, read at our base.
@@ -508,7 +509,7 @@ ${base ? `
 
   // A write to a cell we inherit, sent to our base.
   #_baseSet(name, value) {
-    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, _route: () => {} }));
+    queueMicrotask(() => this.#base.receive({ id: String(++this.#nextId), op: [[value], '$set'], to: ':' + name, from: ${J(self)}, ty: [['Anything']], _route: () => {} }));
   }
 ` : ''}
 `;
@@ -1312,9 +1313,11 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
     const { _route, _silent, from, _asFrom, id: childId, ...call } = message;
     // Its own id, so the reply, to its address, is routed to it as it is.
     if (_asFrom) {
-      // Its reply may come before it's published (it's still being built).
-      if (!_silent && _route) this.#_selfFwd.set(_asFrom + '|' + childId, _route);
-      this.#binding.post({ ...call, id: childId, from: _asFrom });
+      // Under an id of ours, as every call a class of ours makes is; its reply, to its
+      // address, comes back to it under its own (even before it's published).
+      const id = String(++this.#nextId);
+      if (!_silent && _route) this.#_selfFwd.set(_asFrom + '|' + id, { route: _route, id: childId });
+      this.#binding.post({ ...call, id, from: _asFrom });
       return;
     }
     const id = String(++this.#nextId);
@@ -1423,10 +1426,10 @@ ${publishesClasses ? `  // An actor made by \`#new\` has its own address, so it'
     }${!actor.name && ctx.readsOuter ? `
     // A reply to a class of ours that spoke for itself (\`_asFrom\`).
     if (!('op' in message) && typeof message.to === 'string' && this.#_selfFwd.has(message.to + '|' + message.id)) {
-      const route = this.#_selfFwd.get(message.to + '|' + message.id);
+      const fwd = this.#_selfFwd.get(message.to + '|' + message.id);
       this.#_selfFwd.delete(message.to + '|' + message.id);
       const { to: _to, ...reply } = message;
-      route(reply);
+      fwd.route({ ...reply, id: fwd.id });
       return;
     }` : ''}${actor.spawnable ? `
     // Still being constructed: a request waits; a reply is what construction waits on.

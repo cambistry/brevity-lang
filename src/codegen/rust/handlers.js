@@ -969,12 +969,22 @@ ${m[2]}
         }
         // A delegated call from the wire names its context.
         if bv_from_wire_caller(from) {
-            if let Some(a) = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from) { return self.bv_admit_call(op, payload, from, &a); }
+            if let Some(a) = self.wire_msg.get("as").and_then(|v| v.as_str()).map(String::from) {
+                let r = self.bv_admit_call(op, payload, from, &a);
+                // Tagged as the function it ran replies.
+                if let Some(t) = bv_fn_ty(${JSON.stringify(name)}, op) { self.wire_tag = Some(t); }
+                return r;
+            }
         }
         // A name we don't define but inherit: our base runs it, for us.
         {
             let (_, _, _, _, _, inherited, own) = bv_block_info(${JSON.stringify(name)});
-            if !op.starts_with('$') && !own.contains(&op) && inherited.contains(&op) { return self.bv_ctx_send(op, payload, false); }
+            if !op.starts_with('$') && !own.contains(&op) && inherited.contains(&op) {
+                let r = self.bv_ctx_send(op, payload, false);
+                // Tagged as the function it ran replies.
+                if bv_from_wire_caller(from) { if let Some(t) = bv_inherited_ty(${JSON.stringify(name)}, op) { self.wire_tag = Some(t); } }
+                return r;
+            }
         }
         let from = if bv_from_wire_caller(from) && (op.starts_with("$get ~") || op.starts_with("$set ~")) && self.bv_is_extender(from) { "__parent" } else { from };
         {

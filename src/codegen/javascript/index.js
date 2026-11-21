@@ -89,7 +89,8 @@ export default {
       let failed = null;
       const binding = { post: msg => posts.push(normalizeBigInts(msg)), created: (i) => { instance = i; } };
       const ready = Actor.create(binding, ...args);
-      ready.catch((err) => { failed = err; });
+      // What it fails with may be a reply's `ex`: thrown as an Error, as on every target.
+      ready.catch((err) => { failed = err instanceof Error ? err : new Error(`construction failed: ${JSON.stringify(err)}`); });
       await Promise.race([ready, (async () => { for (let i = 0; i < 20; i++) await tick(); })()]);
       if (failed) throw failed;
       let built = false;
@@ -99,7 +100,10 @@ export default {
         // Whether construction has finished (or failed): it may be waiting on a reply.
         get built() { return built; },
         send(msg) { pending.push(msg); },
+        // An actor whose construction failed is gone: the send it fails on resolves,
+        // and a send to it after that throws (as on every target).
         async sendAsync(msg) {
+          if (failed) throw failed;
           pending.push(msg);
           for (const m of pending) {
             instance.receive(m);

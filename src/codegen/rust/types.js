@@ -668,7 +668,7 @@ function toJsonValue(expr, brevityType) {
   }
   if (brevityType === 'Integer') {
     // If expression is already a Value (state read, ref read, fn call result), don't wrap
-    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(')
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(') || expr.startsWith('self.bv_ctx_or(')
         || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
         || expr.startsWith('bv_bigint_to_value(')
         // SSA-resolved state/ref reads: e.g. _s.positional.get(...).cloned()...
@@ -678,7 +678,7 @@ function toJsonValue(expr, brevityType) {
     return intToValue(expr);
   }
   if (brevityType === 'Decimal') {
-    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(')
+    if (expr === 'Value::Null' || expr.startsWith('self.state.get(') || expr.startsWith('self.refs.get(') || expr.startsWith('self.outer_read(') || expr.startsWith('self.bv_ctx_or(')
         || expr.startsWith('bv_val(') || expr.startsWith('json!(') || expr.startsWith('Value::')
         || expr.startsWith('bv_decimal_to_value(')
         || (expr.startsWith('_') && expr.includes('.cloned().unwrap_or('))

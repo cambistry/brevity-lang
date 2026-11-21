@@ -296,7 +296,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr.type === 'Identifier') {
     // In a class block's function, a cell an extender may redeclare is read there
     // when the call's context says so.
-    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `(if self.bv_ctx_has(${JSON.stringify(expr.ctxCell)}) { self.bv_ctx_get(${JSON.stringify(expr.ctxCell)}) } else { self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null) })`;
+    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `self.bv_ctx_or(${JSON.stringify(expr.ctxCell)}, self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null))`;
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     // `Self` in expression position resolves to the class wire address.
     // fileName is enforced by validate() whenever the AST uses Self as a value.
@@ -751,7 +751,7 @@ ${subRegLines.join('\n')}
     return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'RefRead') {
-    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `(if self.bv_ctx_has(${JSON.stringify(expr.ctxCell)}) { self.bv_ctx_get(${JSON.stringify(expr.ctxCell)}) } else { self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null) })`;
+    if (G.ctx.stateVarNames.has(expr.name) && expr.ctxCell && G.ctx.inBlock) return `self.bv_ctx_or(${JSON.stringify(expr.ctxCell)}, self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null))`;
     if (G.ctx.stateVarNames.has(expr.name)) return `self.state.get("${stateKey(expr.name)}").cloned().unwrap_or(Value::Null)`;
     return `self.refs.get("${expr.name}").cloned().unwrap_or(Value::Null)`;
   }

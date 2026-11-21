@@ -39,7 +39,33 @@ function genBlockInfoFn(actors) {
     const cls = actors.find(c => c.name === a.membersOf);
     return `        ${JSON.stringify(a.name.toLowerCase())} => (${strs(a.overrideTable?.instance || [])}, ${strs(cls?.instanceNames || [])}),`;
   });
-  return `// A class block's \`instance\` section (what its class's instances override in its
+  const tyArms = actors.filter(a => a.name && a.inheritedTys).flatMap(a => Object.entries(a.inheritedTys).map(([n, t]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(n)}) => Some(json!(${JSON.stringify(t)})),`));
+  // And what its own functions reply, for a call that runs one in a context.
+  const ownTyArms = actors.filter(a => a.name && a.membersOf).flatMap(a => {
+    const byName = new Map();
+    for (const f of a.functions || []) if (typeof f.name === 'string' && !f.cellGetter && !/^(set|update|subscribe|new)[@.#]/.test(f.name)) (byName.get(f.name) ?? byName.set(f.name, []).get(f.name)).push(f);
+    return [...byName].filter(([, fs]) => fs.length === 1).map(([n, [f]]) => [n, replyTy(f)]).filter(([, t]) => t)
+      .map(([n, t]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(wireLabel(n))}) => Some(json!(${JSON.stringify(t)})),`);
+  });
+  return `// The tag of what an inherited function replies, by its parent's source or doc.
+#[allow(dead_code)]
+fn bv_inherited_ty(class: &str, op: &str) -> Option<Value> {
+    match (class, op) {
+${tyArms.join('\n')}
+        _ => None,
+    }
+}
+
+// The tag of what a function of ours replies.
+#[allow(dead_code)]
+fn bv_fn_ty(class: &str, op: &str) -> Option<Value> {
+    match (class, op) {
+${ownTyArms.join('\n')}
+        _ => bv_inherited_ty(class, op),
+    }
+}
+
+// A class block's \`instance\` section (what its class's instances override in its
 // parent's), and what its class's instances declare, which an extender may name.
 #[allow(dead_code)]
 fn bv_block_instance(class: &str) -> (&'static [&'static str], &'static [&'static str]) {
@@ -107,7 +133,7 @@ import { PUBLIC_CLASS_SUFFIX, resolveSuperclassChain, withInheritedState } from 
 import { lowerChains } from '../../chains.js';
 import { fileOuterNames, hasOuterReads, readableNames, propNames } from '../../outer_reads.js';
 import { withDeferredRuns } from '../../init_order.js';
-import { publicLabel, FILE_CLASS } from '../../singleton_classes.js';
+import { publicLabel, FILE_CLASS, replyTy } from '../../singleton_classes.js';
 import { genRustLocals, markExpectedTypes } from './statements.js';
 import { capturedRefs } from '../ref_captures.js';
 
@@ -1041,7 +1067,9 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         let mut msg = Map::new();
         msg.insert("id".to_string(), json!(id.clone()));
         msg.insert("op".to_string(), if !has_args { json!(wire_op) } else if payload.is_array() { json!([payload, wire_op]) } else { json!([[payload], wire_op]) });
-        if has_args {
+        // \`$extend\`'s table is data, untyped, as the note writes it.
+        // A message with \`as\` is the delegation's, untyped, as \`$extend\`'s table is.
+        if has_args && wire_op != "$extend" && as_.is_none() {
             let arity = payload.as_array().map(|a| a.len()).unwrap_or(1);
             msg.insert("ty".to_string(), json!([vec![json!("Anything"); arity]]));
         }
@@ -1169,6 +1197,10 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         }
         self.bv_deliver(&owner, op, payload, self_label, &as_)
     }
+
+    // A cell an extender may redeclare: there when the context says so, else ours.
+    #[allow(dead_code)]
+    fn bv_ctx_or(&mut self, name: &str, own: Value) -> Value { if self.bv_ctx_has(name) { self.bv_ctx_get(name) } else { own } }
 
     #[allow(dead_code)]
     fn bv_ctx_get(&mut self, name: &str) -> Value {

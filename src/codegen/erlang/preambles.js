@@ -1524,7 +1524,9 @@ bv_wire_call_(To, Op, Payload, As, Wait) ->
     Seq_ = bv_next_seq_(),
     Id_ = integer_to_binary(Seq_),
     Base_ = #{<<"id">> => Id_, <<"op">> => OpV_, <<"to">> => To_, <<"from">> => Self_},
-    Ty_ = case HasArgs_ of true -> #{<<"ty">> => [[<<"Anything">> || _ <- (case Payload of L_ when is_list(L_) -> L_; _ -> [x] end)]]}; false -> #{} end,
+    %% \`$extend\`'s table is data, untyped, as the note writes it.
+    %% A message with \`as\` is the delegation's, untyped, as \`$extend\`'s table is.
+    Ty_ = case HasArgs_ andalso WOp_ =/= <<"$extend">> andalso As =:= undefined of true -> #{<<"ty">> => [[<<"Anything">> || _ <- (case Payload of L_ when is_list(L_) -> L_; _ -> [x] end)]]}; false -> #{} end,
     Msg_ = maps:merge(maps:merge(Base_, Ty_), case As of undefined -> #{}; _ -> #{<<"as">> => As} end),
     case Wait of
         true -> bv_outer_() ! {bv_await_line, self(), Id_};
@@ -1594,7 +1596,8 @@ bv_base_set_local_(Token, Payload) ->
 bv_block_wire_(Op, Msg, Payload) ->
     WFrom_ = maps:get(<<"from">>, Msg, null),
     case maps:is_key(<<"as">>, Msg) andalso bv_wire_op_(Op) =/= <<"$extend">> of
-        true -> {reply, bv_admit_call_(Op, Payload, WFrom_, maps:get(<<"as">>, Msg))};
+        %% Tagged as the function it ran replies.
+        true -> {reply, bv_admit_call_(Op, Payload, WFrom_, maps:get(<<"as">>, Msg)), case Op of {_, _} -> null; _ -> (bv_mod_()):bv_fn_ty_(bv_my_class_(), Op) end};
         false -> bv_block_wire_op_(Op, Msg, Payload, WFrom_)
     end.
 bv_block_wire_op_(Op, Msg, Payload, WFrom_) ->
@@ -1637,7 +1640,7 @@ bv_inherited_op_(Op, Payload) ->
     case lists:member(Op, Inh_) andalso not lists:member(Op, Own_) of
         true ->
             As_ = case get(bv_ctx_) of {_, A_, _, _} -> A_; _ -> Self_ end,
-            {ok, bv_to_base_(Op, Payload, Self_, As_), null};
+            {ok, bv_to_base_(Op, Payload, Self_, As_), (bv_mod_()):bv_inherited_ty_(bv_my_class_(), Op)};
         false -> {error, bv_ex_key_(Op)}
     end.
 bv_run_own_(Op, Payload) ->
@@ -2129,6 +2132,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

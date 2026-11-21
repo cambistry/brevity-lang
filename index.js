@@ -597,22 +597,6 @@ function instanceDocument(ast, cls, aliasMap, purportedByActor, opts = {}) {
 // Two types in a signature agree: the same, or either one unknown.
 const sameType = (a, b) => !a || !b || a === b || a === 'Anything' || b === 'Anything';
 
-// Each class block's override table, by class name: for tests.
-export function overrideTables(source) {
-  const { ast } = extract(source);
-  settleOverrideTables(ast);
-  const out = {};
-  const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
-  const shown = (n) => (byName.get(n)?.sourceName ?? n).replace(/^@/, '');
-  for (const a of ast.actors) if (a.overrideTable) out[shown(a.membersOf ?? a.name)] = { block: a.overrideTable.block };
-  for (const a of ast.actors) {
-    const tables = Object.entries(a.instanceTables || {}).filter(([, t]) => t.length);
-    if (!tables.length) continue;
-    (out[shown(a.name)] ??= {}).instance = Object.fromEntries(tables.map(([P, t]) => [shown(P), t]));
-  }
-  return out;
-}
-
 // \`remotes\` (\`[{ path, service }]\`, as compile takes): the docs of the files this one
 // uses, for what the parse needs of them (a parent class from another file).
 export function extract(source, { remotes = null } = {}) {

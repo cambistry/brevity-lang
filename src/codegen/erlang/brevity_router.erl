@@ -57,7 +57,13 @@ router_loop(Instances) ->
                 exit(GL, kill)
             end, Instances),
             ok;
-        {'EXIT', _Pid, _Reason} ->
+        %% An actor that exits (a failed construction, a crash) is gone: say so, so
+        %% whoever waits on it hears.
+        {'EXIT', Pid, _Reason} ->
+            maps:foreach(fun(Id, #{pid := P}) when P =:= Pid ->
+                                 io:put_chars(standard_io, ["{\"ev\":\"exited\",\"id\":\"", Id, "\"}\n"]);
+                            (_, _) -> ok
+                         end, Instances),
             router_loop(Instances)
     end.
 

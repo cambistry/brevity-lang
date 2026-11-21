@@ -1,3 +1,4 @@
+import { returnShapes } from './return_shapes.js';
 import { parseInterface as parseRemoteDoc } from './codegen/javascript/types.js';
 import { _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
@@ -349,7 +350,7 @@ export function addRemoteParents(actors, dependencies, remotes) {
     if (members) {
       const block = { type: 'Actor', name: `${stubName}_block`, functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], supertypes: [], singletonOf: `${name}__class`, remoteStub: true, remoteAddress: address, remoteDoc: members };
       const fields = { ...(members.__fields || {}) };
-      const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [] });
+      const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [], remoteReturns: sig.returns ?? null });
       for (const [n, sigs] of Object.entries(members)) {
         if (n.startsWith('__')) continue;
         if (fields[n]) {
@@ -398,6 +399,17 @@ export function dropRemoteParents(actors, stubs) {
   for (let i = actors.length - 1; i >= 0; i--) if (gone.has(actors[i].name)) actors.splice(i, 1);
 }
 
+// The \`ty\` a function's reply is tagged with, when it has one shape of plain types:
+// \`['Integer']\`, \`[{ a: 'Integer' }]\`. A placeholder's function has its doc's returns.
+export function replyTy(fn) {
+  const slots = fn.remoteReturns ? fn.remoteReturns.map(r => ({ name: r.name, type: r.type }))
+    : (() => { const { alternatives, orSelf, opaque } = returnShapes(fn); return alternatives.length === 1 && !orSelf && !opaque ? alternatives[0] : null; })();
+  if (!slots?.length || slots.some(x => !x.type || x.type === 'Anything' || x.type.includes('|'))) return null;
+  const pos = slots.filter(x => !x.name).map(x => x.type);
+  const named = slots.filter(x => x.name);
+  return named.length ? [...pos, Object.fromEntries(named.map(x => [x.name, x.type]))] : pos;
+}
+
 // Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call"): a class
 // block's functions aren't copied into the blocks that extend it. A block's call of a
 // function it inherits is a delegated call to its base (`inheritedCall`: 'late', or
@@ -421,6 +433,11 @@ export function lowerBlockDelegation(actors) {
       }
     }
     Object.defineProperty(block, 'forwardFns', { value: [...inherited.keys()], configurable: true });
+    // What each one replies, tagged: a call for it that the base answers is tagged so.
+    block.inheritedTys = Object.fromEntries([...inherited].map(([n, owner]) => {
+      const decls = (byName.get(owner)?.functions || []).filter(f => f.name === n);
+      return [wireLabelOf(n), decls.length === 1 ? replyTy(decls[0]) : null];
+    }).filter(([, t]) => t));
     const ownCells = new Set((block.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string' && !n.startsWith('#') && !n.includes('__')));
     const visit = (node, bound) => {
       if (!node || typeof node !== 'object') return;

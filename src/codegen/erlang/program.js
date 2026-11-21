@@ -4,7 +4,7 @@ import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
-import { publicLabel } from '../../singleton_classes.js';
+import { publicLabel, replyTy } from '../../singleton_classes.js';
 import { expectedTag } from '../../actor_values.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
@@ -453,13 +453,25 @@ function genBlockInfo(actors, ctx = {}) {
   const bases = blocks.filter(a => a.blockParent && !a.remoteBase).map(a => `bv_block_base_class_(${erlString(a.name.toLowerCase())}) -> ${erlString(a.blockParent.toLowerCase())}`);
   bases.push('bv_block_base_class_(_) -> <<>>');
   const docNames = (d) => [...Object.keys(d).filter(k => !k.startsWith('__')), ...Object.keys(d.__protected || {}).filter(k => !k.startsWith('__'))];
+  const erlTy = (t) => `[${t.map(x => typeof x === 'string' ? erlString(x) : `#{${Object.entries(x).map(([k, v]) => `${erlString(k)} => ${erlString(v)}`).join(', ')}}`).join(', ')}]`;
+  const tys = actors.filter(a => a.name && a.inheritedTys).flatMap(a => Object.entries(a.inheritedTys).map(([n, t]) => `bv_inherited_ty_(${erlString(a.name.toLowerCase())}, ${erlString(n)}) -> ${erlTy(t)}`));
+  tys.push('bv_inherited_ty_(_, _) -> null');
+  // And what its own functions reply, for a call that runs one in a context.
+  const ownTys = blocks.flatMap(a => {
+    const byName = new Map();
+    for (const f of a.functions || []) if (typeof f.name === 'string' && !f.cellGetter && !/^(set|update|subscribe|new)[@.#]/.test(f.name)) (byName.get(f.name) ?? byName.set(f.name, []).get(f.name)).push(f);
+    return [...byName].filter(([, fs]) => fs.length === 1).map(([n, [f]]) => [n, replyTy(f)]).filter(([, t]) => t)
+      .map(([n, t]) => `bv_fn_ty_(${erlString(a.name.toLowerCase())}, ${erlString(wireLabel(n))}) -> ${erlTy(t)}`);
+  });
+  ownTys.push('bv_fn_ty_(C_, O_) -> bv_inherited_ty_(C_, O_)');
+  tys.push(...[]);
   const instances = blocks.map(a => `bv_block_instance_(${erlString(a.name.toLowerCase())}) -> {${bins(a.overrideTable?.instance || [])}, ${bins(actors.find(c => c.name === a.membersOf)?.instanceNames || [])}}`);
   instances.push('bv_block_instance_(_) -> {[], []}');
   const remotes = blocks.filter(a => a.remoteBase).map(a => `bv_block_remote_(${erlString(a.name.toLowerCase())}) -> {${erlString(a.remoteBase.address)}, ${bins(docNames(a.remoteBase.doc))}}`);
   remotes.push('bv_block_remote_(_) -> {<<>>, []}');
   const wireIns = blocks.filter(a => (ctx.actorInfo?.has(a.name))).map(a => `bv_wire_in_(${erlString(a.name.toLowerCase())}, F_, O_, M_, P_, I_) -> bv_wire_in_${a.name.toLowerCase()}(F_, O_, M_, P_, I_)`);
   wireIns.push('bv_wire_in_(_, _, _, _, _, _) -> ok');
-  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
+  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
 }
 
 function genReadTable(actors) {
@@ -1289,7 +1301,7 @@ function genChildActorCode(ctx, actors) {
       ].join(', ') || 'ok';
       // A message from the wire: from the loop, and from a class block's wait on the
       // wire (bv_block_await_), which keeps answering.
-      sections.push(`bv_wire_in_${lowerName}(From_, Op_, Msg_, Payload_, Id_) ->\n            put(bv_caller_, From_),\n            ${blockNode ? `case bv_guard_(fun() -> bv_block_wire_(Op_, Msg_, Payload_) end) of\n                {reply, BRe_} -> From_ ! {bv_wire_reply, Id_, BRe_, null};\n                {fail, BFail_} -> From_ ! {bv_error, Id_, BFail_};\n                {bv_failed, BFail_} -> From_ ! {bv_error, Id_, BFail_};\n                Admit_ ->\n            WFrom_ = case Admit_ of inside -> <<"__parent">>; _ -> <<"__bv_wire">> end,\n            ` : 'WFrom_ = <<"__bv_wire">>,\n            '}case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, WFrom_) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end${blockNode ? '\n            end' : ''}.`);
+      sections.push(`bv_wire_in_${lowerName}(From_, Op_, Msg_, Payload_, Id_) ->\n            put(bv_caller_, From_),\n            ${blockNode ? `case bv_guard_(fun() -> bv_block_wire_(Op_, Msg_, Payload_) end) of\n                {reply, BRe_} -> From_ ! {bv_wire_reply, Id_, BRe_, null};\n                {reply, BRe_, BTy_} -> From_ ! {bv_wire_reply, Id_, BRe_, BTy_};\n                {fail, BFail_} -> From_ ! {bv_error, Id_, BFail_};\n                {bv_failed, BFail_} -> From_ ! {bv_error, Id_, BFail_};\n                Admit_ ->\n            WFrom_ = case Admit_ of inside -> <<"__parent">>; _ -> <<"__bv_wire">> end,\n            ` : 'WFrom_ = <<"__bv_wire">>,\n            '}case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, WFrom_) end) of\n                {ok, WRe_, WTy_} -> From_ ! {bv_wire_reply, Id_, WRe_, WTy_};\n                {error, _} -> From_ ! {bv_error, Id_, <<"unhandled">>};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end${blockNode ? '\n            end' : ''}.`);
       sections.push(`start_internal_${lowerName}(Args_, Outer_) ->\n    put(bv_mod, ?MODULE),\n    put(bv_self_class_, ${erlString(lowerName)}),\n    bv_adopt_outer_(Outer_),\n    case bv_guard_(fun() -> ${initCall} end) of\n        {bv_failed, _} -> bv_init_failed_();\n        _ -> bv_loop_${lowerName}()\n    end.\n\nbv_loop_${lowerName}() ->\n    receive\n        {bv_dispatch, From_, Op_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            Result_ = bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, #{<<"op">> => Op_}, Payload_, Id_, <<"__bv_internal">>) end),\n            case Result_ of\n                {ok, <<"#<:>"/utf8>>, _} -> From_ ! {bv_reply, Id_, self()}; {ok, Re_, Ty_} -> From_ ! {bv_reply, Id_, bv_swap_self_(bv_unwire_reply(Re_, Ty_), self())};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        {bv_dispatch_wire, From_, Op_, Msg_, Payload_, Id_} ->\n            bv_wire_in_${lowerName}(From_, Op_, Msg_, Payload_, Id_),\n            bv_loop_${lowerName}();${blockNode ? `\n        {bv_extend, From_, EFrom_, EAs_, ETable_, ERef_} ->\n            bv_answer_extend_(From_, EFrom_, EAs_, ETable_, ERef_),\n            bv_loop_${lowerName}();\n        {bv_deleg, From_, DOp_, DPayload_, DFrom_, DAs_, DRef_} ->\n            bv_answer_deleg_(From_, DOp_, DPayload_, DFrom_, DAs_, DRef_),\n            bv_loop_${lowerName}();` : ''}\n        {bv_get, From_, Key_, Ref_} ->\n            From_ ! {bv_reply, Ref_, get(Key_)},\n            bv_loop_${lowerName}();\n        {bv_outer_get, From_, Key_, Ref_} ->\n            bv_answer_outer_(From_, Key_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_outer_sub, From_, Key_, SubId_, Ref_} ->\n            bv_answer_outer_sub_(From_, Key_, SubId_, Ref_),\n            bv_loop_${lowerName}();\n        {bv_notify, SubId_, Re_} ->\n            case get({pending_subscribe, SubId_}) of F_ when is_function(F_) -> F_(Re_); _ -> ok end,\n            bv_loop_${lowerName}();\n        {bv_outer_op, From_, OClass_, OOp_, OPayload_, ORef_} ->\n            bv_answer_outer_op_(From_, OClass_, OOp_, OPayload_, ORef_),\n            bv_loop_${lowerName}();\n        {bv_init_sync, From_} ->\n            From_ ! {bv_ready, self()},\n            bv_loop_${lowerName}();\n        {bv_dispatch_msg, From_, Op_, Msg_, Payload_, Id_} ->\n            put(bv_caller_, From_),\n            case bv_guard_(fun() -> child_${lowerName}_handle_op(Op_, Msg_, Payload_, Id_, <<"__bv_internal">>) end) of\n                {ok, MRe_, _} -> From_ ! {bv_reply, Id_, MRe_};\n                {bv_failed, Fail_} -> From_ ! {bv_error, Id_, Fail_};\n                _ -> From_ ! {bv_error, Id_, <<"error">>}\n            end,\n            bv_loop_${lowerName}();\n        bv_stop -> ok\n    end.`);
     }
 

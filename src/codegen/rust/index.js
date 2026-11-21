@@ -71,9 +71,12 @@ async function startLive(ctx, bin, args) {
   await idle();
   return {
     send(msg) { write(msg); },
+    // An actor that exits is gone: the send it exits on resolves, and a send to it
+    // after that throws (as on every target).
     async sendAsync(msg) {
+      if (exit) throw new Error(exit);
       write(msg);
-      await idle();
+      try { await idle(); } catch (err) { if (!exit) throw err; }
     },
     posts,
   };

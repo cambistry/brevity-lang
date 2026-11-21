@@ -7,59 +7,131 @@ import { compileSource, expectBehavior } from '../helpers.js';
 // unset (JS and Rust: null; Erlang: an unset value), failing at the first use.
 // See notes/opre-extend-and-as-2026-11-20.md ("Instance layers": construction order).
 
-const T = `
+describe('construction order across layers — compile errors', () => {
+  it("a parent's body calls an override that reads a cell below super", () => {
+    expect(() => compileSource(`
+      @T = *{
+        got Integer = probe()
+        probe = -> 0
+        @got = { return got }
+      }
+      @U = @T ^ (k Integer) *{
+        super()
+        marker Integer = k
+        probe = -> marker
+      }
+      @go = -> 1
+    `)).toThrow("'marker' in 'U' is read before its declaration (by the body of 'T', run at 'super', through 'probe') — declare 'marker' above that line");
+  });
+
+  it('through a chain of calls', () => {
+    expect(() => compileSource(`
+      @C = *{
+        got Integer = step()
+        step = -> probe()
+        probe = -> 0
+        @got = { return got }
+      }
+      @D = @C ^ (k Integer) *{
+        super()
+        marker Integer = k
+        probe = -> marker
+      }
+      @go = -> 1
+    `)).toThrow("'marker' in 'D' is read before its declaration (by the body of 'C', run at 'super', through 'step' → 'probe')");
+  });
+
+  it('with two parents, each built at its own line', () => {
+    expect(() => compileSource(`
+      @A = *{ @a = -> 1 }
+      @T = *{
+        got Integer = probe()
+        probe = -> 0
+        @got = { return got }
+      }
+      @AT = @A ^ @T ^ (k Integer) *{
+        super[@A]()
+        super[@T]()
+        marker Integer = k
+        probe = -> marker
+      }
+      @go = -> 1
+    `)).toThrow("'marker' in 'AT' is read before its declaration (by the body of 'T', run at 'super[T]', through 'probe')");
+  });
+
+  it("one parent's body reaches, through the child, a cell of a parent built below it", () => {
+    expect(() => compileSource(`
+      @A = *{
+        got Integer = h()
+        h = -> 0
+        @got = { return got }
+      }
+      @B = *{
+        b Integer = 7
+        h = -> b
+      }
+      @AB = @A ^ @B ^ *{
+        super[@A]()
+        super[@B]()
+      }
+      @go = -> 1
+    `)).toThrow("'b' in 'AB' is read before its declaration (by the body of 'A', run at 'super[A]', through 'h')");
+  });
+
+  it("an override reads a cell of the parent's own, declared below the line of its body that calls it", () => {
+    expect(() => compileSource(`
+      @S = *{
+        got Integer = probe()
+        late Integer = 3
+        probe = -> 0
+        @got = { return got }
+      }
+      @V = @S ^ *{
+        super()
+        probe = -> late
+      }
+      @go = -> 1
+    `)).toThrow("'late' in 'V' is read before its declaration (by the body of 'S', run at 'super', through 'probe')");
+  });
+
+  it('a composition with no constructor of its own runs its parent first', () => {
+    expect(() => compileSource(`
+      @T = *{
+        got Integer = probe()
+        probe = -> 0
+        @got = { return got }
+      }
+      @U = @T ^ *{
+        marker Integer = 5
+        probe = -> marker
+      }
+      @go = -> 1
+    `)).toThrow("'marker' in 'U' is read before its declaration (by the body of a parent of 'U', run first, through 'probe')");
+  });
+
+  it('a class block whose initializer calls an inherited function that reaches a later cell', () => {
+    expect(() => compileSource(`
+      @P = *{} ^ {
+        f = -> late
+        late *Integer = 1
+      }
+      @Q = @P ^ *{} ^ {
+        x Integer = f()
+        late *Integer = 2
+        @x = -> x
+      }
+      @go = -> 1
+    `)).toThrow("'late' is read before its declaration (by 'x', through 'f')");
+  });
+});
+
+// The same paths, with the cell above the line that reaches it.
+const fine = `
   @T = *{
     got Integer = probe()
     probe = -> 0
     @got = { return got }
   }
-`;
-
-describe('construction order across layers — compile errors', () => {
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
-
-  it("a parent's body calls an override that reads a cell below super", () => {
-    expect(compile(`${T}@U = @T ^ (k Integer) *{\n  super()\n  marker Integer = k\n  probe = -> marker\n}\n`))
-      .toThrow("'marker' in 'U' is read before its declaration (by the body of 'T', run at 'super', through 'probe') — declare 'marker' above that line");
-  });
-
-  it('through a chain of calls', () => {
-    const C = '@C = *{\n  got Integer = step()\n  step = -> probe()\n  probe = -> 0\n  @got = { return got }\n}\n';
-    expect(compile(`${C}@D = @C ^ (k Integer) *{\n  super()\n  marker Integer = k\n  probe = -> marker\n}\n`))
-      .toThrow("'marker' in 'D' is read before its declaration (by the body of 'C', run at 'super', through 'step' → 'probe')");
-  });
-
-  it('with two parents, each built at its own line', () => {
-    expect(compile(`@A = *{ @a = -> 1 }\n${T}@AT = @A ^ @T ^ (k Integer) *{\n  super[@A]()\n  super[@T]()\n  marker Integer = k\n  probe = -> marker\n}\n`))
-      .toThrow("'marker' in 'AT' is read before its declaration (by the body of 'T', run at 'super[T]', through 'probe')");
-  });
-
-  it("one parent's body reaches, through the child, a cell of a parent built below it", () => {
-    const A = '@A = *{\n  got Integer = h()\n  h = -> 0\n  @got = { return got }\n}\n';
-    const B = '@B = *{\n  b Integer = 7\n  h = -> b\n}\n';
-    expect(compile(`${A}${B}@AB = @A ^ @B ^ *{\n  super[@A]()\n  super[@B]()\n}\n`))
-      .toThrow("'b' in 'AB' is read before its declaration (by the body of 'A', run at 'super[A]', through 'h')");
-  });
-
-  it("an override reads a cell of the parent's own, declared below the line of its body that calls it", () => {
-    const S = '@S = *{\n  got Integer = probe()\n  late Integer = 3\n  probe = -> 0\n  @got = { return got }\n}\n';
-    expect(compile(`${S}@V = @S ^ *{\n  super()\n  probe = -> late\n}\n`))
-      .toThrow("'late' in 'V' is read before its declaration (by the body of 'S', run at 'super', through 'probe')");
-  });
-
-  it('a composition with no constructor of its own runs its parent first', () => {
-    expect(compile(`${T}@U = @T ^ *{\n  marker Integer = 5\n  probe = -> marker\n}\n`))
-      .toThrow("'marker' in 'U' is read before its declaration (by the body of a parent of 'U', run first, through 'probe')");
-  });
-
-  it('a class block whose initializer calls an inherited function that reaches a later cell', () => {
-    expect(compile('@P = *{} ^ {\n  f = -> late\n  late *Integer = 1\n}\n@Q = @P ^ *{} ^ {\n  x Integer = f()\n  late *Integer = 2\n  @x = -> x\n}\n'))
-      .toThrow("'late' is read before its declaration (by 'x', through 'f')");
-  });
-});
-
-// The same paths, with the cell above the line that reaches it.
-const fine = `${T}
   @U = @T ^ (k Integer) *{
     marker Integer = k
     super()

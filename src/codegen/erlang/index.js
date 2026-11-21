@@ -284,17 +284,21 @@ export default {
         posts.push(...initOutputs.map(o => normalizeBigInts(o.data)));
       }
 
+      // An actor that exits is gone: a send to it after that throws, as on every target.
+      let exited = false;
       return {
         send(_msg) { /* no-op: persistent VM handles state */ },
         async sendAsync(msg) {
+          if (exited) throw new Error(`Erlang actor ${id} has exited`);
           const line = bigintJsonStringify(msg);
           ctx.send({ cmd: 'msg', id, line });
           const outputs = await ctx.collectUntil(
-            ev => ev.ev === 'out' && ev.id === id,
-            ev => ev.ev === 'ready' && ev.id === id,
+            ev => (ev.ev === 'out' || ev.ev === 'exited') && ev.id === id,
+            ev => (ev.ev === 'ready' || ev.ev === 'exited') && ev.id === id,
           );
-          const allOutputs = outputs.map(o => normalizeBigInts(o.data));
-          posts.push(...allOutputs);
+          posts.push(...outputs.filter(o => o.ev === 'out').map(o => normalizeBigInts(o.data)));
+          // The send it exits on resolves; a send after that throws.
+          if (outputs.some(o => o.ev === 'exited')) exited = true;
         },
         posts,
       };

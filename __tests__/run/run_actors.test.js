@@ -4,9 +4,17 @@ import { runActors } from '../helpers.js';
 // name is delivered to it, `from` the sender, and anything else is external. The same
 // on every target.
 
-const svc = '@double = (n Integer) -> n * 2\n';
-const main = 'use Svc = "svc" as { double (Integer) -> (Integer) }\n@go = { x Integer = Svc.double(21); return x + 1 }\n';
-const front = 'use Main = "main" as { go () -> (Integer) }\n@ask = { x Integer = Main.go(); return x * 10 }\n';
+const svc = `
+  @double = (n Integer) -> n * 2
+`;
+const main = `
+  use Svc = "svc" as { double (Integer) -> (Integer) }
+  @go = { x Integer = Svc.double(21); return x + 1 }
+`;
+const front = `
+  use Main = "main" as { go () -> (Integer) }
+  @ask = { x Integer = Main.go(); return x * 10 }
+`;
 
 describe('runActors', () => {
   it('a call to another actor of the network, and its reply', async () => {
