@@ -5,6 +5,7 @@ import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { TT, renderType } from './type_tree.js';
+import { encodeAstTypes } from './parser_types.js';
 import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, addRemoteParents, dropRemoteParents, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
@@ -121,9 +122,11 @@ export function parseTypeText(text) {
   return parse(tokenize(text), { typeOnly: true });
 }
 
-// `text` as a type tree (src/type_tree.js).
+// `text` as a type tree (src/type_tree.js). In a type, `class` is the class of the
+// actor it's in, a name.
 export function parseTypeTree(text) {
-  return parse(tokenize(text), { typeOnly: true, typeTree: true });
+  const tokens = tokenize(text).map(t => t.type === 'KEYWORD' && t.value === 'class' ? { ...t, type: 'IDENT' } : t);
+  return parse(tokens, { typeOnly: true, typeTree: true });
 }
 
 // The type names `text` uses, as the type grammar reads them: `Integer`,
@@ -143,6 +146,11 @@ export function typeNamesIn(text) {
 // then with each chain decided. So is `D = A ^ "x"`: when `A` is a class, what
 // follows `^` must be a layer.
 export function parse(tokensIn, options = {}) {
+  const ast = parseProgram(tokensIn, options);
+  return options.typeOnly ? ast : encodeAstTypes(ast, options.remotes);
+}
+
+function parseProgram(tokensIn, options) {
   const seen = [];
   const first = parseOnce(tokensIn, { ...options, nameChains: { seen } });
   if (!seen.length) return first;

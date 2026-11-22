@@ -52,11 +52,13 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
     // The address of the type `path` names: an instance for a class, unless `asClass`.
     resolve(path, { asClass = false } = {}) {
       let segs = path.map(strip);
+      const instance = asClass ? '' : ':*';
+      // `class`, the class of the actor the type is in.
+      if (segs[0] === 'class' && within.length) return `:${tokens([...within, ...segs.slice(1)])}${segs.length > 1 ? '' : instance}`;
       for (let i = within.length; i > 0; i--) {
         const inner = [...within.slice(0, i), ...segs];
         if (declared(inner)) { segs = inner; break; }
       }
-      const instance = asClass ? '' : ':*';
       if (Object.hasOwn(bindings, segs[0])) {
         const b = bindings[segs[0]];
         const rest = segs.slice(1);

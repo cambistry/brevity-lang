@@ -392,14 +392,14 @@ describe('file-level params — function-typed', () => {
   it('named: cb: (s: Integer) => .', () => {
     const { ast } = extract('*\n  cb: (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: false },
+      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: false },
     ]);
   });
 
   it('positional: cb (s: Integer) => .', () => {
     const { ast } = extract('*\n  cb (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', positional: true },
+      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: true },
     ]);
   });
 });

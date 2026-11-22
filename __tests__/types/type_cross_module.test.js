@@ -14,7 +14,7 @@ describe('type cross-module reference — Foo::Bar', () => {
     expect(ast.types[0]).toEqual({
       type: 'TypeDecl',
       name: 'User',
-      fields: [{ type: 'TypeField', name: 'profile', paramType: 'Geom::Profile' }],
+      fields: [{ type: 'TypeField', name: 'profile', paramType: 'Geom::Profile', paramTypeEnc: 'Geom:Profile' }],
     });
   });
 
