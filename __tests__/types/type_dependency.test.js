@@ -12,7 +12,7 @@ describe('type dependency — interface extraction', () => {
         =
         -> response: "hello" as Text
     `);
-    expect(iface.service).toBe('{\n  get (url: Text) -> (response: Text)\n}');
+    expect(iface.service).toEqual({ public: { get: [{ args: [{ url: 'Text' }], re: [{ response: 'Text' }], writes: false }] } });
   });
 
   it('interface captures multiple ops with full signatures', () => {
@@ -25,14 +25,19 @@ describe('type dependency — interface extraction', () => {
 
       @write. = (key: Text, value: Text) {}
     `);
-    expect(iface.service).toBe(
-      '{\n  read (key: Text) -> (value: Text)\n  write. (key: Text, value: Text) => .\n}',
+    expect(iface.service).toEqual(
+      {
+        public: {
+          read: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }],
+          'write.': [{ args: [{ key: 'Text', value: 'Text' }], writes: true }],
+        },
+      },
     );
   });
 
   it('interface for silent public function shows -> .', () => {
     const { interface: iface } = extract('@notify. = (msg: Text) {}\n');
-    expect(iface.service).toBe('{\n  notify. (msg: Text) => .\n}');
+    expect(iface.service).toEqual({ public: { 'notify.': [{ args: [{ msg: 'Text' }], writes: true }] } });
   });
 });
 

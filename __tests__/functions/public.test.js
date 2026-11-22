@@ -154,8 +154,8 @@ describe('f, @f and #f are different functions', () => {
 
   it('the doc lists only @f, as f', () => {
     const { interface: doc } = compileSource(script);
-    expect(doc.service.match(/^ {2}f /gm)).toHaveLength(1);
-    expect(doc.service).toContain('f () -> (Text)');
+    expect(doc.service.public.f).toEqual([{ re: ['Text'], writes: false }]);
+    expect(Object.keys(doc.service.public).filter(k => /^[#~@]?f$/.test(k))).toEqual(['f']);
   });
 
   it('a bare name doesn\'t reach @f', () => {

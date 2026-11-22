@@ -6,7 +6,18 @@ import { compileSource } from '../helpers.js';
 
 const compiles = (src, options) => expect(() => compileSource(src, options)).not.toThrow();
 
-const SVC_DOC = '{ type Point (x: Integer)\n  Counter (Integer) -> *{\n    get () -> (Integer)\n  }\n  W! () => *{\n    one () -> (Integer)\n  }\n  origin () -> (Point) }';
+const SVC_DOC = {
+  public: { origin: [{ re: [':Point'], writes: false }] },
+  types: { ':Point': [{ x: 'Integer' }] },
+  ':Counter': {
+    public: { $new: [{ args: ['Integer'], re: [':Counter:*'], writes: false }] },
+    ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+  },
+  ':W!': {
+    public: { $new: [{ re: [':W!:*'], writes: true }] },
+    ':*': { public: { one: [{ re: ['Integer'], writes: false }] } },
+  },
+};
 const remotes = { remotes: [{ path: 'svc.bv', service: SVC_DOC }] };
 
 describe('a name that is not a type', () => {

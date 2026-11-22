@@ -85,10 +85,12 @@ describe('lambda param inference — C1 local type callback field', () => {
 // Fictional service — no browser, no DOM.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WIDGET = `{
-  type Signal (dismiss.: () => ., code: Integer)
-  type Panel (onpress.: (s: Signal) => ., label: Text)
-}`;
+const WIDGET = {
+  types: {
+    ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }],
+    ':Panel': [{ 'onpress.': { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] }, label: 'Text' }],
+  },
+};
 const remotes = [{ path: 'Widget', service: WIDGET }];
 
 const withPanel = (body) => `
@@ -157,10 +159,12 @@ describe('lambda param inference — C2 explicit annotation requires explicit im
 // comma/colon-split limitation and are out of scope here.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WIDGET_M = `{
-  type Signal (dismiss.: () => ., code: Integer)
-  watch. (on: (s: Signal) => .) => .
-}`;
+const WIDGET_M = {
+  public: {
+    'watch.': [{ args: [{ on: { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] } }], writes: true }],
+  },
+  types: { ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }] },
+};
 const remotesM = [{ path: 'Widget', service: WIDGET_M }];
 
 const withDep = (body) => `

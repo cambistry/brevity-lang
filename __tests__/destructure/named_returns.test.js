@@ -259,13 +259,27 @@ describe('return shape — inherited methods', () => {
   });
 
   describe('manifest classes', () => {
-    const shapes = `{
-      Base () -> *{
-        get () -> (value: Integer)
-        size () -> (Integer)
-      }
-      Box Base ^ -> *{}
-    }`;
+    const shapes = {
+      ':Base': {
+        public: { $new: [{ re: [':Base:*'], writes: false }] },
+        ':*': {
+          public: {
+            get: [{ re: [{ value: 'Integer' }], writes: false }],
+            size: [{ re: ['Integer'], writes: false }],
+          },
+        },
+      },
+      ':Box': {
+        extends: [':Base'],
+        public: { $new: [{ re: [':Box:*'], writes: false }] },
+        ':*': {
+          public: {
+            get: [{ re: [{ value: 'Integer' }], writes: false }],
+            size: [{ re: ['Integer'], writes: false }],
+          },
+        },
+      },
+    };
     const withBox = (body) => compileSource(`use :Box = Shapes\n${body}\n`, {
       remotes: [{ path: 'Shapes', service: shapes }],
     });

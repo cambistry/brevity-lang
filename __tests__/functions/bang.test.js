@@ -1,6 +1,10 @@
 import { expectBehavior, compileSource, createActor, expectActorBehavior } from '../helpers.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
 
+// An op's signatures in a service document, at whichever address has it.
+const opIn = (node, name) => node?.public?.[name]
+  ?? Object.entries(node || {}).filter(([k]) => k.startsWith(':')).map(([, n]) => opIn(n, name)).find(Boolean);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // A `!` function writes. Its return paths say what it yields: falling off the end
 // returns self, `return v` returns v, and there is no tail return. A self-return
@@ -856,28 +860,20 @@ describe('a function named like a builtin', () => {
 });
 
 describe('effect arrows in signatures', () => {
-  const widget = (entry) => ({ remotes: [{ path: 'Widget', service: `{ ${entry} }` }] });
+  const widget = (entry) => ({ remotes: [{ path: 'Widget', service: { public: entry } }] });
   const useWidget = 'use Widget\n@go. = { x Integer = 1 }\n';
+  const self = { '%self': true };
 
   it.each([
-    'total () -> (Integer)',
-    'me () -> self',
-    'total () ~> (Integer)',
-    'pop () => (Integer)',
-    'sort (Integer) => self',
-    'log (Text) => .',
-    'log. (Text) => .',
-  ])('`%s` is valid', (entry) => {
+    ['a read', { total: [{ re: ['Integer'], writes: false }] }],
+    ['the identity', { me: [{ re: [self], writes: false }] }],
+    ['no claim', { total: [{ re: ['Integer'] }] }],
+    ['a write', { pop: [{ re: ['Integer'], writes: true }] }],
+    ['a write replying self', { sort: [{ args: ['Integer'], re: [self], writes: true }] }],
+    ['no reply', { log: [{ args: ['Text'], writes: true }] }],
+    ['no reply, a silent name', { 'log.': [{ args: ['Text'], writes: true }] }],
+  ])('%s is valid', (_, entry) => {
     expect(() => compileSource(useWidget, widget(entry))).not.toThrow();
-  });
-
-  it.each([
-    ['log. (Text) -> .', /has nothing to read/],
-    ['log. (Text) ~> .', /has nothing to read/],
-    ['me () ~> self', /has nothing to read/],
-    ['log. (Text) => (Integer)', /silent by its name/],
-  ])('`%s` is an error', (entry, message) => {
-    expect(() => compileSource(useWidget, widget(entry))).toThrow(message);
   });
 
   it.each([
@@ -932,7 +928,7 @@ describe('effect arrows in signatures', () => {
 
   it('a member named `untracked` can be called', () => {
     expect(() => compileSource('use Svc\n@go = {\n  :n Integer = Svc.untracked()\n  return :n\n}\n',
-      { remotes: [{ path: 'Svc', service: '{ untracked () -> (n: Integer) }' }] })).not.toThrow();
+      { remotes: [{ path: 'Svc', service: { public: { untracked: [{ re: [{ n: 'Integer' }], writes: false }] } } }] })).not.toThrow();
   });
 
   it('an effect arrow is only for signatures', () => {
@@ -953,11 +949,11 @@ describe('effect arrows in signatures', () => {
       @me = { self }
       @total = { return a }
     `);
-    expect(doc.service).toContain('inc! (Integer) => self');
-    expect(doc.service).toMatch(/take! \(\) => \(/);
-    expect(doc.service).toContain('ping. () => .');
-    expect(doc.service).toContain('me () -> self');
-    expect(doc.service).toMatch(/total \(\) -> \(/);
+    expect(opIn(doc.service, 'inc!')).toEqual([{ args: ['Integer'], re: [{ '%self': true }], writes: true }]);
+    expect(opIn(doc.service, 'take!')).toEqual([{ re: ['Integer'], writes: true }]);
+    expect(opIn(doc.service, 'ping.')).toEqual([{ writes: true }]);
+    expect(opIn(doc.service, 'me')).toEqual([{ re: [{ '%self': true }], writes: false }]);
+    expect(opIn(doc.service, 'total')[0].writes).toBe(false);
   });
 
   it('a claim spreads: a function reading a `~>` gets `~>` in its own doc', () => {
@@ -978,20 +974,20 @@ describe('effect arrows in signatures', () => {
       }
       @plain = { return 1 }
     `);
-    expect(doc.service).toMatch(/direct \(\) ~> /);
-    expect(doc.service).toMatch(/indirect \(\) ~> /);
-    expect(doc.service).toMatch(/plain \(\) -> /);
+    expect(opIn(doc.service, 'direct')[0]).not.toHaveProperty('writes');
+    expect(opIn(doc.service, 'indirect')[0]).not.toHaveProperty('writes');
+    expect(opIn(doc.service, 'plain')[0].writes).toBe(false);
   });
 
   it('a foreign silent function needs no dot in its name', () => {
     const { output } = compileSource('use Logger\n@go. = { Logger.log("x")... }\n',
-      { remotes: [{ path: 'Logger', service: '{ log (Text) => . }' }] });
+      { remotes: [{ path: 'Logger', service: { public: { log: [{ args: ['Text'], writes: true }] } } }] });
     expect(output).toBeTruthy();
   });
 
   it('`...` still needs a silent function', () => {
     expect(() => compileSource('use Logger\n@go. = { Logger.get("x")... }\n',
-      { remotes: [{ path: 'Logger', service: '{ get (Text) -> (Integer) }' }] })).toThrow(/needs a silent/);
+      { remotes: [{ path: 'Logger', service: { public: { get: [{ args: ['Text'], re: ['Integer'], writes: false }] } } }] })).toThrow(/needs a silent/);
   });
 });
 
@@ -1128,15 +1124,15 @@ describe('effect enforcement', () => {
   });
 
   it('a foreign writer counts, by its arrow', () => {
-    expect(() => compileSource(`${REMOTE}@go = { Svc.sort(1)\n return 1 }\n`, docs('{ sort (Integer) => self }'))).toThrow(/'@go' writes/);
+    expect(() => compileSource(`${REMOTE}@go = { Svc.sort(1)\n return 1 }\n`, docs({ public: { sort: [{ args: ['Integer'], re: [{ '%self': true }], writes: true }] } }))).toThrow(/'@go' writes/);
   });
 
   it('a foreign read doesn\'t count, even with a bang in its name', () => {
-    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.uniq!()\n  return :n\n}\n`, docs('{ uniq! () -> (n: Integer) }'))).not.toThrow();
+    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.uniq!()\n  return :n\n}\n`, docs({ public: { 'uniq!': [{ re: [{ n: 'Integer' }], writes: false }] } }))).not.toThrow();
   });
 
   it('a purported read counts as a read', () => {
-    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.get()\n  return :n\n}\n`, docs('{ get () ~> (n: Integer) }'))).not.toThrow();
+    expect(() => compileSource(`${REMOTE}@go = {\n  :n Integer = Svc.get()\n  return :n\n}\n`, docs({ public: { get: [{ re: [{ n: 'Integer' }] }] } }))).not.toThrow();
   });
 
   describe('calling a `~>`', () => {
@@ -1209,10 +1205,10 @@ describe('effect enforcement', () => {
         }
       `);
       for (const name of ['g', 'viaLocal', 'viaFresh', 'viaTwoClasses', 'viaParam', 'direct']) {
-        expect(doc.service).toMatch(new RegExp(`${name} \\(.*\\) ~> `));
+        expect(opIn(doc.service, name)[0]).not.toHaveProperty('writes');
       }
-      expect(doc.service).toMatch(/\bh \(\) -> /);
-      expect(doc.service).toMatch(/certain \(\) -> /);
+      expect(opIn(doc.service, 'h')[0].writes).toBe(false);
+      expect(opIn(doc.service, 'certain')[0].writes).toBe(false);
     });
 
     it('a claim shows on a public class\'s members', () => {
@@ -1225,7 +1221,7 @@ describe('effect enforcement', () => {
           }
         }
       `);
-      expect(doc.service).toMatch(/g \(\) ~> /);
+      expect(opIn(doc.service, 'g')[0]).not.toHaveProperty('writes');
     });
 
     it('a claim through a class is reason enough for `!`', () => {
@@ -1260,13 +1256,13 @@ describe('effect enforcement', () => {
           return v
         }
       `);
-      expect(doc.service).toMatch(/go \(\) ~> /);
+      expect(opIn(doc.service, 'go')[0]).not.toHaveProperty('writes');
     });
 
     it('`!` and `.` keep `=>` in their docs', () => {
       const { interface: doc } = compileSource(`${SVC}@a! = {\n${reads}}\n@b. = {\n${reads}}\n`);
-      expect(doc.service).toContain('a! () => self');
-      expect(doc.service).toContain('b. () => .');
+      expect(opIn(doc.service, 'a!')).toEqual([{ re: [{ '%self': true }], writes: true }]);
+      expect(opIn(doc.service, 'b.')).toEqual([{ writes: true }]);
     });
   });
 
@@ -1380,7 +1376,7 @@ describe('effect enforcement', () => {
 
   it('a class that writes while constructing must be `!`', () => {
     const source = (name) => `${REMOTE}${name} = *{\n  Svc.ping!()\n  @get = { return 1 }\n}\n@go = { return 1 }\n`;
-    expect(() => compileSource(source('W'), docs('{ ping! () => self }'))).toThrow(/Class 'W' writes/);
+    expect(() => compileSource(source('W'), docs({ public: { 'ping!': [{ re: [{ '%self': true }], writes: true }] } }))).toThrow(/Class 'W' writes/);
   });
 
   it('a file constructor\'s alias and arrow must agree', () => {
@@ -1483,13 +1479,13 @@ describe('untracked', () => {
 
   it('an untracked member in a foreign doc doesn\'t count', () => {
     expect(() => compileSource('use Svc\n@go = { Svc.write(1)...\n return 1 }\n',
-      { remotes: [{ path: 'Svc', service: '{ untracked write. (Integer) => . }' }] })).not.toThrow();
+      { remotes: [{ path: 'Svc', service: { public: { 'write.': [{ args: ['Integer'], writes: 'untracked' }] } } }] })).not.toThrow();
   });
 
   it('crosses actor borders in the generated doc', () => {
     const { interface: doc } = compileSource('untracked @log *Text = ""\nuntracked hidden *Text = ""\nuntracked @write. = (m Text) { hidden <- m }\n');
-    expect(doc.service).toContain('untracked log *Text');
-    expect(doc.service).toContain('untracked write. (Text) => .');
+    expect(doc.service[':log'].public.$set).toEqual([{ args: ['Text'], writes: 'untracked' }]);
+    expect(opIn(doc.service, 'write.')).toEqual([{ args: ['Text'], writes: 'untracked' }]);
   });
 
   it('is an error before anything but a declaration', () => {

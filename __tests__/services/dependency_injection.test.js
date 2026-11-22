@@ -299,7 +299,7 @@ describe('file-level DI — dependency extraction', () => {
 // ─── options.remotes injection ───────────────────────────────────────────────
 
 describe('file-level DI — options.remotes injection', () => {
-  const dbManifest = '{\n  lookup (key: Text) -> (value: Text)\n}';
+  const dbManifest = { public: { lookup: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }] } };
 
   it('bare * compiles when interface supplied via options.remotes', () => {
     const { ast } = extract(`
@@ -345,7 +345,7 @@ describe('file-level DI — options.remotes injection', () => {
       @go = -> DB.ping.()
     `);
     expect(() => compile(ast, {
-      remotes: [{ path: '/services/db', service: '{\n  ping. () => .\n}' }],
+      remotes: [{ path: '/services/db', service: { public: { 'ping.': [{ writes: true }] } } }],
     })).toThrow(/silent/);
   });
 });

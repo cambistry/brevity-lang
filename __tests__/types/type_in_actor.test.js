@@ -91,16 +91,15 @@ describe('a type declared in a class', () => {
         type Hidden (n Integer)
       }
     `);
-    expect(iface.service).toBe(`{
-  type P (x Integer)
-  S {
-    type Widget (a Text, b Text)
-  }
-  W () -> *{
-    type X (n Integer)
-    get () -> (X)
-  }
-}`);
+    expect(iface.service).toEqual({
+      types: { ':P': ['Integer', { '%names': ['x'] }] },
+      ':S': { types: { ':Widget': ['Text', 'Text', { '%names': ['a', 'b'] }] } },
+      ':W': {
+        public: { $new: [{ re: [':W:*'], writes: false }] },
+        types: { ':X': ['Integer', { '%names': ['n'] }] },
+        ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
+      },
+    });
   });
 });
 
@@ -162,7 +161,14 @@ describe('types of one name in different actors', () => {
 });
 
 describe('a type of another file, reached through the service', () => {
-  const DOC = '{\n  type Point (x Integer, y Integer)\n  W () -> *{\n    type X (n Integer)\n    get () -> (X)\n  }\n}';
+  const DOC = {
+    types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    ':W': {
+      public: { $new: [{ re: [':W:*'], writes: false }] },
+      types: { ':X': ['Integer', { '%names': ['n'] }] },
+      ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
+    },
+  };
   const remotes = [{ path: 'svc.bv', service: DOC }];
   const script = `
     use Svc = "svc.bv"
@@ -208,8 +214,14 @@ describe('a type of another file, reached through the service', () => {
 // Two services' types of one name are two types: each is known by its address.
 describe('types of one name in two services', () => {
   const remotes = [
-    { path: 'svc.bv', service: '{\n  type Point (x Integer, y Integer)\n  origin () -> (Point)\n}' },
-    { path: 'geo.bv', service: '{\n  type Point (lat Integer, lon Integer, alt Integer)\n  origin () -> (Point)\n}' },
+    { path: 'svc.bv', service: {
+      public: { origin: [{ re: [':Point'], writes: false }] },
+      types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    } },
+    { path: 'geo.bv', service: {
+      public: { origin: [{ re: [':Point'], writes: false }] },
+      types: { ':Point': ['Integer', 'Integer', 'Integer', { '%names': ['lat', 'lon', 'alt'] }] },
+    } },
   ];
   const script = `
     use Svc = "svc.bv"

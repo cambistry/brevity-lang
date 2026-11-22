@@ -1,48 +1,51 @@
 import { extract } from '../../index.js';
 
-// Slice 14 of types-implementation-plan-2026-04-27: types appear in the
-// interface document in the same form as their declaration (`type Name (…)`).
-// Field names are retained because they are part of the contract.
+// A file's types are its service document's `types`, each an entry list: positional
+// fields as items, named ones in an object after them, the positional fields' names
+// as its `%names` (notes/opre-type-encoding-2026-11-21.md). Field names are part of
+// the contract.
 
-describe('type interface — emission in declaration form', () => {
-  it('inline single-line for short required types', () => {
+describe('type interface — the document\'s types', () => {
+  it('positional fields', () => {
     const { interface: iface } = extract(`
       type Point (x Integer, y Integer)
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type Point (x Integer, y Integer)');
+    expect(iface.service.types).toEqual({ ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] });
   });
 
-  it('multiline form for types with optional fields', () => {
+  it('optional fields', () => {
     const { interface: iface } = extract(`
       type Game (? started Boolean, ? turn: Integer, ? players: List of Texts)
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type Game (\n    ? started Boolean,\n    ? turn: Integer,\n    ? players: List of Texts\n  )');
+    expect(iface.service.types).toEqual({
+      ':Game': [{ '%opt': 'Boolean' }, { turn: { '%opt': 'Integer' }, players: { '%opt': [['Text'], { '%t': 'List' }] }, '%names': ['started'] }],
+    });
   });
 
-  it('preserves named-field syntax (`name: Type`)', () => {
+  it('named fields', () => {
     const { interface: iface } = extract(`
       type Rank (score Integer, kind: Text)
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type Rank (score Integer, kind: Text)');
+    expect(iface.service.types).toEqual({ ':Rank': ['Integer', { kind: 'Text', '%names': ['score'] }] });
   });
 
-  it('preserves cross-module references in field types', () => {
+  it('a type reached through another actor', () => {
     const { interface: iface } = extract(`
       type User (profile Geom::Profile)
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type User (profile Geom::Profile)');
+    expect(iface.service.types).toEqual({ ':User': ['Geom:Profile', { '%names': ['profile'] }] });
   });
 
-  it('empty type emits `()`', () => {
+  it('a type with no fields', () => {
     const { interface: iface } = extract(`
       type Empty ()
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type Empty ()');
+    expect(iface.service.types).toEqual({ ':Empty': [] });
   });
 
   it('multiple type declarations all appear in interface', () => {
@@ -51,18 +54,20 @@ describe('type interface — emission in declaration form', () => {
       type Pair (a Integer, b Integer)
       @noop = -> ok: true
     `);
-    expect(iface.service).toContain('type Point (x Integer, y Integer)');
-    expect(iface.service).toContain('type Pair (a Integer, b Integer)');
+    expect(iface.service.types).toEqual({
+      ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }],
+      ':Pair': ['Integer', 'Integer', { '%names': ['a', 'b'] }],
+    });
   });
 
-  it('types appear before public function entries', () => {
+  it('a node has its ops, then its types', () => {
     const { interface: iface } = extract(`
       type Point (x Integer, y Integer)
       @get = -> coords: 1
     `);
-    const tIdx = iface.service.indexOf('type Point');
-    const fIdx = iface.service.indexOf('get (');
-    expect(tIdx).toBeGreaterThan(-1);
-    expect(fIdx).toBeGreaterThan(tIdx);
+    expect(iface.service).toEqual({
+      public: { get: [{ re: [{ coords: 'Integer' }], writes: false }] },
+      types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    });
   });
 });

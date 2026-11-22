@@ -26,9 +26,7 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // A fictional host service exporting one element factory, `node`. The signature
 // is a placeholder — element construction uses the generic `#new` op, not this
 // method — it exists only so the `(:node)` destructure resolves.
-const HOST = `{
-  node (Anything) -> (Anything)
-}`;
+const HOST = { public: { node: [{ args: ['Anything'], re: ['Anything'], writes: false }] } };
 
 // ── The de-coupling proof: addressing tracks the imported service name ────────
 
@@ -62,10 +60,12 @@ describe('service-agnostic templating — `#new` routes to the imported service'
       use :node, :leaf = "Scene"
       @build. = { <node><leaf>deep</leaf></node> }
     `;
-    const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: `{
-      node (Anything) -> (Anything)
-      leaf (Anything) -> (Anything)
-    }` }] } })).spawn();
+    const actor = await (await compileActor(src, { compileOptions: { remotes: [{ path: 'Scene', service: {
+      public: {
+        node: [{ args: ['Anything'], re: ['Anything'], writes: false }],
+        leaf: [{ args: ['Anything'], re: ['Anything'], writes: false }],
+      },
+    } }] } })).spawn();
     await actor.sendAsync({ id: '1', op: 'build.', from: 'caller' });
     // The inner <leaf> is pre-dispatched as its own #new to `Scene leaf`; the
     // outer <node> #new awaits that child's address before it can fire, so with

@@ -16,24 +16,24 @@ const remotes = [{ path: 'w', service: { public: {
 describe('a JSON document in remotes', () => {
   it('an op with no writes claim: callable from a function with no bang, which then claims nothing', () => {
     const { interface: iface } = compileSource('use W = "w"\n@go = { x Integer = W.total(); return x }\n', { remotes });
-    expect(iface.document.public).toEqual({ go: [{ re: ['Integer'] }] });
+    expect(iface.service.public).toEqual({ go: [{ re: ['Integer'] }] });
   });
 
   it('an op that writes nothing', () => {
     const { interface: iface } = compileSource('use W = "w"\n@go = { x Integer = W.peek(); return x }\n', { remotes });
-    expect(iface.document.public).toEqual({ go: [{ re: ['Integer'], writes: false }] });
+    expect(iface.service.public).toEqual({ go: [{ re: ['Integer'], writes: false }] });
   });
 
   it('an op that writes: only from a function with a bang', () => {
     expect(() => compileSource('use W = "w"\n@go = { x Integer = W.pop(); return x }\n', { remotes }))
       .toThrow("'@go' writes (W.pop(…)), so it must be named '@go!' or '@go.'");
     const { interface: iface } = compileSource('use W = "w"\n@go! = { x Integer = W.pop(); return x }\n', { remotes });
-    expect(iface.document.public).toEqual({ 'go!': [{ re: ['Integer'], writes: true }] });
+    expect(iface.service.public).toEqual({ 'go!': [{ re: ['Integer'], writes: true }] });
   });
 
   it('an untracked write counts as none', () => {
-    const { interface: iface } = compileSource('use W = "w"\n@go = { W.note("hi"); return 1 }\n', { remotes });
-    expect(iface.document.public).toEqual({ go: [{ re: ['Integer'], writes: false }] });
+    const { interface: iface } = compileSource('use W = "w"\n@go = { W.note("hi")...; return 1 }\n', { remotes });
+    expect(iface.service.public).toEqual({ go: [{ re: ['Integer'], writes: false }] });
   });
 
   it('an op the document has no entry for', () => {

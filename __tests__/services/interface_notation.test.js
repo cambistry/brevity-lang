@@ -1,5 +1,6 @@
 import { extract, compile } from '../../index.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { documentShape } from '../../src/service_doc.js';
 
 // Service-document notation: every entry is a name, a space, and a
 // definition — no entry colon, no `=` on types, one line per overload.
@@ -167,7 +168,12 @@ describe('service document — invalid forms are rejected', () => {
 describe('service document — emitted form', () => {
   it('constructor with no members emits -> *{}', () => {
     const { interface: iface } = extract('@Empty = (x: Integer) *{}\n');
-    expect(iface.service).toBe('{\n  Empty (x: Integer) -> *{}\n}');
+    expect(iface.service).toEqual({
+      ':Empty': {
+        public: { $new: [{ args: [{ x: 'Integer' }], re: [':Empty:*'], writes: false }] },
+        ':*': {},
+      },
+    });
   });
 
   it('overloads emit one line each', () => {
@@ -175,7 +181,12 @@ describe('service document — emitted form', () => {
       @notify. = (msg: Integer) {}
       @notify = (msg: Text) -> ack: "ok"
     `);
-    expect(iface.service).toBe('{\n  notify. (msg: Integer) => .\n  notify (msg: Text) -> (ack: Text)\n}');
+    expect(iface.service).toEqual({
+      public: {
+        'notify.': [{ args: [{ msg: 'Integer' }], writes: true }],
+        notify: [{ args: [{ msg: 'Text' }], re: [{ ack: 'Text' }], writes: false }],
+      },
+    });
   });
 
   it('emitted document parses back', () => {
@@ -187,7 +198,7 @@ describe('service document — emitted form', () => {
       }
       @add = (a: Integer, b: Integer) -> sum: (a + b) as Integer
     `);
-    const p = parseInterface(iface.service);
+    const p = documentShape(iface.service);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
     expect(p.__fields.val).toEqual({ type: 'Integer', cell: true, readOnly: false });
     expect(p.__types.Counter.functions.map(f => f.name)).toEqual(['get']);
@@ -199,8 +210,17 @@ describe('service document — emitted form', () => {
       @names *List of Texts = []
       @val *Integer = 0
     `);
-    expect(iface.service).toBe('{\n  names &List of Texts\n  val *Integer\n}');
-    expect(parseInterface(iface.service).__fields).toEqual({
+    expect(iface.service).toEqual({
+      public: {
+        names: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }],
+        val: [{ re: ['Integer'], writes: false }],
+      },
+      ':names': { public: { $get: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }] } },
+      ':val': {
+        public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+      },
+    });
+    expect(documentShape(iface.service).__fields).toEqual({
       names: { type: 'List of Texts', cell: true, readOnly: true },
       val: { type: 'Integer', cell: true, readOnly: false },
     });
@@ -214,9 +234,28 @@ describe('service document — emitted form', () => {
         @get = -> value: start as Integer
       }
     `);
-    expect(iface.service).toBe('{\n  Box (Integer) -> *{\n    start Integer\n    slot *Integer\n    names &List of Texts\n    get () -> (value: Integer)\n  }\n}');
-    expect(parseInterface(iface.service).__types.Box.fields).toEqual({
-      start: { type: 'Integer', cell: false, readOnly: true },
+    expect(iface.service).toEqual({
+      ':Box': {
+        public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
+        ':*': {
+          public: {
+            start: [{ re: ['Integer'], writes: false }],
+            slot: [{ re: ['Integer'], writes: false }],
+            names: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }],
+            get: [{ re: [{ value: 'Integer' }], writes: false }],
+          },
+          ':slot': {
+            public: {
+              $get: [{ re: ['Integer'], writes: false }],
+              $set: [{ args: ['Integer'], writes: true }],
+            },
+          },
+          ':names': { public: { $get: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }] } },
+        },
+      },
+    });
+    // A positional param has no name in the document, so its prop reads back as an op.
+    expect(documentShape(iface.service).__types.Box.fields).toEqual({
       slot: { type: 'Integer', cell: true, readOnly: false },
       names: { type: 'List of Texts', cell: true, readOnly: true },
     });
@@ -262,13 +301,21 @@ describe('props and cells — validation', () => {
       .toThrow(/'Remote.label' is a write-only cell, so it can't be subscribed to/);
   });
 
-  const shapes = `{
-    Box () -> *{
-      total Integer
-      slot *Integer
-      set label (Text)
-    }
-  }`;
+  const shapes = {
+    ':Box': {
+      public: { $new: [{ re: [':Box:*'], writes: false }] },
+      ':*': {
+        public: { total: [{ re: ['Integer'], writes: false }], slot: [{ re: ['Integer'], writes: false }] },
+        ':slot': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+        ':label': { public: { $set: [{ args: ['Text'], writes: true }] } },
+      },
+    },
+  };
   const withBox = (body) => compileSrc(`use :Box = Shapes\n${body}\n`, {
     remotes: [{ path: 'Shapes', service: shapes }],
   });

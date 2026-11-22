@@ -1,5 +1,5 @@
 import { extract, compile } from '../../index.js';
-import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domDocument as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML DI validation — template tag must appear in the destructure list.

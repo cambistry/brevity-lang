@@ -53,29 +53,26 @@ Read back (a remote's `params` in `compile` options), the scalar entries give
 the constructor signature that calls to the dependency are checked against.
 Dependency entries are skipped for now.
 
-## `interface.service` Rendering
+## `interface.service`
 
-Public `@` handlers appear in the service document. Private and bare helper
+The service document is JSON (`notes/opre-type-encoding-2026-11-21.md`). Public
+`@` handlers appear in it as ops, by their wire names. Private and bare helper
 functions do not.
-
-Examples:
 
 ```brevity
 @greet = (name: Text) -> greeting: "hi"
 ```
 
-renders:
+is:
 
-```text
-{
-  greet (name: Text) -> (greeting: Text)
-}
+```json
+{ "public": { "greet": [{ "args": [{ "name": "Text" }], "re": [{ "greeting": "Text" }], "writes": false }] } }
 ```
 
-Optional args render with `?`:
+An optional arg is `{ "%opt": T }`:
 
-```text
-greet (name: Text, ? greeting: Text) -> (result: Text)
+```json
+{ "args": [{ "name": "Text", "greeting": { "%opt": "Text" } }] }
 ```
 
 ## Extract vs Compile

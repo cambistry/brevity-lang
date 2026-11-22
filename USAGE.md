@@ -19,7 +19,8 @@ const output = compile(ast, { target: 'js' });
 
 - `ast`: parsed Brevity AST
 - `interface.params`: the file actor's manifest
-- `interface.service`: service document for the public surface
+- `interface.service`: the Opre service document for the public surface, as JSON
+  (`notes/opre-type-encoding-2026-11-21.md`)
 
 `compile()` takes that AST and emits source for `js`, `rust`, or `erlang`.
 
@@ -149,7 +150,8 @@ For compilation purposes, the important case today is service resolution. A
 compilation environment can inspect `iface.params`, resolve the required service
 interfaces, and pass them back to `compile()`.
 
-The test-backed form is an array of remote service documents keyed by path:
+The test-backed form is an array of remote service documents (each the JSON
+`interface.service` of the remote's `extract`) keyed by path:
 
 ```javascript
 compile(ast, {

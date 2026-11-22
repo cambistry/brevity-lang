@@ -1,6 +1,6 @@
 import { compileSource, compileActor, expectBehavior, createActor, expectActorBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { documentShape } from '../../src/service_doc.js';
 
 // A function's return paths can differ. Its doc shows them all, and a caller's annotation
 // has to hold for every one.
@@ -8,39 +8,45 @@ import { parseInterface } from '../../src/codegen/javascript/types.js';
 const doc = (source) => extract(source).interface.service;
 
 describe('generated docs', () => {
-  const sig = (body, params = 'b Boolean') => doc(`@f = (${params}) {\n${body}\n}\n`).split('\n')[1].trim();
+  const sig = (body, params = 'b Boolean') => doc(`@f = (${params}) {\n${body}\n}\n`).public.f;
+  const or = (...members) => ({ '%or': members });
+  const self = { '%self': true };
 
   it('merges paths with the same slots', () => {
-    expect(sig('if b { return 1 }\nreturn "x"')).toBe('f (Boolean) -> (Integer | Text)');
-    expect(sig('if b { return 1 }\nreturn 2')).toBe('f (Boolean) -> (Integer)');
-    expect(sig('if b { return n: 1 }\nreturn n: "x"')).toBe('f (Boolean) -> (n: Integer | Text)');
-    expect(sig('if b { return 1, n: 2 }\nreturn "x", n: "y"')).toBe('f (Boolean) -> (Integer | Text, n: Integer | Text)');
+    expect(sig('if b { return 1 }\nreturn "x"')).toEqual([{ args: ['Boolean'], re: [or('Integer', 'Text')], writes: false }]);
+    expect(sig('if b { return 1 }\nreturn 2')).toEqual([{ args: ['Boolean'], re: ['Integer'], writes: false }]);
+    expect(sig('if b { return n: 1 }\nreturn n: "x"')).toEqual([{ args: ['Boolean'], re: [{ n: or('Integer', 'Text') }], writes: false }]);
+    expect(sig('if b { return 1, n: 2 }\nreturn "x", n: "y"')).toEqual([{ args: ['Boolean'], re: [or('Integer', 'Text'), { n: or('Integer', 'Text') }], writes: false }]);
   });
 
   it('merges a union it finds, without repeating a member', () => {
-    expect(sig('if b { return x }\nreturn 1', 'b Boolean, x Integer | Text')).toBe('f (Boolean, Integer | Text) -> (Integer | Text)');
+    expect(sig('if b { return x }\nreturn 1', 'b Boolean, x Integer | Text')).toEqual([{ args: ['Boolean', or('Integer', 'Text')], re: [or('Integer', 'Text')], writes: false }]);
   });
 
   it('alternates paths with different slots', () => {
-    expect(sig('if b { return a: 1, c: 2 }\nreturn 3, n: "x"')).toBe('f (Boolean) -> (a: Integer, c: Integer) | (Integer, n: Text)');
-    expect(sig('if b { return 1, 2 }\nreturn 3')).toBe('f (Boolean) -> (Integer, Integer) | (Integer)');
+    expect(sig('if b { return a: 1, c: 2 }\nreturn 3, n: "x"')).toEqual([{ args: ['Boolean'], re: or([{ a: 'Integer', c: 'Integer' }], ['Integer', { n: 'Text' }]), writes: false }]);
+    expect(sig('if b { return 1, 2 }\nreturn 3')).toEqual([{ args: ['Boolean'], re: or(['Integer', 'Integer'], ['Integer']), writes: false }]);
   });
 
   it('keeps self last', () => {
-    expect(doc('@a *Integer = 0\n@f! = (b Boolean, c Boolean) {\n  @a <- 1\n  if b { return 1 }\n  if c { return "x" }\n  return self\n}\n')).toContain('f! (Boolean, Boolean) => (Integer | Text) | self');
-    expect(doc('@a *Integer = 0\n@f! = (b Boolean, c Boolean) {\n  @a <- 1\n  if b { return self }\n  if c { return p: 1 }\n  return 2\n}\n')).toContain('f! (Boolean, Boolean) => (p: Integer) | (Integer) | self');
+    expect(doc('@a *Integer = 0\n@f! = (b Boolean, c Boolean) {\n  @a <- 1\n  if b { return 1 }\n  if c { return "x" }\n  return self\n}\n').public['f!'])
+      .toEqual([{ args: ['Boolean', 'Boolean'], re: or([or('Integer', 'Text')], [self]), writes: true }]);
+    expect(doc('@a *Integer = 0\n@f! = (b Boolean, c Boolean) {\n  @a <- 1\n  if b { return self }\n  if c { return p: 1 }\n  return 2\n}\n').public['f!'])
+      .toEqual([{ args: ['Boolean', 'Boolean'], re: or([{ p: 'Integer' }], ['Integer'], [self]), writes: true }]);
   });
 
   it('a path it can\'t infer widens to Anything, positionally', () => {
     const source = '@g = (b Boolean) {\n  x = other(b)\n  if b { return x }\n  return 3\n}\nother = (b) { return b }\n';
-    expect(doc(source)).toContain('g (Boolean) -> (Anything)');
-    expect(doc(source)).not.toContain('arg1');
+    expect(doc(source).public.g).toEqual([{ args: ['Boolean'], re: ['Anything'], writes: false }]);
   });
 });
 
 describe('reading a doc', () => {
   it('states every shape', () => {
-    const { f, g } = parseInterface('{ f () -> (Integer) | (a: Text)\n g () => (Integer) | (Text) | self }');
+    const { f, g } = documentShape({ public: {
+      f: [{ re: { '%or': [['Integer'], [{ a: 'Text' }]] }, writes: false }],
+      g: [{ re: { '%or': [['Integer'], ['Text'], [{ '%self': true }]] }, writes: true }],
+    } });
     expect(f[0].returnAlternatives).toEqual([
       [expect.objectContaining({ type: 'Integer', positional: true })],
       [expect.objectContaining({ name: 'a', type: 'Text' })],
@@ -56,7 +62,7 @@ describe('reading a doc', () => {
 
   it('round-trips a generated doc', () => {
     const service = doc('@f = (b Boolean) {\n  if b { return a: 1 }\n  return 2\n}\n');
-    expect(parseInterface(service).f[0].returnAlternatives).toHaveLength(2);
+    expect(documentShape(service).f[0].returnAlternatives).toHaveLength(2);
   });
 
 });
@@ -91,11 +97,11 @@ describe('a caller\'s annotation', () => {
   it('checks a doc', () => {
     const h = 'use Svc = "s.bv"\n';
     const docs = (service) => ({ remotes: [{ path: 's.bv', service }] });
-    rejects(`${h}@g = {\n  x Text = Svc.f()\n  return x\n}\n`, /'x Text' to 'Svc\.f\(\)' — it can return Integer/, docs('{ f () -> (Integer) }'));
-    rejects(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, /it can return Integer \| Text/, docs('{ f () -> (Integer | Text) }'));
-    rejects(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, /it can return Integer \| Text/, docs('{ f () -> (Integer) | (Text) }'));
-    accepts(`${h}@g = {\n  x Integer | Text = Svc.f()\n  return x\n}\n`, docs('{ f () -> (Integer) | (Text) }'));
-    accepts(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, docs('{ f () -> (Anything) }'));
+    rejects(`${h}@g = {\n  x Text = Svc.f()\n  return x\n}\n`, /'x Text' to 'Svc\.f\(\)' — it can return Integer/, docs({ public: { f: [{ re: ['Integer'], writes: false }] } }));
+    rejects(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, /it can return Integer \| Text/, docs({ public: { f: [{ re: [{ '%or': ['Integer', 'Text'] }], writes: false }] } }));
+    rejects(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, /it can return Integer \| Text/, docs({ public: { f: [{ re: { '%or': [['Integer'], ['Text']] }, writes: false }] } }));
+    accepts(`${h}@g = {\n  x Integer | Text = Svc.f()\n  return x\n}\n`, docs({ public: { f: [{ re: { '%or': [['Integer'], ['Text']] }, writes: false }] } }));
+    accepts(`${h}@g = {\n  x Integer = Svc.f()\n  return x\n}\n`, docs({ public: { f: [{ re: ['Anything'], writes: false }] } }));
   });
 
   it('a destructured key has to be in every shape', () => {
@@ -190,7 +196,14 @@ describe('a caller\'s annotation on an overload', () => {
 
   it('checks a doc', () => {
     const h = 'use Svc = "s.bv"\n';
-    const docs = { remotes: [{ path: 's.bv', service: '{ f (Integer) -> (Text)\n f (Text) -> (Integer) }' }] };
+    const docs = { remotes: [{ path: 's.bv', service: {
+      public: {
+        f: [
+          { args: ['Integer'], re: ['Text'], writes: false },
+          { args: ['Text'], re: ['Integer'], writes: false },
+        ],
+      },
+    } }] };
     rejects(`${h}@g = {\n  x Integer = Svc.f(1)\n  return x\n}\n`, /'x Integer' to 'Svc\.f\(\)' — it can return Text/, docs);
     accepts(`${h}@g = {\n  x Integer = Svc.f("a")\n  return x\n}\n`, docs);
   });
@@ -243,7 +256,7 @@ describe('at runtime', () => {
   });
 
   it('a typed bind waits for a service\'s reply', async () => {
-    const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) }' }] } });
+    const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer = Svc.f()\n  return x + 1\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: { public: { f: [{ re: ['Integer'], writes: false }] } } }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'f', to: 's.bv' }) },
@@ -253,7 +266,7 @@ describe('at runtime', () => {
   });
 
   it('a remote\'s shapes reach the caller', async () => {
-    const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: '{ f () -> (Integer) | (Text) }' }] } });
+    const actor = await createActor('use Svc = "s.bv"\n@go = {\n  x Integer | Text = Svc.f()\n  return x\n}\n', { compileOptions: { remotes: [{ path: 's.bv', service: { public: { f: [{ re: { '%or': [['Integer'], ['Text']] }, writes: false }] } } }] } });
     await expectActorBehavior(actor,
       { input: { id: 'x', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ op: 'f', to: 's.bv' }) },

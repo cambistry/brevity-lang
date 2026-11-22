@@ -16,29 +16,36 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 //   sz Integer = g.size()
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GT_MANIFEST = `(text Text) -> *{
-  size () -> (result: Integer)
-  empty? () -> (Boolean)
-  first () -> (result: Text)
-  last () -> (Text)
-  reverse () -> (Text)
-  repeat (Integer) -> (Text)
-  slice (Integer) -> (Text)
-  slice (Integer, Integer) -> (Text)
-  trim () -> (Text)
-  trim_start () -> (Text)
-  trim_end () -> (Text)
-  contains (Text) -> (Boolean)
-  starts_with (Text) -> (Boolean)
-  ends_with (Text) -> (Boolean)
-  index_of (Text) -> (Integer)
-  before (Text) -> (Text)
-  after (Text) -> (Text)
-  replace (Text, Text) -> (Text)
-  replace_first (Text, Text) -> (Text)
-  split (Text) -> (List)
-  lines () -> (List)
-}`;
+const GT_MANIFEST = {
+  public: { $new: [{ args: [{ text: 'Text' }], re: [':*'], writes: false }] },
+  ':*': {
+    public: {
+      size: [{ re: [{ result: 'Integer' }], writes: false }],
+      'empty?': [{ re: ['Boolean'], writes: false }],
+      first: [{ re: [{ result: 'Text' }], writes: false }],
+      last: [{ re: ['Text'], writes: false }],
+      reverse: [{ re: ['Text'], writes: false }],
+      repeat: [{ args: ['Integer'], re: ['Text'], writes: false }],
+      slice: [
+        { args: ['Integer'], re: ['Text'], writes: false },
+        { args: ['Integer', 'Integer'], re: ['Text'], writes: false },
+      ],
+      trim: [{ re: ['Text'], writes: false }],
+      trim_start: [{ re: ['Text'], writes: false }],
+      trim_end: [{ re: ['Text'], writes: false }],
+      contains: [{ args: ['Text'], re: ['Boolean'], writes: false }],
+      starts_with: [{ args: ['Text'], re: ['Boolean'], writes: false }],
+      ends_with: [{ args: ['Text'], re: ['Boolean'], writes: false }],
+      index_of: [{ args: ['Text'], re: ['Integer'], writes: false }],
+      before: [{ args: ['Text'], re: ['Text'], writes: false }],
+      after: [{ args: ['Text'], re: ['Text'], writes: false }],
+      replace: [{ args: ['Text', 'Text'], re: ['Text'], writes: false }],
+      replace_first: [{ args: ['Text', 'Text'], re: ['Text'], writes: false }],
+      split: [{ args: ['Text'], re: [[['Anything'], { '%t': 'List' }]], writes: false }],
+      lines: [{ re: [[['Anything'], { '%t': 'List' }]], writes: false }],
+    },
+  },
+};
 
 describe('GraphemeText via DI — a constructor document', () => {
   const source = `

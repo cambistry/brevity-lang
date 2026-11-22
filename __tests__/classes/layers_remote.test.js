@@ -13,31 +13,7 @@ import { extract } from '../../index.js';
 // One test runs the two together. See notes/opre-extend-and-as-2026-11-20.md
 // ("Instance layers").
 
-const DOC = `{
-  G () -> *{
-    ~g () -> (Integer)
-  }
-  T G ^ (n: Integer) -> *{
-    ...G
-    n Integer
-    get () -> (Integer)
-    gee () -> (Integer)
-    bump! () => self
-    ~count *Integer
-    ~g () -> (Integer)
-    ~step () -> (Integer)
-  }
-  A (Integer) -> *{
-    ha () -> (Integer)
-    ~h () -> (Anything)
-  }
-  B (Integer) -> *{
-    hb () -> (Integer)
-  }
-}`;
-
-// The same, as a JSON document (notes/opre-type-encoding-2026-11-21.md).
-const DOC_JSON = {
+const DOC = {
   ':G': {
     public: { $new: [{ re: [':G:*'], writes: false }] },
     ':*': { protected: { '~g': [{ re: ['Integer'], writes: false }] } },
@@ -75,9 +51,6 @@ const DOC_JSON = {
   },
 };
 
-// Each case runs against the doc text and the JSON document.
-const FORMS = [['doc text', DOC, 'service'], ['JSON document', DOC_JSON, 'document']];
-
 const child = `
   use :T = "svc"
   use :A = "svc"
@@ -113,229 +86,227 @@ const child = `
   @parents = { u = @AB(3); a Integer = u.ha(); b Integer = u.hb(); return a * 100 + b }
 `;
 
-describe.each(FORMS)('with the %s', (_, doc) => {
-  describe('the child of a parent class in another file', () => {
-    it('registers each class with its parent class there as the file starts', async () => {
-      await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
+describe('the child of a parent class in another file', () => {
+  it('registers each class with its parent class there as the file starts', async () => {
+    await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+  });
 
-    it("super(args) builds its layer there; a call it inherits runs at the layer, calling back for its override", async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'get', from: 'c' } },
-        { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
-        { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
-        { output: { id: '7', op: 'get', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '1', op: '~step', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '1', re: [10], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '7', re: [20], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: 'x', re: [20], ty: ['Integer'], to: 'c' } },
-      );
+  it("super(args) builds its layer there; a call it inherits runs at the layer, calling back for its override", async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'get', from: 'c' } },
+      { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
+      { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
+      { output: { id: '7', op: 'get', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '1', op: '~step', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '1', re: [10], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '7', re: [20], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: 'x', re: [20], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("a cell it inherits is read and written at the layer; the parent's code there writes it too", async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'cells', from: 'c' } },
-        { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
-        { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
-        { output: { id: '7', op: '$get', to: 'svc:T:1:~count', from: ':U:1' } },
-        { input: { id: '7', re: [10], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '8', op: [[11], '$set'], ty: [['Anything']], to: 'svc:T:1:~count', from: ':U:1' } },
-        { output: { id: '9', op: 'bump!', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '9', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '10', op: '$get', to: 'svc:T:1:~count', from: ':U:1' } },
-        { input: { id: '10', re: [12], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '11', op: 'get', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '1', op: '~step', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '1', re: [10], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '11', re: [22], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: 'x', re: [1222], ty: ['Integer'], to: 'c' } },
-      );
+  it("a cell it inherits is read and written at the layer; the parent's code there writes it too", async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'cells', from: 'c' } },
+      { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
+      { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
+      { output: { id: '7', op: '$get', to: 'svc:T:1:~count', from: ':U:1' } },
+      { input: { id: '7', re: [10], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '8', op: [[11], '$set'], ty: [['Anything']], to: 'svc:T:1:~count', from: ':U:1' } },
+      { output: { id: '9', op: 'bump!', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '9', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '10', op: '$get', to: 'svc:T:1:~count', from: ':U:1' } },
+      { input: { id: '10', re: [12], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '11', op: 'get', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '1', op: '~step', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '1', re: [10], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '11', re: [22], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: 'x', re: [1222], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("an override of the parent's own parent's, and a published param, answered at the layer", async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'levels', from: 'c' } },
-        { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
-        { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
-        { output: { id: '7', op: 'gee', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '1', op: '~g', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: '1', re: [7], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
-        { input: { id: '7', re: [7], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
-        { output: { id: 'x', re: [7], ty: ['Integer'], to: 'c' } },
-        { input: { id: 'y', op: 'param', from: 'c' } },
-        { output: { id: '8', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:2', to: 'svc:T', from: ':U:2' } },
-        { input: { id: '8', re: ['#<svc:T:2>'], ty: ['svc:T'], to: ':U:2', from: 'svc' } },
-        { output: { id: '9', op: 'n', as: ':U:2', to: 'svc:T:2', from: ':U:2' } },
-        { input: { id: '9', re: [10], to: ':U:2', from: 'svc:T:2' } },
-        { output: { id: 'y', re: [10], ty: ['Integer'], to: 'c' } },
-      );
+  it("an override of the parent's own parent's, and a published param, answered at the layer", async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'levels', from: 'c' } },
+      { output: { id: '6', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:1', to: 'svc:T', from: ':U:1' } },
+      { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':U:1', from: 'svc' } },
+      { output: { id: '7', op: 'gee', as: ':U:1', to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '1', op: '~g', as: ':U:1', to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: '1', re: [7], ty: ['Integer'], to: 'svc:T:1', from: ':U:1' } },
+      { input: { id: '7', re: [7], ty: ['Integer'], to: ':U:1', from: 'svc:T:1' } },
+      { output: { id: 'x', re: [7], ty: ['Integer'], to: 'c' } },
+      { input: { id: 'y', op: 'param', from: 'c' } },
+      { output: { id: '8', op: [[{ n: 10 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':U:2', to: 'svc:T', from: ':U:2' } },
+      { input: { id: '8', re: ['#<svc:T:2>'], ty: ['svc:T'], to: ':U:2', from: 'svc' } },
+      { output: { id: '9', op: 'n', as: ':U:2', to: 'svc:T:2', from: ':U:2' } },
+      { input: { id: '9', re: [10], to: ':U:2', from: 'svc:T:2' } },
+      { output: { id: 'y', re: [10], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it('bare super forwards its own args', async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'bare', from: 'c' } },
-        { output: { id: '6', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':Bare:1', to: 'svc:T', from: ':Bare:1' } },
-        { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':Bare:1', from: 'svc' } },
-        { output: { id: '7', op: 'get', as: ':Bare:1', to: 'svc:T:1', from: ':Bare:1' } },
-        { input: { id: '7', re: [6], ty: ['Integer'], to: ':Bare:1', from: 'svc:T:1' } },
-        { output: { id: 'x', re: [6], ty: ['Integer'], to: 'c' } },
-      );
+  it('bare super forwards its own args', async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'bare', from: 'c' } },
+      { output: { id: '6', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':Bare:1', to: 'svc:T', from: ':Bare:1' } },
+      { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':Bare:1', from: 'svc' } },
+      { output: { id: '7', op: 'get', as: ':Bare:1', to: 'svc:T:1', from: ':Bare:1' } },
+      { input: { id: '7', re: [6], ty: ['Integer'], to: ':Bare:1', from: 'svc:T:1' } },
+      { output: { id: 'x', re: [6], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("a redeclared cell is the instance's, read by the layer's callback; super and base:: run the parent's", async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'redeclared', from: 'c' } },
-        { output: { id: '6', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':R:1', to: 'svc:T', from: ':R:1' } },
-        { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':R:1', from: 'svc' } },
-        { output: { id: '7', op: 'get', as: ':R:1', to: 'svc:T:1', from: ':R:1' } },
-        { input: { id: '1', op: '$get', as: ':R:1', to: ':R:1:~count', from: 'svc:T:1' } },
-        { output: { id: '1', re: [100], to: 'svc:T:1', from: ':R:1' } },
-        { input: { id: '2', op: '~step', as: ':R:1', to: ':R:1', from: 'svc:T:1' } },
-        { output: { id: '8', op: '~step', as: ':R:1', to: 'svc:T:1', from: ':R:1' } },
-        { input: { id: '8', re: [1], ty: ['Integer'], to: ':R:1', from: 'svc:T:1' } },
-        { output: { id: '2', re: [6], ty: ['Integer'], to: 'svc:T:1', from: ':R:1' } },
-        { input: { id: '7', re: [106], ty: ['Integer'], to: ':R:1', from: 'svc:T:1' } },
-        { output: { id: 'x', re: [106], ty: ['Integer'], to: 'c' } },
-        { input: { id: 'y', op: 'viaBase', from: 'c' } },
-        { output: { id: '9', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':R:2', to: 'svc:T', from: ':R:2' } },
-        { input: { id: '9', re: ['#<svc:T:2>'], ty: ['svc:T'], to: ':R:2', from: 'svc' } },
-        { output: { id: '10', op: '~step', as: ':R:2', to: 'svc:T:2', from: ':R:2' } },
-        { input: { id: '10', re: [1], ty: ['Integer'], to: ':R:2', from: 'svc:T:2' } },
-        { output: { id: 'y', re: [100], ty: ['Integer'], to: 'c' } },
-      );
+  it("a redeclared cell is the instance's, read by the layer's callback; super and base:: run the parent's", async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'redeclared', from: 'c' } },
+      { output: { id: '6', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':R:1', to: 'svc:T', from: ':R:1' } },
+      { input: { id: '6', re: ['#<svc:T:1>'], ty: ['svc:T'], to: ':R:1', from: 'svc' } },
+      { output: { id: '7', op: 'get', as: ':R:1', to: 'svc:T:1', from: ':R:1' } },
+      { input: { id: '1', op: '$get', as: ':R:1', to: ':R:1:~count', from: 'svc:T:1' } },
+      { output: { id: '1', re: [100], to: 'svc:T:1', from: ':R:1' } },
+      { input: { id: '2', op: '~step', as: ':R:1', to: ':R:1', from: 'svc:T:1' } },
+      { output: { id: '8', op: '~step', as: ':R:1', to: 'svc:T:1', from: ':R:1' } },
+      { input: { id: '8', re: [1], ty: ['Integer'], to: ':R:1', from: 'svc:T:1' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'svc:T:1', from: ':R:1' } },
+      { input: { id: '7', re: [106], ty: ['Integer'], to: ':R:1', from: 'svc:T:1' } },
+      { output: { id: 'x', re: [106], ty: ['Integer'], to: 'c' } },
+      { input: { id: 'y', op: 'viaBase', from: 'c' } },
+      { output: { id: '9', op: [[{ n: 5 }], '$new'], ty: [[{ n: 'Integer' }]], as: ':R:2', to: 'svc:T', from: ':R:2' } },
+      { input: { id: '9', re: ['#<svc:T:2>'], ty: ['svc:T'], to: ':R:2', from: 'svc' } },
+      { output: { id: '10', op: '~step', as: ':R:2', to: 'svc:T:2', from: ':R:2' } },
+      { input: { id: '10', re: [1], ty: ['Integer'], to: ':R:2', from: 'svc:T:2' } },
+      { output: { id: 'y', re: [100], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it('two parents, a layer each', async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', re: [], to: ':U', from: 'svc' } },
-          { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
-          { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
-          { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
-          { input: { id: '3', re: [], to: ':R', from: 'svc' } },
-          { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
-          { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
-          { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
-          { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: 'x', op: 'parents', from: 'c' } },
-        { output: { id: '6', op: [[3], '$new'], ty: [['Integer']], as: ':AB:1', to: 'svc:A', from: ':AB:1' } },
-        { input: { id: '6', re: ['#<svc:A:1>'], ty: ['svc:A'], to: ':AB:1', from: 'svc' } },
-        { output: { id: '7', op: [[4], '$new'], ty: [['Integer']], as: ':AB:1', to: 'svc:B', from: ':AB:1' } },
-        { input: { id: '7', re: ['#<svc:B:1>'], ty: ['svc:B'], to: ':AB:1', from: 'svc' } },
-        { output: { id: '8', op: 'ha', as: ':AB:1', to: 'svc:A:1', from: ':AB:1' } },
-        { input: { id: '1', op: '~h', as: ':AB:1', to: ':AB:1', from: 'svc:A:1' } },
-        { output: { id: '1', re: [9], ty: ['Integer'], to: 'svc:A:1', from: ':AB:1' } },
-        { input: { id: '8', re: [9], ty: ['Integer'], to: ':AB:1', from: 'svc:A:1' } },
-        { output: { id: '9', op: 'hb', as: ':AB:1', to: 'svc:B:1', from: ':AB:1' } },
-        { input: { id: '9', re: [40], ty: ['Integer'], to: ':AB:1', from: 'svc:B:1' } },
-        { output: { id: 'x', re: [940], ty: ['Integer'], to: 'c' } },
-      );
+  it('two parents, a layer each', async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', re: [], to: ':U', from: 'svc' } },
+        { output: { id: '2', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:T', from: ':Bare' } },
+        { input: { id: '2', re: [], to: ':Bare', from: 'svc' } },
+        { output: { id: '3', op: [[{ block: [], instance: ['~count', '~step'] }], '$extend'], to: 'svc:T', from: ':R' } },
+        { input: { id: '3', re: [], to: ':R', from: 'svc' } },
+        { output: { id: '4', op: [[{ block: [], instance: ['~h'] }], '$extend'], to: 'svc:A', from: ':AB' } },
+        { input: { id: '4', re: [], to: ':AB', from: 'svc' } },
+        { output: { id: '5', op: [[{ block: [], instance: [] }], '$extend'], to: 'svc:B', from: ':AB' } },
+        { input: { id: '5', re: [], to: ':AB', from: 'svc' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: 'x', op: 'parents', from: 'c' } },
+      { output: { id: '6', op: [[3], '$new'], ty: [['Integer']], as: ':AB:1', to: 'svc:A', from: ':AB:1' } },
+      { input: { id: '6', re: ['#<svc:A:1>'], ty: ['svc:A'], to: ':AB:1', from: 'svc' } },
+      { output: { id: '7', op: [[4], '$new'], ty: [['Integer']], as: ':AB:1', to: 'svc:B', from: ':AB:1' } },
+      { input: { id: '7', re: ['#<svc:B:1>'], ty: ['svc:B'], to: ':AB:1', from: 'svc' } },
+      { output: { id: '8', op: 'ha', as: ':AB:1', to: 'svc:A:1', from: ':AB:1' } },
+      { input: { id: '1', op: '~h', as: ':AB:1', to: ':AB:1', from: 'svc:A:1' } },
+      { output: { id: '1', re: [9], ty: ['Integer'], to: 'svc:A:1', from: ':AB:1' } },
+      { input: { id: '8', re: [9], ty: ['Integer'], to: ':AB:1', from: 'svc:A:1' } },
+      { output: { id: '9', op: 'hb', as: ':AB:1', to: 'svc:B:1', from: ':AB:1' } },
+      { input: { id: '9', re: [40], ty: ['Integer'], to: ':AB:1', from: 'svc:B:1' } },
+      { output: { id: 'x', re: [940], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it('a parent class that refuses the registration fails the build', async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
-          { input: { id: '1', ex: { $extend: 'unknown_name' }, to: ':U', from: 'svc' } },
-        ],
-      });
-      await expect(actor.sendAsync({ id: 'x', op: 'get', from: 'c' })).rejects.toThrow();
+  it('a parent class that refuses the registration fails the build', async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: [], instance: ['~step', '~g'] }], '$extend'], to: 'svc:T', from: ':U' } },
+        { input: { id: '1', ex: { $extend: 'unknown_name' }, to: ':U', from: 'svc' } },
+      ],
     });
+    await expect(actor.sendAsync({ id: 'x', op: 'get', from: 'c' })).rejects.toThrow();
   });
 });
 
@@ -428,51 +399,18 @@ describe('the parent class, extended from another file', () => {
   });
 });
 
-describe.each(FORMS)('with the %s', (_, _doc, key) => {
-  describe('the two files together', () => {
-    it("the parent's code, run at the child's layer, with the child's override and the inherited cell", async () => {
-      const net = await runActors({
-        svc: { source: parent },
-        main: { source: child, compileOptions: { remotes: [{ path: 'svc', service: extract(parent).interface[key] }] } },
-      });
-      await net.send('main', { id: 'x', op: 'cells', from: 'c' });
-      expect(net.external).toEqual([{ id: 'x', re: [1222], ty: ['Integer'], to: 'c' }]);
+describe('the two files together', () => {
+  it("the parent's code, run at the child's layer, with the child's override and the inherited cell", async () => {
+    const net = await runActors({
+      svc: { source: parent },
+      main: { source: child, compileOptions: { remotes: [{ path: 'svc', service: extract(parent).interface.service }] } },
     });
+    await net.send('main', { id: 'x', op: 'cells', from: 'c' });
+    expect(net.external).toEqual([{ id: 'x', re: [1222], ty: ['Integer'], to: 'c' }]);
   });
 });
 
-// Two parents that extend one class, as doc text and as a JSON document.
-const DIAMOND = `{
-  S () -> *{
-    ~s () -> (Integer)
-  }
-  P S ^ () -> *{
-    ...S
-    ~s () -> (Integer)
-  }
-  Q S ^ () -> *{
-    ...S
-    ~s () -> (Integer)
-  }
-}`;
-const DIAMOND_JSON = {
-  ':S': {
-    public: { $new: [{ re: [':S:*'], writes: false }] },
-    ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
-  },
-  ':P': {
-    extends: [':S'],
-    public: { $new: [{ re: [':P:*'], writes: false }] },
-    ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
-  },
-  ':Q': {
-    extends: [':S'],
-    public: { $new: [{ re: [':Q:*'], writes: false }] },
-    ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
-  },
-};
-
-describe.each([['doc text', DIAMOND], ['JSON document', DIAMOND_JSON]])('instance layers in another file — compile errors, with the %s', (_, doc) => {
+describe('instance layers in another file — compile errors', () => {
   it('a diamond of instance layers', () => {
     expect(() => compileSource(`
       use :P = "lib"
@@ -483,7 +421,22 @@ describe.each([['doc text', DIAMOND], ['JSON document', DIAMOND_JSON]])('instanc
       }
       @go = -> 1
     `, {
-      remotes: [{ path: 'lib', service: doc }],
+      remotes: [{ path: 'lib', service: {
+        ':S': {
+          public: { $new: [{ re: [':S:*'], writes: false }] },
+          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+        },
+        ':P': {
+          extends: [':S'],
+          public: { $new: [{ re: [':P:*'], writes: false }] },
+          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+        },
+        ':Q': {
+          extends: [':S'],
+          public: { $new: [{ re: [':Q:*'], writes: false }] },
+          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+        },
+      } }],
     })).toThrow("'R' extends 'P' and 'Q', which both extend 'S': a diamond of instance layers isn't supported yet");
   });
 });

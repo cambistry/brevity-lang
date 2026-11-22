@@ -2134,28 +2134,15 @@ function checkListMethodArgs(ast) {
 // inner service interface string. Returns null if the input isn't shaped
 // like a constructor manifest (so the caller can fall back to a plain service).
 
-// A remote's document as `options.remotes` gives it: its interface, as the compiler
-// reads one, and the params of its `new` when it is a constructor document.
-// A JSON document (notes/opre-type-encoding-2026-11-21.md) is read as one; a
-// service whose own `$new` replies `:*` is a constructor document.
+// A remote's document as `options.remotes` gives it, a JSON document
+// (notes/opre-type-encoding-2026-11-21.md): its interface, as the compiler reads
+// one, and the params of its `new` when it is a constructor document, a service
+// whose own `$new` replies `:*`.
 export function readRemote(service, params = null) {
-  if (typeof service !== 'string') {
-    const { $new, ...rest } = service.public || {};
-    if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: documentShape(service), ctorParams: params ? parseParamsDocument(params) : null };
-    const ctorParams = documentShape({ public: { $new } }).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type }));
-    return { doc: documentShape(service[':*'] || {}), ctorParams };
-  }
-  let ctorParams = null;
-  let text = service;
-  if (params) ctorParams = parseParamsDocument(params);
-  else {
-    const ctorManifest = parseConstructorManifest(service);
-    if (ctorManifest) { ctorParams = ctorManifest.constructorParams; text = ctorManifest.service; }
-  }
-  const { iface, asTypes } = splitAsTypes(text);
-  const doc = parseInterface(iface);
-  if (asTypes.length > 0) doc.__asTypes = asTypes;
-  return { doc, ctorParams };
+  const { $new, ...rest } = service?.public || {};
+  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: documentShape(service), ctorParams: params ? parseParamsDocument(params) : null };
+  const ctorParams = documentShape({ public: { $new } }).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type }));
+  return { doc: documentShape(service[':*'] || {}), ctorParams };
 }
 
 function splitAsTypes(service) {
@@ -2216,38 +2203,6 @@ function splitParamsEntries(inner) {
   }
   if (current.trim()) entries.push(current.trim());
   return entries;
-}
-
-// A remote service string that is itself a constructor profile:
-//   (params) [->] *{ iface }
-function parseConstructorManifest(s) {
-  const t = s.trim();
-  if (!t.startsWith('(')) return null;
-  let depth = 1;
-  let i = 1;
-  for (; i < t.length; i++) {
-    if (t[i] === '(') depth++;
-    else if (t[i] === ')') { depth--; if (depth === 0) break; }
-  }
-  if (depth !== 0) return null;
-  const paramsStr = t.slice(1, i).trim();
-  let j = i + 1;
-  while (j < t.length && /\s/.test(t[j])) j++;
-  if (/^[-=~]>/.test(t.slice(j, j + 2))) {
-    j += 2;
-    while (j < t.length && /\s/.test(t[j])) j++;
-  }
-  if (t.slice(j, j + 2) !== '*{') return null;
-  const service = t.slice(j + 1);
-  const constructorParams = [];
-  if (paramsStr) {
-    for (const part of paramsStr.split(',')) {
-      const trimmed = part.trim();
-      const m = trimmed.match(/^(\w+)\s*:\s*(\w+)$/) || trimmed.match(/^(\w+)\s+(\w+)$/);
-      if (m) constructorParams.push({ name: m[1], type: m[2] });
-    }
-  }
-  return { constructorParams, service };
 }
 
 // ── Expression type inference (for validation) ────────────────────────────

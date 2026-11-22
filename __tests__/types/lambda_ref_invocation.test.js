@@ -27,15 +27,19 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 // in their names — `onpress.`, `dismiss.` — and are launched with `...`.)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const WIDGET_FIELD = `{
-  type Signal (dismiss.: () => ., code: Integer)
-  type Panel (onpress.: (s: Signal) => ., label: Text)
-}`;
+const WIDGET_FIELD = {
+  types: {
+    ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }],
+    ':Panel': [{ 'onpress.': { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] }, label: 'Text' }],
+  },
+};
 
-const WIDGET_METHOD = `{
-  type Signal (dismiss.: () => ., code: Integer)
-  watch. (on: (s: Signal) => .) => .
-}`;
+const WIDGET_METHOD = {
+  public: {
+    'watch.': [{ args: [{ on: { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] } }], writes: true }],
+  },
+  types: { ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }] },
+};
 
 // A Signal value as it arrives on the wire: its silent `dismiss` reference
 // holds an address, its `code` a datum. Positional — all fields required.

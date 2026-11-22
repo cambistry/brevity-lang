@@ -151,66 +151,63 @@ const pair = {
 ` + children,
 };
 
-// The child compiles against the parent's doc text, and its JSON document.
-describe.each([['doc text', 'service'], ['JSON document', 'document']])('with the %s', (_, document) => {
-  describe('a parent here, and in another file', () => {
-    it("class blocks: an inherited function runs with the child's override, at each level", async () => {
-      await expectLocalAndRemote({ ...pair, document },
-        { input: { id: '1', op: 'v', from: 'c' } },
-        { output: { id: '1', re: [302], ty: ['Integer'], to: 'c' } },
-        { input: { id: '2', op: 'w', from: 'c' } },
-        { output: { id: '2', re: [52], ty: ['Integer'], to: 'c' } },
-        { input: { id: '3', op: 'x', from: 'c' } },
-        { output: { id: '3', re: [53], ty: ['Integer'], to: 'c' } },
-      );
-    });
+describe('a parent here, and in another file', () => {
+  it("class blocks: an inherited function runs with the child's override, at each level", async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'v', from: 'c' } },
+      { output: { id: '1', re: [302], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'w', from: 'c' } },
+      { output: { id: '2', re: [52], ty: ['Integer'], to: 'c' } },
+      { input: { id: '3', op: 'x', from: 'c' } },
+      { output: { id: '3', re: [53], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("class blocks: base::, super, the parent named explicitly, and the parent's code writing the child's cell", async () => {
-      await expectLocalAndRemote({ ...pair, document },
-        { input: { id: '1', op: 'blockBase', from: 'c' } },
-        { output: { id: '1', re: [102], ty: ['Integer'], to: 'c' } },
-        { input: { id: '2', op: 'blockSuper', from: 'c' } },
-        { output: { id: '2', re: [1005], ty: ['Integer'], to: 'c' } },
-        { input: { id: '3', op: 'asParent', from: 'c' } },
-        { output: { id: '3', re: [301], ty: ['Integer'], to: 'c' } },
-        { input: { id: '4', op: 'bumpW!', from: 'c' } },
-        { output: { id: '4', re: [6], ty: ['Integer'], to: 'c' } },
-      );
-    });
+  it("class blocks: base::, super, the parent named explicitly, and the parent's code writing the child's cell", async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'blockBase', from: 'c' } },
+      { output: { id: '1', re: [102], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'blockSuper', from: 'c' } },
+      { output: { id: '2', re: [1005], ty: ['Integer'], to: 'c' } },
+      { input: { id: '3', op: 'asParent', from: 'c' } },
+      { output: { id: '3', re: [301], ty: ['Integer'], to: 'c' } },
+      { input: { id: '4', op: 'bumpW!', from: 'c' } },
+      { output: { id: '4', re: [6], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("instance layers: the parent's code with the instance's override, its parent's parent's too, and inherited cells", async () => {
-      await expectLocalAndRemote({ ...pair, document },
-        { input: { id: '1', op: 'get', from: 'c' } },
-        { output: { id: '1', re: [20], ty: ['Integer'], to: 'c' } },
-        { input: { id: '2', op: 'cells', from: 'c' } },
-        { output: { id: '2', re: [1222], ty: ['Integer'], to: 'c' } },
-        { input: { id: '3', op: 'levels', from: 'c' } },
-        { output: { id: '3', re: [7], ty: ['Integer'], to: 'c' } },
-        { input: { id: '4', op: 'param', from: 'c' } },
-        { output: { id: '4', re: [10], ty: ['Integer'], to: 'c' } },
-      );
-    });
+  it("instance layers: the parent's code with the instance's override, its parent's parent's too, and inherited cells", async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'get', from: 'c' } },
+      { output: { id: '1', re: [20], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'cells', from: 'c' } },
+      { output: { id: '2', re: [1222], ty: ['Integer'], to: 'c' } },
+      { input: { id: '3', op: 'levels', from: 'c' } },
+      { output: { id: '3', re: [7], ty: ['Integer'], to: 'c' } },
+      { input: { id: '4', op: 'param', from: 'c' } },
+      { output: { id: '4', re: [10], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it('instance layers: bare super, a redeclared cell, super and base::, two parents', async () => {
-      await expectLocalAndRemote({ ...pair, document },
-        { input: { id: '1', op: 'bare', from: 'c' } },
-        { output: { id: '1', re: [6], ty: ['Integer'], to: 'c' } },
-        { input: { id: '2', op: 'redeclared', from: 'c' } },
-        { output: { id: '2', re: [106], ty: ['Integer'], to: 'c' } },
-        { input: { id: '3', op: 'layerBase', from: 'c' } },
-        { output: { id: '3', re: [100], ty: ['Integer'], to: 'c' } },
-        { input: { id: '4', op: 'parents', from: 'c' } },
-        { output: { id: '4', re: [940], ty: ['Integer'], to: 'c' } },
-      );
-    });
+  it('instance layers: bare super, a redeclared cell, super and base::, two parents', async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'bare', from: 'c' } },
+      { output: { id: '1', re: [6], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'redeclared', from: 'c' } },
+      { output: { id: '2', re: [106], ty: ['Integer'], to: 'c' } },
+      { input: { id: '3', op: 'layerBase', from: 'c' } },
+      { output: { id: '3', re: [100], ty: ['Integer'], to: 'c' } },
+      { input: { id: '4', op: 'parents', from: 'c' } },
+      { output: { id: '4', re: [940], ty: ['Integer'], to: 'c' } },
+    );
+  });
 
-    it("a parent class with a block: the instance's layer, and the parent block's code for the child's block", async () => {
-      await expectLocalAndRemote({ ...pair, document },
-        { input: { id: '1', op: 'yGet', from: 'c' } },
-        { output: { id: '1', re: [15], ty: ['Integer'], to: 'c' } },
-        { input: { id: '2', op: 'yAll', from: 'c' } },
-        { output: { id: '2', re: [31], ty: ['Integer'], to: 'c' } },
-      );
-    });
+  it("a parent class with a block: the instance's layer, and the parent block's code for the child's block", async () => {
+    await expectLocalAndRemote(pair,
+      { input: { id: '1', op: 'yGet', from: 'c' } },
+      { output: { id: '1', re: [15], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: 'yAll', from: 'c' } },
+      { output: { id: '2', re: [31], ty: ['Integer'], to: 'c' } },
+    );
   });
 });

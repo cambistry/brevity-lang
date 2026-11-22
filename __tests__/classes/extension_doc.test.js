@@ -1,6 +1,6 @@
 import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { documentShape } from '../../src/service_doc.js';
 
 // Every actor is extensible for now, so a class's doc lists what an extender may use
 // and override beside its public members: protected functions (`~h (…) -> (…)`) and
@@ -23,18 +23,35 @@ describe('the extension section', () => {
         #p = -> 2
       }
       @go = -> 1
-    `).interface.service).toBe(`{
-  go () -> (Integer)
-  A (Integer) -> *{
-    n () -> (Anything)
-  } ^ {
-    total *Integer
-    f () -> (Integer)
-    ~count *Integer
-    ~limit &Integer
-    ~h (Integer) -> (Integer)
-  }
-}`);
+    `).interface.service).toEqual({
+      public: { go: [{ re: ['Integer'], writes: false }] },
+      ':A': {
+        public: {
+          $new: [{ args: ['Integer'], re: [':A:*'], writes: false }],
+          total: [{ re: ['Integer'], writes: false }],
+          f: [{ re: ['Integer'], writes: false }],
+        },
+        protected: {
+          '~count': [{ re: ['Integer'], writes: false }],
+          '~limit': [{ re: ['Integer'], writes: false }],
+          '~h': [{ args: ['Integer'], re: ['Integer'], writes: false }],
+        },
+        ':total': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+        ':~count': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+        ':~limit': { public: { $get: [{ re: ['Integer'], writes: false }] } },
+        ':*': { public: { n: [{ re: ['Anything'], writes: false }] } },
+      },
+    });
   });
 
   it('a block that extends another presents the composite', () => {
@@ -51,16 +68,28 @@ describe('the extension section', () => {
         k = -> 5
       }
       @go = -> 1
-    `).interface.service).toContain(`  B A ^ -> *{
-    ...A
-  } ^ {
-    total *Integer
-    f () -> (Integer)
-    ~count *Integer
-    ~limit &Integer
-    ~k () -> (Integer)
-    ~h (Integer) -> (Integer)
-  }`);
+    `).interface.service[':B']).toEqual({
+      extends: [':A'],
+      public: {
+        $new: [{ re: [':B:*'], writes: false }],
+        total: [{ re: ['Integer'], writes: false }],
+        f: [{ re: ['Integer'], writes: false }],
+      },
+      protected: {
+        '~count': [{ re: ['Integer'], writes: false }],
+        '~limit': [{ re: ['Integer'], writes: false }],
+        '~k': [{ re: ['Integer'], writes: false }],
+        '~h': [{ args: ['Integer'], re: ['Integer'], writes: false }],
+      },
+      ':total': {
+        public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+      },
+      ':~count': {
+        public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+      },
+      ':~limit': { public: { $get: [{ re: ['Integer'], writes: false }] } },
+      ':*': {},
+    });
   });
 
   it("lists a class's instances' protected functions and cells, never private ones", () => {
@@ -72,12 +101,22 @@ describe('the extension section', () => {
         #p = -> 3
       }
       @go = -> 1
-    `).interface.service).toContain(`  T (n: Integer) -> *{
-    n Integer
-    f () -> (Integer)
-    ~count *Integer
-    ~step () -> (Integer)
-  }`);
+    `).interface.service[':T']).toEqual({
+      public: { $new: [{ args: [{ n: 'Integer' }], re: [':T:*'], writes: false }] },
+      ':*': {
+        public: { n: [{ re: ['Integer'], writes: false }], f: [{ re: ['Integer'], writes: false }] },
+        protected: {
+          '~count': [{ re: ['Integer'], writes: false }],
+          '~step': [{ re: ['Integer'], writes: false }],
+        },
+        ':~count': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+      },
+    });
   });
 
   it('a class that extends another presents the composite', () => {
@@ -91,26 +130,45 @@ describe('the extension section', () => {
         j = -> 5
       }
       @go = -> 1
-    `).interface.service).toContain(`  U T ^ (Integer) -> *{
-    ...T
-    ~count *Integer
-    ~step () -> (Integer)
-    ~j () -> (Integer)
-  }`);
+    `).interface.service[':U']).toEqual({
+      extends: [':T'],
+      public: { $new: [{ args: ['Integer'], re: [':U:*'], writes: false }] },
+      ':*': {
+        public: { n: [{ re: ['Integer'], writes: false }] },
+        protected: {
+          '~count': [{ re: ['Integer'], writes: false }],
+          '~step': [{ re: ['Integer'], writes: false }],
+          '~j': [{ re: ['Integer'], writes: false }],
+        },
+        ':~count': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+      },
+    });
   });
 
   it('reads back: protected entries apart from what a caller sees', () => {
-    const doc = parseInterface(`{
-  A (n: Integer) -> *{
-    n Integer
-    f () -> (Integer)
-    ~step () -> (Integer)
-  } ^ {
-    g () -> (Integer)
-    ~count *Integer
-    ~h (Integer) -> (Integer)
-  }
-}`);
+    const cell = { public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] } };
+    const doc = documentShape({
+      ':A': {
+        public: {
+          $new: [{ args: [{ n: 'Integer' }], re: [':A:*'], writes: false }],
+          g: [{ re: ['Integer'], writes: false }],
+        },
+        protected: {
+          '~count': [{ re: ['Integer'], writes: false }],
+          '~h': [{ args: ['Integer'], re: ['Integer'], writes: false }],
+        },
+        ':~count': cell,
+        ':*': {
+          public: { n: [{ re: ['Integer'], writes: false }], f: [{ re: ['Integer'], writes: false }] },
+          protected: { '~step': [{ re: ['Integer'], writes: false }] },
+        },
+      },
+    });
     expect(doc.__types.A.functions.map(f => f.name)).toEqual(['n', 'f']);
     expect(doc.__types.A.instanceProtected).toEqual({
       '~step': [{ params: [], returns: [{ name: null, type: 'Integer', positional: true }], effect: 'read' }],
@@ -122,29 +180,12 @@ describe('the extension section', () => {
       __fields: { '~count': { type: 'Integer', cell: true, readOnly: false } },
     });
   });
-
-  it('only a function or a cell is protected', () => {
-    expect(() => parseInterface(`{
-  ~type P (x Integer)
-}`)).toThrow("Interface entry '~type P (x Integer)': only a function or a cell is protected");
-  });
 });
 
 // A child of a parent block in another file, alone: the parent's side is the test's.
 // Its block's `$extend` carries the parent's names it overrides or redeclares, in the
 // parent's terms; a block that extends it is registered `as` that block.
-const DOC = `{
-  A () -> *{} ^ {
-    total *Integer
-    f () -> (Integer)
-    ~count *Integer
-    ~h (Integer) -> (Integer)
-    ~k () -> (Integer)
-  }
-}`;
-
-// The same, as a JSON document (notes/opre-type-encoding-2026-11-21.md).
-const DOC_JSON = {
+const DOC = {
   ':A': {
     public: {
       $new: [{ re: [':A:*'], writes: false }],
@@ -165,9 +206,6 @@ const DOC_JSON = {
     ':*': {},
   },
 };
-
-// Each case runs against the doc text and the JSON document.
-const FORMS = [['doc text', DOC, 'service'], ['JSON document', DOC_JSON, 'document']];
 const child = `
   use :A = "svc"
   @B = A ^ {
@@ -182,35 +220,33 @@ const child = `
   }
 `;
 
-describe.each(FORMS)('with the %s', (_, doc) => {
-  describe('the override table, as the child sends it', () => {
-    it("names the parent's names a block overrides or redeclares, and registers a block extending it", async () => {
-      await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
-          { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
-          { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
-          { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
-        ],
-      });
+describe('the override table, as the child sends it', () => {
+  it("names the parent's names a block overrides or redeclares, and registers a block extending it", async () => {
+    await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
+        { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
+        { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
+        { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
+      ],
     });
+  });
 
-    it("a function both blocks hold runs here, with the lower block's override", async () => {
-      const actor = await createActor(child, {
-        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
-        expects: [
-          { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
-          { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
-          { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
-          { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
-        ],
-      });
-      await expectActorBehavior(actor,
-        { input: { id: '3', op: 'g', to: ':C', from: 'c' } },
-        { output: { id: '3', re: [30], ty: ['Integer'], to: 'c', from: ':C' } },
-      );
+  it("a function both blocks hold runs here, with the lower block's override", async () => {
+    const actor = await createActor(child, {
+      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
+      expects: [
+        { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
+        { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
+        { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
+        { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
+      ],
     });
+    await expectActorBehavior(actor,
+      { input: { id: '3', op: 'g', to: ':C', from: 'c' } },
+      { output: { id: '3', re: [30], ty: ['Integer'], to: 'c', from: ':C' } },
+    );
   });
 });
 

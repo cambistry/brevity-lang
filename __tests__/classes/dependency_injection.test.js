@@ -311,9 +311,7 @@ describe('explicit form — method call validation', () => {
 // ─── Phase 2a: an unclaimed dependency ──────────────────────────────────────
 
 describe('constructor block — calls are checked as in a handler body', () => {
-  const GREETER_MANIFEST = `{
-    greet (name: Text) -> (Text)
-  }`;
+  const GREETER_MANIFEST = { public: { greet: [{ args: [{ name: 'Text' }], re: ['Text'], writes: false }] } };
   const remotes = [{ path: 'greeter.bv', service: GREETER_MANIFEST }];
 
   it('a call the manifest declares → compiles', () => {
@@ -374,7 +372,12 @@ describe('an unclaimed dependency — requires a document', () => {
 });
 
 describe('an unclaimed dependency — document from options.remotes', () => {
-  const ctorManifest = '(a: Integer) -> *{\n  ping. () => .\n  get () -> (value: Integer)\n}';
+  const ctorManifest = {
+    public: { $new: [{ args: [{ a: 'Integer' }], re: [':*'], writes: false }] },
+    ':*': {
+      public: { 'ping.': [{ writes: true }], get: [{ re: [{ value: 'Integer' }], writes: false }] },
+    },
+  };
 
   it('compiles when a constructor document is supplied via options.remotes', () => {
     expect(() => compileSource(`
@@ -519,10 +522,12 @@ describe('coercion to typed class — runtime', () => {
 // target-agnostic too.
 
 describe('destructure entries — must be exported by the manifest', () => {
-  const MATH_MANIFEST = `{
-    double (n: Integer) -> (result: Integer)
-    inc (n: Integer) -> (result: Integer)
-  }`;
+  const MATH_MANIFEST = {
+    public: {
+      double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      inc: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+    },
+  };
   const remotes = [{ path: 'Math', service: MATH_MANIFEST }];
 
   it('an op the manifest declares → compiles', () => {
@@ -588,11 +593,13 @@ describe('destructure entries — must be exported by the manifest', () => {
 });
 
 describe('spread `(...)` — compilation', () => {
-  const MATH_MANIFEST = `{
-    double (n: Integer) -> (result: Integer)
-    inc (n: Integer) -> (result: Integer)
-    dec (n: Integer) -> (result: Integer)
-  }`;
+  const MATH_MANIFEST = {
+    public: {
+      double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      inc: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      dec: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+    },
+  };
 
   it('`(...)` flattens all manifest ops into scope', () => {
     expect(() => compileSource(`
@@ -656,10 +663,12 @@ describe('spread `(...)` — compilation', () => {
   });
 
   it('two spreads sharing a manifest op is a compile error', () => {
-    const OTHER = `{
-      double (n: Integer) -> (result: Integer)
-      square (n: Integer) -> (result: Integer)
-    }`;
+    const OTHER = {
+      public: {
+        double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+        square: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      },
+    };
     expect(() => compileSource(`
       use ... = Math
       use ... = Other
@@ -671,10 +680,12 @@ describe('spread `(...)` — compilation', () => {
   });
 
   it('aliasing on one side resolves a spread-vs-spread collision', () => {
-    const OTHER = `{
-      double (n: Integer) -> (result: Integer)
-      square (n: Integer) -> (result: Integer)
-    }`;
+    const OTHER = {
+      public: {
+        double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+        square: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      },
+    };
     expect(() => compileSource(`
       use ... = Math
       use double: OD, ... = Other
@@ -691,10 +702,12 @@ describe('spread `(...)` — compilation', () => {
   });
 
   it('discard on one side resolves a spread-vs-spread collision', () => {
-    const OTHER = `{
-      double (n: Integer) -> (result: Integer)
-      square (n: Integer) -> (result: Integer)
-    }`;
+    const OTHER = {
+      public: {
+        double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+        square: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      },
+    };
     expect(() => compileSource(`
       use ... = Math
       use double: _, ... = Other
@@ -711,10 +724,12 @@ describe('spread `(...)` — compilation', () => {
 });
 
 describe('spread `(...)` — runtime routing', () => {
-  const MATH_MANIFEST = `{
-    double (n: Integer) -> (result: Integer)
-    inc (n: Integer) -> (result: Integer)
-  }`;
+  const MATH_MANIFEST = {
+    public: {
+      double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      inc: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+    },
+  };
 
   it('spread-injected call routes to the service with the remote op', async () => {
     const compiled = await compileActor(`
@@ -764,11 +779,13 @@ describe('spread `(...)` — runtime routing', () => {
 // skipped (its work already done at validate time).
 
 describe('body-form DI destructure — <:Name> + (...) = Name', () => {
-  const MATH_MANIFEST = `{
-    double (n: Integer) -> (result: Integer)
-    inc (n: Integer) -> (result: Integer)
-    dec (n: Integer) -> (result: Integer)
-  }`;
+  const MATH_MANIFEST = {
+    public: {
+      double: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      inc: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+      dec: [{ args: [{ n: 'Integer' }], re: [{ result: 'Integer' }], writes: false }],
+    },
+  };
 
   describe('compilation', () => {
     it('`<:Name>` retains the namespace — bare DI compiles', () => {

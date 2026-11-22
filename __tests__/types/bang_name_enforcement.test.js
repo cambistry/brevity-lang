@@ -46,11 +46,13 @@ describe('bang enforcement — type reference fields', () => {
 // ── Service / interface methods: the method name keeps its bang, so the call's
 //    bang-ness must match the declared name — both directions.
 describe('bang enforcement — interface methods (bidirectional)', () => {
-  const WIDGET = `{
-    type Signal (dismiss.: () => ., code: Integer)
-    watch. (on: (s: Signal) => .) => .
-    poke! () => .
-  }`;
+  const WIDGET = {
+    public: {
+      'watch.': [{ args: [{ on: { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] } }], writes: true }],
+      'poke!': [{ writes: true }],
+    },
+    types: { ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }] },
+  };
   const remotes = [{ path: 'Widget', service: WIDGET }];
   const dep = (body) => `use Widget\n${body}`;
 

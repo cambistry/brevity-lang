@@ -4,7 +4,25 @@ import { compileSource, createActor, expectActorBehavior } from '../helpers.js';
 // is the address. `Svc.s.get()` is `@get` to `Svc @s`; `Svc.s.inner.ping()` is
 // `@ping` to `Svc @s @inner`. See notes/classes-as-singletons-2026-11-09.md.
 
-const DOC = '{\n  s {\n    n *Integer\n    get () -> (Integer)\n    add (Integer, by: Integer) -> (Integer)\n    note. () => .\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  Box (Integer) -> *{\n    tally {\n      get () -> (Integer)\n    }\n  }\n  top () -> (Integer)\n}';
+const DOC = {
+  public: { top: [{ re: ['Integer'], writes: false }] },
+  ':s': {
+    public: {
+      n: [{ re: ['Integer'], writes: false }],
+      get: [{ re: ['Integer'], writes: false }],
+      add: [{ args: ['Integer', { by: 'Integer' }], re: ['Integer'], writes: false }],
+      'note.': [{ writes: true }],
+    },
+    ':n': {
+      public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+    },
+    ':inner': { public: { ping: [{ re: ['Integer'], writes: false }] } },
+  },
+  ':Box': {
+    public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
+    ':*': { ':tally': { public: { get: [{ re: ['Integer'], writes: false }] } } },
+  },
+};
 const remotes = [{ path: 'svc.bv', service: DOC }];
 const header = 'use Svc = "svc.bv"\n';
 

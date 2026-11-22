@@ -121,7 +121,7 @@ describe('destructured service member — bare read', () => {
   const run = (reply, expected) => createActor(`
     use :count = "counter.bv"
     @go = { n Integer = count; return a1: n }
-  `, { compileOptions: { remotes: [{ path: 'counter.bv', service: '{ count () -> (Integer) }' }] } })
+  `, { compileOptions: { remotes: [{ path: 'counter.bv', service: { public: { count: [{ re: ['Integer'], writes: false }] } } }] } })
     .then(actor => expectActorBehavior(actor,
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'count', to: 'counter.bv' }) },

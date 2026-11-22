@@ -1,5 +1,5 @@
 import { extract, compile } from '../../index.js';
-import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domDocument as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DI spread operator — `<HTML: (...)>`
@@ -84,10 +84,26 @@ describe('DI spread operator — <HTML: (...)>', () => {
   });
 
   it('two spread injections sharing a name is a compile error', () => {
-    const OTHER = `{
-      div (inner_html: Text | null) -> *{}
-      section (inner_html: Text | null) -> *{}
-    }`;
+    const OTHER = {
+      ':div': {
+        public: {
+          $new: [{ args: [{ inner_html: { '%or': ['Text', null] } }], re: [':div:*'], writes: false }],
+        },
+        ':*': {},
+      },
+      ':section': {
+        public: {
+          $new: [
+            {
+              args: [{ inner_html: { '%or': ['Text', null] } }],
+              re: [':section:*'],
+              writes: false,
+            },
+          ],
+        },
+        ':*': {},
+      },
+    };
     const source = `
       use ... = HTML
       use ... = "OTHER"

@@ -15,12 +15,12 @@ describe('a self-call in a constructor block — validation', () => {
 
   it('a bare name declared above is a call, and the declarations after it stay', () => {
     const { interface: doc } = compileSource('b *Integer = 0\nmark! = { b <- 5 }\nmark!()\n@go = { return b }\n');
-    expect(doc.service).toMatch(/go \(\)/);
+    expect(Object.keys(doc.service.public)).toEqual(['go']);
   });
 
   it('so is a bare name declared below', () => {
     const { interface: doc } = compileSource('b *Integer = 0\nmark!()\nmark! = { b <- 5 }\n@go = { return b }\n');
-    expect(doc.service).toMatch(/go \(\)/);
+    expect(Object.keys(doc.service.public)).toEqual(['go']);
   });
 });
 

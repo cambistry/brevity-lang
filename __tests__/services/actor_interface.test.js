@@ -1,5 +1,6 @@
 import { extract } from '../../index.js';
 import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { documentShape } from '../../src/service_doc.js';
 import { compileSource } from '../helpers.js';
 
 // ── Single public class — basic actor interfaces ─────────────────────────────
@@ -11,8 +12,13 @@ describe('class interface — basic', () => {
         @hello = -> greeting: "hi"
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Greeter () -> *{\n    hello () -> (greeting: Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Greeter': {
+          public: { $new: [{ re: [':Greeter:*'], writes: false }] },
+          ':*': { public: { hello: [{ re: [{ greeting: 'Text' }], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -22,8 +28,13 @@ describe('class interface — basic', () => {
         @body = -> content as Text
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Document (content: Text) -> *{\n    body () -> (Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Document': {
+          public: { $new: [{ args: [{ content: 'Text' }], re: [':Document:*'], writes: false }] },
+          ':*': { public: { body: [{ re: ['Text'], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -33,8 +44,13 @@ describe('class interface — basic', () => {
         @get = -> value: n as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Wrapper (Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Wrapper': {
+          public: { $new: [{ args: ['Integer'], re: [':Wrapper:*'], writes: false }] },
+          ':*': { public: { get: [{ re: [{ value: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -44,8 +60,13 @@ describe('class interface — basic', () => {
         @sum = -> total: (a + b) as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Pair (Integer, Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Pair': {
+          public: { $new: [{ args: ['Integer', 'Integer'], re: [':Pair:*'], writes: false }] },
+          ':*': { public: { sum: [{ re: [{ total: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -59,8 +80,15 @@ describe('class interface — actor methods', () => {
         @find = (query: Text) -> result: "found"
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Search (corpus: Text) -> *{\n    find (query: Text) -> (result: Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Search': {
+          public: { $new: [{ args: [{ corpus: 'Text' }], re: [':Search:*'], writes: false }] },
+          ':*': {
+            public: { find: [{ args: [{ query: 'Text' }], re: [{ result: 'Text' }], writes: false }] },
+          },
+        },
+      },
     );
   });
 
@@ -70,8 +98,13 @@ describe('class interface — actor methods', () => {
         @log. = (msg: Text) {}
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Logger () -> *{\n    log. (msg: Text) => .\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Logger': {
+          public: { $new: [{ re: [':Logger:*'], writes: false }] },
+          ':*': { public: { 'log.': [{ args: [{ msg: 'Text' }], writes: true }] } },
+        },
+      },
     );
   });
 
@@ -83,8 +116,19 @@ describe('class interface — actor methods', () => {
         @index_of = (match: Text) -> pos: 0 as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Document': {
+          public: { $new: [{ args: [{ content: 'Text' }], re: [':Document:*'], writes: false }] },
+          ':*': {
+            public: {
+              title: [{ re: ['Text'], writes: false }],
+              body: [{ re: ['Text'], writes: false }],
+              index_of: [{ args: [{ match: 'Text' }], re: [{ pos: 'Integer' }], writes: false }],
+            },
+          },
+        },
+      },
     );
   });
 
@@ -94,8 +138,13 @@ describe('class interface — actor methods', () => {
         @get = -> value as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Box (value: Integer) -> *{\n    get () -> (Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Box': {
+          public: { $new: [{ args: [{ value: 'Integer' }], re: [':Box:*'], writes: false }] },
+          ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -110,8 +159,13 @@ describe('class interface — private methods excluded', () => {
         @title = -> #helper(content) as Text
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Document (content: Text) -> *{\n    title () -> (Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Document': {
+          public: { $new: [{ args: [{ content: 'Text' }], re: [':Document:*'], writes: false }] },
+          ':*': { public: { title: [{ re: ['Text'], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -128,8 +182,20 @@ describe('class interface — mixed with public functions', () => {
       }
       @publish. = (doc: @Document) {}
     `);
-    expect(iface.service).toBe(
-      '{\n  publish. (doc: Document) => .\n  Document (content: Text) -> *{\n    title () -> (Text)\n    body () -> (Text)\n    index_of (match: Text) -> (pos: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        public: { 'publish.': [{ args: [{ doc: ':Document:*' }], writes: true }] },
+        ':Document': {
+          public: { $new: [{ args: [{ content: 'Text' }], re: [':Document:*'], writes: false }] },
+          ':*': {
+            public: {
+              title: [{ re: ['Text'], writes: false }],
+              body: [{ re: ['Text'], writes: false }],
+              index_of: [{ args: [{ match: 'Text' }], re: [{ pos: 'Integer' }], writes: false }],
+            },
+          },
+        },
+      },
     );
   });
 
@@ -140,8 +206,14 @@ describe('class interface — mixed with public functions', () => {
         @get = -> value: start as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  ping () -> (Integer)\n  Counter (Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        public: { ping: [{ re: ['Integer'], writes: false }] },
+        ':Counter': {
+          public: { $new: [{ args: ['Integer'], re: [':Counter:*'], writes: false }] },
+          ':*': { public: { get: [{ re: [{ value: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -154,8 +226,17 @@ describe('class interface — mixed with public functions', () => {
         @get = -> text as Text
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Point (Integer, Integer) -> *{\n    sum () -> (total: Integer)\n  }\n  Label (text: Text) -> *{\n    get () -> (Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Point': {
+          public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point:*'], writes: false }] },
+          ':*': { public: { sum: [{ re: [{ total: 'Integer' }], writes: false }] } },
+        },
+        ':Label': {
+          public: { $new: [{ args: [{ text: 'Text' }], re: [':Label:*'], writes: false }] },
+          ':*': { public: { get: [{ re: ['Text'], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -180,8 +261,14 @@ describe('class interface — private classes excluded', () => {
   `);
 
   it('leaves out a private class and its members, keeping public entries', () => {
-    expect(iface.service).toBe(
-      '{\n  use () -> (value: Integer)\n  Shown () -> *{\n    show () -> (value: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        public: { use: [{ re: [{ value: 'Integer' }], writes: false }] },
+        ':Shown': {
+          public: { $new: [{ re: [':Shown:*'], writes: false }] },
+          ':*': { public: { show: [{ re: [{ value: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -195,8 +282,13 @@ describe('class interface — optional params', () => {
         @get = -> value: start as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Counter (? Integer) -> *{\n    get () -> (value: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Counter': {
+          public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Counter:*'], writes: false }] },
+          ':*': { public: { get: [{ re: [{ value: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -206,8 +298,13 @@ describe('class interface — optional params', () => {
         @get = -> label as Text
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Config (? label: Text) -> *{\n    get () -> (Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Config': {
+          public: { $new: [{ args: [{ label: { '%opt': 'Text' } }], re: [':Config:*'], writes: false }] },
+          ':*': { public: { get: [{ re: ['Text'], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -217,8 +314,13 @@ describe('class interface — optional params', () => {
         @sum = -> total: (a + b) as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Pair (Integer, ? Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Pair': {
+          public: { $new: [{ args: ['Integer', { '%opt': 'Integer' }], re: [':Pair:*'], writes: false }] },
+          ':*': { public: { sum: [{ re: [{ total: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -228,8 +330,13 @@ describe('class interface — optional params', () => {
         @get = -> value as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Box (? Integer) -> *{\n    get () -> (Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Box': {
+          public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Box:*'], writes: false }] },
+          ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -239,8 +346,23 @@ describe('class interface — optional params', () => {
         @get = (key: Text, fallback: Text = "none") -> value: "found"
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Store () -> *{\n    get (key: Text, ? fallback: Text) -> (value: Text)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Store': {
+          public: { $new: [{ re: [':Store:*'], writes: false }] },
+          ':*': {
+            public: {
+              get: [
+                {
+                  args: [{ key: 'Text', fallback: { '%opt': 'Text' } }],
+                  re: [{ value: 'Text' }],
+                  writes: false,
+                },
+              ],
+            },
+          },
+        },
+      },
     );
   });
 
@@ -250,8 +372,21 @@ describe('class interface — optional params', () => {
         @sum = -> total: (x + y) as Integer
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Defaults (? Integer, ? Integer) -> *{\n    sum () -> (total: Integer)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Defaults': {
+          public: {
+            $new: [
+              {
+                args: [{ '%opt': 'Integer' }, { '%opt': 'Integer' }],
+                re: [':Defaults:*'],
+                writes: false,
+              },
+            ],
+          },
+          ':*': { public: { sum: [{ re: [{ total: 'Integer' }], writes: false }] } },
+        },
+      },
     );
   });
 });
@@ -267,8 +402,13 @@ describe('class interface — imported type address resolution', () => {
         @get = -> item as Item
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Wrapper (item: `/models/item`) -> *{\n    get () -> (`/models/item`)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Wrapper': {
+          public: { $new: [{ args: [{ item: '/models/item' }], re: [':Wrapper:*'], writes: false }] },
+          ':*': { public: { get: [{ re: ['/models/item'], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -280,8 +420,13 @@ describe('class interface — imported type address resolution', () => {
         @make = -> Pair(key: "a", value: "b") as Pair
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Factory () -> *{\n    make () -> (`/models/pair`)\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Factory': {
+          public: { $new: [{ re: [':Factory:*'], writes: false }] },
+          ':*': { public: { make: [{ re: ['/models/pair'], writes: false }] } },
+        },
+      },
     );
   });
 
@@ -293,8 +438,13 @@ describe('class interface — imported type address resolution', () => {
         @handle. = (item: Item) {}
       }
     `);
-    expect(iface.service).toBe(
-      '{\n  Processor () -> *{\n    handle. (item: `/models/item`) => .\n  }\n}',
+    expect(iface.service).toEqual(
+      {
+        ':Processor': {
+          public: { $new: [{ re: [':Processor:*'], writes: false }] },
+          ':*': { public: { 'handle.': [{ args: [{ item: '/models/item' }], writes: true }] } },
+        },
+      },
     );
   });
 });
@@ -313,40 +463,69 @@ describe('class interface — a class named with `!`', () => {
   `;
 
   it('shows the name callers write, and a writing arrow', () => {
-    expect(docOf(source)).toBe('{\n  W! () => *{\n    get () -> (Integer)\n  }\n}');
+    expect(docOf(source)).toEqual({
+      ':W!': {
+        public: { $new: [{ re: [':W!:*'], writes: true }] },
+        ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+      },
+    });
   });
 
   it('reads back with its name and effect', () => {
-    const W = parseInterface(docOf(source)).__types['W!'];
+    const W = documentShape(docOf(source)).__types['W!'];
     expect(W.effect).toBe('write');
     expect(W.functions.map(f => f.name)).toEqual(['get']);
   });
 
   it('a class without `!` stays a read', () => {
     const doc = docOf('@W = *{\n  @get = { return 1 }\n}\n');
-    expect(doc).toBe('{\n  W () -> *{\n    get () -> (Integer)\n  }\n}');
-    expect(parseInterface(doc).__types.W.effect).toBe('read');
+    expect(doc).toEqual({
+      ':W': {
+        public: { $new: [{ re: [':W:*'], writes: false }] },
+        ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+      },
+    });
+    expect(documentShape(doc).__types.W.effect).toBe('read');
   });
 
   it('with no members of its own', () => {
     const doc = docOf('@E! = *{}\n');
-    expect(doc).toBe('{\n  E! () => *{}\n}');
-    expect(parseInterface(doc).__types['E!'].effect).toBe('write');
+    expect(doc).toEqual({ ':E!': { public: { $new: [{ re: [':E!:*'], writes: true }] }, ':*': {} } });
+    expect(documentShape(doc).__types['E!'].effect).toBe('write');
   });
 
   it('a public subclass names its public `!` superclass', () => {
     const doc = docOf('@W! = *{\n  @get = { return 1 }\n}\n@S! = @W! ^ *{\n  @h = { return 2 }\n}\n');
-    expect(doc).toBe('{\n  W! () => *{\n    get () -> (Integer)\n  }\n  S! W! ^ => *{\n    ...W!\n    h () -> (Integer)\n  }\n}');
-    expect(parseInterface(doc).__types['S!'].supertypes).toEqual([{ supertype: 'W!' }]);
+    expect(doc).toEqual({
+      ':W!': {
+        public: { $new: [{ re: [':W!:*'], writes: true }] },
+        ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+      },
+      ':S!': {
+        extends: [':W!'],
+        public: { $new: [{ re: [':S!:*'], writes: true }] },
+        ':*': {
+          public: { h: [{ re: ['Integer'], writes: false }], get: [{ re: ['Integer'], writes: false }] },
+        },
+      },
+    });
+    expect(documentShape(doc).__types['S!'].supertypes).toEqual([{ supertype: 'W!' }]);
   });
 
   it('a private `!` superclass is stated in place', () => {
     expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@S! = W! ^ *{\n  @h = { return 2 }\n}\n'))
-      .toBe('{\n  S! () => *{\n    get () -> (Integer)\n    h () -> (Integer)\n  }\n}');
+      .toEqual({
+        ':S!': {
+          public: { $new: [{ re: [':S!:*'], writes: true }] },
+          ':*': {
+            public: { get: [{ re: ['Integer'], writes: false }], h: [{ re: ['Integer'], writes: false }] },
+          },
+        },
+      });
   });
 
   it('a private one isn\'t documented', () => {
-    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@go = { return 1 }\n')).toBe('{\n  go () -> (Integer)\n}');
+    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@go = { return 1 }\n')).toEqual({ public: { go: [{ re: ['Integer'], writes: false }] } });
   });
 
   // A class named with `!` has to write while constructing.
@@ -366,7 +545,7 @@ describe('class interface — a class named with `!`', () => {
   });
 
   it('a type in a doc is the class name without `!`', () => {
-    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@go = (w W) { return 1 }\n')).toBe('{\n  go (W) -> (Integer)\n}');
+    expect(docOf('W! = *{\n  @get = { return 1 }\n}\n@go = (w W) { return 1 }\n')).toEqual({ public: { go: [{ args: ['W'], re: ['Integer'], writes: false }] } });
   });
 
   it('is constructed with its `!`', () => {
@@ -398,15 +577,20 @@ describe('class interface — a class named with `!`', () => {
 
   it('a subclass may be purer than a foreign parent\'s `!` member', () => {
     const header = 'use Svc\n';
-    const docs = { remotes: [{ path: 'Svc', service: '{ Base () -> *{ g! () => self } }' }] };
+    const docs = { remotes: [{ path: 'Svc', service: {
+      ':Base': {
+        public: { $new: [{ re: [':Base:*'], writes: false }] },
+        ':*': { public: { 'g!': [{ re: [{ '%self': true }], writes: true }] } },
+      },
+    } }] };
     expect(() => compileSource(`${header}C = Base ^ *{\n  @g! = { return self }\n}\n@go = { return 1 }\n`, docs)).not.toThrow();
   });
 
   it('a doc\'s writing constructor passes its effect too', () => {
     const header = 'use Svc\n';
-    const docs = (entry) => ({ remotes: [{ path: 'Svc', service: `{ ${entry} }` }] });
-    expect(() => compileSource(`${header}S = Base ^ *{}\n@go = { return 1 }\n`, docs('Base () => *{}'))).toThrow(/Class 'S' inherits from 'Base'/);
-    expect(() => compileSource(`${header}S = Base ^ *{}\n@go = { return 1 }\n`, docs('Base () -> *{}'))).not.toThrow();
+    const docs = (writes) => ({ remotes: [{ path: 'Svc', service: { ':Base': { public: { $new: [{ re: [':Base:*'], writes }] }, ':*': {} } } }] });
+    expect(() => compileSource(`${header}S = Base ^ *{}\n@go = { return 1 }\n`, docs(true))).toThrow(/Class 'S' inherits from 'Base'/);
+    expect(() => compileSource(`${header}S = Base ^ *{}\n@go = { return 1 }\n`, docs(false))).not.toThrow();
   });
 });
 
@@ -414,13 +598,13 @@ describe('class interface — return paths', () => {
   const fn = (body) => `n *Integer = 0\n@go! = (b Boolean) {\n  n <- 1\n  ${body}\n}\n`;
 
   it('a value and self show both, whichever comes first', () => {
-    const expected = '{\n  go! (Boolean) => (Integer) | self\n}';
-    expect(docOf(fn('if b { return 1 }\n  return self'))).toBe(expected);
-    expect(docOf(fn('if b { return self }\n  return 1'))).toBe(expected);
+    const expected = { public: { 'go!': [{ args: ['Boolean'], re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: true }] } };
+    expect(docOf(fn('if b { return 1 }\n  return self'))).toEqual(expected);
+    expect(docOf(fn('if b { return self }\n  return 1'))).toEqual(expected);
   });
 
   it('reads back with both outcomes', () => {
-    const [sig] = parseInterface(docOf(fn('if b { return 1 }\n  return self')))['go!'];
+    const [sig] = documentShape(docOf(fn('if b { return 1 }\n  return self')))['go!'];
     expect(sig.effect).toBe('write');
     expect(sig.returnsSelf).toBe(true);
     expect(sig.returns.map(r => r.type)).toEqual(['Integer']);
@@ -428,40 +612,70 @@ describe('class interface — return paths', () => {
 
   it('inside a class', () => {
     const doc = docOf('@C = *{\n  n *Integer = 0\n  @go! = (b Boolean) {\n    n <- 1\n    if b { return 1 }\n    return self\n  }\n}\n');
-    expect(doc).toBe('{\n  C () -> *{\n    go! (Boolean) => (Integer) | self\n    ~n *Integer\n  }\n}');
-    const [sig] = parseInterface(doc).__types.C.functions;
+    expect(doc).toEqual({
+      ':C': {
+        public: { $new: [{ re: [':C:*'], writes: false }] },
+        ':*': {
+          public: {
+            'go!': [
+              {
+                args: ['Boolean'],
+                re: { '%or': [['Integer'], [{ '%self': true }]] },
+                writes: true,
+              },
+            ],
+          },
+          protected: { '~n': [{ re: ['Integer'], writes: false }] },
+          ':~n': {
+            public: {
+              $get: [{ re: ['Integer'], writes: false }],
+              $set: [{ args: ['Integer'], writes: true }],
+            },
+          },
+        },
+      },
+    });
+    const [sig] = documentShape(doc).__types.C.functions;
     expect(sig.returnsSelf).toBe(true);
     expect(sig.returns.map(r => r.type)).toEqual(['Integer']);
   });
 
   it('a value returned only from branches is shown', () => {
     const doc = docOf(fn('if b { return 1 } else { return 2 }'));
-    expect(doc).toBe('{\n  go! (Boolean) => (Integer)\n}');
-    expect(parseInterface(doc)['go!'][0].returnsSelf).toBeUndefined();
+    expect(doc).toEqual({ public: { 'go!': [{ args: ['Boolean'], re: ['Integer'], writes: true }] } });
+    expect(documentShape(doc)['go!'][0].returnsSelf).toBeUndefined();
   });
 
   it('a local in a branch gives the value its type', () => {
-    expect(docOf(fn('if b {\n    x = 1\n    return x\n  }\n  return self'))).toBe('{\n  go! (Boolean) => (Integer) | self\n}');
+    expect(docOf(fn('if b {\n    x = 1\n    return x\n  }\n  return self'))).toEqual({
+      public: {
+        'go!': [{ args: ['Boolean'], re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: true }],
+      },
+    });
   });
 
   it('self on every path is self, in branches too', () => {
     const doc = docOf('n *Integer = 0\n@go! = (b Boolean) {\n  if b { n <- 1 } else { n <- 2 }\n}\n');
-    expect(doc).toBe('{\n  go! (Boolean) => self\n}');
-    const [sig] = parseInterface(doc)['go!'];
+    expect(doc).toEqual({ public: { 'go!': [{ args: ['Boolean'], re: [{ '%self': true }], writes: true }] } });
+    const [sig] = documentShape(doc)['go!'];
     expect(sig.returnsSelf).toBe(true);
     expect(sig.returns).toBeNull();
   });
 
   it('a nested function\'s return isn\'t one of these paths', () => {
-    expect(docOf('n *Integer = 0\n@go! = {\n  f = { return "x" }\n  n <- 1\n}\n')).toBe('{\n  go! () => self\n}');
+    expect(docOf('n *Integer = 0\n@go! = {\n  f = { return "x" }\n  n <- 1\n}\n')).toEqual({ public: { 'go!': [{ re: [{ '%self': true }], writes: true }] } });
   });
 
   it('a read-only function can mix them as well', () => {
-    expect(docOf('@go = (b Boolean) {\n  if b { return 1 }\n  return self\n}\n')).toBe('{\n  go (Boolean) -> (Integer) | self\n}');
+    expect(docOf('@go = (b Boolean) {\n  if b { return 1 }\n  return self\n}\n')).toEqual({
+      public: {
+        go: [{ args: ['Boolean'], re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: false }],
+      },
+    });
   });
 
   it('a silent function stays silent with an early exit', () => {
-    expect(docOf('n *Integer = 0\n@fire. = (b Boolean) {\n  if b { return }\n  n <- 1\n}\n')).toBe('{\n  fire. (Boolean) => .\n}');
+    expect(docOf('n *Integer = 0\n@fire. = (b Boolean) {\n  if b { return }\n  n <- 1\n}\n')).toEqual({ public: { 'fire.': [{ args: ['Boolean'], writes: true }] } });
   });
 
   it('other text after a return is still rejected', () => {
@@ -473,30 +687,45 @@ describe('class interface — return paths', () => {
   });
 
   it('a function type can state both', () => {
-    expect(docOf('@go = (f () => (Integer) | self) { return 1 }\n')).toBe('{\n  go (() => (Integer) | self) -> (Integer)\n}');
+    expect(docOf('@go = (f () => (Integer) | self) { return 1 }\n')).toEqual({
+      public: {
+        go: [
+          {
+            args: [{ '%fn': [{ re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: true }] }],
+            re: ['Integer'],
+            writes: false,
+          },
+        ],
+      },
+    });
   });
 });
 
 describe('class interface — a read-only tail `if`', () => {
   it('shows the value its branches end in', () => {
     const doc = docOf('@f = (b Boolean) {\n  if b { 1 } else { 2 }\n}\n');
-    expect(doc).toBe('{\n  f (Boolean) -> (Integer)\n}');
-    expect(parseInterface(doc).f[0].returns.map(r => r.type)).toEqual(['Integer']);
+    expect(doc).toEqual({ public: { f: [{ args: ['Boolean'], re: ['Integer'], writes: false }] } });
+    expect(documentShape(doc).f[0].returns.map(r => r.type)).toEqual(['Integer']);
   });
 
   it('through `else if`, with a local in a branch', () => {
-    expect(docOf('@f = (b Boolean) {\n  if b {\n    x = 1\n    x\n  } else if b { 2 } else { 3 }\n}\n')).toBe('{\n  f (Boolean) -> (Integer)\n}');
+    expect(docOf('@f = (b Boolean) {\n  if b {\n    x = 1\n    x\n  } else if b { 2 } else { 3 }\n}\n')).toEqual({ public: { f: [{ args: ['Boolean'], re: ['Integer'], writes: false }] } });
   });
 
   it('an `if` that isn\'t the tail returns nothing', () => {
-    expect(docOf('@f = (b Boolean) {\n  if b { 1 } else { 2 }\n  return "x"\n}\n')).toBe('{\n  f (Boolean) -> (Text)\n}');
+    expect(docOf('@f = (b Boolean) {\n  if b { 1 } else { 2 }\n  return "x"\n}\n')).toEqual({ public: { f: [{ args: ['Boolean'], re: ['Text'], writes: false }] } });
   });
 });
 
 describe('class interface — chaining on a mixed return', () => {
   const REMOTE = 'use Svc\n';
   const docs = (service) => ({ remotes: [{ path: 'Svc', service }] });
-  const MIXED = docs('{ go! () => (Integer) | self\n next! () => self }');
+  const MIXED = docs({
+    public: {
+      'go!': [{ re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: true }],
+      'next!': [{ re: [{ '%self': true }], writes: true }],
+    },
+  });
 
   it('is an error locally', () => {
     expect(() => compileSource(`C = *{

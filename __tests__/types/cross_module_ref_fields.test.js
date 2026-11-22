@@ -14,14 +14,18 @@ import { compileSource, compileActor } from '../helpers.js';
 //
 // `Control` carries an optional field, so it travels as a name-keyed map.
 
-const WIDGET = `{
-  type Control (
-    press.: () => .
-    release.: () => .
-    reset.: () => .
-    ? label: Text
-  )
-}`;
+const WIDGET = {
+  types: {
+    ':Control': [
+      {
+        'press.': { '%fn': [{ writes: true }] },
+        'release.': { '%fn': [{ writes: true }] },
+        'reset.': { '%fn': [{ writes: true }] },
+        label: { '%opt': 'Text' },
+      },
+    ],
+  },
+};
 
 const remotes = [{ path: 'Widget', service: WIDGET }];
 

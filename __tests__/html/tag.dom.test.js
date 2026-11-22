@@ -1,13 +1,13 @@
 import { compileSource } from '../helpers.js';
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
-import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domDocument as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Per-tag smoke tests for the HTML manifest
 //
 // Element + Aria carry the full attribute discipline (covered exhaustively in
 // element.dom.test.js); this file just confirms each concrete tag in
-// domManifest:
+// domDocument:
 //
 //   1. is reachable as a typed class (`tag()` compiles with no args
 //      because every Element field is declared `?` optional and tags inherit
@@ -21,7 +21,7 @@ import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.
 const compileWithHTML = (src) =>
   compileSource(src, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });
 
-// All 57 concrete tags exposed by domManifest. Listed in manifest order.
+// All 57 concrete tags exposed by domDocument. Listed in manifest order.
 const ALL_TAGS = [
   'html', 'head', 'body',
   'header', 'footer', 'main', 'nav', 'section', 'article', 'aside',

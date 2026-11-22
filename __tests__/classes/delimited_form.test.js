@@ -256,7 +256,18 @@ describe('constructor delimited form — optional args — runtime', () => {
     expect(extract(`
       @Offset = (a Integer, b: Integer = -1) *{}
       @Below = (b Integer = -2) *{}
-    `).interface.service).toBe('{\n  Offset (Integer, ? b: Integer) -> *{}\n  Below (? Integer) -> *{}\n}');
+    `).interface.service).toEqual({
+      ':Offset': {
+        public: {
+          $new: [{ args: ['Integer', { b: { '%opt': 'Integer' } }], re: [':Offset:*'], writes: false }],
+        },
+        ':*': {},
+      },
+      ':Below': {
+        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Below:*'], writes: false }] },
+        ':*': {},
+      },
+    });
   });
 });
 
@@ -370,7 +381,18 @@ describe('constructor delimited form — expression defaults', () => {
       @A = *{}
       @Sum = (a Integer, b Integer = 1 + 2) *{}
       @Sub = @A ^ (n Integer = 1 + 2) *{ super() }
-    `).interface.service).toBe('{\n  A () -> *{}\n  Sum (Integer, ? Integer) -> *{}\n  Sub A ^ (? Integer) -> *{\n    ...A\n  }\n}');
+    `).interface.service).toEqual({
+      ':A': { public: { $new: [{ re: [':A:*'], writes: false }] }, ':*': {} },
+      ':Sum': {
+        public: { $new: [{ args: ['Integer', { '%opt': 'Integer' }], re: [':Sum:*'], writes: false }] },
+        ':*': {},
+      },
+      ':Sub': {
+        extends: [':A'],
+        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Sub:*'], writes: false }] },
+        ':*': {},
+      },
+    });
   });
 
   it('an untyped param with an expression default is an error', () => {

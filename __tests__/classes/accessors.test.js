@@ -60,7 +60,16 @@ describe('published params — service document', () => {
       @T = (@a Integer, @label: l Text, quiet: Text) *{ @x = -> 1 }
       @test = -> 1
     `);
-    expect(iface.service).toContain('T (Integer, label: Text, quiet: Text) -> *{\n    a Integer\n    label Text\n    x () -> (Integer)\n  }');
+    expect(iface.service[':T']).toEqual({
+      public: { $new: [{ args: ['Integer', { label: 'Text', quiet: 'Text' }], re: [':T:*'], writes: false }] },
+      ':*': {
+        public: {
+          a: [{ re: ['Integer'], writes: false }],
+          label: [{ re: ['Text'], writes: false }],
+          x: [{ re: ['Integer'], writes: false }],
+        },
+      },
+    });
   });
 
   it('lists published file params as read-only fields', () => {
@@ -72,7 +81,13 @@ describe('published params — service document', () => {
       *
       @test = -> 1
     `);
-    expect(iface.service).toBe('{\n  count Integer\n  tag Text\n  test () -> (Integer)\n}');
+    expect(iface.service).toEqual({
+      public: {
+        count: [{ re: ['Integer'], writes: false }],
+        tag: [{ re: ['Text'], writes: false }],
+        test: [{ re: ['Integer'], writes: false }],
+      },
+    });
   });
 });
 

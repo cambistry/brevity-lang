@@ -603,9 +603,24 @@ describe('type coercion — documents supplied through options.remotes', () => {
       return t as Text
   `;
   const remotes = [
-    { path: '/services/counter', service: '{\n  get () -> (count: Integer)\n} | Integer' },
-    { path: '/services/store', service: '{\n  ping. () => .\n} | Integer | Text' },
-    { path: 'service.bv', params: '()', service: '{\n  ping. () => .\n} | Integer | Text' },
+    { path: '/services/counter', service: {
+      public: {
+        get: [{ re: [{ count: 'Integer' }], writes: false }],
+        $as: [{ re: ['Integer'], writes: false }],
+      },
+    } },
+    { path: '/services/store', service: {
+      public: {
+        'ping.': [{ writes: true }],
+        $as: [{ re: ['Integer'], writes: false }, { re: ['Text'], writes: false }],
+      },
+    } },
+    { path: 'service.bv', params: '()', service: {
+      public: {
+        'ping.': [{ writes: true }],
+        $as: [{ re: ['Integer'], writes: false }, { re: ['Text'], writes: false }],
+      },
+    } },
   ];
 
   it('service ref — sends [Integer, as] and replies with the value', async () => {
@@ -685,7 +700,7 @@ describe('type coercion — class ref constructed at the top level', () => {
         n Integer = s
         return n as Integer
     `, {
-      compileOptions: { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n} | Integer' }] },
+      compileOptions: { remotes: [{ path: 'service.bv', params: '()', service: { public: { 'ping.': [{ writes: true }], $as: [{ re: ['Integer'], writes: false }] } } }] },
       expects: [{ output: expect.objectContaining({ op: '$new', to: 'service.bv' }) }],
     });
     await expectActorBehavior(actor,
@@ -734,14 +749,14 @@ describe('type coercion — compile errors when the document lacks the as type',
     expect(() => compileSource(`
       use Counter = "/services/counter"
       ${counter}
-    `, { remotes: [{ path: '/services/counter', service: '{\n  get () -> (count: Integer)\n}' }] })).toThrow();
+    `, { remotes: [{ path: '/services/counter', service: { public: { get: [{ re: [{ count: 'Integer' }], writes: false }] } } }] })).toThrow();
   });
 
   it('class ref, through options.remotes', () => {
     expect(() => compileSource(`
       use Service = "service.bv"
       ${service}
-    `, { remotes: [{ path: 'service.bv', params: '()', service: '{\n  ping. () => .\n}' }] })).toThrow();
+    `, { remotes: [{ path: 'service.bv', params: '()', service: { public: { 'ping.': [{ writes: true }] } } }] })).toThrow();
   });
 });
 

@@ -1,6 +1,6 @@
 import { compileSource } from '../helpers.js';
 import { loadTestPage as loadPage } from '../../src/codegen/browser/harness.js';
-import { domManifest as HTML_MANIFEST, documentManifest as DOC_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domDocument as HTML_MANIFEST, documentDocument as DOC_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML element — compile-time, service-side, actor-side
@@ -54,7 +54,7 @@ async function expectBehavior(actor, ...steps) {
 // `? ` is interface-level only; source-level actor params declare
 // optionality via an explicit default value.
 //
-// Tests import domManifest directly — the same string the browser runtime
+// Tests import domDocument directly — the same string the browser runtime
 // registers at startup — so we exercise the real ~70-attribute Element and
 // ~50-attribute Aria surface, not a hand-rolled trimmed copy.
 // ═══════════════════════════════════════════════════════════════════════════════

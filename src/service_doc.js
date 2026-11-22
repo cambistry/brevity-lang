@@ -45,8 +45,7 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
   const ops = {};
   for (const name of own(doc)) {
     const field = doc.__fields?.[name];
-    if (field?.writeOnly) continue;
-    if (field) {
+    if (field && !field.writeOnly) {
       const type = typeOf(field.type, scope);
       ops[name] = [{ re: [type], writes: false }];
       if (field.cell) node[`:${name}`] = cellNode(type, { readOnly: field.readOnly, untracked: untracked.has(name) });
@@ -60,12 +59,22 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
   if (Object.keys(ops).length) node[sectionName] = { ...node[sectionName], ...ops };
 }
 
+// A declared type's fields, as an entry list. A positional field is read by its
+// name too (`p.x`), so the names of the positional ones, in order, are its
+// `%names`, in the object of its named entries.
 function typesOf(typeDecls, scope) {
   const out = {};
   for (const [name, { fields }] of Object.entries(typeDecls || {})) {
-    out[`:${name}`] = encodeEntries((fields || []).map(f => ({
+    const list = encodeEntries((fields || []).map(f => ({
       name: f.named ? f.name : null, type: f.paramType ? tree(f.paramType) : null, optional: f.optional,
     })), scope);
+    const names = (fields || []).filter(f => !f.named).map(f => f.name);
+    if (names.length) {
+      const last = list[list.length - 1];
+      if (isEntryObject(last)) list[list.length - 1] = { ...last, '%names': names };
+      else list.push({ '%names': names });
+    }
+    out[`:${name}`] = list;
   }
   return out;
 }
@@ -99,6 +108,9 @@ function classNode(name, cls, outer) {
 export function interfaceNode(doc, scope) {
   const node = {};
   section(doc, scope, node, 'public', new Set(doc.__untracked || []));
+  // `$as` takes the type to convert to, and replies the value as it: one signature
+  // per type, its arg the type of its reply.
+  if (doc.__asTypes?.length) node.public = { ...node.public, $as: doc.__asTypes.map(t => ({ re: [typeOf(t, scope)], writes: false })) };
   if (doc.__protected) section(doc.__protected, scope, node, 'protected');
   const types = typesOf(doc.__typeDecls, scope);
   if (Object.keys(types).length) node.types = types;
@@ -147,13 +159,36 @@ export function fileScope(ast, remoteDocs = {}) {
 // of its own taking its parents' params.
 export function serviceDocument(parsed, scope) {
   const root = interfaceNode(parsed, scope);
+  // A class with no constructor of its own takes its parents' params.
+  const at = nodeAt(root);
   const done = new Set();
-  const at = (address) => address.startsWith(':') ? address.slice(1).split(':').reduce((n, seg) => n?.[`:${seg}`], root) : null;
-  const expand = (node, cls) => {
+  const inheritNew = (name, cls) => {
+    const node = root[`:${name}`];
+    if (done.has(node)) return;
+    done.add(node);
+    const parents = (node.extends || []).map(a => [a, at(a)]).filter(([, p]) => p);
+    for (const [a] of parents) if (parsed.__types?.[a.slice(1)]) inheritNew(a.slice(1), parsed.__types[a.slice(1)]);
+    if (parents.length && !cls.ownNew && !cls.initParams?.length) {
+      const args = mergeEntries(parents.map(([, p]) => p.public?.$new?.[0]?.args || []));
+      if (args.length) node.public.$new = node.public.$new.map(s => orderSig({ ...s, args }));
+    }
+  };
+  for (const [name, cls] of Object.entries(parsed.__types || {})) inheritNew(name, cls);
+  return expandInheritance(root);
+}
+
+const nodeAt = (root) => (address) => (address.startsWith(':') ? address.slice(1).split(':').reduce((n, seg) => n?.[`:${seg}`], root) : null);
+
+// Each class's instances with what they inherit from a parent in the document:
+// its parents' instance ops it doesn't define, and their cells.
+export function expandInheritance(root) {
+  const at = nodeAt(root);
+  const done = new Set();
+  const expand = (node) => {
     if (done.has(node)) return;
     done.add(node);
     const parents = (node.extends || []).map(at).filter(Boolean);
-    parents.forEach(p => expand(p, null));
+    parents.forEach(expand);
     const inst = node[':*'] ??= {};
     for (const p of parents) {
       const theirs = p[':*'] || {};
@@ -165,12 +200,8 @@ export function serviceDocument(parsed, scope) {
       for (const k of Object.keys(theirs)) if (k.startsWith(':') && !(k in inst)) inst[k] = theirs[k];
     }
     node[':*'] = orderNode(inst);
-    if (cls && parents.length && !cls.ownNew && !cls.initParams?.length) {
-      const args = mergeEntries(parents.map(p => p.public?.$new?.[0]?.args || []));
-      if (args.length) node.public.$new = node.public.$new.map(s => orderSig({ ...s, args }));
-    }
   };
-  for (const [name, cls] of Object.entries(parsed.__types || {})) expand(root[`:${name}`], cls);
+  for (const [key, node] of Object.entries(root)) if (key.startsWith(':') && node.public?.$new) expand(node);
   return root;
 }
 
@@ -279,9 +310,11 @@ function decodeEntries(list) {
 
 const EFFECT = (writes) => (writes === false ? 'read' : writes === undefined ? 'purported' : 'write');
 
-function decodeSignature(sig) {
+function decodeSignature(sig, name = '') {
   const out = { params: decodeEntries(sig.args || []), returns: null, effect: EFFECT(sig.writes) };
-  if (!sig.re) return { ...out, noReply: true };
+  // A Brevity name says it's silent with its `.` (or writes with its `!`); a
+  // foreign name can't, so its signature does.
+  if (!sig.re) return { ...out, noReply: true, ...(!/[.!]$/.test(name) && { silent: true }) };
   const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
   const values = shapes.filter(s => !isSelf(s)).map(decodeEntries);
   if (shapes.some(isSelf)) out.returnsSelf = true;
@@ -301,21 +334,37 @@ function readSection(ops, node, doc) {
       if (child.public.$set?.[0]?.writes === 'untracked') (doc.__untracked ??= []).push(op);
       continue;
     }
-    doc[op] = sigs.map(decodeSignature);
+    doc[op] = sigs.map(s => decodeSignature(s, op));
     if (sigs.some(s => s.writes === 'untracked')) (doc.__untracked ??= []).push(op);
   }
 }
 
 function readTypes(types) {
-  return Object.fromEntries(Object.entries(types || {}).map(([key, list]) => [key.slice(1), {
-    // A positional field's name is the service's own: it is known by its place.
-    fields: decodeEntries(list).map((f, i) => ({ type: 'TypeField', name: f.positional ? `${i}` : f.name, paramType: f.type, ...(f.optional && { optional: true }), ...(!f.positional && { named: true }) })),
-  }]));
+  return Object.fromEntries(Object.entries(types || {}).map(([key, list]) => {
+    const last = list[list.length - 1];
+    const names = last && typeof last === 'object' && !Array.isArray(last) ? last['%names'] || [] : [];
+    let entries = list;
+    if (names.length) {
+      const named = Object.fromEntries(Object.entries(last).filter(([k]) => k !== '%names'));
+      entries = [...list.slice(0, -1), ...(Object.keys(named).length ? [named] : [])];
+    }
+    let i = 0;
+    // A silent-function field is named with its silent `.`, stored without it.
+    const bare = (name, type) => (name?.endsWith('.') && /=>\s*\.\s*$/.test(type) ? name.slice(0, -1) : name);
+    const fields = decodeEntries(entries).map(f => ({
+      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.type), paramType: f.type,
+      ...(f.optional && { optional: true }), ...(!f.positional && { named: true }),
+    }));
+    return [key.slice(1), { fields }];
+  }));
 }
 
 export function documentShape(node) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) throw new Error(`A node of a service document is an object, not ${JSON.stringify(node)}`);
   const doc = {};
-  readSection(node.public, node, doc);
+  const { $as, ...ops } = node.public || {};
+  readSection(ops, node, doc);
+  if ($as) doc.__asTypes = $as.map(s => typeText(s.re[0]));
   if (node.protected) {
     const prot = {};
     readSection(node.protected, node, prot);

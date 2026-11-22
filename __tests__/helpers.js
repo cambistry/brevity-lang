@@ -177,13 +177,11 @@ export async function runActors(actors, { messages = [] } = {}) {
 //     { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
 //   );
 
-// `document` is which of the parent's published documents the child compiles against:
-// `service` (its doc text) or `document` (its JSON document).
-export async function expectLocalAndRemote({ local, parent, child, path = 'svc', document = 'service' }, ...steps) {
+export async function expectLocalAndRemote({ local, parent, child, path = 'svc' }, ...steps) {
   await expectActorBehavior(await createActor(local), ...steps);
   const net = await runActors({
     [path]: { source: parent },
-    main: { source: child, compileOptions: { remotes: [{ path, service: extract(parent).interface[document] }] } },
+    main: { source: child, compileOptions: { remotes: [{ path, service: extract(parent).interface.service }] } },
   });
   let seen = 0;
   for (const { input, output } of steps) {

@@ -34,8 +34,7 @@ describe('extract', () => {
     expect(iface).toEqual({
       structures: [],
       params: '()',
-      service: '{\n  do_this (Text, b: Integer) -> (output: Boolean)\n}',
-      document: {
+      service: {
         public: {
           do_this: [{ args: ['Text', { b: 'Integer' }], re: [{ output: 'Boolean' }], writes: false }],
         },
@@ -56,12 +55,7 @@ describe('extract', () => {
     expect(iface).toEqual({
       structures: [],
       params: '(\n  "/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n  "limit": Integer\n)',
-      service: '{\n  fetch (key: Text) -> (value: Text)\n}',
-      document: {
-        public: {
-          fetch: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }],
-        },
-      },
+      service: { public: { fetch: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }] } },
     });
   });
 });

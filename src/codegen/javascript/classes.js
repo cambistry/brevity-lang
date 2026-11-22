@@ -10,6 +10,7 @@ import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.
 import { publicLabel } from '../../singleton_classes.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv, parseInterface } from './types.js';
+import { readRemote } from '../../validate.js';
 export { parseInterface } from './types.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
@@ -1761,10 +1762,10 @@ export function codegen(ast, options = {}) {
       }
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
-        if (alias) resolvedRemotes[alias] = stripAsTypeSuffix(service);
+        if (alias) resolvedRemotes[alias] = readRemote(service).doc;
       }
     } else {
-      Object.assign(resolvedRemotes, options.remotes);
+      for (const [name, service] of Object.entries(options.remotes)) resolvedRemotes[name] = readRemote(service).doc;
     }
   }
   const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0

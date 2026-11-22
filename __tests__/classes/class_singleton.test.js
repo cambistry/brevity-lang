@@ -425,7 +425,21 @@ describe('class members in the service document', () => {
           @n = -> 1
         }
       }
-    `).interface.service).toBe('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ^ {\n    count *Integer\n  }\n}');
+    `).interface.service).toEqual({
+      ':C': {
+        public: {
+          $new: [{ args: ['Integer'], re: [':C:*'], writes: false }],
+          count: [{ re: ['Integer'], writes: false }],
+        },
+        ':count': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+        ':*': { public: { n: [{ re: ['Integer'], writes: false }] } },
+      },
+    });
   });
 
   it('read back as a document of their own', () => {

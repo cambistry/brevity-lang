@@ -1,5 +1,5 @@
 import { compileActor } from '../helpers.js';
-import { domManifest as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
+import { domDocument as HTML_MANIFEST } from '../../src/codegen/browser/runtime.js';
 
 // HTML manifest supplied via compileOptions.remotes so <HTML: (:div)>
 // validates. The in-page runtime auto-injects this for <script

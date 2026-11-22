@@ -12,7 +12,7 @@ describe('extract — basic', () => {
   it('interface separates file-level params from service', () => {
     const { interface: iface } = extract('@ping = -> 1\n');
     expect(iface.params).toBe('()');
-    expect(iface.service).toBe('{\n  ping () -> (Integer)\n}');
+    expect(iface.service).toEqual({ public: { ping: [{ re: ['Integer'], writes: false }] } });
   });
 });
 
@@ -170,7 +170,9 @@ describe('extract — basic (continued)', () => {
     const { interface: iface } = extract(`
       @greet = (name: Text) -> greeting: "hi"
     `);
-    expect(iface.service).toBe('{\n  greet (name: Text) -> (greeting: Text)\n}');
+    expect(iface.service).toEqual({
+      public: { greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }] },
+    });
   });
 
   it('class appears in interface', () => {
@@ -179,8 +181,7 @@ describe('extract — basic (continued)', () => {
         @get = -> value
       }
     `);
-    expect(iface.service).toContain('Box (');
-    expect(iface.service).toContain('(value: Integer) -> *{');
+    expect(iface.service[':Box'].public.$new).toEqual([{ args: [{ value: 'Integer' }], re: [':Box:*'], writes: false }]);
   });
 });
 
@@ -253,8 +254,8 @@ describe('extract + compile — optional args round-trip', () => {
         -> result: (name + " " + greeting)
     `);
 
-    // interface should contain `? greeting: Text`
-    expect(ifaceA.service).toContain('? greeting: Text');
+    // `greeting` is optional
+    expect(ifaceA.service.public.greet).toEqual([{ args: [{ name: 'Text', greeting: { '%opt': 'Text' } }], re: [{ result: 'Text' }], writes: false }]);
 
     const { ast } = extract(`
       use Greeter
@@ -298,7 +299,7 @@ describe('extract + compile — optional args round-trip', () => {
       }
     `);
 
-    expect(ifaceA.service).toContain('? Integer');
+    expect(ifaceA.service[':Counter'].public.$new).toEqual([{ args: [{ '%opt': 'Integer' }], re: [':Counter:*'], writes: false }]);
   });
 });
 

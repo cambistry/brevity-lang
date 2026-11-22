@@ -1,9 +1,5 @@
 import { returnShapes } from './return_shapes.js';
-import { parseInterface } from './codegen/javascript/types.js';
 import { documentShape } from './service_doc.js';
-
-// A remote's document: doc text, or a JSON document.
-const parseRemoteDoc = (doc) => (typeof doc === 'string' ? parseInterface(doc) : documentShape(doc));
 import { _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
 import { lowerActorValues } from './actor_values.js';
@@ -371,7 +367,7 @@ export function addRemoteParents(actors, dependencies, remotes) {
   const local = new Set(actors.filter(a => a.name).map(a => a.name));
   for (const [name, info] of used) {
     if (local.has(name) || !actors.some(a => (a.supertypes || []).some(st => st.supertype === name))) continue;
-    const parsed = parseRemoteDoc(info.doc);
+    const parsed = documentShape(info.doc);
     const cls = parsed?.__types?.[info.remote];
     if (!cls) continue;
     const members = cls.members;

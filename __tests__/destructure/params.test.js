@@ -23,7 +23,14 @@ import { extract } from '../../index.js';
 // ─── Compilation — single destructure ────────────────────────────────────────
 
 describe('destructure params — single function', () => {
-  const manifest = '{\n  Point (Integer, Integer) -> *{\n    x () -> (Integer)\n    y () -> (Integer)\n  }\n}';
+  const manifest = {
+    ':Point': {
+      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point:*'], writes: false }] },
+      ':*': {
+        public: { x: [{ re: ['Integer'], writes: false }], y: [{ re: ['Integer'], writes: false }] },
+      },
+    },
+  };
 
   it('single destructured function compiles', () => {
     expect(() => compileSource(`
@@ -49,7 +56,7 @@ describe('destructure params — single function', () => {
 });
 
 describe('destructure params — single constant', () => {
-  const manifest = '{\n  MAGIC () -> (Text)\n}';
+  const manifest = { public: { MAGIC: [{ re: ['Text'], writes: false }] } };
 
   it('destructured constant compiles', () => {
     expect(() => compileSource(`
@@ -61,7 +68,7 @@ describe('destructure params — single constant', () => {
 });
 
 describe('destructure params — single cell', () => {
-  const manifest = '{\n  count () -> (Integer)\n}';
+  const manifest = { public: { count: [{ re: ['Integer'], writes: false }] } };
 
   it('destructured cell read compiles', () => {
     expect(() => compileSource(`
@@ -78,8 +85,20 @@ describe('destructure params — single cell', () => {
 // ─── Compilation — multiple destructures ─────────────────────────────────────
 
 describe('destructure params — multiple members', () => {
-  const domManifest = '{\n  Element () -> (Element)\n  div () -> (Element)\n  p () -> (Element)\n}';
-  const mixedManifest = '{\n  greet (name: Text) -> (greeting: Text)\n  VERSION () -> (Text)\n  count () -> (Integer)\n}';
+  const domDocument = {
+    public: {
+      Element: [{ re: ['Element'], writes: false }],
+      div: [{ re: ['Element'], writes: false }],
+      p: [{ re: ['Element'], writes: false }],
+    },
+  };
+  const mixedManifest = {
+    public: {
+      greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }],
+      VERSION: [{ re: ['Text'], writes: false }],
+      count: [{ re: ['Integer'], writes: false }],
+    },
+  };
 
   it('multiple destructured functions compile', () => {
     expect(() => compileSource(`
@@ -90,7 +109,7 @@ describe('destructure params — multiple members', () => {
         d = div()
         para = p()
         return :d
-    `, { remotes: [{ path: 'dom.bv', service: domManifest }] })).not.toThrow();
+    `, { remotes: [{ path: 'dom.bv', service: domDocument }] })).not.toThrow();
   });
 
   it('mixed function, constant, and cell destructures compile', () => {
@@ -108,7 +127,18 @@ describe('destructure params — multiple members', () => {
 // ─── Compilation — aliased destructures ──────────────────────────────────────
 
 describe('destructure params — aliasing', () => {
-  const manifest = '{\n  create () -> (Text)\n  CONFIG () -> (Text)\n  Func () -> (Text)\n  Point (Integer, Integer) -> *{\n    x () -> (Integer)\n  }\n  Scale () -> (Integer)\n}';
+  const manifest = {
+    public: {
+      create: [{ re: ['Text'], writes: false }],
+      CONFIG: [{ re: ['Text'], writes: false }],
+      Func: [{ re: ['Text'], writes: false }],
+      Scale: [{ re: ['Integer'], writes: false }],
+    },
+    ':Point': {
+      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point:*'], writes: false }] },
+      ':*': { public: { x: [{ re: ['Integer'], writes: false }] } },
+    },
+  };
 
   it('aliased destructure compiles', () => {
     expect(() => compileSource(`
@@ -156,7 +186,9 @@ describe('destructure params — aliasing', () => {
 
 describe('destructure params — unclaimed source', () => {
   it('with a document, compiles', () => {
-    const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
+    const manifest = {
+      public: { greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }] },
+    };
     expect(() => compileSource(`
       use :greet = "service.bv"
 
@@ -256,14 +288,19 @@ describe('destructure params — extraction', () => {
 
       @go = (p Point) -> p
     `);
-    expect(iface.service).toContain('`geometry.bv`.Point');
+    expect(iface.service.public.go).toEqual([{ args: ['geometry.bv:Point'], re: ['geometry.bv:Point'], writes: false }]);
   });
 });
 
 // ─── Outgoing CAM messages ───────────────────────────────────────────────────
 
 describe('destructure params — outgoing messages', () => {
-  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  ping. () => .\n}';
+  const manifest = {
+    public: {
+      greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }],
+      'ping.': [{ writes: true }],
+    },
+  };
 
   it('destructured function call sends message to source service', async () => {
     const compiled = await compileActor(`
@@ -305,7 +342,7 @@ describe('destructure params — outgoing messages', () => {
 // ─── Full roundtrip ──────────────────────────────────────────────────────────
 
 describe('destructure params — full roundtrip', () => {
-  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n}';
+  const manifest = { public: { greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }] } };
 
   it('destructured function: call out, mock response, return to caller', async () => {
     const compiled = await compileActor(`
@@ -366,7 +403,13 @@ describe('destructure params — validation', () => {
 // ─── Uniform addressable ops ─────────────────────────────────────────────────
 
 describe('destructure params — uniform addressable ops', () => {
-  const manifest = '{\n  greet (name: Text) -> (greeting: Text)\n  VERSION () -> (Text)\n  count () -> (Integer)\n}';
+  const manifest = {
+    public: {
+      greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }],
+      VERSION: [{ re: ['Text'], writes: false }],
+      count: [{ re: ['Integer'], writes: false }],
+    },
+  };
 
   it('function, constant, and cell are all callable as ops', async () => {
     const compiled = await compileActor(`

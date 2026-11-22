@@ -145,6 +145,14 @@ Decided 2026-11-22, for the forms the note above leaves open:
 - **An anonymous shape is an `Object`:** `(Text, n: Integer)` is
   `["Text", { "n": "Integer", "%t": "Object" }]`.
 - **Named entries sit in one object after the positional ones,** as `ty` writes them.
+- **A declared type's positional fields keep their names, as `%names`** in the object of its
+  named entries, in order: `type Point (x Integer, y: Integer)` is
+  `":Point": ["Integer", { "y": "Integer", "%names": ["x"] }]`. A caller reads a positional field
+  by name (`p.x`), and decodes a value into its fields, so the names are part of the type's
+  interface, unlike a positional param's.
+- **A service's `as` clauses are its `$as` op,** one signature per type it converts to: `$as`
+  takes the type and replies the value as it, so each signature is `{ "re": [T], "writes": false }`,
+  its arg the type of its reply.
 
 ## Addresses
 

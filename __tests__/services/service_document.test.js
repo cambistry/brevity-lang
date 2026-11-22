@@ -29,7 +29,7 @@ describe('the service document', () => {
         @made = -> 1
       }
     `);
-    expect(iface.document).toEqual({
+    expect(iface.service).toEqual({
       public: {
         val: [{ re: ['Integer'], writes: false }],
         origin: [{ re: [':Point'], writes: false }],
@@ -44,7 +44,7 @@ describe('the service document', () => {
         ],
       },
       types: {
-        ':Point': ['Integer', { y: 'Integer' }],
+        ':Point': ['Integer', { y: 'Integer', '%names': ['x'] }],
       },
       ':cell': {
         public: {
@@ -94,7 +94,7 @@ describe('the service document', () => {
         @more = -> 2
       }
     `);
-    expect(iface.document).toEqual({
+    expect(iface.service).toEqual({
       ':G': {
         public: {
           $new: [{ args: ['Integer'], re: [':G:*'], writes: false }],
@@ -122,13 +122,13 @@ describe('the service document', () => {
         @x = (p X) -> p
       }
     `);
-    expect(iface.document).toEqual({
+    expect(iface.service).toEqual({
       ':W': {
         public: {
           $new: [{ re: [':W:*'], writes: false }],
         },
         types: {
-          ':X': ['Integer'],
+          ':X': ['Integer', { '%names': ['a'] }],
         },
         ':*': {
           public: {
@@ -144,7 +144,7 @@ describe('the service document', () => {
       use Geo = "geo.bv"
       @p = (q Geo::Point) -> q
     `);
-    expect(iface.document).toEqual({
+    expect(iface.service).toEqual({
       public: {
         p: [{ args: ['geo.bv:Point'], re: ['geo.bv:Point'], writes: false }],
       },
@@ -157,7 +157,7 @@ describe('the service document', () => {
         @k = -> 1
       }
     `);
-    expect(iface.document).toEqual({
+    expect(iface.service).toEqual({
       ':s': {
         public: {
           k: [{ re: ['Integer'], writes: false }],

@@ -207,7 +207,19 @@ describe('a public singleton in the service document', () => {
       }
       @empty = actor {
       }
-    `).interface.service).toBe('{\n  s {\n    n *Integer\n    get () -> (Integer)\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  empty {}\n}');
+    `).interface.service).toEqual({
+      ':s': {
+        public: { n: [{ re: ['Integer'], writes: false }], get: [{ re: ['Integer'], writes: false }] },
+        ':n': {
+          public: {
+            $get: [{ re: ['Integer'], writes: false }],
+            $set: [{ args: ['Integer'], writes: true }],
+          },
+        },
+        ':inner': { public: { ping: [{ re: ['Integer'], writes: false }] } },
+      },
+      ':empty': {},
+    });
   });
 
   it('is a sub-service inside a class', () => {
@@ -218,7 +230,15 @@ describe('a public singleton in the service document', () => {
         }
         @read = -> 2
       }
-    `).interface.service).toBe('{\n  Box (Integer) -> *{\n    tally {\n      get () -> (Integer)\n    }\n    read () -> (Integer)\n  }\n}');
+    `).interface.service).toEqual({
+      ':Box': {
+        public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
+        ':*': {
+          public: { read: [{ re: ['Integer'], writes: false }] },
+          ':tally': { public: { get: [{ re: ['Integer'], writes: false }] } },
+        },
+      },
+    });
   });
 
   it('a private singleton is not in it', () => {
@@ -227,7 +247,7 @@ describe('a public singleton in the service document', () => {
         @get = -> 1
       }
       @go = -> 2
-    `).interface.service).toBe('{\n  go () -> (Integer)\n}');
+    `).interface.service).toEqual({ public: { go: [{ re: ['Integer'], writes: false }] } });
   });
 
   it('reads back as a document of its own', () => {

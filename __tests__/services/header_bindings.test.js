@@ -61,7 +61,7 @@ describe('use bindings — forms', () => {
 
   it('an untyped binding takes its type from the remote document', () => {
     const src = 'use S = Store\n@go. = { S.ping... }\n';
-    expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: '{\n  ping. () => .\n}' }] }))
+    expect(() => compile(extract(src).ast, { remotes: [{ path: 'Store', service: { public: { 'ping.': [{ writes: true }] } } }] }))
       .not.toThrow();
   });
 
@@ -73,7 +73,7 @@ describe('use bindings — forms', () => {
 
 describe('inline definition wins over the remote document', () => {
   const header = 'use DB = "/db" as { get (key: Text) -> (value: Text) }\n';
-  const remotes = [{ path: '/db', service: '{\n  put. (key: Text, value: Text) => .\n}' }];
+  const remotes = [{ path: '/db', service: { public: { 'put.': [{ args: [{ key: 'Text', value: 'Text' }], writes: true }] } } }];
   const compileWith = (body) => compile(extract(header + body).ast, { remotes });
 
   it('a declared method compiles even when the remote lacks it', () => {
@@ -86,7 +86,7 @@ describe('inline definition wins over the remote document', () => {
 
   it('an inline constructor profile wins too', () => {
     const src = 'use Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
-    const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: '{\n  pong. () => .\n}' }];
+    const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: { public: { 'pong.': [{ writes: true }] } } }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });
 

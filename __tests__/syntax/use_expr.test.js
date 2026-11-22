@@ -126,7 +126,7 @@ describe('use("…") — the manifest', () => {
 });
 
 describe('use("…") — scope', () => {
-  const remotes = [{ path: 'HTML', service: '{ div () -> (Integer) }' }];
+  const remotes = [{ path: 'HTML', service: { public: { div: [{ re: ['Integer'], writes: false }] } } }];
 
   it('a destructure binds in its function only', () => {
     expect(() => compileSource(`
