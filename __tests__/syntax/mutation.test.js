@@ -188,6 +188,7 @@ function accepted(m, outcome, src) {
     if (m.kind === 'delete' && m.type === 'KEYWORD' && m.text === 'return') return n === 'SIGIL' ? 'a sigil tail is its reply: `:x` is `return :x`' : '`return` is optional before a tail value';
     if (m.kind === 'delete' && m.type === 'KEYWORD' && m.text === 'self') return 'in a `!` function, a bare `return` is `return self`';
     if (m.kind === 'delete' && m.type === 'COLON') return 'in a signature, `name: Type` is `name Type`';
+    if (m.kind === 'swap' && m.type === 'IDENT' && m.withType === 'COLON') return 'a named destructure entry is `name: Type` or `:name Type`';
     if (m.kind === 'delete' && m.type === 'IDENT' && n === 'EQUALS') return 'a param\'s type may be inferred from its default';
     if (m.type === 'STAR' || m.stray === '*') return 'a header param\'s `*` grants writes; nothing here writes it';
     return null;

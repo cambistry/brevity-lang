@@ -1,8 +1,9 @@
 import { purportedFunctions } from './src/effects.js';
 import { parseInterface } from './src/codegen/javascript/types.js';
+import { serviceDocument, fileScope } from './src/service_doc.js';
+import { validate, readRemote } from './src/validate.js';
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
-import { validate } from './src/validate.js';
 import { renamePublicClasses, validateWithSourceNames, resolveSuperclassChain } from './src/subclass.js';
 import { buildsBase } from './src/super_calls.js';
 import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js';
@@ -622,6 +623,226 @@ function instanceDocument(ast, cls, aliasMap, purportedByActor, opts = {}) {
 // Two types in a signature agree: the same, or either one unknown.
 const sameType = (a, b) => !a || !b || a === b || a === 'Anything' || b === 'Anything';
 
+// ── The service document ─────────────────────────────────────────────────────
+//
+// The file's Opre service document (notes/opre-type-encoding-2026-11-21.md): its
+// interface as the compiler reads one (the shape parseInterface gives), built from
+// the AST with each type as the file names it, then encoded (src/service_doc.js).
+// A synthesized name (a closure's `@0`) is reached through a function value, typed
+// where the value is, so it is no op of the service's.
+
+const SYNTHESIZED = /^@(\d+$|__)/;
+
+function shapeParam(p) {
+  const optional = !!(p.defaultValue || p.optional);
+  return { name: p.positional ? null : (p.key || p.name), type: p.type || 'Anything', positional: !!p.positional, ...(optional && { optional }) };
+}
+
+function fnShape(fn, purported) {
+  const params = fn.params.map(shapeParam);
+  if (fn.body.some(stmt => stmt.type === 'SilentTerminator')) return { params, returns: null, effect: 'write', noReply: true };
+  const effect = fn.name.endsWith('!') ? 'write' : purported?.has(fn.name) ? 'purported' : 'read';
+  const { alternatives, orSelf } = returnShapes(fn);
+  const slots = (alt) => alt.map(({ name, type }) => ({ name, type: unionMembers(type).join(' | '), positional: name === null }));
+  const shapes = alternatives.map(slots);
+  return {
+    params, returns: shapes[0] ?? null, effect,
+    ...(orSelf && { returnsSelf: true }),
+    ...(shapes.length > 1 && { returnAlternatives: shapes }),
+  };
+}
+
+// A public cell `@name`: its type, and whether it is read-only. Null for anything else.
+function cellShape(actor, getters, setters) {
+  if (getters.length !== 1 || setters.length > 1) return null;
+  const [getter] = getters;
+  if (setters.length === 1) {
+    const type = reactiveCellType(getter, setters[0], new Map());
+    return type ? { type, readOnly: false } : null;
+  }
+  if (!getter.cellGetter) return null;
+  const field = getter.body.find(s => s.type === 'Reply')?.fields?.[0];
+  return field?.type ? { type: field.type, readOnly: true } : null;
+}
+
+const addFn = (doc, name, sig, untracked = false) => {
+  (doc[name] ??= []).push(sig);
+  if (untracked) (doc.__untracked ??= []).push(name);
+};
+const addField = (doc, name, { type, cell, readOnly }, untracked = false) => {
+  (doc[name] ??= []).push({ params: [], returns: [{ name: null, type, positional: true }] });
+  (doc.__fields ??= {})[name] = { type, cell, readOnly };
+  if (untracked) (doc.__untracked ??= []).push(name);
+};
+const addSetter = (doc, name, type) => {
+  (doc.__setters ??= []).push({ name, type });
+  (doc.__fields ??= {})[name] = { type, cell: true, writeOnly: true };
+};
+const docNames = (doc) => new Set([...Object.keys(doc).filter(k => !k.startsWith('__')), ...Object.keys(doc.__fields || {}), ...Object.keys(doc.__services || {})]);
+
+// Copies `from`'s entries whose names `into` doesn't have.
+function inherit(into, from) {
+  const have = docNames(into);
+  for (const name of docNames(from)) {
+    if (have.has(name)) continue;
+    if (from[name]) into[name] = from[name];
+    if (from.__fields?.[name]) (into.__fields ??= {})[name] = from.__fields[name];
+    if (from.__services?.[name]) (into.__services ??= {})[name] = from.__services[name];
+    if (from.__untracked?.includes(name)) (into.__untracked ??= []).push(name);
+    for (const st of from.__setters || []) if (st.name === name) (into.__setters ??= []).push(st);
+  }
+  return into;
+}
+
+const typeDeclShape = (decl) => ({
+  fields: (decl.fields || []).map(f => (/=>\s*\.\s*$/.test(f.paramType || '') && f.named ? { ...f, name: `${f.name}.` } : f)),
+});
+
+// An actor's public members (src/singleton_classes.js has the singletons).
+function publicMembersShape(ast, actor, purportedByActor, doc = {}) {
+  const purported = purportedByActor.get(actor);
+  const grouped = new Map();
+  for (const fn of actor.functions) {
+    if (!fn.name || SYNTHESIZED.test(fn.name)) continue;
+    const isGetter = fn.name.startsWith('@');
+    const isSetter = fn.name.startsWith('set@');
+    if (!isGetter && !isSetter) continue;
+    const bare = fn.name.replace(/^set@|^@/, '');
+    if (!grouped.has(bare)) grouped.set(bare, { getters: [], setters: [] });
+    (isGetter ? grouped.get(bare).getters : grouped.get(bare).setters).push(fn);
+  }
+  for (const [bare, { getters, setters }] of grouped) {
+    const cell = cellShape(actor, getters, setters);
+    if (cell) { addField(doc, bare, { ...cell, cell: true }, !!untrackedPrefix(actor, '@' + bare)); continue; }
+    const singleton = getters.length === 1 && singletonIn(ast, actor, '@' + bare);
+    if (singleton) { (doc.__services ??= {})[bare] = singletonShape(ast, singleton, purportedByActor); continue; }
+    for (const fn of getters) addFn(doc, bare, fnShape(fn, purported), !!fn.untracked);
+    for (const fn of setters) addSetter(doc, bare, fn.params[0]?.type || 'Anything');
+  }
+  return doc;
+}
+
+// A public singleton, or a class block: a document of its own.
+function singletonShape(ast, cls, purportedByActor) {
+  const doc = {};
+  for (const decl of ownTypes(ast, cls)) (doc.__typeDecls ??= {})[decl.bareName ?? decl.name] = typeDeclShape(decl);
+  if (!cls.membersOf) return publicMembersShape(ast, cls, purportedByActor, doc);
+  blockPublicShape(ast, cls, purportedByActor, doc);
+  const prot = protectedShape(ast, cls, purportedByActor);
+  if (docNames(prot).size) doc.__protected = prot;
+  return doc;
+}
+
+// A class block's public members, composite: its own, then those of the block it
+// extends that it doesn't define.
+function blockPublicShape(ast, block, purportedByActor, doc = {}) {
+  publicMembersShape(ast, { ...block, functions: (block.functions || []).filter(f => !f.inheritedFrom) }, purportedByActor, doc);
+  const parent = block.blockParent && ast.actors.find(a => a.name === block.blockParent);
+  if (parent) inherit(doc, blockPublicShape(ast, parent, purportedByActor));
+  else if (block.remoteBase) inherit(doc, { ...block.remoteBase.doc, __protected: undefined, __types: undefined, __typeDecls: undefined });
+  return doc;
+}
+
+// A class block's protected functions and cells, composite; then what a parent in
+// another file gives it.
+function protectedShape(ast, block, purportedByActor) {
+  const { fns, cells } = protectedMembers(ast, block);
+  const purported = purportedByActor.get(block);
+  const doc = {};
+  for (const d of cells.values()) addField(doc, `~${d.name}`, { type: d.typeName || 'Anything', cell: true, readOnly: !d.isRef });
+  for (const [name, clauses] of fns) for (const f of clauses) addFn(doc, `~${name}`, fnShape(f, purported));
+  let top = block;
+  const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
+  while (top.blockParent && byName.get(top.blockParent)) top = byName.get(top.blockParent);
+  if (top.remoteBase?.doc.__protected) inherit(doc, top.remoteBase.doc.__protected);
+  return doc;
+}
+
+// What a class's instances present to an extender beyond their public members.
+function instanceProtectedShape(ast, cls, purportedByActor, opts) {
+  const { functions, cells } = instanceMembers(ast, cls, opts);
+  const purported = purportedByActor.get(cls);
+  const isAccessor = (f) => f.cellGetter || /^(set|update|subscribe|new)[@.#]/.test(f.name);
+  const deps = new Set((ast.dependencies || []).map(d => d.name));
+  const typeOf = (d) => !d.typeName ? 'Anything' : deps.has(d.typeName) ? 'Actor' : d.typeName;
+  const doc = {};
+  for (const d of cells.filter(d => !d.name.startsWith('@'))) addField(doc, `~${d.name}`, { type: typeOf(d), cell: true, readOnly: !d.isRef });
+  for (const f of functions.filter(f => !/^[@#]/.test(f.name) && !isAccessor(f))) addFn(doc, `~${f.name}`, fnShape(f, purported));
+  return doc;
+}
+
+function classShape(ast, actor, privateClasses, purportedByActor) {
+  const name = (actor.sourceName ?? actor.name).replace(/^@/, '');
+  const flat = withPrivateSupers(actor, privateClasses, purportedByActor);
+  const supertypes = (flat.supertypes || []).map(st => ({ supertype: (st.sourceName ?? st.supertype).replace(/^@/, '') }));
+  const ownNew = !supertypes.length || (flat.params || []).length > 0 || buildsBase(actor);
+  const inst = {};
+  for (const p of flat.initParams || []) if (p.accessor) addField(inst, p.accessor, { type: p.type || 'Anything', cell: false, readOnly: true });
+  const setterOf = (fnName) => (flat.functions || []).filter(f => f.name === 'set' + fnName);
+  for (const fn of (flat.functions || []).filter(f => f.name?.startsWith('@') && !SYNTHESIZED.test(f.name))) {
+    const bare = fn.name.replace(/^@/, '');
+    const cell = cellShape(flat, [fn], setterOf(fn.name));
+    if (cell) { addField(inst, bare, { ...cell, cell: true }); continue; }
+    const singleton = singletonIn(ast, actor, fn.name);
+    if (singleton) { (inst.__services ??= {})[bare] = singletonShape(ast, singleton, purportedByActor); continue; }
+    addFn(inst, bare, fnShape(fn, flat.purported));
+  }
+  const functions = own(inst).flatMap(n => inst[n].map(sig => ({ name: n, ...sig })));
+  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([n, f]) => ({ name: n, type: f.type }));
+  const typeDecls = Object.fromEntries(ownTypes(ast, actor).map(d => [d.bareName ?? d.name, typeDeclShape(d)]));
+  const instanceProtected = instanceProtectedShape(ast, actor, purportedByActor);
+  const members = actor.membersClass ? ast.actors.find(a => a.name === actor.membersClass) : null;
+  return [name, {
+    effect: name.endsWith('!') ? 'write' : 'read',
+    supertypes,
+    initParams: (flat.params || []).map(shapeParam),
+    functions,
+    setters,
+    ...(inst.__services && { services: inst.__services }),
+    ...(inst.__fields && { fields: inst.__fields }),
+    ...(Object.keys(typeDecls).length && { typeDecls }),
+    ...(members && { members: singletonShape(ast, members, purportedByActor) }),
+    ...(ownNew && supertypes.length && { ownNew: true }),
+    ...(docNames(instanceProtected).size && { instanceProtected }),
+  }];
+}
+const own = (doc) => Object.keys(doc).filter(k => !k.startsWith('__'));
+
+// The file's interface, as the compiler reads one.
+function serviceShape(ast) {
+  const purportedByActor = purportedFunctions(ast, parseInterface);
+  const privateClasses = new Map(ast.actors.filter(a => a.name && !a.name.startsWith('@')).map(a => [a.name, a]));
+  const doc = {};
+  for (const decl of ast.types || []) if (!decl.ownerClass) (doc.__typeDecls ??= {})[decl.bareName ?? decl.name] = typeDeclShape(decl);
+  for (const actor of ast.actors) {
+    if (actor.name?.startsWith('@')) {
+      const [name, cls] = classShape(ast, actor, privateClasses, purportedByActor);
+      (doc.__types ??= {})[name] = cls;
+      continue;
+    }
+    if (actor.name) continue;
+    for (const p of actor.initParams || []) if (p.accessor) addField(doc, p.accessor, { type: p.type || 'Anything', cell: false, readOnly: true });
+    publicMembersShape(ast, actor, purportedByActor, doc);
+  }
+  return doc;
+}
+
+// The documents of the services a file uses, by path, for what its own says of
+// them. A malformed one is reported by validation, with the context to explain it.
+function remoteDocsByPath(ast, remotes) {
+  const docs = {};
+  const entries = Array.isArray(remotes) ? remotes.map(r => [r.path, r.service, r.params])
+    : Object.entries(remotes || {}).map(([name, service]) => [(ast.dependencies || []).find(d => d.name === name)?.path ?? name, service]);
+  for (const [path, service, params] of entries) {
+    try { docs[path] = readRemote(service, params).doc; } catch { /* reported by validation */ }
+  }
+  return docs;
+}
+
+function buildServiceJson(ast, remotes) {
+  return serviceDocument(serviceShape(ast), fileScope(ast, remoteDocsByPath(ast, remotes)));
+}
+
 // \`remotes\` (\`[{ path, service }]\`, as compile takes): the docs of the files this one
 // uses, for what the parse needs of them (a parent class from another file).
 export function extract(source, { remotes = null } = {}) {
@@ -637,6 +858,7 @@ export function extract(source, { remotes = null } = {}) {
       structures: [],
       params: buildParamsDocument(ast),
       service: buildServiceDocument(ast),
+      document: buildServiceJson(ast, remotes),
     },
   };
 }

@@ -38,15 +38,24 @@ export const SELF = Object.freeze({ '%self': true });
 //   services  { alias: path } for each dependency
 //   serviceClasses(path, rest) true when `rest` names a class in that service
 //   bindings  { name: { address, isClass } } for a name a dependency binds (`use :T = "svc"`)
-export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {} } = {}) {
+//   within    the classes a name is read inside, outermost first: there, a type or
+//             class declared in one is named bare
+export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [] } = {}) {
   const strip = (n) => n.replace(/^@/, '');
   const typeSet = new Set([...types].map(strip));
   const classSet = new Set([...classes].map(strip));
   const tokens = (segs) => segs.map(quote).join(':');
+  const declared = (segs) => typeSet.has(segs.join('::')) || classSet.has(segs.join('::'));
   return {
+    // The same names, read inside the class `name`.
+    within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, strip(name)] }),
     // The address of the type `path` names: an instance for a class, unless `asClass`.
     resolve(path, { asClass = false } = {}) {
-      const segs = path.map(strip);
+      let segs = path.map(strip);
+      for (let i = within.length; i > 0; i--) {
+        const inner = [...within.slice(0, i), ...segs];
+        if (declared(inner)) { segs = inner; break; }
+      }
       const instance = asClass ? '' : ':*';
       if (Object.hasOwn(bindings, segs[0])) {
         const b = bindings[segs[0]];

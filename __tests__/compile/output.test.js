@@ -35,6 +35,11 @@ describe('extract', () => {
       structures: [],
       params: '()',
       service: '{\n  do_this (Text, b: Integer) -> (output: Boolean)\n}',
+      document: {
+        public: {
+          do_this: [{ args: ['Text', { b: 'Integer' }], re: [{ output: 'Boolean' }], writes: false }],
+        },
+      },
     });
   });
 
@@ -52,6 +57,11 @@ describe('extract', () => {
       structures: [],
       params: '(\n  "/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n  "limit": Integer\n)',
       service: '{\n  fetch (key: Text) -> (value: Text)\n}',
+      document: {
+        public: {
+          fetch: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }],
+        },
+      },
     });
   });
 });

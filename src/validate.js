@@ -128,29 +128,9 @@ function validateProgram(ast, options = {}) {
       .map(d => d.name));
     const ingestRemote = (alias, service, params) => {
       if (inlineDefined.has(alias)) return;
-      if (typeof service !== 'string') {
-        remotesParsed[alias] = service;
-        return;
-      }
-      if (params) {
-        const ctorParams = parseParamsDocument(params);
-        if (ctorParams) factoryDecls[alias] = ctorParams;
-        const { iface, asTypes } = splitAsTypes(service);
-        remotesParsed[alias] = parseInterface(iface);
-        if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
-      } else {
-        const ctorManifest = parseConstructorManifest(service);
-        if (ctorManifest) {
-          factoryDecls[alias] = ctorManifest.constructorParams;
-          const { iface, asTypes } = splitAsTypes(ctorManifest.service);
-          remotesParsed[alias] = parseInterface(iface);
-          if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
-        } else {
-          const { iface, asTypes } = splitAsTypes(service);
-          remotesParsed[alias] = parseInterface(iface);
-          if (asTypes.length > 0) remotesParsed[alias].__asTypes = asTypes;
-        }
-      }
+      const { doc, ctorParams } = readRemote(service, params);
+      remotesParsed[alias] = doc;
+      if (ctorParams) factoryDecls[alias] = ctorParams;
     };
     if (Array.isArray(options.remotes)) {
       // New format: [{ path, params?, service }, ...]
@@ -2152,6 +2132,23 @@ function checkListMethodArgs(ast) {
 // matching the inline form. This helper splits it into ctor params + the
 // inner service interface string. Returns null if the input isn't shaped
 // like a constructor manifest (so the caller can fall back to a plain service).
+
+// A remote's document as `options.remotes` gives it: its interface, as the compiler
+// reads one, and the params of its `new` when it is a constructor document.
+export function readRemote(service, params = null) {
+  if (typeof service !== 'string') return { doc: service, ctorParams: null };
+  let ctorParams = null;
+  let text = service;
+  if (params) ctorParams = parseParamsDocument(params);
+  else {
+    const ctorManifest = parseConstructorManifest(service);
+    if (ctorManifest) { ctorParams = ctorManifest.constructorParams; text = ctorManifest.service; }
+  }
+  const { iface, asTypes } = splitAsTypes(text);
+  const doc = parseInterface(iface);
+  if (asTypes.length > 0) doc.__asTypes = asTypes;
+  return { doc, ctorParams };
+}
 
 function splitAsTypes(service) {
   const t = service.trim();
