@@ -190,3 +190,178 @@ const orderSig = (s) => {
   for (const k of ['args', 're', 'writes']) if (k in s) out[k] = s[k];
   return out;
 };
+
+// ── Reading a document ───────────────────────────────────────────────────────
+//
+// A service's published document, as the compiler reads an interface: the shape
+// parseInterface gives (src/codegen/javascript/types.js), each type as the service
+// names it (`:Point` is `Point`, `:T:*` an instance of its class `T`).
+
+const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals']]);
+const isEntryObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
+
+// An address in the document as a type name of the service's.
+function addressName(address) {
+  if (!address.startsWith(':')) {
+    if (address.includes(':')) throw new Error(`A type from another service ('${address}') in a service document isn't supported yet`);
+    return address;
+  }
+  const segs = address.slice(1).split(':');
+  if (segs[segs.length - 1] === '*') segs.pop();
+  return segs.join('::');
+}
+
+// A generic's element, after `of`: a plural for "any number of".
+function elementText(param) {
+  if (!Array.isArray(param)) return typeText(param);
+  const [inner] = param;
+  if (typeof inner === 'string' && PLURAL_OF.has(inner)) return PLURAL_OF.get(inner);
+  if (Array.isArray(inner) && inner[inner.length - 1]?.['%t'] === 'List') return `Lists of ${elementText(inner[0])}`;
+  return typeText(inner);
+}
+
+export function typeText(t) {
+  if (t === null) return 'null';
+  if (typeof t === 'string') return addressName(t);
+  if (Array.isArray(t)) {
+    const tag = t[t.length - 1];
+    if (!tag || typeof tag !== 'object' || !('%t' in tag)) throw new Error(`A type list ends in its '%t' entry: ${JSON.stringify(t)}`);
+    const { '%t': name, ...named } = tag;
+    const items = t.slice(0, -1);
+    if (name === 'Object') return `(${fieldsText(decodeEntries([...items, ...(Object.keys(named).length ? [named] : [])]))})`;
+    if (items.length !== 1 || Object.keys(named).length) throw new Error(`'${name}' takes one parameter in Brevity: ${JSON.stringify(t)}`);
+    return `${addressName(name)} of ${elementText(items[0])}`;
+  }
+  if ('%or' in t) return t['%or'].map(typeText).join(' | ');
+  if ('%fn' in t) return fnText(t['%fn'][0]);
+  if ('%node' in t) return nodeTypeText(t['%node']);
+  throw new Error(`Unrecognized type in a service document: ${JSON.stringify(t)}`);
+}
+
+const fieldsText = (fields) => fields.map(f => `${f.optional ? '? ' : ''}${f.positional ? f.type : `${f.name}: ${f.type}`}`).join(', ');
+const ARROW = (writes) => (writes === false ? '->' : writes === undefined ? '~>' : '=>');
+const isSelf = (shape) => shape.length === 1 && shape[0]?.['%self'] === true;
+
+function fnText(sig) {
+  const args = `(${fieldsText(decodeEntries(sig.args || []))})`;
+  if (!sig.re) return `${args} => .`;
+  const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
+  const self = shapes.some(isSelf);
+  const values = shapes.filter(s => !isSelf(s)).map(s => `(${fieldsText(decodeEntries(s))})`);
+  return `${args} ${ARROW(sig.writes)} ${[...values, ...(self ? ['self'] : [])].join(' | ')}`;
+}
+
+const isCell = (node) => node?.public?.$get && Object.keys(node.public).every(k => k === '$get' || k === '$set');
+
+function nodeTypeText(node) {
+  if (isCell(node)) return `${node.public.$set ? '*' : '&'}${typeText(node.public.$get[0].re[0])}`;
+  const $new = node.public?.$new?.[0];
+  if ($new && Object.keys(node.public).length === 1) {
+    return `(${fieldsText(decodeEntries($new.args || []))}) -> *${nodeTypeText($new.re[0]['%node'])}`;
+  }
+  const ops = Object.entries(node.public || {}).flatMap(([op, sigs]) => sigs.map(s => `${op} ${fnText(s)}`));
+  return `{ ${ops.join(', ')} }`;
+}
+
+// An entry list as fields: `[{ name, type, positional, optional }]`.
+function decodeEntries(list) {
+  const fields = [];
+  const one = (name, t) => {
+    const optional = t && typeof t === 'object' && '%opt' in t;
+    fields.push({ name, type: typeText(optional ? t['%opt'] : t), positional: name === null, ...(optional && { optional: true }) });
+  };
+  for (const e of list) {
+    if (isEntryObject(e)) for (const [k, v] of Object.entries(e)) one(k, v);
+    else one(null, e);
+  }
+  return fields;
+}
+
+const EFFECT = (writes) => (writes === false ? 'read' : writes === undefined ? 'purported' : 'write');
+
+function decodeSignature(sig) {
+  const out = { params: decodeEntries(sig.args || []), returns: null, effect: EFFECT(sig.writes) };
+  if (!sig.re) return { ...out, noReply: true };
+  const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
+  const values = shapes.filter(s => !isSelf(s)).map(decodeEntries);
+  if (shapes.some(isSelf)) out.returnsSelf = true;
+  if (values.length) out.returns = values.length === 1 && !values[0].length && !out.returnsSelf ? null : values[0];
+  if (values.length > 1) out.returnAlternatives = values;
+  return out;
+}
+
+// One section's ops, into `doc`; a cell is the op of its name with a node of its own.
+function readSection(ops, node, doc) {
+  for (const [op, sigs] of Object.entries(ops || {})) {
+    const child = node[`:${op}`];
+    if (isCell(child)) {
+      const type = typeText(child.public.$get[0].re[0]);
+      (doc[op] ??= []).push({ params: [], returns: [{ name: null, type, positional: true }] });
+      (doc.__fields ??= {})[op] = { type, cell: true, readOnly: !child.public.$set };
+      if (child.public.$set?.[0]?.writes === 'untracked') (doc.__untracked ??= []).push(op);
+      continue;
+    }
+    doc[op] = sigs.map(decodeSignature);
+    if (sigs.some(s => s.writes === 'untracked')) (doc.__untracked ??= []).push(op);
+  }
+}
+
+function readTypes(types) {
+  return Object.fromEntries(Object.entries(types || {}).map(([key, list]) => [key.slice(1), {
+    // A positional field's name is the service's own: it is known by its place.
+    fields: decodeEntries(list).map((f, i) => ({ type: 'TypeField', name: f.positional ? `${i}` : f.name, paramType: f.type, ...(f.optional && { optional: true }), ...(!f.positional && { named: true }) })),
+  }]));
+}
+
+export function documentShape(node) {
+  const doc = {};
+  readSection(node.public, node, doc);
+  if (node.protected) {
+    const prot = {};
+    readSection(node.protected, node, prot);
+    doc.__protected = prot;
+  }
+  if (node.types) doc.__typeDecls = readTypes(node.types);
+  for (const key of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) {
+    const name = key.slice(1);
+    const child = node[key];
+    if (doc.__fields?.[name] || doc.__protected?.__fields?.[name]) continue;
+    if (child.public?.$new) (doc.__types ??= {})[name] = readClass(child);
+    else if (child.public?.$set && Object.keys(child.public).length === 1) {
+      const type = typeText(child.public.$set[0].args[0]);
+      (doc.__setters ??= []).push({ name, type });
+      (doc.__fields ??= {})[name] = { type, cell: true, writeOnly: true };
+    } else (doc.__services ??= {})[name] = documentShape(child);
+  }
+  return doc;
+}
+
+function readClass(node) {
+  const { $new: [newSig], ...blockOps } = node.public;
+  const nu = decodeSignature(newSig);
+  const inst = documentShape(node[':*'] || {});
+  // A published param reads as an op of its name and type, taking nothing.
+  for (const p of nu.params) {
+    const sigs = inst[p.name];
+    if (p.positional || inst.__fields?.[p.name] || sigs?.length !== 1 || sigs[0].params.length || sigs[0].returns?.[0]?.type !== p.type) continue;
+    (inst.__fields ??= {})[p.name] = { type: p.type, cell: false, readOnly: true };
+  }
+  const functions = Object.keys(inst).filter(k => !k.startsWith('__')).flatMap(name => inst[name].map(s => ({ name, ...s })));
+  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, type: f.type }));
+  const block = { public: blockOps, ...(node.protected && { protected: node.protected }) };
+  for (const k of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) block[k] = node[k];
+  const hasBlock = Object.keys(blockOps).length || node.protected;
+  return {
+    effect: nu.effect,
+    supertypes: (node.extends || []).map(a => ({ supertype: addressName(a) })),
+    initParams: nu.params,
+    functions,
+    setters,
+    ...(inst.__services && { services: inst.__services }),
+    ...(inst.__fields && { fields: inst.__fields }),
+    ...(node.types && { typeDecls: readTypes(node.types) }),
+    ...(hasBlock && { members: documentShape(block) }),
+    ...(node.extends?.length && { ownNew: true }),
+    ...(inst.__protected && { instanceProtected: inst.__protected }),
+  };
+}

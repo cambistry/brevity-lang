@@ -142,6 +142,32 @@ const DOC = `{
     ~k () -> (Integer)
   }
 }`;
+
+// The same, as a JSON document (notes/opre-type-encoding-2026-11-21.md).
+const DOC_JSON = {
+  ':A': {
+    public: {
+      $new: [{ re: [':A:*'], writes: false }],
+      total: [{ re: ['Integer'], writes: false }],
+      f: [{ re: ['Integer'], writes: false }],
+    },
+    protected: {
+      '~count': [{ re: ['Integer'], writes: false }],
+      '~h': [{ args: ['Integer'], re: ['Integer'], writes: false }],
+      '~k': [{ re: ['Integer'], writes: false }],
+    },
+    ':total': {
+      public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+    },
+    ':~count': {
+      public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+    },
+    ':*': {},
+  },
+};
+
+// Each case runs against the doc text and the JSON document.
+const FORMS = [['doc text', DOC, 'service'], ['JSON document', DOC_JSON, 'document']];
 const child = `
   use :A = "svc"
   @B = A ^ {
@@ -156,33 +182,35 @@ const child = `
   }
 `;
 
-describe('the override table, as the child sends it', () => {
-  it("names the parent's names a block overrides or redeclares, and registers a block extending it", async () => {
-    await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
-        { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
-        { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
-        { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
-      ],
+describe.each(FORMS)('with the %s', (_, doc) => {
+  describe('the override table, as the child sends it', () => {
+    it("names the parent's names a block overrides or redeclares, and registers a block extending it", async () => {
+      await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
+          { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
+          { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
+          { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
+        ],
+      });
     });
-  });
 
-  it("a function both blocks hold runs here, with the lower block's override", async () => {
-    const actor = await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
-        { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
-        { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
-        { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
-      ],
+    it("a function both blocks hold runs here, with the lower block's override", async () => {
+      const actor = await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['total', 'f', '~count', '~h'] }], '$extend'], to: 'svc:A', from: ':B' } },
+          { input: { id: '1', re: [], to: ':B', from: 'svc:A' } },
+          { output: { id: '2', op: [[{ block: ['total', 'f', '~count', '~h', '~k'] }], '$extend'], as: ':C', to: 'svc:A', from: ':B' } },
+          { input: { id: '2', re: [], to: ':B', from: 'svc:A' } },
+        ],
+      });
+      await expectActorBehavior(actor,
+        { input: { id: '3', op: 'g', to: ':C', from: 'c' } },
+        { output: { id: '3', re: [30], ty: ['Integer'], to: 'c', from: ':C' } },
+      );
     });
-    await expectActorBehavior(actor,
-      { input: { id: '3', op: 'g', to: ':C', from: 'c' } },
-      { output: { id: '3', re: [30], ty: ['Integer'], to: 'c', from: ':C' } },
-    );
   });
 });
 

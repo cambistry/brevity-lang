@@ -809,8 +809,9 @@ function classShape(ast, actor, privateClasses, purportedByActor) {
 const own = (doc) => Object.keys(doc).filter(k => !k.startsWith('__'));
 
 // The file's interface, as the compiler reads one.
-function serviceShape(ast) {
-  const purportedByActor = purportedFunctions(ast, parseInterface);
+function serviceShape(ast, remoteDocs = {}) {
+  const byName = Object.fromEntries((ast.dependencies || []).filter(d => d.path && remoteDocs[d.path]).map(d => [d.name, remoteDocs[d.path]]));
+  const purportedByActor = purportedFunctions(ast, parseInterface, byName);
   const privateClasses = new Map(ast.actors.filter(a => a.name && !a.name.startsWith('@')).map(a => [a.name, a]));
   const doc = {};
   for (const decl of ast.types || []) if (!decl.ownerClass) (doc.__typeDecls ??= {})[decl.bareName ?? decl.name] = typeDeclShape(decl);
@@ -840,7 +841,8 @@ function remoteDocsByPath(ast, remotes) {
 }
 
 function buildServiceJson(ast, remotes) {
-  return serviceDocument(serviceShape(ast), fileScope(ast, remoteDocsByPath(ast, remotes)));
+  const remoteDocs = remoteDocsByPath(ast, remotes);
+  return serviceDocument(serviceShape(ast, remoteDocs), fileScope(ast, remoteDocs));
 }
 
 // \`remotes\` (\`[{ path, service }]\`, as compile takes): the docs of the files this one

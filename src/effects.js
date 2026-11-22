@@ -579,14 +579,17 @@ export function checkEffects(ast, remotesParsed = {}) {
 // The functions whose read-only claim rests on a `~>` in an inline doc, directly or
 // through any call in this file, per actor. A claim can't become a guarantee on the
 // way up, so this follows calls across classes until nothing changes.
-export function purportedFunctions(ast, parseDoc) {
+// `remoteDocs` are the documents of dependencies with no inline one, by name.
+export function purportedFunctions(ast, parseDoc, remoteDocs = {}) {
   const classes = classesByName(ast);
   const docClaims = new Map();
   for (const d of ast.dependencies || []) {
-    if (typeof d.interface !== 'string') continue;
+    if (typeof d.interface !== 'string' && !remoteDocs[d.name]) continue;
     // A malformed doc is reported by validation, with the context to explain it.
-    let doc;
-    try { doc = parseDoc(d.interface.replace(/\}\s*\|[^}]*$/, '}')); } catch { continue; }
+    let doc = remoteDocs[d.name];
+    if (typeof d.interface === 'string') {
+      try { doc = parseDoc(d.interface.replace(/\}\s*\|[^}]*$/, '}')); } catch { continue; }
+    }
     const sigs = [
       ...Object.entries(doc).filter(([k]) => !k.startsWith('__')).flatMap(([k, v]) => v.map(sig => [k, sig])),
       ...Object.values(doc.__types || {}).flatMap(t => (t.functions || []).map(f => [f.name, f])),

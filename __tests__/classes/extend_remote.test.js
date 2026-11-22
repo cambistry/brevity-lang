@@ -19,6 +19,29 @@ const DOC = `{
   }
 }`;
 
+// The same, as a JSON document (notes/opre-type-encoding-2026-11-21.md).
+const DOC_JSON = {
+  ':T': {
+    public: {
+      $new: [{ re: [':T:*'], writes: false }],
+      connect: [{ re: ['Integer'], writes: false }],
+      'bump!': [{ re: [{ '%self': true }], writes: true }],
+      read: [{ re: ['Integer'], writes: false }],
+    },
+    protected: {
+      '~timeout': [{ re: ['Integer'], writes: false }],
+      '~h': [{ re: ['Integer'], writes: false }],
+    },
+    ':~timeout': {
+      public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
+    },
+    ':*': {},
+  },
+};
+
+// Each case runs against the doc text and the JSON document.
+const FORMS = [['doc text', DOC, 'service'], ['JSON document', DOC_JSON, 'document']];
+
 const child = `
   use :T = "svc"
   @V = T ^ {
@@ -35,100 +58,102 @@ const child = `
   }
 `;
 
-describe('the child of a parent block in another file', () => {
-  it('registers its block, and each block extending it, as it is built', async () => {
-    await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
-        { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
-        { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
-        { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
-      ],
+describe.each(FORMS)('with the %s', (_, doc) => {
+  describe('the child of a parent block in another file', () => {
+    it('registers its block, and each block extending it, as it is built', async () => {
+      await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
+          { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
+          { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
+          { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
+        ],
+      });
     });
-  });
 
-  it('delegates a name it inherits, and answers the callbacks for its overrides', async () => {
-    const actor = await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
-        { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
-        { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
-        { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
-      ],
+    it('delegates a name it inherits, and answers the callbacks for its overrides', async () => {
+      const actor = await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
+          { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
+          { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
+          { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
+        ],
+      });
+      await expectActorBehavior(actor,
+        { input: { id: 'x', op: 'connect', to: ':V', from: 'c' } },
+        { output: { id: '4', op: 'connect', as: ':V', to: 'svc:T', from: ':V' } },
+        { input: { id: '1', op: '~h', as: ':V', to: ':V', from: 'svc:T' } },
+        { output: { id: '1', re: [2], ty: ['Integer'], to: 'svc:T', from: ':V' } },
+        { input: { id: '4', re: [302], ty: ['Integer'], to: ':V', from: 'svc:T' } },
+        { output: { id: 'x', re: [302], ty: ['Integer'], to: 'c', from: ':V' } },
+        // Two levels down: the cell is the lower block's, the override the middle's.
+        { input: { id: 'y', op: 'connect', to: ':W', from: 'c' } },
+        { output: { id: '5', op: 'connect', as: ':W', to: 'svc:T', from: ':V' } },
+        { input: { id: '2', op: '$get', as: ':W', to: ':V:~timeout', from: 'svc:T' } },
+        { output: { id: '2', re: [5], to: 'svc:T', from: ':V' } },
+        { input: { id: '3', op: '~h', as: ':W', to: ':V', from: 'svc:T' } },
+        { output: { id: '3', re: [2], ty: ['Integer'], to: 'svc:T', from: ':V' } },
+        { input: { id: '5', re: [52], ty: ['Integer'], to: ':V', from: 'svc:T' } },
+        { output: { id: 'y', re: [52], ty: ['Integer'], to: 'c', from: ':W' } },
+        // Three levels, an override at each.
+        { input: { id: 'z', op: 'connect', to: ':X', from: 'c' } },
+        { output: { id: '6', op: 'connect', as: ':X', to: 'svc:T', from: ':V' } },
+        { input: { id: '4', op: '$get', as: ':X', to: ':V:~timeout', from: 'svc:T' } },
+        { output: { id: '4', re: [5], to: 'svc:T', from: ':V' } },
+        { input: { id: '5', op: '~h', as: ':X', to: ':V', from: 'svc:T' } },
+        { output: { id: '5', re: [3], ty: ['Integer'], to: 'svc:T', from: ':V' } },
+        { input: { id: '6', re: [53], ty: ['Integer'], to: ':V', from: 'svc:T' } },
+        { output: { id: 'z', re: [53], ty: ['Integer'], to: 'c', from: ':X' } },
+      );
     });
-    await expectActorBehavior(actor,
-      { input: { id: 'x', op: 'connect', to: ':V', from: 'c' } },
-      { output: { id: '4', op: 'connect', as: ':V', to: 'svc:T', from: ':V' } },
-      { input: { id: '1', op: '~h', as: ':V', to: ':V', from: 'svc:T' } },
-      { output: { id: '1', re: [2], ty: ['Integer'], to: 'svc:T', from: ':V' } },
-      { input: { id: '4', re: [302], ty: ['Integer'], to: ':V', from: 'svc:T' } },
-      { output: { id: 'x', re: [302], ty: ['Integer'], to: 'c', from: ':V' } },
-      // Two levels down: the cell is the lower block's, the override the middle's.
-      { input: { id: 'y', op: 'connect', to: ':W', from: 'c' } },
-      { output: { id: '5', op: 'connect', as: ':W', to: 'svc:T', from: ':V' } },
-      { input: { id: '2', op: '$get', as: ':W', to: ':V:~timeout', from: 'svc:T' } },
-      { output: { id: '2', re: [5], to: 'svc:T', from: ':V' } },
-      { input: { id: '3', op: '~h', as: ':W', to: ':V', from: 'svc:T' } },
-      { output: { id: '3', re: [2], ty: ['Integer'], to: 'svc:T', from: ':V' } },
-      { input: { id: '5', re: [52], ty: ['Integer'], to: ':V', from: 'svc:T' } },
-      { output: { id: 'y', re: [52], ty: ['Integer'], to: 'c', from: ':W' } },
-      // Three levels, an override at each.
-      { input: { id: 'z', op: 'connect', to: ':X', from: 'c' } },
-      { output: { id: '6', op: 'connect', as: ':X', to: 'svc:T', from: ':V' } },
-      { input: { id: '4', op: '$get', as: ':X', to: ':V:~timeout', from: 'svc:T' } },
-      { output: { id: '4', re: [5], to: 'svc:T', from: ':V' } },
-      { input: { id: '5', op: '~h', as: ':X', to: ':V', from: 'svc:T' } },
-      { output: { id: '5', re: [3], ty: ['Integer'], to: 'svc:T', from: ':V' } },
-      { input: { id: '6', re: [53], ty: ['Integer'], to: ':V', from: 'svc:T' } },
-      { output: { id: 'z', re: [53], ty: ['Integer'], to: 'c', from: ':X' } },
-    );
-  });
 
-  it("base:: and super are delegated calls of the parent's own; T.f() is a plain call", async () => {
-    const actor = await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
-        { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
-        { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
-        { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
-        { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
-      ],
+    it("base:: and super are delegated calls of the parent's own; T.f() is a plain call", async () => {
+      const actor = await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
+          { input: { id: '1', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '2', op: [[{ block: ['~h', '~timeout'] }], '$extend'], as: ':W', to: 'svc:T', from: ':V' } },
+          { input: { id: '2', re: [], to: ':V', from: 'svc:T' } },
+          { output: { id: '3', op: [[{ block: ['~h', '~timeout', 'read'] }], '$extend'], as: ':X', to: 'svc:T', from: ':V' } },
+          { input: { id: '3', re: [], to: ':V', from: 'svc:T' } },
+        ],
+      });
+      await expectActorBehavior(actor,
+        { input: { id: 'z', op: 'viaBase', to: ':V', from: 'c' } },
+        { output: { id: '4', op: '~h', as: ':V', to: 'svc:T', from: ':V' } },
+        { input: { id: '4', re: [1], ty: ['Integer'], to: ':V', from: 'svc:T' } },
+        { output: { id: 'z', re: [102], ty: ['Integer'], to: 'c', from: ':V' } },
+        { input: { id: 's', op: 'read', to: ':X', from: 'c' } },
+        { output: { id: '5', op: 'read', as: ':X', to: 'svc:T', from: ':V' } },
+        { input: { id: '1', op: '$get', as: ':X', to: ':V:~timeout', from: 'svc:T' } },
+        { output: { id: '1', re: [5], to: 'svc:T', from: ':V' } },
+        { input: { id: '5', re: [5], ty: ['Integer'], to: ':V', from: 'svc:T' } },
+        { output: { id: 's', re: [1005], ty: ['Integer'], to: 'c', from: ':X' } },
+        { input: { id: 'w', op: 'asParent', to: ':V', from: 'c' } },
+        { output: { id: '6', op: 'connect', to: 'svc:T' } },
+        { input: { id: '6', re: [301], ty: ['Integer'], from: 'svc:T' } },
+        { output: { id: 'w', re: [301], ty: ['Integer'], to: 'c', from: ':V' } },
+      );
     });
-    await expectActorBehavior(actor,
-      { input: { id: 'z', op: 'viaBase', to: ':V', from: 'c' } },
-      { output: { id: '4', op: '~h', as: ':V', to: 'svc:T', from: ':V' } },
-      { input: { id: '4', re: [1], ty: ['Integer'], to: ':V', from: 'svc:T' } },
-      { output: { id: 'z', re: [102], ty: ['Integer'], to: 'c', from: ':V' } },
-      { input: { id: 's', op: 'read', to: ':X', from: 'c' } },
-      { output: { id: '5', op: 'read', as: ':X', to: 'svc:T', from: ':V' } },
-      { input: { id: '1', op: '$get', as: ':X', to: ':V:~timeout', from: 'svc:T' } },
-      { output: { id: '1', re: [5], to: 'svc:T', from: ':V' } },
-      { input: { id: '5', re: [5], ty: ['Integer'], to: ':V', from: 'svc:T' } },
-      { output: { id: 's', re: [1005], ty: ['Integer'], to: 'c', from: ':X' } },
-      { input: { id: 'w', op: 'asParent', to: ':V', from: 'c' } },
-      { output: { id: '6', op: 'connect', to: 'svc:T' } },
-      { input: { id: '6', re: [301], ty: ['Integer'], from: 'svc:T' } },
-      { output: { id: 'w', re: [301], ty: ['Integer'], to: 'c', from: ':V' } },
-    );
-  });
 
-  it('a parent whose doc is newer than the one it compiled against fails its build at $extend', async () => {
-    const actor = await createActor(child, {
-      compileOptions: { remotes: [{ path: 'svc', service: DOC }] },
-      expects: [
-        { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
-        { input: { id: '1', ex: { $extend: 'unknown_name' }, to: ':V', from: 'svc:T' } },
-      ],
+    it('a parent whose doc is newer than the one it compiled against fails its build at $extend', async () => {
+      const actor = await createActor(child, {
+        compileOptions: { remotes: [{ path: 'svc', service: doc }] },
+        expects: [
+          { output: { id: '1', op: [[{ block: ['~h'] }], '$extend'], to: 'svc:T', from: ':V' } },
+          { input: { id: '1', ex: { $extend: 'unknown_name' }, to: ':V', from: 'svc:T' } },
+        ],
+      });
+      await expect(actor.sendAsync({ id: 'x', op: 'connect', to: ':V', from: 'c' })).rejects.toThrow();
     });
-    await expect(actor.sendAsync({ id: 'x', op: 'connect', to: ':V', from: 'c' })).rejects.toThrow();
   });
 });
 
@@ -187,13 +212,15 @@ describe('the parent block, extended from another file', () => {
   });
 });
 
-describe('the two files together', () => {
-  it("the parent's code, run for the child three levels down", async () => {
-    const net = await runActors({
-      svc: { source: parent },
-      main: { source: child, compileOptions: { remotes: [{ path: 'svc', service: extract(parent).interface.service }] } },
+describe.each(FORMS)('with the %s', (_, _doc, key) => {
+  describe('the two files together', () => {
+    it("the parent's code, run for the child three levels down", async () => {
+      const net = await runActors({
+        svc: { source: parent },
+        main: { source: child, compileOptions: { remotes: [{ path: 'svc', service: extract(parent).interface[key] }] } },
+      });
+      await net.send('main', { id: 'z', op: 'connect', to: ':X', from: 'c' });
+      expect(net.external).toEqual([{ id: 'z', re: [53], ty: ['Integer'], to: 'c', from: ':X' }]);
     });
-    await net.send('main', { id: 'z', op: 'connect', to: ':X', from: 'c' });
-    expect(net.external).toEqual([{ id: 'z', re: [53], ty: ['Integer'], to: 'c', from: ':X' }]);
   });
 });

@@ -3,6 +3,7 @@
 
 import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
+import { documentShape } from './service_doc.js';
 import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
@@ -2135,8 +2136,15 @@ function checkListMethodArgs(ast) {
 
 // A remote's document as `options.remotes` gives it: its interface, as the compiler
 // reads one, and the params of its `new` when it is a constructor document.
+// A JSON document (notes/opre-type-encoding-2026-11-21.md) is read as one; a
+// service whose own `$new` replies `:*` is a constructor document.
 export function readRemote(service, params = null) {
-  if (typeof service !== 'string') return { doc: service, ctorParams: null };
+  if (typeof service !== 'string') {
+    const { $new, ...rest } = service.public || {};
+    if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: documentShape(service), ctorParams: params ? parseParamsDocument(params) : null };
+    const ctorParams = documentShape({ public: { $new } }).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type }));
+    return { doc: documentShape(service[':*'] || {}), ctorParams };
+  }
   let ctorParams = null;
   let text = service;
   if (params) ctorParams = parseParamsDocument(params);
