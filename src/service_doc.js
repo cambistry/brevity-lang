@@ -9,6 +9,7 @@
 
 import { encodeType, encodeEntries, cellNode, typeScope, SELF } from './opre_types.js';
 import { TT } from './type_tree.js';
+import { intern } from './type_enc.js';
 import { parseTypeTree } from './parser.js';
 
 const WRITES = { read: false, write: true };
@@ -299,7 +300,8 @@ function decodeEntries(list) {
   const fields = [];
   const one = (name, t) => {
     const optional = t && typeof t === 'object' && '%opt' in t;
-    fields.push({ name, type: typeText(optional ? t['%opt'] : t), positional: name === null, ...(optional && { optional: true }) });
+    const bare = optional ? t['%opt'] : t;
+    fields.push({ name, type: typeText(bare), typeEnc: intern(bare), positional: name === null, ...(optional && { optional: true }) });
   };
   for (const e of list) {
     if (isEntryObject(e)) for (const [k, v] of Object.entries(e)) one(k, v);
@@ -328,9 +330,10 @@ function readSection(ops, node, doc) {
   for (const [op, sigs] of Object.entries(ops || {})) {
     const child = node[`:${op}`];
     if (isCell(child)) {
-      const type = typeText(child.public.$get[0].re[0]);
-      (doc[op] ??= []).push({ params: [], returns: [{ name: null, type, positional: true }] });
-      (doc.__fields ??= {})[op] = { type, cell: true, readOnly: !child.public.$set };
+      const enc = intern(child.public.$get[0].re[0]);
+      const type = typeText(enc);
+      (doc[op] ??= []).push({ params: [], returns: [{ name: null, type, typeEnc: enc, positional: true }] });
+      (doc.__fields ??= {})[op] = { type, typeEnc: enc, cell: true, readOnly: !child.public.$set };
       if (child.public.$set?.[0]?.writes === 'untracked') (doc.__untracked ??= []).push(op);
       continue;
     }
@@ -352,7 +355,7 @@ function readTypes(types) {
     // A silent-function field is named with its silent `.`, stored without it.
     const bare = (name, type) => (name?.endsWith('.') && /=>\s*\.\s*$/.test(type) ? name.slice(0, -1) : name);
     const fields = decodeEntries(entries).map(f => ({
-      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.type), paramType: f.type,
+      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.type), paramType: f.type, paramTypeEnc: f.typeEnc,
       ...(f.optional && { optional: true }), ...(!f.positional && { named: true }),
     }));
     return [key.slice(1), { fields }];
@@ -377,9 +380,10 @@ export function documentShape(node) {
     if (doc.__fields?.[name] || doc.__protected?.__fields?.[name]) continue;
     if (child.public?.$new) (doc.__types ??= {})[name] = readClass(child);
     else if (child.public?.$set && Object.keys(child.public).length === 1) {
-      const type = typeText(child.public.$set[0].args[0]);
-      (doc.__setters ??= []).push({ name, type });
-      (doc.__fields ??= {})[name] = { type, cell: true, writeOnly: true };
+      const enc = intern(child.public.$set[0].args[0]);
+      const type = typeText(enc);
+      (doc.__setters ??= []).push({ name, type, typeEnc: enc });
+      (doc.__fields ??= {})[name] = { type, typeEnc: enc, cell: true, writeOnly: true };
     } else (doc.__services ??= {})[name] = documentShape(child);
   }
   return doc;
@@ -393,10 +397,10 @@ function readClass(node) {
   for (const p of nu.params) {
     const sigs = inst[p.name];
     if (p.positional || inst.__fields?.[p.name] || sigs?.length !== 1 || sigs[0].params.length || sigs[0].returns?.[0]?.type !== p.type) continue;
-    (inst.__fields ??= {})[p.name] = { type: p.type, cell: false, readOnly: true };
+    (inst.__fields ??= {})[p.name] = { type: p.type, typeEnc: p.typeEnc, cell: false, readOnly: true };
   }
   const functions = Object.keys(inst).filter(k => !k.startsWith('__')).flatMap(name => inst[name].map(s => ({ name, ...s })));
-  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, type: f.type }));
+  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, type: f.type, typeEnc: f.typeEnc }));
   const block = { public: blockOps, ...(node.protected && { protected: node.protected }) };
   for (const k of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) block[k] = node[k];
   const hasBlock = Object.keys(blockOps).length || node.protected;

@@ -1,7 +1,7 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-import { parseInterface, parseFieldList } from './codegen/javascript/types.js';
+import { parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { documentShape } from './service_doc.js';
 import { lowerAs } from './as_check.js';
@@ -97,8 +97,9 @@ function validateProgram(ast, options = {}) {
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
     if (d.interface) {
-      const { iface, asTypes } = splitAsTypes(d.interface);
-      remotesParsed[d.name] = parseInterface(iface);
+      // The parser read it, its types encoded (src/parser_types.js).
+      const { asTypes } = splitAsTypes(d.interface);
+      remotesParsed[d.name] = d.interfaceDoc;
       if (asTypes.length > 0) remotesParsed[d.name].__asTypes = asTypes;
     }
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;

@@ -8,7 +8,6 @@
 // where the value is, so it is no op of the service's.
 
 import { purportedFunctions } from './effects.js';
-import { parseInterface } from './codegen/javascript/types.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { buildsBase } from './super_calls.js';
 import { returnShapes, unionMembers } from './return_shapes.js';
@@ -311,7 +310,7 @@ function classShape(ast, actor, privateClasses, purportedByActor) {
 // interfaces and `remoteDocs` (by dependency path).
 function purported(ast, remoteDocs) {
   const byName = Object.fromEntries((ast.dependencies || []).filter(d => d.path && remoteDocs[d.path]).map(d => [d.name, remoteDocs[d.path]]));
-  return purportedFunctions(ast, parseInterface, byName);
+  return purportedFunctions(ast, byName);
 }
 
 // The file's interface. Its `as` clauses are what its `$as` converts it to.
@@ -345,7 +344,7 @@ export function serviceShape(ast, remoteDocs = {}) {
 // only by its doc is the same case. A clash with the parent's declaration is the
 // child's compile error.
 export function settleOverrideTables(ast) {
-  const purportedByActor = purportedFunctions(ast, parseInterface);
+  const purportedByActor = purportedFunctions(ast);
   const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
   const shown = (name) => (byName.get(name)?.sourceName ?? name ?? '').replace(/^@/, '').replace(/__pub$/, '');
   const docNames = (doc) => [...own(doc), ...own(doc.__protected || {})];

@@ -6,8 +6,10 @@
 
 import { parseTypeTree } from './parser.js';
 import { encodeType } from './opre_types.js';
+import { intern } from './type_enc.js';
 import { fileScope, documentShape } from './service_doc.js';
 import { TT } from './type_tree.js';
+import { parseInterface } from './codegen/javascript/types.js';
 
 // A node's `type` is its kind; a param's or field's `type` is a type.
 const NODE_KINDS = new Set(['Actor', 'ActorFieldSet', 'ActorSetStatement', 'ActorValue', 'AnonymousHtmlActor', 'AsClause',
@@ -45,7 +47,7 @@ export function encodeAstTypes(ast, remotes = null) {
   const encode = (text, sc) => {
     if (text === 'null') return null;
     const key = `${sc.key}\u0000${text}`;
-    if (!cache.has(key)) cache.set(key, encodeType(parseTypeTree(text), sc));
+    if (!cache.has(key)) cache.set(key, intern(encodeType(parseTypeTree(text), sc)));
     return cache.get(key);
   };
   const keyed = (sc, key) => Object.assign(sc, { key });
@@ -60,9 +62,13 @@ export function encodeAstTypes(ast, remotes = null) {
     }
     if (typeof node.type === 'string' && !NODE_KINDS.has(node.type) && !NOT_TYPES.has(node.type)) setEnc(node, 'type', encode(node.type, sc));
     if (node.type === 'Dependency' && typeof node.interface === 'string') {
-      setEnc(node, 'interface', encodeType(TT.iface(node.interface.replace(/\}\s*\|[^}]*$/, '}')), sc));
+      const text = node.interface.replace(/\}\s*\|[^}]*$/, '}');
+      setEnc(node, 'interface', intern(encodeType(TT.iface(text), sc)));
+      // The interface as the compiler reads one, its types encoded too.
+      node.interfaceDoc = parseInterface(text);
+      visit(node.interfaceDoc, sc);
     }
-    for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v, sc);
+    for (const [k, v] of Object.entries(node)) if (k !== 'loc' && k !== 'interfaceDoc' && v && typeof v === 'object') visit(v, sc);
   };
   for (const a of ast.actors || []) {
     const owner = a.singletonOf ?? a.membersOf ?? a.name;

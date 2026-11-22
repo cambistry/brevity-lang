@@ -200,9 +200,9 @@ describe('service document — emitted form', () => {
     `);
     const p = documentShape(iface.service);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
-    expect(p.__fields.val).toEqual({ type: 'Integer', cell: true, readOnly: false });
+    expect(p.__fields.val).toEqual({ type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false });
     expect(p.__types.Counter.functions.map(f => f.name)).toEqual(['get']);
-    expect(p.add[0].returns).toEqual([{ name: 'sum', type: 'Integer', positional: false }]);
+    expect(p.add[0].returns).toEqual([{ name: 'sum', type: 'Integer', typeEnc: 'Integer', positional: false }]);
   });
 
   it('a public cell with no setter emits &, and round-trips', () => {
@@ -221,8 +221,8 @@ describe('service document — emitted form', () => {
       },
     });
     expect(documentShape(iface.service).__fields).toEqual({
-      names: { type: 'List of Texts', cell: true, readOnly: true },
-      val: { type: 'Integer', cell: true, readOnly: false },
+      names: { type: 'List of Texts', typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
+      val: { type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false },
     });
   });
 
@@ -256,8 +256,8 @@ describe('service document — emitted form', () => {
     });
     // A positional param has no name in the document, so its prop reads back as an op.
     expect(documentShape(iface.service).__types.Box.fields).toEqual({
-      slot: { type: 'Integer', cell: true, readOnly: false },
-      names: { type: 'List of Texts', cell: true, readOnly: true },
+      slot: { type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false },
+      names: { type: 'List of Texts', typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
     });
   });
 });

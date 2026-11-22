@@ -6,7 +6,8 @@
 // Design: notes/mutation-suffix-2026-10-31.md.
 
 import { receiverDoc, receiverLabel } from './opre.js';
-import { parseInterface } from './codegen/javascript/types.js';
+import { fnArrow, fnReply, fnSignature, showReply, isCell, cellType, ownPath } from './type_enc.js';
+import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { settleWriterBody, eachReturn } from './writer_body.js';
 
@@ -25,47 +26,56 @@ const isUnnamedHandler = (name) =>
 // Calls name a class bare, while a public class is declared with its `@`.
 const classesByName = (ast) => new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
-const typeNameOf = (type) => (typeof type === 'string' ? type.trim().replace(/^[*&]/, '') : null);
-
-// A function type's own arrow, skipping any inside its params or result, and what
-// follows it.
-function functionTypeArrowAt(type) {
-  if (typeof type !== 'string') return null;
-  let depth = 0;
-  for (let i = 0; i < type.length; i++) {
-    if ('({'.includes(type[i])) depth++;
-    else if (')}'.includes(type[i])) depth--;
-    else if (depth === 0 && /^[-=~]>/.test(type.slice(i, i + 2))) return { arrow: type.slice(i, i + 2), result: type.slice(i + 2).trim() };
+// The class or dependency a type names, by the name the file knows it by: a class
+// by its actor's name (`@C`, `C`), a dependency by its alias. A name the file
+// doesn't resolve is itself. Null for any other type.
+function typeNamer(ast) {
+  const classes = classesByName(ast);
+  const byAddress = new Map();
+  for (const d of ast.dependencies || []) {
+    if (d.type !== 'Dependency' || !d.path) continue;
+    if (!d.destructures) byAddress.set(quote(d.path), d.name);
+    for (const { local, remote } of d.destructures || []) if (remote) byAddress.set(`${quote(d.path)}:${quote(remote)}`, local);
   }
-  return null;
+  return (enc) => {
+    const t = isCell(enc) ? cellType(enc) : enc;
+    if (typeof t !== 'string') return null;
+    const path = ownPath(t);
+    if (path) {
+      const name = path.join('::');
+      return classes.has(name) || !classes.has('@' + name) ? name : '@' + name;
+    }
+    if (!t.includes(':')) return byAddress.get(t) ?? t;
+    return byAddress.get(t.replace(/:\*$/, '')) ?? null;
+  };
 }
-const functionTypeArrow = (type) => functionTypeArrowAt(type)?.arrow ?? null;
 
 // An anonymous function in a `=>` slot follows the rules of a `!` function, and
 // what it yields has to be what the slot's result says: self for `=> self`, a value
 // for `=> (T)`, nothing for `=> .`. An empty `=> ()` takes falling off the end.
 function settleWritingSlot(fn, type, calleeLabel) {
-  const result = functionTypeArrowAt(type).result;
-  if (result === '.') {
+  const reply = fnReply(type);
+  if (reply === 'silent') {
     eachReturn(fn.body || [], (r) => {
       if (r.fields?.length) throw new Error(`'${calleeLabel}' takes a silent function here ('=> .'), but this one returns a value`);
     });
     return;
   }
   const yields = settleWriterBody(fn);
-  if (/\|\s*self\s*$/.test(result) || /^\(\s*\)$/.test(result)) return;
-  if (result === 'self' && yields !== 'self') {
+  if (reply === 'orSelf' || reply === 'empty') return;
+  if (reply === 'self' && yields !== 'self') {
     throw new Error(`'${calleeLabel}' takes a function that returns self here ('=> self'), but this one returns a value`);
   }
-  if (result !== 'self' && yields !== 'value') {
-    throw new Error(`'${calleeLabel}' takes a function that returns a value here ('=> ${result}'), but this one ${yields === 'self' ? 'falls off the end, which returns self' : 'returns self on a path'} — write 'return' with the value`);
+  if (reply !== 'self' && yields !== 'value') {
+    throw new Error(`'${calleeLabel}' takes a function that returns a value here ('=> ${showReply(fnSignature(type))}'), but this one ${yields === 'self' ? 'falls off the end, which returns self' : 'returns self on a path'} — write 'return' with the value`);
   }
 }
 
 export function checkEffects(ast, remotesParsed = {}) {
   const classes = classesByName(ast);
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
-  const claimedByActor = purportedFunctions(ast, parseInterface);
+  const claimedByActor = purportedFunctions(ast);
+  const typeNameOf = typeNamer(ast);
 
   // A file constructor's `!` and its doc's arrow must agree.
   for (const d of ast.dependencies || []) {
@@ -107,9 +117,9 @@ export function checkEffects(ast, remotesParsed = {}) {
       if (s.type === 'StateAssign' && callee) instanceOf.set(s.name.replace(/^@/, ''), callee);
     }
     for (const d of actor.stateVarDecls || []) {
-      if (!instanceOf.has(d.name.replace(/^@/, '')) && typeNameOf(d.typeName)) instanceOf.set(d.name.replace(/^@/, ''), typeNameOf(d.typeName));
+      if (!instanceOf.has(d.name.replace(/^@/, '')) && typeNameOf(d.typeNameEnc)) instanceOf.set(d.name.replace(/^@/, ''), typeNameOf(d.typeNameEnc));
     }
-    for (const p of actor.initParams || []) if (typeNameOf(p.type)) instanceOf.set(p.name, typeNameOf(p.type));
+    for (const p of actor.initParams || []) if (typeNameOf(p.typeEnc)) instanceOf.set(p.name, typeNameOf(p.typeEnc));
     const docSignatures = (alias, method) => {
       const parsed = remotesParsed[alias];
       if (parsed?.[method]) return parsed[method];
@@ -154,7 +164,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           const root = receiverRoot(node.value);
           if (isConstruction(root) || (root?.type === 'Identifier' && scope.fresh.has(root.name))) scope.fresh.add(node.name);
           if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.name) scope.instances.set(node.name, node.value.callee.name);
-          else if (typeNameOf(node.typeName)) scope.instances.set(node.name, typeNameOf(node.typeName));
+          else if (typeNameOf(node.typeNameEnc)) scope.instances.set(node.name, typeNameOf(node.typeNameEnc));
           // A chain on a fresh actor binds that actor: `d = c.inc!(5)`.
           else if (root?.type === 'Identifier' && scope.fresh.has(node.name) && scope.instances.has(root.name)) scope.instances.set(node.name, scope.instances.get(root.name));
           if (node.value?.type === 'Identifier') scope.fresh.delete(node.value.name);
@@ -188,7 +198,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           return;
         case 'TypeConstruction':
           checkReadOnlySlots(
-            ast.types?.find(t => t.name === node.typeName)?.fields?.map(f => ({ name: f.name, type: f.paramType })),
+            ast.types?.find(t => t.name === node.typeName)?.fields?.map(f => ({ name: f.name, typeEnc: f.paramTypeEnc })),
             node.args || [], node.typeName, scope,
           );
           walk(node.args, scope);
@@ -296,19 +306,19 @@ export function checkEffects(ast, remotesParsed = {}) {
     // A param typed with `->` requires a read-only function.
     const checkReadOnlySlots = (params, args, calleeLabel, scope) => {
       if (!params) return;
-      const slot = (key) => params.find(p => (p.key || p.name) === key)?.type;
+      const slot = (key) => params.find(p => (p.key || p.name) === key)?.typeEnc;
       // A member call's args are wrappers with no type of their own.
       const isNamed = (a) => !a.type && a.name && !a.positional;
       const positional = args.filter(a => a.type !== 'NamedArgsBag' && !isNamed(a));
       const passed = [
-        ...positional.map((a, i) => [a, params[i]?.type]),
+        ...positional.map((a, i) => [a, params[i]?.typeEnc]),
         ...args.filter(isNamed).map(a => [a, slot(a.name)]),
         ...Object.entries(args.find(a => a.type === 'NamedArgsBag')?.fields || {}).map(([k, v]) => [v, slot(k)]),
       ];
       for (const [arg, type] of passed) {
         const value = arg.expr ?? arg;
-        if (functionTypeArrow(type) === '=>' && value?.type === 'Function') settleWritingSlot(value, type, calleeLabel);
-        if (functionTypeArrow(type) !== '->') continue;
+        if (fnArrow(type) === '=>' && value?.type === 'Function') settleWritingSlot(value, type, calleeLabel);
+        if (fnArrow(type) !== '->') continue;
         if (value?.type === 'FnRef' && refWrites(value, scope)) {
           throw new Error(`'${calleeLabel}' takes a read-only function here, but '&${value.name}' writes. Its param type would need '=>'`);
         }
@@ -428,7 +438,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       }
     };
 
-    const writingParamsOf = (fn) => (fn.params || []).filter(p => functionTypeArrow(p.type) === '=>').map(p => p.name);
+    const writingParamsOf = (fn) => (fn.params || []).filter(p => fnArrow(p.typeEnc) === '=>').map(p => p.name);
 
     const collectOwnRefs = (node, into) => {
       if (!node || typeof node !== 'object') return;
@@ -488,7 +498,7 @@ export function checkEffects(ast, remotesParsed = {}) {
         };
         for (const p of fn.params || []) {
           if (!p.ref) scope.locals.add(p.name);
-          if (typeNameOf(p.type)) scope.instances.set(p.name, typeNameOf(p.type));
+          if (typeNameOf(p.typeEnc)) scope.instances.set(p.name, typeNameOf(p.typeEnc));
         }
         walk(fn.body, scope);
         if (out) { reach.set(fn, true); changed = true; }
@@ -518,7 +528,7 @@ export function checkEffects(ast, remotesParsed = {}) {
       };
       for (const p of fn.params || []) {
         if (!p.ref) scope.locals.add(p.name);
-        if (typeNameOf(p.type)) scope.instances.set(p.name, typeNameOf(p.type));
+        if (typeNameOf(p.typeEnc)) scope.instances.set(p.name, typeNameOf(p.typeEnc));
       }
       for (const name of writingParamsOf(fn)) scope.writingParams.add(name);
       walk(fn.body, scope);
@@ -580,16 +590,13 @@ export function checkEffects(ast, remotesParsed = {}) {
 // through any call in this file, per actor. A claim can't become a guarantee on the
 // way up, so this follows calls across classes until nothing changes.
 // `remoteDocs` are the documents of dependencies with no inline one, by name.
-export function purportedFunctions(ast, parseDoc, remoteDocs = {}) {
+export function purportedFunctions(ast, remoteDocs = {}) {
   const classes = classesByName(ast);
+  const typeNameOf = typeNamer(ast);
   const docClaims = new Map();
   for (const d of ast.dependencies || []) {
-    if (typeof d.interface !== 'string' && !remoteDocs[d.name]) continue;
-    // A malformed doc is reported by validation, with the context to explain it.
-    let doc = remoteDocs[d.name];
-    if (typeof d.interface === 'string') {
-      try { doc = parseDoc(d.interface.replace(/\}\s*\|[^}]*$/, '}')); } catch { continue; }
-    }
+    const doc = d.interfaceDoc ?? remoteDocs[d.name];
+    if (!doc) continue;
     const sigs = [
       ...Object.entries(doc).filter(([k]) => !k.startsWith('__')).flatMap(([k, v]) => v.map(sig => [k, sig])),
       ...Object.values(doc.__types || {}).flatMap(t => (t.functions || []).map(f => [f.name, f])),
@@ -616,20 +623,20 @@ export function purportedFunctions(ast, parseDoc, remoteDocs = {}) {
   for (const actor of ast.actors) {
     const fields = new Map();
     for (const d of actor.stateVarDecls || []) {
-      if (typeNameOf(d.typeName)) fields.set(d.name.replace(/^@/, ''), typeNameOf(d.typeName));
+      if (typeNameOf(d.typeNameEnc)) fields.set(d.name.replace(/^@/, ''), typeNameOf(d.typeNameEnc));
     }
     for (const st of actor.initBody || []) {
       if (st.type === 'StateAssign' && st.value?.callee?.name) fields.set(st.name.replace(/^@/, ''), st.value.callee.name);
     }
-    for (const p of actor.initParams || []) if (typeNameOf(p.type)) fields.set(p.name, typeNameOf(p.type));
+    for (const p of actor.initParams || []) if (typeNameOf(p.typeEnc)) fields.set(p.name, typeNameOf(p.typeEnc));
     for (const fn of functionsOf(actor)) {
       const known = new Map(fields);
-      for (const p of fn.params || []) if (typeNameOf(p.type)) known.set(p.name, typeNameOf(p.type));
+      for (const p of fn.params || []) if (typeNameOf(p.typeEnc)) known.set(p.name, typeNameOf(p.typeEnc));
       const visit = (node) => {
         if (!node || typeof node !== 'object') return;
         if (Array.isArray(node)) { node.forEach(visit); return; }
         if ((node.type === 'Assign' || node.type === 'TypedAssign') && node.name) {
-          const source = sourceOf(node.value, known) ?? typeNameOf(node.typeName);
+          const source = sourceOf(node.value, known) ?? typeNameOf(node.typeNameEnc);
           if (source) known.set(node.name, source);
         }
         if (node.type === 'FunctionCallExpr' && node.callee?.name) edges.push({ from: [actor, fn.name], to: [actor, node.callee.name] });
