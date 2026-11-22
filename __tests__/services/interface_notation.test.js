@@ -28,7 +28,7 @@ describe('service document — entry forms', () => {
 
   it('silent function: name. (params) => .', () => {
     const p = parseInterface('{ log! (Text) => . }');
-    expect(p['log!']).toEqual([{ params: [{ name: null, type: 'Text', positional: true }], returns: null, effect: 'write' }]);
+    expect(p['log!']).toEqual([{ params: [{ name: null, type: 'Text', positional: true }], returns: null, effect: 'write', noReply: true }]);
   });
 
   it('the -> before a return is optional on input', () => {

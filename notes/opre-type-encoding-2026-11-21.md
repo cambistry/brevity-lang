@@ -128,6 +128,24 @@ What the source constructs come to:
   number of Texts.
 - **`%`-prefixed keys are reserved.** `%t` and `%opt` are provisional spellings.
 
+Decided 2026-11-22, for the forms the note above leaves open:
+
+- **A union is `{ "%or": [A, B] }`.** The `null` of `X | null` is JSON `null`:
+  `{ "%or": ["Integer", null] }`.
+- **A function type is `{ "%fn": [signature] }`,** the signature exactly as an op's: `args`,
+  `re`, `writes`. `->` is `"writes": false`, `=>` is `true`, `~>` makes no claim. A silent
+  `=> .` has no `re`.
+- **A reply that is the receiver is `{ "%self": true }`:** `=> self` is `"re": [{ "%self": true }]`.
+- **A reply that depends on the path is a union of shapes:** `-> (Integer) | (Text) | self` is
+  `"re": { "%or": [["Integer"], ["Text"], [{ "%self": true }]] }`.
+- **An actor with no address of its own is an inline node, `{ "%node": { … } }`,** a document
+  node in a type position. A cell (`*Integer`) is a node with `$get` and `$set`; a read-only cell
+  (`&Integer`) has `$get` only. An interface `{ … }` is the node of its ops. A constructor profile
+  `(p) -> *{ … }` is a node with a `$new` whose reply is an inline node.
+- **An anonymous shape is an `Object`:** `(Text, n: Integer)` is
+  `["Text", { "n": "Integer", "%t": "Object" }]`.
+- **Named entries sit in one object after the positional ones,** as `ty` writes them.
+
 ## Addresses
 
 - **Every address in the document is relative to the service,** in standard Opre form: a

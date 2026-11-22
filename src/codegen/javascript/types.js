@@ -250,7 +250,7 @@ function parseSignature(name, text) {
   if (rest === '.') {
     if (arrow !== '=>') throw new Error(`Interface entry '${name}': '${arrow} .' has nothing to read — a silent function is '=> .'`);
     // A name without the mark can't say it's silent, so the entry does.
-    return { kind: 'function', params, returns: null, effect, ...(name.endsWith('.') || name.endsWith('!') ? {} : { silent: true }) };
+    return { kind: 'function', params, returns: null, effect, noReply: true, ...(name.endsWith('.') || name.endsWith('!') ? {} : { silent: true }) };
   }
   if (rest === 'self') {
     if (arrow === '~>') throw new Error(`Interface entry '${name}': '~> self' has nothing to read — write '=> self', or '-> self' if it's the identity function`);
@@ -307,12 +307,12 @@ function parseConstructor(name, supertypes, paramsInner, bodyInner) {
     if (e.protected) {
       (instanceProtected[e.name] ??= []).push(e.kind === 'field'
         ? { params: [], returns: [{ name: null, type: e.type, positional: true }] }
-        : { params: e.params, returns: e.returns, effect: e.effect });
+        : { params: e.params, returns: e.returns, effect: e.effect, ...(e.noReply ? { noReply: true } : {}) });
       if (e.kind === 'field') (instanceProtected.__fields ??= {})[e.name] = fieldRecord(e);
       continue;
     }
     if (e.kind === 'function') {
-      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}) });
+      functions.push({ name: e.name, effect: e.effect, params: e.params, returns: e.returns, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.noReply ? { noReply: true } : {}) });
     } else if (e.kind === 'field') {
       // A field reads as a zero-arg getter; a `*` cell is also settable.
       functions.push({ name: e.name, params: [], returns: [{ name: null, type: e.type, positional: true }] });
@@ -391,7 +391,7 @@ function parseEntry(text) {
       const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
       return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, [], sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
     }
-    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}) };
+    return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}), ...(sig.noReply ? { noReply: true } : {}) };
   }
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
   // `name Type` is a prop: an attribute, read as `{op: 'name'}`, not an address.
@@ -442,7 +442,7 @@ export function parseInterface(manifestStr) {
       const prot = result.__protected ??= {};
       (prot[e.name] ??= []).push(e.kind === 'field'
         ? { params: [], returns: [{ name: null, type: e.type, positional: true }] }
-        : { params: e.params, returns: e.returns, effect: e.effect });
+        : { params: e.params, returns: e.returns, effect: e.effect, ...(e.noReply ? { noReply: true } : {}) });
       if (e.kind === 'field') (prot.__fields ??= {})[e.name] = fieldRecord(e);
       continue;
     }
@@ -457,7 +457,7 @@ export function parseInterface(manifestStr) {
       result.__types[e.name] = { effect, supertypes, initParams, functions, setters, ...(services ? { services } : {}), ...(fields ? { fields } : {}), ...(typeDecls ? { typeDecls } : {}), ...(members ? { members } : {}), ...(ownNew && { ownNew }), ...(instanceProtected ? { instanceProtected } : {}) };
     } else if (e.kind === 'function') {
       result[e.name] = result[e.name] || [];
-      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}) });
+      result[e.name].push({ params: e.params, returns: e.returns, effect: e.effect, ...(e.returnsSelf ? { returnsSelf: true } : {}), ...(e.returnAlternatives ? { returnAlternatives: e.returnAlternatives } : {}), ...(e.silent ? { silent: true } : {}), ...(e.noReply ? { noReply: true } : {}) });
     } else if (e.kind === 'field') {
       result[e.name] = result[e.name] || [];
       result[e.name].push({ params: [], returns: [{ name: null, type: e.type, positional: true }] });

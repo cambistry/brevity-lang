@@ -4,6 +4,7 @@ import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
+import { TT, renderType } from './type_tree.js';
 import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, addRemoteParents, dropRemoteParents, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
@@ -120,6 +121,11 @@ export function parseTypeText(text) {
   return parse(tokenize(text), { typeOnly: true });
 }
 
+// `text` as a type tree (src/type_tree.js).
+export function parseTypeTree(text) {
+  return parse(tokenize(text), { typeOnly: true, typeTree: true });
+}
+
 // The type names `text` uses, as the type grammar reads them: `Integer`,
 // `Svc::Point`, `@Pub`; not a function type's field names.
 export function typeNamesIn(text) {
@@ -179,7 +185,7 @@ export function parse(tokensIn, options = {}) {
 // (`;` lexes as NEWLINE). Consuming one is using it.
 const STRUCTURAL_TOKENS = new Set(['NEWLINE', 'BLOCK_SEP', 'DIVIDER', 'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'LBRACKET', 'RBRACKET', 'COMMA']);
 
-function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRead = null, remotes = null } = {}) {
+function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = null, typeNamesRead = null, remotes = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
   let tokens = foldSelfClass(joined);
   const fileTokens = tokens;
@@ -706,6 +712,8 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
 
   // Parse a single non-union type: a base name with optional `of <type>` or `.Member`.
   // The atomic form excludes union pipes; parseType wraps this with union handling.
+  // The type grammar builds a type tree (src/type_tree.js); `parseType` gives its
+  // text, which the AST holds for now.
   function parseAtomicType(inOf = false) {
     if (peek().type === 'LPAREN') {
       return parseParenType();
@@ -715,7 +723,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       take();
       const name = '@' + take().value;
       typeNamesRead?.push(name);
-      return name;
+      return TT.name([name]);
     }
     const tok = take();
     if (tok.type !== 'IDENT')
@@ -732,24 +740,24 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       throw new Error(`'Lists' requires 'of <type>', e.g. 'Lists of Integers'`);
     }
     if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      return 'List of Anything'; // bare List = List of Anything (mixed elements)
+      return TT.of('List', TT.name(['Anything'])); // bare List = List of Anything (mixed elements)
     }
     if (peek().type === 'KEYWORD' && peek().value === 'of') {
       take(); // 'of'
       typeNamesRead?.push(typeName);
-      return `${typeName} of ${parseAtomicType(true)}`;
+      return TT.of(typeName, parseAtomicType(true));
     }
     if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
       throw new Error(`Unexpected '.' in type '${typeName}.${tokens[pos+1].value}'`);
     }
     // A type reached through an actor — `Svc::Point`, `Class::X`, `A::B::X`.
-    let path = typeName;
+    const path = [typeName];
     while (peek().type === 'DCOLON' && tokens[pos+1]?.type === 'IDENT') {
       take(); // ::
-      path += `::${take().value}`;
+      path.push(take().value);
     }
-    typeNamesRead?.push(path);
-    return path;
+    typeNamesRead?.push(path.join('::'));
+    return TT.name(path);
   }
 
   // Consume an `&Type` token at the current position and continue parsing
@@ -767,8 +775,22 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     tokens[at] = { ...ampTok, type: 'IDENT' };
     try { return parseType(); } finally { tokens[at] = ampTok; }
   }
+  function consumeAmpersandTypeNode() {
+    const at = pos;
+    const ampTok = peek();
+    tokens[at] = { ...ampTok, type: 'IDENT' };
+    try { return parseTypeNode(); } finally { tokens[at] = ampTok; }
+  }
 
+  // The last type `parseType` read, as a tree: a param keeps it (`typeNode`).
+  let lastTypeNode = null;
   function parseType(inOf = false) {
+    const node = parseTypeNode(inOf);
+    lastTypeNode = node;
+    return renderType(node);
+  }
+
+  function parseTypeNode(inOf = false) {
     let result = parseAtomicType(inOf);
     // Union suffix — only at top level (not inside 'of').
     // Greedily consumes any number of `| Type` and `| null` segments.
@@ -778,13 +800,13 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       if (nxt?.type === 'KEYWORD' && nxt.value === 'null') {
         take(); // |
         take(); // null
-        result = `${result} | null`;
+        result = TT.union(result, TT.null());
         continue;
       }
       if (nxt?.type === 'IDENT' || (nxt?.type === 'AT' && tokens[pos + 2]?.type === 'IDENT')) {
         take(); // |
         const member = parseAtomicType(false);
-        result = `${result} | ${member}`;
+        result = TT.union(result, member);
         continue;
       }
       break;
@@ -797,10 +819,12 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     // `new` (notes/actors-not-classes-2026-11-18.md).
     if (ctorProfileAhead(pos)) {
       const savedArrow = ctorArrow;
+      ctorArrow = null;
       const params = parseCtorProfileParams('in a constructor profile');
+      const arrow = ctorArrow;
       ctorArrow = savedArrow;
       const iface = parseInlineIface().replace(/\s*\n\s*/g, ' ');
-      return `(${params.map(p => p.positional ? `${p.name} ${p.type}` : `${p.name}: ${p.type}`).join(', ')}) -> *${iface}`;
+      return TT.ctor(params.map(paramTypeEntry), iface, arrow);
     }
     // Either a function signature type: (..)->(..)
     // Or an object-shaped type: (output: Text) / (Text)
@@ -817,7 +841,7 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
     }
     const after = tokens[i + 1];
     if (after?.type === '->') {
-      return functionTypeToString(parseFunctionType());
+      return TT.fn(parseFunctionType());
     }
     return parseObjectType();
   }
@@ -833,23 +857,20 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
         // name: Type — named field (trailing colon)
         const name = take().value;
         take(); // COLON
-        const t = parseType();
-        fields.push(`${name}: ${t}`);
+        fields.push({ name, type: parseTypeNode() });
       } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'IDENT') {
         // name Type — named field (whitespace)
         const name = take().value;
-        const t = parseType();
-        fields.push(`${name}: ${t}`);
+        fields.push({ name, type: parseTypeNode() });
       } else if (peek().type === 'IDENT') {
         // Unnamed type (single IDENT followed by comma/rparen)
-        const t = parseType();
-        fields.push(`${t}`);
+        fields.push({ name: null, type: parseTypeNode() });
       } else {
         throw new Error(`Expected type in object type, got ${peek().type} '${peek().value || ''}'`);
       }
     }
     expect('RPAREN');
-    return `(${fields.join(', ')})`;
+    return TT.shape(fields);
   }
 
   function parseObjectConstructor() {
@@ -900,16 +921,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
           // name: Type — named field (trailing colon)
           take(); // name
           take(); // COLON
-          const type = parseType();
+          const type = parseTypeNode();
           inputs.push({ name, type });
         } else if (tokens[pos + 1]?.type === 'IDENT') {
           // name Type — named field (whitespace)
           take(); // name
-          const type = parseType();
+          const type = parseTypeNode();
           inputs.push({ name, type });
         } else {
           // Unnamed type
-          const type = parseType();
+          const type = parseTypeNode();
           inputs.push({ type });
         }
       } else {
@@ -948,16 +969,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
             // name: Type — named field (trailing colon)
             take(); // name
             take(); // COLON
-            const type = parseType();
+            const type = parseTypeNode();
             outputs.push({ name, type });
           } else if (tokens[pos + 1]?.type === 'IDENT') {
             // name Type — named field (whitespace)
             take(); // name
-            const type = parseType();
+            const type = parseTypeNode();
             outputs.push({ name, type });
           } else {
             // Unnamed type
-            const type = parseType();
+            const type = parseTypeNode();
             outputs.push({ type });
           }
         } else {
@@ -982,18 +1003,6 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
       return { ...AST.functionType(inputs, outputs), ...shapes, orSelf: true, arrow };
     }
     return { ...AST.functionType(inputs, outputs), ...shapes, arrow };
-  }
-
-  function functionTypeToString(functionType) {
-    const fmtSide = (items) => items.map(item => {
-      if (item.name !== undefined) return `${item.name}: ${item.type}`;
-      return `${item.type}`;
-    }).join(', ');
-    const arrow = functionType.arrow ?? '->';
-    if (functionType.silent) return `(${fmtSide(functionType.inputs)}) => .`;
-    if (functionType.returnsSelf) return `(${fmtSide(functionType.inputs)}) ${arrow} self`;
-    const shapes = (functionType.alternatives ?? [functionType.outputs]).map(alt => `(${fmtSide(alt)})`).join(' | ');
-    return `(${fmtSide(functionType.inputs)}) ${arrow} ${shapes}${functionType.orSelf ? ' | self' : ''}`;
   }
 
   function getFunctionLiteralSignature(fnNode) {
@@ -3601,10 +3610,22 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
 
   // One param. Every param says whether it is positional: a rest param is.
   function parseOneParam() {
+    lastTypeNode = null;
     const p = parseParamForm();
     if (p && p.positional === undefined) p.positional = !!p.rest;
+    // The param's type as a tree, when the type grammar read it.
+    if (p && lastTypeNode && renderType(lastTypeNode) === p.type) {
+      Object.defineProperty(p, 'typeNode', { value: lastTypeNode, configurable: true, enumerable: false, writable: true });
+    }
     return p;
   }
+  // A param as a constructor profile's tree holds it.
+  const paramTypeEntry = (p) => ({
+    name: p.name, ...(p.key && { key: p.key }), text: p.type,
+    type: p.typeNode ?? (typeof p.type === 'string' && /^\w+$/.test(p.type) ? TT.name([p.type]) : null),
+    positional: !!p.positional, ...((p.optional || p.defaultValue) && { optional: true }),
+    ...(p.ref && { ref: true }), ...(p.readonly && { readonly: true }),
+  });
   function parseParamForm() {
     const isOneParamDelim = () => {
       const t = peek().type;
@@ -6321,14 +6342,16 @@ function parseOnce(tokensIn, { typeOnly = false, nameChains = null, typeNamesRea
 
   if (typeOnly) {
     skipNewlines();
-    if (peek().type === 'STAR') take();
-    const type = peek().type === 'LBRACE' ? parseInlineIface()
-      : peek().type === 'AMPERSAND_IDENT' ? consumeAmpersandTypeForParam()
-      : parseType();
+    const star = peek().type === 'STAR' ? !!take() : false;
+    const node = peek().type === 'LBRACE' ? TT.iface(parseInlineIface())
+      : peek().type === 'AMPERSAND_IDENT' ? TT.cell(consumeAmpersandTypeNode(), true)
+      : star ? TT.cell(parseTypeNode())
+      : parseTypeNode();
     skipNewlines();
     if (peek().type !== 'EOF') throw new Error(`Unexpected token in a type: ${peek().type} '${peek().value || ''}'`);
     checkTokensAccounted();
-    return type;
+    if (typeTree) return node;
+    return node.k === 'cell' ? renderType(node.type) : renderType(node);
   }
 
   while (peek().type !== 'EOF') {
