@@ -1166,7 +1166,9 @@ export function erlOuterCtx(ctx, cls) {
 function refCellTypeIsSelfBearing(ctx, cellName) {
   const t = ctx.stateVarTypeEnv?.get(cellName);
   if (t === undefined) return false;
-  return members(t).some(m => ctx.actorInfo?.has(classNameOf(m)));
+  // `class` is encoded as the class's own instance; at the file level it stays `class`.
+  const own = (m) => classNameOf(m) === 'class' || (ctx.childStatePrefix && m?.includes?.(':') && classNameOf(m)?.toLowerCase() === ctx.childStatePrefix);
+  return members(t).some(own);
 }
 
 // Dot-call on a Self-bearing ref cell: the cell holds a PID. Read it,

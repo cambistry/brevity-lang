@@ -1,11 +1,15 @@
 // types.js — Pure helpers and type utilities for Rust codegen
 import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
-import { inferExprType } from '../../inference.js';
-import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
+import { inferType } from '../../type_infer.js';
+import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
 import { wireLabel } from '../wire_labels.js';
-import { publicLabel } from '../../singleton_classes.js';
-import { isCtorProfile } from '../../actor_values.js';
+import { isFn, members } from '../../type_enc.js';
+import { typeTag, typeText, envTypeOf, classNameOf } from '../enc_names.js';
+
+// The Rust generator reads encoded types (src/type_enc.js): a type env maps a name
+// to its encoded type, and `typeDecls` keys a declared type by its address. A
+// scalar's encoding is its name, so `rustType('Integer')` reads one as before.
 const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bool {
     if actual == expected { return true; }
     // \`*\` expects an actor, any actor: one no \`new\` built (\`*\`), or one tagged
@@ -462,23 +466,13 @@ export function setCtx(newCtx) { G.ctx = newCtx; }
 // (primitives, null) pass through. Shared by reply, param, and argument slots.
 // See notes/type-authority-address-tags-2026-10-26.
 export function rustTypeTag(t) {
-  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
-  if (t === 'Actor' || isCtorProfile(t)) return '*';
-  const node = typeof t === 'string' && G.ctx.actorNodes?.get(t);
-  const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return '*';
-  // An actor of a dependency's class is tagged with the class's address
-  // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
-  if (typeof t === 'string' && !G.ctx.typeDecls?.has(t) && G.ctx.depIsDependency?.(t)) return G.ctx.depAddress(t);
-  if (typeof t !== 'string' || !G.ctx.typeDecls?.has(t)) return t;
-  // A type's tag is its address (src/codegen/type_table.js).
-  return G.ctx.typeDecls.get(t).key;
+  return typeTag(G.ctx, t);
 }
 
 // The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or
 // `Anything`. Parenthesized so it sits in a `json!` as one expression.
 export function rustTyOf(t, valueExpr) {
-  const members = tyMembers(t, rustTypeTag, G.ctx.typeDecls)
+  const members = tyMembersEnc(t, rustTypeTag, G.ctx.typeDecls, u => typeText(u, G.ctx.depAliases))
     .map(([k, tag]) => `(${JSON.stringify(k)}, ${JSON.stringify(tag)})`).join(', ');
   return `(bv_ty_of(&${valueExpr}, &[${members}]))`;
 }
@@ -486,7 +480,7 @@ export function rustTyOf(t, valueExpr) {
 // A slot's tag for a `json!`: the declared type's when it is one, else the value's
 // at runtime (`valueExpr`, or no tag when there is nothing safe to read).
 export function rustSlotTag(t, valueExpr) {
-  if (!isDynamicTy(t)) { const tag = rustTypeTag(t ?? null); return tag ? JSON.stringify(tag) : 'null'; }
+  if (!isDynamicTy(t)) { const tag = rustTypeTag(t); return tag ? JSON.stringify(tag) : 'null'; }
   return valueExpr ? rustTyOf(t, valueExpr) : 'null';
 }
 
@@ -508,43 +502,44 @@ export function rustTypeWireWrap(valueExpr, t) {
   return `{ let _w: Value = ${valueExpr}; match _w.get("__type").and_then(|t| t.as_str()) { ${arms} _ => _w.clone() } }`;
 }
 
+// A scope's names and their encoded types. A param with no type is in scope, untyped.
 function buildTypeEnv(params, body) {
   const env = new Map();
+  const known = (t) => t !== undefined;
   for (const p of params) {
-    if (p.name && !p.rest) env.set(p.name, p.type || null);
+    if (p.name && !p.rest) env.set(p.name, envTypeOf(p));
   }
   for (const s of body) {
-    if (s.type === 'TypedAssign') env.set(s.name, s.typeName);
+    if (s.type === 'TypedAssign') env.set(s.name, s.typeNameEnc);
     if (s.type === 'DestructureAssign') {
       // Typed-value source: propagate each field's declared type from the
       // type registry to the destructured local.
       const src = s.source;
-      let srcTypeName = null;
-      if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
-      else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
-      const srcDecl = (G.ctx?.typeDecls && srcTypeName && G.ctx.typeDecls.has(srcTypeName))
-        ? G.ctx.typeDecls.get(srcTypeName) : null;
+      let srcType;
+      if (src?.type === 'TypeConstruction') srcType = src.typeNameEnc;
+      else if (src?.type === 'Identifier' && env.has(src.name)) srcType = env.get(src.name);
+      const srcDecl = G.ctx?.typeDecls && known(srcType) ? G.ctx.typeDecls.get(srcType) ?? null : null;
       for (const item of s.pattern) {
         if (item.discard) continue;
-        let t = item.type || null;
-        if (!t && srcDecl) {
+        let t = item.typeEnc;
+        if (!known(t) && srcDecl) {
           const fields = srcDecl.fields || [];
           let field;
           if (item.named) field = fields.find(f => f.name === item.name);
           else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
           else if (item.positional) field = fields[item.idx];
           // Skip propagation for optional fields — keep the local as
-           // Value so `??` / `(expr)?` see absence.
-          if (field?.paramType && !field.optional) t = field.paramType;
+          // Value so `??` / `(expr)?` see absence.
+          if (known(field?.paramTypeEnc) && !field.optional) t = field.paramTypeEnc;
         }
         // Infer type from ObjectConstructor source if pattern lacks type
-        if (!t && s.source.type === 'ObjectConstructor') {
+        if (!known(t) && s.source.type === 'ObjectConstructor') {
           if (item.positional) {
             const srcArg = s.source.args.filter(a => a.positional)[item.idx];
-            if (srcArg) t = srcArg.type || null;
+            if (srcArg) t = srcArg.typeEnc;
           } else if (item.named) {
             const srcArg = s.source.args.find(a => a.key === item.name);
-            if (srcArg) t = srcArg.type || null;
+            if (srcArg) t = srcArg.typeEnc;
           }
         }
         if (item.name) env.set(item.name, t);
@@ -554,36 +549,38 @@ function buildTypeEnv(params, body) {
       if (s.value?.type === 'Function') {
         env.set(s.name, 'Function');
       } else {
-        const inferred = inferLiteralType(s.value) || inferExprType(s.value, env);
-        if (inferred) env.set(s.name, inferred);
+        const inferred = inferLiteralType(s.value) ?? inferType(s.value, env);
+        if (known(inferred)) env.set(s.name, inferred);
       }
     }
     if (s.type === 'RefDecl' && s.name) {
-      const rt = s.typeName || inferLiteralType(s.value);
-      if (rt) env.set(s.name, rt);
+      const rt = s.typeNameEnc ?? inferLiteralType(s.value);
+      if (known(rt)) env.set(s.name, rt);
     }
-    if (s.type === 'BareTypeDecl' && s.name && s.typeName) env.set(s.name, s.typeName);
+    if (s.type === 'BareTypeDecl' && s.name && known(s.typeNameEnc)) env.set(s.name, s.typeNameEnc);
     if (s.type === 'ListDestructure') {
       for (const item of s.pattern) {
         if (item.discard || !item.name) continue;
-        if (item.type) env.set(item.name, item.type);
+        if (known(item.typeEnc)) env.set(item.name, item.typeEnc);
       }
     }
   }
   return env;
 }
 
+// A literal's encoded type; undefined for anything else.
 function inferLiteralType(expr) {
-  if (!expr) return null;
-  if (expr.type === 'IntLiteral') return 'Integer';
-  if (expr.type === 'StringLiteral') return 'Text';
-  if (expr.type === 'DecimalLiteral') return 'Decimal';
-  if (expr.type === 'FloatLiteral') return 'Float';
-  if (expr.type === 'BoolLiteral') return 'Boolean';
-  if (expr.type === 'NullLiteral') return 'null';
-  if (expr.type === 'TypeConstruction') return expr.typeName;
-  if (expr.type === 'PresenceCheck') return 'Boolean';
-  return null;
+  switch (expr?.type) {
+    case 'IntLiteral': return 'Integer';
+    case 'StringLiteral': return 'Text';
+    case 'DecimalLiteral': return 'Decimal';
+    case 'FloatLiteral': return 'Float';
+    case 'BoolLiteral': return 'Boolean';
+    case 'NullLiteral': return null;
+    case 'TypeConstruction': return expr.typeNameEnc;
+    case 'PresenceCheck': return 'Boolean';
+    default: return undefined;
+  }
 }
 
 function rustIdent(name) {
@@ -629,6 +626,7 @@ function matchIntLiteral(expr) {
   return m ? m[1] : null;
 }
 
+// `brevityType` is encoded.
 function rustType(brevityType) {
   if (brevityType === 'Integer') return INT_TYPE;
   if (brevityType === 'Text') return 'String';
@@ -636,7 +634,6 @@ function rustType(brevityType) {
   if (brevityType === 'Decimal') return DEC_TYPE;
   if (brevityType === 'Float') return 'f64';
   if (brevityType === 'Boolean') return 'bool';
-  if (typeof brevityType === 'string' && brevityType.includes('|')) return 'Value';
   return 'Value';
 }
 
@@ -700,7 +697,7 @@ function toJsonValue(expr, brevityType) {
   if (brevityType === 'Text' || brevityType === 'Blob') {
     return `json!(${expr})`;
   }
-  if (brevityType === 'Anything' || !brevityType) {
+  if (brevityType === 'Anything' || brevityType === undefined) {
     return `bv_val(${expr})`;
   }
   return expr;
@@ -714,7 +711,7 @@ function resolveVarExpr(name) {
 }
 
 function isFunctionArg(arg) {
-  return arg.type === 'Function' || arg.expr?.type === 'Function' || (typeof arg.type === 'string' && /[-=~]>/.test(arg.type));
+  return arg.type === 'Function' || arg.expr?.type === 'Function' || isFn(arg.typeEnc);
 }
 
 function isFunctionOnlyConstructor(node) {
@@ -764,7 +761,7 @@ function outerRead(expr) {
     : `self.outer_read(${expr.outerLevel ?? 1}, ${JSON.stringify(wireLabel(expr.name))})`;
   // A ref read is a Value here, as a class's own cell is.
   if (expr.type === 'RefRead') return read;
-  return `(${convertFromValue(read, expr.outerType ?? G.ctx.outerTypes?.get(expr.name))})`;
+  return `(${convertFromValue(read, expr.outerTypeEnc ?? G.ctx.outerTypes?.get(expr.name))})`;
 }
 
 function stateKey(name) {
@@ -794,10 +791,11 @@ function findRsAsClauseMatch(targetType, actorName) {
   if (!G.ctx.actorInfo.has(actorName)) return null;
   const info = G.ctx.actorInfo.get(actorName);
   if (!info.asClauses || info.asClauses.length === 0) return null;
-  if (targetType === actorName) return null;
+  if (classNameOf(targetType) === actorName) return null;
+  // `targetType` and each clause's are encoded.
   for (const clause of info.asClauses) {
-    if (!clause.negated && clause.targetType === targetType) return clause;
-    if (clause.negated && clause.targetType !== targetType) return clause;
+    if (!clause.negated && clause.targetTypeEnc === targetType) return clause;
+    if (clause.negated && clause.targetTypeEnc !== targetType) return clause;
   }
   return null;
 }
@@ -856,7 +854,7 @@ function analyzeFunctions(body, mutableVars, typeEnv) {
     }
 
     // s : Object = Object(fn: f : Function) — all-function constructor
-    if (s.type === 'TypedAssign' && s.typeName === 'Object' && s.value.type === 'ObjectConstructor') {
+    if (s.type === 'TypedAssign' && s.typeNameEnc === 'Object' && s.value.type === 'ObjectConstructor') {
       if (isFunctionOnlyConstructor(s.value)) {
         skipSet.add(i);
         const sc = new Map();
@@ -1003,7 +1001,7 @@ function needsObject(actor) {
       if (s.type === 'DestructureAssign') return true;
       if (s.type === 'Assign' && s.value.type === 'IndexExpr') return true;
       if (s.type === 'Assign' && s.value.type === 'Function') return true;
-      if (s.type === 'TypedAssign' && s.typeName === 'Object') return true;
+      if (s.type === 'TypedAssign' && s.typeNameEnc === 'Object') return true;
       if (s.type === 'TypedAssign' && (s.value.type === 'ObjectConstructor' || s.value.type === 'ObjectLiteral')) return true;
       if (s.type === 'Assign' && (s.value.type === 'ObjectConstructor' || s.value.type === 'ObjectLiteral')) return true;
       if (s.type === 'TypedAssign' && s.value.type === 'FunctionCallExpr') return true;
@@ -1015,7 +1013,7 @@ function needsObject(actor) {
 function fnReturnsFunction(fn) {
   const reply = fn.body.find(s => s.type === 'Reply');
   if (!reply) return false;
-  return reply.fields.some(f => f.type === 'Function' || (typeof f.type === 'string' && /[-=~]>/.test(f.type)));
+  return reply.fields.some(f => f.typeEnc === 'Function' || isFn(f.typeEnc));
 }
 
 function needsDotCallAwait(actor) {
@@ -1040,11 +1038,11 @@ function classNeedsSpawnedInstances(actor) {
 // makes a recursive Self() call.
 function classRefersToSelf(actor) {
   if (!actor) return false;
+  // `class` in a type is an actor of the class it's in: its own instance.
+  const own = (t) => (typeof t === 'string' ? classNameOf(t) === actor.name && t.includes(':')
+    : Array.isArray(t) ? t.some(own) : t !== null && typeof t === 'object' && Object.values(t).some(own));
   for (const p of (actor.initParams || [])) {
-    if (typeof p.type !== 'string') continue;
-    if (p.type === 'class') return true;
-    if (p.type.split('|').some(m => m.trim() === 'class')) return true;
-    if (/\bclass\b/.test(p.type)) return true;
+    if (own(p.typeEnc)) return true;
   }
   const decls = [
     ...(actor.constructorBody || []),
@@ -1052,9 +1050,8 @@ function classRefersToSelf(actor) {
     ...(actor.initBody || []),
   ];
   for (const d of decls) {
-    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && typeof d.typeName === 'string') {
-      if (d.typeName === 'class') return true;
-      if (d.typeName.split('|').some(m => m.trim() === 'class')) return true;
+    if ((d.type === 'RefDecl' || d.type === 'TypedAssign') && d.typeNameEnc !== undefined) {
+      if (members(d.typeNameEnc).some(m => typeof m === 'string' && own(m))) return true;
     }
   }
   function bodyHasSelfCall(body) {

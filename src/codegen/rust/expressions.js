@@ -2,9 +2,10 @@
 import { isDependencyValue } from '../dep_address.js';
 import { addressToken, memberOp, selfAddress, wireLabel, actorAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
-import { inferExprType, bindLocalType } from '../../inference.js';
+import { inferType, bindLocalType } from '../../type_infer.js';
 import { publicLabel } from '../../singleton_classes.js';
-import { isActorRefType } from '../../actor_values.js';
+import { isFn, fnReply, members } from '../../type_enc.js';
+import { typeText, classNameOf, envTypeOf, leadsWithList, declaredReturn, orAny } from '../enc_names.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -25,18 +26,17 @@ import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_
 // classify the discipline ('silent' | 'callback' | 'value'); null otherwise.
 export function refFieldInvocationRust(objExpr, rawName, typeEnv) {
   let t;
-  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
+  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeNameEnc;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
-  else t = inferExprType(objExpr, typeEnv);
-  const decl = (typeof t === 'string' && G.ctx.typeDecls?.has(t)) ? G.ctx.typeDecls.get(t) : null;
+  else t = inferType(objExpr, typeEnv);
+  const decl = G.ctx.typeDecls?.get(t) ?? null;
   if (!decl) return null;
   // A writing field keeps its `!` in its name: `run!`.
   const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
-  const pt = f.paramType || '';
-  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!isFn(f.paramTypeEnc)) return { field, discipline: 'value' };
+  return { field, discipline: fnReply(f.paramTypeEnc) === 'silent' ? 'silent' : 'callback' };
 }
 
 // Rust expression reading the address a reference field holds, as a String.
@@ -95,12 +95,12 @@ export function rustNewArgs(args, typeEnv, eCtx) {
   const bag = args.find(a => a.type === 'NamedArgsBag');
   const named = bag ? Object.entries(bag.fields) : [];
   if (positional.length === 0 && named.length === 0) return { payload: null, ty: null };
-  const typeOf = (e) => inferLiteralType(e) || inferExprType(e, typeEnv) || null;
+  const typeOf = (e) => inferLiteralType(e) ?? inferType(e, typeEnv);
   const raw = (e) => genRustExpr(e, typeEnv, eCtx);
   const val = (e) => {
     if (e.type === 'Function') return rustLambdaWireRef(e);
     const t = typeOf(e);
-    const jv = forceJsonWrap(toJsonValue(raw(e), t || 'Anything'));
+    const jv = forceJsonWrap(toJsonValue(raw(e), orAny(t)));
     return rustTypeWireWrap(`(${jv})`, t) || jv;
   };
   const tag = (e) => rustSlotTag(typeOf(e), e.type === 'Identifier' ? `bv_val((${raw(e)}).clone())` : null);
@@ -190,7 +190,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
   if (expr.type === 'CellNotify') {
     const child = G.ctx.childStatePrefix ? G.ctx.childStatePrefix : null;
-    return `{ ${rustCellNotifyLines(expr.cell, expr.cellType, child, expr.label ?? '@' + expr.cell).join(' ')} Value::Null }`;
+    return `{ ${rustCellNotifyLines(expr.cell, expr.cellTypeEnc, child, expr.label ?? '@' + expr.cell).join(' ')} Value::Null }`;
   }
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
@@ -311,10 +311,10 @@ function genRustExpr(expr, typeEnv, eCtx) {
     if (expr.op === '??') {
       const lc = genRustExpr(expr.left, typeEnv, eCtx);
       const rc = genRustExpr(expr.right, typeEnv, eCtx);
-      const lt = inferExprType(expr.left, typeEnv) || inferLiteralType(expr.left);
-      const rt = inferExprType(expr.right, typeEnv) || inferLiteralType(expr.right);
-      const lv = toJsonValue(lc, lt || 'Anything');
-      const rv = toJsonValue(rc, rt || 'Anything');
+      const lt = inferType(expr.left, typeEnv) ?? inferLiteralType(expr.left);
+      const rt = inferType(expr.right, typeEnv) ?? inferLiteralType(expr.right);
+      const lv = toJsonValue(lc, orAny(lt));
+      const rv = toJsonValue(rc, orAny(rt));
       return `({ let _l = ${lv}; if matches!(&_l, Value::Null) { ${rv} } else { _l } })`;
     }
     const rustOp = expr.op === '===' ? '==' : expr.op === '!==' ? '!=' : expr.op;
@@ -346,10 +346,9 @@ function genRustExpr(expr, typeEnv, eCtx) {
         return `format!("{}{}", ${l}, ${r})`;
       }
       // List + List → concat (synonym of List.concat). Both operands are Value::Array.
-      const lInf = inferExprType(expr.left, typeEnv);
-      const rInf = inferExprType(expr.right, typeEnv);
-      if (typeof lInf === 'string' && typeof rInf === 'string'
-          && lInf.startsWith('List') && rInf.startsWith('List')) {
+      const lInf = inferType(expr.left, typeEnv);
+      const rInf = inferType(expr.right, typeEnv);
+      if (leadsWithList(lInf) && leadsWithList(rInf)) {
         return `bv_list_concat(&${left}, &${right})`;
       }
     }
@@ -360,38 +359,38 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const numOps = ['+', '-', '*', '/', '%', '>', '<', '>=', '<=', '==', '!='];
     const lIsValue = expr.left.type === 'StateVar' || expr.left.type === 'RefRead'
       || (expr.left.type === 'Identifier' && G.ctx.stateVarNames.has(expr.left.name))
-      || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && !typeEnv.get(expr.left.name))
+      || (expr.left.type === 'Identifier' && typeEnv && typeEnv.has(expr.left.name) && typeEnv.get(expr.left.name) === undefined)
       || expr.left.type === 'DotAccessExpr'
       || (expr.left.type === 'FunctionCallExpr' && (left.includes('_cfr = self.') || expr.left.outerFnCall || expr.left._precomputedValue || callYieldsValue(left)));
     const rIsValue = expr.right.type === 'StateVar' || expr.right.type === 'RefRead'
       || (expr.right.type === 'Identifier' && G.ctx.stateVarNames.has(expr.right.name))
-      || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && !typeEnv.get(expr.right.name))
+      || (expr.right.type === 'Identifier' && typeEnv && typeEnv.has(expr.right.name) && typeEnv.get(expr.right.name) === undefined)
       || expr.right.type === 'DotAccessExpr'
       || (expr.right.type === 'FunctionCallExpr' && (right.includes('_cfr = self.') || expr.right.outerFnCall || expr.right._precomputedValue || callYieldsValue(right)));
     // Slice 10: type field access (`coords.x` where `coords` is a *Point
     // state cell or a typed local) infers the field's declared type so
     // BinaryExpr can pick the right numeric coercion path.
     const inferTypeFieldType = (e) => {
-      if (e?.type !== 'DotAccessExpr') return null;
-      let objType = null;
-      if (e.object?.type === 'TypeConstruction') objType = e.object.typeName;
+      if (e?.type !== 'DotAccessExpr') return undefined;
+      let objType;
+      if (e.object?.type === 'TypeConstruction') objType = e.object.typeNameEnc;
       else if (e.object?.type === 'Identifier' && typeEnv?.has(e.object.name)) objType = typeEnv.get(e.object.name);
       else if (e.object?.type === 'RefRead') {
         const decl = G.ctx.stateVarDecls?.find(d => d.name === e.object.name);
-        if (decl?.typeName) objType = decl.typeName;
+        if (decl?.typeNameEnc !== undefined) objType = decl.typeNameEnc;
         else if (typeEnv?.has(e.object.name)) objType = typeEnv.get(e.object.name);
       }
-      if (!objType || !G.ctx.typeDecls?.has(objType)) return null;
+      if (objType === undefined || !G.ctx.typeDecls?.has(objType)) return undefined;
       const decl = G.ctx.typeDecls.get(objType);
       const field = (decl.fields || []).find(f => f.name === e.property);
-      return field?.paramType || null;
+      return field?.paramTypeEnc;
     };
     // Detect if this is integer or decimal arithmetic. An operand with no type of its
     // own (a reply's Value, or arithmetic on them) takes the type the result is
     // assigned to (statements.js, expectType).
-    const expected = (e, isValue) => (isValue || e.expectedType) ? expr.expectedType ?? null : null;
-    const lType = inferTypeFieldType(expr.left) || inferExprType(expr.left, typeEnv) || expected(expr.left, lIsValue);
-    const rType = inferTypeFieldType(expr.right) || inferExprType(expr.right, typeEnv) || expected(expr.right, rIsValue);
+    const expected = (e, isValue) => ((isValue || e.expectedType) ? expr.expectedType : undefined);
+    const lType = inferTypeFieldType(expr.left) ?? inferType(expr.left, typeEnv) ?? expected(expr.left, lIsValue);
+    const rType = inferTypeFieldType(expr.right) ?? inferType(expr.right, typeEnv) ?? expected(expr.right, rIsValue);
     // Float detection — must come before Decimal/Integer detection
     const lIsFloat = lType === 'Float' || expr.left.type === 'FloatLiteral';
     const rIsFloat = rType === 'Float' || expr.right.type === 'FloatLiteral';
@@ -474,21 +473,21 @@ function genRustExpr(expr, typeEnv, eCtx) {
     // calling convention: bare expressions for positional plus an optional
     // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields whose
     // value was not provided so absent optionals read as null.
-    const decl = G.ctx.typeDecls?.get(expr.typeName);
+    const decl = G.ctx.typeDecls?.get(expr.typeNameEnc);
     const fields = decl?.fields ?? [];
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
     const named = namedBag?.fields || {};
     const seen = new Set();
     const inserts = [];
-    inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(decl?.key ?? expr.typeName)}.to_string()));`);
+    inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(decl?.key ?? typeText(expr.typeNameEnc, G.ctx.depAliases))}.to_string()));`);
     // A lambda stored in a type field is a callback reference that travels with
     // the value: lower it to a routable self-address (#<. @N>).
     const fieldValue = (e) => {
       if (e?.type === 'Function') return rustLambdaWireRef(e);
       const raw = genRustExpr(e, typeEnv, eCtx);
-      const t = inferLiteralType(e) || inferExprType(e, typeEnv);
-      return toJsonValue(raw, t || 'Anything');
+      const t = inferLiteralType(e) ?? inferType(e, typeEnv);
+      return toJsonValue(raw, orAny(t));
     };
     fields.slice(0, positional.length).forEach((f, i) => {
       seen.add(f.name);
@@ -625,7 +624,7 @@ ${subRegLines.join('\n')}
   // A cell a class block inherits is set at its base (src/singleton_classes.js).
   if (expr.type === 'OuterSet' && (expr.outerBase || expr.outerSelf)) {
     if (expr.updateOp === '<|') throw new Error(`'${expr.name} <|' on a cell a class block inherits isn't supported yet: write '${expr.name} <- …'`);
-    const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
+    const t = orAny(expr.outerTypeEnc ?? inferType(expr.value, typeEnv));
     const w = JSON.stringify(wireLabel(expr.name));
     const owner = expr.outerClass ? `Some(${JSON.stringify(expr.outerClass)})` : 'None';
     if (expr.ctxCell && G.ctx.inBlock) return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; self.bv_ctx_set_of(${w}, _v, ${!!expr.outerBase}, ${owner}); }`;
@@ -635,14 +634,15 @@ ${subRegLines.join('\n')}
   if (expr.type === 'RemoteNew') {
     const pos = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => !a.positional);
-    const val = (a) => toJsonValue(genRustExpr(a.value, typeEnv), a.type || inferExprType(a.value, typeEnv) || 'Anything');
+    const val = (a) => toJsonValue(genRustExpr(a.value, typeEnv), orAny(a.typeEnc ?? inferType(a.value, typeEnv)));
     const items = [...pos.map(val), ...(named.length ? [`{ let mut _nm = Map::new(); ${named.map(a => `_nm.insert(${JSON.stringify(a.key)}.to_string(), ${val(a)});`).join(' ')} Value::Object(_nm) }`] : [])];
-    const tys = [...pos.map(a => `json!(${JSON.stringify(a.type ?? 'Anything')})`), ...(named.length ? [`json!({ ${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type ?? 'Anything')}`).join(', ')} })`] : [])];
+    const tyOf = (a) => JSON.stringify(a.typeEnc === undefined ? 'Anything' : typeText(a.typeEnc, G.ctx.depAliases));
+    const tys = [...pos.map(a => `json!(${tyOf(a)})`), ...(named.length ? [`json!({ ${named.map(a => `${JSON.stringify(a.key)}: ${tyOf(a)}`).join(', ')} })`] : [])];
     return `{ let _p = Value::Array(vec![${items.join(', ')}]); let _t = json!([Value::Array(vec![${tys.join(', ')}])]); self.bv_new_layer(${JSON.stringify(expr.layer)}, ${JSON.stringify(expr.address)}, &_p, &_t); }`;
   }
   if (expr.type === 'OuterSet') {
     const op = `${expr.updateOp === '<|' ? '$update' : '$set'} ${wireLabel(expr.name)}`;
-    const t = expr.outerType || inferExprType(expr.value, typeEnv) || 'Anything';
+    const t = orAny(expr.outerTypeEnc ?? inferType(expr.value, typeEnv));
     return `{ let _v = ${toJsonValue(genRustExpr(expr.value, typeEnv), t)}; let _ = self.outer_send(${expr.outerLevel}, ${JSON.stringify(op)}, &Value::Array(vec![_v])); }`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.outerFnCall) {
@@ -672,12 +672,12 @@ ${subRegLines.join('\n')}
     } else if (namedBag) {
       const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
         const raw = genRustExpr(v, typeEnv, eCtx);
-        const t = inferLiteralType(v) || inferExprType(v, typeEnv);
-        return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+        const t = inferLiteralType(v) ?? inferType(v, typeEnv);
+        return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, orAny(t))});`;
       }).join(' ');
       opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
     } else {
-      const vals = callArgs.map(a => { const v = genRustExpr(a, typeEnv, eCtx); const t = inferLiteralType(a) || inferExprType(a, typeEnv); return toJsonValue(v, t || 'Anything'); });
+      const vals = callArgs.map(a => { const v = genRustExpr(a, typeEnv, eCtx); const t = inferLiteralType(a) ?? inferType(a, typeEnv); return toJsonValue(v, orAny(t)); });
       opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
     }
     return `{
@@ -694,7 +694,7 @@ ${subRegLines.join('\n')}
   // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
   // `$new` to it, answered with the new actor's address.
   if (expr.type === 'FunctionCallExpr' && (expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
-      && isActorRefType(typeEnv?.get(expr.callee.name))) {
+      && typeEnv?.get(expr.callee.name) === 'Actor') {
     G.ctx.needsAwaitNew = true;
     const recv = genRustExpr(expr.callee, typeEnv, eCtx);
     return `{ let _to = bv_addr_to(bv_val((${recv}).clone()).as_str().unwrap_or("")); let mut send_msg = Map::new(); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} let _op = send_msg.remove("op").unwrap_or(json!("$new")); let _ty = send_msg.remove("ty"); let _r = self.bv_held_send(_to, _op, _ty); BvObject::pack(&_r).one() }`;
@@ -712,7 +712,7 @@ ${subRegLines.join('\n')}
     }
     // Check if callee is a local lambda var (now a handler name in a Value::String)
     const isLocalLambda = calleeName && G.ctx.lambdaVarNames.has(calleeName);
-    const isFnTyped = isLocalLambda || (calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType))));
+    const isFnTyped = isLocalLambda || calleeType === 'Function' || isFn(calleeType);
     // Local-identifier fallback: by this point we've ruled out actor fns, public
     // fns, destructured members, and constructors. Any remaining Identifier
     // callee must be a function value held in a local — route through call_fn.
@@ -742,7 +742,7 @@ ${subRegLines.join('\n')}
           return tmp;
         }
         const t = typeEnv.get(a.name) || inferLiteralType(a);
-        return toJsonValue(raw, t || 'Anything');
+        return toJsonValue(raw, orAny(t));
       }).join(', ');
       const preStr = precomputes.length > 0 ? precomputes.join(' ') + ' ' : '';
       return `{ ${preStr}let _cfr = ${callFnCode(fnRef, `&Value::Array(vec![${argExprs}])`)}; BvObject::pack(&_cfr).one_or_null() }`;
@@ -771,12 +771,12 @@ ${subRegLines.join('\n')}
   if (expr.type === 'ListLiteral') {
     if (expr.elements.length === 0) return 'json!([])';
     const hasInt = expr.elements.some(e => {
-      const t = inferLiteralType(e.expr || e) || (e.expr ? inferLiteralType(e.expr) : null);
+      const t = inferLiteralType(e.expr ?? e) ?? (e.expr ? inferLiteralType(e.expr) : null);
       return t === 'Integer';
     });
     const elems = expr.elements.map(e => {
       const raw = genRustExpr(e.expr || e, typeEnv, eCtx);
-      const t = inferLiteralType(e.expr || e) || inferExprType(e.expr || e, typeEnv);
+      const t = inferLiteralType(e.expr ?? e) ?? inferType(e.expr ?? e, typeEnv);
       return toJsonValue(raw, t);
     });
     if (hasInt) return `Value::Array(vec![${elems.join(', ')}])`;
@@ -791,7 +791,7 @@ ${subRegLines.join('\n')}
       const ref = refFieldInvocationRust(expr.object, expr.method, typeEnv);
       if (ref && ref.discipline !== 'value') {
         const positional = expr.args.filter(a => a.positional);
-        const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv, eCtx), inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything');
+        const wrapArg = (e) => toJsonValue(genRustExpr(e, typeEnv, eCtx), orAny(inferLiteralType(e) ?? inferType(e, typeEnv)));
         const posVals = positional.map(a => wrapArg(a.expr)).join(', ');
         const opExpr = positional.length === 0 ? `json!(bv_sel(&_addr))` : `json!([[${posVals}], bv_sel(&_addr)])`;
         // A locally-constructed lambda held in the field is a relative
@@ -822,8 +822,11 @@ ${subRegLines.join('\n')}
     // enclosing class, which is whatever class contains this handler).
     if (dotObjName && expr.object.type === 'RefRead') {
       const decl = G.ctx.stateVarDecls?.find(d => d.name === dotObjName);
-      const t = decl?.typeName;
-      const isSelfBearing = typeof t === 'string' && t.split('|').some(m => m.trim() === 'class');
+      // A cell typed `class` (or a union with it) holds an actor of the class it's in.
+      const t = decl?.typeNameEnc;
+      // `class` is encoded as the class's own instance; at the file level it stays `class`.
+      const own = (m) => classNameOf(m) === 'class' || (G.ctx.currentActorName && m?.includes?.(':') && classNameOf(m) === G.ctx.currentActorName);
+      const isSelfBearing = t !== undefined && members(t).some(own);
       if (isSelfBearing) {
         // The enclosing class (the one whose handler we're inside). When
         // codegening child class handlers, ctx.childStatePrefix is set to
@@ -839,7 +842,7 @@ ${subRegLines.join('\n')}
         // explicitly via Value::String + clone so the variable stays alive.
         const wrapArgX = (e) => {
           const raw = genRustExpr(e, typeEnv, eCtx);
-          const tt = inferLiteralType(e) || inferExprType(e, typeEnv) || 'Anything';
+          const tt = orAny(inferLiteralType(e) ?? inferType(e, typeEnv));
           if (e.type === 'Identifier' && (tt === 'Text' || tt === 'Blob')) {
             return `Value::String(${raw}.clone())`;
           }
@@ -871,15 +874,15 @@ ${subRegLines.join('\n')}
     // own cell, or one of an actor it's declared in (src/outer_reads.js). The call
     // goes to that actor's per-instance handler.
     if (dotObjName && !eCtx?.selfSpawnedRefs?.has(dotObjName)) {
-      const t = expr.object.outer ? expr.object.outerType
-        : (G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName : null);
-      if (typeof t === 'string' && G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor)) {
+      const t = classNameOf(expr.object.outer ? expr.object.outerTypeEnc
+        : (G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeNameEnc : undefined));
+      if (G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor)) {
         const cell = expr.object.outer
           ? outerRead({ ...expr.object, type: 'RefRead' })
           : `self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null)`;
         const namedC = expr.args.filter(a => !a.positional);
         const positionalC = expr.args.filter(a => a.positional);
-        const wrapArgC = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const tt = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, tt || 'Anything'); };
+        const wrapArgC = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const tt = inferLiteralType(e) ?? inferType(e, typeEnv); return toJsonValue(raw, orAny(tt)); };
         let payloadC;
         if (positionalC.length === 0 && namedC.length === 0) {
           payloadC = 'json!({})';
@@ -904,7 +907,7 @@ ${subRegLines.join('\n')}
       const method = JSON.stringify(wireOpOf(expr));
       const named0 = expr.args.filter(a => !a.positional);
       const positional0 = expr.args.filter(a => a.positional);
-      const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const t = inferLiteralType(e) || inferExprType(e, typeEnv); return toJsonValue(raw, t || 'Anything'); };
+      const wrapArg = (e) => { const raw = genRustExpr(e, typeEnv, eCtx); const t = inferLiteralType(e) ?? inferType(e, typeEnv); return toJsonValue(raw, orAny(t)); };
       let payload;
       if (positional0.length === 0 && named0.length === 0) {
         payload = 'json!({})';
@@ -946,7 +949,7 @@ ${subRegLines.join('\n')}
       if (positional.length === 0 && named.length === 0) {
         opExpr = `json!(${method})`;
       } else {
-        const genArgVal = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx); const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, t || 'Anything'); };
+        const genArgVal = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx); const t = a.typeEnc ?? (a.expr ? inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv) : typeEnv.get(a.name)); return toJsonValue(v, orAny(t)); };
         const posVals = positional.map(genArgVal);
         if (named.length === 0) {
           opExpr = `json!([[${posVals.join(', ')}], ${method}])`;
@@ -981,17 +984,17 @@ ${subRegLines.join('\n')}
       } else if (named.length > 0) {
         const namedInserts = named.map(a => {
           const val = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name);
-          const t = a.type || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : null);
-          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, t || 'Anything')});`;
+          const t = a.typeEnc ?? (a.expr ? inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv) : null);
+          return `_nm.insert("${a.name}".to_string(), ${toJsonValue(val, orAny(t))});`;
         }).join(' ');
         if (positional.length > 0) {
-          const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+          const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.typeEnc ?? inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv); return toJsonValue(v, orAny(t)); });
           payload = `{ let mut _arr: Vec<Value> = vec![${posVals.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); Value::Array(_arr) }`;
         } else {
           payload = `{ let mut _nm = Map::new(); ${namedInserts} Value::Object(_nm) }`;
         }
       } else {
-        const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.type || inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv); return toJsonValue(v, t || 'Anything'); });
+        const posVals = positional.map(a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : rustIdent(a.name); const t = a.typeEnc ?? inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv); return toJsonValue(v, orAny(t)); });
         payload = valueArray(posVals);
       }
       return `{ let _cn = ${childRef}; self.child_dispatch(&_cn, ${method}, &${payload}, "", "__parent") }`;
@@ -1019,7 +1022,7 @@ ${subRegLines.join('\n')}
     }`;
     }
     const genArgValRaw = a => a.expr ? genRustExpr(a.expr, typeEnv, eCtx) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv, eCtx);
-    const argType = a => a.type || a.typeName || (a.expr ? inferLiteralType(a.expr) || inferExprType(a.expr, typeEnv) : typeEnv.get(a.name)) || null;
+    const argType = a => a.typeEnc ?? a.typeNameEnc ?? (a.expr ? inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv) : typeEnv.get(a.name));
     // A type-valued arg serializes to wire form (`bv_to_wire`) and carries its
     // authority-address tag, like a reply slot; primitives pass through with a
     // bare tag. See notes/type-authority-address-tags-2026-10-26 (arg slots).
@@ -1028,7 +1031,7 @@ ${subRegLines.join('\n')}
       // self-address (#<. @N>) so the callee can invoke it back through CAM.
       if (a.expr?.type === 'Function') return rustLambdaWireRef(a.expr);
       const t = argType(a);
-      const jv = toJsonValue(genArgValRaw(a), t || 'Anything');
+      const jv = toJsonValue(genArgValRaw(a), orAny(t));
       return rustTypeWireWrap(`(${jv})`, t) || jv;
     };
     // A union or `Anything` arg is tagged from its value, read again only when it is a name.
@@ -1088,7 +1091,7 @@ ${subRegLines.join('\n')}
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genRustExpr(a, typeEnv, eCtx));
-    const argTypes = expr.args.map(a => inferExprType(a, typeEnv));
+    const argTypes = expr.args.map(a => inferType(a, typeEnv));
     const isValueExpr = (a) => a.type === 'RefRead' || a.type === 'StateVar';
     const toF64 = (code, type, argIdx) => {
       if (type === 'Integer') return `(${code}).to_f64().unwrap_or(0.0)`;
@@ -1211,8 +1214,8 @@ ${subRegLines.join('\n')}
     // A call on the actor's own function already comes out as its sole value.
     const value = isCall ? (inner.endsWith('.one()') ? inner : `BvObject::pack(&${inner}).one()`)
       : native ? `json!(${inner})`
-      : toJsonValue(inner, inferExprType(expr.expr, typeEnv) || (expr.expr.type === 'BinaryExpr' ? expr.typeName : null));
-    const out = convertFromValue(`bv_as(&${value}, &json!(${JSON.stringify(expr.desc)}), ${JSON.stringify(expr.typeName)})`, expr.typeName);
+      : toJsonValue(inner, inferType(expr.expr, typeEnv) ?? (expr.expr.type === 'BinaryExpr' ? expr.typeNameEnc : undefined));
+    const out = convertFromValue(`bv_as(&${value}, &json!(${JSON.stringify(expr.desc)}), ${JSON.stringify(typeText(expr.typeNameEnc, G.ctx.depAliases))})`, expr.typeNameEnc);
     G.strictConvert = strict;
     return out;
   }
@@ -1311,15 +1314,15 @@ ${subRegLines.join('\n')}
     const params = fn.params || [];
     const param = params[0];
     const paramName = param ? param.name : '_item';
-    const paramType = param?.type;
+    const paramType = param && envTypeOf(param);
     const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
     const bodyStmts = fn.body ? fn.body.filter(s => s.type !== 'ImplicitReturn' && s.type !== 'Return') : [];
     const bodyExpr = implRet ? implRet.expr : fn.expr;
     if (bodyExpr) {
-      const retType = fn.returnType;
+      const retType = declaredReturn(fn);
       // Build body statements for multi-statement fn bodies
       const stmtLines = [];
-      if (paramType) {
+      if (paramType !== undefined) {
         const access = convertFromValue(`_el.clone()`, paramType);
         stmtLines.push(`let ${paramName}: ${rustType(paramType)} = ${access};`);
         typeEnv.set(paramName, paramType);
@@ -1329,7 +1332,7 @@ ${subRegLines.join('\n')}
       for (const bs of bodyStmts) {
         if (bs.type === 'TypedAssign' && bs.value.type === 'FunctionCallExpr' && bs.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(bs.value.callee.name)) {
           const pcExpr = genRustFnCallExpr(bs.value, typeEnv);
-          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${convertFromValue(`${pcExpr}.one()`, bs.typeName)};`);
+          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeNameEnc)} = ${convertFromValue(`${pcExpr}.one()`, bs.typeNameEnc)};`);
         } else if (bs.type === 'DestructureAssign' && bs.source.type === 'FunctionCallExpr' && bs.source.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(bs.source.callee.name)) {
           // Destructure from function call: result: sq : Integer = square(item)
           const pcExpr = genRustFnCallExpr(bs.source, typeEnv);
@@ -1339,14 +1342,14 @@ ${subRegLines.join('\n')}
             if (!item.name) continue;
             const key = item.key || item.name;
             const accessor = `${tmpVar}.named.get("${key}").cloned().unwrap_or(Value::Null)`;
-            if (item.type) {
-              stmtLines.push(`let ${rustIdent(item.name)}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+            if (item.typeEnc !== undefined) {
+              stmtLines.push(`let ${rustIdent(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             } else {
               stmtLines.push(`let ${rustIdent(item.name)} = ${accessor};`);
             }
           }
         } else if (bs.type === 'TypedAssign') {
-          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, typeEnv, eCtx)};`);
+          stmtLines.push(`let ${rustIdent(bs.name)}: ${rustType(bs.typeNameEnc)} = ${genRustExpr(bs.value, typeEnv, eCtx)};`);
         } else if (bs.type === 'Assign') {
           stmtLines.push(`let ${rustIdent(bs.name)} = ${genRustExpr(bs.value, typeEnv, eCtx)};`);
         }
@@ -1382,20 +1385,20 @@ ${subRegLines.join('\n')}
     const itemParam = params[1];
     const accName = accParam ? accParam.name : '_acc';
     const itemName = itemParam ? itemParam.name : '_item';
-    const accType = accParam?.type;
-    const itemType = itemParam?.type;
+    const accType = accParam && envTypeOf(accParam);
+    const itemType = itemParam && envTypeOf(itemParam);
     const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
     const bodyExpr = implRet ? implRet.expr : fn.expr;
     if (bodyExpr) {
       const innerExpr = genRustExpr(bodyExpr, typeEnv, eCtx);
-      const retType = fn.returnType;
+      const retType = declaredReturn(fn);
       const wrapped = toJsonValue(innerExpr, retType);
-      const accAccess = accType ? convertFromValue('_a.clone()', accType) : '_a.clone()';
-      const itemAccess = itemType ? convertFromValue('_el.clone()', itemType) : '_el.clone()';
-      const accRustType = accType ? rustType(accType) : 'Value';
-      const itemRustType = itemType ? rustType(itemType) : 'Value';
-      if (accType) typeEnv.set(accName, accType);
-      if (itemType) typeEnv.set(itemName, itemType);
+      const accAccess = accType !== undefined ? convertFromValue('_a.clone()', accType) : '_a.clone()';
+      const itemAccess = itemType !== undefined ? convertFromValue('_el.clone()', itemType) : '_el.clone()';
+      const accRustType = accType !== undefined ? rustType(accType) : 'Value';
+      const itemRustType = itemType !== undefined ? rustType(itemType) : 'Value';
+      if (accType !== undefined) typeEnv.set(accName, accType);
+      if (itemType !== undefined) typeEnv.set(itemName, itemType);
       if (expr.initial) {
         const initVal = toJsonValue(init, accType);
         return `${coll}.as_array().map(|_arr| _arr.iter().fold(${initVal}, |_a: Value, _el| { let ${accName}: ${accRustType} = ${accAccess}; let ${itemName}: ${itemRustType} = ${itemAccess}; ${wrapped} })).unwrap_or(Value::Null)`;
@@ -1447,7 +1450,7 @@ ${subRegLines.join('\n')}
     // `Option<&Value>`; clone to a `Value`, defaulting to `Value::Null`
     // when the field is absent (matches JS's `undefined` semantics).
     const objStaticType = (() => {
-      if (expr.object?.type === 'TypeConstruction') return expr.object.typeName;
+      if (expr.object?.type === 'TypeConstruction') return expr.object.typeNameEnc;
       if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {
         return typeEnv.get(expr.object.name);
       }
@@ -1455,15 +1458,15 @@ ${subRegLines.join('\n')}
       // declared as a `*Point` cell).
       if (expr.object?.type === 'RefRead') {
         const decl = G.ctx.stateVarDecls?.find(d => d.name === expr.object.name);
-        if (decl?.typeName) return decl.typeName;
+        if (decl?.typeNameEnc !== undefined) return decl.typeNameEnc;
         if (typeEnv?.has(expr.object.name)) return typeEnv.get(expr.object.name);
       }
-      return null;
+      return undefined;
     })();
     // Nothing says what an untyped local holds (a reply, say): read the field off
     // whatever value it is, as JS does.
-    const untyped = !objStaticType || objStaticType === 'Anything' || objStaticType === 'Object';
-    if ((objStaticType && G.ctx.typeDecls?.has(objStaticType))
+    const untyped = objStaticType === undefined || objStaticType === null || objStaticType === 'Anything' || objStaticType === 'Object';
+    if ((objStaticType !== undefined && G.ctx.typeDecls?.has(objStaticType))
         || (untyped && (expr.object?.type === 'Identifier' || expr.object?.type === 'DotAccessExpr'))) {
       const inner = genRustExpr(expr.object, typeEnv, eCtx);
       return `(${inner}).get(${JSON.stringify(expr.property)}).cloned().unwrap_or(Value::Null)`;
@@ -1491,15 +1494,15 @@ function genRustIfBranch(branch, typeEnv, eCtx, indent, targetType) {
       if (s.type === 'TypedAssign') {
         lastTypedName = s.name;
         if (s.value.type === 'IfExpr') {
-          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${genRustIfExpr(s.value, typeEnv, eCtx, indent, rustType(s.typeName))};`);
+          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${genRustIfExpr(s.value, typeEnv, eCtx, indent, rustType(s.typeNameEnc))};`);
         } else if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
           const callExpr = genRustFnCallExpr(s.value, typeEnv);
-          const converted = convertFromValue(`${callExpr}.one()`, s.typeName);
-          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${converted};`);
+          const converted = convertFromValue(`${callExpr}.one()`, s.typeNameEnc);
+          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${converted};`);
         } else {
           let val = genRustExpr(s.value, typeEnv, eCtx);
           if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
-          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeName)} = ${val};`);
+          lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`);
         }
       } else if (s.type === 'DestructureAssign') {
         if (s.source.type === 'FunctionCallExpr' && s.source.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.source.callee.name)) {
@@ -1511,10 +1514,10 @@ function genRustIfBranch(branch, typeEnv, eCtx, indent, targetType) {
             lastTypedName = item.name;
             if (item.key !== undefined) {
               const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
-              lines.push(`${indent}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+              lines.push(`${indent}let ${item.name}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             } else if (item.positional) {
               const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
-              lines.push(`${indent}let ${item.name}: ${rustType(item.type)} = ${convertFromValue(accessor, item.type)};`);
+              lines.push(`${indent}let ${item.name}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             }
           }
         }
@@ -1651,17 +1654,17 @@ function genRustBranchBind(s, typeEnv, indent) {
   if (s.type !== 'TypedAssign') return `${indent}let ${mintRustSsa(s.name)} = ${val};`;
   // A call to the actor's own function gives a Value, which takes the bind's type.
   if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
-    return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${convertFromValue(val, s.typeName)};`;
+    return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${convertFromValue(val, s.typeNameEnc)};`;
   }
   if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-  return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeName)} = ${val};`;
+  return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`;
 }
 
 // A local function with a branch returns from inside it, so its call is a block
 // with its params bound: the same as binding the call and reading the reply.
 function precomputeGuardedFnCall(expr, fnBody, typeEnv, functionAnalysis, tmpVar, lines, indent = '                ') {
   if (!fnBody.some(s => s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && isRustGuardIf(s.expr))) return false;
-  const bind = { type: 'TypedAssign', name: tmpVar, typeName: 'Object', value: expr };
+  const bind = { type: 'TypedAssign', name: tmpVar, typeNameEnc: 'Object', value: expr };
   const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
   const analysis = { fnDefs: functionAnalysis.fnDefs, skipSet: new Set(), capturePoints: new Map() };
   lines.push(genRustLocals([bind], typeEnv, analysis, findMutableVars([bind]), indent, undefined, null, enclosing));
@@ -1760,11 +1763,11 @@ function genRustFnMethod({ name: op, params, body }) {
   for (const p of orderParamsForDefaults(params)) {
     if (p.positional) {
       const accessor = genRustDefaulted(p, `_s.positional.get(${posAt.get(p)}).cloned()`, typeEnv);
-      paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+      paramLines.push(`${I}let ${p.name}: ${rustType(envTypeOf(p))} = ${convertFromValue(accessor, envTypeOf(p))};`);
     } else {
       const key = p.key || p.name;
       const accessor = genRustDefaulted(p, `_s.named.get("${key}").cloned()`, typeEnv);
-      paramLines.push(`${I}let ${p.name}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+      paramLines.push(`${I}let ${p.name}: ${rustType(envTypeOf(p))} = ${convertFromValue(accessor, envTypeOf(p))};`);
     }
   }
 
@@ -1780,7 +1783,7 @@ function genRustFnMethod({ name: op, params, body }) {
   // statements after it); later guards run after them, as in public handlers.
   const leadingGuard = guards.length > 0 && body[0] === guards[0] ? guards[0] : null;
   const leadingGuardLines = leadingGuard ? buildRustGuardBlock(leadingGuard.expr, typeEnv, I, fnReturnMaker) : '';
-  G.ctx.classParams = (params || []).filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
+  G.ctx.classParams = (params || []).filter(p => G.ctx.actorInfo?.has(classNameOf(p.typeEnc))).map(p => [p.name, classNameOf(p.typeEnc)]);
   const locals = genRustLocals(body, typeEnv, functionAnalysis, mutableVars, I, undefined, fnReturnMaker);
   G.ctx.classParams = null;
   const trailingGuards = leadingGuard ? guards.slice(1) : guards;
@@ -1818,7 +1821,7 @@ function genRustFnReturn(fields, typeEnv) {
   const named = fields.filter(f => !f.positional && !f.spread);
 
   const posVals = pos.map(f => {
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr, typeEnv);
+    const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : null) ?? inferType(f.expr, typeEnv);
     if (f.expr) return forceJsonWrap(toJsonValue(genRustExpr(f.expr, typeEnv), t));
     if (f.name) {
       if (f.name && f.name.startsWith('$')) return resolveVarExpr(f.name);
@@ -1834,10 +1837,10 @@ function genRustFnReturn(fields, typeEnv) {
       let key, val;
       if ('sigil' in f) {
         key = f.sigil;
-        const sigilType = typeEnv.get(f.sigil) || f.type;
+        const sigilType = typeEnv.get(f.sigil) ?? f.typeEnc;
         val = f.sigil.startsWith('$') ? resolveVarExpr(f.sigil) : (sigilType ? forceJsonWrap(toJsonValue(rustSsaResolve(f.sigil), sigilType)) : `bv_val(${rustSsaResolve(f.sigil)})`);
       } else if (f.key !== undefined) {
-        val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.type || inferExprType(f.value, typeEnv)));
+        val = forceJsonWrap(toJsonValue(genRustExpr(f.value, typeEnv), f.typeEnc ?? inferType(f.value, typeEnv)));
         key = f.key;
       }
       return `m.insert(${JSON.stringify(key)}.to_string(), ${val});`;
@@ -1878,14 +1881,14 @@ function genRustFnCallExpr(expr, typeEnv) {
     const heldActor = a.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(a.name);
     const raw = `${genRustExpr(a, typeEnv)}${heldActor ? '.clone()' : ''}`;
     const t = typeEnv.get(a.name) || inferLiteralType(a);
-    return toJsonValue(raw, t || 'Anything');
+    return toJsonValue(raw, orAny(t));
   });
   if (namedBag && positionalArgs.length === 0) {
     // Named-only args
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
       const raw = `${genRustExpr(val, typeEnv)}${val.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(val.name) ? '.clone()' : ''}`;
       const t = typeEnv.get(val.name) || inferLiteralType(val);
-      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, orAny(t))});`;
     }).join(' ');
     return `{ let _payload = { let mut m = Map::new(); ${inserts} Value::Object(m) }; let _re = ${selfSendCall('&_payload')}; BvObject::pack(&_re) }`;
   }
@@ -1893,7 +1896,7 @@ function genRustFnCallExpr(expr, typeEnv) {
     const inserts = Object.entries(namedBag.fields).map(([key, val]) => {
       const raw = `${genRustExpr(val, typeEnv)}${val.type === 'Identifier' && G.ctx.enclosingLocals?.selfSpawnedRefs?.has(val.name) ? '.clone()' : ''}`;
       const t = typeEnv.get(val.name) || inferLiteralType(val);
-      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, t || 'Anything')});`;
+      return `m.insert(${JSON.stringify(key)}.to_string(), ${toJsonValue(raw, orAny(t))});`;
     }).join(' ');
     return `{ let mut _arr: Vec<Value> = vec![${argVals.join(', ')}]; { let mut m = Map::new(); ${inserts} _arr.push(Value::Object(m)); } let _payload = Value::Array(_arr); let _re = ${selfSendCall('&_payload')}; BvObject::pack(&_re) }`;
   }
@@ -1916,11 +1919,11 @@ function genRustDefaultValue(node, _brevityType) {
 // params bound before it (orderParamsForDefaults).
 function genRustDefaulted(p, opt, typeEnv, eCtx) {
   if (!p.defaultValue) return `${opt}.unwrap_or(Value::Null)`;
-  if (isLiteralDefault(p.defaultValue)) return `${opt}.unwrap_or(${genRustDefaultValue(p.defaultValue, p.type)})`;
+  if (isLiteralDefault(p.defaultValue)) return `${opt}.unwrap_or(${genRustDefaultValue(p.defaultValue, envTypeOf(p))})`;
   const strict = G.strictConvert;
   G.strictConvert = false;
   try {
-    const value = toJsonValue(genRustExpr(p.defaultValue, typeEnv, eCtx), p.type || 'Anything');
+    const value = toJsonValue(genRustExpr(p.defaultValue, typeEnv, eCtx), orAny(envTypeOf(p)));
     return `match ${opt} { Some(_v) => _v, None => ${value} }`;
   } finally { G.strictConvert = strict; }
 }
@@ -1948,7 +1951,7 @@ function genRustDestructureParams(params) {
   }
 
   const posAt = positionalIndexes(params);
-  const typeEnv = new Map(params.map(p => [p.name, p.type]));
+  const typeEnv = new Map(params.map(p => [p.name, envTypeOf(p)]));
   for (const p of orderParamsForDefaults(params)) {
     if (p.rest) {
       lines.push(`                let args = BvObject::pack(&payload);`);
@@ -1956,17 +1959,17 @@ function genRustDestructureParams(params) {
     }
     if (p.positional) {
       const accessor = genRustDefaulted(p, `_s.positional.get(${posAt.get(p)}).cloned()`, typeEnv);
-      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, envTypeOf(p))};`);
     } else if (hasPositional) {
       // Named param in a mixed public function — use _s.named
       const key = p.key || p.name;
       const accessor = genRustDefaulted(p, `_s.named.get("${key}").cloned()`, typeEnv);
-      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, envTypeOf(p))};`);
     } else {
       // Pure named public function — use payload directly (existing behavior)
       const key = p.key || p.name;
       const accessor = genRustDefaulted(p, `payload.get("${key}").cloned()`, typeEnv);
-      lines.push(`                let ${p.name} = ${convertFromValue(accessor, p.type)};`);
+      lines.push(`                let ${p.name} = ${convertFromValue(accessor, envTypeOf(p))};`);
     }
   }
   return lines.join('\n');
@@ -1983,16 +1986,16 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   const implRet = funcNode.body?.find(st => st.type === 'ImplicitReturn');
 
   // Determine return type from last body statement or ImplicitReturn
-  let returnType = null;
+  let returnType;
   if (bodyStmts.length > 0) {
     const lastStmt = bodyStmts[bodyStmts.length - 1];
-    if (lastStmt.type === 'TypedAssign') returnType = lastStmt.typeName;
+    if (lastStmt.type === 'TypedAssign') returnType = lastStmt.typeNameEnc;
   }
-  if (!returnType) returnType = 'Value';
+  if (returnType === undefined) returnType = 'Value';
 
   // Build param list
   const paramList = params.map(p => {
-    const pt = p.type || returnType; // fallback: same type as return
+    const pt = envTypeOf(p) ?? returnType; // fallback: same type as return
     return `${rustIdent(p.name)}: ${rustType(pt)}`;
   }).join(', ');
   const rt = rustType(returnType);
@@ -2000,14 +2003,14 @@ function genRecursiveFnDef(name, funcNode, typeEnv) {
   // Build local typeEnv for the function
   const fnTypeEnv = new Map(typeEnv);
   for (const p of params) {
-    fnTypeEnv.set(p.name, p.type || returnType);
+    fnTypeEnv.set(p.name, envTypeOf(p) ?? returnType);
   }
 
   const lines = [];
   lines.push(`fn ${rustIdent(name)}(${paramList}) -> ${rt} {`);
   for (const bs of bodyStmts) {
     if (bs.type === 'TypedAssign') {
-      lines.push(`    let ${rustIdent(bs.name)}: ${rustType(bs.typeName)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
+      lines.push(`    let ${rustIdent(bs.name)}: ${rustType(bs.typeNameEnc)} = ${genRustExpr(bs.value, fnTypeEnv)};`);
     } else if (bs.type === 'Assign') {
       const knownType = inferLiteralType(bs.value);
       if (knownType) {

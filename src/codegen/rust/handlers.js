@@ -1,5 +1,6 @@
 // handlers.js — Handler and child actor generation for Rust codegen
-import { expectedTag } from '../../actor_values.js';
+import { paramTag, typeText, classNameOf, hasType, envTypeOf, hasGeneric, declaredReturn, orAny } from '../enc_names.js';
+import { isFn, isList, listElement } from '../../type_enc.js';
 import { intrinsicArm, selfAddress, wireLabel } from '../wire_labels.js';
 
 // The key a handler's match arm answers: its wire op, or for a cell or class arm
@@ -20,7 +21,7 @@ import {
 } from './types.js';
 import { intFromValue } from './int_repr.js';
 import { isOwnCallStatement as isOwnCall } from '../../ast.js';
-import { inferExprType } from '../../inference.js';
+import { inferType } from '../../type_infer.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import {
   genRustExpr, genRustDestructure, genRustDefaulted,
@@ -34,7 +35,7 @@ import { capturedRefs } from '../ref_captures.js';
 
 // The names a class reads from the actors it's declared in, with their types.
 function outerTypesOf(actor) {
-  return G.ctx.outerProgram && actor?.name ? outerNamesFor(G.ctx.outerProgram, actor) : (G.ctx.outerTypes || new Map());
+  return G.ctx.outerProgram && actor?.name ? outerNamesFor(G.ctx.outerProgram, actor, { enc: true }) : (G.ctx.outerTypes || new Map());
 }
 
 // A param typed as a class of this file holds one of its actors.
@@ -61,7 +62,7 @@ function outersExpr(actor) {
   return `self.outers_with_members(${JSON.stringify(enclosing)}, ${JSON.stringify((actor.home ?? '').toLowerCase())}, ${JSON.stringify(wireLabel(members.singletonOf))})`;
 }
 
-const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(p.type)).map(p => [p.name, p.type]);
+const classParamsOf = (params = []) => params.filter(p => G.ctx.actorInfo?.has(classNameOf(p.typeEnc))).map(p => [p.name, classNameOf(p.typeEnc)]);
 
 function genRustPublicFn(...args) {
   return withPrecomputeScope(() => genRustPublicFnCode(...args));
@@ -86,15 +87,15 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
   // Merge state var types for function-typed state var detection
   for (const n of G.ctx.stateVarNames) {
     const decl = G.ctx.stateVarDecls?.find(d => d.name === n);
-    if (decl?.typeName) typeEnv.set(n, decl.typeName);
+    if (decl?.typeNameEnc !== undefined) typeEnv.set(n, decl.typeNameEnc);
   }
   const mutableVars = findMutableVars(body);
   const functionAnalysis = analyzeFunctions(body, mutableVars, typeEnv);
   const refNames = new Set(body.filter(s => s.type === 'RefDecl').map(s => s.name));
   G.ctx.refNames = refNames;
 
-  const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const typedParams = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
+  const isListOfAny = t => isList(t) && listElement(t) === 'Anything';
+  const typedParams = params.filter(p => hasType(p) && !p.rest && !isListOfAny(p.typeEnc));
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
   let guard = '';
@@ -126,15 +127,15 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
     const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
     const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
     if (positionalTyped.length > 0) {
-      const posTypes = positionalTyped.map(p => expectedLit(p.type)).join(', ');
-      const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ');
+      const posTypes = positionalTyped.map(p => expectedLit(p)).join(', ');
+      const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p)})`).join(', ');
       const typeCheck = hasOptionalTyped
         ? `${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`
         : `match_types_positional(message, &[${posTypes}], &[${namedTypes}])`;
       guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-      const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ')}])`;
+      const typeCheck = `match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p)})`).join(', ')}])`;
       guard = ` if ${checks.join(' && ')} && ${inProcessOr(typeCheck)}`;
     } else if (checks.length > 0) {
       guard = ` if ${checks.join(' && ')}`;
@@ -142,8 +143,8 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
   } else if (positionalTyped.length > 0) {
     const requiredPosTypedCount = positionalTyped.filter(p => !p.defaultValue).length;
     const hasOptionalTyped = requiredPosTypedCount < positionalTyped.length;
-    const posTypes = positionalTyped.map(p => expectedLit(p.type)).join(', ');
-    const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ');
+    const posTypes = positionalTyped.map(p => expectedLit(p)).join(', ');
+    const namedTypes = namedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p)})`).join(', ');
     if (hasOptionalTyped) {
       guard = ` if from == "__self" || from == "__test" || ${untaggedOk(params, 'message')}match_types_positional_min(message, &[${posTypes}], &[${namedTypes}], ${requiredPosTypedCount})`;
     } else {
@@ -151,7 +152,7 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
     }
   } else if (namedTyped.length > 0) {
     const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p.type)})`).join(', ')}])`;
+    guard = ` if from == "__self" || from == "__test" || match_types(message, &[${requiredNamedTyped.map(p => `("${p.key || p.name}", ${expectedLit(p)})`).join(', ')}])`;
   }
 
   const lines = [];
@@ -233,7 +234,7 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
       }
     } else {
       // Pre-compute function-typed param calls and DotCallExpr to avoid block expressions inside json!
-      const isFnType = t => t && (t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t)));
+      const isFnType = t => t === 'Function' || isFn(t);
       let precomputeIdx = 0;
 
       // Recursively walk expression tree to pre-compute local function calls and actor fn calls
@@ -293,7 +294,7 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
       for (const f of reply.fields) {
         // Walk the full expression tree for each field (named fields use f.value, positional use f.expr)
         const fieldExpr = f.expr || f.value;
-        if (fieldExpr) precomputeExprCalls(fieldExpr, f.type);
+        if (fieldExpr) precomputeExprCalls(fieldExpr, f.typeEnc);
         if (fieldExpr?.type === 'FunctionCallExpr' && fieldExpr.callee?.type === 'Identifier') {
           const calleeTy = typeEnv.get(fieldExpr.callee.name);
           if (isFnType(calleeTy) && !fieldExpr._precomputed) {
@@ -320,12 +321,12 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
   } else if (implicitReturn && guards.length === 0) {
     {
       const raw = genRustExpr(implicitReturn.expr, typeEnv);
-      const retType = inferExprType(implicitReturn.expr, typeEnv);
-      const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+      const retType = inferType(implicitReturn.expr, typeEnv);
+      const val = retType !== undefined ? toJsonValue(raw, retType) : `bv_val(${raw})`;
       const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
       if (needsTmp) {
         lines.push(`                let _impl_ret = ${raw};`);
-        const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
+        const tmpVal = retType !== undefined ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
         lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
       } else {
         lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
@@ -380,10 +381,10 @@ function genRustChildDispatchSub(cls) {
   const slots = G.ctx.childSubscribeSlots?.get(cls) || [];
   const arms = slots.map((s) => {
     const paramName = s.params?.[0]?.name ? rustIdent(s.params[0].name) : '_sub_arg';
-    const paramType = s.params?.[0]?.type || 'Anything';
+    const paramType = orAny((s.params?.[0] && envTypeOf(s.params[0])));
     const bindV = convertFromValue('re.as_array().and_then(|a| a.get(0)).cloned().unwrap_or(Value::Null)', paramType);
     const env = new Map();
-    for (const d of (G.ctx.stateVarDecls || [])) env.set(d.name, d.typeName);
+    for (const d of (G.ctx.stateVarDecls || [])) env.set(d.name, d.typeNameEnc);
     if (s.params?.[0]?.name) env.set(s.params[0].name, paramType);
     const savedScope = G.ctx.ssaScope;
     const savedCounts = G.ctx.ssaCounts;
@@ -427,11 +428,11 @@ function genRustLambdaArms(start, privateFns) {
     }
 
     // Destructure params from _s
-    const paramTypes = new Map(params.map(p => [p.name, p.type]));
+    const paramTypes = new Map(params.map(p => [p.name, envTypeOf(p)]));
     for (const p of orderParamsForDefaults(params)) {
       const accessor = genRustDefaulted(p, `_s.positional.get(${params.indexOf(p)}).cloned()`, paramTypes);
-      if (p.type) {
-        lambdaLines.push(`                let ${rustIdent(p.name)}: ${rustType(p.type)} = ${convertFromValue(accessor, p.type)};`);
+      if (hasType(p)) {
+        lambdaLines.push(`                let ${rustIdent(p.name)}: ${rustType(p.typeEnc)} = ${convertFromValue(accessor, p.typeEnc)};`);
       } else {
         lambdaLines.push(`                let ${rustIdent(p.name)} = ${accessor};`);
       }
@@ -439,7 +440,7 @@ function genRustLambdaArms(start, privateFns) {
 
     // Generate body — use full body codegen for multi-statement lambdas
     const capTypeEnv = new Map([
-      ...params.map(p => [p.name, p.type]),
+      ...params.map(p => [p.name, envTypeOf(p)]),
       ...(captures || []).map(c => [c.name, 'Integer']),
     ]);
     if (fnNode.body && fnNode.body.length > 0) {
@@ -528,9 +529,9 @@ function genRustLambdaArms(start, privateFns) {
         // Implicit return — last expression in body
         const implRet = fnNode.body.find(s => s.type === 'ImplicitReturn');
         if (implRet) {
-          const retType = fnNode.returnType || inferExprType(implRet.expr, capTypeEnv);
+          const retType = declaredReturn(fnNode) ?? inferType(implRet.expr, capTypeEnv);
           const raw = genRustExpr(implRet.expr, capTypeEnv);
-          const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+          const val = retType !== undefined ? toJsonValue(raw, retType) : `bv_val(${raw})`;
           lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
         } else if (fnNode.returnType === '()') {
           // Void lambda — body ran for side effects, reply with empty `re: []`.
@@ -540,9 +541,9 @@ function genRustLambdaArms(start, privateFns) {
       G.ctx.ssaScope = savedSsaScope;
       G.ctx.ssaCounts = savedSsaCounts;
     } else if (fnNode.expr) {
-      const retType = fnNode.returnType || inferExprType(fnNode.expr, capTypeEnv);
+      const retType = declaredReturn(fnNode) ?? inferType(fnNode.expr, capTypeEnv);
       const raw = genRustExpr(fnNode.expr, capTypeEnv);
-      const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+      const val = retType !== undefined ? toJsonValue(raw, retType) : `bv_val(${raw})`;
       lambdaLines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
     } else if (fnNode.returnType === '()') {
       // Void lambda with no body and no expr — emit empty reply.
@@ -627,14 +628,14 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     const val = genRustExpr(clause.expr, {});
     const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
     } else {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${clause.targetType}"]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${typeText(clause.targetTypeEnc, G.ctx.depAliases)}"]));\n                handled = true;\n            }`);
     }
   }
   // Memoized return-as dispatch arm
-  if (declarationReturn && declarationReturn.typeName) {
-    const t = declarationReturn.typeName;
+  if (declarationReturn?.typeNameEnc !== undefined) {
+    const t = typeText(declarationReturn.typeNameEnc, G.ctx.depAliases);
     arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                ty_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
   }
 
@@ -681,8 +682,8 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
 
 // With nothing required, a call can leave out every arg, and so every tag.
 // A param type's expected tag, as a Rust string literal (src/actor_values.js).
-function expectedLit(t) {
-  return JSON.stringify(expectedTag(t, [...(G.ctx.actorNodes?.values() || [])]));
+function expectedLit(p) {
+  return JSON.stringify(paramTag(G.ctx, p));
 }
 
 function untaggedOk(params, message) {
@@ -692,15 +693,15 @@ function untaggedOk(params, message) {
 // A call from outside an instance has its tags checked, as a file handler's are.
 // In-process callers pass values, not tags. Overloads fall through to the next arm.
 function childTagGuard({ params }, overloaded = false) {
-  const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const typed = params.filter(p => p.type && !p.rest && !isListOfAny(p.type));
+  const isListOfAny = t => isList(t) && listElement(t) === 'Anything';
+  const typed = params.filter(p => hasType(p) && !p.rest && !isListOfAny(p.typeEnc));
   const pos = typed.filter(p => p.positional);
   const named = typed.filter(p => !p.positional);
-  const pair = p => `("${p.key || p.name}", ${expectedLit(p.type)})`;
+  const pair = p => `("${p.key || p.name}", ${expectedLit(p)})`;
   let check;
   if (pos.length > 0) {
     const required = pos.filter(p => !p.defaultValue).length;
-    const posTypes = pos.map(p => expectedLit(p.type)).join(', ');
+    const posTypes = pos.map(p => expectedLit(p)).join(', ');
     check = `${untaggedOk(params, 'self.wire_msg')}match_types_positional_min(&self.wire_msg, &[${posTypes}], &[${named.map(pair).join(', ')}], ${required})`;
   } else if (named.length > 0) {
     check = `match_types(&self.wire_msg, &[${named.filter(p => !p.defaultValue).map(pair).join(', ')}])`;
@@ -720,7 +721,8 @@ function childTagGuard({ params }, overloaded = false) {
 function valueFit(params, subject) {
   if (params.some(p => p.rest)) return null;
   const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
-  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  // A param's type as `bv_values_fit` reads it; a generic one, anything.
+  const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, G.ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
   if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
@@ -835,7 +837,7 @@ function genRustChildPublicFnCode(fn, eCtx, classTypes = new Map(), isPublic = f
       const fieldExpr = f.expr || f.value;
       if (!fieldExpr) continue;
       if (exprNeedsPrecompute(fieldExpr)) {
-        precomputeFnCalls(fieldExpr, f.type);
+        precomputeFnCalls(fieldExpr, f.typeEnc);
       }
     }
 
@@ -852,12 +854,12 @@ function genRustChildPublicFnCode(fn, eCtx, classTypes = new Map(), isPublic = f
     }
   } else if (implicitReturn && !childGuards.includes(implicitReturn)) {
     const raw = genRustExpr(implicitReturn.expr, typeEnv, eCtx);
-    const retType = inferExprType(implicitReturn.expr, typeEnv);
-    const val = retType ? toJsonValue(raw, retType) : `bv_val(${raw})`;
+    const retType = inferType(implicitReturn.expr, typeEnv);
+    const val = retType !== undefined ? toJsonValue(raw, retType) : `bv_val(${raw})`;
     const needsTmp = implicitReturn.expr.type === 'FunctionCallExpr' || implicitReturn.expr.type === 'DotCallExpr';
     if (needsTmp) {
       lines.push(`                let _impl_ret = ${raw};`);
-      const tmpVal = retType ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
+      const tmpVal = retType !== undefined ? toJsonValue('_impl_ret', retType) : 'bv_val(_impl_ret)';
       lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(tmpVal)}]));`);
     } else {
       lines.push(`                re = Some(Value::Array(vec![${forceJsonWrap(val)}]));`);
@@ -894,10 +896,10 @@ function genRustChildDispatch(actor) {
   const eCtx = undefined;
   // Class param and state types, so handler bodies see e.g. Text params as Text.
   const classTypes = new Map();
-  for (const p of (actor.initParams || [])) if (p.type) classTypes.set(p.name, p.type);
-  for (const d of (actor.stateVarDecls || [])) if (d.typeName) classTypes.set(d.name, d.typeName);
+  for (const p of (actor.initParams || [])) if (envTypeOf(p) !== undefined) classTypes.set(p.name, envTypeOf(p));
+  for (const d of (actor.stateVarDecls || [])) if (d.typeNameEnc !== undefined) classTypes.set(d.name, d.typeNameEnc);
   // The names this class reads from the actors it's declared in, typed as they declare them.
-  for (const [n, t] of outerTypesOf(actor)) if (t && !classTypes.has(n)) classTypes.set(n, t);
+  for (const [n, t] of outerTypesOf(actor)) if (t !== undefined && !classTypes.has(n)) classTypes.set(n, t);
   // Lambdas its methods lift are its own: their arms are here, with its state in.
   const lambdaStart = G.ctx.lambdaHandlers.length;
   const arms = [
@@ -917,14 +919,14 @@ function genRustChildDispatch(actor) {
     const val = genRustExpr(clause.expr, {});
     const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
     } else {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${clause.targetType}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
     }
   }
   // Memoized return-as dispatch arm for child actor
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
-    const t = actor.declarationReturn.typeName;
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
+    const t = typeText(actor.declarationReturn.typeNameEnc, G.ctx.depAliases);
     const sk = stateKey('__returnAs');
     arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
@@ -1055,36 +1057,36 @@ function genRustChildInit(actor) {
   const constructorParams = actor.initParams || [];
   const initBody = withDeferredRuns(actor.initBody || [], actor);
   const inheritedIngests = actor._inheritedIngests || [];
-  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
   if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
 
   // Destructure constructor params from args (sequential index — call sites flatten args in param order)
-  const paramTypes = new Map(constructorParams.map(p => [p.name, p.type]));
+  const paramTypes = new Map(constructorParams.map(p => [p.name, envTypeOf(p)]));
   for (const p of orderParamsForDefaults(constructorParams)) {
     const i = constructorParams.indexOf(p);
     // For optional params, treat null as "not provided" → use default
     const opt = p.defaultValue
       ? `args.as_array().and_then(|a| a.get(${i})).and_then(|v| if v.is_null() { None } else { Some(v.clone()) })`
       : `args.as_array().and_then(|a| a.get(${i})).cloned()`;
-    lines.push(`        let ${p.name}: ${rustType(p.type)} = ${convertFromValue(genRustDefaulted(p, opt, paramTypes), p.type)};`);
+    lines.push(`        let ${p.name}: ${rustType(p.typeEnc)} = ${convertFromValue(genRustDefaulted(p, opt, paramTypes), p.typeEnc)};`);
     // Store it as state (unprefixed — parent code reads these too) before the
     // next param: a default reads the params before it from there.
-    const storeVal = p.type === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`;
+    const storeVal = p.typeEnc === 'Integer' ? `bv_bigint_to_value(&${p.name})` : `json!(${p.name})`;
     lines.push(`        self.state.insert("${stateKey(p.name)}".to_string(), ${storeVal});`);
   }
 
   // Service block statements — split around IngestExpr
   const initTypeEnv = new Map();
   for (const d of actor.stateVarDecls || []) {
-    initTypeEnv.set(d.name, d.typeName);
+    initTypeEnv.set(d.name, d.typeNameEnc);
   }
   for (const p of constructorParams) {
-    initTypeEnv.set(p.name, p.type);
+    initTypeEnv.set(p.name, envTypeOf(p));
   }
-  for (const [n, t] of outerTypesOf(actor)) if (t && !initTypeEnv.has(n)) initTypeEnv.set(n, t);
+  for (const [n, t] of outerTypesOf(actor)) if (t !== undefined && !initTypeEnv.has(n)) initTypeEnv.set(n, t);
 
   let ownIngestInfo = null;
   const preIngestBody = [];
@@ -1141,8 +1143,8 @@ function genRustChildInit(actor) {
         // the cell holds it.
         const t = initTypeEnv.get(s.name);
         const name = 'cell_call';
-        const binds = [t && t !== 'Anything'
-          ? { type: 'TypedAssign', name, typeName: t, value: s.value }
+        const binds = [t !== undefined && t !== null && t !== 'Anything'
+          ? { type: 'TypedAssign', name, typeNameEnc: t, value: s.value }
           : { type: 'Assign', name, value: s.value }];
         const bound = genRustLocals(binds, initTypeEnv, analyzeFunctions(binds, new Set(), initTypeEnv), findMutableVars(binds), '            ');
         const val = genRustExpr({ type: 'Identifier', name }, new Map([...initTypeEnv, [name, t]]));
@@ -1181,22 +1183,22 @@ function genRustChildInit(actor) {
     // Subclass provides a value for its superclass's ingest — assign directly to the inherited state var
     const ingest = inheritedIngests[0];
     const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
-    const t = ingest.typeName;
+    const t = ingest.typeNameEnc;
     lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
   } else if (inheritedIngests.length > 0) {
     // Subclass doesn't provide a return — use superclass's default if available
     for (const ingest of inheritedIngests) {
       if (ingest.defaultValue) {
         const val = genRustExpr(ingest.defaultValue, initTypeEnv);
-        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, ingest.typeName))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
+        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, ingest.typeNameEnc))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
       }
     }
   }
 
   // Memoized return-as value
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
     const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
-    const t = actor.declarationReturn.typeName;
+    const t = actor.declarationReturn.typeNameEnc;
     lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey('__returnAs')}".to_string(), _v); }`);
   }
 
@@ -1263,7 +1265,7 @@ function genRustChildMethods(allActors) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }
@@ -1285,8 +1287,8 @@ function genRustChildMethods(allActors) {
     savedDecls = G.ctx.stateVarDecls;
     G.ctx.stateVarDecls = [
       ...childStateDecls,
-      ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
-      ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
+      ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything', typeNameEnc: orAny(envTypeOf(p)) })),
+      ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything', typeNameEnc: 'Anything' })),
     ];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));

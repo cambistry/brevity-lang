@@ -104,3 +104,10 @@ export const hasType = (p) => p.typeEnc !== undefined || !!p.typeUnencoded;
 // A param's type as a type env holds it: a constructor profile, which has no
 // encoding, takes any actor with a `new`, so it's `Actor`.
 export const envTypeOf = (p) => (p.typeEnc !== undefined ? p.typeEnc : p.typeKind === 'ctor' ? 'Actor' : undefined);
+
+// A function's declared reply when it says one, for how its value is sent: its
+// encoded type, or its `.` or `()`.
+export const declaredReturn = (fn) => (fn.returnType === '.' || fn.returnType === '()' ? fn.returnType : fn.returnTypeEnc);
+
+// A type that's known, or `Anything`. (`??` would take the `null` type for unknown.)
+export const orAny = (t) => (t === undefined ? 'Anything' : t);

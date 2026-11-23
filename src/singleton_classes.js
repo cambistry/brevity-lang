@@ -26,6 +26,12 @@ import { lowerActorValues } from './actor_values.js';
 // only that, so it is reserved everywhere else.
 // See notes/class-singleton-forms-2026-11-13.md.
 
+// These lowerings run in the parse, before its types are encoded (src/parser_types.js):
+// a node takes a declaration's encoded type when it's asked for.
+const encodedLater = (node, key, decl, declKey) => Object.defineProperty(node, key, {
+  get: () => decl[declKey], enumerable: true, configurable: true,
+});
+
 // `class` as the parser leaves it: `class` is reserved, so no other name is spelled so.
 // Resolved here to the class of the actor it's in.
 export const CLASS_SELF = 'class';
@@ -295,6 +301,7 @@ export function lowerInheritedBlockCells(actors) {
     const mark = (node, found) => {
       delete node.viaClass;
       Object.assign(node, { outer: true, outerBase: true, outerLevel: 1, outerClass: found.owner, outerParam: false, outerType: found.decl.typeName ?? null });
+      encodedLater(node, 'outerTypeEnc', found.decl, 'typeNameEnc');
       return node;
     };
     const visit = (node, bound) => {
@@ -322,6 +329,7 @@ export function lowerInheritedBlockCells(actors) {
           node.type = 'ExprStatement';
           const type = found.decl.typeName ?? null;
           node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner, outerType: type };
+          encodedLater(node.expr, 'outerTypeEnc', found.decl, 'typeNameEnc');
           visit(value, bound);
           return;
         }
@@ -423,7 +431,7 @@ function fillStub(stub, publicSigs, fields, prot) {
     if (n.startsWith('__')) continue;
     const field = fields[n];
     if (field) {
-      stub.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: field.type, isRef: !field.readOnly });
+      stub.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: field.type, typeNameEnc: field.typeEnc, isRef: !field.readOnly });
       stub.functions.push({ ...fn('@' + n, { params: [], returns: sigs[0]?.returns }), cellGetter: true });
     } else for (const sig of sigs) stub.functions.push(fn('@' + n, sig));
   }
@@ -431,7 +439,7 @@ function fillStub(stub, publicSigs, fields, prot) {
     if (n.startsWith('__')) continue;
     const bare = n.replace(/^~/, '');
     const f = prot.__fields?.[n];
-    if (f) stub.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, isRef: !f.readOnly });
+    if (f) stub.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, typeNameEnc: f.typeEnc, isRef: !f.readOnly });
     else for (const sig of sigs) stub.functions.push(fn(bare, sig));
   }
 }
@@ -556,6 +564,7 @@ export function lowerBlockDelegation(actors) {
         for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
         node.type = 'ExprStatement';
         node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, outerType: type, ctxCell: wireLabelOf(name) };
+        encodedLater(node.expr, 'outerTypeEnc', decl, 'typeNameEnc');
         return;
       }
       if (node.type === 'OuterSet' && node.outerBase) node.ctxCell = wireLabelOf(node.name);

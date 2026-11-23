@@ -5,7 +5,7 @@ import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { publicLabel, replyTy } from '../../singleton_classes.js';
-import { paramTag, typeText, classNameOf, hasGeneric, hasType, dependencyAliases, envTypeOf } from '../enc_names.js';
+import { paramTag, typeText, classNameOf, hasGeneric, hasType, dependencyAliases, envTypeOf, orAny } from '../enc_names.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
@@ -1270,7 +1270,7 @@ function genChildActorCode(ctx, actors) {
       // The names this class reads from the actors it's declared in (src/outer_reads.js); its own win.
       ...[...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined),
       ...childStateDecls.map(v => [v.name, v.typeNameEnc]),
-      ...childParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
+      ...childParams.map(p => [p.name, orAny(envTypeOf(p))]),
       ...childCoercions.map(s => [s.name, 'Anything']),
     ]);
     ctx.childStatePrefix = name.toLowerCase();
@@ -1572,7 +1572,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   }
   ctx.stateVarTypeEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
+    ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);
 
   // Set main actor return-as type before dispatch generation
@@ -1698,7 +1698,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
   const ownFnNames = new Set((actor.functions || []).map(f => f.name));
   const ownCallEnv = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
+    ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);
   const declOf = new Map(stateVarDecls.map(v => [v.name, v]));
   for (const s of withCellReady(actor.initBody || [], pendingCells)) {
@@ -1771,7 +1771,7 @@ ${putLines},
   if (actor.declarationReturn?.typeNameEnc !== undefined) {
     const raTypeEnv = new Map([
       ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-      ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
+      ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
     ]);
     const val = genExpr(ctx, actor.declarationReturn.expr, raTypeEnv, {});
     stateInitLines.push(`    put(${erlStateKey(ctx, '__returnAs')}, ${val})`);
@@ -1793,13 +1793,13 @@ ${putLines},
   // Test harness function — get/set/update/op
   const stateTypeMap = new Map([
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
+    ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);
   const testGetClauses = allStateNames.map(n =>
     `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
-    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, stateTypeMap.get(n) ?? 'Anything'))}`,
+    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`,
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
@@ -1837,7 +1837,7 @@ ${putLines},
       const getClauses = r.stateVars.map(v =>
         `                            ${erlOp(v.name)} -> bv_inst_get_(${pid}, ${erlStateKey(childCtx, v.name)});\n`).join('');
       const typeClauses = r.stateVars.map(v =>
-        `                            ${erlOp(v.name)} -> ${erlString(typeText(v.typeNameEnc ?? 'Anything', ctx.depAliases))};\n`).join('');
+        `                            ${erlOp(v.name)} -> ${erlString(typeText(orAny(v.typeNameEnc), ctx.depAliases))};\n`).join('');
       return `            ${erlString(r.path)} ->
                 ${resolve},
                 case maps:find(<<"get">>, Test) of

@@ -144,6 +144,8 @@ ${arms.join('\n')}
 // program.js — Program assembly and entry for Rust codegen
 import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
+import { typeText, hasType, envTypeOf, dependencyAliases, orAny } from '../enc_names.js';
+import { isFn } from '../../type_enc.js';
 import { addressToken, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import * as AST from '../../ast.js';
@@ -198,10 +200,10 @@ function genRustProgram(actor, allActors) {
   const allDispatchFns = [...publicFns, ...privateFns];
   // A class's handlers check tags too, on a call from outside.
   const needsMatchTypes = childActors.length > 0 || allDispatchFns.some(h => {
-    const typed = h.params.filter(p => p.type && !p.rest);
+    const typed = h.params.filter(p => hasType(p) && !p.rest);
     return typed.length > 0 && !typed.some(p => p.positional);
   });
-  const needsMatchTypesPos = childActors.length > 0 || allDispatchFns.some(h => h.params.some(p => p.type && !p.rest && p.positional));
+  const needsMatchTypesPos = childActors.length > 0 || allDispatchFns.some(h => h.params.some(p => hasType(p) && !p.rest && p.positional));
   const typeMemberOfFn = (needsMatchTypes || needsMatchTypesPos) ? '\n' + TYPE_MEMBER_OF_FN + '\n\n' + TAG_MATCHES_FN + '\n' : '';
   const matchTypesFn = needsMatchTypes ? '\n' + MATCH_TYPES_FN + '\n' : '';
   const matchTypesPosFn = needsMatchTypesPos ? '\n' + MATCH_TYPES_POSITIONAL_FN + '\n' : '';
@@ -212,11 +214,11 @@ function genRustProgram(actor, allActors) {
   // (its address, or the alias spelling of its authority), `bv_type_fields(key)`
   // its declared field names, and `bv_source_key(name)` the key of the type the
   // source calls `name`, for matching a tag against a param's type.
-  const registry = registryEntries(G.ctx.outerProgram, G.ctx.typeDecls);
+  const registry = registryEntries(G.ctx.outerProgram, G.ctx.typeTable);
   const keyArms = registry.map(([lookup, key]) => `        ${JSON.stringify(lookup)} => Some(${JSON.stringify(key)}),`).join('\n');
   const fieldArms = registry.filter(([lookup, key]) => lookup === key)
     .map(([, key, fields]) => `        ${JSON.stringify(key)} => Some(&[${fields.map(f => JSON.stringify(f.name)).join(', ')}]),`).join('\n');
-  const sourceArms = [...G.ctx.typeDecls.entries()].map(([name, e]) => `        ${JSON.stringify(name)} => Some(${JSON.stringify(e.key)}),`).join('\n');
+  const sourceArms = [...G.ctx.typeTable.entries()].map(([name, e]) => `        ${JSON.stringify(name)} => Some(${JSON.stringify(e.key)}),`).join('\n');
   const bvTypeFieldsFn = `
 fn bv_type_fields(key: &str) -> Option<&'static [&'static str]> {
     match key {
@@ -281,8 +283,8 @@ ${sourceArms}
   ]);
   G.ctx.stateVarDecls = [
     ...(actor.stateVarDecls || []),
-    ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything' })),
-    ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything' })),
+    ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything', typeNameEnc: orAny(envTypeOf(p)) })),
+    ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything', typeNameEnc: 'Anything' })),
   ];
   G.ctx.remoteInstanceVars = new Set();
   // Constructor coercions: alias name → the underlying dep's wire address. Treat the alias
@@ -368,7 +370,7 @@ ${sourceArms}
   const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
-  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
+  const isFunctionType = t => t === 'Function' || isFn(t);
   const overloadedPrivNames = new Set();
   {
     const privNameCounts = new Map();
@@ -381,7 +383,7 @@ ${sourceArms}
     }
   }
   const compilableFns = hasFns ? privateFns.filter(f =>
-    !f.params.some(fp => isFunctionType(fp.type)) && !fnReturnsFunction(f) && !overloadedPrivNames.has(f.name) && !f.emptyOverload) : [];
+    !f.params.some(fp => isFunctionType(fp.typeEnc) || fp.typeKind === 'ctor') && !fnReturnsFunction(f) && !overloadedPrivNames.has(f.name) && !f.emptyOverload) : [];
   const fnMethods = compilableFns.length > 0 ? '\n' + compilableFns.map(f => genRustFnMethod(f)).join('\n\n') : '';
   const childMethodsCode = genRustChildMethods(allActors || []);
   // Either remote-instance method-call awaits (existing) or function-body
@@ -512,7 +514,7 @@ ${sourceArms}
   if (mainActorStateful) {
     const initTypeEnv = new Map();
     for (const d of (actor.stateVarDecls || [])) {
-      initTypeEnv.set(d.name, d.typeName);
+      initTypeEnv.set(d.name, d.typeNameEnc);
     }
     const initBody = withDeferredRuns(actor.initBody || [], actor);
     for (const s of initBody) {
@@ -561,7 +563,7 @@ ${sourceArms}
           const named = s.value.args.filter(a => a.key !== undefined);
           if (positional.length === 1 && named.length === 0) {
             const val = genRustExpr(positional[0].expr, initTypeEnv);
-            const pt = positional[0].type || inferLiteralType(positional[0].expr);
+            const pt = positional[0].typeEnc ?? inferLiteralType(positional[0].expr);
             stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!([${toJsonValue(val, pt)}]));`);
           } else {
             const val = genRustExpr(s.value, initTypeEnv);
@@ -595,12 +597,12 @@ ${sourceArms}
     }
   }
   // Memoized return-as value for main actor
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
-    const raTypeEnv = new Map([...(actor.stateVarDecls || []).map(d => [d.name, d.typeName])]);
-    for (const p of (actor.initParams || [])) raTypeEnv.set(p.name, p.type);
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
+    const raTypeEnv = new Map([...(actor.stateVarDecls || []).map(d => [d.name, d.typeNameEnc])]);
+    for (const p of (actor.initParams || [])) raTypeEnv.set(p.name, envTypeOf(p));
     let val = genRustExpr(actor.declarationReturn.expr, raTypeEnv);
     val = val.replace(/\bself\./g, 'actor.');
-    const t = actor.declarationReturn.typeName;
+    const t = actor.declarationReturn.typeNameEnc;
     stateInitLines.push(`    actor.state.insert("${stateKey('__returnAs')}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   }
   const initMethod = '';
@@ -661,7 +663,7 @@ ${[...G.ctx.stateVarNames].map(n =>
       const savedCtx = G.ctx; G.ctx = childCtx;
       const sk = stateKey(v.name);
       G.ctx = savedCtx;
-      return `                        ${JSON.stringify(wireLabel(v.name))} => (_st.get("${sk}").cloned().unwrap_or(Value::Null), Some("${v.typeName || 'Anything'}")),`;
+      return `                        ${JSON.stringify(wireLabel(v.name))} => (_st.get("${sk}").cloned().unwrap_or(Value::Null), Some("${typeText(orAny(v.typeNameEnc), G.ctx.depAliases)}")),`;
     }).join('\n');
     return `                    "${r.path}" => {
                         ${resolve}
@@ -700,7 +702,7 @@ ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(
             let bv_type: Option<&str> = match name {
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
-  const t = decl?.typeName || 'Anything';
+  const t = orAny(decl?.typeNameEnc);
   return `                ${JSON.stringify(wireLabel(n))} => Some(${JSON.stringify(rustTypeTag(t))}),`;
 }).join('\n')}
                 _ => None,
@@ -786,12 +788,12 @@ ${[...G.ctx.stateVarNames].map(n => {
         match slot {
 ${subSlots.map(s => {
   const paramName = s.params?.[0]?.name ? rustIdent(s.params[0].name) : '_sub_arg';
-  const paramType = s.params?.[0]?.type || 'Anything';
+  const paramType = orAny((s.params?.[0] && envTypeOf(s.params[0])));
   const bindV = convertFromValue(`re.as_array().and_then(|a| a.get(0)).cloned().unwrap_or(Value::Null)`, paramType);
   // Build typeEnv for body
   const subTypeEnv = new Map();
   if (s.params?.[0]?.name) subTypeEnv.set(s.params[0].name, paramType);
-  for (const d of (G.ctx.stateVarDecls || [])) subTypeEnv.set(d.name, d.typeName);
+  for (const d of (G.ctx.stateVarDecls || [])) subTypeEnv.set(d.name, d.typeNameEnc);
   // Compile body using genRustLocals
   const savedScope = G.ctx.ssaScope;
   const savedCounts = G.ctx.ssaCounts;
@@ -2915,7 +2917,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   // A class with no functions of its own still has to be constructible.
-  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || (a.declarationReturn && a.declarationReturn.typeName));
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || (a.declarationReturn?.typeNameEnc !== undefined));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   // A public singleton is published under the actor that builds it, which needs
@@ -2925,17 +2927,21 @@ function codegenRust(ast, options = {}) {
   // An actor that may be extended, or extends one in another file, runs as a class
   // that reaches the actors around it (its delegation runtime is there).
   G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons || ast.actors.some(a => a.membersOf || a.isPublic || a.remoteLayers?.length);
-  G.ctx.outerTypes = fileOuterNames(ast);
+  G.ctx.outerTypes = fileOuterNames(ast, { enc: true });
+  G.ctx.program = ast;
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();
   // Every type this program knows, by the name the source uses for it, with
   // the address that identifies it (src/codegen/type_table.js). A service's
   // type is also known by its bare name, for what its document says.
-  G.ctx.typeDecls = buildTypeTable(ast);
+  G.ctx.typeTable = buildTypeTable(ast);
   for (const info of Object.values(ast.crossModuleTypes || {})) {
-    const entry = [...G.ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
-    if (entry && !G.ctx.typeDecls.has(info.name)) G.ctx.typeDecls.set(info.name, entry);
+    const entry = [...G.ctx.typeTable.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !G.ctx.typeTable.has(info.name)) G.ctx.typeTable.set(info.name, entry);
   }
+  // The generator reads encoded types, so it finds a type by its address.
+  G.ctx.typeDecls = new Map([...G.ctx.typeTable.values()].map(e => [e.key, e]));
+  G.ctx.depAliases = dependencyAliases(ast);
   G.ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   G.ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);
   // A dependency's wire address is its source (src/codegen/dep_address.js).
@@ -2951,7 +2957,7 @@ function codegenRust(ast, options = {}) {
   // param gets a typed local, not a raw Value.
   G.ctx.dependencyInterfaces = new Map();
   for (const d of (ast.dependencies || [])) {
-    if (d.interface) G.ctx.dependencyInterfaces.set(d.name, d.interface);
+    if (d.interfaceDoc) G.ctx.dependencyInterfaces.set(d.name, d.interfaceDoc);
   }
   G.ctx.destructuredMembers = new Map();
   // Template element hosts: an XML `<tag>` lowers to `#new` sent to the element-
@@ -3000,8 +3006,8 @@ function codegenRust(ast, options = {}) {
   for (const a of active) {
     if (a.name) {
       const asClauses = [...(a.asClauses || [])];
-      if (a.declarationReturn && a.declarationReturn.typeName) {
-        asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+      if (a.declarationReturn?.typeNameEnc !== undefined) {
+        asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
       }
       G.ctx.actorInfo.set(a.name, { actor: a, asClauses });
     }
@@ -3079,7 +3085,7 @@ function codegenRust(ast, options = {}) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }
