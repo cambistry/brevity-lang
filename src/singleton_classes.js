@@ -56,7 +56,7 @@ function addImplicitBlock(actors, byName, a, parentBlock) {
   const cell = `${bare}__class`;
   const declarer = actors.find(x => (x.name ?? null) === (a.enclosing ?? null));
   const make = () => ({ type: 'FunctionCallExpr', callee: { type: 'Identifier', name: blockName }, args: [] });
-  declarer.stateVarDecls.push({ name: cell, typeName: blockName, typeFromCallee: true, isRef: false });
+  declarer.stateVarDecls.push({ name: cell, typeName: blockName, typeNameEnc: `:${quoteToken(blockName)}:*`, typeFromCallee: true, isRef: false });
   const place = (body, st) => {
     if (!body) return;
     const at = body.findIndex(x => x.name === parentBlock?.singletonOf);
@@ -272,7 +272,7 @@ export function lowerInheritedBlockCells(actors) {
       if (!inherited.has(d.name)) inherited.set(d.name, { decl: d, owner: b.name });
     }
     if (block.blockParent) block.enclosing = block.home ?? null;
-    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, isRef: !!decl.isRef })), configurable: true });
+    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, ...(decl.typeNameEnc !== undefined && { typeNameEnc: decl.typeNameEnc }), isRef: !!decl.isRef })), configurable: true });
     // The cell a use names: an inherited one, or (`base::x`, `A::x`) an ancestor's.
     const resolve = (node, bound) => {
       if (typeof node.name !== 'string') return null;
@@ -378,7 +378,7 @@ export function addRemoteParents(actors, dependencies, remotes) {
     // Its `new`'s params, by the doc: a published one is a prop (`n Integer`).
     const props = new Set(Object.entries(cls.fields || {}).filter(([, f]) => !f.cell).map(([n]) => n));
     stubClass.initParams = (cls.initParams || []).map((p, i) => ({
-      name: p.name ?? `p${i}`, key: p.name ?? `p${i}`, type: p.type, positional: p.positional !== false,
+      name: p.name ?? `p${i}`, key: p.name ?? `p${i}`, type: p.type, typeEnc: p.typeEnc, positional: p.positional !== false,
       ...(p.optional && { remoteOptional: true }), ...(p.name && props.has(p.name) && { accessor: p.name }),
     }));
     if (cls.ownNew) stubClass.ownNew = true;
