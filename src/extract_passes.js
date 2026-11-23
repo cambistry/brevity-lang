@@ -320,6 +320,7 @@ export function injectFileParamsIntoFileActor(ast) {
       name: p.name,
       ...(p.key ? { key: p.key } : {}),
       type: p.paramType,
+      ...(p.paramTypeEnc !== undefined && { typeEnc: p.paramTypeEnc }),
       positional: !!p.positional,
       ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),
       ...(p.accessor ? { accessor: p.accessor } : {}),
@@ -340,11 +341,11 @@ export function coerceObjectsToTypes(ast) {
   const typesByName = new Map((ast.types || []).flatMap(t => (t.bareName ? [[t.bareName, t], [t.name, t]] : [[t.name, t]])));
   if (typesByName.size === 0) return;
 
-  function structureToTypeConstruction(typeName, structureExpr) {
+  function structureToTypeConstruction(typeName, typeNameEnc, structureExpr) {
     const decl = typesByName.get(typeName);
     if (!decl) return null;
     const positional = (structureExpr.args || []).filter(a => a.positional);
-    return { type: 'TypeConstruction', typeName, args: positional.map(a => a.expr) };
+    return { type: 'TypeConstruction', typeName, typeNameEnc, args: positional.map(a => a.expr) };
   }
 
   function walk(node) {
@@ -354,7 +355,7 @@ export function coerceObjectsToTypes(ast) {
         typesByName.has(node.typeName) &&
         node.value &&
         (node.value.type === 'ObjectConstructor' || node.value.type === 'ObjectLiteral')) {
-      const rewritten = structureToTypeConstruction(node.typeName, node.value);
+      const rewritten = structureToTypeConstruction(node.typeName, node.typeNameEnc, node.value);
       if (rewritten) node.value = rewritten;
     }
     for (const k of Object.keys(node)) {
@@ -380,8 +381,10 @@ export function rewriteTypeConstructions(ast) {
     n.callee?.type === 'Identifier' &&
     typeNames.has(n.callee.name);
 
+  // The type a call names, encoded in the actor it's read in.
+  let actor = null;
   const toTypeConstruction = (n) =>
-    ({ type: 'TypeConstruction', typeName: n.callee.name, args: n.args });
+    ({ type: 'TypeConstruction', typeName: n.callee.name, typeNameEnc: ast.typeNamed([n.callee.name], actor), args: n.args });
 
   function walk(node) {
     if (!node || typeof node !== 'object') return;
@@ -399,7 +402,10 @@ export function rewriteTypeConstructions(ast) {
       if (isTypeCall(child)) node[k] = toTypeConstruction(child);
     }
   }
-  walk(ast);
+  for (const a of ast.actors || []) { actor = a; walk(a); }
+  actor = null;
+  walk(ast.types);
+  walk(ast.dependencies);
 }
 
 // All of them, in order.

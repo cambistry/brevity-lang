@@ -1,11 +1,12 @@
 import { returnShapes } from './return_shapes.js';
+import { isUnion } from './type_enc.js';
 
 // The type of a call to a function of this actor, or of one enclosing it
 // (src/outer_reads.js marks those `outerFnCall`), when that function has one
 // return of one value with a known type: `f()` of `f = -> 16` is an Integer.
-// Kept on a call that is an operand (`resultType`) for inference
-// (src/inference.js), so `x Integer = f() + #f()` is Integer arithmetic on every
-// target.
+// Kept on a call that is an operand (`resultType`, and encoded `resultTypeEnc`)
+// for inference (src/inference.js, src/type_infer.js), so `x Integer = f() + #f()`
+// is Integer arithmetic on every target.
 
 export function markCallResultTypes(ast) {
   const byName = new Map(ast.actors.map(a => [a.name ?? null, a]));
@@ -20,7 +21,7 @@ export function markCallResultTypes(ast) {
       const { alternatives, orSelf, opaque } = returnShapes(fns[0]);
       const [only] = alternatives;
       if (!orSelf && !opaque && alternatives.length === 1 && only.length === 1 && !only[0].name
-        && only[0].type && only[0].type !== 'Anything' && !only[0].type.includes('|')) type = only[0].type;
+        && only[0].typeEnc !== 'Anything' && !isUnion(only[0].typeEnc)) type = { text: only[0].type, enc: only[0].typeEnc };
     }
     resultOf.set(key, type);
     return type;
@@ -32,11 +33,14 @@ export function markCallResultTypes(ast) {
       if (Array.isArray(node)) { node.forEach(n => visit(n)); return; }
       const arith = node.type === 'BinaryExpr' || node.type === 'UnaryExpr';
       for (const v of Object.values(node)) if (v && typeof v === 'object') visit(v, arith);
-      if (!operand || node.type !== 'FunctionCallExpr' || node.callee?.type !== 'Identifier' || node.resultType) return;
+      if (!operand || node.type !== 'FunctionCallExpr' || node.callee?.type !== 'Identifier' || node.resultTypeEnc !== undefined) return;
       const owner = node.inheritedFrom ? byName.get(node.inheritedFrom) : node.outerFnCall ? byName.get(node.outerClass ?? null) : actor;
       if (!owner) return;
       const t = typeOf(owner, node.callee.name);
-      if (t) node.resultType = t;
+      if (!t) return;
+      node.resultTypeEnc = t.enc;
+      // The code generators' text, while they read it: none where its inference had none.
+      if (t.text !== 'Anything') node.resultType = t.text;
     };
     for (const fn of actor.functions || []) visit(fn.body);
     visit(actor.initBody);

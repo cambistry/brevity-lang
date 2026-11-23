@@ -28,7 +28,10 @@ const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueTy
 // Not types: a silent function's `.`, a void `()`.
 const NOT_TYPES = new Set(['.', '()']);
 
-const setEnc = (node, key, value) => { if (value !== undefined) node[`${key}Enc`] = value; };
+const setEnc = (node, key, value) => {
+  if (value?.unencoded) node[`${key}Unencoded`] = value.unencoded;
+  else node[`${key}Enc`] = value;
+};
 
 // The documents `remotes` gives, by path: what says a name a dependency binds is a class.
 function remoteDocs(remotes) {
@@ -40,17 +43,24 @@ function remoteDocs(remotes) {
   return docs;
 }
 
+// The class an actor's names are read inside: a singleton's or a class block's is
+// the class it is of.
+const ownerOf = (a) => a.singletonOf ?? a.membersOf ?? a.name;
+
 export function encodeAstTypes(ast, remotes = null) {
   const scope = fileScope(ast, remoteDocs(remotes));
   const cache = new Map();
   // A constructor profile or an interface has no encoding (src/opre_types.js): a
-  // name typed with one carries its text alone.
+  // name typed with one carries its text, and why it has no encoding
+  // (`<key>Unencoded`), for where an encoding is needed.
   const encode = (text, sc) => {
     if (text === 'null') return null;
     const key = `${sc.key}\u0000${text}`;
     if (!cache.has(key)) {
       const tree = parseTypeTree(text);
-      cache.set(key, tree.k === 'ctor' || tree.k === 'iface' ? undefined : intern(encodeType(tree, sc)));
+      if (tree.k === 'ctor' || tree.k === 'iface') {
+        try { encodeType(tree, sc); } catch (e) { cache.set(key, { unencoded: e.message }); }
+      } else cache.set(key, intern(encodeType(tree, sc)));
     }
     return cache.get(key);
   };
@@ -73,9 +83,18 @@ export function encodeAstTypes(ast, remotes = null) {
     for (const [k, v] of Object.entries(node)) if (k !== 'loc' && k !== 'interfaceDoc' && v && typeof v === 'object') visit(v, sc);
   };
   for (const a of ast.actors || []) {
-    const owner = a.singletonOf ?? a.membersOf ?? a.name;
+    const owner = ownerOf(a);
     visit(a, owner ? inside(root, owner) : root);
   }
+  // A pass that makes a type after the parse (a call that is a construction, say)
+  // encodes its name here, as the parser would have: `typeNamed(['X'], actor)`.
+  Object.defineProperty(ast, 'typeNamed', {
+    value: (path, actor = null) => {
+      const owner = actor && ownerOf(actor);
+      return intern((owner ? inside(root, owner) : root).resolve(path));
+    },
+    configurable: true, enumerable: false,
+  });
   for (const t of ast.types || []) visit(t, t.ownerClass ? inside(root, t.ownerClass) : root);
   visit(ast.dependencies, root);
   return ast;

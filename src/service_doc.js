@@ -7,36 +7,51 @@
 // (the shape parseInterface gives, src/codegen/javascript/types.js), its types
 // encoded by src/opre_types.js.
 
-import { encodeType, encodeEntries, cellNode, typeScope, SELF } from './opre_types.js';
-import { TT } from './type_tree.js';
+import { cellNode, typeScope, SELF } from './opre_types.js';
 import { intern, translate } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
-import { parseTypeTree } from './parser.js';
 
 const WRITES = { read: false, write: true };
 const own = (o) => Object.keys(o || {}).filter(k => !k.startsWith('__'));
-// A type as the compiler names it: the type grammar's, or `null`, the type of the
-// `null` literal.
-const tree = (text) => (text === 'null' ? TT.null() : parseTypeTree(text));
-const typeOf = (text, scope) => (text ? encodeType(tree(text), scope) : 'Anything');
+// A record's encoded type (`typeEnc`); `Anything` when it has no type. One with a
+// type's text and no encoding is the compiler's mistake, never `Anything`.
+const encOf = (r) => {
+  if (r?.typeEnc !== undefined) return r.typeEnc;
+  if (r?.type && r.type !== 'Anything') throw new Error(`Compiler bug: the type '${r.type}' has no encoding`);
+  return 'Anything';
+};
 
-// A list of fields as an entry list: `[{ name, type, positional, optional }]`.
-function entries(fields, scope) {
-  return encodeEntries((fields || []).map(f => ({
+// Entries already encoded as an entry list: positional ones as items, named ones in
+// one object after them.
+export function entryList(items) {
+  const out = [];
+  let named = null;
+  for (const { name, enc, optional } of items) {
+    const t = optional ? { '%opt': enc } : enc;
+    if (name == null) out.push(t);
+    else (named ??= {})[name] = t;
+  }
+  if (named) out.push(named);
+  return intern(out);
+}
+
+// A list of fields as an entry list: `[{ name, typeEnc, positional, optional }]`.
+function entries(fields) {
+  return entryList((fields || []).map(f => ({
     name: f.positional === false || (f.positional === undefined && f.name) ? f.name : null,
-    type: f.type ? tree(f.type) : null,
+    enc: encOf(f),
     optional: f.optional,
-  })), scope);
+  })));
 }
 
 function signature(s, scope, { untracked = false } = {}) {
   const sig = {};
-  if (s.params?.length) sig.args = entries(s.params, scope);
+  if (s.params?.length) sig.args = entries(s.params);
   if (s.returnAlternatives?.length || (s.returnsSelf && s.returns)) {
-    const shapes = (s.returnAlternatives ?? [s.returns]).map(r => entries(r, scope));
+    const shapes = (s.returnAlternatives ?? [s.returns]).map(r => entries(r));
     sig.re = { '%or': [...shapes, ...(s.returnsSelf ? [[SELF]] : [])] };
   } else if (s.returnsSelf) sig.re = [SELF];
-  else if (!s.noReply) sig.re = s.returns ? entries(s.returns, scope) : [];
+  else if (!s.noReply) sig.re = s.returns ? entries(s.returns) : [];
   const writes = s.effect === undefined ? false : WRITES[s.effect];
   if (writes !== undefined) sig.writes = untracked && writes ? 'untracked' : writes;
   return sig;
@@ -48,7 +63,7 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
   for (const name of own(doc)) {
     const field = doc.__fields?.[name];
     if (field && !field.writeOnly) {
-      const type = typeOf(field.type, scope);
+      const type = encOf(field);
       ops[name] = [{ re: [type], writes: false }];
       if (field.cell) node[`:${name}`] = cellNode(type, { readOnly: field.readOnly, untracked: untracked.has(name) });
       continue;
@@ -56,7 +71,7 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
     ops[name] = doc[name].map(s => signature(s, scope, { untracked: untracked.has(name) }));
   }
   for (const [name, field] of Object.entries(doc.__fields || {})) {
-    if (field.writeOnly) node[`:${name}`] = { public: { $set: [{ args: [typeOf(field.type, scope)], writes: true }] } };
+    if (field.writeOnly) node[`:${name}`] = { public: { $set: [{ args: [encOf(field)], writes: true }] } };
   }
   if (Object.keys(ops).length) node[sectionName] = { ...node[sectionName], ...ops };
 }
@@ -64,12 +79,12 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
 // A declared type's fields, as an entry list. A positional field is read by its
 // name too (`p.x`), so the names of the positional ones, in order, are its
 // `%names`, in the object of its named entries.
-function typesOf(typeDecls, scope) {
+function typesOf(typeDecls) {
   const out = {};
   for (const [name, { fields }] of Object.entries(typeDecls || {})) {
-    const list = encodeEntries((fields || []).map(f => ({
-      name: f.named ? f.name : null, type: f.paramType ? tree(f.paramType) : null, optional: f.optional,
-    })), scope);
+    const list = [...entryList((fields || []).map(f => ({
+      name: f.named ? f.name : null, enc: f.paramTypeEnc ?? 'Anything', optional: f.optional,
+    })))];
     const names = (fields || []).filter(f => !f.named).map(f => f.name);
     if (names.length) {
       const last = list[list.length - 1];
@@ -87,19 +102,19 @@ function classNode(name, cls, outer) {
   const scope = outer.within(name);
   if (cls.supertypes?.length) node.extends = cls.supertypes.map(st => outer.resolve(st.supertype.split('::'), { asClass: true }));
   const block = cls.members ? interfaceNode(cls.members, scope) : {};
-  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams, scope) }), re: [outer.resolve([name])] };
+  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams) }), re: [outer.resolve([name])] };
   const writes = cls.effect === undefined ? false : WRITES[cls.effect];
   if (writes !== undefined) newSig.writes = writes;
   node.public = { $new: [newSig], ...block.public };
   if (block.protected) node.protected = block.protected;
-  const types = { ...typesOf(cls.typeDecls, scope), ...block.types };
+  const types = { ...typesOf(cls.typeDecls), ...block.types };
   if (Object.keys(types).length) node.types = types;
   for (const k of Object.keys(block).filter(k => k.startsWith(':'))) node[k] = block[k];
   const inst = {};
   const instDoc = {};
   for (const f of cls.functions || []) (instDoc[f.name] ??= []).push(f);
   if (cls.fields) instDoc.__fields = cls.fields;
-  for (const s of cls.setters || []) if (!cls.fields?.[s.name]) (instDoc.__fields ??= {})[s.name] = { type: s.type, cell: true, writeOnly: true };
+  for (const s of cls.setters || []) if (!cls.fields?.[s.name]) (instDoc.__fields ??= {})[s.name] = { type: s.type, typeEnc: s.typeEnc, cell: true, writeOnly: true };
   section(instDoc, scope, inst, 'public');
   if (cls.instanceProtected) section(cls.instanceProtected, scope, inst, 'protected');
   for (const [sub, svc] of Object.entries(cls.services || {})) inst[`:${sub}`] = interfaceNode(svc, scope);
@@ -112,9 +127,9 @@ export function interfaceNode(doc, scope) {
   section(doc, scope, node, 'public', new Set(doc.__untracked || []));
   // `$as` takes the type to convert to, and replies the value as it: one signature
   // per type, its arg the type of its reply.
-  if (doc.__asTypes?.length) node.public = { ...node.public, $as: doc.__asTypes.map(t => ({ re: [typeOf(t, scope)], writes: false })) };
+  if (doc.__asTypesEnc?.length) node.public = { ...node.public, $as: doc.__asTypesEnc.map(t => ({ re: [t], writes: false })) };
   if (doc.__protected) section(doc.__protected, scope, node, 'protected');
-  const types = typesOf(doc.__typeDecls, scope);
+  const types = typesOf(doc.__typeDecls);
   if (Object.keys(types).length) node.types = types;
   for (const [name, svc] of Object.entries(doc.__services || {})) node[`:${name}`] = interfaceNode(svc, scope);
   for (const [name, cls] of Object.entries(doc.__types || {})) node[`:${name}`] = classNode(name, cls, scope);

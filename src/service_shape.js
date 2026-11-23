@@ -1,6 +1,6 @@
 // A file's interface, as the compiler reads one (the shape parseInterface gives,
-// src/codegen/javascript/types.js), built from the AST with each type as the file
-// names it. src/service_doc.js encodes it as the file's Opre service document
+// src/codegen/javascript/types.js), built from the AST, each type both as the file
+// writes it (`type`) and encoded (`typeEnc`). src/service_doc.js encodes it as the file's Opre service document
 // (notes/opre-type-encoding-2026-11-21.md). Its pieces are also what an extender
 // is checked against: the override tables (`settleOverrideTables`).
 //
@@ -11,14 +11,17 @@ import { purportedFunctions } from './effects.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { buildsBase } from './super_calls.js';
 import { returnShapes, unionMembers } from './return_shapes.js';
+import { show } from './type_enc.js';
 
 const SYNTHESIZED = /^@(\d+$|__)/;
 
 const untrackedCell = (actor, name) => (actor.stateVarDecls || []).some(d => d.untracked && d.name === name);
 
 function shapeParam(p) {
+  // A published type has to have an encoding.
+  if (p.typeUnencoded) throw new Error(p.typeUnencoded);
   const optional = !!(p.defaultValue || p.optional);
-  return { name: p.positional ? null : (p.key || p.name), type: p.type || 'Anything', positional: !!p.positional, ...(optional && { optional }) };
+  return { name: p.positional ? null : (p.key || p.name), type: p.type || 'Anything', typeEnc: p.typeEnc ?? (p.type ? undefined : 'Anything'), positional: !!p.positional, ...(optional && { optional }) };
 }
 
 function fnShape(fn, purported) {
@@ -26,7 +29,7 @@ function fnShape(fn, purported) {
   if (fn.body.some(stmt => stmt.type === 'SilentTerminator')) return { params, returns: null, effect: 'write', noReply: true };
   const effect = fn.name.endsWith('!') ? 'write' : purported?.has(fn.name) ? 'purported' : 'read';
   const { alternatives, orSelf } = returnShapes(fn);
-  const slots = (alt) => alt.map(({ name, type }) => ({ name, type: unionMembers(type).join(' | '), positional: name === null }));
+  const slots = (alt) => alt.map(({ name, type, typeEnc }) => ({ name, type: unionMembers(type).join(' | '), typeEnc, positional: name === null }));
   const shapes = alternatives.map(slots);
   return {
     params, returns: shapes[0] ?? null, effect,
@@ -42,9 +45,8 @@ function reactiveCellType(getter, setter) {
   if (!reply || reply.fields.length !== 1) return null;
   const [field] = reply.fields;
   const [setParam] = setter.params;
-  if (!field?.type || !field.positional || !setParam?.type || !setParam.positional) return null;
-  const strip = (t) => t.replace(/@(?=\w)/g, '');
-  return strip(field.type) === strip(setParam.type) ? field.type : null;
+  if (field?.typeEnc === undefined || !field.positional || setParam?.typeEnc === undefined || !setParam.positional) return null;
+  return field.typeEnc === setParam.typeEnc ? { type: field.type, typeEnc: field.typeEnc } : null;
 }
 
 // A public cell `@name`: its type, and whether it is read-only. Null for anything else.
@@ -53,25 +55,25 @@ function cellShape(getters, setters) {
   const [getter] = getters;
   if (setters.length === 1) {
     const type = reactiveCellType(getter, setters[0]);
-    return type ? { type, readOnly: false } : null;
+    return type ? { ...type, readOnly: false } : null;
   }
   if (!getter.cellGetter) return null;
   const field = getter.body.find(s => s.type === 'Reply')?.fields?.[0];
-  return field?.type ? { type: field.type, readOnly: true } : null;
+  return field?.typeEnc !== undefined ? { type: field.type, typeEnc: field.typeEnc, readOnly: true } : null;
 }
 
 const addFn = (doc, name, sig, untracked = false) => {
   (doc[name] ??= []).push(sig);
   if (untracked) (doc.__untracked ??= []).push(name);
 };
-const addField = (doc, name, { type, cell, readOnly }, untracked = false) => {
-  (doc[name] ??= []).push({ params: [], returns: [{ name: null, type, positional: true }] });
-  (doc.__fields ??= {})[name] = { type, cell, readOnly };
+const addField = (doc, name, { type, typeEnc, cell, readOnly }, untracked = false) => {
+  (doc[name] ??= []).push({ params: [], returns: [{ name: null, type, typeEnc, positional: true }] });
+  (doc.__fields ??= {})[name] = { type, typeEnc, cell, readOnly };
   if (untracked) (doc.__untracked ??= []).push(name);
 };
-const addSetter = (doc, name, type) => {
-  (doc.__setters ??= []).push({ name, type });
-  (doc.__fields ??= {})[name] = { type, cell: true, writeOnly: true };
+const addSetter = (doc, name, { type, typeEnc }) => {
+  (doc.__setters ??= []).push({ name, type, typeEnc });
+  (doc.__fields ??= {})[name] = { type, typeEnc, cell: true, writeOnly: true };
 };
 const own = (doc) => Object.keys(doc).filter(k => !k.startsWith('__'));
 const entryNames = (doc) => new Set([...own(doc), ...Object.keys(doc.__fields || {}), ...Object.keys(doc.__services || {})]);
@@ -122,7 +124,7 @@ function publicMembersShape(ast, actor, purportedByActor, doc = {}) {
     const singleton = getters.length === 1 && singletonIn(ast, actor, '@' + bare);
     if (singleton) { (doc.__services ??= {})[bare] = singletonShape(ast, singleton, purportedByActor); continue; }
     for (const fn of getters) addFn(doc, bare, fnShape(fn, purported), !!fn.untracked);
-    for (const fn of setters) addSetter(doc, bare, fn.params[0]?.type || 'Anything');
+    for (const fn of setters) addSetter(doc, bare, { type: fn.params[0]?.type || 'Anything', typeEnc: fn.params[0]?.typeEnc ?? (fn.params[0]?.type ? undefined : 'Anything') });
   }
   return doc;
 }
@@ -180,7 +182,7 @@ function protectedShape(ast, block, purportedByActor) {
   const { fns, cells } = protectedMembers(ast, block);
   const purported = purportedByActor.get(block);
   const doc = {};
-  for (const d of cells.values()) addField(doc, `~${d.name}`, { type: d.typeName || 'Anything', cell: true, readOnly: !d.isRef });
+  for (const d of cells.values()) addField(doc, `~${d.name}`, { type: d.typeName || 'Anything', typeEnc: d.typeNameEnc ?? (d.typeName ? undefined : 'Anything'), cell: true, readOnly: !d.isRef });
   for (const [name, clauses] of fns) for (const f of clauses) addFn(doc, `~${name}`, fnShape(f, purported));
   let top = block;
   const byName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
@@ -211,9 +213,10 @@ function instanceProtectedShape(ast, cls, purportedByActor, opts) {
   const isAccessor = (f) => f.cellGetter || /^(set|update|subscribe|new)[@.#]/.test(f.name);
   // A cell holding an actor of a dependency is typed Actor, as any actor value is.
   const deps = new Set((ast.dependencies || []).map(d => d.name));
-  const typeOf = (d) => !d.typeName ? 'Anything' : deps.has(d.typeName) ? 'Actor' : d.typeName;
+  const typeOf = (d) => (!d.typeName ? 'Anything' : deps.has(d.typeName) ? 'Actor' : d.typeName);
+  const typeEncOf = (d) => (d.typeName && deps.has(d.typeName) ? 'Actor' : d.typeNameEnc ?? (d.typeName ? undefined : 'Anything'));
   const doc = {};
-  for (const d of cells.filter(d => !d.name.startsWith('@'))) addField(doc, `~${d.name}`, { type: typeOf(d), cell: true, readOnly: !d.isRef });
+  for (const d of cells.filter(d => !d.name.startsWith('@'))) addField(doc, `~${d.name}`, { type: typeOf(d), typeEnc: typeEncOf(d), cell: true, readOnly: !d.isRef });
   for (const f of functions.filter(f => !/^[@#]/.test(f.name) && !isAccessor(f))) addFn(doc, `~${f.name}`, fnShape(f, purported));
   return doc;
 }
@@ -223,7 +226,7 @@ function instanceProtectedShape(ast, cls, purportedByActor, opts) {
 function instanceShape(ast, cls, purportedByActor, opts = {}) {
   const { functions, params } = instanceMembers(ast, cls, opts);
   const doc = {};
-  for (const p of params) addField(doc, p.accessor.replace(/^@/, ''), { type: p.type || 'Anything', cell: false, readOnly: true });
+  for (const p of params) addField(doc, p.accessor.replace(/^@/, ''), { type: p.type || 'Anything', typeEnc: p.typeEnc ?? (p.type ? undefined : 'Anything'), cell: false, readOnly: true });
   publicMembersShape(ast, { ...cls, functions }, purportedByActor, doc);
   const prot = instanceProtectedShape(ast, cls, purportedByActor, opts);
   if (entryNames(prot).size) doc.__protected = prot;
@@ -274,7 +277,7 @@ function classShape(ast, actor, privateClasses, purportedByActor) {
   const supertypes = flat.supertypes.map(st => ({ supertype: (st.sourceName ?? st.supertype).replace(/^@/, '') }));
   const ownNew = !supertypes.length || flat.params.length > 0 || buildsBase(actor);
   const inst = {};
-  for (const p of flat.initParams) if (p.accessor) addField(inst, p.accessor, { type: p.type || 'Anything', cell: false, readOnly: true });
+  for (const p of flat.initParams) if (p.accessor) addField(inst, p.accessor, { type: p.type || 'Anything', typeEnc: p.typeEnc ?? (p.type ? undefined : 'Anything'), cell: false, readOnly: true });
   const setterOf = (fnName) => flat.functions.filter(f => f.name === 'set' + fnName);
   for (const fn of flat.functions.filter(f => f.name?.startsWith('@') && !SYNTHESIZED.test(f.name))) {
     const bare = fn.name.replace(/^@/, '');
@@ -285,7 +288,7 @@ function classShape(ast, actor, privateClasses, purportedByActor) {
     addFn(inst, bare, fnShape(fn, flat.purported));
   }
   const functions = own(inst).flatMap(n => inst[n].map(sig => ({ name: n, ...sig })));
-  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([n, f]) => ({ name: n, type: f.type }));
+  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([n, f]) => ({ name: n, type: f.type, typeEnc: f.typeEnc }));
   const typeDecls = Object.fromEntries(ownTypes(ast, actor).map(d => [d.bareName ?? d.name, typeDeclShape(d)]));
   // Every actor is extensible for now: its instances' protected members are
   // published too, composite (notes/opre-extend-and-as-2026-11-20.md).
@@ -328,10 +331,13 @@ export function serviceShape(ast, remoteDocs = {}) {
     // A private class isn't part of the file's surface.
     if (actor.name) continue;
     // The file's published params read as read-only fields.
-    for (const p of actor.initParams || []) if (p.accessor) addField(doc, p.accessor, { type: p.type || 'Anything', cell: false, readOnly: true });
+    for (const p of actor.initParams || []) if (p.accessor) addField(doc, p.accessor, { type: p.type || 'Anything', typeEnc: p.typeEnc ?? (p.type ? undefined : 'Anything'), cell: false, readOnly: true });
     publicMembersShape(ast, actor, purportedByActor, doc);
-    const asTypes = (actor.asClauses || []).filter(c => !c.negated).map(c => c.targetType);
-    if (asTypes.length) doc.__asTypes = [...(doc.__asTypes || []), ...asTypes];
+    const asClauses = (actor.asClauses || []).filter(c => !c.negated);
+    if (asClauses.length) {
+      doc.__asTypes = [...(doc.__asTypes || []), ...asClauses.map(c => c.targetType)];
+      doc.__asTypesEnc = [...(doc.__asTypesEnc || []), ...asClauses.map(c => c.targetTypeEnc)];
+    }
   }
   return doc;
 }
@@ -424,18 +430,14 @@ export function settleOverrideTables(ast) {
   }
 }
 
-// Two types in a signature agree: the same, or either one unknown. A public
-// class is `@C` in the file and `C` in a document.
-const sameType = (a, b) => {
-  const strip = (t) => t?.replace(/@(?=\w)/g, '');
-  return !a || !b || strip(a) === strip(b) || a === 'Anything' || b === 'Anything';
-};
+// Two encoded types in a signature agree: the same, or either one unknown.
+const sameType = (a, b) => a === undefined || b === undefined || a === b || a === 'Anything' || b === 'Anything';
 
 // The parent's public and protected names that `mine` overrides (a function) or
 // redeclares (a cell), in the parent's terms, checked against the parent's doc.
 function overrides(mine, theirs, where, parentWhere) {
   const table = [];
-  const shownType = (t) => t?.replace(/@(?=\w)/g, '');
+  const shownType = (t) => show(t);
   const check = (label, source, my, their) => {
     if (!their) return;
     // A prop (a published param) is read as an op; a function may stand in for it.
@@ -447,8 +449,8 @@ function overrides(mine, theirs, where, parentWhere) {
       throw new Error(`'${source}' in ${where} is a ${myCell ? 'cell' : 'function'}, and in ${parentWhere}, which it extends, '${source}' is a ${theirCell ? 'cell' : 'function'}`);
     }
     if (myCell) {
-      if (!sameType(my.field.type, their.field.type)) {
-        throw new Error(`'${source}' in ${where} is a ${shownType(my.field.type)}, and in ${parentWhere}, which it extends, a ${shownType(their.field.type)}`);
+      if (!sameType(my.field.typeEnc, their.field.typeEnc)) {
+        throw new Error(`'${source}' in ${where} is a ${shownType(my.field.typeEnc)}, and in ${parentWhere}, which it extends, a ${shownType(their.field.typeEnc)}`);
       }
     } else {
       for (const sig of my.sigs) {
@@ -459,11 +461,11 @@ function overrides(mine, theirs, where, parentWhere) {
         }
         sig.params.forEach((p, i) => {
           const q = match.params[i];
-          if (!sameType(p.type, q.type)) throw new Error(`'${source}' in ${where}: its arg ${i + 1} is a ${shownType(p.type)}, and in ${parentWhere}, which it extends, a ${shownType(q.type)}`);
+          if (!sameType(p.typeEnc, q.typeEnc)) throw new Error(`'${source}' in ${where}: its arg ${i + 1} is a ${shownType(p.typeEnc)}, and in ${parentWhere}, which it extends, a ${shownType(q.typeEnc)}`);
         });
         const [r, q] = [sig.returns, match.returns];
-        if (r && q && (r.length !== q.length || r.some((x, i) => !sameType(x.type, q[i].type)))) {
-          const fmt = (xs) => `(${xs.map(x => shownType(x.type)).join(', ')})`;
+        if (r && q && (r.length !== q.length || r.some((x, i) => !sameType(x.typeEnc, q[i].typeEnc)))) {
+          const fmt = (xs) => `(${xs.map(x => shownType(x.typeEnc)).join(', ')})`;
           throw new Error(`'${source}' in ${where} replies ${fmt(r)}, and in ${parentWhere}, which it extends, ${fmt(q)}`);
         }
       }
