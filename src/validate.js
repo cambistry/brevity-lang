@@ -1895,7 +1895,7 @@ function rewriteImportedTypeConstructions(ast, importedTypes) {
         walk(node[i]);
         const child = node[i];
         const info = isImportedTypeCall(child);
-        if (info) node[i] = { type: 'TypeConstruction', typeName: info.remote, args: child.args };
+        if (info) node[i] = { type: 'TypeConstruction', typeName: info.remote, typeNameEnc: ast.typeNamed([child.callee.name]), args: child.args };
       }
       return;
     }
@@ -1904,7 +1904,7 @@ function rewriteImportedTypeConstructions(ast, importedTypes) {
       const child = node[k];
       walk(child);
       const info = isImportedTypeCall(child);
-      if (info) node[k] = { type: 'TypeConstruction', typeName: info.remote, args: child.args };
+      if (info) node[k] = { type: 'TypeConstruction', typeName: info.remote, typeNameEnc: ast.typeNamed([child.callee.name]), args: child.args };
     }
   }
   walk(ast);

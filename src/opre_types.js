@@ -27,7 +27,7 @@ import { _opre_quote as quote } from './codegen/opre_tokens.js';
 
 const PLURAL = new Map([
   ['Integers', 'Integer'], ['Texts', 'Text'], ['Floats', 'Float'], ['Booleans', 'Boolean'],
-  ['Blobs', 'Blob'], ['Decimals', 'Decimal'],
+  ['Blobs', 'Blob'], ['Decimals', 'Decimal'], ['Actors', 'Actor'],
 ]);
 
 export const SELF = Object.freeze({ '%self': true });

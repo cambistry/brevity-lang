@@ -28,9 +28,13 @@ const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueTy
 // Not types: a silent function's `.`, a void `()`.
 const NOT_TYPES = new Set(['.', '()']);
 
+// A type with no encoding keeps why (`<key>Unencoded`) and what it is (`<key>Kind`:
+// `ctor` for a constructor profile, `iface` for an interface).
 const setEnc = (node, key, value) => {
-  if (value?.unencoded) node[`${key}Unencoded`] = value.unencoded;
-  else node[`${key}Enc`] = value;
+  if (value?.unencoded) {
+    node[`${key}Unencoded`] = value.unencoded;
+    node[`${key}Kind`] = value.kind;
+  } else node[`${key}Enc`] = value;
 };
 
 // The documents `remotes` gives, by path: what says a name a dependency binds is a class.
@@ -59,7 +63,7 @@ export function encodeAstTypes(ast, remotes = null) {
     if (!cache.has(key)) {
       const tree = parseTypeTree(text);
       if (tree.k === 'ctor' || tree.k === 'iface') {
-        try { encodeType(tree, sc); } catch (e) { cache.set(key, { unencoded: e.message }); }
+        try { encodeType(tree, sc); } catch (e) { cache.set(key, { unencoded: e.message, kind: tree.k }); }
       } else cache.set(key, intern(encodeType(tree, sc)));
     }
     return cache.get(key);
@@ -75,7 +79,9 @@ export function encodeAstTypes(ast, remotes = null) {
     for (const k of TYPE_KEYS) {
       if (typeof node[k] === 'string' && !NOT_TYPES.has(node[k])) at(k, k === 'returnType' && /^\w+\s*:/.test(node[k]) ? `(${node[k]})` : node[k]);
     }
-    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type) && !NOT_TYPES.has(node.type)) at('type', node.type);
+    // `Actor` is a node kind and a type: an actor node has functions.
+    const isKind = NODE_KINDS.has(node.type) && !(node.type === 'Actor' && !Array.isArray(node.functions));
+    if (typeof node.type === 'string' && !isKind && !NOT_TYPES.has(node.type)) at('type', node.type);
     if (node.type === 'Dependency' && typeof node.interface === 'string') {
       // The interface as the compiler reads one, its types encoded too.
       node.interfaceDoc = parseInterface(node.interface.replace(/\}\s*\|[^}]*$/, '}'));

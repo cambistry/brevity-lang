@@ -12,7 +12,7 @@
 import * as AST from './ast.js';
 import { FILE_CLASS } from './singleton_classes.js';
 import { lowerConstructionChains } from './chains.js';
-import { resolveSuperclassChain } from './subclass.js';
+import { resolveSuperclassChain, PUBLIC_CLASS_SUFFIX as PUBLIC_SUFFIX } from './subclass.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 
 // A constructor entry as the document of what it constructs.
@@ -188,10 +188,13 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       if (s.type !== 'StateAssign' || !synthetic.has(s.value?.callee?.name)) continue;
       s.isRef = true;
       const decl = actor.stateVarDecls?.find(v => v.name === s.name);
-      if (decl) Object.assign(decl, { typeName: s.value.callee.name, isRef: true });
+      if (decl) Object.assign(decl, { typeName: s.value.callee.name, typeNameEnc: classTypeEnc(ast, s.value.callee.name), isRef: true });
     }
   }
 }
+
+// The encoded type of an actor of the class `name`, by its name as compiled.
+const classTypeEnc = (ast, name) => ast.typeNamed?.([name.endsWith(PUBLIC_SUFFIX) ? `@${name.slice(0, -PUBLIC_SUFFIX.length)}` : name]);
 
 // An untyped param of a private function can hold an actor of this file. Rust and Erlang
 // have to know that at compile time, unlike an address, and a private function's callers
@@ -231,7 +234,7 @@ function inferActorParams(ast) {
     };
     for (const f of actor.functions || []) visit(f.body, new Map());
     for (const { seen } of candidates.values()) {
-      for (const [p, cls] of seen) if (cls) p.type = cls;
+      for (const [p, cls] of seen) if (cls) Object.assign(p, { type: cls, typeEnc: classTypeEnc(ast, cls) });
     }
   }
 }

@@ -134,7 +134,7 @@ export function parentView(actorByName, P, chain) {
     })),
     sourceParams: params,
     functions,
-    cells: params.map(p => ({ name: renames.get(p.name), typeName: p.type || 'Anything', isRef: !!p.ref })),
+    cells: params.map(p => ({ name: renames.get(p.name), typeName: p.type || 'Anything', typeNameEnc: p.typeEnc ?? 'Anything', isRef: !!p.ref })),
     init: renamedCopy(effectiveInit(actorByName, P, chain), renames),
   };
 }

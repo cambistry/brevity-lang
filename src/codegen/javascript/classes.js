@@ -2,14 +2,15 @@ import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
-import { unionMembers } from '../../return_shapes.js';
-import { isDynamicTy } from '../ty_tags.js';
+import { members as unionMembers } from '../../type_enc.js';
+import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { typeText, dependencyAliases, leadsWithList } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
-import { buildTypeEnv, parseInterface } from './types.js';
+import { buildTypeEnv } from './types.js';
 import { readRemote } from '../../validate.js';
 export { parseInterface } from './types.js';
 import {
@@ -45,21 +46,6 @@ function opMatch(name) {
   // `new` is the file's own: `$new` to the file itself (a file that declares `new`).
   if (name === 'set' || name === 'update' || name === 'new') return `opName === ${JSON.stringify(wireLabel(name))} && _target === null`;
   return `opName === ${JSON.stringify(wireLabel(name))}`;
-}
-
-// The `{ members }` of a service string: drops a trailing `| AsType` suffix
-// and, for a constructor profile `(params) -> *{ members }`, the profile.
-function stripAsTypeSuffix(service) {
-  if (typeof service !== 'string') return service;
-  const t = service.trim();
-  const start = t.indexOf('{');
-  if (start === -1) return t;
-  let depth = 0;
-  for (let i = start; i < t.length; i++) {
-    if (t[i] === '{') depth++;
-    else if (t[i] === '}') { depth--; if (depth === 0) return t.slice(start, i + 1); }
-  }
-  return t;
 }
 
 function createContext() {
@@ -119,10 +105,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   // Reply grounding check: reject reply fields whose type depends on remote inference
   if (reply && remoteInferred.size > 0) {
     for (const field of reply.fields) {
-      if ('sigil' in field && !field.type && remoteInferred.has(field.sigil)) {
+      if ('sigil' in field && field.typeEnc === undefined && remoteInferred.has(field.sigil)) {
         throw new Error(`Reply type for ':${field.sigil}' cannot be inferred from local declarations — annotate explicitly`);
       }
-      if (field.key !== undefined && !field.type) {
+      if (field.key !== undefined && field.typeEnc === undefined) {
         const expr = field.value;
         if (expr?.type === 'Identifier' && remoteInferred.has(expr.name)) {
           throw new Error(`Reply type for ':${expr.name}' cannot be inferred from local declarations — annotate explicitly`);
@@ -212,7 +198,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
     if (typeCondition) {
       // External callers are matched by their tags. An in-process call carries
       // values but no tags, so its values pick the clause.
-      const valueCondition = genValueCondition(params) ?? 'true';
+      const valueCondition = genValueCondition(ctx, params) ?? 'true';
       condition = `${opMatch(name)} && (${checks.join(' && ')}) && ((from === '__parent' || from === '__inner' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
     } else {
       condition = `${opMatch(name)} && (${checks.join(' && ')})`;
@@ -232,7 +218,7 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   let notifyBlock = '';
   if (name.startsWith('set@')) {
     const cellName = name.slice('set@'.length);
-    const cellType = params[0]?.type;
+    const cellType = params[0]?.typeEnc;
     notifyBlock = `
         ${genCellNotify(ctx, cellName, cellType)}`;
     // Derived fn replay for this cell is emitted by the underlying
@@ -645,7 +631,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.lambdaVarNames = new Set();
   ctx.lambdaCaptureFields = [];
 
-  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
 
   // ── Resolve superclass inheritance ──────────────────────────────────────
   const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
@@ -680,7 +666,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       if (!ownStateNames.has(ingest.name)) {
         mergedActor.stateVarDecls = [
           ...(mergedActor.stateVarDecls || []),
-          { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+          { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
         ];
       }
     }
@@ -748,12 +734,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
         const method = s.value.method;
         const iface = remotes[objName];
         if (iface) {
-          const parsed = typeof iface === 'string' ? parseInterface(iface) : iface;
-          // Op-form: parsed[method][0].returns. Type-form: methods live
-          // inside parsed.__types[objName].functions.
-          const retSig = parsed?.[method]?.[0] || parsed?.__types?.[objName]?.functions?.find(f => f.name === method);
-          const retType = retSig?.returnAlternatives ? null : retSig?.returns?.[0]?.type;
-          if (retType && !unionMembers(retType).some(t => VALUE_TYPES.has(t))) {
+          // Op-form: iface[method][0].returns. Type-form: methods live
+          // inside iface.__types[objName].functions.
+          const retSig = iface?.[method]?.[0] || iface?.__types?.[objName]?.functions?.find(f => f.name === method);
+          const retType = retSig?.returnAlternatives ? undefined : retSig?.returns?.[0]?.typeEnc;
+          if (retType !== undefined && !unionMembers(retType).some(t => VALUE_TYPES.has(t))) {
             ctx.remoteInstanceVars.add(s.name);
           }
         }
@@ -765,7 +750,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   for (const p of constructorParams) {
     if (p.ref) {
       ctx.wrappedChildParams.add(p.name);
-    } else if (p.type === 'Anything') {
+    } else if (p.typeEnc === 'Anything') {
       ctx.wrappedChildParams.add(p.name);
     }
   }
@@ -775,9 +760,9 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   const stateVarEnv = new Map([
     // The file's names a class reads (src/outer_reads.js); its own come after, and win.
-    ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor)].filter(([, t]) => t) : []),
-    ...stateVarDecls.map(v => [v.name, v.typeName]),
-    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+    ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined) : []),
+    ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
+    ...constructorParams.map(p => [p.name, p.typeEnc ?? 'Anything']),
   ]);
 
   // Ref-captured-by map: which non-silent public fns reference each ref in
@@ -870,7 +855,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     if (s.value.type === 'DotCallExpr' && (expr.startsWith('this.#childSend(') || expr.startsWith('this.#send('))) {
       const decl = (mergedActor.stateVarDecls || []).find(d => d.name === s.name);
       const reply = `BvObject.pack(await ${expr})`;
-      return `    this.#${stateKey(s.name)} = ${decl?.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`};`;
+      return `    this.#${stateKey(s.name)} = ${decl?.typeNameEnc === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`};`;
     }
     return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
@@ -920,7 +905,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // A silent local function (`h. = () { … }`) gives no reply, as `-> .` doesn't.
     const silentLambda = fnNode.returnType === '.' || !!lVarName?.endsWith('.');
     if (fnNode.body) {
-      const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType);
+      const fnCode = genFunctionBodyCode(ctx, params, fnNode.body, null, fnNode.returnType, fnNode.returnTypeEnc);
       if (silentLambda) {
         // Silent lambda — no reply
         block += `\n        await (${fnCode})(_s);`;
@@ -987,19 +972,19 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const asClauseParts = (mergedActor.asClauses || []).map(clause => {
     const val = genExpr(ctx, clause.expr);
     const typeCond = clause.negated
-      ? `_rawPayload !== ${JSON.stringify(clause.targetType)}`
-      : `_rawPayload === ${JSON.stringify(clause.targetType)}`;
+      ? `_rawPayload !== ${JSON.stringify(typeText(clause.targetTypeEnc, ctx.depAliases))}`
+      : `_rawPayload === ${JSON.stringify(typeText(clause.targetTypeEnc, ctx.depAliases))}`;
     // A union target is tagged from the value; the request names the union.
-    const tag = isDynamicTy(clause.targetType) && !clause.negated ? jsTyOf(ctx, clause.targetType, 're[0]') : '_rawPayload';
+    const tag = isDynamicTy(clause.targetTypeEnc) && !clause.negated ? jsTyOf(ctx, clause.targetTypeEnc, 're[0]') : '_rawPayload';
     return {
       condition: `opName === "$as" && typeof _rawPayload === "string" && ${typeCond}`,
       block: `\n        re = [${val}];\n        _ty_re = [${tag}];\n        _handled = true;`,
     };
   });
   if (hasReturnAs) {
-    const returnAsType = actor.declarationReturn.typeName;
+    const returnAsType = actor.declarationReturn.typeNameEnc;
     asClauseParts.push({
-      condition: `opName === "$as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(returnAsType)}`,
+      condition: `opName === "$as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(typeText(returnAsType, ctx.depAliases))}`,
       block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [${isDynamicTy(returnAsType) ? jsTyOf(ctx, returnAsType, 're[0]') : '_rawPayload'}];\n        _handled = true;`,
     });
   }
@@ -1388,8 +1373,8 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
     }
     if ('get' in t) {
       const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
-      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeName)}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(p.type || 'Anything')}`)].join(',')} };
-      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeName]), ...constructorParams.map(p => [p.name, p.type || 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
+      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeNameEnc === undefined ? undefined : typeText(v.typeNameEnc, ctx.depAliases))}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(typeText(p.typeEnc ?? 'Anything', ctx.depAliases))}`)].join(',')} };
+      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, p.typeEnc ?? 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
       let _v = t.get in _vals ? _vals[t.get] : null;
       if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;
@@ -1750,7 +1735,7 @@ export function codegen(ast, options = {}) {
   // (the inline definition wins — see validate)
   const inlineRemotes = {};
   for (const d of (ast.dependencies || [])) {
-    if (d.interface) inlineRemotes[d.name] = stripAsTypeSuffix(d.interface);
+    if (d.interfaceDoc) inlineRemotes[d.name] = d.interfaceDoc;
   }
   // Resolve path-keyed remotes to alias names
   const resolvedRemotes = {};
@@ -1804,10 +1789,10 @@ export function codegen(ast, options = {}) {
       s.type === 'ListDestructure' ||
       (s.type === 'Assign' && (s.value?.type === 'ListLiteral' || iterExpr(s.value?.type))) ||
       (s.type === 'TypedAssign' && (
-        (typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
+        leadsWithList(s.typeNameEnc) ||
         iterExpr(s.value?.type)
       )) ||
-      (s.type === 'BareTypeDecl' && typeof s.typeName === 'string' && s.typeName.startsWith('List')) ||
+      (s.type === 'BareTypeDecl' && leadsWithList(s.typeNameEnc)) ||
       hasListMethod(s),
     );
   }
@@ -1836,11 +1821,11 @@ export function codegen(ast, options = {}) {
   );
   const needsListPreamble = active.some(a =>
     a.functions.some(f =>
-      f.params.some(p => typeof p.type === 'string' && p.type.startsWith('List')) ||
+      f.params.some(p => leadsWithList(p.typeEnc)) ||
       bodyUsesList(f.body),
     ) ||
     (a.initBody && bodyUsesList(a.initBody)) ||
-    (a.stateVarDecls || []).some(v => typeof v.typeName === 'string' && v.typeName.startsWith('List')),
+    (a.stateVarDecls || []).some(v => leadsWithList(v.typeNameEnc)),
   );
   // ── Constructor overloads: promote actorDef FunctionDecls to synthetic actors ──
   // Collect overload clauses from the anonymous actor's functions
@@ -1880,11 +1865,14 @@ export function codegen(ast, options = {}) {
   // Every type this program knows, by the name the source uses for it, with
   // the address that identifies it (src/codegen/type_table.js). A service's
   // type is also known by its bare name, for what its document says.
-  ctx.typeDecls = buildTypeTable(ast);
+  ctx.typeTable = buildTypeTable(ast);
   for (const info of Object.values(ast.crossModuleTypes || {})) {
-    const entry = [...ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
-    if (entry && !ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, entry);
+    const entry = [...ctx.typeTable.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !ctx.typeTable.has(info.name)) ctx.typeTable.set(info.name, entry);
   }
+  // The generator reads encoded types, so it finds a type by its address.
+  ctx.typeDecls = new Map([...ctx.typeTable.values()].map(e => [e.key, e]));
+  ctx.depAliases = dependencyAliases(ast);
   ctx.actorNodes = new Map(active.filter(a => a.name).map(a => [a.name, a]));
   // A class reads its file actor's cells through it, and sends everything bound
   // outside itself through it too, so every class gets it.
@@ -1907,15 +1895,15 @@ export function codegen(ast, options = {}) {
     // through the parent's binding without dedicated routing setup. See
     // notes/tail-return-wire-2026-04-15.md, Shape 1.
     const inlineExpandable = !!(a.declarationReturn
-      && !a.declarationReturn.typeName
+      && a.declarationReturn.typeNameEnc === undefined
       && !(a.functions || []).length
       && !(a.stateVarDecls || []).length
       && !(a.asClauses || []).length
       && !(a.supertypes || []).length
       && !(a.initBody || []).length);
     const asClauses = [...(a.asClauses || [])];
-    if (a.declarationReturn && a.declarationReturn.typeName) {
-      asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+    if (a.declarationReturn && a.declarationReturn.typeNameEnc !== undefined) {
+      asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
     }
     return [a.name, { asClauses, initParams: mergedParams, inlineExpandable, subscribedParams: subscribedParams(a) }];
   }));
@@ -1962,11 +1950,11 @@ export function codegen(ast, options = {}) {
   // `allRequired` flag so wire helpers encode positional vs. named payload
   // without re-inspecting the AST. `_bv_type_keys` maps the source's name for a
   // type to its key, for matching a tag against a param's type.
-  const wireRegistryEntries = registryEntries(ast, ctx.typeDecls).map(([lookup, key, fields]) => {
+  const wireRegistryEntries = registryEntries(ast, ctx.typeTable).map(([lookup, key, fields]) => {
     const allRequired = fields.every(f => !f.optional);
     return `${JSON.stringify(lookup)}: { key: ${JSON.stringify(key)}, fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;
   }).join(', ');
-  const typeKeyEntries = [...ctx.typeDecls.entries()].map(([name, e]) => `${JSON.stringify(name)}: ${JSON.stringify(e.key)}`).join(', ');
+  const typeKeyEntries = [...ctx.typeTable.entries()].map(([name, e]) => `${JSON.stringify(name)}: ${JSON.stringify(e.key)}`).join(', ');
   const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\nconst _bv_type_keys = { ${typeKeyEntries} };\n${WIRE_PREAMBLE}\n\n`;
 
   return (needsPreamble ? OBJECT_PREAMBLE + '\n\n' : '') +

@@ -1,11 +1,13 @@
 import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
-import { inferExprType } from '../../inference.js';
-import { isActorRefType, isCtorProfile, expectedTag, selfSlotTag } from '../../actor_values.js';
+import { inferType } from '../../type_infer.js';
+import { makerTag, selfSlotTag } from '../../actor_values.js';
+import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply, ownPath } from '../../type_enc.js';
+import { classNameOf, typeText, leadsWithList } from '../enc_names.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
-import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
+import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
 import { wireLabel, selfAddress, memberOp, actorAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken, _opre_split as _opre_split_tokens } from '../opre_tokens.js';
@@ -115,7 +117,7 @@ export function domHostAddr(ctx, tag) {
 // Tell a published cell's subscribers its new value, in the getter's shape.
 export function genCellNotify(ctx, cell, cellType, label = '@' + cell) {
   const value = `this.#${stateKey(label)}`;
-  const tyPart = cellType ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
+  const tyPart = cellType !== undefined ? `, 'ty': [${jsSlotTag(ctx, cellType, value)}]` : '';
   return `{ const _subs = this.#_cellSubs.get(${JSON.stringify(wireLabel(label))}); if (_subs) for (const _sub of _subs) (_sub.route || ((m) => this.#binding.post(m)))({ id: _sub.id, re: [${value}]${tyPart}, to: _sub.from }); }`;
 }
 
@@ -384,20 +386,19 @@ export function mintSsaName(ctx, name) {
 // is not behavioral and so cannot be invoked (the validator reports it).
 // Returns null when the object is not a known typed value or has no such field.
 export function refFieldInvocation(ctx, objExpr, rawName) {
-  const t = inferExprType(objExpr, ctx.currentTypeEnv);
-  const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
+  const t = inferType(objExpr, ctx.currentTypeEnv);
+  const decl = ctx.typeDecls?.get(t) ?? null;
   if (!decl) return null;
   // A writing field keeps its `!` in its name: `run!`.
   const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
-  const pt = f.paramType || '';
-  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!isFn(f.paramTypeEnc)) return { field, discipline: 'value' };
+  return { field, discipline: fnReply(f.paramTypeEnc) === 'silent' ? 'silent' : 'callback' };
 }
 
 export function genExpr(ctx, expr) {
-  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellType, expr.label)})()`;
+  if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellTypeEnc, expr.label)})()`;
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);
   }
@@ -484,7 +485,8 @@ export function genExpr(ctx, expr) {
     const pos = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => !a.positional);
     const list = [...pos.map(a => genExpr(ctx, a.value)), ...(named.length ? [`{ ${named.map(a => `${JSON.stringify(a.key)}: ${genExpr(ctx, a.value)}`).join(', ')} }`] : [])];
-    const tys = [...pos.map(a => JSON.stringify(a.type ?? 'Anything')), ...(named.length ? [`{ ${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type ?? 'Anything')}`).join(', ')} }`] : [])];
+    const tyOf = (a) => JSON.stringify(a.typeEnc === undefined ? 'Anything' : typeText(a.typeEnc, ctx.depAliases));
+    const tys = [...pos.map(tyOf), ...(named.length ? [`{ ${named.map(a => `${JSON.stringify(a.key)}: ${tyOf(a)}`).join(', ')} }`] : [])];
     const op = list.length ? `[[${list.join(', ')}], '$new']` : `'$new'`;
     return `this.#_layers[${JSON.stringify(expr.layer)}] = await this.#_newLayer(${JSON.stringify(expr.address)}, ${op}, ${list.length ? `[[${tys.join(', ')}]]` : 'undefined'})`;
   }
@@ -520,7 +522,7 @@ export function genExpr(ctx, expr) {
     const inner = genExpr(ctx, expr.expr);
     const isCall = CALL_LIKE.has(expr.expr.type) || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
     const value = isCall ? `BvObject.one(BvObject.pack(await ${inner}), 'as')` : inner;
-    return `_bvAs(${value}, ${JSON.stringify(expr.desc)}, ${JSON.stringify(expr.typeName)})`;
+    return `_bvAs(${value}, ${JSON.stringify(expr.desc)}, ${JSON.stringify(typeText(expr.typeNameEnc, ctx.depAliases))})`;
   }
   if (expr.type === 'BlobMethodExpr') {
     const s = genExpr(ctx, expr.args[0]);
@@ -540,7 +542,7 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genExpr(ctx, a));
-    const argTypes = expr.args.map(a => inferExprType(a, ctx.currentTypeEnv));
+    const argTypes = expr.args.map(a => inferType(a, ctx.currentTypeEnv));
     // Coerce to Number for Math.* functions
     const toNum = (code, type) => {
       if (type === 'Integer') return `Number(${code})`;
@@ -657,8 +659,8 @@ export function genExpr(ctx, expr) {
     const left = CALL_LIKE.has(expr.left.type) ? `BvObject.one(${genExpr(ctx, expr.left)}, '_')` : genExpr(ctx, expr.left);
     const right = CALL_LIKE.has(expr.right.type) ? `BvObject.one(${genExpr(ctx, expr.right)}, '_')` : genExpr(ctx, expr.right);
     // Use _bv_int_op for integer arithmetic to handle Number/BigInt coercion
-    const lType = inferExprType(expr.left, ctx.currentTypeEnv);
-    const rType = inferExprType(expr.right, ctx.currentTypeEnv);
+    const lType = inferType(expr.left, ctx.currentTypeEnv);
+    const rType = inferType(expr.right, ctx.currentTypeEnv);
     const isFloatOp = lType === 'Float' || rType === 'Float'
       || expr.left.type === 'FloatLiteral' || expr.right.type === 'FloatLiteral';
     const isIntOp = lType === 'Integer' || rType === 'Integer'
@@ -675,8 +677,7 @@ export function genExpr(ctx, expr) {
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     // List + List → concat (pure, returns new list).
-    if (expr.op === '+' && typeof lType === 'string' && typeof rType === 'string'
-        && lType.startsWith('List') && rType.startsWith('List')) {
+    if (expr.op === '+' && leadsWithList(lType) && leadsWithList(rType)) {
       return `_bv_list_concat(${left}, ${right})`;
     }
     // Slice 4 of types-implementation-plan-2026-04-27: tag-aware equality.
@@ -687,7 +688,7 @@ export function genExpr(ctx, expr) {
     // Note: parser maps `==`/`!=` to `===`/`!==` per CMP_OPS in parser.js.
     if (expr.op === '===' || expr.op === '!==') {
       const isTyped = (e, t) => e?.type === 'TypeConstruction'
-        || (typeof t === 'string' && ctx.typeDecls?.has(t));
+        || (t !== undefined && ctx.typeDecls?.has(t));
       if (isTyped(expr.left, lType) || isTyped(expr.right, rType)) {
         return expr.op === '===' ? `_bv_eq(${left}, ${right})` : `!_bv_eq(${left}, ${right})`;
       }
@@ -711,11 +712,11 @@ export function genExpr(ctx, expr) {
     const named = expr.args.filter(a => a.key !== undefined);
     const posVals = positional.map(a => genExpr(ctx, a.expr)).join(', ');
     const posTypes = positional.length > 0
-      ? `[${positional.map(a => JSON.stringify(a.type)).join(', ')}]`
+      ? `[${positional.map(a => JSON.stringify(a.typeEnc === undefined ? null : typeText(a.typeEnc, ctx.depAliases))).join(', ')}]`
       : 'null';
     const namedVals = named.map(a => `${JSON.stringify(a.key)}: ${genExpr(ctx, a.expr)}`).join(', ');
     const namedTypes = named.length > 0
-      ? `{${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.type)}`).join(', ')}}`
+      ? `{${named.map(a => `${JSON.stringify(a.key)}: ${JSON.stringify(a.typeEnc === undefined ? null : typeText(a.typeEnc, ctx.depAliases))}`).join(', ')}}`
       : 'null';
     return `{ positional: [${posVals}], named: {${namedVals}}, positional_types: ${posTypes}, named_types: ${namedTypes} }`;
   }
@@ -736,7 +737,7 @@ export function genExpr(ctx, expr) {
     // trailing `NamedArgsBag` for `name: expr` arguments. Slice 11: omit
     // fields whose value was not provided so absent optionals read as
     // `undefined`.
-    const decl = ctx.typeDecls?.get(expr.typeName);
+    const decl = ctx.typeDecls?.get(expr.typeNameEnc);
     const fields = decl?.fields ?? [];
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
@@ -759,7 +760,7 @@ export function genExpr(ctx, expr) {
         pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(named[f.name])}`);
       }
     }
-    return `{ __type: ${JSON.stringify(decl?.key ?? expr.typeName)}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
+    return `{ __type: ${JSON.stringify(decl?.key ?? typeText(expr.typeNameEnc, ctx.depAliases))}${pairs.length ? ', ' + pairs.join(', ') : ''} }`;
   }
   // A write to a cell of an actor this class is declared in (src/outer_reads.js): a
   // `$set` sent to it, as a closure's write goes to its enclosing scope.
@@ -991,7 +992,7 @@ export function genExpr(ctx, expr) {
     // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
     // `$new` to it, answered with the new actor's address.
     if ((expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
-        && isActorRefType(ctx.currentTypeEnv?.get(expr.callee.name))) {
+        && ctx.currentTypeEnv?.get(expr.callee.name) === 'Actor') {
       return `BvObject.pack([await ${genSendNew(ctx, expr.args, genExpr(ctx, expr.callee))}])`;
     }
     // If callee is a local variable, it may hold a string label (lambda) or closure at runtime
@@ -1046,7 +1047,7 @@ export function genExpr(ctx, expr) {
     if (lambdaUsesOuterRefs(ctx, expr)) {
       const destr = genDestructure(ctx, expr.params, '  ');
       if (expr.body) {
-        return wrapWithCapture(ctx, ctx.genFunctionBodyCode(ctx, expr.params, expr.body, null, expr.returnType), expr);
+        return wrapWithCapture(ctx, ctx.genFunctionBodyCode(ctx, expr.params, expr.body, null, expr.returnType, expr.returnTypeEnc), expr);
       }
       if (expr.returnType === '.') {
         return wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, expr.expr)};\n}`, expr);
@@ -1277,9 +1278,8 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
   // name. Positional pattern items resolve to the type's declared field at
   // that index. Validation in src/validate.js rejects over-arity and
   // undeclared-field references before reaching codegen.
-  const sourceType = inferExprType(source, ctx.currentTypeEnv);
-  const typeDecl = (typeof sourceType === 'string' && ctx.typeDecls?.has(sourceType))
-    ? ctx.typeDecls.get(sourceType) : null;
+  const sourceType = inferType(source, ctx.currentTypeEnv);
+  const typeDecl = ctx.typeDecls?.get(sourceType) ?? null;
   if (typeDecl) {
     const fields = typeDecl.fields || [];
     return pattern.map(item => {
@@ -1298,7 +1298,7 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
   // arrives as a JS array (the sender ran _List.toArray on outbound). Convert
   // back so the bound local can flow into _bv_list_* helpers.
   const wrapList = (raw, t) =>
-    typeof t === 'string' && /^List(\b|$)/.test(t)
+    leadsWithList(t)
       ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
       : raw;
   // Named/key reads take the named field only. A sole positional does not
@@ -1309,11 +1309,11 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
     if (item.discard) return '';
     const ssaName = mintSsaName(ctx, item.name);
     if (item.named)
-      return `\n${indent}const ${ssaName} = ${wrapList(named(item.name), item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(named(item.name), item.typeEnc)};`;
     if (item.key !== undefined)
-      return `\n${indent}const ${ssaName} = ${wrapList(named(item.key), item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(named(item.key), item.typeEnc)};`;
     if (item.positional)
-      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.type)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.typeEnc)};`;
     return '';
   }).join('');
 }
@@ -1358,7 +1358,7 @@ export function genValue(ctx, expr, name = '_') {
 }
 
 export function genReplyField(ctx, field, typeEnv) {
-  const isList = t => typeof t === 'string' && t.startsWith('List');
+  const isList = leadsWithList;
   const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const wrapForReply = (expr, t) => {
     if (isList(t)) return `_List.toArray(${expr})`;
@@ -1372,15 +1372,15 @@ export function genReplyField(ctx, field, typeEnv) {
   };
   if ('sigil' in field) {
     const name = field.sigil;
-    const t = field.type || typeEnv?.get(name);
+    const t = field.typeEnc ?? typeEnv?.get(name);
     let val = ctx.stateVarNames.has(name) ? `this.#${stateKey(name)}` : (field.ref ? `${jsIdent(name)}.value` : ssaResolve(ctx, name));
     val = wrapForReply(val, t);
     return `${name}: ${val}`;
   }
   const valueCode = genValue(ctx, field.value, field.key);
-  const t = field.type
-    || (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : null)
-    || inferExprType(field.value, typeEnv);
+  const t = field.typeEnc
+    ?? (typeEnv && field.value?.type === 'Identifier' ? typeEnv.get(field.value.name) : undefined)
+    ?? inferType(field.value, typeEnv);
   const finalCode = wrapForReply(valueCode, t);
   return `${field.key}: ${finalCode}`;
 }
@@ -1392,14 +1392,14 @@ export function genDestructure(ctx, params, indent = '        ') {
   const pos = params.filter(p => p.positional);
   const named = params.filter(p => !p.positional);
   const namedPart = p => p.key ? `${p.key}: ${p.name}` : p.name;
-  const isListType = t => typeof t === 'string' && t.startsWith('List');
+  const isListType = leadsWithList;
   const hasDefaults = params.some(p => p.defaultValue);
-  const hasIntParams = params.some(p => p.type === 'Integer' && !p.ref);
-  const hasDecParams = params.some(p => p.type === 'Decimal' && !p.ref);
+  const hasIntParams = params.some(p => p.typeEnc === 'Integer' && !p.ref);
+  const hasDecParams = params.some(p => p.typeEnc === 'Decimal' && !p.ref);
   const wrapParam = (expr, p) => {
     if (p.ref) return expr;
-    if (p.type === 'Integer') return `_bvAs(${expr}, "Integer", "Integer")`;
-    if (p.type === 'Decimal') return `BvDecimal.from(${expr})`;
+    if (p.typeEnc === 'Integer') return `_bvAs(${expr}, "Integer", "Integer")`;
+    if (p.typeEnc === 'Decimal') return `BvDecimal.from(${expr})`;
     return expr;
   };
 
@@ -1424,8 +1424,8 @@ export function genDestructure(ctx, params, indent = '        ') {
       code += `\n${indent}const [${pos.map(p => p.name).join(', ')}] = _s.positional;`;
     }
   }
-  const listNamed = named.filter(p => isListType(p.type));
-  const plainNamed = named.filter(p => !isListType(p.type));
+  const listNamed = named.filter(p => isListType(p.typeEnc));
+  const plainNamed = named.filter(p => !isListType(p.typeEnc));
   if (plainNamed.length > 0) {
     if (hasDefaults || hasIntParams || hasDecParams) {
       // Per-field access (required for type-aware wrapping or default fallback)
@@ -1476,26 +1476,31 @@ export function genDefaultValue(node) {
 // `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
 // parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
 export function typeTag(ctx, t) {
-  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
-  if (t === 'Actor' || isCtorProfile(t)) return '*';
-  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
-  const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return '*';
+  if (t === undefined) return null;
+  if (t === null) return 'null';
+  // Any actor (`Actor`) is tagged `*`.
+  if (t === 'Actor') return '*';
+  // A type's tag is its address (src/codegen/type_table.js).
+  if (ctx.typeDecls?.has(t)) return t;
+  // An actor no `new` built (a singleton) is tagged `*`.
+  const cls = classNameOf(t);
+  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === (cls ?? t));
+  if (node && (publicLabel(node) ?? node.singletonOf)) return '*';
+  if (cls) return cls;
   // An actor of a dependency's class is tagged with the class's address
   // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
-  if (typeof t === 'string' && !ctx.typeDecls?.has(t) && ctx.depIsDependency?.(t)) return ctx.depAddress(t);
-  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-  // A type's tag is its address (src/codegen/type_table.js).
-  return ctx.typeDecls.get(t).key;
+  if (typeof t === 'string' && !t.startsWith(':') && ownPath(t) === null && !SCALARS.has(t)) return t.replace(/:\*$/, '');
+  return typeText(t, ctx.depAliases);
 }
+const SCALARS = new Set(['Integer', 'Float', 'Decimal', 'Text', 'Boolean', 'Object', 'Anything', 'Function', 'Blob', 'GraphemeText', 'Regex']);
 
 // Resolve a call argument's declared/inferred type for wire tagging. Covers
 // the destructure-shorthand arg (`Sink.take(:p)` — no `expr`, type in the
 // enclosing typeEnv), an explicit `expr`, and a literal.
 export function argTypeOf(ctx, a) {
-  if (a.typeName) return a.typeName;
-  if (a.expr) return inferExprType(a.expr, ctx.currentTypeEnv) || inferLiteralType(a.expr) || null;
-  return ctx.currentTypeEnv?.get(a.name) ?? null;
+  if (a.typeNameEnc !== undefined) return a.typeNameEnc;
+  if (a.expr) return inferType(a.expr, ctx.currentTypeEnv) ?? inferLiteralType(a.expr);
+  return ctx.currentTypeEnv?.get(a.name);
 }
 
 // A call argument's value expression, wire-serialized when it is a type value
@@ -1557,7 +1562,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   if (fields[0]?.selfReturn) return null;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
-  const isFunctionType = t => t === 'Function' || (typeof t === 'string' && /[-=~]>/.test(t));
+  const isFunctionType = t => t === 'Function' || isFn(t);
   // A slot declared as a union or `Anything` is tagged from its value at runtime, so
   // it needs a name to read; an expression with no name leaves the reply untagged.
   const slotTag = (t, varName) => {
@@ -1570,8 +1575,8 @@ export function genTyBody(ctx, fields, typeEnv) {
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
     if (f.expr?.type === 'SelfValue') { posTypes.push(JSON.stringify(selfSlotTag(ctx.currentActor))); continue; }
-    const t = f.type || (f.name ? typeEnv.get(f.name) : undefined) || inferExprType(f.expr, typeEnv);
-    if (!t) return null;
+    const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr, typeEnv);
+    if (t === undefined) return null;
     if (isFunctionType(t)) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
     if (tag === null) return null;
@@ -1582,13 +1587,13 @@ export function genTyBody(ctx, fields, typeEnv) {
     let key, t, varName;
     if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: ${JSON.stringify(selfSlotTag(ctx.currentActor))}`); continue; }
     if ('sigil' in f) {
-      key = f.sigil; t = f.type || typeEnv.get(f.sigil); varName = f.sigil;
+      key = f.sigil; t = f.typeEnc ?? typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
-      t = f.type || ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : undefined) || inferExprType(f.value, typeEnv);
+      t = f.typeEnc ?? ((f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? typeEnv.get(f.value.name) : undefined) ?? inferType(f.value, typeEnv);
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
-    if (!t) return null;
+    if (t === undefined) return null;
     if (isFunctionType(t)) return null;
     const tag = slotTag(t, varName);
     if (tag === null) return null;
@@ -1605,25 +1610,25 @@ export function genTyBody(ctx, fields, typeEnv) {
 
 // The runtime tag of `read`, a value whose declared type `t` is a union or `Anything`.
 export function jsTyOf(ctx, t, read) {
-  return `_bvTyOf(${read}, ${JSON.stringify(tyMembers(t, u => typeTag(ctx, u), ctx.typeDecls))})`;
+  return `_bvTyOf(${read}, ${JSON.stringify(tyMembersEnc(t, u => typeTag(ctx, u), ctx.typeDecls, (u) => typeText(u, ctx.depAliases)))})`;
 }
 
 // A slot's tag: the declared type's when it is one, else the value's at runtime
 // (`read`, or no tag when there is nothing safe to read).
 export function jsSlotTag(ctx, t, read) {
-  if (!isDynamicTy(t)) return JSON.stringify(typeTag(ctx, t ?? null));
+  if (!isDynamicTy(t)) return JSON.stringify(typeTag(ctx, t));
   return read ? jsTyOf(ctx, t, read) : 'null';
 }
 
 // What a function body returns: a packed Object, marked when it's a self-return
 // so the handler can tag the reply on that path.
-export function genPackedReturn(ctx, fields, typeEnv, declaredReturnType = null) {
+export function genPackedReturn(ctx, fields, typeEnv, declaredReturnType = undefined) {
   if (fields[0]?.selfReturn) return '{ positional: [], named: {}, positional_types: null, named_types: null, selfReturn: true }';
   const packed = `BvObject.pack(${genReBody(ctx, fields, typeEnv, declaredReturnType)})`;
   return fields.some(f => f.localObject) ? `Object.assign(${packed}, { forwarded: true })` : packed;
 }
 
-export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { skipTypeCheck = false } = {}) {
+export function genReBody(ctx, fields, typeEnv, declaredReturnType = undefined, { skipTypeCheck = false } = {}) {
   // Empty fields → Void return on the wire (`re: []`).
   if (fields.length === 0) return '[]';
   // Self-return: the bare local self address. The parent promotes it.
@@ -1633,14 +1638,14 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
   if (spread) return `BvObject.splat(${ssaResolve(ctx, spread.name)})`;
   const pos = fields.filter(f => f.positional);
   const named = fields.filter(f => !f.positional);
-  const isList = t => typeof t === 'string' && t.startsWith('List');
+  const isList = leadsWithList;
   const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const posVal = f => {
     let raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     // A send to an actor (`return b.get()`) replies with what it answers.
     if (f.expr && isSendCode(raw)) raw = awaitSendValue(raw, name ?? 'value');
-    const t = f.type || (typeEnv && name ? typeEnv.get(name) : null) || inferExprType(f.expr, typeEnv);
+    const t = f.typeEnc ?? (typeEnv && name ? typeEnv.get(name) : undefined) ?? inferType(f.expr, typeEnv);
     if (isList(t)) return `_List.toArray(${raw})`;
     if (t === 'Object') return `BvObject.splat(${raw})`;
     if (t === 'Decimal') {
@@ -1663,24 +1668,42 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = null, { ski
 
 // An overload clause's guard for an in-process call, which carries values but no
 // tags: null when no param has a scalar type a value could contradict.
-export function genValueCondition(params) {
+export function genValueCondition(ctx, params) {
   if (params.find(p => p.rest)) return null;
   const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
-  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  // A param's type as `_bvValuesFit` reads it; a generic one, anything.
+  const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
   if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
   return `_bvValuesFit(_s, ${JSON.stringify(pos)}, ${JSON.stringify(named)})`;
 }
 
+// Whether an encoded type has a generic in it (`List of Integers`, a shape).
+const hasGeneric = (t) => Array.isArray(t) || (t !== null && typeof t === 'object' && Object.values(t).some(hasGeneric));
+
+// What a param's type expects of an arg's tag: an actor a `new` built is tagged
+// with its maker's address (`:C`); `Actor`, a constructor profile and an interface
+// take any actor (`*`). Anything else is matched as it's written.
+function expectedTag(ctx, p) {
+  const t = p.typeEnc;
+  // A param with no type at all (a named one, `a: b`) expects an untagged arg.
+  if (t === undefined) return p.typeKind === 'ctor' ? '*' : p.typeUnencoded ? p.type : null;
+  if (t === 'Actor') return '*';
+  const cls = classNameOf(t);
+  const node = cls && (ctx.program?.actors || []).find(a => a.name === cls && !a.singletonOf && !a.membersOf);
+  if (node) return makerTag(cls);
+  return typeText(t, ctx.depAliases);
+}
+
 export function genTypeCondition(ctx, params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
-  const isListOfAny = t => t === 'List of Anything' || t === 'List';
-  const namedParams = params.filter(p => !p.positional && !isListOfAny(p.type));
-  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(expectedTag(p.type, ctx.program?.actors))}]`);
-  const posParams = params.filter(p => p.positional && !isListOfAny(p.type));
-  const pos = posParams.map(p => JSON.stringify(expectedTag(p.type, ctx.program?.actors)));
+  const isListOfAny = t => isListEnc(t) && listElementEnc(t) === 'Anything';
+  const namedParams = params.filter(p => !p.positional && !isListOfAny(p.typeEnc));
+  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(expectedTag(ctx, p))}]`);
+  const posParams = params.filter(p => p.positional && !isListOfAny(p.typeEnc));
+  const pos = posParams.map(p => JSON.stringify(expectedTag(ctx, p)));
   if (named.length === 0 && pos.length === 0) return null;
   // Count required positional params (no default value)
   const requiredPosCount = posParams.filter(p => !p.defaultValue).length;

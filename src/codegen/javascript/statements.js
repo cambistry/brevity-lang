@@ -1,7 +1,9 @@
 import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
-import { bindLocalType } from '../../inference.js';
-import { isDynamicTy } from '../ty_tags.js';
+import { bindLocalType } from '../../type_infer.js';
+import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isFn } from '../../type_enc.js';
+import { typeText, classNameOf, leadsWithList } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import {
@@ -74,7 +76,7 @@ export function genSubscribeCall(ctx, expr) {
     opExpr = JSON.stringify(selector);
   } else {
     const genArgVal = a => a.expr ? genExpr(ctx, a.expr) : (ctx.stateVarNames?.has(a.name) ? `this.#${stateKey(a.name)}` : a.name);
-    const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
+    const typeOf = a => a.typeNameEnc ?? (a.expr ? inferLiteralType(a.expr) : undefined);
     const posVals = positional.map(genArgVal).join(', ');
     const namedFields = named.map(a => `${a.name}: ${genArgVal(a)}`).join(', ');
     const readOf = a => (a.expr ? (a.expr.type === 'Identifier' ? genArgVal(a) : null) : genArgVal(a));
@@ -210,7 +212,9 @@ export function hasBlockBodies(ifExpr) {
   return e.body != null;
 }
 
-export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null) {
+// `declaredReturnType` is the function's `.` or `()` if it has one; `declaredReturnTypeEnc`
+// its declared return type, encoded.
+export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declaredReturnType = null, declaredReturnTypeEnc = undefined) {
   const { env: typeEnv } = buildTypeEnv(params, body, null, null, ctx.typeDecls);
   const savedTypeEnv = ctx.currentTypeEnv;
   ctx.currentTypeEnv = typeEnv;
@@ -296,7 +300,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
       } else if (s.value.type === 'Function') {
         if (lambdaUsesOuterRefs(ctx, s.value)) {
           if (s.value.body) {
-            const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
+            const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType, s.value.returnTypeEnc);
             code += emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
           } else {
             const destr2 = genDestructure(ctx, s.value.params, '  ');
@@ -362,7 +366,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     } else if (s.type === 'Return') {
       _lastTypedName = null;
       _lastSetName = null;
-      code += `\n  return ${genPackedReturn(ctx, s.fields, typeEnv, declaredReturnType)};`;
+      code += `\n  return ${genPackedReturn(ctx, s.fields, typeEnv, declaredReturnTypeEnc)};`;
     } else if (s.type === 'ImplicitReturn') {
       _lastTypedName = null;
       _lastSetName = null;
@@ -414,7 +418,7 @@ function branchBindValue(ctx, s) {
   // The value is the send itself, not arithmetic on what sends gave back.
   if (/^this\.#(childSend|send)\(/.test(code)) {
     const reply = `BvObject.pack(await ${code})`;
-    return s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`;
+    return s.type === 'TypedAssign' && s.typeNameEnc === 'Object' ? reply : `BvObject.one(${reply}, ${JSON.stringify(s.name)})`;
   }
   return CALL_LIKE.has(s.value.type) ? `BvObject.one(${code}, ${JSON.stringify(s.name)})` : code;
 }
@@ -599,10 +603,11 @@ export function findAsClauseMatch(ctx, targetType, actorName) {
   if (!ctx.actorNames.has(actorName)) return null;
   const info = ctx.actorNames.get(actorName);
   if (!info.asClauses || info.asClauses.length === 0) return null;
-  if (targetType === actorName) return null; // identity — no cast
+  if (classNameOf(targetType) === actorName) return null; // identity — no cast
+  // `targetType` and each clause's are encoded.
   for (const clause of info.asClauses) {
-    if (!clause.negated && clause.targetType === targetType) return clause;
-    if (clause.negated && clause.targetType !== targetType) return clause;
+    if (!clause.negated && clause.targetTypeEnc === targetType) return clause;
+    if (clause.negated && clause.targetTypeEnc !== targetType) return clause;
   }
   return null; // validation should have caught this
 }
@@ -636,26 +641,26 @@ function genDepConstructorAsAssign(ctx, s, emitBinding) {
   const targetName = ctx.constructorCoercions?.get(calleeName) || ctx.depAddress(calleeName);
   const tmpRef = `_ref_${s.name}`;
   const newLine = `const ${tmpRef} = await ${genSendNew(ctx, s.value.args, JSON.stringify(targetName))};`;
-  const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${tmpRef}))[0]`);
+  const asLine = emitBinding(s.name, `(await this.#send([${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"], ${tmpRef}))[0]`);
   return `\n        ${newLine}${asLine}`;
 }
 
 export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counters) {
   // Typed dep constructor: n Integer = Service() → sendNew then send [Type, as]
-  if (isDepConstructorCall(ctx, s) && s.typeName) {
+  if (isDepConstructorCall(ctx, s) && s.typeNameEnc !== undefined) {
     return genDepConstructorAsAssign(ctx, s, emitBinding);
   }
   // Untyped dep constructor: t = Service() → just sendNew
   if (isDepConstructorCall(ctx, s)) return genDepConstructorAssign(ctx, s, emitBinding);
   // as-clause interception: TypedAssign + FunctionCallExpr naming an actor with as clauses
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
-    const clause = findAsClauseMatch(ctx, s.typeName, s.value.callee.name);
+    const clause = findAsClauseMatch(ctx, s.typeNameEnc, s.value.callee.name);
     if (clause) {
       if (clause.memoized) {
         const tmpRef = `_ref_${s.name}`;
         const createExpr = genExpr(ctx, s.value);
         const newLine = `const ${tmpRef} = ${createExpr};`;
-        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(s.typeName)}, "$as"]))[0]`);
+        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"]))[0]`);
         return `\n        ${newLine}${asLine}`;
       }
       return emitBinding(s.name, genExpr(ctx, clause.expr));
@@ -670,28 +675,28 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   }
   // Typed assign from service dependency: n Integer = Counter → send [Type, as]
   // For destructured members, route to the source service with the remote op name
-  if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeName) {
+  if (s.value.type === 'Identifier' && ctx.dependencyNames.has(s.value.name) && s.typeNameEnc !== undefined) {
     if (ctx.destructuredMembers?.has(s.value.name)) {
       const { service, remote } = ctx.destructuredMembers.get(s.value.name);
       return emitBinding(s.name, `BvObject.one(BvObject.pack(await this.#send(${JSON.stringify(memberOp(remote))}, ${JSON.stringify(service)})), ${JSON.stringify(s.name)})`);
     }
     const target = ctx.stateVarNames.has(s.value.name) ? `this.#${stateKey(s.value.name)}` : JSON.stringify(ctx.depAddress(s.value.name));
-    return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${target}))[0]`);
+    return emitBinding(s.name, `(await this.#send([${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"], ${target}))[0]`);
   }
   // Typed assign from child actor ref: n Integer = c → childSend [Type, as]
-  if (s.value.type === 'Identifier' && s.typeName) {
+  if (s.value.type === 'Identifier' && s.typeNameEnc !== undefined) {
     const varName = s.value.name;
     if (ctx.childActorVars?.has(varName)) {
       const resolved = ctx.ssaScope?.get(varName) || varName;
       const target = ctx.childActorVars.get(varName) ? `${resolved}.value` : resolved;
-      return emitBinding(s.name, `(await this.#childSend(${target}, [${JSON.stringify(s.typeName)}, "$as"]))[0]`);
+      return emitBinding(s.name, `(await this.#childSend(${target}, [${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"]))[0]`);
     }
     if (ctx.localInstanceVars?.has(varName)) {
       const resolved = ctx.ssaScope?.get(varName) || varName;
-      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], ${resolved}))[0]`);
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"], ${resolved}))[0]`);
     }
     if (ctx.remoteInstanceVars?.has(varName)) {
-      return emitBinding(s.name, `(await this.#send([${JSON.stringify(s.typeName)}, "$as"], this.#${stateKey(varName)}))[0]`);
+      return emitBinding(s.name, `(await this.#send([${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"], this.#${stateKey(varName)}))[0]`);
     }
   }
   if (s.value.type === 'IfExpr') {
@@ -702,14 +707,14 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
       emitBinding(s.name, tmpVar)
     );
   }
-  if (s.typeName === 'Object') {
+  if (s.typeNameEnc === 'Object') {
     if (s.value.type === 'DotCallExpr') return emitBinding(s.name, `BvObject.pack(await ${genExpr(ctx, s.value)})`);
     return emitBinding(s.name, genExpr(ctx, s.value));
   }
   // Function-typed variable assignment → lambda dispatch handler
   if (s.value.type === 'Function') {
     const overloadMode = s.value.overloadMode;
-    const isFnType = s.typeName === 'Function' || (typeof s.typeName === 'string' && /[-=~]>/.test(s.typeName));
+    const isFnType = s.typeNameEnc === 'Function' || isFn(s.typeNameEnc);
     if ((isFnType || overloadMode) && !lambdaUsesOuterRefs(ctx, s.value)) {
       // Overload append: reuse existing label for this variable (scoped to current body)
       if (overloadMode === 'append') {
@@ -757,7 +762,7 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     // List-typed reply from a child actor arrives as a JS array (the sender
     // ran _List.toArray on its outbound). Convert back to a cons cell here so
     // the bound local can be passed straight into _bv_list_* helpers.
-    if (typeof s.typeName === 'string' && /^List(\b|$)/.test(s.typeName)) {
+    if (leadsWithList(s.typeNameEnc)) {
       valExpr = `(v => Array.isArray(v) ? _List.from(v) : v)(${valExpr})`;
     }
     return prefix + emitBinding(s.name, valExpr);
@@ -817,7 +822,7 @@ export function genLocals(ctx, body, outerEnv) {
     // A TypedAssign whose declared type is an actor class binds an actor
     // ref — e.g., `p Peer = peers.first()` returns the head Peer instance.
     // Mark it so `p.method()` later compiles as #childSend, not #send.
-    if (s.type === 'TypedAssign' && typeof s.typeName === 'string' && ctx.actorNames.has(s.typeName))
+    if (s.type === 'TypedAssign' && ctx.actorNames.has(classNameOf(s.typeNameEnc)))
       ctx.childActorVars.set(s.name, false);
   }
   const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'LaunchStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
@@ -885,11 +890,11 @@ export function genLocals(ctx, body, outerEnv) {
       // remote's schema check succeeds.
       if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
         const inferred = inferLiteralType(s.value);
-        const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : null;
-        const typeHint = inferred || envType || null;
+        const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : undefined;
+        const typeHint = inferred !== undefined ? inferred : envType;
         // A union or `Anything` is tagged from the value (named, so it is read once).
-        const hintTag = !typeHint ? null
-          : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
+        const hintTag = typeHint === undefined ? null
+          : !isDynamicTy(typeHint) ? JSON.stringify(typeText(typeHint, ctx.depAliases))
           : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
         const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
         const toExpr = JSON.stringify(joinAddress([ctx.depSource(s.objectName), toSelector]));
@@ -1075,7 +1080,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (CALL_LIKE.has(s.value.type)) {
       return emitBinding(s.name, `BvObject.one(${genExpr(ctx, s.value)}, ${JSON.stringify(s.name)})`);
     }
-    if (inferLiteralType(s.value) !== null) {
+    if (inferLiteralType(s.value) !== undefined) {
       return emitBinding(s.name, genExpr(ctx, s.value));
     }
     if (s.value.type === 'TypeConstruction') {
@@ -1097,7 +1102,7 @@ export function genLocals(ctx, body, outerEnv) {
 // A function that sets outer refs stays a closure, since it can't be lifted.
 function genClosureBind(ctx, s, emitBinding, outerEnv) {
   if (s.value.body) {
-    const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType);
+    const fnCode = genFunctionBodyCode(ctx, s.value.params, s.value.body, outerEnv, s.value.returnType, s.value.returnTypeEnc);
     return emitBinding(s.name, wrapWithCapture(ctx, fnCode, s.value, s.name));
   }
   const destr = genDestructure(ctx, s.value.params, '  ');

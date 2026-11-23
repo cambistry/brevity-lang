@@ -3,6 +3,7 @@
 // runtime from its value (`_bvTyOf` JS, `bv_ty_of` Rust and Erlang), choosing among
 // the members worked out here. See notes/session-2026-11-06-ty-from-value.md.
 import { unionMembers } from '../return_shapes.js';
+import { members, isUnion, isList } from '../type_enc.js';
 
 const KINDS = new Set(['Integer', 'Float', 'Decimal', 'Text', 'Boolean', 'null', 'Object']);
 const isPlaceholder = t => t === 'List' || /\bAnything\b/.test(t);
@@ -42,4 +43,39 @@ export function wireTypes(t, typeDecls) {
   const members = unionMembers(t);
   if (members.includes('Anything')) return [...typeDecls.keys()];
   return members.filter(m => typeDecls.has(m));
+}
+
+// ── The same, for encoded types (src/type_enc.js) ─────────────────────────────
+// `typeDecls` keys each declared type by its address.
+
+const mentionsAnything = (t) => t === 'Anything' || (Array.isArray(t) ? t.some(mentionsAnything)
+  : t && typeof t === 'object' ? Object.values(t).some(mentionsAnything) : false);
+const ENC_KINDS = new Set(['Integer', 'Float', 'Decimal', 'Text', 'Boolean', 'Object']);
+
+export function isDynamicTyEnc(t) {
+  return t !== undefined && (mentionsAnything(t) || isUnion(t));
+}
+
+// `text` renders a type as a tag carries it.
+export function tyMembersEnc(t, tagFor, typeDecls, text) {
+  const out = [];
+  const add = (kind, tag) => { if (!out.some(e => e[0] === kind)) out.push([kind, tag]); };
+  for (const m of members(t)) {
+    if (mentionsAnything(m)) continue;
+    if (m === null) add('null', 'null');
+    else if (ENC_KINDS.has(m)) add(m, m);
+    else if (isList(m)) add('List', text(m));
+    else if (typeDecls?.has(m)) add(tagFor(m), tagFor(m));
+    else add('*', tagFor(m));
+  }
+  if (mentionsAnything(t)) for (const k of typeDecls?.keys() ?? []) add(tagFor(k), tagFor(k));
+  return out;
+}
+
+export function wireTypesEnc(t, typeDecls) {
+  if (t === undefined || !typeDecls) return [];
+  if (typeDecls.has(t)) return [t];
+  if (!isDynamicTyEnc(t)) return [];
+  if (members(t).includes('Anything')) return [...typeDecls.keys()];
+  return members(t).filter(m => typeDecls.has(m));
 }

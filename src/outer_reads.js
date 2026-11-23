@@ -27,12 +27,13 @@ import { resolveSuperclassChain } from './subclass.js';
 const SCALAR_TYPES = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float']);
 
 // What the file actor holds, by name, with its type: cells, constants, file params.
-export function fileOuterNames(program) {
+// With `enc`, each name's encoded type (src/type_enc.js) in place of its text.
+export function fileOuterNames(program, { enc = false } = {}) {
   const file = program.actors.find(a => !a.name);
   const names = new Map();
   if (!file) return names;
-  for (const p of file.initParams || []) names.set(p.name, p.type || null);
-  for (const d of file.stateVarDecls || []) names.set(d.name, d.typeName || null);
+  for (const p of file.initParams || []) names.set(p.name, enc ? p.typeEnc : p.type || null);
+  for (const d of file.stateVarDecls || []) names.set(d.name, enc ? d.typeNameEnc : d.typeName || null);
   return names;
 }
 
@@ -92,15 +93,16 @@ export function homeOf(cls) {
 function classOwnNames(classes, actor) {
   const { inheritedParams, inheritedState } = resolveSuperclassChain(classes, actor);
   const names = new Map();
-  const add = (name, type, param, ref = false) => { if (typeof name === 'string' && !names.has(name)) names.set(name, { type: type || null, param, ref: !!ref }); };
-  for (const p of actor.initParams || []) add(p.name, p.type, true, p.ref);
-  for (const p of inheritedParams) add(p.name, p.type, true, p.ref);
-  for (const d of actor.stateVarDecls || []) add(d.name, d.typeName, false, d.isRef);
-  for (const d of inheritedState || []) add(d.name, d.typeName, false, d.isRef);
+  // Each name's type both as text and encoded (`typeEnc`).
+  const add = (name, type, typeEnc, param, ref = false) => { if (typeof name === 'string' && !names.has(name)) names.set(name, { type: type || null, typeEnc, param, ref: !!ref }); };
+  for (const p of actor.initParams || []) add(p.name, p.type, p.typeEnc, true, p.ref);
+  for (const p of inheritedParams) add(p.name, p.type, p.typeEnc, true, p.ref);
+  for (const d of actor.stateVarDecls || []) add(d.name, d.typeName, d.typeNameEnc, false, d.isRef);
+  for (const d of inheritedState || []) add(d.name, d.typeName, d.typeNameEnc, false, d.isRef);
   // A class block answers the cells it inherits, by forwarding them to its base.
-  for (const c of actor.forwardCells || []) add(c.name, c.typeName, false, c.isRef);
+  for (const c of actor.forwardCells || []) add(c.name, c.typeName, c.typeNameEnc, false, c.isRef);
   // A write in the constructor block (`total <- 1`) names a cell; it doesn't declare one.
-  for (const s of actor.initBody || []) if (s.type !== 'SetStatement' && s.type !== 'ActorSetStatement') add(s.name, s.typeName, false, s.isRef);
+  for (const s of actor.initBody || []) if (s.type !== 'SetStatement' && s.type !== 'ActorSetStatement') add(s.name, s.typeName, s.typeNameEnc, false, s.isRef);
   return names;
 }
 
@@ -118,7 +120,8 @@ function levelOf(program, classes, owner) {
   if (owner === null) {
     const file = program.actors.find(a => !a.name);
     const refs = new Set([...(file?.stateVarDecls || []), ...(file?.initParams || [])].filter(d => d.isRef || d.ref).map(d => d.name));
-    const names = new Map([...fileOuterNames(program)].map(([n, type]) => [n, { type, param: false, ref: refs.has(n) }]));
+    const encs = fileOuterNames(program, { enc: true });
+    const names = new Map([...fileOuterNames(program)].map(([n, type]) => [n, { type, typeEnc: encs.get(n), param: false, ref: refs.has(n) }]));
     return { owner, names, functions: file ? functionNames(classes, file, names) : new Set() };
   }
   const actor = classes.get(owner);
@@ -213,12 +216,13 @@ export function markOuterReads(program) {
       return at < 0 ? null : { level: at + 1, ...chain[at] };
     };
     const mark = (node, found) => {
-      const { type, param } = found.names.get(node.name);
+      const { type, typeEnc, param } = found.names.get(node.name);
       node.outer = true;
       node.outerLevel = found.level;
       node.outerClass = found.owner;
       node.outerParam = param;
       node.outerType = type;
+      node.outerTypeEnc = typeEnc;
       return node;
     };
 
@@ -267,7 +271,7 @@ export function markOuterReads(program) {
       // owner has no `$update` for a cell yet, so a structured `<|` across actors isn't
       // supported.)
       const scalar = SCALAR_TYPES.has(type);
-      node.expr = { type: 'OuterSet', name, value, updateOp: scalar ? null : updateOp ?? null, outerLevel: found.level, outerClass: found.owner, outerType: type };
+      node.expr = { type: 'OuterSet', name, value, updateOp: scalar ? null : updateOp ?? null, outerLevel: found.level, outerClass: found.owner, outerType: type, outerTypeEnc: found.names.get(name).typeEnc };
     };
     // A name that a class outside the chain declares is out of reach. Anything the
     // class binds anywhere (a destructure, a catch, a lambda) is its own.
@@ -356,13 +360,14 @@ export function markOuterReads(program) {
 
 // The names a class reads from the actors it's declared in, with their types. The
 // innermost declaration of a name wins, and the class's own names win over all of them.
-export function outerNamesFor(program, actor) {
+// With `enc`, each name's encoded type in place of its text.
+export function outerNamesFor(program, actor, { enc = false } = {}) {
   const classes = new Map(program.actors.filter(a => a.name).map(a => [a.name, a]));
   const names = new Map();
   // A class block's inherited cells, read at its base (src/singleton_classes.js).
-  for (const c of actor.forwardCells || []) names.set(c.name, c.typeName ?? null);
+  for (const c of actor.forwardCells || []) names.set(c.name, enc ? c.typeNameEnc : c.typeName ?? null);
   for (const owner of enclosingChain(program, actor)) {
-    for (const [n, { type }] of levelOf(program, classes, owner).names) if (!names.has(n)) names.set(n, type);
+    for (const [n, { type, typeEnc }] of levelOf(program, classes, owner).names) if (!names.has(n)) names.set(n, enc ? typeEnc : type);
   }
   return names;
 }

@@ -82,7 +82,7 @@ export const ownNames = (t) => ownPath(t)?.map(s => s.replace(/^~/, '')) ?? null
 export const isInstance = (t) => typeof t === 'string' && t.endsWith(':*');
 
 // ── Text, for a message ───────────────────────────────────────────────────────
-const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals']]);
+const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals'], ['Actor', 'Actors']]);
 const isEntries = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
 const showName = (a) => (ownNames(a) ? ownNames(a).join('::') : a);
 const showEntries = (list, nameOf = showName) => list.flatMap(e => (isEntries(e)

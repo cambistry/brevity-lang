@@ -272,7 +272,7 @@ export function lowerInheritedBlockCells(actors) {
       if (!inherited.has(d.name)) inherited.set(d.name, { decl: d, owner: b.name });
     }
     if (block.blockParent) block.enclosing = block.home ?? null;
-    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, ...(decl.typeNameEnc !== undefined && { typeNameEnc: decl.typeNameEnc }), isRef: !!decl.isRef })), configurable: true });
+    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, get typeNameEnc() { return decl.typeNameEnc; }, isRef: !!decl.isRef })), configurable: true });
     // The cell a use names: an inherited one, or (`base::x`, `A::x`) an ancestor's.
     const resolve = (node, bound) => {
       if (typeof node.name !== 'string') return null;
