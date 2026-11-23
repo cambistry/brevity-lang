@@ -3,7 +3,7 @@
 
 import { parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
-import { documentShape } from './service_doc.js';
+import { readDocument } from './service_doc.js';
 import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
@@ -130,7 +130,8 @@ function validateProgram(ast, options = {}) {
       .map(d => d.name));
     const ingestRemote = (alias, service, params) => {
       if (inlineDefined.has(alias)) return;
-      const { doc, ctorParams } = readRemote(service, params);
+      const path = (ast.dependencies || []).find(d => d.name === alias)?.path ?? null;
+      const { doc, ctorParams } = readRemote(service, { path, params });
       remotesParsed[alias] = doc;
       if (ctorParams) factoryDecls[alias] = ctorParams;
     };
@@ -2136,14 +2137,15 @@ function checkListMethodArgs(ast) {
 // like a constructor manifest (so the caller can fall back to a plain service).
 
 // A remote's document as `options.remotes` gives it, a JSON document
-// (notes/opre-type-encoding-2026-11-21.md): its interface, as the compiler reads
-// one, and the params of its `new` when it is a constructor document, a service
-// whose own `$new` replies `:*`.
-export function readRemote(service, params = null) {
+// (notes/opre-type-encoding-2026-11-21.md), from the service at `path`: its
+// interface, as the compiler reads one, and the params of its `new` when it is a
+// constructor document, a service whose own `$new` replies `:*`.
+export function readRemote(service, { path = null, params = null } = {}) {
   const { $new, ...rest } = service?.public || {};
-  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: documentShape(service), ctorParams: params ? parseParamsDocument(params) : null };
-  const ctorParams = documentShape({ public: { $new } }).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type }));
-  return { doc: documentShape(service[':*'] || {}), ctorParams };
+  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: readDocument(service, path), ctorParams: params ? parseParamsDocument(params) : null };
+  const ctorParams = readDocument({ public: { $new } }, path).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type, typeEnc: p.typeEnc }));
+  // An instance's own addresses are under the instance; its node is the service's `:*`.
+  return { doc: readDocument(service[':*'] || {}, path), ctorParams };
 }
 
 function splitAsTypes(service) {

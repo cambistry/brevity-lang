@@ -1762,10 +1762,10 @@ export function codegen(ast, options = {}) {
       }
       for (const { path, service } of options.remotes) {
         const alias = pathToAlias.get(path);
-        if (alias) resolvedRemotes[alias] = readRemote(service).doc;
+        if (alias) resolvedRemotes[alias] = readRemote(service, { path }).doc;
       }
     } else {
-      for (const [name, service] of Object.entries(options.remotes)) resolvedRemotes[name] = readRemote(service).doc;
+      for (const [name, service] of Object.entries(options.remotes)) resolvedRemotes[name] = readRemote(service, { path: (ast.dependencies || []).find(d => d.name === name)?.path ?? null }).doc;
     }
   }
   const _remotes = Object.keys(inlineRemotes).length > 0 || Object.keys(resolvedRemotes).length > 0

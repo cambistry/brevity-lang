@@ -7,7 +7,7 @@
 import { parseTypeTree } from './parser.js';
 import { encodeType } from './opre_types.js';
 import { intern } from './type_enc.js';
-import { fileScope, documentShape } from './service_doc.js';
+import { fileScope, readDocument } from './service_doc.js';
 import { parseInterface } from './codegen/javascript/types.js';
 
 // A node's `type` is its kind; a param's or field's `type` is a type.
@@ -35,7 +35,7 @@ function remoteDocs(remotes) {
   const docs = {};
   const entries = Array.isArray(remotes) ? remotes.map(r => [r.path, r.service]) : Object.entries(remotes || {});
   for (const [path, service] of entries) {
-    if (service && typeof service === 'object') docs[path] = documentShape(service);
+    if (service && typeof service === 'object') docs[path] = readDocument(service, path);
   }
   return docs;
 }

@@ -114,3 +114,21 @@ export function show(t) {
   }
   throw new Error(`Unrecognized type: ${JSON.stringify(t)}`);
 }
+
+// ── Perspective ───────────────────────────────────────────────────────────────
+
+// `t` as written by the service at `path`, in the reader's terms: each of the
+// service's own addresses (`:Point`, `:T:*`) is under `path` (`svc.bv:Point`), as
+// any Opre value's addresses are when it passes between perspectives. An address
+// the service reaches through its parent (`Integer`) is the reader's too.
+export function translate(t, path) {
+  const under = (a) => (a === ':' ? path : a.startsWith(':') ? `${path}${a}` : a);
+  const walk = (v) => {
+    if (typeof v === 'string') return under(v);
+    if (v === null || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(walk);
+    // A key is a name, never an address; `%t` names a generic by its address.
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === '%names' ? x : walk(x)]));
+  };
+  return intern(walk(t));
+}

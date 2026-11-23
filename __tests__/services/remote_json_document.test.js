@@ -1,4 +1,6 @@
 import { compileSource } from '../helpers.js';
+import { extract } from '../../index.js';
+import { readDocument } from '../../src/service_doc.js';
 
 // Compiling against another service's JSON document (notes/opre-type-encoding-2026-11-21.md):
 // validation and the effects check read it as they read doc text. An op with no `writes`
@@ -51,5 +53,44 @@ describe('a JSON document in remotes', () => {
     expect(() => compileSource('use W = "w"\n@go = { (n: m Integer) = W.scale(2); return m }\n', { remotes })).not.toThrow();
     expect(() => compileSource('use W = "w"\n@go = { (n: m Integer) = W.scale("a"); return m }\n', { remotes }))
       .toThrow("'W.scale()' arguments don't match any signature: (Integer, by: Integer). positional arg 1: expected Integer, got Text");
+  });
+});
+
+// A document's addresses are in its service's terms: `:Point` is the service's own.
+// Read here, each is in this file's terms, as any Opre value's addresses are when it
+// passes between perspectives.
+describe('a document read from another service', () => {
+  const doc = {
+    public: {
+      origin: [{ re: [':Point'], writes: false }],
+      count: [{ re: ['Integer'], writes: false }],
+      move: [{ args: [':Point', { by: [[':Point'], { '%t': 'List' }] }], re: [':T:*'], writes: false }],
+    },
+    types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    ':T': { public: { $new: [{ re: [':T:*'], writes: false }] }, ':*': {} },
+  };
+
+  it("puts the service's own addresses under its path", () => {
+    const read = readDocument(doc, 'svc.bv');
+    expect(read.origin[0].returns[0].typeEnc).toBe('svc.bv:Point');
+    expect(read.move[0].params.map(p => p.typeEnc)).toEqual(['svc.bv:Point', [['svc.bv:Point'], { '%t': 'List' }]]);
+    expect(read.move[0].returns[0].typeEnc).toBe('svc.bv:T:*');
+    expect(read.__typeDecls.Point.fields.map(f => f.paramTypeEnc)).toEqual(['Integer', 'Integer']);
+  });
+
+  it('leaves an address the service reaches through its parent as it is', () => {
+    expect(readDocument(doc, 'svc.bv').count[0].returns[0].typeEnc).toBe('Integer');
+  });
+
+  it('keeps the text as the service writes it', () => {
+    const read = readDocument(doc, 'svc.bv');
+    expect(read.origin[0].returns[0].type).toBe('Point');
+    expect(read.__typeDecls.Point.fields.map(f => f.name)).toEqual(['x', 'y']);
+  });
+
+  it("names a type as this file's own spelling of it does", () => {
+    const { ast } = extract('use Svc = "svc.bv"\n@go = (p Svc::Point) -> 1\n', { remotes: [{ path: 'svc.bv', service: doc }] });
+    const [param] = ast.actors[0].functions.find(f => f.name === '@go').params;
+    expect(param.typeEnc).toBe(readDocument(doc, 'svc.bv').origin[0].returns[0].typeEnc);
   });
 });

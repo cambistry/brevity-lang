@@ -64,7 +64,7 @@ function remoteDocsByPath(ast, remotes) {
   const entries = Array.isArray(remotes) ? remotes.map(r => [r.path, r.service, r.params])
     : Object.entries(remotes || {}).map(([name, service]) => [(ast.dependencies || []).find(d => d.name === name)?.path ?? name, service]);
   for (const [path, service, params] of entries) {
-    try { docs[path] = readRemote(service, params).doc; } catch { /* reported by validation */ }
+    try { docs[path] = readRemote(service, { path, params }).doc; } catch { /* reported by validation */ }
   }
   return docs;
 }

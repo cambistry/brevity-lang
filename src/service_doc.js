@@ -9,7 +9,8 @@
 
 import { encodeType, encodeEntries, cellNode, typeScope, SELF } from './opre_types.js';
 import { TT } from './type_tree.js';
-import { intern } from './type_enc.js';
+import { intern, translate } from './type_enc.js';
+import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { parseTypeTree } from './parser.js';
 
 const WRITES = { read: false, write: true };
@@ -409,4 +410,25 @@ function readClass(node) {
     ...(node.extends?.length && { ownNew: true }),
     ...(inst.__protected && { instanceProtected: inst.__protected }),
   };
+}
+
+// The document of the service at `path`, as this file reads it: each type's
+// encoding in this file's terms (src/type_enc.js, translate). Its text stays as the
+// service writes it.
+export function readDocument(node, path) {
+  const doc = documentShape(node);
+  if (!path) return doc;
+  const from = quote(path);
+  const seen = new Set();
+  const walk = (v) => {
+    if (!v || typeof v !== 'object' || Object.isFrozen(v) || seen.has(v)) return;
+    seen.add(v);
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    for (const [k, x] of Object.entries(v)) {
+      if (k.endsWith('Enc')) v[k] = translate(x, from);
+      else walk(x);
+    }
+  };
+  walk(doc);
+  return doc;
 }
