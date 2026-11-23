@@ -3,7 +3,7 @@ import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { members as unionMembers } from '../../type_enc.js';
-import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { typeText, dependencyAliases, leadsWithList, envTypeOf, orAny } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';

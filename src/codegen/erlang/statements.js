@@ -5,7 +5,7 @@ import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preamble
 import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
-import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { isFn } from '../../type_enc.js';
 import { typeText, classNameOf, hasType } from '../enc_names.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';

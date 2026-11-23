@@ -15,7 +15,7 @@ import {
   buildTypeEnv, fnReturnsFunction, resolveVarExpr, classNeedsSpawnedInstances, rustTypeTag, rustTyOf, rustSlotTag, rustTypeWireWrap,
   instDispatchAt,
 } from './types.js';
-import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { intToValue, valueArray } from './int_repr.js';
 import {
   genRustExpr, genRustIfExpr,
@@ -2434,7 +2434,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const valAsValue = toJsonValue(val, orAny(typeHint));
         // A union or `Anything` is tagged from the value (named, so it is read once).
         const hintTag = typeHint === undefined ? null
-          : !isDynamicTy(typeHint) ? JSON.stringify(typeHint)
+          : !isDynamicTy(typeHint) ? JSON.stringify(typeText(typeHint, G.ctx.depAliases))
           : s.value?.type === 'Identifier' ? rustTyOf(typeHint, `bv_val((${val}).clone())`) : null;
         const tyPart = hintTag
           ? `\n${I}    set_msg.insert("ty".to_string(), json!([[${hintTag}]]));`

@@ -7,7 +7,7 @@ import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply } fro
 import { typeText, leadsWithList, typeTag, paramTag, hasGeneric } from '../enc_names.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
-import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { wireLabel, selfAddress, memberOp, actorAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken, _opre_split as _opre_split_tokens } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
@@ -1585,7 +1585,7 @@ export function genTyBody(ctx, fields, typeEnv) {
 
 // The runtime tag of `read`, a value whose declared type `t` is a union or `Anything`.
 export function jsTyOf(ctx, t, read) {
-  return `_bvTyOf(${read}, ${JSON.stringify(tyMembersEnc(t, u => typeTag(ctx, u), ctx.typeDecls, (u) => typeText(u, ctx.depAliases)))})`;
+  return `_bvTyOf(${read}, ${JSON.stringify(tyMembers(t, u => typeTag(ctx, u), ctx.typeDecls, (u) => typeText(u, ctx.depAliases)))})`;
 }
 
 // A slot's tag: the declared type's when it is one, else the value's at runtime

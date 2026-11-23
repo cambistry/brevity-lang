@@ -1,4 +1,6 @@
 import { returnShapes } from './return_shapes.js';
+import { isUnion } from './type_enc.js';
+import { typeText } from './codegen/enc_names.js';
 import { readDocument } from './service_doc.js';
 import { _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
@@ -476,13 +478,15 @@ export function dropRemoteParents(actors, stubs) {
 
 // The \`ty\` a function's reply is tagged with, when it has one shape of plain types:
 // \`['Integer']\`, \`[{ a: 'Integer' }]\`. A placeholder's function has its doc's returns.
+// Read once types are encoded (src/parser_types.js).
 export function replyTy(fn) {
-  const slots = fn.remoteReturns ? fn.remoteReturns.map(r => ({ name: r.name, type: r.type }))
+  const slots = fn.remoteReturns ? fn.remoteReturns.map(r => ({ name: r.name, typeEnc: r.typeEnc }))
     : (() => { const { alternatives, orSelf, opaque } = returnShapes(fn); return alternatives.length === 1 && !orSelf && !opaque ? alternatives[0] : null; })();
-  if (!slots?.length || slots.some(x => !x.type || x.type === 'Anything' || x.type.includes('|'))) return null;
-  const pos = slots.filter(x => !x.name).map(x => x.type);
+  if (!slots?.length || slots.some(x => x.typeEnc === undefined || x.typeEnc === 'Anything' || isUnion(x.typeEnc))) return null;
+  const text = (x) => typeText(x.typeEnc);
+  const pos = slots.filter(x => !x.name).map(text);
   const named = slots.filter(x => x.name);
-  return named.length ? [...pos, Object.fromEntries(named.map(x => [x.name, x.type]))] : pos;
+  return named.length ? [...pos, Object.fromEntries(named.map(x => [x.name, text(x)]))] : pos;
 }
 
 // Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call"): a class
@@ -520,10 +524,14 @@ export function lowerBlockDelegation(actors) {
     }
     Object.defineProperty(block, 'forwardFns', { value: [...inherited.keys()], configurable: true });
     // What each one replies, tagged: a call for it that the base answers is tagged so.
-    block.inheritedTys = Object.fromEntries([...inherited].map(([n, owner]) => {
-      const decls = (byName.get(owner)?.functions || []).filter(f => f.name === n);
-      return [wireLabelOf(n), decls.length === 1 ? replyTy(decls[0]) : null];
-    }).filter(([, t]) => t));
+    // Its types are read when they're encoded, after the parse.
+    Object.defineProperty(block, 'inheritedTys', {
+      get: () => Object.fromEntries([...inherited].map(([n, owner]) => {
+        const decls = (byName.get(owner)?.functions || []).filter(f => f.name === n);
+        return [wireLabelOf(n), decls.length === 1 ? replyTy(decls[0]) : null];
+      }).filter(([, t]) => t)),
+      configurable: true, enumerable: false,
+    });
     // Which parent each inherited function is from: its layer, for a class with two.
     if (!block.membersOf) block.inheritedOwners = Object.fromEntries([...inherited].map(([n, owner]) => [wireLabelOf(n), owner]));
     const ownCells = new Set((block.stateVarDecls || []).map(d => d.name).filter(n => typeof n === 'string' && !n.startsWith('#') && !n.includes('__')));

@@ -15,7 +15,7 @@ import { withCellReady } from '../../init_order.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { RUNTIME_CALLBACKS, RUNTIME_IMPORT, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
-import { bindLocalType } from '../../inference.js';
+import { bindLocalType } from '../../type_infer.js';
 import {
   buildTypeEnv,
   buildSSAEnv,

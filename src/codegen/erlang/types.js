@@ -3,7 +3,7 @@
 import { erlStateKey, erlString } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { inferType } from '../../type_infer.js';
-import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { typeTag, typeText, envTypeOf } from '../enc_names.js';
 
 // The Erlang generator reads encoded types (src/type_enc.js): a type env maps a
@@ -15,7 +15,7 @@ const erlTypeTag = (ctx, t) => typeTag(ctx, t);
 
 // The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.
 function erlTyOf(ctx, t, valueExpr) {
-  const members = tyMembersEnc(t, u => erlTypeTag(ctx, u), ctx.typeDecls, u => typeText(u, ctx.depAliases))
+  const members = tyMembers(t, u => erlTypeTag(ctx, u), ctx.typeDecls, u => typeText(u, ctx.depAliases))
     .map(([k, tag]) => `{${erlString(k)}, ${erlString(tag)}}`).join(', ');
   return `bv_ty_of(${valueExpr}, [${members}])`;
 }

@@ -1,7 +1,7 @@
 import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../type_infer.js';
-import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isDynamicTy } from '../ty_tags.js';
 import { isFn } from '../../type_enc.js';
 import { typeText, classNameOf, leadsWithList } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, memberOp } from '../wire_labels.js';

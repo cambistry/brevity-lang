@@ -2,7 +2,7 @@
 import { INT_TYPE, intFromValue, intToValue, isIntValue } from './int_repr.js';
 import { DEC_TYPE, decFromValue, decToValue, isDecValue } from './dec_repr.js';
 import { inferType } from '../../type_infer.js';
-import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
+import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
 import { wireLabel } from '../wire_labels.js';
 import { isFn, members } from '../../type_enc.js';
 import { typeTag, typeText, envTypeOf, classNameOf } from '../enc_names.js';
@@ -472,7 +472,7 @@ export function rustTypeTag(t) {
 // The runtime tag of `valueExpr` (a Value), whose declared type `t` is a union or
 // `Anything`. Parenthesized so it sits in a `json!` as one expression.
 export function rustTyOf(t, valueExpr) {
-  const members = tyMembersEnc(t, rustTypeTag, G.ctx.typeDecls, u => typeText(u, G.ctx.depAliases))
+  const members = tyMembers(t, rustTypeTag, G.ctx.typeDecls, u => typeText(u, G.ctx.depAliases))
     .map(([k, tag]) => `(${JSON.stringify(k)}, ${JSON.stringify(tag)})`).join(', ');
   return `(bv_ty_of(&${valueExpr}, &[${members}]))`;
 }
