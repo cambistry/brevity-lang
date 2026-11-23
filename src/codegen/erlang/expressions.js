@@ -4,7 +4,8 @@ import { isDependencyValue } from '../dep_address.js';
 import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
 import { selfAddress, addressToken, memberOp, wireLabel, actorAddress } from '../wire_labels.js';
 import { publicLabel } from '../../singleton_classes.js';
-import { isActorRefType } from '../../actor_values.js';
+import { isFn, fnReply, members } from '../../type_enc.js';
+import { typeText, classNameOf, leadsWithList } from '../enc_names.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import {
@@ -16,7 +17,7 @@ import {
   erlSlotTag,
   erlTypeWireWrap,
 } from './types.js';
-import { inferExprType } from '../../inference.js';
+import { inferType } from '../../type_infer.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { ERL_BLOB_METHODS, ERL_TEXT_METHODS, ERL_GRAPHEME_METHODS, ERL_LIST_METHODS, dispatchMethod } from './method_tables.js';
 import { genErlCatchStatement } from './statements.js';
@@ -43,9 +44,9 @@ function erlDomHostAddr(ctx, tag) {
 // JS/Rust arg paths. See notes/type-authority-address-tags-2026-10-26.
 function erlArgHelpers(ctx, typeEnv, sCtx) {
   const argType = a => {
-    if (a.typeName) return a.typeName;
-    if (a.expr) return (typeEnv ? inferExprType(a.expr, typeEnv) : null) || inferLiteralType(a.expr) || null;
-    return (typeEnv ? typeEnv.get(a.name) : null) || null;
+    if (a.typeNameEnc !== undefined) return a.typeNameEnc;
+    if (a.expr) return (typeEnv ? inferType(a.expr, typeEnv) : undefined) ?? inferLiteralType(a.expr);
+    return typeEnv ? typeEnv.get(a.name) : undefined;
   };
   const argVal = a => {
     // A lambda argument to a cross-actor call travels as a routable self-address
@@ -111,18 +112,17 @@ function erlSetTarget(ctx, name) {
 // ('silent' | 'callback' | 'value'); null otherwise.
 export function refFieldInvocationErl(ctx, objExpr, rawName, typeEnv) {
   let t;
-  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeName;
+  if (objExpr?.type === 'TypeConstruction') t = objExpr.typeNameEnc;
   else if (objExpr?.type === 'Identifier' && typeEnv?.has(objExpr.name)) t = typeEnv.get(objExpr.name);
-  else t = inferExprType(objExpr, typeEnv);
-  const decl = (typeof t === 'string' && ctx.typeDecls?.has(t)) ? ctx.typeDecls.get(t) : null;
+  else t = inferType(objExpr, typeEnv);
+  const decl = ctx.typeDecls?.get(t) ?? null;
   if (!decl) return null;
   // A writing field keeps its `!` in its name: `run!`.
   const field = decl.fields?.some(ff => ff.name === rawName) || !rawName.endsWith('!') ? rawName : rawName.slice(0, -1);
   const f = decl.fields?.find(ff => ff.name === field);
   if (!f) return null;
-  const pt = f.paramType || '';
-  if (!/[-=~]>/.test(pt)) return { field, discipline: 'value' };
-  return { field, discipline: /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback' };
+  if (!isFn(f.paramTypeEnc)) return { field, discipline: 'value' };
+  return { field, discipline: fnReply(f.paramTypeEnc) === 'silent' ? 'silent' : 'callback' };
 }
 
 // Erlang expression reading the address a reference field holds (a binary).
@@ -180,7 +180,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
 // protected or private cell subscribed to from inside).
 export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@' + cell) {
   const value = `get(${erlStateKey(ctx, label)})`;
-  const tyPart = cellType ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
+  const tyPart = cellType !== undefined ? `, <<"ty">> => [${erlSlotTag(ctx, cellType, value)}]` : '';
   return [
     `${I}CellSubs${sfx}_ = case get({cell_subs, ${erlString(wireLabel(label))}}) of undefined -> []; L${sfx}_ -> L${sfx}_ end,`,
     // An in-process class instance's entry is told separately.
@@ -207,7 +207,7 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@'
 function genExpr(ctx, expr, typeEnv, sCtx) {
   if (!expr) return 'null';
   if (expr.type === 'CellNotify') {
-    const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellType, '    ', `N${ctx.ephCounter++}`, expr.label ?? '@' + expr.cell);
+    const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellTypeEnc, '    ', `N${ctx.ephCounter++}`, expr.label ?? '@' + expr.cell);
     return `begin\n${lines.join('\n')}\n    ok\nend`;
   }
 
@@ -235,7 +235,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const pieces = expr.parts.map(p => {
       if (p.kind === 'text') return `(${erlString(p.value)})/binary`;
       const code = genExprScalar(ctx, p.expr, typeEnv, sCtx);
-      const t = inferExprType(p.expr, typeEnv);
+      const t = inferType(p.expr, typeEnv);
       const coerced = t === 'Float' ? `bv_to_float(${code})` : code;
       return `(bv_str(${coerced}))/binary`;
     });
@@ -351,8 +351,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `<<${wrapBin(left)}/binary, ${wrapBin(right)}/binary>>`;
     }
     // List + List → concat (synonym of List.concat). Erlang lists chain via ++.
-    if (expr.op === '+' && typeof leftType === 'string' && typeof rightType === 'string'
-        && leftType.startsWith('List') && rightType.startsWith('List')) {
+    if (expr.op === '+' && leadsWithList(leftType) && leadsWithList(rightType)) {
       return `(${left} ++ ${right})`;
     }
     const isFloatOp = leftType === 'Float' || rightType === 'Float'
@@ -406,7 +405,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // calling convention: bare expressions for positional plus an optional
     // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields
     // whose value was not provided so absent optionals read as null.
-    const decl = ctx.typeDecls?.get(expr.typeName);
+    const decl = ctx.typeDecls?.get(expr.typeNameEnc);
     const fields = decl?.fields ?? [];
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
@@ -429,7 +428,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         fieldPairs.push(`${erlString(f.name)} => ${fieldValue(named[f.name])}`);
       }
     }
-    const head = `${erlString('__type')} => ${erlString(decl?.key ?? expr.typeName)}`;
+    const head = `${erlString('__type')} => ${erlString(decl?.key ?? typeText(expr.typeNameEnc, ctx.depAliases))}`;
     return `#{${head}${fieldPairs.length ? ', ' + fieldPairs.join(', ') : ''}}`;
   }
 
@@ -457,7 +456,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const pos = expr.args.filter(a => a.positional);
     const named = expr.args.filter(a => !a.positional);
     const items = [...pos.map(a => genExpr(ctx, a.value, typeEnv, sCtx)), ...(named.length ? [`#{${named.map(a => `${erlString(a.key)} => ${genExpr(ctx, a.value, typeEnv, sCtx)}`).join(', ')}}`] : [])];
-    const tys = [...pos.map(a => erlString(a.type ?? 'Anything')), ...(named.length ? [`#{${named.map(a => `${erlString(a.key)} => ${erlString(a.type ?? 'Anything')}`).join(', ')}}`] : [])];
+    const tyOf = (a) => erlString(a.typeEnc === undefined ? 'Anything' : typeText(a.typeEnc, ctx.depAliases));
+    const tys = [...pos.map(tyOf), ...(named.length ? [`#{${named.map(a => `${erlString(a.key)} => ${tyOf(a)}`).join(', ')}}`] : [])];
     return `bv_new_layer_(${erlString(expr.layer)}, ${erlString(expr.address)}, [${items.join(', ')}], [[${tys.join(', ')}]])`;
   }
   if (expr.type === 'OuterSet') {
@@ -513,7 +513,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // Check if callee is function-typed — route through self_send
     if (expr.callee?.type === 'Identifier') {
       const calleeType = ctx.currentTypeEnv?.get(expr.callee.name);
-      const isFnTyped = calleeType && (calleeType === 'Function' || (typeof calleeType === 'string' && /[-=~]>/.test(calleeType)));
+      const isFnTyped = calleeType === 'Function' || isFn(calleeType);
       if (isFnTyped) {
         return genErlLambdaVarCall(ctx, expr, typeEnv, sCtx);
       }
@@ -613,7 +613,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
   if (expr.type === 'MathMethodExpr') {
     const args = expr.args.map(a => genExprScalar(ctx, a, typeEnv, sCtx));
-    const argTypes = expr.args.map(a => exprType(a, typeEnv, ctx) || inferExprType(a, typeEnv));
+    const argTypes = expr.args.map(a => exprType(a, typeEnv, ctx) ?? inferType(a, typeEnv));
     const toFloat = (code, type) => {
       if (type === 'Integer') return `float(${code})`;
       if (type === 'Decimal') return `bv_dec_to_float(${code})`;
@@ -751,7 +751,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.type === 'AsExpr') {
     const inner = genExpr(ctx, expr.expr, typeEnv, sCtx);
     const isCall = expr.expr.type === 'FunctionCallExpr' || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
-    return `bv_as(${isCall ? `bv_object_one(bv_object_pack(${inner}))` : inner}, ${erlAsDesc(expr.desc)}, ${erlString(expr.typeName)})`;
+    return `bv_as(${isCall ? `bv_object_one(bv_object_pack(${inner}))` : inner}, ${erlAsDesc(expr.desc)}, ${erlString(typeText(expr.typeNameEnc, ctx.depAliases))})`;
   }
 
   if (expr.type === 'DecimalLiteral') {
@@ -791,9 +791,9 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // A cell typed with a class of this file holds one of its actors' pids: its own
     // cell, or one of an actor it's declared in (src/outer_reads.js).
     if (dotObjName && !sCtx?.selfSpawnedRefs?.has(dotObjName) && !ctx.localInstanceVars?.has(dotObjName)) {
-      const t = expr.object.outer ? expr.object.outerType
-        : (ctx.stateVarNames?.has(dotObjName) ? ctx.stateVarTypeEnv?.get(dotObjName) : null);
-      if (typeof t === 'string' && ctx.actorInfo?.has(t)) return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
+      const t = expr.object.outer ? expr.object.outerTypeEnc
+        : (ctx.stateVarNames?.has(dotObjName) ? ctx.stateVarTypeEnv?.get(dotObjName) : undefined);
+      if (ctx.actorInfo?.has(classNameOf(t))) return genErlRefCellSelfDispatch(ctx, expr, typeEnv, sCtx);
     }
     const isChild = !isRemote && ((expr.object.type === 'FunctionCallExpr' && expr.object.callee?.type === 'Identifier' && ctx.actorInfo.has(expr.object.callee.name)) ||
       (expr.object.type === 'RefRead' && sCtx?.childActorRefs?.has(expr.object.name)) ||
@@ -904,24 +904,24 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     // field names. Absent fields read as the atom null. Slice 10 extends
     // this to RefRead: type-valued state cells (`coords *Point`).
     const objStaticType = (() => {
-      if (expr.object?.type === 'TypeConstruction') return expr.object.typeName;
+      if (expr.object?.type === 'TypeConstruction') return expr.object.typeNameEnc;
       if (expr.object?.type === 'Identifier' && typeEnv?.has(expr.object.name)) {
         return typeEnv.get(expr.object.name);
       }
       if (expr.object?.type === 'RefRead') {
         const decl = (ctx.stateVarDecls || []).find(d => d.name === expr.object.name);
-        if (decl?.typeName) return decl.typeName;
+        if (decl?.typeNameEnc !== undefined) return decl.typeNameEnc;
         if (typeEnv?.has(expr.object.name)) return typeEnv.get(expr.object.name);
       }
-      return null;
+      return undefined;
     })();
-    if (objStaticType && ctx.typeDecls?.has(objStaticType)) {
+    if (objStaticType !== undefined && ctx.typeDecls?.has(objStaticType)) {
       const inner = genExpr(ctx, expr.object, typeEnv, sCtx);
       return `maps:get(${erlString(expr.property)}, ${inner}, null)`;
     }
     // Nothing says what an untyped local holds (a reply, say): read the field off
     // whatever value it is, as JS does.
-    const untyped = !objStaticType || objStaticType === 'Anything' || objStaticType === 'Object';
+    const untyped = objStaticType === undefined || objStaticType === null || objStaticType === 'Anything' || objStaticType === 'Object';
     if (untyped && (expr.object?.type === 'Identifier' || expr.object?.type === 'DotAccessExpr')) {
       return `bv_dot_(${erlString(expr.property)}, ${genExpr(ctx, expr.object, typeEnv, sCtx)})`;
     }
@@ -1162,10 +1162,11 @@ export function erlOuterCtx(ctx, cls) {
   return `bv_outer_ctx_(${erlString(enclosing.toLowerCase())})`;
 }
 
+// A cell typed `class` (or a union with it) holds an actor of the class it's in.
 function refCellTypeIsSelfBearing(ctx, cellName) {
   const t = ctx.stateVarTypeEnv?.get(cellName);
-  if (typeof t !== 'string') return false;
-  return t.split('|').some(m => m.trim() === 'class');
+  if (t === undefined) return false;
+  return members(t).some(m => ctx.actorInfo?.has(classNameOf(m)));
 }
 
 // Dot-call on a Self-bearing ref cell: the cell holds a PID. Read it,
@@ -1391,8 +1392,8 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
     if (e.type === 'BinaryExpr') {
       const left = genInnerExpr(e.left);
       const right = genInnerExpr(e.right);
-      const lType = inferExprType(e.left, typeEnv);
-      const rType = inferExprType(e.right, typeEnv);
+      const lType = inferType(e.left, typeEnv);
+      const rType = inferType(e.right, typeEnv);
       const decOp = lType === 'Decimal' || rType === 'Decimal'
         || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
       if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;
@@ -1603,7 +1604,7 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
 export function genHeldNewCall(ctx, expr, typeEnv, sCtx) {
   if (expr.callee?.type !== 'Identifier' && expr.callee?.type !== 'RefRead') return null;
   const t = typeEnv?.get?.(expr.callee.name) ?? ctx.currentTypeEnv?.get(expr.callee.name);
-  if (!isActorRefType(t)) return null;
+  if (t !== 'Actor') return null;
   ctx.usesHeldSend = true;
   const recv = genExpr(ctx, expr.callee, typeEnv, sCtx);
   const positional = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => ({ expr: a }));
@@ -1796,8 +1797,8 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
     if (e.type === 'BinaryExpr') {
       const left = genInner(e.left);
       const right = genInner(e.right);
-      const lType = inferExprType(e.left, typeEnv);
-      const rType = inferExprType(e.right, typeEnv);
+      const lType = inferType(e.left, typeEnv);
+      const rType = inferType(e.right, typeEnv);
       const decOp = lType === 'Decimal' || rType === 'Decimal'
         || e.left.type === 'DecimalLiteral' || e.right.type === 'DecimalLiteral';
       if (decOp) return `bv_dec_op(${left}, '${e.op}', ${right})`;

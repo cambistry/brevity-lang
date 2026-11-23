@@ -5,9 +5,11 @@ import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preamble
 import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
-import { isDynamicTy } from '../ty_tags.js';
+import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
+import { isFn } from '../../type_enc.js';
+import { typeText, classNameOf, hasType } from '../enc_names.js';
 import { returnsOnlySelf, slotOnlySelf } from '../../chains.js';
-import { bindLocalType } from '../../inference.js';
+import { bindLocalType, inferType } from '../../type_infer.js';
 import {
   inferLiteralType,
   buildSSAEnv,
@@ -21,7 +23,6 @@ import {
   erlSlotTag,
   erlTypeWireWrap,
 } from './types.js';
-import { inferExprType } from '../../inference.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import {
@@ -95,7 +96,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const params = expr.params || [];
   const bodyTypeEnv = new Map();
   for (const p of params) {
-    if (p.name && !p.rest) bodyTypeEnv.set(p.name, p.type || null);
+    if (p.name && !p.rest) bodyTypeEnv.set(p.name, p.typeEnc);
   }
   const bodySCtx = {
     restVars: new Set(),
@@ -135,7 +136,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   const genArgVal = a => a.expr
     ? genExpr(ctx, a.expr, bodyTypeEnv, bodySCtx)
     : erlVarName(a.name);
-  const typeOf = a => a.typeName || (a.expr ? inferLiteralType(a.expr) : null) || null;
+  const typeOf = a => a.typeNameEnc ?? (a.expr ? inferLiteralType(a.expr) : undefined);
   // Authority-address tag for a subscribe arg; the payload stays a live value
   // because this op is shared with in-process self/child delivery.
   const tagOf = a => erlSlotTag(ctx, typeOf(a), (a.expr ? a.expr.type === 'Identifier' : true) ? genArgVal(a) : null);
@@ -232,13 +233,14 @@ function genErlDepConstructorAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines)
   lines.push(`${I}${varName} = await_new_response_(New_id_${seq}),`);
 }
 
-function genErlAsSend(ctx, varName, typeName, target, I, lines) {
+// `type` is encoded.
+function genErlAsSend(ctx, varName, type, target, I, lines) {
   const v = erlSendVars(ctx);
   lines.push(`${I}${v.seq} = bv_next_seq_(),`);
   lines.push(`${I}${v.id} = integer_to_binary(${v.seq}),`);
   // `to` is bare: an address value held in a cell or local loses its brackets.
   const to = target.startsWith('<<"') ? target : `bv_to_addr_(${target})`;
-  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeName)}, <<"$as">>], <<"to">> => ${to}},`);
+  lines.push(`${I}${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [${erlString(typeText(type, ctx.depAliases))}, <<"$as">>], <<"to">> => ${to}},`);
   lines.push(`${I}io:put_chars([json_encode(${v.msg}), $\n]),`);
   lines.push(`${I}${varName} = hd(await_response_(${v.id})),`);
 }
@@ -252,7 +254,7 @@ function genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, line
   lines.push(`${I}New_msg_${seq} = #{<<"id">> => New_id_${seq}, ${erlNewOpEntries(ctx, s.value.args, typeEnv, stmtCtx)}, <<"to">> => ${erlString(targetName)}},`);
   lines.push(`${I}io:put_chars([json_encode(New_msg_${seq}), $\n]),`);
   lines.push(`${I}New_addr_${seq} = await_new_response_(New_id_${seq}),`);
-  genErlAsSend(ctx, varName, s.typeName, `New_addr_${seq}`, I, lines);
+  genErlAsSend(ctx, varName, s.typeNameEnc, `New_addr_${seq}`, I, lines);
 }
 
 function genLocals(ctx, body, typeEnv, sCtx, indent) {
@@ -342,14 +344,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       // PID/u32 and track the variable as a spawn-ref so .method() dispatch
       // routes via {bv_dispatch, ...}. The runtime value of an in-process
       // instance ref is the Erlang Pid itself.
-      if (s.type === 'TypedAssign' && s.typeName && ctx.actorInfo?.has(s.typeName) &&
-          classNeedsSpawnedInstances(ctx.actorInfo.get(s.typeName)?.actor) &&
+      if (s.type === 'TypedAssign' && ctx.actorInfo?.has(classNameOf(s.typeNameEnc)) &&
+          classNeedsSpawnedInstances(ctx.actorInfo.get(classNameOf(s.typeNameEnc))?.actor) &&
           s.value && s.value.type !== 'FunctionCallExpr' &&
           s.value.type !== 'Identifier') {
         const raw = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}${varName} = ${raw},`);
         sCtx.selfSpawnedRefs?.add(s.name);
-        if (sCtx.selfSpawnedClassMap) sCtx.selfSpawnedClassMap.set(s.name, s.typeName);
+        if (sCtx.selfSpawnedClassMap) sCtx.selfSpawnedClassMap.set(s.name, classNameOf(s.typeNameEnc));
         continue;
       }
 
@@ -373,7 +375,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
 
       if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.callee.name)) {
-        const asClause = findErlAsClauseMatch(ctx, s.typeName, s.value.callee.name);
+        const asClause = findErlAsClauseMatch(ctx, s.typeNameEnc, s.value.callee.name);
         if (asClause) {
           if (asClause.memoized) {
             const actorName = s.value.callee.name;
@@ -409,7 +411,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
               lines.push(`${I}${childPrefix}_init([${initArgs}]),`);
             }
             // Extract memoized value via child dispatch
-            lines.push(`${I}{ok, [${varName}], _} = ${childPrefix}_handle_op(<<"$as">>, #{}, ${erlString(s.typeName)}, <<>>, <<>>),`);
+            lines.push(`${I}{ok, [${varName}], _} = ${childPrefix}_handle_op(<<"$as">>, #{}, ${erlString(typeText(s.typeNameEnc, ctx.depAliases))}, <<>>, <<>>),`);
             continue;
           }
           lines.push(`${I}${varName} = ${genExpr(ctx, asClause.expr, typeEnv, stmtCtx)},`);
@@ -431,7 +433,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           lines.push(`${I}${varName} = bv_object_one(bv_object_pack(await_response_(${v.id}))),`);
           continue;
         }
-        genErlAsSend(ctx, varName, s.typeName, erlString(ctx.depAddress(s.value.name)), I, lines);
+        genErlAsSend(ctx, varName, s.typeNameEnc, erlString(ctx.depAddress(s.value.name)), I, lines);
         continue;
       }
 
@@ -440,28 +442,28 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const actorName = stmtCtx.childActorRefs.get(s.value.name);
         const prefix = `child_${actorName.toLowerCase()}`;
         const n = ctx.ephCounter++;
-        lines.push(`${I}{ok, Eph_as_re_${n}_, _} = ${prefix}_handle_op(<<"$as">>, #{}, ${erlString(s.typeName)}, <<"0">>, <<"__parent">>),`);
+        lines.push(`${I}{ok, Eph_as_re_${n}_, _} = ${prefix}_handle_op(<<"$as">>, #{}, ${erlString(typeText(s.typeNameEnc, ctx.depAliases))}, <<"0">>, <<"__parent">>),`);
         lines.push(`${I}${varName} = hd(Eph_as_re_${n}_),`);
         continue;
       }
       // ...or from an instance process.
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(s.value.name)) {
         const pid = genExpr(ctx, { type: stmtCtx.refVars?.has(s.value.name) ? 'RefRead' : 'Identifier', name: s.value.name }, typeEnv, stmtCtx);
-        lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"$as">>, ${erlString(s.typeName)})),`);
+        lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"$as">>, ${erlString(typeText(s.typeNameEnc, ctx.depAliases))})),`);
         continue;
       }
 
       // Typed assign from remote actor ref (state var): n Integer = s → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
         const target = `get(${erlStateKey(ctx, s.value.name)})`;
-        genErlAsSend(ctx, varName, s.typeName, target, I, lines);
+        genErlAsSend(ctx, varName, s.typeNameEnc, target, I, lines);
         continue;
       }
       // Typed assign from local actor ref (handler-scoped): n Integer = t → send [Type, as]
       if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.localInstanceVars?.has(s.value.name)) {
         const resolved = resolveSSAName(s.value.name, ssaEnv);
         const target = erlVarName(resolved);
-        genErlAsSend(ctx, varName, s.typeName, target, I, lines);
+        genErlAsSend(ctx, varName, s.typeNameEnc, target, I, lines);
         continue;
       }
 
@@ -597,14 +599,14 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         }
         lines.push(`${I}${varName} = ${erlString(actorName.toLowerCase())},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
-        if (s.typeName === 'Object') {
+        if (s.typeNameEnc === 'Object') {
           lines.push(`${I}${varName} = ${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)},`);
         } else {
           lines.push(`${I}${varName} = bv_object_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
         }
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
         lines.push(`${I}${varName} = bv_object_one(${genActorFnCallExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
-      } else if (s.type === 'TypedAssign' && s.typeName === 'Object' && s.value?.type === 'ObjectConstructor') {
+      } else if (s.type === 'TypedAssign' && s.typeNameEnc === 'Object' && s.value?.type === 'ObjectConstructor') {
         lines.push(`${I}${varName} = ${genExpr(ctx, s.value, typeEnv, stmtCtx)},`);
       } else if (s.type === 'TypedAssign' && s.value?.type === 'ObjectConstructor') {
         lines.push(`${I}${varName} = bv_object_one(${genExpr(ctx, s.value, typeEnv, stmtCtx)}),`);
@@ -614,7 +616,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && (() => {
         const ct = ctx.currentTypeEnv?.get(s.value.callee.name);
-        return ct && (ct === 'Function' || (typeof ct === 'string' && /[-=~]>/.test(ct)));
+        return ct === 'Function' || isFn(ct);
       })()) {
         lines.push(`${I}${varName} = bv_object_one(${genErlLambdaVarCall(ctx, s.value, typeEnv, stmtCtx)}),`);
       } else if (s.value?.type === 'FunctionCallExpr') {
@@ -690,7 +692,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           && (stmtCtx.selfSpawnedRefs?.has(src.object.name) || stmtCtx.childActorRefs?.has(src.object.name))) {
         const declared = [...(ctx.actorInfo?.values() || [])].flatMap(i => i.actor?.functions || []).filter(f => f.name === '@' + src.method);
         for (const item of s.pattern) {
-          if (item.name && !item.type && !item.discard && declared.length > 0 && declared.every(fn => slotOnlySelf(fn, item))) stmtCtx.selfSpawnedRefs?.add(item.name);
+          if (item.name && item.typeEnc === undefined && !item.discard && declared.length > 0 && declared.every(fn => slotOnlySelf(fn, item))) stmtCtx.selfSpawnedRefs?.add(item.name);
         }
       }
       // A remote's self-return yields an address, so the new name is an instance.
@@ -859,11 +861,11 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Remote dep: post to stdout with bare verb + angle-delimited alias + sel.
         // Include `ty` so the remote's schema_required check passes.
         const typeHint = s.value?.type === 'Identifier'
-          ? (typeEnv.get(s.value.name) || null)
-          : (inferLiteralType(s.value) || null);
+          ? typeEnv.get(s.value.name)
+          : inferLiteralType(s.value);
         // A union or `Anything` is tagged from the value (named, so it is read once).
-        const hintTag = !typeHint ? null
-          : !isDynamicTy(typeHint) ? `<<"${typeHint}">>`
+        const hintTag = typeHint === undefined ? null
+          : !isDynamicTy(typeHint) ? `<<"${typeText(typeHint, ctx.depAliases)}">>`
           : s.value?.type === 'Identifier' ? erlTyOf(ctx, typeHint, val) : null;
         const tyField = hintTag
           ? `, <<"ty">> => [[${hintTag}]]`
@@ -1300,9 +1302,8 @@ function genDestructureAssign(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) 
   // Typed-value source: tagged map `#{<<"__type">> => <<"Name">>, <<"x">> => ...}` —
   // read fields by name via maps:get. Validation in src/validate.js rejects
   // over-arity and undeclared-field references before reaching codegen.
-  const sourceType = inferExprType(s.source, typeEnv);
-  const typeDecl = (typeof sourceType === 'string' && ctx.typeDecls?.has(sourceType))
-    ? ctx.typeDecls.get(sourceType) : null;
+  const sourceType = inferType(s.source, typeEnv);
+  const typeDecl = ctx.typeDecls?.get(sourceType) ?? null;
   if (typeDecl) {
     const fields = typeDecl.fields || [];
     let srcRef;
@@ -1448,10 +1449,11 @@ function genParamDestructure(params, indent, { ctx = null, afterBind = null } = 
 
   // An actor one of our classes built arrives from the wire as its address, which
   // names one we published: its process.
-  const builtByClass = (type) => (ctx?.program?.actors || []).some(a => a.name === type && !a.singletonOf && !a.membersOf);
-  const wrapParam = (expr, type) => type === 'Decimal' ? `bv_dec_from_number(${expr})`
-    : builtByClass(type) ? `bv_held_pid_(${expr})` : expr;
-  const typeEnv = new Map(params.map(p => [p.name, p.type]));
+  // So may a param with no type.
+  const builtByClass = (p) => !hasType(p) || (ctx?.program?.actors || []).some(a => a.name === classNameOf(p.typeEnc) && !a.singletonOf && !a.membersOf);
+  const wrapParam = (expr, p) => p.typeEnc === 'Decimal' ? `bv_dec_from_number(${expr})`
+    : builtByClass(p) ? `bv_held_pid_(${expr})` : expr;
+  const typeEnv = new Map(params.map(p => [p.name, p.typeEnc]));
   // An expression default runs only when the arg is missing.
   const isExprDefault = p => p.defaultValue && !isLiteralDefault(p.defaultValue);
   const exprDefault = p => {
@@ -1472,14 +1474,14 @@ function genParamDestructure(params, indent, { ctx = null, afterBind = null } = 
       if (p.defaultValue) {
         const dv = isExprDefault(p) ? exprDefault(p) : genErlDefaultValue(p.defaultValue);
         const raw = `case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dv} end`;
-        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
+        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p)},`);
       } else {
         const raw = `lists:nth(${posIdx + 1}, S_pos)`;
-        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p.type)},`);
+        lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(raw, p)},`);
       }
     } else {
       const key = p.key || p.name;
-      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(fromMap(hasPositional ? 'S_named' : 'Payload', key, p), p.type)},`);
+      lines.push(`${I}${erlVarName(p.name)} = ${wrapParam(fromMap(hasPositional ? 'S_named' : 'Payload', key, p), p)},`);
     }
     if (afterBind) lines.push(...afterBind(p));
   }
@@ -1491,10 +1493,11 @@ function findErlAsClauseMatch(ctx, targetType, actorName) {
   if (!ctx.actorInfo.has(actorName)) return null;
   const info = ctx.actorInfo.get(actorName);
   if (!info.asClauses || info.asClauses.length === 0) return null;
-  if (targetType === actorName) return null;
+  if (classNameOf(targetType) === actorName) return null;
+  // `targetType` and each clause's are encoded.
   for (const clause of info.asClauses) {
-    if (!clause.negated && clause.targetType === targetType) return clause;
-    if (clause.negated && clause.targetType !== targetType) return clause;
+    if (!clause.negated && clause.targetTypeEnc === targetType) return clause;
+    if (clause.negated && clause.targetTypeEnc !== targetType) return clause;
   }
   return null;
 }
@@ -1533,9 +1536,9 @@ function genReplyBody(ctx, fields, typeEnv, sCtx) {
 }
 
 function genReplyFieldVal(ctx, f, typeEnv, sCtx) {
-  const slotType = f.type
-    || (f.name && typeEnv?.get(f.name))
-    || (f.expr && inferExprType(f.expr, typeEnv));
+  const slotType = f.typeEnc
+    ?? (f.name ? typeEnv?.get(f.name) : undefined)
+    ?? (f.expr ? inferType(f.expr, typeEnv) : undefined);
   const wireWrap = (raw) => {
     if (slotType === 'Object') return `bv_object_wire(${raw})`;
     return erlTypeWireWrap(ctx, raw, slotType) || raw;
@@ -1572,15 +1575,15 @@ function genReplyNamedMap(ctx, named, typeEnv, sCtx) {
       else if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined && sCtx.ssaEnv.assignments.some(a => a.name === f.sigil)) val = erlVarName(resolveSSAName(f.sigil, sCtx.stmtIdx, sCtx.ssaEnv));
       else if (typeEnv?.has(f.sigil)) val = erlVarName(f.sigil);
       else val = erlString(f.sigil);
-      const slotType = f.type || typeEnv?.get(f.sigil);
+      const slotType = f.typeEnc ?? typeEnv?.get(f.sigil);
       return `${erlString(f.sigil)} => ${wireWrap(val, slotType)}`;
     }
     if (f.key !== undefined) {
       // A call to a function gives back its whole reply; the field holds its value.
       const val = f.value ? genExprScalar(ctx, f.value, typeEnv, sCtx) : erlVarName(f.key);
-      const slotType = f.type
-        || (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv?.get(f.value.name) : null)
-        || inferExprType(f.value, typeEnv);
+      const slotType = f.typeEnc
+        ?? (f.value?.type === 'Identifier' || f.value?.type === 'RefRead' ? typeEnv?.get(f.value.name) : undefined)
+        ?? inferType(f.value, typeEnv);
       return `${erlString(f.key)} => ${wireWrap(val, slotType)}`;
     }
     return '';
@@ -1618,8 +1621,8 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
     if (f.expr?.type === 'SelfValue') { posTypes.push(erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))); continue; }
-    const t = f.type || (f.name ? typeEnv.get(f.name) : null) || inferExprType(f.expr || f.value, typeEnv);
-    if (!t) return null;
+    const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr || f.value, typeEnv);
+    if (t === undefined) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
     if (tag === null) return null;
     posTypes.push(tag);
@@ -1631,14 +1634,14 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
     if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
-      t = f.type || typeEnv.get(f.sigil);
+      t = f.typeEnc ?? typeEnv.get(f.sigil);
       varName = f.sigil;
     } else if (f.key !== undefined) {
       key = f.key;
       varName = f.value?.type === 'Identifier' ? f.value.name : (f.value?.type === 'RefRead' ? f.value.name : null);
-      t = f.type || (varName ? typeEnv.get(varName) : null) || inferExprType(f.value, typeEnv);
+      t = f.typeEnc ?? (varName ? typeEnv.get(varName) : undefined) ?? inferType(f.value, typeEnv);
     }
-    if (!key || !t) return null;
+    if (!key || t === undefined) return null;
     const tag = slotTag(t, varName);
     if (tag === null) return null;
     namedTypes.push(`${erlString(key)} => ${tag}`);

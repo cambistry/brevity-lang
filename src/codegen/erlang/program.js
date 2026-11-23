@@ -5,7 +5,7 @@ import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { publicLabel, replyTy } from '../../singleton_classes.js';
-import { expectedTag } from '../../actor_values.js';
+import { paramTag, typeText, classNameOf, hasGeneric, hasType, dependencyAliases, envTypeOf } from '../enc_names.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
@@ -255,7 +255,7 @@ function genFn(ctx, fn) {
   const posAt = new Map();
   let posCount = 0;
   for (const p of params) if (p.positional) posAt.set(p, posCount++);
-  const paramTypes = new Map(params.map(p => [p.name, p.type]));
+  const paramTypes = new Map(params.map(p => [p.name, p.typeEnc]));
   // An expression default runs only when the arg is missing.
   const dvOf = p => isLiteralDefault(p.defaultValue)
     ? genErlDefaultValue(p.defaultValue)
@@ -265,7 +265,7 @@ function genFn(ctx, fn) {
       const posIdx = posAt.get(p);
       if (p.defaultValue) {
         paramLines.push(`${I}${erlVarName(p.name)} = case length(S_pos) > ${posIdx} of true -> lists:nth(${posIdx + 1}, S_pos); false -> ${dvOf(p)} end,`);
-      } else if ((ctx.program?.actors || []).some(a => a.name === p.type && !a.singletonOf && !a.membersOf)) {
+      } else if (!hasType(p) || (ctx.program?.actors || []).some(a => a.name === classNameOf(p.typeEnc) && !a.singletonOf && !a.membersOf)) {
         // An actor one of our classes built: from the wire it's its address,
         // which names one we published.
         paramLines.push(`${I}${erlVarName(p.name)} = bv_held_pid_(lists:nth(${posIdx + 1}, S_pos)),`);
@@ -551,7 +551,7 @@ function genDispatch(ctx, publicFns, actor = null) {
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
     if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
-    if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
+    if (variants.length === 1 && !variants[0].params.some(p => hasType(p) && !p.rest)) {
       // Single function, no type check needed — simple clause
       clauses.push(genPublicFn(ctx, variants[0], false));
     } else {
@@ -594,14 +594,14 @@ function genDispatch(ctx, publicFns, actor = null) {
   for (const clause of asClauses) {
     const val = genExpr(ctx, clause.expr, {}, {});
     if (clause.negated) {
-      clauses.push(`handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+      clauses.push(`handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))} ->\n    {ok, [${val}], [Payload]}`);
     } else {
-      clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
+      clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}, _Id, _From) ->\n    {ok, [${val}], [${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}]}`);
     }
   }
   // Memoized return-as dispatch arm
-  if (ctx.mainActorReturnAs) {
-    const t = ctx.mainActorReturnAs;
+  if (ctx.mainActorReturnAs !== undefined) {
+    const t = typeText(ctx.mainActorReturnAs, ctx.depAliases);
     clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
@@ -620,10 +620,11 @@ function isSilentGuard(s, silent) {
 
 // The value check for an in-process call to one clause of an overloaded
 // function, or null when no param has a scalar type a value could contradict.
-function erlValueFit(params) {
+function erlValueFit(ctx, params) {
   if (params.some(p => p.rest)) return null;
   const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
-  const typeOf = p => (p.type && !/\bof\b/.test(p.type) ? p.type : 'Anything');
+  // A param's type as `bv_values_fit` reads it; a generic one, anything.
+  const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
   if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
@@ -644,7 +645,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   }
 
   // Build type check expression
-  const typedParams = params.filter(p => p.type && !p.rest);
+  const typedParams = params.filter(p => hasType(p) && !p.rest);
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
 
@@ -653,8 +654,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   let matchExpr = '';
   if (!skipTypeCheck) {
     if (positionalTyped.length > 0) {
-      const posTypes = positionalTyped.map(p => erlString(expectedTag(p.type, ctx.program?.actors))).join(', ');
-      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(expectedTag(p.type, ctx.program?.actors))}}`).join(', ');
+      const posTypes = positionalTyped.map(p => erlString(paramTag(ctx, p))).join(', ');
+      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(paramTag(ctx, p))}}`).join(', ');
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
         // With nothing required, a call can leave out every arg, and so every tag.
@@ -665,13 +666,13 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       }
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(expectedTag(p.type, ctx.program?.actors))}}`).join(', ');
+      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(paramTag(ctx, p))}}`).join(', ');
       matchExpr = `match_types(Message, [${pairs}])`;
     }
   }
   // An overloaded clause's in-process call carries values, not tags: its values
   // pick the clause. (S_pos / S_named are bound before an overload's guard.)
-  const valueFit = hasOverloads && matchExpr ? erlValueFit(params) : null;
+  const valueFit = hasOverloads && matchExpr ? erlValueFit(ctx, params) : null;
   const typeCheck = !matchExpr ? ''
     : valueFit ? `(case ${exempt} of true -> ${valueFit}; false -> ${matchExpr} end)`
     : `(${exempt} orelse ${matchExpr})`;
@@ -707,7 +708,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   }
   const childActorRefs = new Map();
   // A param typed as a class of this file holds one of its actors.
-  const classParams = params.filter(p => ctx.actorInfo?.has(p.type)).map(p => p.name);
+  const classParams = params.filter(p => ctx.actorInfo?.has(classNameOf(p.typeEnc))).map(p => p.name);
   const sCtx = { restVars, refVars, childActorRefs, selfSpawnedRefs: new Set([...fileChildRefs(ctx), ...classParams]), ssaEnv: buildSSAEnv(body) };
 
   const paramLines = genParamDestructure(params, I, { ctx });
@@ -885,7 +886,7 @@ function genCamInit(ctx, actor) {
   const initParams = actor.initParams || [];
   const stateVarDecls = actor.stateVarDecls || [];
 
-  const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeName]));
+  const stateVarEnv = new Map(stateVarDecls.map(d => ['$' + d.name, d.typeNameEnc]));
   const typeEnv = buildTypeEnv(initParams, initBody, ctx.typeDecls);
   // Merge state var types into typeEnv
   for (const [k, v] of stateVarEnv) typeEnv.set(k, v);
@@ -917,7 +918,7 @@ function genCamInit(ctx, actor) {
   if (pendingCells.length) lines.push(`${I}bv_join_all_(),`);
 
   // Memoized return-as value for main actor
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
     const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
     lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
   }
@@ -982,7 +983,7 @@ function genChildHandleOp(ctx, actor) {
   const publicByName = new Map();
   for (const h of childPublicFns) publicByName.set(h.name, [...(publicByName.get(h.name) || []), h]);
   for (const [op, variants] of publicByName) {
-    if (variants.length === 1 && !variants[0].params.some(p => p.type && !p.rest)) {
+    if (variants.length === 1 && !variants[0].params.some(p => hasType(p) && !p.rest)) {
       const inner = genPublicFnInner(ctx, variants[0], { skipTypeCheck: true });
       clauses.push(`${prefix}_handle_op(${erlOp(op)}, Message, Payload, _Id, _From) ->\n${inner}`);
       continue;
@@ -1043,14 +1044,14 @@ function genChildHandleOp(ctx, actor) {
   for (const clause of (actor.asClauses || [])) {
     const val = genExpr(ctx, clause.expr, {}, {});
     if (clause.negated) {
-      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(clause.targetType)} ->\n    {ok, [${val}], [Payload]}`);
+      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))} ->\n    {ok, [${val}], [Payload]}`);
     } else {
-      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(clause.targetType)}, _Id, _From) ->\n    {ok, [${val}], [${erlString(clause.targetType)}]}`);
+      clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}, _Id, _From) ->\n    {ok, [${val}], [${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}]}`);
     }
   }
   // Memoized return-as dispatch arm for child actor
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
-    const t = actor.declarationReturn.typeName;
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
+    const t = typeText(actor.declarationReturn.typeNameEnc, ctx.depAliases);
     clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
@@ -1073,7 +1074,7 @@ function genChildInit(ctx, actor) {
   const initBody = withCellReady(actor.initBody || [], pendingCells);
   const inheritedIngests = actor._inheritedIngests || [];
 
-  const hasReturnAs = !!(actor.declarationReturn && actor.declarationReturn.typeName);
+  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
   if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
 
   const I = '    ';
@@ -1138,7 +1139,7 @@ function genChildInit(ctx, actor) {
   }
 
   // Memoized return-as value
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
     const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
     lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
   }
@@ -1245,7 +1246,7 @@ function genChildActorCode(ctx, actors) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }
@@ -1267,9 +1268,9 @@ function genChildActorCode(ctx, actors) {
     savedTypeEnv = ctx.stateVarTypeEnv;
     ctx.stateVarTypeEnv = new Map([
       // The names this class reads from the actors it's declared in (src/outer_reads.js); its own win.
-      ...[...outerNamesFor(ctx.program, actor)].filter(([, t]) => t),
-      ...childStateDecls.map(v => [v.name, v.typeName]),
-      ...childParams.map(p => [p.name, p.type || 'Anything']),
+      ...[...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined),
+      ...childStateDecls.map(v => [v.name, v.typeNameEnc]),
+      ...childParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
       ...childCoercions.map(s => [s.name, 'Anything']),
     ]);
     ctx.childStatePrefix = name.toLowerCase();
@@ -1570,13 +1571,13 @@ function genProgram(ctx, actor, allActors, options = {}) {
     }
   }
   ctx.stateVarTypeEnv = new Map([
-    ...stateVarDecls.map(v => [v.name, v.typeName]),
-    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+    ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
+    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
   ]);
 
   // Set main actor return-as type before dispatch generation
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
-    ctx.mainActorReturnAs = actor.declarationReturn.typeName;
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
+    ctx.mainActorReturnAs = actor.declarationReturn.typeNameEnc;
   }
 
   // Generate child actor code
@@ -1696,8 +1697,8 @@ function genProgram(ctx, actor, allActors, options = {}) {
   if (pendingCells.length) blockLines.push(`    bv_pending_cells_([${pendingCells.map(n => erlString(wireLabel(n))).join(', ')}])`);
   const ownFnNames = new Set((actor.functions || []).map(f => f.name));
   const ownCallEnv = new Map([
-    ...stateVarDecls.map(v => [v.name, v.typeName]),
-    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+    ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
+    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
   ]);
   const declOf = new Map(stateVarDecls.map(v => [v.name, v]));
   for (const s of withCellReady(actor.initBody || [], pendingCells)) {
@@ -1767,10 +1768,10 @@ ${putLines},
   stateInitLines.push(...blockLines);
 
   // Memoized return-as value for main actor
-  if (actor.declarationReturn && actor.declarationReturn.typeName) {
+  if (actor.declarationReturn?.typeNameEnc !== undefined) {
     const raTypeEnv = new Map([
-      ...stateVarDecls.map(v => [v.name, v.typeName]),
-      ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+      ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
+      ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
     ]);
     const val = genExpr(ctx, actor.declarationReturn.expr, raTypeEnv, {});
     stateInitLines.push(`    put(${erlStateKey(ctx, '__returnAs')}, ${val})`);
@@ -1791,14 +1792,14 @@ ${putLines},
 
   // Test harness function — get/set/update/op
   const stateTypeMap = new Map([
-    ...stateVarDecls.map(v => [v.name, v.typeName]),
-    ...constructorParams.map(p => [p.name, p.type || 'Anything']),
+    ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
+    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
   ]);
   const testGetClauses = allStateNames.map(n =>
     `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`,
   ).join(';\n');
   const testTypeClauses = allStateNames.map(n =>
-    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, stateTypeMap.get(n) || 'Anything'))}`,
+    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, stateTypeMap.get(n) ?? 'Anything'))}`,
   ).join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
@@ -1836,7 +1837,7 @@ ${putLines},
       const getClauses = r.stateVars.map(v =>
         `                            ${erlOp(v.name)} -> bv_inst_get_(${pid}, ${erlStateKey(childCtx, v.name)});\n`).join('');
       const typeClauses = r.stateVars.map(v =>
-        `                            ${erlOp(v.name)} -> ${erlString(v.typeName || 'Anything')};\n`).join('');
+        `                            ${erlOp(v.name)} -> ${erlString(typeText(v.typeNameEnc ?? 'Anything', ctx.depAliases))};\n`).join('');
       return `            ${erlString(r.path)} ->
                 ${resolve},
                 case maps:find(<<"get">>, Test) of
@@ -2234,14 +2235,14 @@ bv_held_addr_(A_) -> A_.
   // address, or the alias spelling of its authority), `bv_type_fields/1` its
   // declared field names, and `bv_source_key/1` the key of the type the source
   // calls a name, for matching a tag against a param's type.
-  const registry = registryEntries(ctx.program, ctx.typeDecls);
+  const registry = registryEntries(ctx.program, ctx.typeTable);
   const typeArms = [
     ...registry.filter(([lookup, key]) => lookup === key)
       .map(([, key, fields]) => `bv_type_fields(${erlString(key)}) -> [${fields.map(f => erlString(f.name)).join(', ')}];`),
     'bv_type_fields(_) -> undefined.',
     ...registry.map(([lookup, key]) => `bv_type_name(${erlString(lookup)}) -> ${erlString(key)};`),
     'bv_type_name(_) -> undefined.',
-    ...[...ctx.typeDecls.entries()].map(([name, e]) => `bv_source_key(${erlString(name)}) -> ${erlString(e.key)};`),
+    ...[...ctx.typeTable.entries()].map(([name, e]) => `bv_source_key(${erlString(name)}) -> ${erlString(e.key)};`),
     'bv_source_key(_) -> undefined.',
   ].join('\n');
   const bvTypeFieldsBlock = `${typeArms}\n\n` +
@@ -2372,7 +2373,7 @@ export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
   // A class with no functions of its own still has to be constructible.
-  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || (a.declarationReturn && a.declarationReturn.typeName);
+  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || (a.declarationReturn?.typeNameEnc !== undefined);
   const active = ast.actors.filter(isActive);
   if (active.length === 0) return '';
 
@@ -2395,11 +2396,14 @@ export function codegenErlang(ast, options = {}) {
   // Every type this program knows, by the name the source uses for it, with
   // the address that identifies it (src/codegen/type_table.js). A service's
   // type is also known by its bare name, for what its document says.
-  ctx.typeDecls = buildTypeTable(ast);
+  ctx.typeTable = buildTypeTable(ast);
   for (const info of Object.values(ast.crossModuleTypes || {})) {
-    const entry = [...ctx.typeDecls.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
-    if (entry && !ctx.typeDecls.has(info.name)) ctx.typeDecls.set(info.name, entry);
+    const entry = [...ctx.typeTable.values()].find(e => e.name === info.name && e.authority === (info.path || ''));
+    if (entry && !ctx.typeTable.has(info.name)) ctx.typeTable.set(info.name, entry);
   }
+  // The generator reads encoded types, so it finds a type by its address.
+  ctx.typeDecls = new Map([...ctx.typeTable.values()].map(e => [e.key, e]));
+  ctx.depAliases = dependencyAliases(ast);
 
   // Include actors that inherit public functions from superclasses even if they have none of their own
   const activeNames = new Set(active.map(a => a.name).filter(Boolean));
@@ -2425,8 +2429,8 @@ export function codegenErlang(ast, options = {}) {
   for (const a of active) {
     if (a.name) {
       const asClauses = [...(a.asClauses || [])];
-      if (a.declarationReturn && a.declarationReturn.typeName) {
-        asClauses.push({ targetType: a.declarationReturn.typeName, negated: false, expr: a.declarationReturn.expr, memoized: true });
+      if (a.declarationReturn?.typeNameEnc !== undefined) {
+        asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
       }
       ctx.actorInfo.set(a.name, { actor: a, asClauses });
     }

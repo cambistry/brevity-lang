@@ -4,7 +4,7 @@ import * as AST from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
 import { members as unionMembers } from '../../type_enc.js';
 import { isDynamicTyEnc as isDynamicTy } from '../ty_tags.js';
-import { typeText, dependencyAliases, leadsWithList } from '../enc_names.js';
+import { typeText, dependencyAliases, leadsWithList, envTypeOf } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.js';
@@ -762,7 +762,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // The file's names a class reads (src/outer_reads.js); its own come after, and win.
     ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined) : []),
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-    ...constructorParams.map(p => [p.name, p.typeEnc ?? 'Anything']),
+    ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything']),
   ]);
 
   // Ref-captured-by map: which non-silent public fns reference each ref in
@@ -1373,8 +1373,8 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
     }
     if ('get' in t) {
       const _vals = {${[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`).join(',')} };
-      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeNameEnc === undefined ? undefined : typeText(v.typeNameEnc, ctx.depAliases))}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(typeText(p.typeEnc ?? 'Anything', ctx.depAliases))}`)].join(',')} };
-      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, p.typeEnc ?? 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
+      const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeNameEnc === undefined ? undefined : typeText(v.typeNameEnc, ctx.depAliases))}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(typeText(envTypeOf(p) ?? 'Anything', ctx.depAliases))}`)].join(',')} };
+      const _tyOf = {${[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, envTypeOf(p) ?? 'Anything'])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`).join(',')} };
       let _v = t.get in _vals ? _vals[t.get] : null;
       if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;

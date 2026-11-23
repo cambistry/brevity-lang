@@ -2,33 +2,20 @@
 
 import { erlStateKey, erlString } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
-import { publicLabel } from '../../singleton_classes.js';
-import { isCtorProfile } from '../../actor_values.js';
-import { inferExprType } from '../../inference.js';
-import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
+import { inferType } from '../../type_infer.js';
+import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
+import { typeTag, typeText, envTypeOf } from '../enc_names.js';
 
-// Wire tag for a type-valued slot: `path:Name` for an imported/cross-module
-// type, `:Name` for a local one. `ty` is translated, so it needs no `#<…>`. Non-type tags
-// (primitives, null) pass through. Shared by reply, param, and argument slots.
-// Returns a plain JS string; the caller applies erlString. See
-// notes/type-authority-address-tags-2026-10-26.
-function erlTypeTag(ctx, t) {
-  // An actor no `new` built (a singleton), or any actor (`Actor`), is tagged `*`.
-  if (t === 'Actor' || isCtorProfile(t)) return '*';
-  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === t);
-  const singleton = node && (publicLabel(node) ?? node.singletonOf);
-  if (singleton) return '*';
-  // An actor of a dependency's class is tagged with the class's address
-  // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
-  if (typeof t === 'string' && !ctx.typeDecls?.has(t) && ctx.depIsDependency?.(t)) return ctx.depAddress(t);
-  if (typeof t !== 'string' || !ctx.typeDecls?.has(t)) return t;
-  // A type's tag is its address (src/codegen/type_table.js).
-  return ctx.typeDecls.get(t).key;
-}
+// The Erlang generator reads encoded types (src/type_enc.js): a type env maps a
+// name to its encoded type, and `typeDecls` keys a declared type by its address.
+
+// Wire tag for a type-valued slot (src/codegen/enc_names.js, typeTag). Returns a
+// plain JS string; the caller applies erlString.
+const erlTypeTag = (ctx, t) => typeTag(ctx, t);
 
 // The runtime tag of `valueExpr`, whose declared type `t` is a union or `Anything`.
 function erlTyOf(ctx, t, valueExpr) {
-  const members = tyMembers(t, u => erlTypeTag(ctx, u), ctx.typeDecls)
+  const members = tyMembersEnc(t, u => erlTypeTag(ctx, u), ctx.typeDecls, u => typeText(u, ctx.depAliases))
     .map(([k, tag]) => `{${erlString(k)}, ${erlString(tag)}}`).join(', ');
   return `bv_ty_of(${valueExpr}, [${members}])`;
 }
@@ -36,7 +23,7 @@ function erlTyOf(ctx, t, valueExpr) {
 // A slot's tag: the declared type's when it is one, else the value's at runtime
 // (`valueExpr`, or no tag when there is nothing safe to read).
 function erlSlotTag(ctx, t, valueExpr) {
-  if (!isDynamicTy(t)) { const tag = erlTypeTag(ctx, t ?? null); return tag ? erlString(tag) : 'null'; }
+  if (!isDynamicTy(t)) { const tag = erlTypeTag(ctx, t); return tag ? erlString(tag) : 'null'; }
   return valueExpr ? erlTyOf(ctx, t, valueExpr) : 'null';
 }
 
@@ -57,38 +44,42 @@ function erlTypeWireWrap(ctx, valueExpr, t) {
   return `(fun(W_) -> case W_ of ${arms}; _ -> W_ end end)(${valueExpr})`;
 }
 
+// A literal's encoded type; undefined for anything else.
 function inferLiteralType(expr) {
-  if (!expr) return null;
-  if (expr.type === 'IntLiteral') return 'Integer';
-  if (expr.type === 'StringLiteral') return 'Text';
-  if (expr.type === 'FloatLiteral') return 'Float';
-  if (expr.type === 'DecimalLiteral') return 'Decimal';
-  if (expr.type === 'BoolLiteral') return 'Boolean';
-  if (expr.type === 'NullLiteral') return 'null';
-  if (expr.type === 'TypeConstruction') return expr.typeName;
-  if (expr.type === 'PresenceCheck') return 'Boolean';
-  return null;
+  switch (expr?.type) {
+    case 'IntLiteral': return 'Integer';
+    case 'StringLiteral': return 'Text';
+    case 'FloatLiteral': return 'Float';
+    case 'DecimalLiteral': return 'Decimal';
+    case 'BoolLiteral': return 'Boolean';
+    case 'NullLiteral': return null;
+    case 'TypeConstruction': return expr.typeNameEnc;
+    case 'PresenceCheck': return 'Boolean';
+    default: return undefined;
+  }
 }
 
+// A scope's names and their encoded types. A param with no type is in scope, untyped.
 function buildTypeEnv(params, body, typeDecls = null) {
   const env = new Map();
+  const known = (t) => t !== undefined;
   for (const p of params) {
-    if (p.name && !p.rest) env.set(p.name, p.type || null);
+    if (p.name && !p.rest) env.set(p.name, envTypeOf(p));
   }
   for (const s of body) {
-    if (s.type === 'TypedAssign') env.set(s.name, s.typeName);
+    if (s.type === 'TypedAssign') env.set(s.name, s.typeNameEnc);
     if (s.type === 'DestructureAssign') {
       for (const item of s.pattern) {
-        if (!item.discard && item.name && item.type) env.set(item.name, item.type);
+        if (!item.discard && item.name && known(item.typeEnc)) env.set(item.name, item.typeEnc);
       }
       // Typed-value source: propagate each field's declared type to the
       // destructured local.
       if (typeDecls) {
         const src = s.source;
-        let srcTypeName = null;
-        if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
-        else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
-        const srcDecl = (srcTypeName && typeDecls.has(srcTypeName)) ? typeDecls.get(srcTypeName) : null;
+        let srcType;
+        if (src?.type === 'TypeConstruction') srcType = src.typeNameEnc;
+        else if (src?.type === 'Identifier' && env.has(src.name)) srcType = env.get(src.name);
+        const srcDecl = known(srcType) ? typeDecls.get(srcType) ?? null : null;
         if (srcDecl) {
           const fields = srcDecl.fields || [];
           for (const item of s.pattern) {
@@ -98,8 +89,8 @@ function buildTypeEnv(params, body, typeDecls = null) {
             else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
             else if (item.positional) field = fields[item.idx];
             // Skip propagation for optional fields — keep the local
-             // polymorphic so `??` / `(expr)?` see absence.
-            if (field?.paramType && !field.optional) env.set(item.name, field.paramType);
+            // polymorphic so `??` / `(expr)?` see absence.
+            if (known(field?.paramTypeEnc) && !field.optional) env.set(item.name, field.paramTypeEnc);
           }
         }
       }
@@ -109,26 +100,26 @@ function buildTypeEnv(params, body, typeDecls = null) {
         const namedArgs = (s.source.args || []).filter(a => !a.positional);
         for (const item of s.pattern) {
           if (item.discard || !item.name || env.has(item.name)) continue;
-          if (item.positional && posArgs[item.idx]?.type) {
-            env.set(item.name, posArgs[item.idx].type);
+          if (item.positional && known(posArgs[item.idx]?.typeEnc)) {
+            env.set(item.name, posArgs[item.idx].typeEnc);
           } else if (item.named) {
             const match = namedArgs.find(a => a.key === item.name);
-            if (match?.type) env.set(item.name, match.type);
+            if (known(match?.typeEnc)) env.set(item.name, match.typeEnc);
           }
         }
       }
     }
     if (s.type === 'Assign') {
       const inferred = inferLiteralType(s.value);
-      if (inferred) env.set(s.name, inferred);
+      if (known(inferred)) env.set(s.name, inferred);
     }
     if (s.type === 'ListDestructure') {
       for (const item of s.pattern) {
-        if (!item.discard && item.name && item.type) env.set(item.name, item.type);
+        if (!item.discard && item.name && known(item.typeEnc)) env.set(item.name, item.typeEnc);
       }
     }
-    if (s.type === 'RefDecl' && s.typeName) env.set(s.name, s.typeName);
-    if (s.type === 'BareTypeDecl' && s.typeName) env.set(s.name, s.typeName);
+    if (s.type === 'RefDecl' && known(s.typeNameEnc)) env.set(s.name, s.typeNameEnc);
+    if (s.type === 'BareTypeDecl' && known(s.typeNameEnc)) env.set(s.name, s.typeNameEnc);
   }
   return env;
 }
@@ -196,10 +187,11 @@ function getSSANameForAssignment(name, stmtIdx, ssaEnv) {
   return name;
 }
 
+// An expression's encoded type; undefined when unknown.
 function exprType(expr, typeEnv, _ctx) {
-  if (!expr) return null;
-  if (expr.type === 'RefRead') return typeEnv.get(expr.name) || null;
-  return inferExprType(expr, typeEnv);
+  if (!expr) return undefined;
+  if (expr.type === 'RefRead') return typeEnv.get(expr.name);
+  return inferType(expr, typeEnv);
 }
 
 // Collect free variables from a Function AST node (same logic as JS codegen)

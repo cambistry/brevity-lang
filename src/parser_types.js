@@ -79,8 +79,11 @@ export function encodeAstTypes(ast, remotes = null) {
     for (const k of TYPE_KEYS) {
       if (typeof node[k] === 'string' && !NOT_TYPES.has(node[k])) at(k, k === 'returnType' && /^\w+\s*:/.test(node[k]) ? `(${node[k]})` : node[k]);
     }
-    // `Actor` is a node kind and a type: an actor node has functions.
-    const isKind = NODE_KINDS.has(node.type) && !(node.type === 'Actor' && !Array.isArray(node.functions));
+    // `Actor` and `Function` are node kinds and types: an actor node has functions,
+    // a function node params.
+    const isKind = NODE_KINDS.has(node.type)
+      && !(node.type === 'Actor' && !Array.isArray(node.functions))
+      && !(node.type === 'Function' && !Array.isArray(node.params));
     if (typeof node.type === 'string' && !isKind && !NOT_TYPES.has(node.type)) at('type', node.type);
     if (node.type === 'Dependency' && typeof node.interface === 'string') {
       // The interface as the compiler reads one, its types encoded too.

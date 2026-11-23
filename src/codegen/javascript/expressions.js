@@ -2,14 +2,13 @@ import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferType } from '../../type_infer.js';
-import { makerTag, selfSlotTag } from '../../actor_values.js';
-import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply, ownPath } from '../../type_enc.js';
-import { classNameOf, typeText, leadsWithList } from '../enc_names.js';
+import { selfSlotTag } from '../../actor_values.js';
+import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply } from '../../type_enc.js';
+import { typeText, leadsWithList, typeTag, paramTag, hasGeneric } from '../enc_names.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTyEnc as isDynamicTy, tyMembersEnc, wireTypesEnc as wireTypes } from '../ty_tags.js';
 import { wireLabel, selfAddress, memberOp, actorAddress } from '../wire_labels.js';
-import { publicLabel } from '../../singleton_classes.js';
 import { _opre_join as joinAddress, _opre_quote as quoteToken, _opre_split as _opre_split_tokens } from '../opre_tokens.js';
 import { JS_BLOB_METHODS, JS_TEXT_METHODS, JS_GRAPHEME_METHODS, JS_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
@@ -1470,30 +1469,6 @@ export function genDefaultValue(node) {
   return 'undefined';
 }
 
-// The wire tag for a type-valued slot: `path Name` for an imported/cross-module
-// type, `:Name` for a local one (authority filled by perspective translation as
-// the value rises; `ty` is a translated field, so it needs no `#<…>`). Non-type tags (primitives
-// `'Integer'`, `'Boolean'`, or `null`) pass through unchanged. Shared by reply,
-// parameter, and argument slots. See notes/type-authority-address-tags-2026-10-26.
-export function typeTag(ctx, t) {
-  if (t === undefined) return null;
-  if (t === null) return 'null';
-  // Any actor (`Actor`) is tagged `*`.
-  if (t === 'Actor') return '*';
-  // A type's tag is its address (src/codegen/type_table.js).
-  if (ctx.typeDecls?.has(t)) return t;
-  // An actor no `new` built (a singleton) is tagged `*`.
-  const cls = classNameOf(t);
-  const node = typeof t === 'string' && ctx.program?.actors?.find(a => a.name === (cls ?? t));
-  if (node && (publicLabel(node) ?? node.singletonOf)) return '*';
-  if (cls) return cls;
-  // An actor of a dependency's class is tagged with the class's address
-  // (`thing.bv`, `svc.bv:Counter`), never the local name it is bound to.
-  if (typeof t === 'string' && !t.startsWith(':') && ownPath(t) === null && !SCALARS.has(t)) return t.replace(/:\*$/, '');
-  return typeText(t, ctx.depAliases);
-}
-const SCALARS = new Set(['Integer', 'Float', 'Decimal', 'Text', 'Boolean', 'Object', 'Anything', 'Function', 'Blob', 'GraphemeText', 'Regex']);
-
 // Resolve a call argument's declared/inferred type for wire tagging. Covers
 // the destructure-shorthand arg (`Sink.take(:p)` — no `expr`, type in the
 // enclosing typeEnv), an explicit `expr`, and a literal.
@@ -1679,31 +1654,14 @@ export function genValueCondition(ctx, params) {
   return `_bvValuesFit(_s, ${JSON.stringify(pos)}, ${JSON.stringify(named)})`;
 }
 
-// Whether an encoded type has a generic in it (`List of Integers`, a shape).
-const hasGeneric = (t) => Array.isArray(t) || (t !== null && typeof t === 'object' && Object.values(t).some(hasGeneric));
-
-// What a param's type expects of an arg's tag: an actor a `new` built is tagged
-// with its maker's address (`:C`); `Actor`, a constructor profile and an interface
-// take any actor (`*`). Anything else is matched as it's written.
-function expectedTag(ctx, p) {
-  const t = p.typeEnc;
-  // A param with no type at all (a named one, `a: b`) expects an untagged arg.
-  if (t === undefined) return p.typeKind === 'ctor' ? '*' : p.typeUnencoded ? p.type : null;
-  if (t === 'Actor') return '*';
-  const cls = classNameOf(t);
-  const node = cls && (ctx.program?.actors || []).find(a => a.name === cls && !a.singletonOf && !a.membersOf);
-  if (node) return makerTag(cls);
-  return typeText(t, ctx.depAliases);
-}
-
 export function genTypeCondition(ctx, params) {
   if (params.length === 0) return null;
   if (params.find(p => p.rest)) return null; // rest is the universal matcher
   const isListOfAny = t => isListEnc(t) && listElementEnc(t) === 'Anything';
   const namedParams = params.filter(p => !p.positional && !isListOfAny(p.typeEnc));
-  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(expectedTag(ctx, p))}]`);
+  const named = namedParams.map(p => `[${JSON.stringify(p.key || p.name)},${JSON.stringify(paramTag(ctx, p))}]`);
   const posParams = params.filter(p => p.positional && !isListOfAny(p.typeEnc));
-  const pos = posParams.map(p => JSON.stringify(expectedTag(ctx, p)));
+  const pos = posParams.map(p => JSON.stringify(paramTag(ctx, p)));
   if (named.length === 0 && pos.length === 0) return null;
   // Count required positional params (no default value)
   const requiredPosCount = posParams.filter(p => !p.defaultValue).length;

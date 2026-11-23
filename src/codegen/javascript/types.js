@@ -2,6 +2,7 @@ import { inferType } from '../../type_infer.js';
 import { fieldAcrossReturns } from '../../return_shapes.js';
 import { parseTypeText } from '../../parser.js';
 import { genericName } from '../../type_enc.js';
+import { envTypeOf } from '../enc_names.js';
 
 // The JavaScript generator reads encoded types (src/type_enc.js): a type env maps a
 // name to its encoded type, and `typeDecls` keys a declared type by its address.
@@ -480,9 +481,7 @@ export function buildTypeEnv(params, body, stateVarEnv = null, remotes = null, t
   const known = (t) => t !== undefined;
   for (const p of params) {
     if (p.rest) continue;
-    if (p.name && known(p.typeEnc)) env.set(p.name, p.typeEnc);
-    // A constructor profile has no encoding; its actor is any actor with a `new`.
-    else if (p.name && p.typeKind === 'ctor') env.set(p.name, 'Actor');
+    if (p.name && known(envTypeOf(p))) env.set(p.name, envTypeOf(p));
   }
   for (const s of body) {
     if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
