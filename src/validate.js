@@ -4,6 +4,8 @@
 import { parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { readDocument } from './service_doc.js';
+import { isFn, fnReply, fnSignature, isList, listElement, listOf, show } from './type_enc.js';
+import { inferType, typesCompatible as typesCompatibleEnc, ANY_LIST } from './type_infer.js';
 import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
@@ -20,7 +22,7 @@ import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_ut
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
-import { inferExprType as inferExprTypeFull, binaryResultType, listElementType, typesCompatible } from './inference.js';
+import { inferExprType as inferExprTypeFull, binaryResultType } from './inference.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { buildsBase } from './super_calls.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
@@ -1258,6 +1260,39 @@ function checkTypeDecls(ast) {
 // NOTE: single-input callbacks only for now — parseFieldList splits on commas
 // naively, so a multi-input signature whose input itself nests a function type
 // would mis-split. Depth-aware comma split is future work.
+// A record's encoded type at `key` (`paramType` → `paramTypeEnc`). One with the
+// type's text and no encoding is the compiler's mistake.
+function encAt(record, key) {
+  const enc = record?.[`${key}Enc`];
+  if (enc === undefined && typeof record?.[key] === 'string' && record[key] !== 'Anything') {
+    throw new Error(`Compiler bug: the type '${record[key]}' has no encoding`);
+  }
+  return enc;
+}
+
+// A field's call discipline from its declared type: 'value' (not behavioral,
+// cannot be invoked), 'silent' (it never replies), 'callback' (a function that
+// replies).
+function fieldDisciplineOf(field) {
+  const t = encAt(field, 'paramType');
+  if (!isFn(t)) return 'value';
+  return fnReply(t) === 'silent' ? 'silent' : 'callback';
+}
+
+// A function type's inputs, as encoded types: by name, and positional in order.
+function callbackInputsEnc(t) {
+  const args = fnSignature(t)?.args || [];
+  const last = args[args.length - 1];
+  const isNamed = last && typeof last === 'object' && !Array.isArray(last) && !Object.keys(last).some(k => k.startsWith('%'));
+  const unwrap = (x) => (x && typeof x === 'object' && '%opt' in x ? x['%opt'] : x);
+  return {
+    positional: (isNamed ? args.slice(0, -1) : args).map(unwrap),
+    named: Object.fromEntries(Object.entries(isNamed ? last : {}).map(([k, v]) => [k, unwrap(v)])),
+  };
+}
+
+// The code generators' text of a callback type's inputs (read until they read
+// encodings).
 function callbackInputTypes(paramTypeStr) {
   if (typeof paramTypeStr !== 'string') return null;
   let depth = 0, arrowIdx = -1;
@@ -1275,34 +1310,11 @@ function callbackInputTypes(paramTypeStr) {
   return inputStr ? parseFieldList(inputStr) : [];
 }
 
-// The output side of a callback signature (`(in) -> OUT`): `.` for a silent
-// endpoint, `()` for void, otherwise the reply shape. Null when there is no
-// top-level arrow. Depth-aware so a nested function-type input is skipped.
-function callbackOutputType(paramTypeStr) {
-  if (typeof paramTypeStr !== 'string') return null;
-  let depth = 0, arrowIdx = -1;
-  for (let i = 0; i < paramTypeStr.length; i++) {
-    if ('-=~'.includes(paramTypeStr[i]) && paramTypeStr[i + 1] === '>') {
-      if (depth === 0) { arrowIdx = i; break; }
-      i++; continue;
-    }
-    const c = paramTypeStr[i];
-    if (c === '(' || c === '<' || c === '{') depth++;
-    else if (c === ')' || c === '>' || c === '}') depth--;
-  }
-  if (arrowIdx === -1) return null;
-  return paramTypeStr.slice(arrowIdx + 2).trim();
-}
-
-// Returns the offending name when `typeStr` is a single bare type name that is
-// neither a built-in nor in `nameable`; otherwise null. Only a lone identifier
-// is policed — qualified (`Alias::Name`), unions, `List of …`, and function
-// sigs are intentionally left alone (conservative).
-function unknownBareType(typeStr, nameable) {
-  if (typeof typeStr !== 'string') return null;
-  const t = typeStr.trim();
-  if (!/^[A-Za-z_]\w*$/.test(t) || t === 'null') return null;
-  if (BUILTIN_TYPE_NAMES.has(t) || nameable.has(t)) return null;
+// The name, when an encoded type is a single name this file didn't resolve and
+// isn't a built-in: neither declared nor imported (a declared or imported one is
+// an address). Otherwise null.
+function unknownBareType(t) {
+  if (typeof t !== 'string' || t.includes(':') || BUILTIN_TYPE_NAMES.has(t)) return null;
   return t;
 }
 
@@ -1315,15 +1327,18 @@ function unknownBareType(typeStr, nameable) {
 // import; implicit import is inference-only). Mutates `fnNode.params[i].type` in
 // place (the single source of truth read by both validation and every codegen
 // backend). Returns the resolved type names actually applied.
-function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, resolve = (t) => t, nameable = null) {
+function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, paramTypeEnc, resolve = (t) => t, nameable = null) {
   if (!fnNode || fnNode.type !== 'Function' || !Array.isArray(fnNode.params)) return [];
+  if (!isFn(paramTypeEnc)) return [];
   const inputs = callbackInputTypes(paramTypeStr);
   if (!inputs) return [];
+  const inputsEnc = callbackInputsEnc(paramTypeEnc);
+  let nextPositional = 0;
   // A lambda filling a silent slot (`-> .`) is itself silent: it yields no
   // reply, so the synthesized dispatch arm must not produce one. Without this
   // the arm sets `re` and routes a spurious reply, which on local self-dispatch
   // re-enters dispatch as an op-less message. The slot is authoritative here.
-  if (callbackOutputType(paramTypeStr) === '.') fnNode.returnType = '.';
+  if (fnReply(paramTypeEnc) === 'silent') fnNode.returnType = '.';
   const applied = [];
   for (let i = 0; i < fnNode.params.length; i++) {
     const p = fnNode.params[i];
@@ -1332,7 +1347,7 @@ function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, resolve = (t) =
       // Explicit annotation: honored, never overwritten — but a bare,
       // undeclared/unimported type name is an error.
       if (nameable) {
-        const u = unknownBareType(p.type, nameable);
+        const u = unknownBareType(encAt(p, 'type'));
         if (u) {
           throw new Error(
             `Lambda parameter type '${u}' is not declared or imported — ` +
@@ -1343,10 +1358,12 @@ function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, resolve = (t) =
       continue;
     }
     const input = inputs[i];
+    const inputEnc = input?.name ? inputsEnc.named[input.name] : inputsEnc.positional[nextPositional++];
     if (!input?.type) continue;
     const resolved = resolve(input.type);
     if (!resolved) continue;
     p.type = resolved;
+    if (inputEnc !== undefined) p.typeEnc = inputEnc;
     applied.push(resolved);
   }
   return applied;
@@ -1362,11 +1379,10 @@ function forEachCallbackLambdaArg(node, fields, onCallbackLambda) {
   const asFunction = (a) => (a?.type === 'Function' ? a : (a?.expr?.type === 'Function' ? a.expr : null));
   for (let fi = 0; fi < fields.length; fi++) {
     const field = fields[fi];
-    const sig = field.paramType;
-    if (!sig || !/[-=~]>/.test(sig)) continue;
+    if (!isFn(encAt(field, 'paramType'))) continue;
     const arg = fi < positional.length ? positional[fi] : named[field.name];
     const fn = asFunction(arg);
-    if (fn) onCallbackLambda(fn, sig, field);
+    if (fn) onCallbackLambda(fn, field.paramType, field.paramTypeEnc, field);
   }
 }
 
@@ -1418,9 +1434,9 @@ function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
       let pi = 0;
       for (const p of (sig.params || [])) {
         const argExpr = p.name ? named[p.name] : positional[pi++];
-        if (p.type && /[-=~]>/.test(p.type)) {
+        if (isFn(encAt(p, 'type'))) {
           const fn = asFn(argExpr);
-          if (fn) inferLambdaParamsFromCallbackType(fn, p.type, resolve, nameable);
+          if (fn) inferLambdaParamsFromCallbackType(fn, p.type, p.typeEnc, resolve, nameable);
         }
       }
     }
@@ -1507,7 +1523,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
       // A silent field's key carries its silent `.` (`onpress.: …`); the field
       // is stored without it.
       if (namedBag?.fields) {
-        const isSilent = (n) => /=>\s*\.\s*$/.test(fields.find(f => f.name === n)?.paramType || '');
+        const isSilent = (n) => { const f = fields.find(x => x.name === n); return !!f && fieldDisciplineOf(f) === 'silent'; };
         for (const key of Object.keys(namedBag.fields)) {
           const plain = key.endsWith('.') ? key.slice(0, -1) : key;
           if (key.endsWith('.') && fields.some(f => f.name === plain) && !isSilent(plain)) {
@@ -1571,8 +1587,8 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
       // For a locally-declared host type the input type name is used as-is; a
       // service-hosted host resolves the name to its authority (see C2).
       const resolve = resolveCallbackParamType(node.typeName);
-      forEachCallbackLambdaArg(node, fields, (fn, sig) => {
-        inferLambdaParamsFromCallbackType(fn, sig, resolve, nameable);
+      forEachCallbackLambdaArg(node, fields, (fn, sig, sigEnc) => {
+        inferLambdaParamsFromCallbackType(fn, sig, sigEnc, resolve, nameable);
       });
     }
     for (const k of Object.keys(node)) {
@@ -1614,10 +1630,7 @@ function checkTypeFieldAccess(ast) {
   // 'callback' (any other `->` output, reply-awaiting), or null (no such field).
   function fieldDiscipline(decl, name) {
     const f = decl.fields.find(ff => ff.name === name);
-    if (!f) return null;
-    const pt = f.paramType || '';
-    if (!/[-=~]>/.test(pt)) return 'value';
-    return /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+    return f ? fieldDisciplineOf(f) : null;
   }
 
   // Is `expr` the invocation of a silent reference field? (bang DotAccess, or a
@@ -1751,10 +1764,7 @@ function checkSilentRefOrdering(ast) {
   };
   const fieldDiscipline = (decl, name) => {
     const f = decl.fields.find(ff => ff.name === name);
-    if (!f) return null;
-    const pt = f.paramType || '';
-    if (!/[-=~]>/.test(pt)) return 'value';
-    return /=>\s*\.\s*$/.test(pt) ? 'silent' : 'callback';
+    return f ? fieldDisciplineOf(f) : null;
   };
   // Classify an invocation node as 'silent' | 'callback' (barrier) | null.
   const classify = (node, env) => {
@@ -2035,66 +2045,68 @@ function checkListMethodArgs(ast) {
     if (expr.type !== 'ListMethodExpr') return;
     const meta = LIST_METHODS.get(expr.method);
     if (!meta) return;
-    const recvType = inferExprTypeFull(expr.args[0], typeEnv);
-    const elemType = listElementType(recvType);
+    // Types here are encoded; a message shows them as Brevity writes them.
+    const recvType = inferType(expr.args[0], typeEnv);
+    const elemType = listElement(recvType);
+    const known = (t) => t !== undefined;
+    const scalarIs = (t, want) => !known(t) || t === want || t === 'Anything';
 
     if (ELEMENT_ARG_METHODS.has(expr.method)) {
-      const argType = inferExprTypeFull(expr.args[1], typeEnv);
-      if (!typesCompatible(argType, elemType)) {
-        throw new Error(`List.${expr.method} on ${recvType}: argument type ${argType} is not compatible with element type ${elemType}`);
+      const argType = inferType(expr.args[1], typeEnv);
+      if (!typesCompatibleEnc(argType, elemType)) {
+        throw new Error(`List.${expr.method} on ${show(recvType)}: argument type ${show(argType)} is not compatible with element type ${show(elemType)}`);
       }
     } else if (expr.method === 'replace' || expr.method === 'replace_first') {
       // (list, old, new): both old and new must match element type.
-      const oldType = inferExprTypeFull(expr.args[1], typeEnv);
-      const newType = inferExprTypeFull(expr.args[2], typeEnv);
-      if (!typesCompatible(oldType, elemType)) {
-        throw new Error(`List.${expr.method} on ${recvType}: needle type ${oldType} is not compatible with element type ${elemType}`);
+      const oldType = inferType(expr.args[1], typeEnv);
+      const newType = inferType(expr.args[2], typeEnv);
+      if (!typesCompatibleEnc(oldType, elemType)) {
+        throw new Error(`List.${expr.method} on ${show(recvType)}: needle type ${show(oldType)} is not compatible with element type ${show(elemType)}`);
       }
-      if (!typesCompatible(newType, elemType)) {
-        throw new Error(`List.${expr.method} on ${recvType}: replacement type ${newType} is not compatible with element type ${elemType}`);
+      if (!typesCompatibleEnc(newType, elemType)) {
+        throw new Error(`List.${expr.method} on ${show(recvType)}: replacement type ${show(newType)} is not compatible with element type ${show(elemType)}`);
       }
     } else if (LIST_ARG_METHODS.has(expr.method)) {
       // concat is variadic — every arg after the receiver must be a
       // compatible List. starts_with / ends_with take exactly one.
       for (let i = 1; i < expr.args.length; i++) {
-        const argType = inferExprTypeFull(expr.args[i], typeEnv);
-        const argElem = listElementType(argType);
-        if (typeof argType !== 'string' || !argType.startsWith('List')) {
-          if (argType) throw new Error(`List.${expr.method} on ${recvType}: argument must be a List, got ${argType}`);
-        } else if (!typesCompatible(argElem, elemType)) {
-          throw new Error(`List.${expr.method} on ${recvType}: argument's element type ${argElem} is not compatible with ${elemType}`);
+        const argType = inferType(expr.args[i], typeEnv);
+        const argElem = listElement(argType);
+        if (!isList(argType)) {
+          if (known(argType) && argType !== null) throw new Error(`List.${expr.method} on ${show(recvType)}: argument must be a List, got ${show(argType)}`);
+        } else if (!typesCompatibleEnc(argElem, elemType)) {
+          throw new Error(`List.${expr.method} on ${show(recvType)}: argument's element type ${show(argElem)} is not compatible with ${show(elemType)}`);
         }
       }
     } else if (INT_ARG_METHODS.has(expr.method)) {
-      const argType = inferExprTypeFull(expr.args[1], typeEnv);
-      if (argType && argType !== 'Integer' && argType !== 'Anything') {
-        throw new Error(`List.${expr.method} requires an Integer index, got ${argType}`);
+      const argType = inferType(expr.args[1], typeEnv);
+      if (!scalarIs(argType, 'Integer')) {
+        throw new Error(`List.${expr.method} requires an Integer index, got ${show(argType)}`);
       }
     } else if (expr.method === 'slice') {
-      const start = inferExprTypeFull(expr.args[1], typeEnv);
-      if (start && start !== 'Integer' && start !== 'Anything') {
-        throw new Error(`List.slice requires an Integer start, got ${start}`);
+      const start = inferType(expr.args[1], typeEnv);
+      if (!scalarIs(start, 'Integer')) {
+        throw new Error(`List.slice requires an Integer start, got ${show(start)}`);
       }
       if (expr.args[2]) {
-        const end = inferExprTypeFull(expr.args[2], typeEnv);
-        if (end && end !== 'Integer' && end !== 'Anything') {
-          throw new Error(`List.slice requires an Integer end, got ${end}`);
+        const end = inferType(expr.args[2], typeEnv);
+        if (!scalarIs(end, 'Integer')) {
+          throw new Error(`List.slice requires an Integer end, got ${show(end)}`);
         }
       }
     } else if (expr.method === 'join') {
       // receiver must be List of Texts; sep must be Text.
-      if (typeof recvType === 'string' && recvType !== 'List of Anything' && recvType !== 'List of Texts') {
-        throw new Error(`List.join is only valid on List of Texts, got ${recvType}`);
+      if (known(recvType) && recvType !== ANY_LIST && recvType !== listOf('Text')) {
+        throw new Error(`List.join is only valid on List of Texts, got ${show(recvType)}`);
       }
-      const sepType = inferExprTypeFull(expr.args[1], typeEnv);
-      if (sepType && sepType !== 'Text' && sepType !== 'Anything') {
-        throw new Error(`List.join separator must be Text, got ${sepType}`);
+      const sepType = inferType(expr.args[1], typeEnv);
+      if (!scalarIs(sepType, 'Text')) {
+        throw new Error(`List.join separator must be Text, got ${show(sepType)}`);
       }
     } else if (expr.method === 'flatten') {
       // receiver must be List of Lists (any element type for the inner list).
-      if (typeof recvType === 'string' && recvType !== 'List of Anything' &&
-          !(typeof elemType === 'string' && elemType.startsWith('List'))) {
-        throw new Error(`List.flatten is only valid on a List of Lists, got ${recvType}`);
+      if (known(recvType) && recvType !== ANY_LIST && !isList(elemType)) {
+        throw new Error(`List.flatten is only valid on a List of Lists, got ${show(recvType)}`);
       }
     }
   }
@@ -2116,10 +2128,10 @@ function checkListMethodArgs(ast) {
     // State-var types visible to all functions.
     const stateEnv = new Map();
     for (const d of (actor.stateVarDecls || [])) {
-      if (d.name && d.typeName) stateEnv.set(d.name, d.typeName);
+      if (d.name && d.typeNameEnc !== undefined) stateEnv.set(d.name, d.typeNameEnc);
     }
     for (const fn of (actor.functions || [])) {
-      const typeEnv = buildTypeEnv(fn.params || [], fn.body || []);
+      const typeEnv = buildTypeEnvEnc(fn.params || [], fn.body || []);
       for (const [k, v] of stateEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
       walkBody(fn.body || [], typeEnv);
     }
@@ -2798,6 +2810,59 @@ function buildTypeEnv(params, body, typeDecls = null, depNames = null) {
     }
   }
   return env;
+}
+
+// The same scope's names by their encoded types (src/type_enc.js). `decls`, by a
+// type's address; `typeOfName` encodes a dependency's name, for a local it
+// constructs.
+function buildTypeEnvEnc(params, body, { decls = null, depNames = null, typeOfName = null } = {}) {
+  const env = new Map();
+  for (const p of params) {
+    if (p.rest) continue;
+    if (p.name && p.typeEnc !== undefined) env.set(p.name, p.typeEnc);
+  }
+  for (const s of body) {
+    if ((s.type === 'TypedAssign' || s.type === 'BareTypeDecl' || s.type === 'RefDecl') && s.typeNameEnc !== undefined) {
+      env.set(s.name, s.typeNameEnc);
+    } else if (s.type === 'Assign') {
+      const lit = inferLiteralTypeEnc(s.value);
+      const t = lit !== undefined ? lit
+        : (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier'
+          && depNames?.has(s.value.callee.name) && typeOfName ? typeOfName(s.value.callee.name) : undefined);
+      if (t !== undefined) env.set(s.name, t);
+    } else if (s.type === 'DestructureAssign' && decls) {
+      const src = s.source;
+      const srcType = src?.type === 'TypeConstruction' ? src.typeNameEnc
+        : src?.type === 'Identifier' ? env.get(src.name) : undefined;
+      const srcDecl = srcType !== undefined ? decls.get(srcType) : null;
+      if (srcDecl) {
+        const fields = srcDecl.fields || [];
+        for (const item of s.pattern) {
+          if (item.discard || !item.name || env.has(item.name)) continue;
+          if (item.typeEnc !== undefined) { env.set(item.name, item.typeEnc); continue; }
+          let field;
+          if (item.named) field = fields.find(f => f.name === item.name);
+          else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
+          else if (item.positional) field = fields[item.idx];
+          if (field?.paramTypeEnc !== undefined && !field.optional) env.set(item.name, field.paramTypeEnc);
+        }
+      }
+    }
+  }
+  return env;
+}
+
+function inferLiteralTypeEnc(expr) {
+  switch (expr?.type) {
+    case 'IntLiteral': return 'Integer';
+    case 'StringLiteral': case 'InterpolatedString': return 'Text';
+    case 'DecimalLiteral': return 'Decimal';
+    case 'FloatLiteral': return 'Float';
+    case 'BoolLiteral': return 'Boolean';
+    case 'NullLiteral': return null;
+    case 'TypeConstruction': return expr.typeNameEnc;
+    default: return undefined;
+  }
 }
 
 function inferLiteralType(expr) {

@@ -8,7 +8,7 @@
 // encoded by src/opre_types.js.
 
 import { cellNode, typeScope, SELF } from './opre_types.js';
-import { intern, translate } from './type_enc.js';
+import { intern, translate, isInterned } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 
 const WRITES = { read: false, write: true };
@@ -437,7 +437,7 @@ export function readDocument(node, path) {
   const from = quote(path);
   const seen = new Set();
   const walk = (v) => {
-    if (!v || typeof v !== 'object' || Object.isFrozen(v) || seen.has(v)) return;
+    if (!v || typeof v !== 'object' || isInterned(v) || seen.has(v)) return;
     seen.add(v);
     if (Array.isArray(v)) { v.forEach(walk); return; }
     for (const [k, x] of Object.entries(v)) {

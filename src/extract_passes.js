@@ -2,6 +2,8 @@
 // Node entry point (index.js) and the in-page compiler (src/codegen/browser/brevity.js),
 // so this module must not import anything that needs Node.
 
+import { isInterned } from './type_enc.js';
+
 function hasRefRead(node) {
   if (!node || typeof node !== 'object') return false;
   if (Array.isArray(node)) return node.some(hasRefRead);
@@ -181,6 +183,8 @@ export function liftReactiveElements(ast) {
 
     const processNode = (node) => {
       if (!node || typeof node !== 'object') return node;
+      // An encoded type is an interned value (src/type_enc.js): it stays as it is.
+      if (isInterned(node)) return node;
       if (Array.isArray(node)) return node.map(processNode);
       if (cloneCache.has(node)) return cloneCache.get(node);
       if (node.type === 'AnonymousHtmlActor') {

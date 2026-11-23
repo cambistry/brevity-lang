@@ -4,7 +4,6 @@
 // remote replies, whose docs are only claims. See notes/session-2026-11-01-as-renders-or-fails.md.
 import { inferType } from './type_infer.js';
 import { members, isUnion, isList, listElement, isFn, isInstance, ownPath, show } from './type_enc.js';
-import { ANY_LIST } from './type_infer.js';
 import { buildTypeTable } from './codegen/type_table.js';
 
 // Types here are encoded (src/type_enc.js). A node this pass makes carries a type
@@ -49,7 +48,7 @@ const known = (s) => s !== undefined && !mentionsAnything(s);
 function covers(t, s) {
   if (!known(s)) return false;
   const want = members(t);
-  return members(s).every(m => want.includes(m) || (want.includes(ANY_LIST) && isList(m)));
+  return members(s).every(m => want.includes(m));
 }
 
 const rendersAs = (s) => RENDERS[s === null ? 'null' : s];

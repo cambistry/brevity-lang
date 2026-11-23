@@ -2,17 +2,21 @@
 // A pass asks what a type is through these, and never takes a type's text apart.
 //
 // Encodings are interned: two equal ones are one value, so `===`, a Map key and a
-// Set hold for them as for a type's name.
+// Set hold for them as for a type's name. An interned value is never changed;
+// a pass that copies the tree keeps it as it is (`isInterned`).
 
 const interned = new Map();
+const members_ = new WeakSet();
+
+export const isInterned = (v) => !!v && typeof v === 'object' && members_.has(v);
 
 // The one value for `t`'s structure. A string (an address) is itself.
 export function intern(t) {
   if (t === null || t === undefined || typeof t !== 'object') return t;
-  if (Object.isFrozen(t) && interned.get(keyOf(t)) === t) return t;
+  if (members_.has(t)) return t;
   const inner = Array.isArray(t) ? t.map(intern) : Object.fromEntries(Object.entries(t).map(([k, v]) => [k, intern(v)]));
   const key = keyOf(inner);
-  if (!interned.has(key)) interned.set(key, Object.freeze(inner));
+  if (!interned.has(key)) { interned.set(key, inner); members_.add(inner); }
   return interned.get(key);
 }
 const keyOf = (t) => JSON.stringify(t);
