@@ -60,20 +60,8 @@ A constructor block's result is its actor.
 - Tests and notes that write `return <element>` (or `-> <element>`) at a constructor's tail
   move to `self as`, or to a function returning the element, by what they mean.
 
-## Future direction: element extension
+## Element extension
 
-```brevity
-Receiver = -> <div
-  version *Integer = 1
-  @bump = { version <- version + 1 }
->{ version }</div>
-rx = Receiver()
-rx.bump
-```
-
-A tag head that declares names reads as `HTML::div ^ *{ … }`: a subclass whose base is the
-DOM node. This is the form for "the element is the receiver and has names of its own". Not
-designed yet: whether the extension runs in the HTML host (so `rx` is the DOM node's
-address, with no wrapper), what makes the form callable, and how the tag head mixes
-attributes with declarations. It builds on `remote-superclass-2026-11-16.md` and
-`actorization-bundling-2026-05-15.md`.
+A tag head that declares names extends the element, `HTML::div ^ { … }`: the element is the
+receiver and has names of its own, with no wrapper. Proposal in
+`element-extension-2026-11-23.md`.

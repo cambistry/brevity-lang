@@ -79,6 +79,6 @@ Leaning (b): without it, every conditional or list hole is a special case.
 
 ## Future direction
 
-Element extension (`HTML::div ^ *{ … }`, see `constructor-return-as-retired-2026-11-23.md`)
+Element extension (`HTML::div ^ { … }`, see `element-extension-2026-11-23.md`)
 would put published names on the element itself. A function returning such an element is a
 fresh actor in the result, so it falls under (a)/(b) like any other.
