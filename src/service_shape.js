@@ -10,8 +10,8 @@
 import { purportedFunctions } from './effects.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { buildsBase } from './super_calls.js';
-import { returnShapes, unionMembers } from './return_shapes.js';
-import { show } from './type_enc.js';
+import { returnShapes } from './return_shapes.js';
+import { show, fnReply } from './type_enc.js';
 
 const SYNTHESIZED = /^@(\d+$|__)/;
 
@@ -29,7 +29,7 @@ function fnShape(fn, purported) {
   if (fn.body.some(stmt => stmt.type === 'SilentTerminator')) return { params, returns: null, effect: 'write', noReply: true };
   const effect = fn.name.endsWith('!') ? 'write' : purported?.has(fn.name) ? 'purported' : 'read';
   const { alternatives, orSelf } = returnShapes(fn);
-  const slots = (alt) => alt.map(({ name, type, typeEnc }) => ({ name, type: unionMembers(type).join(' | '), typeEnc, positional: name === null }));
+  const slots = (alt) => alt.map(({ name, type, typeEnc }) => ({ name, type, typeEnc, positional: name === null }));
   const shapes = alternatives.map(slots);
   return {
     params, returns: shapes[0] ?? null, effect,
@@ -94,7 +94,7 @@ function inherit(into, from) {
 
 // A silent-function field is named with its silent `.` (stored without it).
 const typeDeclShape = (decl) => ({
-  fields: (decl.fields || []).map(f => (/=>\s*\.\s*$/.test(f.paramType || '') && f.named ? { ...f, name: `${f.name}.` } : f)),
+  fields: (decl.fields || []).map(f => (fnReply(f.paramTypeEnc) === 'silent' && f.named ? { ...f, name: `${f.name}.` } : f)),
 });
 
 // The types declared in a class's constructor block.

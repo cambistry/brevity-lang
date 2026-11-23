@@ -8,7 +8,7 @@
 // encoded by src/opre_types.js.
 
 import { cellNode, typeScope, SELF } from './opre_types.js';
-import { intern, translate, isInterned } from './type_enc.js';
+import { intern, translate, isInterned, fnReply } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { wireLabel } from './codegen/wire_labels.js';
 
@@ -370,9 +370,9 @@ function readTypes(types) {
     }
     let i = 0;
     // A silent-function field is named with its silent `.`, stored without it.
-    const bare = (name, type) => (name?.endsWith('.') && /=>\s*\.\s*$/.test(type) ? name.slice(0, -1) : name);
+    const bare = (name, enc) => (name?.endsWith('.') && fnReply(enc) === 'silent' ? name.slice(0, -1) : name);
     const fields = decodeEntries(entries).map(f => ({
-      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.type), paramType: f.type, paramTypeEnc: f.typeEnc,
+      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.typeEnc), paramType: f.type, paramTypeEnc: f.typeEnc,
       ...(f.optional && { optional: true }), ...(!f.positional && { named: true }),
     }));
     return [key.slice(1), { fields }];
