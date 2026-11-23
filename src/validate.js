@@ -4,8 +4,9 @@
 import { parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { readDocument } from './service_doc.js';
-import { isFn, fnReply, fnSignature, isList, listElement, listOf, show } from './type_enc.js';
-import { inferType, typesCompatible as typesCompatibleEnc, ANY_LIST } from './type_infer.js';
+import { isFn, fnReply, fnSignature, isList, listElement, listOf, show, members as encMembers, isUnion, isInstance, ownPath, ownNames } from './type_enc.js';
+import { _opre_split as splitAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
+import { inferType, typesCompatible as typesCompatibleEnc, binaryResultType as binaryResultTypeEnc, ANY_LIST } from './type_infer.js';
 import { lowerAs } from './as_check.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
@@ -17,13 +18,12 @@ import { resolveNames } from './names.js';
 import { resolveTypeNames } from './type_names.js';
 import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
-import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes, mergeTypesEnc } from './return_shapes.js';
+import { returnShapes, docReturnShapes, fieldAcrossReturns, mergeShapes, mergeTypes, mergeTypesEnc } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
 import { LIST_METHODS } from './list_methods.js';
-import { inferExprType as inferExprTypeFull, binaryResultType } from './inference.js';
-import { resolveSuperclassChain } from './subclass.js';
+import { resolveSuperclassChain, PUBLIC_CLASS_SUFFIX } from './subclass.js';
 import { buildsBase } from './super_calls.js';
 import { lowerBareCalls, lowerBareMemberCalls } from './bare_calls.js';
 import { lowerRemoteCalls, resolveLoweredCall, receiverDoc, receiverLabel, remoteMember } from './opre.js';
@@ -77,6 +77,9 @@ export function validate(ast, options = {}) {
 }
 
 function validateProgram(ast, options = {}) {
+  run.ast = ast;
+  run.declsByAddress = null;
+  run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
   lowerFunctionAs(ast);
@@ -227,7 +230,7 @@ function validateProgram(ast, options = {}) {
         if (Array.isArray(node.params) && node.params.some(p => p?.name === from)) throw again();
       }
       if (node.type === 'Identifier' && node.name === from) node.name = to;
-      if (node.typeName === from) { node.typeName = to; node.typeNameEnc = ast.typeNamed([to]); }
+      if (node.typeName === from) { node.typeName = to; node.typeNameEnc = classEnc(to); }
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         walk(node[k]);
@@ -714,8 +717,8 @@ function validateProgram(ast, options = {}) {
         body: f.returns ? (f.returnAlternatives ?? [f.returns]).map(alt => ({
           type: 'Reply',
           fields: alt.map(r => (r.positional
-            ? { name: r.name, type: r.type, positional: true }
-            : { key: r.name, name: r.name, type: r.type, positional: r.positional })),
+            ? { name: r.name, type: r.type, typeEnc: r.typeEnc, positional: true }
+            : { key: r.name, name: r.name, type: r.type, typeEnc: r.typeEnc, positional: r.positional })),
         })) : [],
       }));
       const synthetic = {
@@ -730,6 +733,11 @@ function validateProgram(ast, options = {}) {
       };
       actorByName.set(typeName, synthetic);
       manifestActors.push(synthetic);
+      // Its instances' address, as the document gives it. A class reached as a
+      // dependency of its own (src/public_classes.js) is at that dependency's address.
+      const dep = (ast.dependencies || []).find(d => d.name === remoteName);
+      const at = dep?.wireTarget ?? `${quoteToken(dep?.path ?? remoteName)}:${quoteToken(typeName)}`;
+      run.classEncByName.set(typeName, `${at}:*`);
     }
   }
 
@@ -2353,6 +2361,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     const ctorTypeEnv = buildTypeEnv(actor.initParams || [], actor.constructorBody, null, localDepNames);
     for (const [k, v] of ctorTypeEnv) if (!v) ctorTypeEnv.delete(k);
     for (const [k, v] of stateTypeEnv) if (!ctorTypeEnv.has(k)) ctorTypeEnv.set(k, v);
+    mergeEnc(ctorTypeEnv, stateTypeEnv);
     validateBody(actor.constructorBody, actorInfo, localDepNames, localRemotes, localFactoryDecls, ctorTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 
@@ -2363,6 +2372,7 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
+    mergeEnc(typeEnv, stateTypeEnv);
     validateBody(fn.body, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 }
@@ -2392,9 +2402,11 @@ function actorDeps(actor, dependencyNames, remotesParsed, factoryDecls) {
 
 function actorStateTypes(actor, localDepNames) {
   const stateTypeEnv = new Map();
+  const enc = stateTypeEnv.enc = new Map();
   for (const s of (actor.constructorBody || [])) {
     if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
       stateTypeEnv.set(s.name, s.typeName);
+      if (s.typeNameEnc !== undefined) enc.set(s.name, s.typeNameEnc);
     }
     // Infer actor type from class calls against declared dependencies
     // (or against class coercions, which are in localDepNames):
@@ -2404,10 +2416,12 @@ function actorStateTypes(actor, localDepNames) {
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
         localDepNames.has(s.value.callee.name)) {
       stateTypeEnv.set(s.name, s.value.callee.name);
+      enc.set(s.name, classEnc(s.value.callee.name));
     }
   }
   for (const d of (actor.stateVarDecls || [])) {
     if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
+    if (d.typeNameEnc !== undefined) enc.set(d.name, d.typeNameEnc);
   }
   return stateTypeEnv;
 }
@@ -2444,6 +2458,7 @@ function inferCallBinds(ast, args) {
         if (!fn.body) continue;
         const typeEnv = buildTypeEnv(fn.params || [], fn.body, null, localDepNames);
         for (const [k, v] of stateTypeEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
+        mergeEnc(typeEnv, stateTypeEnv);
         inferred += infer(fn.body, typeEnv);
       }
     }
@@ -2773,8 +2788,11 @@ function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
 
 // `depNames`: a local constructed from one of these, `t = Thing()`, is a Thing,
 // as it is for the file's own cells.
+// The env's twin by encoded types rides on it as `env.enc` (buildTypeEnvEnc), for
+// the checks that read encodings; a copy or a merge carries it (`withEncOf`).
 function buildTypeEnv(params, body, typeDecls = null, depNames = null) {
   const env = new Map();
+  env.enc = buildTypeEnvEnc(params, body, { decls: declsByAddress(), depNames, typeOfName: classEnc });
   for (const p of params) {
     if (p.rest) continue;
     if (p.name && p.type) env.set(p.name, p.type);
@@ -2852,6 +2870,12 @@ function buildTypeEnvEnc(params, body, { decls = null, depNames = null, typeOfNa
   return env;
 }
 
+// `into`'s encoded twin takes what `from`'s has that it doesn't.
+function mergeEnc(into, from) {
+  into.enc ??= new Map();
+  for (const [k, v] of from.enc || []) if (!into.enc.has(k)) into.enc.set(k, v);
+}
+
 function inferLiteralTypeEnc(expr) {
   switch (expr?.type) {
     case 'IntLiteral': return 'Integer';
@@ -2878,79 +2902,23 @@ function inferLiteralType(expr) {
   return null;
 }
 
-// Split a type string on top-level `|` (respecting `(...)` and `->` depth).
-// Returns null when the type is not a union.
-function splitUnionMembers(ty) {
-  if (typeof ty !== 'string' || ty.indexOf('|') === -1) return null;
-  const parts = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < ty.length; i++) {
-    const c = ty[i];
-    if (c === '(') depth++;
-    else if (c === ')') depth--;
-    else if (c === '|' && depth === 0) {
-      parts.push(ty.slice(start, i).trim());
-      start = i + 1;
-    }
-  }
-  parts.push(ty.slice(start).trim());
-  return parts.length > 1 ? parts : null;
-}
-
-// Is `from` assignable to a parameter declared as `to`? Handles:
-//   - identical type or class names
-//   - 'Anything' on either side (wildcard)
-//   - union types on either side: target accepts any member; source assignable iff every member is
-//   - nominal subclassing between actor classes (from's superclass chain contains to)
-// Unknown types (null inputs) → null return, callers skip the check.
-function isAssignable(from, to, actorByName) {
-  if (!from || !to) return null;
-  if (from === to) return true;
-  if (from === 'Anything' || to === 'Anything') return true;
-  const toMembers = splitUnionMembers(to);
-  if (toMembers) {
-    const fromMembers = splitUnionMembers(from);
-    if (fromMembers) return fromMembers.every(fm => isAssignable(fm, to, actorByName));
-    return toMembers.some(tm => isAssignable(from, tm, actorByName));
-  }
-  const fromMembers = splitUnionMembers(from);
-  if (fromMembers) return false; // a union can't narrow to a single type without a guard
-  // Nominal subtyping: walk from's superclass chain looking for `to`.
-  const visited = new Set();
-  const stack = [from];
-  while (stack.length) {
-    const cur = stack.pop();
-    if (visited.has(cur)) continue;
-    visited.add(cur);
-    const actor = actorByName?.get(cur);
-    if (!actor?.supertypes) continue;
-    for (const st of actor.supertypes) {
-      if (st.supertype === to) return true;
-      stack.push(st.supertype);
-    }
-  }
-  return false;
-}
-
 // Best-effort type of an expression given the current scope's type env and
-// locally-tracked actor-constructor bindings. Returns null when ambiguous —
-// callers skip rather than false-positive.
-function inferExpressionType(expr, typeEnv, localActorTypes, actorNameSet) {
-  if (!expr) return null;
-  const lit = inferLiteralType(expr);
-  if (lit) return lit;
+// locally-tracked actor-constructor bindings, encoded: `env` by encoded types,
+// `localActorTypes` by class name. Unknown when ambiguous — callers skip rather
+// than false-positive.
+function inferExpressionTypeEnc(expr, env, localActorTypes, actorNameSet) {
+  if (!expr) return undefined;
+  const lit = inferLiteralTypeEnc(expr);
+  if (lit !== undefined) return lit;
   if (expr.type === 'Identifier') {
-    return localActorTypes?.get(expr.name) || typeEnv?.get(expr.name) || null;
+    if (localActorTypes?.has(expr.name)) return classEnc(localActorTypes.get(expr.name));
+    return env?.get(expr.name);
   }
-  if (expr.type === 'RefRead') return typeEnv?.get(expr.name) || null;
-  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier') {
-    const nm = expr.callee.name;
-    if (actorNameSet?.has(nm)) return nm;
-  }
-  if (expr.type === 'TypedValue' && expr.typeName) return expr.typeName;
-  if (expr.type === 'AsClause' && expr.targetType) return expr.targetType;
-  return null;
+  if (expr.type === 'RefRead') return env?.get(expr.name);
+  if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && actorNameSet?.has(expr.callee.name)) return classEnc(expr.callee.name);
+  if (expr.type === 'TypedValue' && expr.typeName) return expr.typeNameEnc;
+  if (expr.type === 'AsClause' && expr.targetType) return expr.targetTypeEnc;
+  return undefined;
 }
 
 function inferArgType(expr, typeEnv) {
@@ -2989,6 +2957,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     if (cls && actorNameSet?.has(cls)) {
       localActorTypes.set(s.name, cls);
       typeEnv.set(s.name, cls);
+      (typeEnv.enc ??= new Map()).set(s.name, classEnc(cls));
     }
   }
 
@@ -3118,43 +3087,35 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
     return true;
   };
-  // Substitute the whole-word token `Self` with `selfName` inside a type
-  // expression string. Used at constructor-call check time so that a
-  // signature like `:P List of Self!` resolves to `List of Peer` for the
-  // call site `Peer(P: peers)`. Whole-word match is safe — type strings
-  // use spaces, pipes, and "of" as separators.
-  const substituteSelf = (type, selfName) =>
-    (type && selfName) ? type.replace(/\bclass\b/g, selfName) : type;
-  // A class from another file is `Svc.Counter` as a construction and `Counter` as a
-  // type, the same way `w Counter = Svc.Counter(…)` names it. A type of that file is
-  // `Svc::Point` here and `Point` in its doc.
-  const acceptsArg = (argType, expected) => isAssignable(argType, expected, actorByName)
-    || isAssignable(argType.replace(/^\w+(?:\.|::)(\w+)!?$/, '$1'), expected, actorByName);
+  // Types here are encoded. `class` in a param's type is the class it's declared
+  // in, as the parser encoded it. A class of another file constructed through its
+  // service (`Svc.Counter(…)`) fits a param typed with its name there (`Counter`).
+  const argTypeOf = (expr) => inferExpressionTypeEnc(expr, typeEnv.enc, localActorTypes, actorNameSet);
+  const remoteName = (t) => (typeof t === 'string' && t.includes(':') ? splitAddress(t).filter(x => x !== '*').at(-1) : null);
+  const acceptsArg = (argType, expected) => assignableEnc(argType, expected, actorByName)
+    || (remoteName(argType) !== null && remoteName(argType) === expected);
   // Check arg-to-param type compatibility for a call that already matched
-  // `clause`. Runs isAssignable on each arg whose type can be inferred.
-  // Throws with a locating message on first mismatch.
-  const checkClauseTypes = (clause, call, label, selfName) => {
+  // `clause`. Throws with a locating message on first mismatch.
+  const checkClauseTypes = (clause, call, label) => {
     const { sigPos, sigNamed } = clauseArity(clause);
     for (let i = 0; i < call.positional.length && i < sigPos.length; i++) {
       const sp = sigPos[i];
-      if (!sp.type) continue;
+      if (!sp.type || sp.typeEnc === undefined) continue;
       const argExpr = call.positional[i]?.expr || call.positional[i];
-      const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
-      if (!argType) continue;
-      const expected = substituteSelf(sp.type, selfName);
-      if (!acceptsArg(argType, expected)) {
-        throw new Error(`${label} positional arg ${i + 1}: '${argType}' is not assignable to '${expected}'`);
+      const argType = argTypeOf(argExpr);
+      if (argType === undefined) continue;
+      if (!acceptsArg(argType, sp.typeEnc)) {
+        throw new Error(`${label} positional arg ${i + 1}: '${shown(argType)}' is not assignable to '${shown(sp.typeEnc)}'`);
       }
     }
     for (const sp of sigNamed) {
       const key = sp.key || sp.name;
       const argExpr = call.named.get(key);
-      if (!argExpr || !sp.type) continue;
-      const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
-      if (!argType) continue;
-      const expected = substituteSelf(sp.type, selfName);
-      if (!acceptsArg(argType, expected)) {
-        throw new Error(`${label} named arg '${key}': '${argType}' is not assignable to '${expected}'`);
+      if (!argExpr || !sp.type || sp.typeEnc === undefined) continue;
+      const argType = argTypeOf(argExpr);
+      if (argType === undefined) continue;
+      if (!acceptsArg(argType, sp.typeEnc)) {
+        throw new Error(`${label} named arg '${key}': '${shown(argType)}' is not assignable to '${shown(sp.typeEnc)}'`);
       }
     }
   };
@@ -3187,7 +3148,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
     // Only narrow types when exactly one clause fits — otherwise we'd have to
     // pick and risk false positives on the non-chosen clauses.
-    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()' constructor`, name);
+    if (accepting.length === 1) checkClauseTypes(accepting[0], call, `'${name}()' constructor`);
   };
   const checkLocalFunctionCall = (callExpr) => {
     if (callExpr.callee?.type !== 'Identifier') return;
@@ -3315,14 +3276,15 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // clause the args certainly fit ends the list; one they might fit joins it and
   // the search goes on; one they can't fit is passed over. Empty when none fits.
   const argFit = (argExpr, param) => {
-    if (!param?.type || param.type === 'Anything') return 'yes';
-    const argType = inferExpressionType(argExpr, typeEnv, localActorTypes, actorNameSet);
-    if (!argType) return 'maybe';
+    const expected = param?.typeEnc;
+    if (!param?.type || expected === undefined || expected === 'Anything') return 'yes';
+    const argType = argTypeOf(argExpr);
+    if (argType === undefined) return 'maybe';
     if (param.rest) return 'maybe';
-    if (acceptsArg(argType, param.type)) return 'yes';
-    if (!canJudge(argType, actorByName) || !canJudge(param.type, actorByName)) return 'maybe';
+    if (acceptsArg(argType, expected)) return 'yes';
+    if (!canJudgeEnc(argType, actorByName) || !canJudgeEnc(expected, actorByName)) return 'maybe';
     // A union arg, or a class that a subclass value could fill, might still fit.
-    const could = unionMembers(argType).some(m => isAssignable(m, param.type, actorByName) || isAssignable(param.type, m, actorByName));
+    const could = encMembers(argType).some(m => assignableEnc(m, expected, actorByName) || assignableEnc(expected, m, actorByName));
     return could ? 'maybe' : 'no';
   };
   const clauseFit = (params, call) => {
@@ -3384,13 +3346,14 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
       const slots = shapes.alternatives.map(alt => alt.find(slot => slot.name === null));
       if (slots.some(slot => !slot)) return null;
-      return { type: slots.map(slot => slot.type).reduce(mergeTypes), narrowable: false, literal: false };
+      const type = slots.map(slot => slot.typeEnc).reduce(mergeTypesEnc);
+      return type === undefined ? null : { type, narrowable: false, literal: false };
     }
     if (expr.type === 'ParenExpr') return valueType(expr.expr);
     if (expr.type === 'Identifier' || expr.type === 'RefRead') {
       if (dependencyNames?.has(expr.name)) return null;
-      const type = typeEnv.get(expr.name) || localActorTypes.get(expr.name);
-      return type ? { type, narrowable: true, literal: false } : null;
+      const type = typeEnv.enc?.get(expr.name) ?? (localActorTypes.has(expr.name) ? classEnc(localActorTypes.get(expr.name)) : undefined);
+      return type !== undefined ? { type, narrowable: true, literal: false } : null;
     }
     if (expr.type === 'BinaryExpr') {
       const l = valueType(expr.left);
@@ -3398,17 +3361,18 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       if (!l || !r) return null;
       const flags = { narrowable: l.narrowable || r.narrowable, literal: l.literal || r.literal };
       if (expr.op === '??') {
-        const present = unionMembers(l.type).filter(m => m !== 'null');
-        if (present.length === unionMembers(l.type).length) return l;
-        return { type: present.length ? mergeTypes(present.join(' | '), r.type) : r.type, ...flags };
+        const all = encMembers(l.type);
+        const present = all.filter(m => m !== null);
+        if (present.length === all.length) return l;
+        return { type: present.length ? mergeTypesEnc(present.reduce(mergeTypesEnc), r.type) : r.type, ...flags };
       }
-      const type = binaryResultType(expr.op, l.type, r.type);
-      return type ? { type, ...flags } : null;
+      const type = binaryResultTypeEnc(expr.op, l.type, r.type);
+      return type !== undefined ? { type, ...flags } : null;
     }
     if (expr.type === 'UnaryExpr' && expr.op === '-') return valueType(expr.operand ?? expr.arg);
     if (mentionsCall(expr)) return null;
-    const type = inferExprTypeFull(expr, typeEnv);
-    return type ? { type, narrowable: mentionsName(expr), literal: mentionsLiteral(expr) } : null;
+    const type = inferType(expr, typeEnv.enc);
+    return type !== undefined ? { type, narrowable: mentionsName(expr), literal: mentionsLiteral(expr) } : null;
   };
 
   // An unannotated bind of a call takes the callee's return type when the callee has
@@ -3419,10 +3383,13 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const shapes = callReturns(call)?.shapes;
     if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
     if (shapes.alternatives.some(alt => alt.length !== 1 || alt[0].name !== null)) return null;
-    const type = shapes.alternatives.map(alt => alt[0].type).reduce(mergeTypes);
-    if (!type || type.includes('Anything') || type.includes(' | ') || type === 'Object' || type === 'null') return null;
-    if (/[-=~]>/.test(type) || actorByName.has(type) || actorNameSet.has(type) || dependencyNames.has(type)) return null;
-    return { text: type, enc: shapes.alternatives.map(alt => alt[0].typeEnc).reduce(mergeTypesEnc) };
+    const enc = shapes.alternatives.map(alt => alt[0].typeEnc).reduce(mergeTypesEnc);
+    if (enc === undefined || enc === null || mentionsAnythingEnc(enc) || isUnion(enc) || enc === 'Object' || isFn(enc)) return null;
+    // Nor an actor: a class here or in another file, or a dependency itself.
+    if (isInstance(enc) || classOfEnc(enc, actorByName) || [...actorNameSet].some(n => classEnc(n) === enc)
+      || [...dependencyNames].some(n => classEnc(n) === enc)) return null;
+    // The code generators' text, while they read it.
+    return { text: shapes.alternatives.map(alt => alt[0].type).reduce(mergeTypes), enc };
   };
   if (inferOnly) {
     let inferred = 0;
@@ -3434,6 +3401,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       s.typeName = type.text;
       if (type.enc !== undefined) s.typeNameEnc = type.enc;
       typeEnv.set(s.name, type.text);
+      if (type.enc !== undefined) (typeEnv.enc ??= new Map()).set(s.name, type.enc);
       inferred++;
     }
     return inferred;
@@ -3868,6 +3836,100 @@ const functionOwners = new WeakMap();
 let functionsByName = new Map();
 const COMPARABLE_SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'null']);
 
+// ── Encoded types (src/type_enc.js) ──────────────────────────────────────────
+//
+// What one run of validation needs to read encoded types: the program, for the
+// encoding a name has in it, and its declared types by address.
+const run = { ast: null, declsByAddress: null, classEncByName: new Map() };
+
+// A class, by its name here (a public one is `C__pub` while validation runs), as an
+// encoded type: an instance of it, as an annotation naming it would be encoded.
+function classEnc(name) {
+  if (typeof name !== 'string' || !run.ast?.typeNamed) return undefined;
+  if (run.classEncByName.has(name)) return run.classEncByName.get(name);
+  const written = name.endsWith(PUBLIC_CLASS_SUFFIX) ? `@${name.slice(0, -PUBLIC_CLASS_SUFFIX.length)}` : name;
+  return run.ast.typeNamed(written.includes('.') ? written.split('.') : [written]);
+}
+
+// The class an encoded type is an instance of, by its name here, or null.
+const classesByEnc = new WeakMap();
+function classOfEnc(t, actorByName) {
+  if (!isInstance(t) || !actorByName) return null;
+  if (!classesByEnc.has(actorByName)) {
+    classesByEnc.set(actorByName, new Map([...actorByName.keys()].map(n => [classEnc(n), n])));
+  }
+  return classesByEnc.get(actorByName).get(t) ?? null;
+}
+
+// How a message writes an encoded type: as the source names it. A public class is
+// its name while validation runs (`C__pub`, shown as `@C`); a type of another
+// service, by its name there.
+function shown(t) {
+  return show(t, (a) => {
+    const own = ownPath(a);
+    if (own) {
+      const names = ownNames(a);
+      return own.length === 1 && isInstance(a) && !own[0].startsWith('~') ? `${names[0]}${PUBLIC_CLASS_SUFFIX}` : names.join('::');
+    }
+    if (!a.includes(':')) return a;
+    const tokens = splitAddress(a).filter(x => x !== '*');
+    return tokens.slice(1).join('::') || tokens[0];
+  });
+}
+
+const comparable = (m) => m === null || (typeof m === 'string' && COMPARABLE_SCALARS.has(m));
+
+// Whether validation can judge an encoded type: built-in scalars and classes of
+// this file whose actors have no `as` clauses.
+function canJudgeEnc(t, actorByName) {
+  if (t === undefined) return false;
+  return encMembers(t).every(m => m === 'Anything' || comparable(m)
+    || (classOfEnc(m, actorByName) && !actorByName.get(classOfEnc(m, actorByName)).asClauses?.length));
+}
+
+// Is `from` assignable to `to`, both encoded? The same type, `Anything` on either
+// side, a union (the target takes any member; a union source, only if each member
+// fits), or a class whose superclasses include the target's. Unknown → null.
+function assignableEnc(from, to, actorByName) {
+  if (from === undefined || to === undefined) return null;
+  if (from === to) return true;
+  if (from === 'Anything' || to === 'Anything') return true;
+  if (isUnion(to)) {
+    if (isUnion(from)) return encMembers(from).every(fm => assignableEnc(fm, to, actorByName));
+    return encMembers(to).some(tm => assignableEnc(from, tm, actorByName));
+  }
+  if (isUnion(from)) return false; // a union can't narrow to a single type without a guard
+  const start = classOfEnc(from, actorByName);
+  if (!start) return false;
+  const visited = new Set();
+  const stack = [start];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    for (const st of actorByName.get(cur)?.supertypes || []) {
+      if (classEnc(st.supertype) === to) return true;
+      stack.push(st.supertype);
+    }
+  }
+  return false;
+}
+
+// Whether an encoded type says `Anything` anywhere in it.
+const mentionsAnythingEnc = (t) => t === 'Anything' || (Array.isArray(t) ? t.some(mentionsAnythingEnc)
+  : t && typeof t === 'object' ? Object.values(t).some(mentionsAnythingEnc) : false);
+
+// Declared types by address, for the destructure inference.
+function declsByAddress() {
+  if (!run.declsByAddress && run.ast) {
+    const table = new Map();
+    for (const t of run.ast.types || []) table.set(t.typeNameEnc ?? addressOfDecl(t), t);
+    run.declsByAddress = table;
+  }
+  return run.declsByAddress;
+}
+const addressOfDecl = (t) => [':', [...(t.ownerTokens ?? t.owner ?? []), t.bareName ?? t.name].map(quoteToken).join(':')].join('');
+
 // The types of the names a function's owner gives it, by their text (`env`) and
 // encoded (`envEnc`), as src/return_shapes.js reads an outer scope.
 function fnOuterTypes(fn) {
@@ -3918,19 +3980,15 @@ function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, selec
   return { label: `${name}.${call.method}`, shapes: mergeShapes(chosen.map(docReturnShapes)) };
 }
 
-function canJudge(type, actorByName) {
-  return unionMembers(type).every(t => t === 'Anything' || COMPARABLE_SCALARS.has(t)
-    || (actorByName?.has(t) && !actorByName.get(t).asClauses?.length));
-}
-
 function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actorByName) {
   if (opaque || alternatives.length === 0) return;
-  const mismatch = (declared, actual) => canJudge(declared, actorByName) && canJudge(actual, actorByName)
-    && isAssignable(actual, declared, actorByName) === false;
+  const mismatch = (declared, actual) => canJudgeEnc(declared, actorByName) && canJudgeEnc(actual, actorByName)
+    && assignableEnc(actual, declared, actorByName) === false;
 
   if (s.type === 'TypedAssign') {
     const declared = s.typeName;
-    if (!declared || declared === 'Anything') return;
+    const declaredEnc = s.typeNameEnc;
+    if (!declared || declaredEnc === undefined || declaredEnc === 'Anything') return;
     const slots = alternatives.map(alt => alt.find(slot => slot.name === null));
     const missing = alternatives.find((alt, i) => alt.length > 0 && !slots[i]);
     if (missing) {
@@ -3941,10 +3999,10 @@ function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actor
       throw new Error(`Cannot bind '${s.name}' to '${label}()' — one of its paths returns only named fields (${names}); handle its shapes separately`);
     }
     if (orSelf) throw new Error(`Cannot bind '${s.name} ${declared}' to '${label}()' — some of its paths return self, not a value`);
-    const known = slots.filter(Boolean).map(slot => slot.type);
-    const bad = known.find(type => mismatch(declared, type));
-    if (bad) {
-      const all = [...new Set(known.flatMap(unionMembers))].join(' | ');
+    const known = slots.filter(Boolean).map(slot => slot.typeEnc).filter(t => t !== undefined);
+    const bad = known.find(type => mismatch(declaredEnc, type));
+    if (bad !== undefined) {
+      const all = [...new Set(known.flatMap(encMembers))].map(shown).join(' | ');
       throw new Error(`Cannot bind '${s.name} ${declared}' to '${label}()' — it can return ${all}. Annotate '${s.name} ${all}', or coerce: '${s.name} ${declared} = ${label}() as ${declared}'`);
     }
     return;
@@ -3957,8 +4015,8 @@ function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actor
     for (const alt of alternatives) {
       const slot = alt.find(c => c.name === key);
       if (!slot) throw new Error(`Cannot destructure '${key}' from '${label}()' — only some of its paths return it`);
-      if (item.type && mismatch(item.type, slot.type)) {
-        throw new Error(`Cannot bind '${key} ${item.type}' to '${label}()' — it can return ${slot.type} there`);
+      if (item.type && item.typeEnc !== undefined && slot.typeEnc !== undefined && mismatch(item.typeEnc, slot.typeEnc)) {
+        throw new Error(`Cannot bind '${key} ${item.type}' to '${label}()' — it can return ${shown(slot.typeEnc)} there`);
       }
     }
     if (orSelf) throw new Error(`Cannot destructure '${key}' from '${label}()' — some of its paths return self`);
@@ -3976,23 +4034,25 @@ const LITERAL_FORMS = new Map([
 
 function checkAnnotationValue(s, value, actorByName) {
   const declared = s.typeName;
-  if (!value || !declared || declared === 'Anything') return;
+  const declaredEnc = s.typeNameEnc;
+  if (!value || !declared || declaredEnc === undefined || declaredEnc === 'Anything') return;
   const { type, narrowable, literal } = value;
-  if (!canJudge(declared, actorByName) || !canJudge(type, actorByName)) return;
-  const members = unionMembers(type);
+  if (!canJudgeEnc(declaredEnc, actorByName) || !canJudgeEnc(type, actorByName)) return;
+  const members = encMembers(type);
   // A name holding an actor is asked for `as` at run time, and may hold a
   // subclass that has clauses: that's the runtime's to judge.
-  const holds = (m) => isAssignable(m, declared, actorByName)
-    || (literal && LITERAL_FORMS.get(m)?.includes(declared))
-    || (narrowable && actorByName?.has(m));
+  const holds = (m) => assignableEnc(m, declaredEnc, actorByName)
+    || (literal && typeof m === 'string' && LITERAL_FORMS.get(m)?.includes(declaredEnc))
+    || (narrowable && !!classOfEnc(m, actorByName));
   const wrong = narrowable ? !members.some(holds) : !members.every(holds);
   if (!wrong) return;
   const is = members.length > 1 ? 'can be' : 'is';
   const named = s.value?.type === 'Identifier' || s.value?.type === 'RefRead' ? s.value.name : null;
+  const shownType = shown(type);
   if (named) {
-    throw new Error(`Cannot bind '${s.name} ${declared}' to '${named}', which ${is} ${type}. Annotate '${s.name} ${type}', or coerce: '${s.name} ${declared} = ${named} as ${declared}'`);
+    throw new Error(`Cannot bind '${s.name} ${declared}' to '${named}', which ${is} ${shownType}. Annotate '${s.name} ${shownType}', or coerce: '${s.name} ${declared} = ${named} as ${declared}'`);
   }
-  throw new Error(`Cannot bind '${s.name} ${declared}' to a value that ${is} ${type}. Annotate '${s.name} ${type}', or coerce it with 'as ${declared}'`);
+  throw new Error(`Cannot bind '${s.name} ${declared}' to a value that ${is} ${shownType}. Annotate '${s.name} ${shownType}', or coerce it with 'as ${declared}'`);
 }
 
 // `x T = f()` binds f's positional result. When f returns only named fields,
@@ -4221,7 +4281,6 @@ function validateLoweredCall(expr, typeEnv, actorByName) {
 // Whether a call's args fit one of a document's signatures. `label` names the
 // receiver in messages; `dep` is the alias whose doc names its types bare.
 function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
-  const actorName = dep;
   const methodName = expr.method;
   const callPositional = expr.args.filter(a => a.positional !== false && a.type !== 'NamedArgsBag');
   const callNamed = expr.args.filter(a => a.positional === false || a.type === 'NamedArgsBag');
@@ -4233,15 +4292,13 @@ function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
       callNamedKeys.add(a.name);
     }
   }
-  // The doc names its own types bare: `Svc::Point` here is `Point` there.
-  const inDocFrame = (t) => (typeof t === 'string' && t.startsWith(`${actorName}::`) ? t.slice(actorName.length + 2) : t);
+  // Types are encoded: a document's are in this file's terms as it's read
+  // (src/service_doc.js, readDocument), so `Svc::Point` here is its `:Point`.
   const argType = (a) => {
-    if (a.typeName) return inDocFrame(a.typeName);
-    if (a.expr?.type === 'Identifier' && typeEnv) {
-      return inDocFrame(typeEnv.get(a.expr.name)) || null;
-    }
-    if (a.expr) return inferLiteralType(a.expr);
-    return null;
+    if (a.typeName) return a.typeNameEnc;
+    if (a.expr?.type === 'Identifier') return typeEnv?.enc?.get(a.expr.name);
+    if (a.expr) return inferLiteralTypeEnc(a.expr);
+    return undefined;
   };
   const errors = [];
   for (const sig of sigs) {
@@ -4266,9 +4323,9 @@ function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
     let typeMismatch = false;
     for (let i = 0; i < callPositional.length; i++) {
       const callType = argType(callPositional[i]);
-      const sigType = sigPositional[i]?.type;
-      if (callType && sigType && isAssignable(callType, sigType, actorByName) === false) {
-        errors.push(`positional arg ${i + 1}: expected ${sigType}, got ${callType}`);
+      const sigType = sigPositional[i]?.typeEnc;
+      if (callType !== undefined && sigType !== undefined && assignableEnc(callType, sigType, actorByName) === false) {
+        errors.push(`positional arg ${i + 1}: expected ${shown(sigType)}, got ${shown(callType)}`);
         typeMismatch = true;
         break;
       }
@@ -4279,8 +4336,8 @@ function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
       if (!aName) continue;
       const callType = argType(a);
       const sigParam = sigNamed.find(p => p.name === aName);
-      if (callType && sigParam?.type && isAssignable(callType, sigParam.type, actorByName) === false) {
-        errors.push(`named arg '${aName}': expected ${sigParam.type}, got ${callType}`);
+      if (callType !== undefined && sigParam?.typeEnc !== undefined && assignableEnc(callType, sigParam.typeEnc, actorByName) === false) {
+        errors.push(`named arg '${aName}': expected ${shown(sigParam.typeEnc)}, got ${shown(callType)}`);
         typeMismatch = true;
         break;
       }

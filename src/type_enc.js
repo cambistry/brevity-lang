@@ -85,39 +85,41 @@ export const isInstance = (t) => typeof t === 'string' && t.endsWith(':*');
 const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals']]);
 const isEntries = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
 const showName = (a) => (ownNames(a) ? ownNames(a).join('::') : a);
-const showEntries = (list) => list.flatMap(e => (isEntries(e)
-  ? Object.entries(e).map(([k, v]) => `${k}: ${show(v)}`)
-  : [show(e)])).join(', ');
-const showElement = (p) => {
-  if (!Array.isArray(p)) return show(p);
+const showEntries = (list, nameOf = showName) => list.flatMap(e => (isEntries(e)
+  ? Object.entries(e).map(([k, v]) => `${k}: ${show(v, nameOf)}`)
+  : [show(e, nameOf)])).join(', ');
+const showElement = (p, nameOf) => {
+  if (!Array.isArray(p)) return show(p, nameOf);
   const [inner] = p;
   if (typeof inner === 'string' && PLURAL_OF.has(inner)) return PLURAL_OF.get(inner);
-  if (isList(inner)) return `Lists of ${showElement(inner[0])}`;
-  return show(inner);
+  if (isList(inner)) return `Lists of ${showElement(inner[0], nameOf)}`;
+  return show(inner, nameOf);
 };
 // A function type's reply, as its signature writes it after the arrow.
-export const showReply = (sig) => {
+export const showReply = (sig, nameOf = showName) => {
   if (!sig.re) return '.';
   const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
   const self = shapes.some(s => s.length === 1 && isSelf(s[0]));
-  return [...shapes.filter(s => !(s.length === 1 && isSelf(s[0]))).map(s => `(${showEntries(s)})`), ...(self ? ['self'] : [])].join(' | ');
+  return [...shapes.filter(s => !(s.length === 1 && isSelf(s[0]))).map(s => `(${showEntries(s, nameOf)})`), ...(self ? ['self'] : [])].join(' | ');
 };
-export function show(t) {
+// `nameOf` renders each address; by default, as the type's own name.
+export function show(t, nameOf = showName) {
+  if (t === undefined) return 'Anything';
   if (t === null) return 'null';
-  if (typeof t === 'string') return showName(t);
+  if (typeof t === 'string') return nameOf(t);
   if (Array.isArray(t)) {
     const name = genericName(t);
     if (name === 'Object') {
       const named = Object.fromEntries(Object.entries(t[t.length - 1]).filter(([k]) => k !== '%t'));
-      return `(${showEntries([...t.slice(0, -1), ...(Object.keys(named).length ? [named] : [])])})`;
+      return `(${showEntries([...t.slice(0, -1), ...(Object.keys(named).length ? [named] : [])], nameOf)})`;
     }
-    return `${showName(name)} of ${showElement(t[0])}`;
+    return `${nameOf(name)} of ${showElement(t[0], nameOf)}`;
   }
-  if (isUnion(t)) return t['%or'].map(show).join(' | ');
-  if ('%opt' in t) return show(t['%opt']);
+  if (isUnion(t)) return t['%or'].map(m => show(m, nameOf)).join(' | ');
+  if ('%opt' in t) return show(t['%opt'], nameOf);
   if (isFn(t)) {
     const sig = fnSignature(t);
-    return `(${showEntries(sig.args || [])}) ${sig.re ? fnArrow(t) : '=>'} ${showReply(sig)}`;
+    return `(${showEntries(sig.args || [], nameOf)}) ${sig.re ? fnArrow(t) : '=>'} ${showReply(sig, nameOf)}`;
   }
   throw new Error(`Unrecognized type: ${JSON.stringify(t)}`);
 }
