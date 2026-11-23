@@ -38,28 +38,28 @@ describe('a type declared in a class', () => {
   it('is constructed through its class, and tagged with the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'byClass', from: 'c' } },
-      { output: { id: '1', ty: [{ result: ':W:X' }], re: [{ result: [2] }], to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':~W:X' }], re: [{ result: [2] }], to: 'c' } },
     );
   });
 
   it('is constructed through an actor of the class', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'byActor', from: 'c' } },
-      { output: { id: '1', ty: [{ result: ':W:X' }], re: [{ result: [3] }], to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':~W:X' }], re: [{ result: [3] }], to: 'c' } },
     );
   });
 
   it('is constructed through a singleton', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'bySingleton', from: 'c' } },
-      { output: { id: '1', ty: [{ result: ':S:Widget' }], re: [{ result: ['a', 'b'] }], to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':~S:Widget' }], re: [{ result: ['a', 'b'] }], to: 'c' } },
     );
   });
 
   it('is reached through nested classes', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'nested', from: 'c' } },
-      { output: { id: '1', ty: [{ result: ':A:B:Y' }], re: [{ result: [4] }], to: 'c' } },
+      { output: { id: '1', ty: [{ result: ':~A:~B:Y' }], re: [{ result: [4] }], to: 'c' } },
     );
   });
 
@@ -72,7 +72,7 @@ describe('a type declared in a class', () => {
 
   it('decodes a param annotated with the class\'s type', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[{ p: [5] }], 'read'], ty: [[{ p: ':W:X' }]], from: 'c' } },
+      { input: { id: '1', op: [[{ p: [5] }], 'read'], ty: [[{ p: ':~W:X' }]], from: 'c' } },
       { output: { id: '1', re: [{ result: 5 }], ty: [{ result: 'Integer' }], to: 'c' } },
     );
   });
@@ -133,9 +133,9 @@ describe('types of one name in different actors', () => {
       { input: { id: '1', op: 'file', from: 'c' } },
       { output: { id: '1', ty: [{ result: ':X' }], re: [{ result: [1] }], to: 'c' } },
       { input: { id: '2', op: 'w', from: 'c' } },
-      { output: { id: '2', ty: [{ result: ':W:X' }], re: [{ result: [2] }], to: 'c' } },
+      { output: { id: '2', ty: [{ result: ':~W:X' }], re: [{ result: [2] }], to: 'c' } },
       { input: { id: '3', op: 'v', from: 'c' } },
-      { output: { id: '3', ty: [{ result: ':V:X' }], re: [{ result: [3, 4] }], to: 'c' } },
+      { output: { id: '3', ty: [{ result: ':~V:X' }], re: [{ result: [3, 4] }], to: 'c' } },
     );
   });
 
@@ -150,11 +150,11 @@ describe('types of one name in different actors', () => {
 
   it('a param takes its own type, and refuses the other', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: [[{ p: [5, 6] }], 'readV'], ty: [[{ p: ':V:X' }]], from: 'c' } },
+      { input: { id: '1', op: [[{ p: [5, 6] }], 'readV'], ty: [[{ p: ':~V:X' }]], from: 'c' } },
       { output: { id: '1', ty: [{ result: 'Integer' }], re: [{ result: 6 }], to: 'c' } },
-      { input: { id: '2', op: [[{ p: [5] }], 'readW'], ty: [[{ p: ':W:X' }]], from: 'c' } },
+      { input: { id: '2', op: [[{ p: [5] }], 'readW'], ty: [[{ p: ':~W:X' }]], from: 'c' } },
       { output: { id: '2', ty: [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
-      { input: { id: '3', op: [[{ p: [5, 6] }], 'readW'], ty: [[{ p: ':V:X' }]], from: 'c' } },
+      { input: { id: '3', op: [[{ p: [5, 6] }], 'readW'], ty: [[{ p: ':~V:X' }]], from: 'c' } },
       { output: expect.objectContaining({ id: '3', to: 'c', ex: expect.anything() }) },
     );
   });

@@ -151,6 +151,10 @@ Decided 2026-11-22, for the forms the note above leaves open:
   `":Point": ["Integer", { "y": "Integer", "%names": ["x"] }]`. A caller reads a positional field
   by name (`p.x`), and decodes a value into its fields, so the names are part of the type's
   interface, unlike a positional param's.
+- **An address names a class by its wire label** (2026-11-22): a private class is `~Box`, as its
+  instances' maker tag already was, so a private `Box` (`:~Box:*`) and the public `@Box`
+  (`:Box:*`) are two types. A type declared in a class is addressed through it: `:~W:X` in a
+  private `W`, `:W:X` in a public `@W`. A type itself is always public: it never takes a `~`.
 - **A service's `as` clauses are its `$as` op,** one signature per type it converts to: `$as`
   takes the type and replies the value as it, so each signature is `{ "re": [T], "writes": false }`,
   its arg the type of its reply.

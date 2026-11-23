@@ -5,6 +5,7 @@ import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
 import { tokenize } from './lexer.js';
 import { TT, renderType } from './type_tree.js';
+import { wireLabel } from './codegen/wire_labels.js';
 import { encodeAstTypes } from './parser_types.js';
 import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, addRemoteParents, dropRemoteParents, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
@@ -6508,9 +6509,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     // A class with members is named where it is declared (its home), not in them.
     return [...classPath('home' in a ? a.home : a.enclosing), (a.singletonOf ?? a.name).replace(/^@/, '')];
   };
+  // The same path as an address's tokens: each class by its wire label, so a
+  // private class is `~W` (src/codegen/wire_labels.js).
+  const classTokens = (name) => {
+    const a = name && byName.get(name);
+    if (!a) return [];
+    return [...classTokens('home' in a ? a.home : a.enclosing), wireLabel(a.singletonOf ?? a.name)];
+  };
   for (const t of types) {
     if (!t.ownerClass) continue;
     t.owner = classPath(t.ownerClass);
+    Object.defineProperty(t, 'ownerTokens', { value: classTokens(t.ownerClass), configurable: true, enumerable: false, writable: true });
     t.bareName = t.name;
     t.name = [...t.owner, t.name].join('::');
   }

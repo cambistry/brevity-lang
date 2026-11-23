@@ -10,6 +10,7 @@
 import { cellNode, typeScope, SELF } from './opre_types.js';
 import { intern, translate, isInterned } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
+import { wireLabel } from './codegen/wire_labels.js';
 
 const WRITES = { read: false, write: true };
 const own = (o) => Object.keys(o || {}).filter(k => !k.startsWith('__'));
@@ -159,9 +160,16 @@ export function fileScope(ast, remoteDocs = {}) {
     }
   }
   const isClass = (a) => a.name && !a.singletonOf && !a.membersOf && !a.remoteStub;
+  const classes = (ast.actors || []).filter(isClass).map(a => a.sourceName ?? a.name);
+  // An address names each class by its wire label: a private one with its `~`.
+  const tokensOf = Object.fromEntries([
+    ...classes.map(n => [n, [quote(wireLabel(n))]]),
+    ...(ast.types || []).filter(t => t.ownerTokens).map(t => [t.name, [...t.ownerTokens, t.bareName ?? t.name].map(quote)]),
+  ]);
   return typeScope({
     types: (ast.types || []).map(t => t.name),
-    classes: (ast.actors || []).filter(isClass).map(a => a.sourceName ?? a.name),
+    classes,
+    tokensOf,
     services,
     bindings,
     serviceClasses: (path, rest) => {

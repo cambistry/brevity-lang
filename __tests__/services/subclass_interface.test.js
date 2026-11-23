@@ -184,7 +184,7 @@ describe('subclass interface — ^ forms', () => {
       @U = @A ^ (b Box) *{ super() }
     `);
     expect(s[':U'].extends).toEqual([':A']);
-    expect(s[':U'].public.$new).toEqual($new([':Box:*'], 'U'));
+    expect(s[':U'].public.$new).toEqual($new([':~Box:*'], 'U'));
   });
 
   it('a param typed with a public class is a param, not a wrapped parent', () => {

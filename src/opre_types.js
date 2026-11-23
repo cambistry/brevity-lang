@@ -40,7 +40,9 @@ export const SELF = Object.freeze({ '%self': true });
 //   bindings  { name: { address, isClass } } for a name a dependency binds (`use :T = "svc"`)
 //   within    the classes a name is read inside, outermost first: there, a type or
 //             class declared in one is named bare
-export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [] } = {}) {
+//   tokensOf  a declared type's or class's address tokens, by its name as declared,
+//             where they aren't its name's (`W::X` in a private `W` is `~W:X`)
+export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [], tokensOf = {} } = {}) {
   const strip = (n) => n.replace(/^@/, '');
   const typeSet = new Set([...types].map(strip));
   // A class by its name as declared: `@Pub` is the public class, and a bare `Pub`
@@ -51,16 +53,18 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
   const declared = (segs) => typeSet.has(segs.join('::')) || isClassName(segs.join('::'));
   return {
     // The same names, read inside the class `name`.
-    within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, strip(name)] }),
+    within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, name], tokensOf }),
     // The address of the type `path` names: an instance for a class, unless `asClass`.
     resolve(path, { asClass = false } = {}) {
       let segs = path.map(strip);
       const instance = asClass ? '' : ':*';
+      const own = (name) => tokensOf[name] ?? name.split('::').map(n => quote(strip(n)));
       // `class`, the class of the actor the type is in.
-      if (segs[0] === 'class' && within.length) return `:${tokens([...within, ...segs.slice(1)])}${segs.length > 1 ? '' : instance}`;
+      if (segs[0] === 'class' && within.length) return `:${own(within[within.length - 1]).join(':')}${segs.length > 1 ? `:${tokens(segs.slice(1))}` : instance}`;
       let nested = false;
-      for (let i = within.length; i > 0; i--) {
-        const inner = [...within.slice(0, i), ...segs];
+      const withinNames = within.map(strip);
+      for (let i = withinNames.length; i > 0; i--) {
+        const inner = [...withinNames.slice(0, i), ...segs];
         if (declared(inner)) { segs = inner; nested = true; break; }
       }
       if (Object.hasOwn(bindings, segs[0])) {
@@ -76,9 +80,11 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
         return `${head}:${tokens(rest)}${serviceClasses(services[segs[0]], rest) ? instance : ''}`;
       }
       const joined = segs.join('::');
-      if (typeSet.has(joined)) return `:${tokens(segs)}`;
+      if (typeSet.has(joined)) return `:${own(joined).join(':')}`;
       const written = path.join('::');
-      if (classSet.has(written) || path[0].startsWith('@') || (nested && isClassName(joined))) return `:${tokens(segs)}${instance}`;
+      if (classSet.has(written)) return `:${own(written).join(':')}${instance}`;
+      if (path[0].startsWith('@')) return `:${tokens(segs)}${instance}`;
+      if (nested && isClassName(joined)) return `:${own(classSet.has(joined) ? joined : `@${joined}`).join(':')}${instance}`;
       return tokens(segs);
     },
   };

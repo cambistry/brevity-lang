@@ -144,7 +144,7 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
       const owner = [...base.local, ...between];
       const decl = localTypes.find(t => bareOf(t) === name && samePath(t.owner || [], owner));
       if (!decl) throw new Error(`'${[...segments.slice(0, -1)].join('::')}' has no type '${name}'`);
-      resolvedAddress.set(written, addressOf('', decl.owner, bareOf(decl)));
+      resolvedAddress.set(written, addressOf('', decl.ownerTokens ?? decl.owner, bareOf(decl)));
       return decl.name;
     }
     const classes = [...base.classes, ...between];

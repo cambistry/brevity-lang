@@ -76,12 +76,15 @@ export const ownPath = (t) => {
   if (segs[segs.length - 1] === '*') segs.pop();
   return segs;
 };
+// The same, by the names the source declares them with: a private class's `~`
+// is its wire label's, not its name's.
+export const ownNames = (t) => ownPath(t)?.map(s => s.replace(/^~/, '')) ?? null;
 export const isInstance = (t) => typeof t === 'string' && t.endsWith(':*');
 
 // ── Text, for a message ───────────────────────────────────────────────────────
 const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals']]);
 const isEntries = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
-const showName = (a) => (ownPath(a) ? ownPath(a).join('::') : a);
+const showName = (a) => (ownNames(a) ? ownNames(a).join('::') : a);
 const showEntries = (list) => list.flatMap(e => (isEntries(e)
   ? Object.entries(e).map(([k, v]) => `${k}: ${show(v)}`)
   : [show(e)])).join(', ');

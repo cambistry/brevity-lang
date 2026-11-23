@@ -8,6 +8,8 @@
 import { _opre_quote as quoteToken } from './opre_tokens.js';
 
 // `authority` is already written; '' is self, so a local key starts with `:`.
+// `owner` is the owning classes' tokens: each by its wire label, a private class
+// with its `~`.
 const address = (authority, owner, name) => [authority, ...[...(owner || []), name].map(quoteToken)].join(':');
 
 // sourceName → { name, fields, owner, key, authority }. `name` is the bare name.
@@ -17,7 +19,7 @@ export function buildTypeTable(ast) {
   const pathOf = (alias) => deps.get(alias)?.path || alias;
   for (const t of ast.types || []) {
     const name = t.bareName ?? t.name;
-    table.set(t.name, { ...t, name, key: address('', t.owner, name), authority: '' });
+    table.set(t.name, { ...t, name, key: address('', t.ownerTokens ?? t.owner, name), authority: '' });
   }
   // A type destructured out of a header binds under its local name and its remote
   // one: `(Point: P)` keeps `Point` on the wire.

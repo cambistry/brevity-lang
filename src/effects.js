@@ -6,7 +6,7 @@
 // Design: notes/mutation-suffix-2026-10-31.md.
 
 import { receiverDoc, receiverLabel } from './opre.js';
-import { fnArrow, fnReply, fnSignature, showReply, ownPath } from './type_enc.js';
+import { fnArrow, fnReply, fnSignature, showReply, ownNames } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { settleWriterBody, eachReturn } from './writer_body.js';
@@ -40,7 +40,7 @@ function typeNamer(ast) {
   return (enc) => {
     if (typeof enc !== 'string') return null;
     const t = enc;
-    const path = ownPath(t);
+    const path = ownNames(t);
     if (path) {
       const name = path.join('::');
       return classes.has(name) || !classes.has('@' + name) ? name : '@' + name;

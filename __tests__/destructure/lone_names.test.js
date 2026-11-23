@@ -39,7 +39,7 @@ describe('destructure — key: X resolves by scope', () => {
 
   it('a class declared later in the file is in scope', () => {
     expect(patternOf(`g = (n Integer) { return value: Box(n) }\n@go = { value: Box = g(7); return :value }\nBox = (v Integer) *{ @get = -> r: v }\n`))
-      .toEqual([{ named: true, name: 'value', type: 'Box', typeEnc: ':Box:*' }]);
+      .toEqual([{ named: true, name: 'value', type: 'Box', typeEnc: ':~Box:*' }]);
   });
 
   it('a local may not take the name of a type in scope', () => {
