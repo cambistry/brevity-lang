@@ -1,5 +1,8 @@
 # "Self becomes" — constructor tail-return as structural interface extension (2026-04-14)
 
+> **Superseded 2026-11-23 by `constructor-return-as-retired-2026-11-23.md`.** A constructor's
+> `return expr` no longer projects; `self as` is the one projection form.
+
 Reframe of the tail-return feature captured earlier the same day in `implicit-return-refinements-2026-04-14.md`. That note framed the tail `->` as sugar over `self as` (a projection). This note supersedes that framing: the tail-return is a **different mechanism** from `self as`, and should be thought of as "self becomes," not "self as."
 
 Both mechanisms can coexist. See the "Relationship to `self as`" section below.
