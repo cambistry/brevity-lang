@@ -15,7 +15,7 @@ import { resolveNames } from './names.js';
 import { resolveTypeNames } from './type_names.js';
 import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
-import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes } from './return_shapes.js';
+import { returnShapes, docReturnShapes, fieldAcrossReturns, unionMembers, mergeShapes, mergeTypes, mergeTypesEnc } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
@@ -2424,6 +2424,7 @@ function inferCallBinds(ast, args) {
           if (b.type !== 'TypedAssign') continue;
           b.stmt.typeName = b.typeName;
           decls.get(b.name).typeName = b.typeName;
+          if (b.typeNameEnc !== undefined) b.stmt.typeNameEnc = decls.get(b.name).typeNameEnc = b.typeNameEnc;
         }
       }
       const stateTypeEnv = actorStateTypes(actor, localDepNames);
@@ -3356,7 +3357,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const type = shapes.alternatives.map(alt => alt[0].type).reduce(mergeTypes);
     if (!type || type.includes('Anything') || type.includes(' | ') || type === 'Object' || type === 'null') return null;
     if (/[-=~]>/.test(type) || actorByName.has(type) || actorNameSet.has(type) || dependencyNames.has(type)) return null;
-    return type;
+    return { text: type, enc: shapes.alternatives.map(alt => alt[0].typeEnc).reduce(mergeTypesEnc) };
   };
   if (inferOnly) {
     let inferred = 0;
@@ -3365,8 +3366,9 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const type = singleReturnType(s.value);
       if (!type) continue;
       s.type = 'TypedAssign';
-      s.typeName = type;
-      typeEnv.set(s.name, type);
+      s.typeName = type.text;
+      if (type.enc !== undefined) s.typeNameEnc = type.enc;
+      typeEnv.set(s.name, type.text);
       inferred++;
     }
     return inferred;
@@ -3801,12 +3803,21 @@ const functionOwners = new WeakMap();
 let functionsByName = new Map();
 const COMPARABLE_SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'null']);
 
+// The types of the names a function's owner gives it, by their text (`env`) and
+// encoded (`envEnc`), as src/return_shapes.js reads an outer scope.
 function fnOuterTypes(fn) {
   const owner = functionOwners.get(fn);
-  const types = new Map();
-  for (const v of (owner?.stateVarDecls || [])) if (v.typeName) types.set(v.name, v.typeName);
-  for (const p of (owner?.initParams || [])) if (p.type) types.set(p.name, p.type);
-  return types;
+  const env = new Map();
+  const envEnc = new Map();
+  for (const v of (owner?.stateVarDecls || [])) {
+    if (v.typeName) env.set(v.name, v.typeName);
+    if (v.typeNameEnc !== undefined) envEnc.set(v.name, v.typeNameEnc);
+  }
+  for (const p of (owner?.initParams || [])) {
+    if (p.type) env.set(p.name, p.type);
+    if (p.typeEnc !== undefined) envEnc.set(p.name, p.typeEnc);
+  }
+  return { env, envEnc };
 }
 
 // `select` narrows a doc's signatures to those the call could select.

@@ -161,13 +161,13 @@ export function lowerActorValues(actors, byName) {
     for (const root of roots) statementLists(root, (list) => {
       for (const s of list) {
         // `k = self` holds the actor's own address.
-        if (s?.type === 'Assign' && s.value?.type === 'SelfValue' && !s.isRef) Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE });
+        if (s?.type === 'Assign' && s.value?.type === 'SelfValue' && !s.isRef) Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE, typeNameEnc: ACTOR_TYPE });
         if (!BINDS.has(s?.type) || s.value?.type !== 'ActorValue' || s.isRef || cells.has(s.name)) continue;
         const written = shownName(s.value.name ?? 'class');
         if (s.type === 'TypedAssign' && !takesDeclared(s.typeName)) {
           throw new Error(`'${s.name} ${s.typeName} = ${written}': '${s.name} ${s.typeName}' takes an actor '${s.typeName}' built, and '${written}' itself isn't one — write '${s.name} Actor = ${written}'`);
         }
-        if (s.type === 'Assign') Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE });
+        if (s.type === 'Assign') Object.assign(s, { type: 'TypedAssign', typeName: ACTOR_TYPE, typeNameEnc: ACTOR_TYPE });
         if (s.value.name !== null) rename(list, s.name, s.value.name);
       }
     });
