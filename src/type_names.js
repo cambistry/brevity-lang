@@ -1,15 +1,15 @@
 // Every name in type position is a type, or it's an error, `'X' is not a type`.
 // Annotations, params, returns, cell types, `of` arguments, union members, `::`
 // paths and constructor profiles are all read with the type grammar
-// (parser.js, typeNamesIn). A type name is:
+// (parser.js), and each is an address in the type's encoding (src/parser_types.js). A type name is:
 //   - a builtin, or a builtin plural after `of`
 //   - a `type` the file declares, a class or declared actor, `class`
 //   - an actor a dependency injects, or a name it destructures
 //   - a type or class a dependency's document declares, reached through it:
 //     `Svc::Point`. Without a document there is nothing to reach it through.
 
-import { typeNamesIn } from './parser.js';
 import { declaredTypeNames } from './names.js';
+import { _opre_quote as quote, _opre_split as split } from './codegen/opre_tokens.js';
 
 // A node's `type` is its kind; a param's or field's `type` is a type.
 const NODE_KINDS = new Set(['Actor', 'ActorFieldSet', 'ActorSetStatement', 'ActorValue', 'AnonymousHtmlActor', 'AsClause',
@@ -25,12 +25,7 @@ const NODE_KINDS = new Set(['Actor', 'ActorFieldSet', 'ActorSetStatement', 'Acto
   'TextMethodExpr', 'TypeConstruction', 'TypeDecl', 'TypeField', 'TypedAssign', 'TypedValue',
   'UnaryExpr', 'UseExpr', 'UseValue', 'WhileStatement', 'text', 'dom', 'interp', 'handler', 'closure_ref', 'strinterp']);
 // Keys whose string value is a type.
-const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueType'];
-// Not types: a silent function's `.`, a void `()`.
-const NOT_TYPES = new Set(['.', '()']);
-// The class of a dependency a cell holds, as the compiler records it
-// (`box = Svc.Box(5)`). A written type has no `.`.
-const DEPENDENCY_CLASS = /^\w+(\.\w+)+$/;
+const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueType', 'returnType'];
 
 export function resolveTypeNames(program, remotesParsed = {}) {
   const declared = declaredTypeNames(program);
@@ -73,26 +68,50 @@ export function resolveTypeNames(program, remotesParsed = {}) {
     ? new Error(`'${name}' isn't in scope — the public class is '@${name}'`)
     : new Error(`'${name}' is not a type`);
 
-  const seen = new Set();
-  // `own`: the types a document declares, in scope inside it.
-  const check = (text, own) => {
-    if (typeof text !== 'string' || NOT_TYPES.has(text) || DEPENDENCY_CLASS.test(text)) return;
-    const key = own ? `${[...own].join(',')}\u0000${text}` : text;
-    if (seen.has(key)) return;
-    seen.add(key);
-    for (const name of typeNamesIn(text)) {
-      if (!isType(name) && !own?.has(name)) throw notAType(name);
+  // How the file writes the head of an address it reaches through a dependency: a
+  // service's path by its alias, a destructured binding (`path:remote`) by its local
+  // name.
+  const headOf = new Map();
+  for (const d of program.dependencies || []) {
+    if (d.type !== 'Dependency' || !d.path) continue;
+    if (!d.destructures) headOf.set(quote(d.path), d.name);
+    for (const { local, remote } of d.destructures || []) if (remote) headOf.set(`${quote(d.path)}:${quote(remote)}`, local);
+  }
+
+  // Every name a type is written with is an address in its encoding: the file's
+  // own (`:Point`), one through a dependency (`svc.bv:Point`), or a name the file
+  // didn't resolve, which is itself. `own`: the types a document declares, in
+  // scope inside it.
+  const checkAddress = (a, own) => {
+    if (typeof a !== 'string' || a.startsWith(':')) return;
+    const tokens = split(a).filter(t => t !== '*');
+    for (let n = tokens.length; n > 0; n--) {
+      const head = headOf.get(tokens.slice(0, n).map(quote).join(':'));
+      if (head === undefined) continue;
+      if (n === tokens.length) return;
+      const written = [head, ...tokens.slice(n)].join('::');
+      if (!isType(written)) throw notAType(written);
+      return;
+    }
+    const written = tokens.join('::');
+    if (!isType(written) && !own?.has(written)) throw notAType(written);
+  };
+  const checkEnc = (t, own) => {
+    if (typeof t === 'string') { checkAddress(t, own); return; }
+    if (!t || typeof t !== 'object') return;
+    if (Array.isArray(t)) { t.forEach(x => checkEnc(x, own)); return; }
+    for (const [k, v] of Object.entries(t)) {
+      if (k === '%t') checkAddress(v, own);
+      else if (k !== '%names' && k !== '%self') checkEnc(v, own);
     }
   };
 
   const visit = (node, own) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => visit(n, own)); return; }
-    for (const k of TYPE_KEYS) check(node[k], own);
-    // A function's reply shape: `-> (output: Text)` keeps `output: Text`.
-    if (typeof node.returnType === 'string') check(/^\w+\s*:/.test(node.returnType) ? `(${node.returnType})` : node.returnType, own);
-    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type)) check(node.type, own);
-    for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v, own);
+    for (const k of TYPE_KEYS) checkEnc(node[`${k}Enc`], own);
+    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type)) checkEnc(node.typeEnc, own);
+    for (const [k, v] of Object.entries(node)) if (k !== 'loc' && !k.endsWith('Enc') && v && typeof v === 'object') visit(v, own);
   };
   visit(program.actors);
   visit(program.types);

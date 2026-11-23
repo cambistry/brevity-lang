@@ -102,7 +102,8 @@ function classNode(name, cls, outer) {
   const scope = outer.within(name);
   if (cls.supertypes?.length) node.extends = cls.supertypes.map(st => outer.resolve(st.supertype.split('::'), { asClass: true }));
   const block = cls.members ? interfaceNode(cls.members, scope) : {};
-  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams) }), re: [outer.resolve([name])] };
+  // Its instances are the `:*` under it.
+  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams) }), re: [`:${quote(name)}:*`] };
   const writes = cls.effect === undefined ? false : WRITES[cls.effect];
   if (writes !== undefined) newSig.writes = writes;
   node.public = { $new: [newSig], ...block.public };

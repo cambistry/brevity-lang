@@ -71,10 +71,11 @@ export function encodeAstTypes(ast, remotes = null) {
   const visit = (node, sc) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => visit(n, sc)); return; }
+    const at = (k, text) => setEnc(node, k, encode(text, sc));
     for (const k of TYPE_KEYS) {
-      if (typeof node[k] === 'string' && !NOT_TYPES.has(node[k])) setEnc(node, k, encode(k === 'returnType' && /^\w+\s*:/.test(node[k]) ? `(${node[k]})` : node[k], sc));
+      if (typeof node[k] === 'string' && !NOT_TYPES.has(node[k])) at(k, k === 'returnType' && /^\w+\s*:/.test(node[k]) ? `(${node[k]})` : node[k]);
     }
-    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type) && !NOT_TYPES.has(node.type)) setEnc(node, 'type', encode(node.type, sc));
+    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type) && !NOT_TYPES.has(node.type)) at('type', node.type);
     if (node.type === 'Dependency' && typeof node.interface === 'string') {
       // The interface as the compiler reads one, its types encoded too.
       node.interfaceDoc = parseInterface(node.interface.replace(/\}\s*\|[^}]*$/, '}'));

@@ -225,7 +225,7 @@ function validateProgram(ast, options = {}) {
         if (Array.isArray(node.params) && node.params.some(p => p?.name === from)) throw again();
       }
       if (node.type === 'Identifier' && node.name === from) node.name = to;
-      if (node.typeName === from) node.typeName = to;
+      if (node.typeName === from) { node.typeName = to; node.typeNameEnc = ast.typeNamed([to]); }
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         walk(node[k]);

@@ -43,9 +43,12 @@ export const SELF = Object.freeze({ '%self': true });
 export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [] } = {}) {
   const strip = (n) => n.replace(/^@/, '');
   const typeSet = new Set([...types].map(strip));
-  const classSet = new Set([...classes].map(strip));
+  // A class by its name as declared: `@Pub` is the public class, and a bare `Pub`
+  // doesn't name it.
+  const classSet = new Set(classes);
+  const isClassName = (j) => classSet.has(j) || classSet.has(`@${j}`);
   const tokens = (segs) => segs.map(quote).join(':');
-  const declared = (segs) => typeSet.has(segs.join('::')) || classSet.has(segs.join('::'));
+  const declared = (segs) => typeSet.has(segs.join('::')) || isClassName(segs.join('::'));
   return {
     // The same names, read inside the class `name`.
     within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, strip(name)] }),
@@ -55,9 +58,10 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
       const instance = asClass ? '' : ':*';
       // `class`, the class of the actor the type is in.
       if (segs[0] === 'class' && within.length) return `:${tokens([...within, ...segs.slice(1)])}${segs.length > 1 ? '' : instance}`;
+      let nested = false;
       for (let i = within.length; i > 0; i--) {
         const inner = [...within.slice(0, i), ...segs];
-        if (declared(inner)) { segs = inner; break; }
+        if (declared(inner)) { segs = inner; nested = true; break; }
       }
       if (Object.hasOwn(bindings, segs[0])) {
         const b = bindings[segs[0]];
@@ -73,7 +77,8 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
       }
       const joined = segs.join('::');
       if (typeSet.has(joined)) return `:${tokens(segs)}`;
-      if (classSet.has(joined) || path[0].startsWith('@')) return `:${tokens(segs)}${instance}`;
+      const written = path.join('::');
+      if (classSet.has(written) || path[0].startsWith('@') || (nested && isClassName(joined))) return `:${tokens(segs)}${instance}`;
       return tokens(segs);
     },
   };

@@ -274,7 +274,8 @@ function withPrivateSupers(actor, privateClasses, purportedByActor) {
 function classShape(ast, actor, privateClasses, purportedByActor) {
   const name = (actor.sourceName ?? actor.name).replace(/^@/, '');
   const flat = withPrivateSupers(actor, privateClasses, purportedByActor);
-  const supertypes = flat.supertypes.map(st => ({ supertype: (st.sourceName ?? st.supertype).replace(/^@/, '') }));
+  // A parent as it's written (`@G`, `T`), which is how its address resolves.
+  const supertypes = flat.supertypes.map(st => ({ supertype: st.sourceName ?? st.supertype }));
   const ownNew = !supertypes.length || flat.params.length > 0 || buildsBase(actor);
   const inst = {};
   for (const p of flat.initParams) if (p.accessor) addField(inst, p.accessor, { type: p.type || 'Anything', typeEnc: p.typeEnc ?? (p.type ? undefined : 'Anything'), cell: false, readOnly: true });
