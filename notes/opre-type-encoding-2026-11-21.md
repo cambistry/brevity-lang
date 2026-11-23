@@ -138,10 +138,11 @@ Decided 2026-11-22, for the forms the note above leaves open:
 - **A reply that is the receiver is `{ "%self": true }`:** `=> self` is `"re": [{ "%self": true }]`.
 - **A reply that depends on the path is a union of shapes:** `-> (Integer) | (Text) | self` is
   `"re": { "%or": [["Integer"], ["Text"], [{ "%self": true }]] }`.
-- **An actor with no address of its own is an inline node, `{ "%node": { … } }`,** a document
-  node in a type position. A cell (`*Integer`) is a node with `$get` and `$set`; a read-only cell
-  (`&Integer`) has `$get` only. An interface `{ … }` is the node of its ops. A constructor profile
-  `(p) -> *{ … }` is a node with a `$new` whose reply is an inline node.
+- **No inline nodes.** An interface `{ … }` and a constructor profile `(p) -> *{ … }` claim a
+  dependency's shape, after `as`; neither has an encoding, and one in a published signature is a
+  compile error. (An earlier `{ "%node": { … } }` wrapper is dropped, 2026-11-22: no service
+  document used it.) A cell (`*Integer`, `&Integer`) encodes as its type for now; how a cell
+  is typed is open.
 - **An anonymous shape is an `Object`:** `(Text, n: Integer)` is
   `["Text", { "n": "Integer", "%t": "Object" }]`.
 - **Named entries sit in one object after the positional ones,** as `ty` writes them.

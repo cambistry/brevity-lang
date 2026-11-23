@@ -103,30 +103,18 @@ describe('a function type is its signature', () => {
   });
 });
 
-describe('an actor with no address of its own is an inline node', () => {
-  it('a cell takes $get and $set; a read-only one $get only', () => {
-    expect(enc('*Integer')).toEqual({ '%node': { public: {
-      $get: [{ re: ['Integer'], writes: false }],
-      $set: [{ args: ['Integer'], writes: true }],
-    } } });
-    expect(enc('&Point')).toEqual({ '%node': { public: { $get: [{ re: [':Point'], writes: false }] } } });
+describe('cells, interfaces and constructor profiles', () => {
+  it('a cell encodes as its type', () => {
+    expect(enc('*Integer')).toEqual('Integer');
+    expect(enc('&Point')).toEqual(':Point');
   });
 
-  it('an interface is a node of its ops', () => {
-    expect(enc('{ get () -> (Integer)\n log. (Text) => . }')).toEqual({ '%node': { public: {
-      get: [{ re: ['Integer'], writes: false }],
-      'log.': [{ args: ['Text'], writes: true }],
-    } } });
+  it('an interface is no type that encodes', () => {
+    expect(() => enc('{ get () -> (Integer) }')).toThrow("An interface can't be a type here: '{ get () -> (Integer) }'");
   });
 
-  it('a constructor profile is a node with $new, replying an instance', () => {
-    expect(enc('(start: Integer) -> *{ get () -> (Integer) }')).toEqual({ '%node': { public: {
-      $new: [{
-        args: [{ start: 'Integer' }],
-        re: [{ '%node': { public: { get: [{ re: ['Integer'], writes: false }] } } }],
-        writes: false,
-      }],
-    } } });
+  it('nor is a constructor profile', () => {
+    expect(() => enc('(start: Integer) -> *{ get () -> (Integer) }')).toThrow("A constructor profile can't be a type here: '(start: Integer) -> *{ get () -> (Integer) }'");
   });
 });
 
@@ -157,13 +145,6 @@ describe('entry lists', () => {
   });
 
   it('actor-typed params: a class, a service\'s class, a cell, a read-only cell', () => {
-    expect(params('(t T, c: Svc::C, n *Integer, r: &Text) -> *{}')).toEqual([
-      ':T:*',
-      { '%node': { public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] } } },
-      {
-        c: 'svc.bv:C:*',
-        r: { '%node': { public: { $get: [{ re: ['Text'], writes: false }] } } },
-      },
-    ]);
+    expect(params('(t T, c: Svc::C, n *Integer, r: &Text) -> *{}')).toEqual([':T:*', 'Integer', { c: 'svc.bv:C:*', r: 'Text' }]);
   });
 });

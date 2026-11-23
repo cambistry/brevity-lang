@@ -150,13 +150,12 @@ describe('use — the manifest', () => {
   });
 
   it('`as` claims the shape: an interface, a constructor profile', () => {
-    const getsInteger = { '%node': { public: { get: [{ re: ['Integer'], writes: false }] } } };
     expect(deps('use Svc = "svc.bv" as { n () -> (Integer) }')).toEqual([
-      dep('Svc', { path: 'svc.bv', interface: '{\n  n () -> (Integer)\n}', interfaceEnc: { '%node': { public: { n: [{ re: ['Integer'], writes: false }] } } }, interfaceDoc: expect.any(Object) }),
+      dep('Svc', { path: 'svc.bv', interface: '{\n  n () -> (Integer)\n}', interfaceDoc: expect.any(Object) }),
     ]);
     expect(deps('use Svc = "svc.bv" as {\n  n () -> (Integer)\n}')).toEqual(deps('use Svc = "svc.bv" as { n () -> (Integer) }'));
     expect(deps('use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }')).toEqual([
-      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', interfaceEnc: getsInteger, interfaceDoc: expect.any(Object), constructorParams: [{ name: 'a', type: 'Integer', typeEnc: 'Integer', positional: false }], constructorArrow: '->' }),
+      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', interfaceDoc: expect.any(Object), constructorParams: [{ name: 'a', type: 'Integer', typeEnc: 'Integer', positional: false }], constructorArrow: '->' }),
     ]);
   });
 

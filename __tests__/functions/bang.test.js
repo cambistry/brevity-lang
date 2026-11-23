@@ -877,6 +877,13 @@ describe('effect arrows in signatures', () => {
   });
 
   it.each([
+    ['a read', { 'log.': [{ args: ['Text'], writes: false }] }],
+    ['no claim', { 'log.': [{ args: ['Text'] }] }],
+  ])('no reply and %s is an error', (_, entry) => {
+    expect(() => compileSource(useWidget, widget(entry))).toThrow(/has nothing to read/);
+  });
+
+  it.each([
     ['(Integer) -> self'],
     ['(Integer) => self'],
     ['(Integer) => (Integer)'],

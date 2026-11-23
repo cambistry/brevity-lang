@@ -6,7 +6,7 @@
 // Design: notes/mutation-suffix-2026-10-31.md.
 
 import { receiverDoc, receiverLabel } from './opre.js';
-import { fnArrow, fnReply, fnSignature, showReply, isCell, cellType, ownPath } from './type_enc.js';
+import { fnArrow, fnReply, fnSignature, showReply, ownPath } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { resolveSuperclassChain } from './subclass.js';
 import { settleWriterBody, eachReturn } from './writer_body.js';
@@ -38,8 +38,8 @@ function typeNamer(ast) {
     for (const { local, remote } of d.destructures || []) if (remote) byAddress.set(`${quote(d.path)}:${quote(remote)}`, local);
   }
   return (enc) => {
-    const t = isCell(enc) ? cellType(enc) : enc;
-    if (typeof t !== 'string') return null;
+    if (typeof enc !== 'string') return null;
+    const t = enc;
     const path = ownPath(t);
     if (path) {
       const name = path.join('::');

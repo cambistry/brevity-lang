@@ -266,7 +266,6 @@ export function typeText(t) {
   }
   if ('%or' in t) return t['%or'].map(typeText).join(' | ');
   if ('%fn' in t) return fnText(t['%fn'][0]);
-  if ('%node' in t) return nodeTypeText(t['%node']);
   throw new Error(`Unrecognized type in a service document: ${JSON.stringify(t)}`);
 }
 
@@ -285,16 +284,6 @@ function fnText(sig) {
 
 const isCell = (node) => node?.public?.$get && Object.keys(node.public).every(k => k === '$get' || k === '$set');
 
-function nodeTypeText(node) {
-  if (isCell(node)) return `${node.public.$set ? '*' : '&'}${typeText(node.public.$get[0].re[0])}`;
-  const $new = node.public?.$new?.[0];
-  if ($new && Object.keys(node.public).length === 1) {
-    return `(${fieldsText(decodeEntries($new.args || []))}) -> *${nodeTypeText($new.re[0]['%node'])}`;
-  }
-  const ops = Object.entries(node.public || {}).flatMap(([op, sigs]) => sigs.map(s => `${op} ${fnText(s)}`));
-  return `{ ${ops.join(', ')} }`;
-}
-
 // An entry list as fields: `[{ name, type, positional, optional }]`.
 function decodeEntries(list) {
   const fields = [];
@@ -312,11 +301,14 @@ function decodeEntries(list) {
 
 const EFFECT = (writes) => (writes === false ? 'read' : writes === undefined ? 'purported' : 'write');
 
-function decodeSignature(sig, name = '') {
+function decodeSignature(sig) {
   const out = { params: decodeEntries(sig.args || []), returns: null, effect: EFFECT(sig.writes) };
-  // A Brevity name says it's silent with its `.` (or writes with its `!`); a
-  // foreign name can't, so its signature does.
-  if (!sig.re) return { ...out, noReply: true, ...(!/[.!]$/.test(name) && { silent: true }) };
+  // No `re`: the op never replies. Its name has no say in it. With nothing to
+  // read, it is called for what it writes.
+  if (!sig.re) {
+    if (sig.writes !== true && sig.writes !== 'untracked') throw new Error(`A signature with no 're' never replies, so it has nothing to read: its 'writes' is true, not ${JSON.stringify(sig.writes)}`);
+    return { ...out, noReply: true, silent: true };
+  }
   const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
   const values = shapes.filter(s => !isSelf(s)).map(decodeEntries);
   if (shapes.some(isSelf)) out.returnsSelf = true;
@@ -337,7 +329,7 @@ function readSection(ops, node, doc) {
       if (child.public.$set?.[0]?.writes === 'untracked') (doc.__untracked ??= []).push(op);
       continue;
     }
-    doc[op] = sigs.map(s => decodeSignature(s, op));
+    doc[op] = sigs.map(decodeSignature);
     if (sigs.some(s => s.writes === 'untracked')) (doc.__untracked ??= []).push(op);
   }
 }

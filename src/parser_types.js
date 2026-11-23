@@ -1,14 +1,13 @@
 // Part of the parser (src/parser.js): once a file is read, every type it writes
 // is encoded as an Opre type (src/opre_types.js), beside its text. A node's
 // `typeName` gets a `typeNameEnc`, a param's `type` a `typeEnc`, and so on, for
-// the keys below. Names resolve in the file's scope (src/service_doc.js,
+// the keys below; an inline interface is read into `interfaceDoc`. Names resolve in the file's scope (src/service_doc.js,
 // fileScope), and inside a class, in the class's: a type it declares is named bare.
 
 import { parseTypeTree } from './parser.js';
 import { encodeType } from './opre_types.js';
 import { intern } from './type_enc.js';
 import { fileScope, documentShape } from './service_doc.js';
-import { TT } from './type_tree.js';
 import { parseInterface } from './codegen/javascript/types.js';
 
 // A node's `type` is its kind; a param's or field's `type` is a type.
@@ -29,7 +28,7 @@ const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueTy
 // Not types: a silent function's `.`, a void `()`.
 const NOT_TYPES = new Set(['.', '()']);
 
-const setEnc = (node, key, value) => { node[`${key}Enc`] = value; };
+const setEnc = (node, key, value) => { if (value !== undefined) node[`${key}Enc`] = value; };
 
 // The documents `remotes` gives, by path: what says a name a dependency binds is a class.
 function remoteDocs(remotes) {
@@ -44,10 +43,15 @@ function remoteDocs(remotes) {
 export function encodeAstTypes(ast, remotes = null) {
   const scope = fileScope(ast, remoteDocs(remotes));
   const cache = new Map();
+  // A constructor profile or an interface has no encoding (src/opre_types.js): a
+  // name typed with one carries its text alone.
   const encode = (text, sc) => {
     if (text === 'null') return null;
     const key = `${sc.key}\u0000${text}`;
-    if (!cache.has(key)) cache.set(key, intern(encodeType(parseTypeTree(text), sc)));
+    if (!cache.has(key)) {
+      const tree = parseTypeTree(text);
+      cache.set(key, tree.k === 'ctor' || tree.k === 'iface' ? undefined : intern(encodeType(tree, sc)));
+    }
     return cache.get(key);
   };
   const keyed = (sc, key) => Object.assign(sc, { key });
@@ -62,10 +66,8 @@ export function encodeAstTypes(ast, remotes = null) {
     }
     if (typeof node.type === 'string' && !NODE_KINDS.has(node.type) && !NOT_TYPES.has(node.type)) setEnc(node, 'type', encode(node.type, sc));
     if (node.type === 'Dependency' && typeof node.interface === 'string') {
-      const text = node.interface.replace(/\}\s*\|[^}]*$/, '}');
-      setEnc(node, 'interface', intern(encodeType(TT.iface(text), sc)));
       // The interface as the compiler reads one, its types encoded too.
-      node.interfaceDoc = parseInterface(text);
+      node.interfaceDoc = parseInterface(node.interface.replace(/\}\s*\|[^}]*$/, '}'));
       visit(node.interfaceDoc, sc);
     }
     for (const [k, v] of Object.entries(node)) if (k !== 'loc' && k !== 'interfaceDoc' && v && typeof v === 'object') visit(v, sc);

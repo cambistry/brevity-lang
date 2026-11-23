@@ -63,12 +63,7 @@ export const fnReply = (t) => {
   return sig.re['%or'].some(shape => shape.length === 1 && isSelf(shape[0])) ? 'orSelf' : 'value';
 };
 
-// ── Nodes and addresses ───────────────────────────────────────────────────────
-export const isNode = (t) => !!t && typeof t === 'object' && !Array.isArray(t) && '%node' in t;
-// A cell's type: `*T` and `&T` are nodes of `$get` (and `$set`).
-export const cellType = (t) => (isNode(t) && t['%node'].public?.$get ? t['%node'].public.$get[0].re[0] : null);
-export const isCell = (t) => cellType(t) !== null && Object.keys(t['%node'].public).every(k => k === '$get' || k === '$set');
-
+// ── Addresses ─────────────────────────────────────────────────────────────────
 // An address of the file's own: its tokens, without the leading colon and an
 // instance's `*`. `:W:X` is `['W', 'X']`; null for any other type.
 export const ownPath = (t) => {
@@ -117,6 +112,5 @@ export function show(t) {
     const sig = fnSignature(t);
     return `(${showEntries(sig.args || [])}) ${sig.re ? fnArrow(t) : '=>'} ${showReply(sig)}`;
   }
-  if (isCell(t)) return show(cellType(t));
-  return 'Actor';
+  throw new Error(`Unrecognized type: ${JSON.stringify(t)}`);
 }

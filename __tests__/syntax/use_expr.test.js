@@ -111,7 +111,7 @@ describe('use("…") — the manifest', () => {
 
   it('`as` on the expression claims the entry\'s shape', () => {
     expect(deps('@a = {\n  s = use("svc.bv") as { n () -> (Integer) }\n  return 1\n}')).toEqual([
-      hidden('__use_svcBv', 'svc.bv', { interface: '{\n  n () -> (Integer)\n}', interfaceEnc: { '%node': { public: { n: [{ re: ['Integer'], writes: false }] } } }, interfaceDoc: expect.any(Object) }),
+      hidden('__use_svcBv', 'svc.bv', { interface: '{\n  n () -> (Integer)\n}', interfaceDoc: expect.any(Object) }),
     ]);
   });
 

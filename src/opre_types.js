@@ -11,19 +11,19 @@
 //   { "%opt": T }                       optional
 //   { "%or": [A, B] }                   a union; `null` is JSON null
 //   { "%fn": [signature] }              a function: `args`, `re`, `writes`, as an op's
-//   { "%node": { public, … } }          an actor with no address of its own: a cell,
-//                                       an interface, a constructor profile
 //   { "%self": true }                   a reply that is the receiver itself
 //
 // An entry list (params, a reply, a type's fields) is written as `ty` writes it:
 // positional entries are items, named entries sit in one object, after them.
 // An anonymous shape `(Text, n: Integer)` is an `Object` with those parameters.
+//
+// A cell (`*T`, `&T`) encodes as its type, `T`. An interface `{ … }` and a
+// constructor profile `(p) -> *{ … }` claim a dependency's shape, after `as`; neither
+// is a type that encodes.
 
-import { TT } from './type_tree.js';
 import { parseTypeTree } from './parser.js';
+import { TT, renderType } from './type_tree.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
-import { parseInterface } from './codegen/javascript/types.js';
-import { interfaceNode } from './service_doc.js';
 
 const PLURAL = new Map([
   ['Integers', 'Integer'], ['Texts', 'Text'], ['Floats', 'Float'], ['Booleans', 'Boolean'],
@@ -101,15 +101,9 @@ export function encodeType(node, scope = NO_SCOPE) {
     }
     case 'shape': return tagged(encodeEntries(node.fields, scope), 'Object');
     case 'fn': return { '%fn': [fnSignature(node, scope)] };
-    case 'ctor': {
-      const sig = {};
-      if (node.params.length) sig.args = encodeParams(node.params, scope);
-      sig.re = [{ '%node': encodeIface(node.iface, scope) }];
-      setWrites(sig, node.arrow);
-      return { '%node': { public: { $new: [sig] } } };
-    }
-    case 'cell': return { '%node': cellNode(encodeType(node.type, scope), { readOnly: node.readOnly }) };
-    case 'iface': return { '%node': encodeIface(node.text, scope) };
+    case 'cell': return encodeType(node.type, scope);
+    case 'ctor': throw new Error(`A constructor profile can't be a type here: '${renderType(node)}'`);
+    case 'iface': throw new Error(`An interface can't be a type here: '${renderType(node).replace(/\s+/g, ' ')}'`);
     default: throw new Error(`Unknown type node '${node.k}'`);
   }
 }
@@ -135,11 +129,11 @@ export function encodeEntries(entries, scope = NO_SCOPE) {
 }
 
 // A param list as a caller writes it: a named param by its key, a positional one by
-// position; a ref param is a cell.
+// position.
 export function encodeParams(params, scope = NO_SCOPE) {
   return encodeEntries(params.map(p => ({
     name: p.positional ? null : (p.key ?? p.name),
-    type: p.type && (p.ref || p.readonly) ? TT.cell(p.type, !!p.readonly) : p.type,
+    type: p.type,
     optional: p.optional,
   })), scope);
 }
@@ -172,7 +166,7 @@ function fnSignature(node, scope) {
   return setWrites(sig, node.arrow);
 }
 
-// A cell's node: `$get`, and `$set` unless it is read-only.
+// A cell's node in a document: `$get`, and `$set` unless it is read-only.
 export function cellNode(type, { readOnly = false, untracked = false } = {}) {
   return {
     public: {
@@ -181,6 +175,3 @@ export function cellNode(type, { readOnly = false, untracked = false } = {}) {
     },
   };
 }
-
-// An inline interface `{ … }`, as a document node.
-const encodeIface = (text, scope) => interfaceNode(parseInterface(text), scope);

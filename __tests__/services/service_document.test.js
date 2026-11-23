@@ -165,4 +165,9 @@ describe('the service document', () => {
       },
     });
   });
+
+  it('a constructor profile in a published signature is a compile error', () => {
+    expect(() => extract('@build = (make: (start: Integer) -> *{ get () -> (Integer) }) -> 1\n'))
+      .toThrow("A constructor profile can't be a type here: '(start: Integer) -> *{ get () -> (Integer) }'");
+  });
 });
