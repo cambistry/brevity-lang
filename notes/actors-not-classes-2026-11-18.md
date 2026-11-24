@@ -4,6 +4,9 @@ Decided in discussion. Supersedes the "class as a value" section of
 `class-scope-and-inheritance-2026-11-16.md` and qualifies `vocabulary-refactor-2026-05-15.md`,
 where "class" is a noun.
 
+**Superseded in part by `class-of-and-self-return-2026-11-23.md`:** `$new` is answered by the
+class (`#<:1>`, `ty: [':']`), and a self-return is tagged `:*`, not `:` or `*`.
+
 ## The rule
 
 There are actors. A "class" isn't a kind of thing. It's a relationship an actor has with its

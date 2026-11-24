@@ -3,6 +3,15 @@
 Decided in discussion. Retires the Brevity-style
 service doc text of `session-2026-10-29-service-doc-notation.md` as a published format.
 
+**Superseded in part by `class-of-and-self-return-2026-11-23.md`:** `":T:*"` and the `":*"`
+node are retired (`":T"` is an instance of `T`; the instance interface is an `instance`
+section), and so is `{ "%self": true }`.
+
+**Superseded in part by `opre-tagged-forms-2026-11-24.md`:** `%` is claimed in address position,
+not key position. `%t`, `%opt`, `%or` and `%fn` become arrays headed by a `%` string
+(`["%f", sig]`, `["%or", A, B]`, `["%opt", T]`, `["%t", name, entries]`), and an anonymous shape
+is its entry list, with no `Object` tag.
+
 ## Decisions
 
 - **A service publishes a JSON document.** It is written for a consumer in any language: what

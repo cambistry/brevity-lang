@@ -62,6 +62,9 @@ for now it is assumed.
 
 ## Compiler use
 
+**Retired by `class-of-and-self-return-2026-11-23.md`:** the compiler never merges separate
+calls into a chain. Only a source chain is a chain.
+
 Consecutive calls on the same actor, with nothing else between them, may be merged into one
 chain:
 
