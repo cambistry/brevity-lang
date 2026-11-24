@@ -253,6 +253,7 @@ async function _expectActorBehaviorFromIndex(actor, postIndex, ...steps) {
     if (input) {
       await actor.sendAsync(input);
     } else if (output) {
+      await _nextPost(actor, postIndex);
       const post = actor.posts[postIndex];
       expect(post).toEqual(output);
       outputs.push(post);
@@ -261,4 +262,16 @@ async function _expectActorBehaviorFromIndex(actor, postIndex, ...steps) {
   }
 
   return outputs;
+}
+
+// Posts queue: an actor's sends can trail its readiness (a send made on handling a
+// reply), so an output step waits for the post rather than reading a snapshot.
+// Gives up after POST_WAIT_MS, leaving the assertion to report the missing post.
+const POST_WAIT_MS = 2000;
+
+async function _nextPost(actor, index) {
+  const deadline = Date.now() + POST_WAIT_MS;
+  while (actor.posts.length <= index && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 5));
+  }
 }

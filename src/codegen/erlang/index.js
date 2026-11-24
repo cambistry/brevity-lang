@@ -87,11 +87,18 @@ export default {
       const rl = createInterface({ input: vm.stdout });
       const pendingEvents = [];    // events not yet claimed by a waiter
       const pendingWaiters = [];   // waiters not yet satisfied
+      // A live actor's output goes straight to its posts as it arrives, so a post that
+      // trails the actor's `ready` (a send made on handling a reply) still lands.
+      const outSinks = new Map();  // actor id → fn(data)
 
       rl.on('line', (line) => {
         if (!line.trim()) return;
         let ev;
         try { ev = bigintJsonParse(line); } catch { return; }
+        if (ev.ev === 'out' && outSinks.has(ev.id)) {
+          outSinks.get(ev.id)(ev.data);
+          return;
+        }
         // Try to satisfy a pending waiter
         for (let i = 0; i < pendingWaiters.length; i++) {
           if (pendingWaiters[i].match(ev)) {
@@ -198,6 +205,7 @@ export default {
 
       return {
         extract, compile, erlDir, vm, send, waitFor, collectUntil,
+        onOut(id, fn) { outSinks.set(id, fn); },
         get instanceSeq() { return ++instanceSeq; },
         get compileSeq() { return ++compileSeq; },
         teardown() {
@@ -269,20 +277,12 @@ export default {
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const id = `i${seq}`;
       const posts = [];
+      ctx.onOut(id, data => posts.push(normalizeBigInts(data)));
 
-      // Spawn, collecting init-time emissions
-
+      // Spawn; init-time emissions land in posts before the first ready
       ctx.send({ cmd: 'spawn', id, mod: moduleName, args });
       await ctx.waitFor(ev => ev.ev === 'spawned' && ev.id === id);
-
-      // Collect any init-time emissions until first ready
-      const initOutputs = await ctx.collectUntil(
-        ev => ev.ev === 'out' && ev.id === id,
-        ev => ev.ev === 'ready' && ev.id === id,
-      );
-      if (initOutputs.length > 0) {
-        posts.push(...initOutputs.map(o => normalizeBigInts(o.data)));
-      }
+      await ctx.waitFor(ev => ev.ev === 'ready' && ev.id === id);
 
       // An actor that exits is gone: a send to it after that throws, as on every target.
       let exited = false;
@@ -292,13 +292,9 @@ export default {
           if (exited) throw new Error(`Erlang actor ${id} has exited`);
           const line = bigintJsonStringify(msg);
           ctx.send({ cmd: 'msg', id, line });
-          const outputs = await ctx.collectUntil(
-            ev => (ev.ev === 'out' || ev.ev === 'exited') && ev.id === id,
-            ev => (ev.ev === 'ready' || ev.ev === 'exited') && ev.id === id,
-          );
-          posts.push(...outputs.filter(o => o.ev === 'out').map(o => normalizeBigInts(o.data)));
+          const ev = await ctx.waitFor(ev => (ev.ev === 'ready' || ev.ev === 'exited') && ev.id === id);
           // The send it exits on resolves; a send after that throws.
-          if (outputs.some(o => o.ev === 'exited')) exited = true;
+          if (ev.ev === 'exited') exited = true;
         },
         posts,
       };
@@ -323,30 +319,19 @@ export default {
         async spawn() {
           const instanceId = `s${seq}_${ctx.instanceSeq}`;
           const posts = [];
+          ctx.onOut(instanceId, data => posts.push(normalizeBigInts(data)));
 
+          // Spawn; init-time emissions land in posts before the first ready
           ctx.send({ cmd: 'spawn', id: instanceId, mod: moduleName, args });
           await ctx.waitFor(ev => ev.ev === 'spawned' && ev.id === instanceId);
-
-          // Collect any init-time emissions until first ready
-          const initOutputs = await ctx.collectUntil(
-            ev => ev.ev === 'out' && ev.id === instanceId,
-            ev => ev.ev === 'ready' && ev.id === instanceId,
-          );
-          if (initOutputs.length > 0) {
-            posts.push(...initOutputs.map(o => normalizeBigInts(o.data)));
-          }
+          await ctx.waitFor(ev => ev.ev === 'ready' && ev.id === instanceId);
 
           return {
             send(_msg) { /* no-op: persistent VM handles state */ },
             async sendAsync(msg) {
               const line = bigintJsonStringify(msg);
               ctx.send({ cmd: 'msg', id: instanceId, line });
-              const outputs = await ctx.collectUntil(
-                ev => ev.ev === 'out' && ev.id === instanceId,
-                ev => ev.ev === 'ready' && ev.id === instanceId,
-              );
-              const allOutputs = outputs.map(o => normalizeBigInts(o.data));
-              posts.push(...allOutputs);
+              await ctx.waitFor(ev => ev.ev === 'ready' && ev.id === instanceId);
             },
             posts,
           };
