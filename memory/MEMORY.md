@@ -10,6 +10,7 @@
 - [Preferences and tooling](user_preferences.md) — terse, precise notes; "first pass" = substantive, not exhaustive; Tensile CLI lives outside this repo
 
 ## Key Design Decisions
+- [Numeric types](../notes/numeric-types-2026-04-21.md) — IMPLEMENTED 2026-04-21: Integer (BigInt everywhere), Decimal (scaled BigInt; `3.14`), Float (f64; `3.14e2`); Decimal `/` exact or error when non-terminating (compile-time for literals), `Math.divide(a, b, n)` to truncate
 - [Capability sigils](project_asterisk_refs.md) — evolution of `*` / `&` / `!`; v1 (2026-05-06) revives prefix `*` (write-cap ref) and `&` (read-only ref), deprecates postfix `Type!` for cells (see link)
 - [Overload model](project_overload_model.md) — `=` create, `<<` append, `>>` prepend; Function() empty init; no Constructor() (2026-04-06)
 - [DI model — injected actors](project_brevity_file_model.md) — a header entry injects an already-instantiated actor (`HTML`, `Svc`); full notation `*` or typed `*`, omission is shorthand (see link)
@@ -51,7 +52,8 @@
 - [Check existing Brevity syntactic forms](feedback_brevity_check_existing_forms.md) — verify shapes against docs/tests before treating as new; I keep inventing "third envelope shapes" for forms that already exist
 - [Design state goes in notes/](feedback_design_notes_location.md) — repo-visible design docs, not private memory; private memory holds pointers only
 - [notes/ is for design, not progress](feedback_notes_no_git_state.md) — design discussions and decisions only; no git state, status, or session narration
-- [Scope test runs](feedback_test_scope.md) — quick iteration can scope to `--selectProjects=js`; full `npm run test` before reporting done
+- [Keep working](feedback_keep_working.md) — no mid-task check-ins or progress summaries; no throttling (`/schedule` offers, early wrap-ups, shrunk scope, "later"); commit/test gates still apply
+- [Scope test runs](feedback_test_scope.md) — quick iteration can scope to `--selectProjects=js`; full `npm run test` before reporting done; never run tests for status/orientation questions
 - [Own lint errors](feedback_own_lint_errors.md) — always take responsibility for lint errors; fix them, don't argue provenance
 - [Full suite runs](feedback_no_full_suite_runs.md) — smoke-test with a full `--selectProjects=js` run first, then `npm run test`; ONE TICKET AT A TIME: green > commit > next ticket, even when tickets arrive together; normal flow waits for acceptance before committing
 - [`--selectProjects` eats paths](feedback_jest_select_projects.md) — use `--selectProjects=js --testPathPattern=…`; the space form runs the whole suite
@@ -77,6 +79,8 @@
 
 ## Active Work
 - [Active work](project_active_work.md) — per-thread status and note pointers (10-24 to 11-03); wire key `bv-a` → `ty`; session decisions belong in notes/
+- [catch through over/reduce](project_catch_over_reduce.md) — DEFERRED: label exits lower to labeled `break`, which can't cross the iteratee callback; needs thrown-sentinel codegen (Erlang already fine)
+- [Remote bare-set codegen](project_html_deferred.md) — DEFERRED: source `node <- "x"` on a remote-bound local emits `.receive` on a wire-token string; `ActorSetStatement` needs the remote branch `ActorFieldSet` has
 - [`from` names the calling scope](../notes/from-names-calling-scope-2026-11-14.md) — PROPOSAL, undecided (2026-11-14): every outgoing call's `from` = innermost named scope (` (see link)
 - [`__add_trace__` on return](../notes/add-trace-on-return-2026-11-14.md) — design 2026-11-14: class may declare `__add_trace__`; BV MUST call it when a fn/ctor returns an actor tha (see link)
 - [Opre colon separator](../notes/opre-colon-separator-2026-11-14.md) — DECIDED 2026-11-15, supersedes space separator + `.` head: `:` separates tokens, leading `:` = self (`:x`, `# (see link)
