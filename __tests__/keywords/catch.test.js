@@ -202,7 +202,7 @@ describe('catch — runtime', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
   // Phase 1 — bare void catch
   //
-  // Spec: kanban/2 - features/CATCH.md §§1–8 (excluding §9 label references).
+  // Spec: notes/catch-2026-03-30.md §§1–8 (excluding §9 label references).
   // Void exits only; value-carrying form lands in Phase 2.
   // ═══════════════════════════════════════════════════════════════════════════════
 

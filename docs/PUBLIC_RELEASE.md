@@ -16,7 +16,7 @@ Use this before making the repository public.
 
 - Add a `LICENSE` file if MIT is the intended license.
 - Remove local artifacts such as `.DS_Store` and crash dumps before publishing.
-- Decide whether `kanban/` should be public as-is or moved behind a clearer
+- Decide whether `kanban/` should be public or moved behind a clearer
   contributor-facing roadmap.
 - Decide whether `convert_steps.py` and `convert_tests2.py` are still useful
   enough to keep at the root.

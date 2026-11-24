@@ -1,0 +1,5 @@
+---
+status: done
+created: 2026-11-19
+---
+# `self`. not `Self`.

@@ -8,6 +8,7 @@
     "test": "node --max-old-space-size=4096 --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js erlang rust dom --no-coverage --randomize",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "board": "node .kanban/board.mjs",
     "lint": "eslint src/ __tests__/ index.js",
     "test:js": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects js --no-coverage --randomize",
     "test:rust": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/.bin/jest --selectProjects rust --no-coverage --randomize",
