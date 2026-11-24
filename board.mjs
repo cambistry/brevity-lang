@@ -412,8 +412,23 @@ function draw() {
   if (!S.editing && process.stdin.isRaw) render();
 }
 
+// Tab title. Apple Terminal ignores the title stack (CSI 22/23 t), so it is
+// reset with an empty title on quit; elsewhere the previous title is popped.
+const TITLE = `Kanban — ${path.basename(REPO)}`;
+const APPLE = process.env.TERM_PROGRAM === 'Apple_Terminal';
+
+// OSC 1 is the tab title in Apple Terminal, OSC 2 the window title; OSC 0 sets both elsewhere.
+function setTitle() {
+  out.write(`\x1b]0;${TITLE}\x07\x1b]1;${TITLE}\x07\x1b]2;${TITLE}\x07`);
+}
+
+function restoreTitle() {
+  out.write(APPLE ? '\x1b]1;\x07\x1b]2;\x07' : `${ESC}23;0t`);
+}
+
 function enterScreen() {
   out.write(`${ESC}?1049h${ESC}?25l`);
+  setTitle();
   process.stdin.setRawMode(true);
   process.stdin.resume();
 }
@@ -526,6 +541,7 @@ function poll() {
 async function quit() {
   if (S.grab) cancelGrab();
   leaveScreen();
+  restoreTitle();
   process.stdout.write('syncing order… ');
   await publish();
   console.log(S.message.startsWith('sync:') ? S.message : 'done');
@@ -617,6 +633,7 @@ if (args[0] === '--print') {
     console.error('board: needs a terminal (or use --print [status...])');
     process.exit(1);
   }
+  if (!APPLE) out.write(`${ESC}22;0t`); // push the current title
   enterScreen();
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', data => {
