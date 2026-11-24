@@ -20,7 +20,7 @@ metadata:
 - The commit and test gates above still apply.
 
 ## Tickets and pasteables
-- When something should be a ticket, give a pasteable title and description. Never create files in `kanban/` (unused).
+- Tickets live in `kanban/` (one file per ticket; the folder is the column; see `kanban/README.md`). When something should be a ticket, write the file in `kanban/backlog/` and say so in one line. Move a ticket to `doing/` when starting it and to `done/` when it's green.
 - Pasteable text (tickets, messages, commit text) goes in a fenced code block, never `>` lines, because the markers come along on copy.
 
 ## notes/ and memory
