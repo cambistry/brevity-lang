@@ -68,4 +68,8 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
   }
 }
 
-export default { projects };
+// A worker's heap grows with every test file it runs (module graphs under
+// --experimental-vm-modules aren't released), ~40 MB → ~440 MB over 30 files.
+// A full run gives each worker ~90 files, which swaps an 8 GB machine. A worker
+// over this limit after a file is replaced by a fresh one.
+export default { projects, workerIdleMemoryLimit: '512MB' };
