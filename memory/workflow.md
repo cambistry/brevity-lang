@@ -20,7 +20,9 @@ metadata:
 - The commit and test gates above still apply.
 
 ## Tickets and pasteables
-- Tickets live in `kanban/` (one file per ticket; the folder is the column; see `kanban/README.md`). When something should be a ticket, write the file in `kanban/backlog/` and say so in one line. Move a ticket to `doing/` when starting it and to `done/` when it's green.
+- Tickets are `kanban/tickets/<slug>.md` with `status:` front-matter (format and columns in `kanban/README.md`). When something should be a ticket, write it with `status: inbox` and say so in one line.
+- Status moves with the work: `in-progress` when I start, `review` when green, `done` in the acceptance commit itself.
+- Order is the user's. Never edit `.kanban/lists/` unless asked. Read the board with `npm run board -- --print [status…]`.
 - Pasteable text (tickets, messages, commit text) goes in a fenced code block, never `>` lines, because the markers come along on copy.
 
 ## notes/ and memory
