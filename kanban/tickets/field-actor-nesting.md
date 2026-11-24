@@ -8,45 +8,54 @@ Could Brevity nest actor field scopes -- with the possibility that inner scopes 
 
 Brevity has deliberately avoided curly braces to discourage deep nesting, so maybe this is a good thing. Nonetheless:
 
+```brevity
 a = A()
 a::field <- value
 a::field! key: updated_value
+```
 
 This is fairly expressive on the consumption side, built off of the allocation of `a` to begin with. And what if ::field is not a scalar value but itself an actor?
 
+```brevity
 a = A()
 a::child::field <- value
+```
 
 Nothing wrong with that IMO. And also possible that a::child could be passable:
 
+```brevity
 ref a = A()
 pass(&a::child)
+```
 
 That's a capture of a contained stable reference, and therefore of the outer reference itself. (The expression actually communicates that nicely.)
 
+```brevity
 ref a = A()
 ref c = a::child
 pass(&c)
+```
 
 Interesting.
 
 Now back to the definition problem.
 
+```brevity
 actor A
 init
-ref [\@field](https://github.com/field "‌") = Field() // ref makes it unrebindable
-ref [\@int](https://github.com/int "‌") = Integer(0)
-[\@zero](https://github.com/zero "‌") = 0
+ref @field = Field() // ref makes it unrebindable
+ref @int = Integer(0)
+@zero = 0
 
-::field -> [\@field](https://github.com/field "‌")
-::int -> [\@int](https://github.com/int "‌")
-::zero -> [\@zero](https://github.com/zero "‌") // no setters. forever zero.
+::field -> @field
+::int -> @int
+::zero -> @zero // no setters. forever zero.
 
 ::inline -> actor {
 // actor, anonymous type
-init() [\@value](https://github.com/value "‌") = "hello" . // hosted by
-get() -> [\@value](https://github.com/value "‌")
-set(val) [\@value](https://github.com/value "‌") = val .
+init() @value = "hello" . // hosted by
+get() -> @value
+set(val) @value = val .
 update(:case)
 }() // parens to invoke the constructor. looks messy!
 end#A
@@ -54,3 +63,4 @@ end#A
 actor Field
 ...
 // could have :: subfields
+```

@@ -8,4 +8,6 @@ e.g. ping
 
 Don't recall I brought this up. Unsupported?
 
+```brevity
 fn = { side_effect . }
+```

@@ -4,6 +4,6 @@ created: 2026-04-27
 ---
 # List >> and + operators
 
-\>> : mutation, prepend
+>> : mutation, prepend
 
-\+ : non-mutation concat
++ : non-mutation concat

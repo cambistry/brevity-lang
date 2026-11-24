@@ -22,13 +22,9 @@ widget = <:div> ->
 <div class="widget">Widget</div>
 ```
 
-‌
-
 `widget =` or `@widget =` ?
 
-Is this running “in” document or in some top-level actor space? That seems incompatible with the file-as-actor model. Revised:
-
-index.html
+Is this running “in” document or in some top-level actor space? That seems incompatible with the file-as-actor model. Revised: index.html
 
 ```
 <script type=”text/brevity” src=”/widget.bv”></script>

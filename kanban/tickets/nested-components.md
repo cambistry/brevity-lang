@@ -4,7 +4,7 @@ created: 2026-04-24
 ---
 # nested components
 
-[factory.bv](http://inner.bv "‌")
+factory.bv
 
 ```
 <DOM: (:p)> {
@@ -12,7 +12,7 @@ created: 2026-04-24
 }
 ```
 
-[app.bv](http://outer.bv "‌")
+app.bv
 
 ```
 <"factory.bv": Factory> {

@@ -6,7 +6,7 @@ created: 2026-11-21
 
 This is foundational for the broad “predicate” concept.
 
-An Opre type is representable as generic, i.e. can contain/modify other types. Proposed wire syntax:\
+An Opre type is representable as generic, i.e. can contain/modify other types. Proposed wire syntax:
 
 { op: [[1, “one”], “exec”], ty: [[Integer, Text, {“%t”: “Set“}]] }
 

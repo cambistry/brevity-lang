@@ -29,10 +29,10 @@ Lineal constructor would remain:
 
 ```
 C =
-\*
+*
   param
   param
-\*
+*
 body
 ```
 

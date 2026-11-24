@@ -4,9 +4,7 @@ created: 2026-04-16
 ---
 # custom types in interfaces
 
-An interface document must remain process-agnostic, i.e. cannot depend on the type-awareness and/or aliasing that is INTERNAL to it’s generating constructor.
-
-Therefore, TYPES _must_ be documented as addresses - either service/instance addresses or constructor addresses. This is done with backticks:
+An interface document must remain process-agnostic, i.e. cannot depend on the type-awareness and/or aliasing that is INTERNAL to it’s generating constructor. Therefore, TYPES _must_ be documented as addresses - either service/instance addresses or constructor addresses. This is done with backticks:
 
 ```
 {
@@ -14,17 +12,15 @@ Therefore, TYPES _must_ be documented as addresses - either service/instance add
 }
 ```
 
-‌
-
 Example (without HTML baggage):
 
-[pair.bv](http://pair.bv "‌"):
+pair.bv:
 
 ```
 <:key Text, :value Text> // defines a type shape
 ```
 
-[app.bv](http://app.bv "‌"):
+app.bv:
 
 ```
 <"pair.bv": (Pair) *> {
@@ -33,9 +29,7 @@ Example (without HTML baggage):
 }
 ```
 
-From it’s coordinates, “[pair.bv](http://pair.bv "‌")” is the address of the type. (Note that [pair.bv](http://pair.bv "‌") is also the actual HOST of a Pair instance.)
-
-So the service document of [pair.bv](http://pair.bv "‌") is:
+From it’s coordinates, “pair.bv” is the address of the type. (Note that pair.bv is also the actual HOST of a Pair instance.) So the service document of pair.bv is:
 
 ```
 <:key Text, :value Text> -> {
@@ -44,7 +38,7 @@ So the service document of [pair.bv](http://pair.bv "‌") is:
 }
 ```
 
-But what is the interface of [app.bv](http://app.bv "‌") (as a service)? It can’t be
+But what is the interface of app.bv (as a service)? It can’t be
 
 ```
 {

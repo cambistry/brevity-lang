@@ -10,8 +10,10 @@ Not necessarily a direct language construct -- these tools are for process lifec
 
 Any _stateful_ Brevity object that needs persistence should be able to repond to a CAM message to recursively capture state. Something like:
 
+```json
 {
-"id": "123",
-"cam": "capture",
-"from": ""
+  "id": "123",
+  "cam": "capture",
+  "from": ""
 }
+```

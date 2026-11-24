@@ -14,7 +14,7 @@ This is different than another object handing it to you, of course.
 
 However it does make sense to ask an object what it becomes if cast to a particular type. (This even makes sense at construction time, if you are not interested in being able to directly address the wrapper actor.)
 
-[actor.bv](http://actor.bv "‌")
+actor.bv
 
 ```
 self as Integer = -> 42

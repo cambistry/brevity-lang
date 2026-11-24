@@ -4,9 +4,7 @@ created: 2026-04-17
 ---
 # Destructuring in DI
 
-Public functions can be destructured from injected services.
-
-Can be done with the destructure sigil.
+Public functions can be destructured from injected services. Can be done with the destructure sigil.
 
 ```
 <
@@ -22,11 +20,9 @@ or be aliased:
 >
 ```
 
-‌
-
 Full example:
 
-[geometry.bv](http://geometry.bv/ "‌")
+geometry.bv
 
 ```
 <> {
@@ -45,7 +41,7 @@ service:
 }
 ```
 
-[app.bv](http://app.bv/ "‌"):
+app.bv:
 
 ```
 <"geometry.bv": (:Point) *> {

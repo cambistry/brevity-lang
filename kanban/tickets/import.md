@@ -6,7 +6,7 @@ created: 2026-04-08
 
 Code import macro (vs. `uses`)
 
-\--- below is old thinking ---
+--- below is old thinking ---
 
 Related:
 

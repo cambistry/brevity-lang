@@ -6,23 +6,25 @@ created: 2026-04-08
 
 We've got a syntax for injection of service dependencies:
 
+```brevity
 <
 "/path": Service *
-
 > {
-> Service.get(...)
-> }
+  Service.get(...)
+}
+```
 
 But... what if we aren't sending outgoing messages/requests, but listening for incoming messages?
 
 First insight: public functions are "listeners" on parent. Sort of like there is an implicit constructor param:
 
+```brevity
 <
-\@: *
+@: *
+>
+```
 
-> ‌
-
-The syntax [\@fn](https://github.com/fn "‌") is, I suppose, sugar for something like:
+The syntax @fn is, I suppose, sugar for something like:
 
 `on parent.fn`
 
@@ -42,27 +44,35 @@ But gotta say that `on` seems oddly placed. Feels more like it should be:
 
 And the `emit` syntax should work the same:
 
+```brevity
 <inner *> {
-inner.on "event" {...}
+  inner.on "event" {...}
 }
+```
 
 From the emitter's side:
 
+```brevity
 <> {
-[\@go](https://github.com/go "‌") = { parent.event(...) }
+  @go = { parent.event(...) }
 }
+```
 
 Shorthand maybe:
 
+```brevity
 <> {
-[\@go](https://github.com/go "‌") = { ^event(...) }
+  @go = { ^event(...) }
 }
+```
 
 So maybe the listener uses that syntax too?
 
+```brevity
 <inner *> {
-inner^event {...} // or inner.^event ?
+  inner^event {...} // or inner.^event ?
 }
+```
 
 Dunno. Not sure the caret is earning its keep.
 
@@ -79,16 +89,20 @@ where `remote is an actor/service declared in the parent, or a sub-dependency or
 
 I wonder if we could deprecate `emit` using this shape:
 
+```brevity
 A = <> {
-subscriber (* | null) = null
-[\@subscribe](https://github.com/subscribe "‌") = |s *| { subscriber <- s }
-[\@fire](https://github.com/fire "‌") = { if subscriber { subscriber.shoot() } }
+  subscriber (* | null) = null
+  @subscribe = |s *| { subscriber <- s }
+  @fire = { if subscriber { subscriber.shoot() } }
 }
+```
 
+```brevity
 B = <shooter *A> {
-shooter.subscribe(self)
-shooter.on("shoot") {...}
+  shooter.subscribe(self)
+  shooter.on("shoot") {...}
 }
+```
 
 ---
 
@@ -101,8 +115,10 @@ What is interesting is this: what is being filtered for, under the hood, is the 
 
 This is getting close to making sense. What is missing is "to"-based child delegation. How does an actor route incoming messages with a "to" field? Quick answer: however it wants to. But we have not actually exposed a mechanism to work with the raw-"to".
 
+```brevity
 <> {
-[\@Local](https://github.com/Local "‌") = {} // no "to", or empty
-child = spawn(path: "/script")
-scope |to: "/child", ...rest| { send(child, rest) }
+  @Local = {} // no "to", or empty
+  child = spawn(path: "/script")
+  scope |to: "/child", ...rest| { send(child, rest) }
 }
+```

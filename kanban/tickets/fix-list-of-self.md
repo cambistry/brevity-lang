@@ -14,4 +14,4 @@ Not digging it. New form:
 ```
 
 & - read-only reference
-\* - read/write reference
+* - read/write reference

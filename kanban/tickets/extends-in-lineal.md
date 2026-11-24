@@ -8,12 +8,12 @@ Maybe:
 
 ```
 C =
-\*
+*
   p Parent
   ++
   q Another
   ++
   params
-\*
+*
 body
 ```

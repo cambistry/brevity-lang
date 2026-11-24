@@ -6,21 +6,25 @@ created: 2026-04-08
 
 i.e. LF acts as comma:
 
+```brevity
 inline_structure =
 (
-1 as Integer
-"string"
-:val
-key: x
+  1 as Integer
+  "string"
+  :val
+  key: x
 )
+```
 
 And lists, similar but no keyed values, of course:
 
+```brevity
 inline_list =
 [
-1
-2
-"three"
-null
-"V"
+  1
+  2
+  "three"
+  null
+  "V"
 ]
+```

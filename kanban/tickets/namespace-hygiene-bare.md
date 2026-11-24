@@ -8,8 +8,8 @@ Uniform prefixes:
 
 b_* bare
 
-a_* \@
+a_* @
 
 h_* #
 
-\_\_* synthetic
+__* synthetic

@@ -18,7 +18,7 @@ In particular, `actor.silent.()…` is fugly. Should perhaps be illegal.
 
 Open question: how should a silent function with args be called?
 
-`actor.silent.(args)…` is also ugly, and that dot seems unnecessary, since a trailing ellipsis after a read-only function is illegal, so this can be inferred to be silent. Better form: `actor.silent(args)…` ?\
+`actor.silent.(args)…` is also ugly, and that dot seems unnecessary, since a trailing ellipsis after a read-only function is illegal, so this can be inferred to be silent. Better form: `actor.silent(args)…` ?
 
 A regular mutation function would keep the bang attached to the name:
 

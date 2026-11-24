@@ -6,13 +6,13 @@ created: 2026-04-25
 
 Communicable shapes.
 
-[geometry.bv](http://geometry.bv "‌")
+geometry.bv
 
 ```
 ::Point = (x Integer, y Integer)
 ```
 
-[location.bv](http://app.bv "‌")
+location.bv
 
 ```
 <"geometry.bv": (:Point)>
@@ -24,7 +24,7 @@ Communicable shapes.
 }
 ```
 
-[app.bv](http://app.bv "‌")
+app.bv
 
 ```
 <

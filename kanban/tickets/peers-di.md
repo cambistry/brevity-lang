@@ -4,8 +4,6 @@ created: 2026-04-28
 ---
 # Peers DI
 
-‌
-
 ```
  Peer = <:name Text, :P List of Self!> {
   peers List = []
@@ -13,9 +11,7 @@ created: 2026-04-28
   @name Text! = "peer"
   @names = { over(peers) |p| { p.name } }
 }
-
 ...
-
 peers List of Peer! = []
 peers <- [
   Peer(name: "Aaron", P: peers)),
@@ -26,8 +22,6 @@ peers.first.names == ["Aaron", "Betsy", "Charlie"]
 ```
 
 Note that this relies on dynamic address resolution. When Aaron traverses `peers`,the value of `p` will reduce to `self`, because of the way that addresses travel on “the wire”.
-
-‌
 
 ```
 Peer = <:name Text, :P List of Self!> {
