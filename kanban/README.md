@@ -19,7 +19,7 @@ Columns: `investigation`, `inbox`, `todo`, `in-progress`, `review`, `done`, and 
 
 ## Board
 
-Order within each column lives on the `kanban` branch, checked out as a gitignored worktree at `.kanban/`. It holds `lists/<status>`, one repo-relative ticket path per line, plus the app and its `columns` file. That branch shares no history with `main`, so reordering never appears in `main`'s log.
+Order within each column lives on the `kanban` branch, checked out as a gitignored worktree at `.kanban/`. It holds only `lists/<status>`, one repo-relative ticket path per line. The app (`kanban/board.mjs`) and its `columns` file are on `main`. That branch shares no history with `main`, so reordering never appears in `main`'s log.
 
 Setup, once per machine:
 
