@@ -50,6 +50,7 @@ function parseTicket(slug, text) {
     file: path.join(TICKETS, `${slug}.md`),
     title: heading ? heading[1].trim() : slug,
     status: fields.status || 'inbox',
+    fmStatus: fields.status || 'inbox',
     created: fields.created || '',
   };
 }
@@ -74,20 +75,24 @@ function slugOfPath(line) {
   return path.dirname(abs) === TICKETS && abs.endsWith('.md') ? path.basename(abs, '.md') : null;
 }
 
-// One list per status. A ticket's status (front-matter) decides its column;
-// the column's list decides its position. Tickets missing from their list go
-// to the top, newest first.
+// One list per status. The list holding a ticket decides its column and
+// position, so a move shows everywhere once kanban syncs, before main's
+// front-matter catches up. A ticket in several lists stays in the one its
+// front-matter names, else the first. Tickets in no list go by front-matter,
+// at the top, newest first. Sets each ticket's `status` to its column.
 function loadLists(tickets) {
   const lists = new Map();
-  const files = fs.existsSync(ORDER_DIR) ? fs.readdirSync(ORDER_DIR).filter(f => !f.startsWith('.')) : [];
+  const files = fs.existsSync(ORDER_DIR) ? fs.readdirSync(ORDER_DIR).filter(f => !f.startsWith('.')).sort() : [];
+  const homes = new Map();
   for (const status of files) {
-    const slugs = fs.readFileSync(path.join(ORDER_DIR, status), 'utf8').split('\n')
-      .map(l => l.trim()).filter(Boolean).map(slugOfPath)
-      .filter(s => s && tickets.has(s) && tickets.get(s).status === status);
-    lists.set(status, [...new Set(slugs)]);
+    const slugs = [...new Set(fs.readFileSync(path.join(ORDER_DIR, status), 'utf8').split('\n')
+      .map(l => l.trim()).filter(Boolean).map(slugOfPath).filter(s => s && tickets.has(s)))];
+    lists.set(status, slugs);
+    for (const s of slugs) if (!homes.has(s) || status === tickets.get(s).fmStatus) homes.set(s, status);
   }
-  const listed = new Set([...lists.values()].flat());
-  const unlisted = [...tickets.values()].filter(t => !listed.has(t.slug))
+  for (const [status, list] of lists) lists.set(status, list.filter(s => homes.get(s) === status));
+  for (const [s, status] of homes) tickets.get(s).status = status;
+  const unlisted = [...tickets.values()].filter(t => !homes.has(t.slug))
     .sort((a, b) => a.created.localeCompare(b.created) || b.slug.localeCompare(a.slug));
   for (const t of unlisted) {
     if (!lists.has(t.status)) lists.set(t.status, []);
@@ -104,6 +109,7 @@ function writeStatus(ticket, status) {
   else if (/^status:.*$/m.test(fm[1])) out = `---\n${fm[1].replace(/^status:.*$/m, `status: ${status}`)}\n---\n${text.slice(fm[0].length)}`;
   else out = `---\nstatus: ${status}\n${fm[1]}\n---\n${text.slice(fm[0].length)}`;
   fs.writeFileSync(ticket.file, out);
+  ticket.fmStatus = status;
 }
 
 function slugify(title) {
@@ -250,14 +256,16 @@ function grabOrDrop() {
     return;
   }
   const t = S.tickets.get(S.grab.slug);
-  const row = members(t.status).indexOf(t.slug);
-  if (t.status !== S.grab.status) writeStatus(t, t.status);
+  const col = t.status;
+  const row = members(col).indexOf(t.slug);
+  if (col !== S.grab.status) writeStatus(t, col);
   S.grab = null;
   if (S.stale) {
     // Lists changed on disk during the move: reload them, then re-apply only this move.
     S.stale = false;
     reload();
-    place(t.slug, S.tickets.get(t.slug).status, row);
+    S.tickets.get(t.slug).status = col;
+    place(t.slug, col, row);
     focusSlug(t.slug);
   }
   writeOrder();
@@ -345,7 +353,7 @@ function renderPeek(W, H) {
   S.peek.top = clamp(S.peek.top, 0, Math.max(0, lines.length - bodyH));
   const out = [
     `${ESC}1m${fit(` ${t.title}`, W)}${ESC}0m`,
-    `${ESC}2m${fit(` ${t.status}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
+    `${ESC}2m${fit(` ${t.status}${t.fmStatus !== t.status ? ` (front-matter: ${t.fmStatus})` : ''}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
     '─'.repeat(W),
   ];
   for (let y = 0; y < bodyH; y++) out.push(fit(` ${lines[S.peek.top + y] ?? ''}`, W));
