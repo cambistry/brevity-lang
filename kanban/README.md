@@ -38,6 +38,6 @@ Run `npm run board`.
 - `p` toggles the parked columns (a carried card goes with it).
 - `e` edits in `$VISUAL`/`$EDITOR`, `n` creates a ticket at the top of the current column, `r` reloads, `q` quits.
 
-Each drop commits `lists/` on `kanban` and pushes it. While open, the board fetches every 15 s (`KANBAN_POLL` seconds) and rebases onto other machines' moves. A move's status change edits the ticket on `main` and stays uncommitted until the work is committed. Until then, other machines show that ticket at the top of its old column.
+Each drop commits `lists/` on `kanban` and pushes it. While open, the board fetches every 15 s (`KANBAN_POLL` seconds) and rebases onto other machines' moves. The lists decide the columns: a move shows on other machines as soon as `kanban` syncs. It also edits the ticket's `status` on `main`, which stays uncommitted until the work is committed; the quick-view flags a ticket whose front-matter lags its column. A ticket in no list goes by its front-matter, at the top.
 
 `npm run board -- --print [status…]` prints the board as text.
