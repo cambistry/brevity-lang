@@ -18,21 +18,19 @@ const ORDER_DIR = path.join(WORKTREE, 'lists');
 const COLUMNS_FILE = path.join(HERE, 'columns');
 const BRANCH = 'kanban';
 const POLL_MS = (Number(process.env.KANBAN_POLL) || 15) * 1000;
+const VISIBLE = 4; // columns on screen; the cursor scrolls the rest into view
 
 // ---------- data ----------
 
 function loadColumns() {
-  const main = [];
-  const parked = [];
-  let target = main;
+  const columns = [];
   for (const raw of fs.readFileSync(COLUMNS_FILE, 'utf8').split('\n')) {
     const line = raw.replace(/#.*/, '').trim();
     if (!line) continue;
-    if (line === '---') { target = parked; continue; }
     const [slug, ...name] = line.split(/\s+/);
-    target.push({ slug, name: name.join(' ') || slug });
+    columns.push({ slug, name: name.join(' ') || slug });
   }
-  return { main, parked };
+  return columns;
 }
 
 function parseTicket(slug, text) {
@@ -133,10 +131,10 @@ const S = {
   columns: null,
   tickets: null,
   lists: null,
-  view: 'main',
   col: 0,
   rows: {},
   scroll: {},
+  left: 0,
   grab: null,
   prompt: null,
   message: '',
@@ -152,7 +150,7 @@ function reload() {
 }
 
 function knownSlugs() {
-  return new Set([...S.columns.main, ...S.columns.parked].map(c => c.slug));
+  return new Set(S.columns.map(c => c.slug));
 }
 
 function unknownColumns() {
@@ -161,8 +159,9 @@ function unknownColumns() {
   return extra.map(slug => ({ slug, name: `?${slug}` }));
 }
 
-function viewColumns(view = S.view) {
-  return view === 'main' ? [...S.columns.main, ...unknownColumns()] : S.columns.parked;
+// Configured columns, then any status no column names.
+function boardColumns() {
+  return [...S.columns, ...unknownColumns()];
 }
 
 function members(colSlug) {
@@ -170,7 +169,7 @@ function members(colSlug) {
 }
 
 function currentColumn() {
-  return viewColumns()[S.col];
+  return boardColumns()[S.col];
 }
 
 function currentRow() {
@@ -209,7 +208,7 @@ function clamp(n, lo, hi) {
 }
 
 function moveCursor(dc, dr) {
-  const cols = viewColumns();
+  const cols = boardColumns();
   if (dc) S.col = clamp(S.col + dc, 0, cols.length - 1);
   const c = currentColumn();
   if (dr && c) S.rows[c.slug] = clamp(currentRow() + dr, 0, Math.max(0, members(c.slug).length - 1));
@@ -218,7 +217,7 @@ function moveCursor(dc, dr) {
 function moveGrabbed(dc, dr) {
   const g = S.grab;
   const t = S.tickets.get(g.slug);
-  const cols = viewColumns();
+  const cols = boardColumns();
   if (dc) {
     const nc = clamp(S.col + dc, 0, cols.length - 1);
     if (nc === S.col) return;
@@ -234,20 +233,6 @@ function moveGrabbed(dc, dr) {
     place(g.slug, t.status, ni);
   }
   S.rows[t.status] = members(t.status).indexOf(g.slug);
-}
-
-function toggleView() {
-  const next = S.view === 'main' ? 'parked' : 'main';
-  const cols = viewColumns(next);
-  if (!cols.length) { S.message = 'no parked columns'; return; }
-  S.view = next;
-  S.col = clamp(S.col, 0, cols.length - 1);
-  if (S.grab) {
-    const t = S.tickets.get(S.grab.slug);
-    t.status = cols[S.col].slug;
-    place(t.slug, t.status, 0);
-    S.rows[t.status] = 0;
-  }
 }
 
 function grabOrDrop() {
@@ -287,15 +272,10 @@ function cancelGrab() {
 function focusSlug(slug) {
   const t = S.tickets.get(slug);
   if (!t) return;
-  for (const view of ['main', 'parked']) {
-    const i = viewColumns(view).findIndex(c => c.slug === t.status);
-    if (i >= 0) {
-      S.view = view;
-      S.col = i;
-      S.rows[t.status] = members(t.status).indexOf(slug);
-      return;
-    }
-  }
+  const i = boardColumns().findIndex(c => c.slug === t.status);
+  if (i < 0) return;
+  S.col = i;
+  S.rows[t.status] = members(t.status).indexOf(slug);
 }
 
 function newTicket(title) {
@@ -364,6 +344,24 @@ function renderPeek(W, H) {
   return out;
 }
 
+// A card is the title on up to two lines: "- " then a two-space indent,
+// cut with an ellipsis if it still doesn't fit.
+function cardLines(title, width) {
+  const rows = wrap(title, width - 2);
+  const lines = [fit(`- ${rows[0]}`, width)];
+  if (rows.length > 1) lines.push(fit(`  ${rows.slice(1).join(' ')}`, width));
+  return lines;
+}
+
+// First visible column: scrolls just enough to keep the cursor's column on screen.
+function leftColumn(n) {
+  const v = Math.min(VISIBLE, n);
+  let l = S.left;
+  if (S.col < l) l = S.col;
+  if (S.col >= l + v) l = S.col - v + 1;
+  return (S.left = clamp(l, 0, n - v));
+}
+
 function render() {
   const W = out.columns || 80;
   const H = out.rows || 24;
@@ -371,49 +369,51 @@ function render() {
     out.write(`${ESC}H` + renderPeek(W, H).slice(0, H).map(l => `${l}${ESC}K`).join('\r\n'));
     return;
   }
-  const cols = viewColumns();
+  const all = boardColumns();
+  const left = leftColumn(all.length);
+  const cols = all.slice(left, left + VISIBLE);
   const n = Math.max(1, cols.length);
-  const cw = Math.max(4, Math.floor((W - (n - 1)) / n));
+  const cw = Math.max(6, Math.floor((W - (n - 1)) / n));
   const bodyH = Math.max(1, H - 4);
   const lines = [];
 
   lines.push(cols.map((c, i) => {
-    const label = fit(` ${c.name} ${members(c.slug).length}`, cw);
-    return i === S.col ? `${ESC}1;7m${label}${ESC}0m` : `${ESC}1m${label}${ESC}0m`;
+    let label = fit(` ${c.name} ${members(c.slug).length}`, cw);
+    if (i === 0 && left > 0) label = '‹' + label.slice(1);
+    if (i === cols.length - 1 && left + cols.length < all.length) label = label.slice(0, -1) + '›';
+    return left + i === S.col ? `${ESC}1;7m${label}${ESC}0m` : `${ESC}1m${label}${ESC}0m`;
   }).join(' '));
   lines.push(cols.map(() => '─'.repeat(cw)).join(' '));
 
-  const colRows = cols.map((c, i) => {
+  // Per column: display lines from the first card shown, keeping the selected card whole.
+  const colLines = cols.map((c, i) => {
+    const ci = left + i;
     const m = members(c.slug);
-    const row = i === S.col ? currentRow() : Math.min(S.rows[c.slug] || 0, Math.max(0, m.length - 1));
-    let top = S.scroll[c.slug] || 0;
+    const cards = m.map(slug => cardLines(S.tickets.get(slug).title, cw));
+    const row = ci === S.col ? currentRow() : Math.min(S.rows[c.slug] || 0, Math.max(0, m.length - 1));
+    const height = (a, b) => cards.slice(a, b + 1).reduce((h, k) => h + k.length, 0);
+    let top = clamp(S.scroll[c.slug] || 0, 0, Math.max(0, m.length - 1));
     if (row < top) top = row;
-    if (row >= top + bodyH) top = row - bodyH + 1;
-    top = clamp(top, 0, Math.max(0, m.length - bodyH));
+    while (top < row && height(top, row) > bodyH) top++;
+    while (top > 0 && height(top - 1, m.length - 1) <= bodyH) top--;
     S.scroll[c.slug] = top;
-    return { m, row, top };
+    const shown = [];
+    for (let k = top; k < m.length && shown.length < bodyH; k++) {
+      const style = S.grab && S.grab.slug === m[k] ? `${ESC}30;43m` : ci === S.col && k === row ? `${ESC}7m` : '';
+      for (const l of cards[k]) shown.push(style ? `${style}${l}${ESC}0m` : l);
+    }
+    return shown;
   });
 
-  for (let y = 0; y < bodyH; y++) {
-    lines.push(cols.map((c, i) => {
-      const { m, row, top } = colRows[i];
-      const slug = m[top + y];
-      if (!slug) return ' '.repeat(cw);
-      const text = fit(` ${S.tickets.get(slug).title}`, cw);
-      if (S.grab && S.grab.slug === slug) return `${ESC}30;43m${text}${ESC}0m`;
-      if (i === S.col && top + y === row) return `${ESC}7m${text}${ESC}0m`;
-      return text;
-    }).join(' '));
-  }
+  for (let y = 0; y < bodyH; y++) lines.push(colLines.map(cl => cl[y] ?? ' '.repeat(cw)).join(' '));
 
   const t = selected();
-  const viewTag = S.view === 'main' ? '' : '[parked] ';
-  lines.push(`${ESC}2m${fit(`${viewTag}${t ? `${t.title}  (${t.slug})` : ''}`, W)}${ESC}0m`);
+  lines.push(`${ESC}2m${fit(t ? `${t.title}  (${t.slug})` : '', W)}${ESC}0m`);
   if (S.prompt !== null) lines.push(fit(`New ticket title: ${S.prompt}`, W));
   else if (S.message) lines.push(fit(S.message, W));
   else lines.push(`${ESC}2m${fit(S.grab
-    ? 'arrows carry  space drop  esc cancel  p carry to other view'
-    : 'arrows move  space grab  enter view  e edit  n new  p parked  r reload  q quit', W)}${ESC}0m`);
+    ? 'arrows carry  space drop  esc cancel'
+    : 'arrows move  space grab  enter view  e edit  n new  r reload  q quit', W)}${ESC}0m`);
 
   out.write(`${ESC}H` + lines.slice(0, H).map(l => `${l}${ESC}K`).join('\r\n'));
 }
@@ -581,7 +581,7 @@ const KEYS = {
   '\x1b[H': 'home', '\x1b[1~': 'home', '\x1bOH': 'home', 'g': 'home',
   '\x1b[F': 'end', '\x1b[4~': 'end', '\x1bOF': 'end', 'G': 'end',
   ' ': 'space', '\r': 'enter', '\n': 'enter', '\x1b': 'esc', '\x03': 'quit', 'q': 'quit',
-  'n': 'new', 'p': 'parked', 'r': 'reload', 'e': 'edit',
+  'n': 'new', 'r': 'reload', 'e': 'edit',
 };
 
 function onPromptKey(k) {
@@ -613,7 +613,6 @@ function onKey(k) {
     case 'enter': if (!S.grab && selected()) S.peek = { slug: selected().slug, top: 0 }; return;
     case 'edit': if (!S.grab) editSelected(); return;
     case 'new': if (!S.grab) S.prompt = ''; return;
-    case 'parked': return toggleView();
     case 'reload': if (!S.grab) { const t = selected(); reload(); if (t) focusSlug(t.slug); } return;
     case 'quit': return quit();
   }
@@ -622,7 +621,7 @@ function onKey(k) {
 // ---------- print mode ----------
 
 function printBoard(filter) {
-  const cols = [...S.columns.main, ...unknownColumns(), ...S.columns.parked]
+  const cols = boardColumns()
     .filter(c => !filter.length || filter.includes(c.slug));
   for (const c of cols) {
     const m = members(c.slug);

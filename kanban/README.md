@@ -15,7 +15,7 @@ Description: the problem, the expected behaviour, and pointers
 
 `status` is the column. A status change goes in the same commit as the work it reflects.
 
-Columns: `investigation`, `inbox`, `todo`, `in-progress`, `review`, `done`, and the parked `future`, `wont-do`, `icebox`.
+Columns: `investigation`, `inbox`, `todo`, `in-progress`, `review`, `done`, `future`, `wont-do`, `icebox`.
 
 ## Board
 
@@ -33,9 +33,9 @@ git worktree add .kanban kanban
 Run `npm run board`.
 
 - Arrows (or `hjkl`) move the cursor; `g`/`G` and PgUp/PgDn jump.
+- Four columns show at a time; moving past the edge scrolls them (`‹`/`›` mark hidden ones).
 - Enter shows the ticket; Enter or Esc returns.
 - Space grabs a card; arrows carry it within or across columns; space drops it, Esc cancels.
-- `p` toggles the parked columns (a carried card goes with it).
 - `e` edits in `$VISUAL`/`$EDITOR`, `n` creates a ticket at the top of the current column, `r` reloads, `q` quits.
 
 Each drop commits `lists/` on `kanban` and pushes it. While open, the board fetches every 15 s (`KANBAN_POLL` seconds) and rebases onto other machines' moves. The lists decide the columns: a move shows on other machines as soon as `kanban` syncs. It also edits the ticket's `status` on `main`, which stays uncommitted until the work is committed; the quick-view flags a ticket whose front-matter lags its column. A ticket in no list goes by its front-matter, at the top.
