@@ -7,6 +7,7 @@
 // origin and rebases onto other stations' moves.
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { execFile, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -222,9 +223,21 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
 
-function moveCursor(dc, dr) {
+// Left/right lands on the card nearest the same screen line in the next
+// column; `skipEmpty` passes over empty columns (the quick-view needs a ticket).
+function moveCursor(dc, dr, { skipEmpty = false } = {}) {
   const cols = boardColumns();
-  if (dc) S.col = clamp(S.col + dc, 0, cols.length - 1);
+  if (dc) {
+    let ni = S.col + dc;
+    while (skipEmpty && ni >= 0 && ni < cols.length && !members(cols[ni].slug).length) ni += dc;
+    if (ni < 0 || ni >= cols.length) { if (skipEmpty) return; ni = clamp(ni, 0, cols.length - 1); }
+    if (ni === S.col) return;
+    const L = layout();
+    const c = currentColumn();
+    const y = c && members(c.slug).length ? cardY(c.slug, currentRow(), L) : 0;
+    S.col = ni;
+    S.rows[cols[ni].slug] = rowAtY(cols[ni].slug, y, L);
+  }
   const c = currentColumn();
   if (dr && c) S.rows[c.slug] = clamp(currentRow() + dr, 0, Math.max(0, members(c.slug).length - 1));
 }
@@ -344,18 +357,23 @@ function peekLines(width) {
   return { t, lines: body ? body.split('\n').flatMap(l => wrap(l, width)) : ['(no description)'] };
 }
 
+function columnName(slug) {
+  const c = boardColumns().find(c => c.slug === slug);
+  return c ? c.name : slug;
+}
+
 function renderPeek(W, H) {
   const { t, lines } = peekLines(W - 2);
   const bodyH = Math.max(1, H - 5);
   S.peek.top = clamp(S.peek.top, 0, Math.max(0, lines.length - bodyH));
   const out = [
     `${ESC}1m${fit(` ${t.title}`, W)}${ESC}0m`,
-    `${ESC}2m${fit(` ${t.status}${t.fmStatus !== t.status ? ` (front-matter: ${t.fmStatus})` : ''}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
+    `${ESC}2m${fit(` ${columnName(t.status)}${t.fmStatus !== t.status ? `  (front-matter says ${columnName(t.fmStatus)})` : ''}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
     '─'.repeat(W),
   ];
   for (let y = 0; y < bodyH; y++) out.push(fit(` ${lines[S.peek.top + y] ?? ''}`, W));
   const more = lines.length > bodyH ? `${S.peek.top + 1}-${Math.min(lines.length, S.peek.top + bodyH)}/${lines.length}  ` : '';
-  out.push(`${ESC}2m${fit(`${more}arrows scroll  e edit  enter/esc back`, W)}${ESC}0m`);
+  out.push(`${ESC}2m${fit(`${more}arrows ticket  pgup/pgdn scroll  e edit  enter/esc back`, W)}${ESC}0m`);
   return out;
 }
 
@@ -366,6 +384,54 @@ function cardLines(title, width) {
   const lines = [fit(`- ${rows[0]}`, width)];
   if (rows.length > 1) lines.push(fit(`  ${rows.slice(1).join(' ')}`, width));
   return lines;
+}
+
+// Board geometry for the current terminal size.
+function layout() {
+  const W = out.columns || 80;
+  const H = out.rows || 24;
+  const total = boardColumns().length;
+  const fits = columnsThatFit(W, total);
+  const n = Math.max(1, Math.min(fits, total));
+  return { W, H, fits, cw: Math.max(6, Math.floor((W - GAP.length * (n - 1)) / n)), bodyH: Math.max(1, H - 4) };
+}
+
+function cardsOf(colSlug, cw) {
+  return members(colSlug).map(slug => cardLines(S.tickets.get(slug).title, cw));
+}
+
+function rememberedRow(colSlug) {
+  return Math.min(S.rows[colSlug] || 0, Math.max(0, members(colSlug).length - 1));
+}
+
+// First card shown in a column: keeps `row` whole on screen, and fills the
+// column from the bottom when the rest would fit.
+function scrollTop(colSlug, row, { cw, bodyH }) {
+  const cards = cardsOf(colSlug, cw);
+  const height = (a, b) => cards.slice(a, b + 1).reduce((h, k) => h + k.length, 0);
+  let top = clamp(S.scroll[colSlug] || 0, 0, Math.max(0, cards.length - 1));
+  if (row < top) top = row;
+  while (top < row && height(top, row) > bodyH) top++;
+  while (top > 0 && height(top - 1, cards.length - 1) <= bodyH) top--;
+  return (S.scroll[colSlug] = top);
+}
+
+// Screen line (within the column body) where card `row` starts.
+function cardY(colSlug, row, L) {
+  const top = scrollTop(colSlug, row, L);
+  return cardsOf(colSlug, L.cw).slice(top, row).reduce((h, k) => h + k.length, 0);
+}
+
+// The card covering screen line `y` of a column, or the nearest one above it.
+function rowAtY(colSlug, y, L) {
+  const cards = cardsOf(colSlug, L.cw);
+  if (!cards.length) return 0;
+  let line = 0;
+  for (let k = scrollTop(colSlug, rememberedRow(colSlug), L); k < cards.length; k++) {
+    if (y < line + cards[k].length) return k;
+    line += cards[k].length;
+  }
+  return cards.length - 1;
 }
 
 // First visible column: scrolls just enough to keep the cursor's column on screen.
@@ -385,12 +451,10 @@ function render() {
     return;
   }
   const all = boardColumns();
-  const fits = columnsThatFit(W, all.length);
+  const L = layout();
+  const { fits, cw, bodyH } = L;
   const left = leftColumn(all.length, fits);
   const cols = all.slice(left, left + fits);
-  const n = Math.max(1, cols.length);
-  const cw = Math.max(6, Math.floor((W - GAP.length * (n - 1)) / n));
-  const bodyH = Math.max(1, H - 4);
   const lines = [];
 
   lines.push(cols.map((c, i) => {
@@ -405,14 +469,9 @@ function render() {
   const colLines = cols.map((c, i) => {
     const ci = left + i;
     const m = members(c.slug);
-    const cards = m.map(slug => cardLines(S.tickets.get(slug).title, cw));
-    const row = ci === S.col ? currentRow() : Math.min(S.rows[c.slug] || 0, Math.max(0, m.length - 1));
-    const height = (a, b) => cards.slice(a, b + 1).reduce((h, k) => h + k.length, 0);
-    let top = clamp(S.scroll[c.slug] || 0, 0, Math.max(0, m.length - 1));
-    if (row < top) top = row;
-    while (top < row && height(top, row) > bodyH) top++;
-    while (top > 0 && height(top - 1, m.length - 1) <= bodyH) top--;
-    S.scroll[c.slug] = top;
+    const cards = cardsOf(c.slug, cw);
+    const row = ci === S.col ? currentRow() : rememberedRow(c.slug);
+    const top = scrollTop(c.slug, row, L);
     const shown = [];
     for (let k = top; k < m.length && shown.length < bodyH; k++) {
       const style = S.grab && S.grab.slug === m[k] ? `${ESC}30;43m` : ci === S.col && k === row ? `${ESC}7m` : '';
@@ -468,10 +527,22 @@ function editSelected() {
   const t = selected();
   if (!t) return;
   const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
+  const FM = /^---\n[\s\S]*?\n---\n?/;
+  const body = fs.readFileSync(t.file, 'utf8').replace(FM, '');
+  const tmp = path.join(os.tmpdir(), `kanban-${process.pid}-${t.slug}.md`);
+  fs.writeFileSync(tmp, body);
   S.editing = true;
   leaveScreen();
   process.stdin.pause();
-  spawnSync(`${editor} "${t.file}"`, { stdio: 'inherit', shell: true });
+  spawnSync(`${editor} "${tmp}"`, { stdio: 'inherit', shell: true });
+  const edited = fs.readFileSync(tmp, 'utf8');
+  fs.rmSync(tmp, { force: true });
+  if (edited !== body) {
+    // Re-read: front-matter may have changed on disk while editing.
+    let fm = (fs.readFileSync(t.file, 'utf8').match(FM) || [''])[0];
+    if (fm && !fm.endsWith('\n')) fm += '\n';
+    fs.writeFileSync(t.file, fm + edited);
+  }
   enterScreen();
   S.editing = false;
   const slug = t.slug;
@@ -626,8 +697,13 @@ function onPromptKey(k) {
 }
 
 function onPeekKey(key, page) {
-  const step = { up: -1, down: 1, pgup: -page, pgdn: page, home: -1e9, end: 1e9 }[key];
-  if (step) S.peek.top = Math.max(0, S.peek.top + step);
+  const walk = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[key];
+  const step = { pgup: -page, pgdn: page, home: -1e9, end: 1e9 }[key];
+  if (walk) {
+    moveCursor(...walk, { skipEmpty: true });
+    const t = selected();
+    if (t && t.slug !== S.peek.slug) S.peek = { slug: t.slug, top: 0 };
+  } else if (step) S.peek.top = Math.max(0, S.peek.top + step);
   else if (key === 'enter' || key === 'esc') S.peek = null;
   else if (key === 'edit') { S.peek = null; editSelected(); }
   else if (key === 'quit') quit();
