@@ -18,7 +18,21 @@ const ORDER_DIR = path.join(WORKTREE, 'lists');
 const COLUMNS_FILE = path.join(HERE, 'columns');
 const BRANCH = 'kanban';
 const POLL_MS = (Number(process.env.KANBAN_POLL) || 15) * 1000;
-const VISIBLE = 4; // columns on screen; the cursor scrolls the rest into view
+// Column width aims for MIN_COL..MAX_COL, GAP apart; the cursor scrolls hidden columns into view.
+const MIN_COL = 40;
+const MAX_COL = 50;
+const GAP = '   ';
+const ONE_COLUMN_BELOW = 45; // screen width under which a single column shows
+
+// Fewest columns that keep each at MAX_COL or under, but never under MIN_COL;
+// two columns hold, narrower, down to ONE_COLUMN_BELOW.
+function columnsThatFit(W, total) {
+  const g = GAP.length;
+  const fitMin = Math.floor((W + g) / (MIN_COL + g));
+  const fitMax = Math.ceil((W + g) / (MAX_COL + g));
+  const floor = W < ONE_COLUMN_BELOW ? 1 : 2;
+  return clamp(Math.max(floor, Math.min(fitMax, fitMin)), 1, Math.max(1, total));
+}
 
 // ---------- data ----------
 
@@ -141,6 +155,7 @@ const S = {
   editing: false,
   peek: null,
   stale: false,
+  quitting: false,
 };
 
 function reload() {
@@ -354,8 +369,7 @@ function cardLines(title, width) {
 }
 
 // First visible column: scrolls just enough to keep the cursor's column on screen.
-function leftColumn(n) {
-  const v = Math.min(VISIBLE, n);
+function leftColumn(n, v) {
   let l = S.left;
   if (S.col < l) l = S.col;
   if (S.col >= l + v) l = S.col - v + 1;
@@ -363,6 +377,7 @@ function leftColumn(n) {
 }
 
 function render() {
+  if (S.quitting) return; // never paint over the restored screen
   const W = out.columns || 80;
   const H = out.rows || 24;
   if (S.peek) {
@@ -370,10 +385,11 @@ function render() {
     return;
   }
   const all = boardColumns();
-  const left = leftColumn(all.length);
-  const cols = all.slice(left, left + VISIBLE);
+  const fits = columnsThatFit(W, all.length);
+  const left = leftColumn(all.length, fits);
+  const cols = all.slice(left, left + fits);
   const n = Math.max(1, cols.length);
-  const cw = Math.max(6, Math.floor((W - (n - 1)) / n));
+  const cw = Math.max(6, Math.floor((W - GAP.length * (n - 1)) / n));
   const bodyH = Math.max(1, H - 4);
   const lines = [];
 
@@ -382,8 +398,8 @@ function render() {
     if (i === 0 && left > 0) label = '‹' + label.slice(1);
     if (i === cols.length - 1 && left + cols.length < all.length) label = label.slice(0, -1) + '›';
     return left + i === S.col ? `${ESC}1;7m${label}${ESC}0m` : `${ESC}1m${label}${ESC}0m`;
-  }).join(' '));
-  lines.push(cols.map(() => '─'.repeat(cw)).join(' '));
+  }).join(GAP));
+  lines.push(cols.map(() => '─'.repeat(cw)).join(GAP));
 
   // Per column: display lines from the first card shown, keeping the selected card whole.
   const colLines = cols.map((c, i) => {
@@ -405,7 +421,7 @@ function render() {
     return shown;
   });
 
-  for (let y = 0; y < bodyH; y++) lines.push(colLines.map(cl => cl[y] ?? ' '.repeat(cw)).join(' '));
+  for (let y = 0; y < bodyH; y++) lines.push(colLines.map(cl => cl[y] ?? ' '.repeat(cw)).join(GAP));
 
   const t = selected();
   lines.push(`${ESC}2m${fit(t ? `${t.title}  (${t.slug})` : '', W)}${ESC}0m`);
@@ -548,15 +564,33 @@ function poll() {
   });
 }
 
+// Leaves the terminal as it was: the status line is erased once the sync
+// finishes, and only a sync failure is left on screen.
 async function quit() {
+  if (S.quitting) return;
+  S.quitting = true;
   if (S.grab) cancelGrab();
   leaveScreen();
   restoreTitle();
-  process.stdout.write('syncing order… ');
+  out.write('syncing order…');
   await publish();
-  console.log(S.message.startsWith('sync:') ? S.message : 'done');
+  out.write(`\r${ESC}K`);
+  if (S.message.startsWith('sync:')) console.log(S.message);
   process.exit(0);
 }
+
+// Any other exit (kill, closed window, crash) restores the screen too.
+let restored = false;
+function restoreTerminal() {
+  if (restored || !process.stdin.isRaw) return;
+  restored = true;
+  S.quitting = true;
+  leaveScreen();
+  restoreTitle();
+}
+for (const sig of ['SIGTERM', 'SIGHUP']) process.on(sig, () => { restoreTerminal(); process.exit(1); });
+process.on('uncaughtException', err => { restoreTerminal(); console.error(err); process.exit(1); });
+process.on('unhandledRejection', err => { restoreTerminal(); console.error(err); process.exit(1); });
 
 function tokens(data) {
   const out = [];

@@ -33,7 +33,7 @@ git worktree add .kanban kanban
 Run `npm run board`.
 
 - Arrows (or `hjkl`) move the cursor; `g`/`G` and PgUp/PgDn jump.
-- Four columns show at a time; moving past the edge scrolls them (`‹`/`›` mark hidden ones).
+- Columns are 40–50 characters wide, as many as fit (two hold, narrower, down to a 45-wide screen), refitting on resize; moving past the edge scrolls them (`‹`/`›` mark hidden ones).
 - Enter shows the ticket; Enter or Esc returns.
 - Space grabs a card; arrows carry it within or across columns; space drops it, Esc cancels.
 - `e` edits in `$VISUAL`/`$EDITOR`, `n` creates a ticket at the top of the current column, `r` reloads, `q` quits.
