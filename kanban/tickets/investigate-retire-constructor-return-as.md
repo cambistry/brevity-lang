@@ -2,7 +2,7 @@
 status: todo
 created: 2026-11-23
 ---
-# Investigate: retire constructor return-as
+# Retire constructor return-as
 
 Design: notes/constructor-return-as-retired-2026-11-23.md
 

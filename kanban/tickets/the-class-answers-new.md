@@ -1,5 +1,5 @@
 ---
-status: todo
+status: in-progress
 created: 2026-11-23
 ---
 # The class answers `$new`
