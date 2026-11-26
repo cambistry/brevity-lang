@@ -14,7 +14,6 @@ kanban/tickets/invoke-add-trace-when-a-function-or-constructor-returns-a.md
 kanban/tickets/style.md
 kanban/tickets/pass-event-to-html-handler-and-read-properties-e-g.md
 kanban/tickets/allow-calls-to-stoppropagation-and-preventdefault-checking.md
-kanban/tickets/catch.md
 kanban/tickets/silent-lambdas-how-an-anonymous-function-declares-silence.md
 kanban/tickets/valueless-attributes.md
 kanban/tickets/class-ancestry.md
