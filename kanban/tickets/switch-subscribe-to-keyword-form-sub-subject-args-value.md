@@ -44,4 +44,7 @@ sub(abc, &fn)                               // or pass a function reference (loc
 - The parse error for subscribe(c.pub(p: 100)) (v) {}.
 - A function subscribing to its own param is still a compile error.
 
-**Open, decide during the ticket:** whether a bare subscribe with no params is allowed (sub(@pub ) { … }, which today is .subscribe { … } if that parses). Seems illegal. Subscribe to something but have no way to read it? If the subscription is really just a trigger, then it should require an explicit discard: `sub(@pub, (_) { effect }`
+**Decided (2026-11-26): a header-less `sub` is valid.** A ping that something changed is a fair
+use. The lambda's header fits the subscribed function's output Object under the normal
+destructuring rules: it takes any subset, including nothing, so `sub @pub, () { effect }` (or
+whatever header-less form `over` accepts) is fine. Accept exactly the forms `over` accepts.

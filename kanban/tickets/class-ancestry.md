@@ -18,3 +18,6 @@ g = (p P) -> p.a()
 ```
 
 Expected: on js, rust and erlang, a typed local (and a typed cell) uses the param's check: `p P = R(1)` is a compile error and `p P = Q(1)` compiles. Tests beside the param case.
+
+**Decided (2026-11-26):** the same check for a typed cell and for every write to one (`<-` and
+the like), not only the declaration.

@@ -16,3 +16,5 @@ Find and report (no changes yet):
 - Whether `self as HTML::div = -> <div>{ text }</div>` works today on every target, as the replacement for the TextDiv case.
 
 Output: the list of sites with a proposed treatment for each, plus anything that doesn't fit the note.
+
+**Output (2026-11-26):** file the findings as a new ticket in `inbox`, then this one is done.
