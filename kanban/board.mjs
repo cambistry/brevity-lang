@@ -403,7 +403,7 @@ function renderPeek(W, H) {
   const more = lines.length > bodyH ? `${S.peek.top + 1}-${Math.min(lines.length, S.peek.top + bodyH)}/${lines.length}  ` : '';
   if (S.confirm) out.push(fit(`Delete ${t.slug}.md? (y/n)`, W));
   else if (S.message) out.push(fit(S.message, W));
-  else out.push(`${ESC}2m${fit(`${more}arrows ticket  pgup/pgdn scroll  e edit  d delete  enter/esc back`, W)}${ESC}0m`);
+  else out.push(`${ESC}2m${fit(`${more}arrows ticket  pgup/pgdn scroll  e edit  d delete  enter/esc back  fn-click to select`, W)}${ESC}0m`);
   return out;
 }
 
@@ -520,7 +520,7 @@ function render() {
   else if (S.message) lines.push(fit(S.message, W));
   else lines.push(`${ESC}2m${fit(S.grab
     ? 'arrows carry  space drop  esc cancel'
-    : 'arrows move  space grab  enter view  e edit  n new  r reload  q quit', W)}${ESC}0m`);
+    : 'arrows move  space grab  enter view  e edit  c copy  n new  r reload  q quit', W)}${ESC}0m`);
 
   out.write(`${ESC}H` + lines.slice(0, H).map(l => `${l}${ESC}K`).join('\r\n') + `${ESC}J`);
 }
@@ -544,15 +544,25 @@ function restoreTitle() {
 }
 
 function enterScreen() {
-  out.write(`${ESC}?1049h${ESC}?25l`);
+  // Mouse reporting on (SGR) so wheel/trackpad scrolls arrive as mouse events, which are dropped,
+  // instead of arrow keys or scrollback.
+  out.write(`${ESC}?1049h${ESC}?25l${ESC}?1000h${ESC}?1006h`);
   setTitle();
   process.stdin.setRawMode(true);
   process.stdin.resume();
 }
 
 function leaveScreen() {
-  out.write(`${ESC}?25h${ESC}?1049l`);
+  out.write(`${ESC}?1006l${ESC}?1000l${ESC}?25h${ESC}?1049l`);
   process.stdin.setRawMode(false);
+}
+
+// The selected ticket's full title to the clipboard.
+function copyTitle() {
+  const t = selected();
+  if (!t) return;
+  const r = spawnSync('pbcopy', { input: t.title });
+  S.message = r.status === 0 ? 'title copied' : `copy: ${r.error ? r.error.message : `pbcopy exited ${r.status}`}`;
 }
 
 function editSelected() {
@@ -734,6 +744,8 @@ function tokens(data) {
   let i = 0;
   while (i < data.length) {
     const rest = data.slice(i);
+    const mouse = rest.match(/^\x1b\[<[0-9;]*[Mm]/);
+    if (mouse) { i += mouse[0].length; continue; }
     const csi = rest.match(/^\x1b\[[0-9;]*[A-Za-z~]/);
     const ss3 = rest.match(/^\x1bO[A-Za-z]/);
     const m = csi || ss3;
@@ -752,7 +764,7 @@ const KEYS = {
   '\x1b[H': 'home', '\x1b[1~': 'home', '\x1bOH': 'home', 'g': 'home',
   '\x1b[F': 'end', '\x1b[4~': 'end', '\x1bOF': 'end', 'G': 'end',
   ' ': 'space', '\r': 'enter', '\n': 'enter', '\x1b': 'esc', '\x03': 'quit', 'q': 'quit',
-  'n': 'new', 'r': 'reload', 'e': 'edit', 'd': 'delete',
+  'n': 'new', 'r': 'reload', 'e': 'edit', 'd': 'delete', 'c': 'copy',
 };
 
 function onPromptKey(k) {
@@ -795,6 +807,7 @@ function onKey(k) {
     case 'esc': return cancelGrab();
     case 'enter': if (!S.grab && selected()) S.peek = { slug: selected().slug, top: 0 }; return;
     case 'edit': if (!S.grab) editSelected(); return;
+    case 'copy': if (!S.grab) copyTitle(); return;
     case 'new': if (!S.grab) S.prompt = ''; return;
     case 'reload': if (!S.grab) { const t = selected(); reload(); if (t) focusSlug(t.slug); } return;
     case 'quit': return quit();
