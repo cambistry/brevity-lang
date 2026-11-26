@@ -58,6 +58,7 @@ Run `npm run board`.
 - Arrows (or `hjkl`) move the cursor; up/down wrap around a column, left/right stop at the ends; `g`/`G` and PgUp/PgDn jump.
 - Columns are 40–50 characters wide, as many as fit (two hold, narrower, down to a 45-wide screen), refitting on resize; moving past the edge scrolls them (`‹`/`›` mark hidden ones). A column's header shows its count; the cursor's column shows the position too, as `Inbox 3 / 16`.
 - Enter shows the ticket, with its column as status; arrows walk to the neighbouring tickets as on the board, PgUp/PgDn scroll, `d` deletes it (after a y/n confirm) and shows the card now in its place, or the column's last; Enter or Esc returns.
+- The board opens in split mode: the board in the top three quarters, the selected ticket's title and body (cut to fit) below. `f` toggles between it and the full board. Everything else works as usual.
 - Space grabs a card; arrows carry it within or across columns; space drops it, Esc cancels.
 - `e` edits the ticket body (front-matter stays out of the editor) in `$VISUAL`/`$EDITOR`, `n` creates a ticket at the top of the current column, `r` reloads, `q` quits.
 

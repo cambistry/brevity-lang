@@ -156,6 +156,7 @@ const S = {
   message: '',
   editing: false,
   peek: null,
+  split: true,
   confirm: null,
   stale: false,
   quitting: false,
@@ -377,8 +378,8 @@ function wrap(line, width) {
   return rows;
 }
 
-function peekLines(width) {
-  const t = S.tickets.get(S.peek.slug);
+function peekLines(slug, width) {
+  const t = S.tickets.get(slug);
   const raw = fs.existsSync(t.file) ? fs.readFileSync(t.file, 'utf8') : '';
   const text = raw.replace(/^---\n[\s\S]*?\n---\n?/, '');
   const body = text.replace(/^#\s+.+\n?/m, '').replace(/^\n+/, '').replace(/\s+$/, '');
@@ -391,7 +392,7 @@ function columnName(slug) {
 }
 
 function renderPeek(W, H) {
-  const { t, lines } = peekLines(W - 2);
+  const { t, lines } = peekLines(S.peek.slug, W - 2);
   const bodyH = Math.max(1, H - 4);
   S.peek.top = clamp(S.peek.top, 0, Math.max(0, lines.length - bodyH));
   const out = [
@@ -416,14 +417,30 @@ function cardLines(title, width) {
   return lines;
 }
 
-// Board geometry for the current terminal size.
+// Board geometry for the current terminal size. In split mode the board
+// takes the top three quarters (header, rule, cards) and the ticket the rest.
 function layout() {
   const W = out.columns || 80;
   const H = out.rows || 24;
   const total = boardColumns().length;
   const fits = columnsThatFit(W, total);
   const n = Math.max(1, Math.min(fits, total));
-  return { W, H, fits, cw: Math.max(6, Math.floor((W - GAP.length * (n - 1)) / n)), bodyH: Math.max(1, H - 4) };
+  const boardH = S.split ? Math.ceil(H * 3 / 4) : H - 2;
+  return { W, H, fits, cw: Math.max(6, Math.floor((W - GAP.length * (n - 1)) / n)), bodyH: Math.max(1, boardH - 2) };
+}
+
+// Split mode's lower pane: a rule, the selected ticket's title, and as much
+// of its body as fits (no scrolling; enter opens the full view).
+function splitPane(W, height) {
+  const t = selected();
+  const lines = ['─'.repeat(W)];
+  if (!t) return lines;
+  lines.push(`${ESC}1m${fit(` ${t.title}`, W)}${ESC}0m`);
+  const body = peekLines(t.slug, W - 2).lines;
+  const room = Math.max(0, height - lines.length);
+  const shown = body.length > room ? [...body.slice(0, Math.max(0, room - 1)), '…'] : body;
+  for (const l of shown.slice(0, room)) lines.push(fit(` ${l}`, W));
+  return lines;
 }
 
 function cardsOf(colSlug, cw) {
@@ -514,13 +531,18 @@ function render() {
 
   for (let y = 0; y < bodyH; y++) lines.push(colLines.map(cl => cl[y] ?? ' '.repeat(cw)).join(GAP));
 
-  const t = selected();
-  lines.push(`${ESC}2m${fit(t ? `${t.title}  (${t.slug})` : '', W)}${ESC}0m`);
+  if (S.split) {
+    const pane = splitPane(W, H - lines.length - 1);
+    lines.push(...pane, ...Array(Math.max(0, H - lines.length - pane.length - 1)).fill(''));
+  } else {
+    const t = selected();
+    lines.push(`${ESC}2m${fit(t ? `${t.title}  (${t.slug})` : '', W)}${ESC}0m`);
+  }
   if (S.prompt !== null) lines.push(fit(`New ticket title: ${S.prompt}`, W));
   else if (S.message) lines.push(fit(S.message, W));
   else lines.push(`${ESC}2m${fit(S.grab
     ? 'arrows carry  space drop  esc cancel'
-    : 'arrows move  space grab  enter view  e edit  c copy  n new  r reload  q quit', W)}${ESC}0m`);
+    : `arrows move  space grab  enter view  f ${S.split ? 'full' : 'split'}  e edit  c copy  n new  r reload  q quit`, W)}${ESC}0m`);
 
   out.write(`${ESC}H` + lines.slice(0, H).map(l => `${l}${ESC}K`).join('\r\n') + `${ESC}J`);
 }
@@ -764,7 +786,7 @@ const KEYS = {
   '\x1b[H': 'home', '\x1b[1~': 'home', '\x1bOH': 'home', 'g': 'home',
   '\x1b[F': 'end', '\x1b[4~': 'end', '\x1bOF': 'end', 'G': 'end',
   ' ': 'space', '\r': 'enter', '\n': 'enter', '\x1b': 'esc', '\x03': 'quit', 'q': 'quit',
-  'n': 'new', 'r': 'reload', 'e': 'edit', 'd': 'delete', 'c': 'copy',
+  'n': 'new', 'r': 'reload', 'e': 'edit', 'd': 'delete', 'c': 'copy', 'f': 'split',
 };
 
 function onPromptKey(k) {
@@ -798,8 +820,8 @@ function onKey(k) {
     return;
   }
   const key = KEYS[k];
-  const page = Math.max(1, (out.rows || 24) - 5);
-  if (S.peek) return onPeekKey(key, page);
+  if (S.peek) return onPeekKey(key, Math.max(1, (out.rows || 24) - 5));
+  const page = Math.max(1, layout().bodyH - 1);
   const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0], pgup: [0, -page], pgdn: [0, page], home: [0, -1e9], end: [0, 1e9] }[key];
   if (step) return S.grab ? moveGrabbed(...step) : moveCursor(...step);
   switch (key) {
@@ -808,6 +830,7 @@ function onKey(k) {
     case 'enter': if (!S.grab && selected()) S.peek = { slug: selected().slug, top: 0 }; return;
     case 'edit': if (!S.grab) editSelected(); return;
     case 'copy': if (!S.grab) copyTitle(); return;
+    case 'split': S.split = !S.split; return;
     case 'new': if (!S.grab) S.prompt = ''; return;
     case 'reload': if (!S.grab) { const t = selected(); reload(); if (t) focusSlug(t.slug); } return;
     case 'quit': return quit();
