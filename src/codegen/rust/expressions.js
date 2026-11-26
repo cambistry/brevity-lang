@@ -276,7 +276,7 @@ function genRustExpr(expr, typeEnv, eCtx) {
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![Value::Object(_payload)]), json!("$new")]));
         send_msg.insert("to".to_string(), json!(${JSON.stringify(rustDomHostAddr(dc.tag))}));
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         Value::Null
     }`;
     }
@@ -654,7 +654,7 @@ ${subRegLines.join('\n')}
     const newTo = expr.viaInstance
       ? `json!(format!("{}:${expr.viaSelector}", ${rustSsaResolve(expr.viaInstance)}.as_str().unwrap_or("")))`
       : `json!(${JSON.stringify(G.ctx.constructorCoercions.get(expr.callee.name))})`;
-    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); let _ = self.binding.send(self.bv_lift(Value::Object(send_msg))); self.await_new_response(&new_id) }`;
+    return `{ let seq = self.send_seq.get(); self.send_seq.set(seq + 1); let new_id = seq.to_string(); let mut send_msg = Map::new(); send_msg.insert("id".to_string(), json!(new_id.clone())); ${rustNewOpInserts(expr.args, typeEnv, eCtx)} send_msg.insert("to".to_string(), ${newTo}); self.bv_send(Value::Object(send_msg)); self.await_new_response(&new_id) }`;
   }
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && G.ctx.destructuredMembers?.has(expr.callee.name)) {
     const { service, remote } = G.ctx.destructuredMembers.get(expr.callee.name);
@@ -683,7 +683,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         Value::Null
     }`;
   }
@@ -806,7 +806,7 @@ ${subRegLines.join('\n')}
             send_msg.insert("id".to_string(), json!(seq.to_string()));
             send_msg.insert("op".to_string(), ${opExpr});
             send_msg.insert("to".to_string(), json!(_addr));
-            let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+            self.bv_send(Value::Object(send_msg));
             Value::Null
         }
     }`;
@@ -965,7 +965,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
@@ -1013,7 +1013,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), json!(${method}));
         send_msg.insert("to".to_string(), json!(${to}));
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         ${awaitUnlessSilent('seq.to_string()')}
     }`;
     }
@@ -1062,7 +1062,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("op".to_string(), ${opExpr});
         send_msg.insert("to".to_string(), json!(${to}));
         send_msg.insert("ty".to_string(), ${tyExpr});
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         ${awaitUnlessSilent('send_id')}
     }`;
   }
@@ -1421,7 +1421,7 @@ ${subRegLines.join('\n')}
         send_msg.insert("id".to_string(), json!(seq.to_string()));
         send_msg.insert("op".to_string(), json!(bv_sel(&_addr)));
         send_msg.insert("to".to_string(), json!(_addr));
-        let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));
+        self.bv_send(Value::Object(send_msg));
         Value::Null
     }`;
       }

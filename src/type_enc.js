@@ -28,7 +28,7 @@ export const isSelf = (t) => !!t && typeof t === 'object' && t[SELF_KEY] === tru
 export const addressesIn = (t, out = new Set()) => {
   if (typeof t === 'string') out.add(t);
   else if (Array.isArray(t)) t.forEach(x => addressesIn(x, out));
-  else if (t && typeof t === 'object') for (const [k, v] of Object.entries(t)) addressesIn(v, out);
+  else if (t && typeof t === 'object') for (const v of Object.values(t)) addressesIn(v, out);
   return out;
 };
 

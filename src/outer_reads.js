@@ -163,9 +163,15 @@ export function markOuterReads(program) {
   for (const name of classes.keys()) levels.set(name, levelOf(program, classes, name));
 
   for (const actor of classes.values()) {
-    if (homeOf(actor) && actor.isPublic) {
-      throw new Error(`'${actor.name}' is declared inside '${homeOf(actor)}', and a class declared in a class can't be public yet`);
+    if (!homeOf(actor) || !actor.isPublic) continue;
+    // A class an instance declares (in the instance body, not the class block,
+    // which is the class itself) is that instance's own, addressed under it
+    // (notes/class-of-and-self-return-2026-11-23.md): it is never public.
+    const home = classes.get(homeOf(actor));
+    if (home && !home.singletonOf) {
+      throw new Error(`'${actor.name}' is declared in an instance of '${homeOf(actor)}', and a class an instance declares is its own: write '${actor.selector}'`);
     }
+    throw new Error(`'${actor.name}' is declared inside '${homeOf(actor)}', and a class declared in a class can't be public yet`);
   }
 
   for (const actor of program.actors) {

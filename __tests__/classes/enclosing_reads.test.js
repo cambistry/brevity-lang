@@ -191,11 +191,11 @@ describe('a class reaches only the actors it is declared in', () => {
     `)).toThrow(/'In' is declared inside 'A', so only that class and the classes inside it can construct it/);
   });
 
-  it('a public class declared in a class is a compile error', () => {
+  it('a class an instance declares is never public', () => {
     expect(() => compileSource(`
       A = *{
         @In = *{}
       }
-    `)).toThrow(/'@In' is declared inside 'A', and a class declared in a class can't be public yet/);
+    `)).toThrow("'@In' is declared in an instance of 'A', and a class an instance declares is its own: write 'In'");
   });
 });

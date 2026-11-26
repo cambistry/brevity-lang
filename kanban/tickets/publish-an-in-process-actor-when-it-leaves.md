@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: review
 created: 2026-11-26
 ---
 # Publish an in-process actor when it leaves

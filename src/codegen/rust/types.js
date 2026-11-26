@@ -698,7 +698,8 @@ function toJsonValue(expr, brevityType) {
     return `json!(${expr})`;
   }
   if (brevityType === 'Anything' || brevityType === undefined) {
-    return `bv_val(${expr})`;
+    // A local is read, not moved: it may be read again after.
+    return /^[A-Za-z_]\w*$/.test(expr) ? `bv_val(${expr}.clone())` : `bv_val(${expr})`;
   }
   return expr;
 }

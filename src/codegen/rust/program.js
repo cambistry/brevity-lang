@@ -143,6 +143,8 @@ ${arms.join('\n')}
 
 // program.js — Program assembly and entry for Rust codegen
 import { dependencyAddressing } from '../dep_address.js';
+import { classSites } from '../class_sites.js';
+import { _opre_join as joinTokens } from '../opre_tokens.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import { typeText, hasType, envTypeOf, dependencyAliases, orAny } from '../enc_names.js';
 import { isFn } from '../../type_enc.js';
@@ -219,7 +221,27 @@ function genRustProgram(actor, allActors) {
   const fieldArms = registry.filter(([lookup, key]) => lookup === key)
     .map(([, key, fields]) => `        ${JSON.stringify(key)} => Some(&[${fields.map(f => JSON.stringify(f.name)).join(', ')}]),`).join('\n');
   const sourceArms = [...G.ctx.typeTable.entries()].map(([name, e]) => `        ${JSON.stringify(name)} => Some(${JSON.stringify(e.key)}),`).join('\n');
+  // Each class, by its pool prefix: where it is declared, which fixes the address an
+  // actor of it built here has as it first leaves (src/codegen/class_sites.js): its
+  // path, or for a class an instance body declares, its token under that instance.
+  const sites = [...classSites(G.ctx.outerProgram ?? { actors: allActors })].filter(([name]) => (allActors || []).some(a => a.name === name));
+  const classPathArms = sites.filter(([, st]) => st.path).map(([name, st]) => `        ${JSON.stringify(name.toLowerCase())} => Some(${JSON.stringify(joinTokens(st.path))}),`).join('\n');
+  const classInInstanceArms = sites.filter(([, st]) => st.inInstance).map(([name, st]) => `        ${JSON.stringify(name.toLowerCase())} => Some(${JSON.stringify(st.token)}),`).join('\n');
   const bvTypeFieldsFn = `
+#[allow(dead_code)]
+fn bv_class_path(prefix: &str) -> Option<&'static str> {
+    match prefix {
+${classPathArms}
+        _ => None,
+    }
+}
+#[allow(dead_code)]
+fn bv_class_in_instance(prefix: &str) -> Option<&'static str> {
+    match prefix {
+${classInInstanceArms}
+        _ => None,
+    }
+}
 fn bv_type_fields(key: &str) -> Option<&'static [&'static str]> {
     match key {
 ${fieldArms}
@@ -454,11 +476,16 @@ ${sourceArms}
   structFields.push('    wire_msg: Value', '    wire_tag: Option<Value>', '    wire_unhandled: bool');
   newArgs.push('wire_msg: Value::Null', 'wire_tag: None', 'wire_unhandled: false');
   const hasPublicSingletons = G.ctx.publicSingletons;
-  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@') || f.name === 'new') || hasPublicSingletons;
+  // The classes the file declares directly, by their pool prefix, with the token an
+  // actor of one built here is published under as it first leaves.
+  const ownClasses = [...classSites(G.ctx.outerProgram ?? { actors: allActors })].filter(([name]) => (allActors || []).some(a => a.name === name));
+  const inInstanceClasses = ownClasses.filter(([, st]) => st.inInstance).map(([name]) => name.toLowerCase());
+  const publishesClasses = actor.functions.some(f => f.name?.startsWith('new@') || f.name === 'new') || hasPublicSingletons || ownClasses.length > 0;
   if (publishesClasses) {
-    // Each actor we published, by its pool ref: its address under us.
-    structFields.push('    published_instances: std::collections::HashSet<String>', '    lift_of: std::collections::HashMap<String, String>');
-    newArgs.push('published_instances: std::collections::HashSet::new()', 'lift_of: std::collections::HashMap::new()');
+    // Each actor we published, by its pool ref: its address under us; and the
+    // actor at each address published as it left.
+    structFields.push('    published_instances: std::collections::HashSet<String>', '    lift_of: std::collections::HashMap<String, String>', '    built_at: std::collections::HashMap<String, String>', '    built_seq: std::collections::HashMap<String, u32>');
+    newArgs.push('published_instances: std::collections::HashSet::new()', 'lift_of: std::collections::HashMap::new()', 'built_at: std::collections::HashMap::new()', 'built_seq: std::collections::HashMap::new()');
   }
   if (hasPublicSingletons) {
     // Public singletons: each one's address and pool ref, both ways, and the ones
@@ -1004,14 +1031,80 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
         }
     }
 
-    // A reply leaving for the wire names an actor we published by its address.
-    fn bv_wire_own(&self, v: &Value) -> Value {
+` : ''}${publishesClasses ? `    // A reply leaving for the wire names an actor we published by its address. An
+    // actor of a class of ours built here (not by \`$new\`) is published as it first
+    // leaves, under its class: it lives where its class is declared.
+    fn bv_wire_own(&mut self, v: &Value) -> Value {
         match v {
-            Value::String(s) => match self.addr_of.get(s) { Some(a) => json!(format!("#<:{}>", a)), None => v.clone() },
+            Value::String(s) => {
+                ${hasPublicSingletons ? 'if let Some(a) = self.addr_of.get(s) { return json!(format!("#<:{}>", a)); }\n                ' : ''}if let Some(a) = self.lift_of.get(s) { return json!(format!("#<:{}>", a)); }
+                let lc = s.split_once('/').map(|(lc, _)| lc).unwrap_or("");
+                // Its class's path; or, declared in an instance body, under that instance.
+                let addr = if let Some(path) = bv_class_path(lc) {
+                    format!("{}:{}", path, bv_inst_id(v))
+                } else if let Some(token) = bv_class_in_instance(lc) {
+                    let encl = match self.bv_encl_of(s) { Some(e) => e, None => return v.clone() };
+                    let at = self.bv_wire_own(&json!(encl));
+                    let at = match at.as_str().and_then(|a| a.strip_prefix("#<:")).and_then(|a| a.strip_suffix('>')) { Some(a) => a.to_string(), None => return v.clone() };
+                    let key = format!("{}:{}", at, token);
+                    let n = self.built_seq.get(&key).copied().unwrap_or(0) + 1;
+                    self.built_seq.insert(key.clone(), n);
+                    format!("{}:{}", key, n)
+                } else {
+                    return v.clone();
+                };
+                self.published_instances.insert(addr.clone());
+                self.lift_of.insert(s.clone(), addr.clone());
+                self.built_at.insert(addr.clone(), s.clone());
+                json!(format!("#<:{}>", addr))
+            }
             Value::Array(a) => Value::Array(a.iter().map(|x| self.bv_wire_own(x)).collect()),
             Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), self.bv_wire_own(x))).collect()),
             _ => v.clone(),
         }
+    }
+
+    // The actor a class an instance body declares was declared in: the first of the
+    // actors it's declared in, recorded as it was built.
+    #[allow(dead_code)]
+    fn bv_encl_of(&self, child: &str) -> Option<String> {
+        let (lc, id) = child.split_once('/')?;
+        let id: u32 = id.parse().ok()?;
+        let st: &std::collections::HashMap<String, Value> = match lc {
+${inInstanceClasses.map(lc => `            ${JSON.stringify(lc)} => self.${lc}_instances.get(&id)?,`).join('\n')}
+            _ => return None,
+        };
+        st.get("__outers").and_then(|o| o.get(0)).and_then(|e| e.as_str()).map(|e| e.to_string())
+    }
+
+    // A reply's types, for one carrying an actor we published: its class's address,
+    // as \`$new\` answers with. Its other slots keep their type, or take their value's.
+    fn bv_wire_own_ty(&self, re: &Value, ty: Option<Value>) -> Option<Value> {
+        let own = |v: &Value| v.as_str().and_then(|s| self.lift_of.get(s)).cloned();
+        let slots = match re { Value::Array(a) => a, _ => return ty };
+        let named = |v: &Value| v.as_object().is_some_and(|m| !m.contains_key("__type"));
+        if !slots.iter().any(|v| own(v).is_some() || (named(v) && v.as_object().unwrap().values().any(|x| own(x).is_some()))) { return ty; }
+        let kind = |v: &Value| -> Value {
+            if let Some(a) = own(v) { return json!(bv_addr_class(&a)); }
+            json!(match v {
+                Value::Null => "null".to_string(),
+                Value::Bool(_) => "Boolean".to_string(),
+                Value::Number(n) => if n.is_f64() { "Float".to_string() } else { "Integer".to_string() },
+                Value::String(_) => "Text".to_string(),
+                Value::Array(_) => "List".to_string(),
+                Value::Object(m) => m.get("__type").and_then(|t| t.as_str()).unwrap_or("Object").to_string(),
+            })
+        };
+        let at = |i: usize| ty.as_ref().and_then(|t| t.as_array()).and_then(|t| t.get(i)).cloned();
+        Some(Value::Array(slots.iter().enumerate().map(|(i, v)| {
+            let t = at(i);
+            if named(v) && own(v).is_none() {
+                Value::Object(v.as_object().unwrap().iter().map(|(k, x)| {
+                    let tk = t.as_ref().and_then(|t| t.get(k)).cloned();
+                    (k.clone(), if own(x).is_some() { kind(x) } else { tk.unwrap_or_else(|| kind(x)) })
+                }).collect())
+            } else if own(v).is_some() { kind(v) } else { t.unwrap_or_else(|| kind(v)) }
+        }).collect()))
     }
 
 ` : ''}${G.ctx.readsOuter ? `    // An instance's state is swapped into self.state while it runs. The state it
@@ -1546,6 +1639,36 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
     // relative to it, so they gain its address under us, as its parents would
     // translate them.
     #[allow(dead_code)]
+    // A message we send, as the file actor sends it: lifted, and an actor of ours in
+    // its args named by us, with its type, as it leaves.
+    #[allow(dead_code)]
+    fn bv_send(&mut self, msg: Value) {
+        let msg = self.bv_lift(msg);${publishesClasses ? `
+        let msg = match msg {
+            Value::Object(mut m) => {
+                if let Some(Value::Array(op)) = m.get("op").cloned() {
+                    if let Some(args @ Value::Array(_)) = op.first().cloned() {
+                        let ty0 = m.get("ty").and_then(|t| t.as_array()).and_then(|t| t.first()).cloned();
+                        let wired = self.bv_wire_own(&args);
+                        let mut op = op;
+                        op[0] = wired;
+                        m.insert("op".to_string(), Value::Array(op));
+                        if let Some(t) = self.bv_wire_own_ty(&args, ty0.clone()) {
+                            if Some(&t) != ty0.as_ref() {
+                                let mut ty = m.get("ty").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+                                if ty.is_empty() { ty.push(t); } else { ty[0] = t; }
+                                m.insert("ty".to_string(), Value::Array(ty));
+                            }
+                        }
+                    }
+                }
+                Value::Object(m)
+            }
+            other => other,
+        };` : ''}
+        let _ = self.binding.send(msg);
+    }
+
     fn bv_lift(&self, msg: Value) -> Value {
         let msg = bv_bare_to(msg);${publishesClasses && G.ctx.readsOuter ? `
         let addr = match self.lift_of.get(&self.state_owner) { Some(a) => a.clone(), None => return msg };
@@ -1588,9 +1711,9 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
                     let (re_val, ty_re) = bv_wrap_reply(re_val, ty_re);
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
-                    resp.insert("re".to_string(), ${G.ctx.publicSingletons ? 'self.bv_wire_own(&re_val)' : 're_val'});
+                    resp.insert("re".to_string(), ${publishesClasses ? 'self.bv_wire_own(&re_val)' : 're_val'});
                     resp.insert("to".to_string(), json!(from));
-                    if let Some(ty) = ty_re {
+                    ${publishesClasses ? 'let ty_re = self.bv_wire_own_ty(&re_val, ty_re);\n                    ' : ''}if let Some(ty) = ty_re {
                         resp.insert("ty".to_string(), ty);
                     }
                     let _ = self.binding.send(Value::Object(resp));
@@ -2678,7 +2801,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 }
             }
         }` : ''}${publishesClasses ? `
-        if let Some(addr) = _inst_addr {
+        if let Some(addr) = _inst_addr {${G.ctx.readsOuter ? `
             // A layer, to anyone but the actor that built it, isn't there.
             if message.get("op").is_some() {
                 if let Some(owner) = self.bv_file_state().get(&format!("__layer_owner_{}", addr)).cloned() {
@@ -2693,11 +2816,11 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                         return;
                     }
                 }
-            }
+            }` : ''}
             let (class, inst) = addr.split_once(':').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             // Only a public class is published, and its identifier has this suffix.
-            let child = ${hasPublicSingletons ? `match self.singleton_at.get(&addr) { Some(c) => c.clone(), None => format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst) }` : `format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst)`};
+            let child = match self.built_at.get(&addr) { Some(c) => c.clone(), None => ${hasPublicSingletons ? `match self.singleton_at.get(&addr) { Some(c) => c.clone(), None => format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst) }` : `format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst)`} };
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
             resp.insert("to".to_string(), json!(from));
@@ -2726,8 +2849,11 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
                     let (v, tag) = bv_wrap_reply(v, tag);
-                    resp.insert("re".to_string(), ${hasPublicSingletons ? 'self.bv_wire_own(&' : '('}bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<:>")), &addr)));
-                    if let Some(t) = tag { resp.insert("ty".to_string(), bv_local_tag(&t, &addr)); }
+                    // An actor of ours it names is named by us, with its type.
+                    let u = bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<:>")), &addr);
+                    resp.insert("re".to_string(), ${publishesClasses ? 'self.bv_wire_own(&u)' : 'u.clone()'});
+                    let t = tag.map(|t| bv_local_tag(&t, &addr));
+                    if let Some(t) = ${publishesClasses ? 'self.bv_wire_own_ty(&u, t)' : 't'} { resp.insert("ty".to_string(), t); }
                 }
                 Err(e) => {
                     let mut ex = Map::new();
@@ -2766,7 +2892,7 @@ ${(allActors || []).some(a => a.name && G.ctx.actorInfo?.has(a.name)) ? `       
         msg.insert("to".to_string(), json!(to));
         if let Some(t) = ty { msg.insert("ty".to_string(), t); }
         if !to.starts_with(':') {
-            let _ = self.binding.send(self.bv_lift(Value::Object(msg)));
+            self.bv_send(Value::Object(msg));
             return self.await_response(&id);
         }
 ${heldSingletonArms ? `        let held: Option<String> = match to.as_str() {
@@ -2945,7 +3071,10 @@ function codegenRust(ast, options = {}) {
   G.ctx.publicSingletons = ast.actors.some(a => publicLabel(a) || a.name === FILE_CLASS);
   // An actor that may be extended, or extends one in another file, runs as a class
   // that reaches the actors around it (its delegation runtime is there).
-  G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons || ast.actors.some(a => a.membersOf || a.isPublic || a.remoteLayers?.length);
+  // A class an instance body declares is addressed under that instance, which its
+  // chain of enclosing actors names (bv_encl_of).
+  G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons || ast.actors.some(a => a.membersOf || a.isPublic || a.remoteLayers?.length)
+    || [...classSites(ast).values()].some(st => st.inInstance);
   G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.program = ast;
   G.ctx.outerProgram = ast;

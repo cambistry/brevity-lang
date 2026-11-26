@@ -42,7 +42,7 @@ function genRustAsSend(varName, typeName, targetExpr, I, lines) {
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
   lines.push(`${I}    send_msg.insert("op".to_string(), json!(["${typeText(typeName, G.ctx.depAliases)}", "$as"]));`);
   lines.push(`${I}    send_msg.insert("to".to_string(), json!(${targetExpr}));`);
-  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+  lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
   lines.push(`${I}    let _re = self.await_response(&send_id);`);
   lines.push(`${I}    let _as_val: Value = if let Some(arr) = _re.as_array() { arr.first().cloned().unwrap_or(Value::Null) } else { Value::Null };`);
   lines.push(`${I}    ${convertFromValue('_as_val', typeName)}`);
@@ -93,7 +93,7 @@ function handleTypedAssign_DepServiceRef(s, I, lines) {
     lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
     lines.push(`${I}    send_msg.insert("op".to_string(), json!(${method}));`);
     lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-    lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+    lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
     lines.push(`${I}    let _re = self.await_response(&send_id);`);
     lines.push(`${I}    ${convertFromValue(`BvObject::pack(&_re).one()`, s.typeNameEnc)}`);
     lines.push(`${I}};`);
@@ -918,7 +918,7 @@ function handleTypedAssign_RefFieldCall(s, typeEnv, I, lines) {
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
   lines.push(`${I}    send_msg.insert("op".to_string(), ${opExpr});`);
   lines.push(`${I}    send_msg.insert("to".to_string(), json!(_addr));`);
-  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+  lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
   lines.push(`${I}    let _re = self.await_response(&send_id);`);
   lines.push(`${I}    ${convertFromValue(`BvObject::pack(&_re).one()`, s.typeNameEnc)}`);
   lines.push(`${I}};`);
@@ -992,7 +992,7 @@ function genRustMemberCallAwait(call, typeEnv, I, lines) {
   lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
   lines.push(`${I}    send_msg.insert("op".to_string(), ${opExpr});`);
   lines.push(`${I}    send_msg.insert("to".to_string(), json!(${to}));`);
-  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+  lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
   lines.push(`${I}    self.await_response(&send_id)`);
   lines.push(`${I}};`);
 }
@@ -1344,7 +1344,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           lines.push(`${I}    send_msg.insert("id".to_string(), json!(send_id.clone()));`);
           lines.push(`${I}    send_msg.insert("op".to_string(), ${opJson});`);
           lines.push(`${I}    send_msg.insert("to".to_string(), json!(_addr));`);
-          lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+          lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
           lines.push(`${I}    send_id`);
           lines.push(`${I}};`);
           lines.push(`${I}let ${tempName} = self.await_response(&${tempName}_id);`);
@@ -1563,7 +1563,7 @@ function genRustDepConstructorAsAssign(s, typeEnv, I, lines) {
   lines.push(`${I}    new_msg.insert("id".to_string(), json!(new_id.clone()));`);
   lines.push(`${I}    ${rustNewOpInserts(s.value.args, typeEnv, undefined, 'new_msg')}`);
   lines.push(`${I}    new_msg.insert("to".to_string(), json!(${JSON.stringify(targetName)}));`);
-  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(new_msg)));`);
+  lines.push(`${I}    self.bv_send(Value::Object(new_msg));`);
   lines.push(`${I}    let addr = self.await_new_response(&new_id);`);
   lines.push(`${I}    let seq2 = self.send_seq.get();`);
   lines.push(`${I}    self.send_seq.set(seq2 + 1);`);
@@ -1595,7 +1595,7 @@ function genRustDepConstructorAssign(s, typeEnv, I, lines) {
     ? `json!(format!("{}:${s.value.viaSelector}", ${rustSsaResolve(s.value.viaInstance)}.as_str().unwrap_or("")))`
     : `json!(${JSON.stringify(targetName)})`;
   lines.push(`${I}    send_msg.insert("to".to_string(), ${toJson});`);
-  lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+  lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
   lines.push(`${I}    self.await_new_response(&new_id)`);
   lines.push(`${I}};`);
 }
@@ -1879,7 +1879,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
         }
         lines.push(`${I}    send_msg.insert("ty".to_string(), ${tyJson});`);
       }
-      lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(send_msg)));`);
+      lines.push(`${I}    self.bv_send(Value::Object(send_msg));`);
       lines.push(`${I}    send_id`);
       lines.push(`${I}};`);
       if (isLocalInst && childNames.length > 0) {
@@ -2444,7 +2444,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         lines.push(`${I}    let mut set_msg = Map::new();`);
         lines.push(`${I}    set_msg.insert("op".to_string(), Value::Array(vec![Value::Array(vec![${valAsValue}]), json!("$set")]));`);
         lines.push(`${I}    set_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));${tyPart}`);
-        lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(set_msg)));`);
+        lines.push(`${I}    self.bv_send(Value::Object(set_msg));`);
         lines.push(`${I}}`);
       }
     } else if (s.type === 'ListDestructure') {
@@ -2727,7 +2727,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}    sub_msg.insert("op".to_string(), ${wireOpExpr});`);
           lines.push(`${I}    sub_msg.insert("to".to_string(), json!(${JSON.stringify(toFieldStr)}));`);
           if (tyExpr) lines.push(`${I}    sub_msg.insert("ty".to_string(), ${tyExpr});`);
-          lines.push(`${I}    let _ = self.binding.send(self.bv_lift(Value::Object(sub_msg)));`);
+          lines.push(`${I}    self.bv_send(Value::Object(sub_msg));`);
           lines.push(`${I}}`);
         } else if (childActorType) {
           lines.push(`${I}{`);

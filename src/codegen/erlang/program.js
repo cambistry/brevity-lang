@@ -1,6 +1,7 @@
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import { dependencyAddressing } from '../dep_address.js';
+import { classSites } from '../class_sites.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
@@ -2014,9 +2015,9 @@ ${dispatchInner}
 handle_result({ok, Re0, TyRe0}, Id, From, _OpName) when Re0 =/= null ->
     {Re, TyRe} = bv_wrap_reply_(Re0, TyRe0),
     Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Re), <<"to">> => From},
-    Resp = case TyRe of
+    Resp = case bv_wire_own_ty_(Re, TyRe) of
         null -> Resp0;
-        _ -> Resp0#{<<"ty">> => TyRe}
+        TyW_ -> Resp0#{<<"ty">> => TyW_}
     end,
     io:put_chars([json_encode(Resp), $\n]);
 handle_result({ok, null, _}, _Id, _From, _OpName) ->
@@ -2241,6 +2242,12 @@ bv_held_addr_(A_) -> A_.
     'bv_type_fields(_) -> undefined.',
     ...registry.map(([lookup, key]) => `bv_type_name(${erlString(lookup)}) -> ${erlString(key)};`),
     'bv_type_name(_) -> undefined.',
+    // Each class, by the name its process records: where it is declared, which fixes
+    // the address an actor of it built here has as it first leaves (src/codegen/class_sites.js).
+    ...[...classSites(ctx.program)].filter(([name]) => ctx.actorInfo?.has(name)).map(([name, site]) => (site.path
+      ? `bv_class_site(${erlString(name.toLowerCase())}) -> {path, [${site.path.map(erlString).join(', ')}]};`
+      : `bv_class_site(${erlString(name.toLowerCase())}) -> {in_instance, ${erlString(site.token)}};`)),
+    'bv_class_site(_) -> undefined.',
     ...[...ctx.typeTable.entries()].map(([name, e]) => `bv_source_key(${erlString(name)}) -> ${erlString(e.key)};`),
     'bv_source_key(_) -> undefined.',
   ].join('\n');
@@ -2532,3 +2539,4 @@ export {
   genChildActorCode,
   genLambdaHandlerInner,
 };
+

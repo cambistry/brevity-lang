@@ -9,6 +9,7 @@ import { wireLabel, addressToken, selfAddress, intrinsicArm } from '../wire_labe
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { fileOuterNames, hasOuterReads, outerNamesFor } from '../../outer_reads.js';
 import { publicLabel } from '../../singleton_classes.js';
+import { classSites } from '../class_sites.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv } from './types.js';
 import { readRemote } from '../../validate.js';
@@ -1109,7 +1110,11 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const declaredHere = (a) => ((a.blockParent ? a.home : a.enclosing) ?? null) === (actor.name ?? null);
   const publicSingletons = (ctx.program?.actors || [])
     .filter(a => publicLabel(a) && declaredHere(a));
-  const publishesClasses = publishesNew || publicSingletons.length > 0;
+  // The file publishes every actor of the program's classes that leaves it, at
+  // the address its class's declaration fixes (#_wireOwn, src/codegen/class_sites.js).
+  const sites = actor.name ? new Map() : classSites(ctx.program);
+  const ownClasses = (ctx.program?.actors || []).filter(a => sites.has(a.name) && ctx.emittedActors?.has(a));
+  const publishesClasses = publishesNew || publicSingletons.length > 0 || ownClasses.length > 0;
   // Private singletons declared directly in this actor (\`s = actor { … }\`): not
   // published, but this actor's own sends reach them by their address (\`#<:~s>\`).
   const heldSingletons = (ctx.program?.actors || [])
@@ -1169,13 +1174,17 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   #nextId = 0
   // Ids for calls that never leave us (to an actor we hold, to ourselves): apart from
   // the wire's, so the ids we post run 1, 2, 3, … on every target.
-  #localId = 0${publishesClasses ? '\n  #_instances = new Map()\n  #_layerOwner = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()' : ''}
+  #localId = 0${publishesClasses ? `\n  #_instances = new Map()\n  #_layerOwner = new Map()\n  #_instanceSeq = new Map()\n  #_addrOf = new Map()\n  #_tyOf = new Map()\n  #_classes = new Map([${ownClasses.map(a => `[${a.name}, ${JSON.stringify(sites.get(a.name))}]`).join(', ')}])` : ''}
   #_remoteRoutes = null
   #_lift = null${hasDeferred ? '\n  #_pendingCells = new Map()\n  #_joins = []' : ''}${actor.spawnable ? '\n  #_starting = null' : ''}${actor.name && ctx.readsOuter ? '\n  #outer = null\n  #chain = []' : ''}${!actor.name && ctx.readsOuter ? '\n  #_outerFwd = new Map()\n  #_selfFwd = new Map()' : ''}${homeExt ? homeExt.fields : ''}${ext ? ext.fields : ''}
 ${fieldSection ? fieldSection + '\n' : ''}
-  constructor(binding) { this.#binding = binding;${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base && !ext.remote ? ' this.#base = binding.base ?? null;' : ''}${ext && !ext.isBlock ? ' this.#_layerCtx = binding.layerCtx ?? null;' : ''} }
+  constructor(binding) { this.#binding = binding;${actor.name ? ' this.#_encl = binding.chain?.[0] ?? null;' : ''}${actor.name && ctx.readsOuter ? ' this.#outer = binding.outer ?? null; this.#chain = binding.chain ?? (binding.outer ? [binding.outer] : []);' : ''}${ext?.base && !ext.remote ? ' this.#base = binding.base ?? null;' : ''}${ext && !ext.isBlock ? ' this.#_layerCtx = binding.layerCtx ?? null;' : ''} }
 
-  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
+${actor.name ? `  // The actor this one's class is declared in, for its address (the file's #_publishBuilt).
+  #_encl = null
+  _enclosing() { return this.#_encl; }
+
+` : ''}  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
   async #init(${[...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
 
@@ -1260,7 +1269,7 @@ ${actor.spawnable ? `
     // The file actor sends it as its own, so it gets our addresses translated
     // as our parents would translate them (\`lift\`).
     if (this.#outer) { this.#outer.receive({ ...(this.#_lift ? this.#_lift(msg) : msg), from: '__child', _route: (m) => this.receive(m), _silent: silent }); return; }` : ''}
-    this.#binding.post(msg);
+    this.#binding.post(${!actor.name && publishesClasses ? 'this.#_wireArgs(msg)' : 'msg'});
   }
 
   async #sendRef(op, to, ty) {
@@ -1428,12 +1437,12 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
       // address, comes back to it under its own (even before it's published).
       const id = String(++this.#nextId);
       if (!_silent && _route) this.#_selfFwd.set(_asFrom + '|' + id, { route: _route, id: childId });
-      this.#binding.post({ ...call, id, from: _asFrom });
+      this.#binding.post(${publishesClasses ? 'this.#_wireArgs({ ...call, id, from: _asFrom })' : '{ ...call, id, from: _asFrom }'});
       return;
     }
     const id = String(++this.#nextId);
     if (!_silent) this.#_outerFwd.set(id, { route: _route, id: childId });
-    this.#binding.post({ ...call, id });
+    this.#binding.post(${publishesClasses ? 'this.#_wireArgs({ ...call, id })' : '{ ...call, id }'});
   }
 
 ` : ''}${readable ? `  // \`$get\` to one of our names: \`{ read, open }\`, open for a public cell.
@@ -1470,8 +1479,9 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
   #_publishInstance(cls, inst) {
     // Published once: as it's made (a class that builds a layer), or when \`new\` replies.
     if (this.#_addrOf.has(inst)) return this.#_addrOf.get(inst);
-    const n = (this.#_instanceSeq.get(cls) || 0) + 1;
-    this.#_instanceSeq.set(cls, n);
+    const key = cls === null ? null : _opre_join([cls]);
+    const n = (this.#_instanceSeq.get(key) || 0) + 1;
+    this.#_instanceSeq.set(key, n);
     if (cls === null) return this.#_publishAt(String(n), ':', inst);
     return this.#_publishAt(_opre_join([cls, String(n)]), _opre_join([null, cls]), inst);
   }
@@ -1492,12 +1502,14 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
   #_publishAt(addr, tag, inst) {
     this.#_instances.set(addr, inst);
     this.#_addrOf.set(inst, addr);
+    this.#_tyOf.set(inst, tag);
     // What it sends relative to itself, \`:x\`, is \`:addr:x\` to us. Any other
     // address is global and passes through.
     const local = (v) => {
       if (typeof v === 'string') return _opre_map_bracketed(v, (a) => _opre_under(a, addr));
       if (Array.isArray(v)) return v.map(local);
-      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
+      // An actor (not a plain object) is named by us as it leaves (#_wireOwn).
+      if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
       return v;
     };
     // \`ty\` has no brackets. A bare \`:\` is the sender's own class, which we know.
@@ -1518,6 +1530,13 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
         const { ty, ...rest } = msg;
         const out = { ...local(rest), to: msg.to, from: msg.from ? _opre_under(msg.from, addr) : ':' + addr };
         if ('ty' in msg) out['ty'] = localTy(ty);
+        // A reply carrying an actor of ours names it, and gives its type.
+        if (Array.isArray(out.re)) {
+          const re = out.re;
+          out.re = this.#_wireOwn(re);
+          const t = this.#_wireOwnTy(re, out['ty']);
+          if (t !== undefined) out['ty'] = t;
+        }
         this.#binding.post(out);
       },
       lift: (msg) => {
@@ -1530,9 +1549,55 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
     return addr;
   }
 
-  // A reply leaving for the wire names an actor we published by its address.
+  // An actor built here, published as it first leaves, under the address its class's
+  // declaration fixes: the class's path, or for a class an instance body declares,
+  // that instance's address (published first) and the class's token.
+  #_publishBuilt(v) {
+    const site = this.#_classes.get(v.constructor);
+    let tokens = site.path;
+    if (!tokens) {
+      const encl = v._enclosing?.();
+      const at = encl ? this.#_wireOwn(encl) : undefined;
+      if (typeof at !== 'string' || !at.startsWith('#<:')) return undefined;
+      tokens = [..._opre_split(_opre_unbracket(at).slice(1)), site.token];
+    }
+    const key = _opre_join(tokens);
+    const n = (this.#_instanceSeq.get(key) || 0) + 1;
+    this.#_instanceSeq.set(key, n);
+    return this.#_publishAt(_opre_join([...tokens, String(n)]), _opre_join([null, ...tokens]), v);
+  }
+
+  // A message we send, ours or one a class of ours makes through us: an actor of
+  // ours in its args is named by us, with its type, as it leaves.
+  #_wireArgs(msg) {
+    if (!Array.isArray(msg.op) || !Array.isArray(msg.op[0])) return msg;
+    const args = msg.op[0];
+    const wired = this.#_wireOwn(args);
+    const t = this.#_wireOwnTy(args, Array.isArray(msg.ty) ? msg.ty[0] : undefined);
+    return { ...msg, op: [wired, ...msg.op.slice(1)], ...(t !== undefined && { ty: [t, ...(Array.isArray(msg.ty) ? msg.ty.slice(1) : [])] }) };
+  }
+
+  // A reply's types, for one carrying an actor we published: its class's address,
+  // as \`$new\` answers with. Its other slots keep their type, or take their value's.
+  #_wireOwnTy(re, ty) {
+    const own = (v) => v && typeof v === 'object' && this.#_tyOf.has(v);
+    const named = (v) => v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype;
+    if (!re.some(v => own(v) || (named(v) && Object.values(v).some(own)))) return ty;
+    const kind = (v) => (own(v) ? this.#_tyOf.get(v) : v === null || v === undefined ? 'null' : typeof v === 'bigint' ? 'Integer'
+      : typeof v === 'number' ? (Number.isInteger(v) ? 'Integer' : 'Float') : typeof v === 'string' ? 'Text' : typeof v === 'boolean' ? 'Boolean'
+      : typeof v.__type === 'string' ? v.__type : 'Object');
+    const slot = (v, t) => (own(v) ? this.#_tyOf.get(v) : t ?? kind(v));
+    return re.map((v, i) => (named(v) && !own(v)
+      ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, slot(x, ty?.[i]?.[k])]))
+      : slot(v, ty?.[i])));
+  }
+
+  // A reply leaving for the wire names an actor we published by its address. An
+  // actor of a class of ours built here (not by \`$new\`) is published as it first
+  // leaves, under its class: it lives where its class is declared.
   #_wireOwn(v) {
-    const addr = v && typeof v === 'object' ? this.#_addrOf.get(v) : undefined;
+    let addr = v && typeof v === 'object' ? this.#_addrOf.get(v) : undefined;
+    if (!addr && v && typeof v === 'object' && this.#_classes.has(v.constructor)) addr = this.#_publishBuilt(v);
     if (addr) return '#<:' + addr + '>';
     if (Array.isArray(v)) return v.map(x => this.#_wireOwn(x));
     if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, this.#_wireOwn(x)]));
@@ -1569,7 +1634,7 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
       // \`$new\` to a class's own label (\`:C\`) builds one here, though its members
       // are published there.
       const _isNew = (Array.isArray(message.op) ? message.op[message.op.length - 1] : message.op) === '$new';
-      for (let _n = Math.min(2, _toks.length); _n > 0; _n--) {
+      for (let _n = _toks.length; _n > 0; _n--) {
         if (_isNew && _n === _toks.length) continue;
         const _at = _opre_join(_toks.slice(0, _n));
         const _inst = this.#_instances.get(_at);
@@ -1722,8 +1787,9 @@ ${ifChain}
         re = [re];
         if (_ty_re !== undefined && !Array.isArray(_ty_re)) _ty_re = [_ty_re];
       }
-      const _post = { id, re${publishesClasses ? `: (message._route || from === '__self') ? re : this.#_wireOwn(re)` : ''}, to: _replyTo };
-      if (_ty_re !== undefined) _post['ty'] = _ty_re;
+      const _wire = !(message._route || from === '__self');
+      const _post = { id, re${publishesClasses ? `: _wire ? this.#_wireOwn(re) : re` : ''}, to: _replyTo };
+      ${publishesClasses ? 'if (_wire) _ty_re = this.#_wireOwnTy(re, _ty_re);\n      ' : ''}if (_ty_re !== undefined) _post['ty'] = _ty_re;
       _route(_post);
     }
   }
@@ -1768,6 +1834,7 @@ export function codegen(ast, options = {}) {
   // A subclass with an empty body (`Box = (Base++) *{}`) is still a class: its
   // surface is all inherited.
   const active = ast.actors.filter(a => a.functions.length > 0 || a.singletonOf || a.asClauses?.length > 0 || (a.constructorBody && a.constructorBody.length > 0) || (a.stateVarDecls && a.stateVarDecls.length > 0) || (a.initParams && a.initParams.length > 0) || (a.supertypes && a.supertypes.length > 0));
+  ctx.emittedActors = new Set(active);
   if (active.length === 0) return '';
 
   function bodyUsesObject(body) {

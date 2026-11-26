@@ -162,7 +162,7 @@ function genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, awaitReply) {
   const postBranch = `${v.seq} = bv_next_seq_(),
                 ${v.id} = integer_to_binary(${v.seq}),
                 ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => bv_to_addr_(${v.addr})},
-                io:put_chars([json_encode(${v.msg}), $\\n]),
+                io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\\n]),
                 ${tail}`;
   return `begin
         ${v.addr} = ${addr},
@@ -288,7 +288,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => [[#{${payloadPairs.join(', ')}}], ${erlString('$new')}], <<"to">> => ${to}},
-        io:put_chars([json_encode(${v.msg}), $\\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\\n]),
         null
     end`;
     }
@@ -496,7 +496,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\n]),
         ok
     end`;
   }
@@ -828,7 +828,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `begin
         ${v.seq} = bv_next_seq_(),
         ${v.msg} = #{<<"id">> => integer_to_binary(${v.seq}), <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\n]),
         ${awaitUnlessSilent(v.seq)}
     end`;
     }
@@ -853,7 +853,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
       return `begin
         ${v2.seq} = bv_next_seq_(),
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${method}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v2.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v2.msg})), $\n]),
         ${awaitUnlessSilent(v2.seq)}
     end`;
     }
@@ -864,7 +864,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
         ${v2.op} = ${opExpr},
         ${v2.ty} = ${tyExpr},
         ${v2.msg} = #{<<"id">> => integer_to_binary(${v2.seq}), <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
-        io:put_chars([json_encode(${v2.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v2.msg})), $\n]),
         ${awaitUnlessSilent(v2.seq)}
     end`;
   }
@@ -965,7 +965,7 @@ function genErlStaticSend(ctx, expr, typeEnv, sCtx, awaited, argHelpers) {
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${method}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\n]),
         ${wait}
     end`;
   }
@@ -976,7 +976,7 @@ function genErlStaticSend(ctx, expr, typeEnv, sCtx, awaited, argHelpers) {
         ${v.op} = ${opExpr},
         ${v.ty} = ${tyExpr},
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${v.op}, <<"to">> => ${to}, <<"ty">> => ${v.ty}},
-        io:put_chars([json_encode(${v.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\n]),
         ${wait}
     end`;
 }
@@ -1048,7 +1048,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v.seq} = bv_next_seq_(),
         ${v.id} = integer_to_binary(${v.seq}),
         ${v.msg} = #{<<"id">> => ${v.id}, <<"op">> => ${opExpr}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v.msg})), $\n]),
         bv_object_pack(await_response_(${v.id}))
     end`;
   }
@@ -1064,7 +1064,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.seq} = bv_next_seq_(),
         ${v2.id} = integer_to_binary(${v2.seq}),
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${method}, <<"to">> => ${to}},
-        io:put_chars([json_encode(${v2.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v2.msg})), $\n]),
         bv_object_pack(await_response_(${v2.id}))
     end`;
   }
@@ -1076,7 +1076,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         ${v2.op} = ${opExpr},
         ${v2.ty} = ${tyExpr},
         ${v2.msg} = #{<<"id">> => ${v2.id}, <<"op">> => ${v2.op}, <<"to">> => ${to}, <<"ty">> => ${v2.ty}},
-        io:put_chars([json_encode(${v2.msg}), $\n]),
+        io:put_chars([json_encode(bv_wire_out_(${v2.msg})), $\n]),
         bv_object_pack(await_response_(${v2.id}))
     end`;
 }

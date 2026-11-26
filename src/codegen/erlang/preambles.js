@@ -952,10 +952,83 @@ bv_held_pid_(<<"#<:", _/binary>> = A) ->
     case bv_instance_at_(bv_to_addr_(A)) of {_, P_} -> P_; none -> A end;
 bv_held_pid_(V) -> V.
 %% A reply leaving for the wire names an actor we published by its address.
-bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> P; A_ -> <<"#<:", A_/binary, ">">> end;
+bv_wire_own_(P) when is_pid(P) -> case get({bv_addr_of, P}) of undefined -> bv_wire_built_(P); A_ -> <<"#<:", A_/binary, ">">> end;
 bv_wire_own_(L) when is_list(L) -> [bv_wire_own_(X) || X <- L];
 bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
 bv_wire_own_(V) -> V.
+%% An actor of a class of ours built here (not by \`$new\`) is published as it
+%% first leaves, where its class is declared, whoever built it: the class's path,
+%% or for a class an instance body declares, that instance's address (published
+%% first) and the class's token. Its process says which class it is, and its
+%% chain's head is the actor it is declared in.
+bv_wire_built_(P) ->
+    case (bv_mod_()):bv_class_site(bv_ask_(P, bv_self_class_)) of
+        {path, Tokens_} -> bv_publish_built_(Tokens_, P);
+        {in_instance, Token_} ->
+            case bv_ask_(P, bv_chain_) of
+                [{_, Encl_} | _] when is_pid(Encl_) ->
+                    case bv_wire_own_(Encl_) of
+                        <<"#<:", _/binary>> = At_ ->
+                            [self | Toks_] = bv_opre_split_(bv_to_addr_(At_)),
+                            bv_publish_built_(Toks_ ++ [Token_], P);
+                        _ -> P
+                    end;
+                _ -> P
+            end;
+        _ -> P
+    end.
+bv_ask_(P, Key) ->
+    Ref_ = make_ref(),
+    P ! {bv_get, self(), Key, Ref_},
+    receive {bv_reply, Ref_, V_} -> V_ end.
+bv_publish_built_(Tokens, P) ->
+    Key_ = bv_opre_join_(Tokens),
+    N_ = case get({bv_inst_seq, Key_}) of undefined -> 1; C_ -> C_ + 1 end,
+    put({bv_inst_seq, Key_}, N_),
+    Addr_ = bv_opre_join_(Tokens ++ [integer_to_binary(N_)]),
+    bv_publish_at_(Addr_, P),
+    <<"#<:", Addr_/binary, ">">>.
+%% A message we send: an actor of ours in its args is named by us, with its type,
+%% as it leaves. The file actor publishes; an actor of ours sends as it is.
+bv_wire_out_(#{<<"op">> := [Args | Rest]} = Msg) when is_list(Args) ->
+    case get(bv_self_class_) of
+        undefined ->
+            Ty_ = maps:get(<<"ty">>, Msg, null),
+            Ty0_ = case Ty_ of [T_ | _] -> T_; _ -> null end,
+            M_ = Msg#{<<"op">> => [bv_wire_own_(Args) | Rest]},
+            case bv_wire_own_ty_(Args, Ty0_) of
+                Ty0_ -> M_;
+                T2_ -> M_#{<<"ty">> => [T2_ | case Ty_ of [_ | TR_] -> TR_; _ -> [] end]}
+            end;
+        _ -> Msg
+    end;
+bv_wire_out_(Msg) -> Msg.
+%% A reply's types, for one carrying an actor we published: its class's address,
+%% as \`$new\` answers with. Its other slots keep their type, or take their value's.
+bv_wire_own_ty_(Re, Ty) when is_list(Re) ->
+    Own = fun(V) -> is_pid(V) andalso get({bv_addr_of, V}) =/= undefined end,
+    Named = fun(V) -> is_map(V) andalso not maps:is_key(<<"__type">>, V) end,
+    case lists:any(fun(V) -> Own(V) orelse (Named(V) andalso lists:any(Own, maps:values(V))) end, Re) of
+        false -> Ty;
+        true ->
+            Slot = fun(V, T) ->
+                case Own(V) of
+                    true -> bv_addr_class_(get({bv_addr_of, V}));
+                    false when T =:= undefined; T =:= null -> bv_as_kind(V);
+                    false -> T
+                end
+            end,
+            TyAt = fun(I) -> case is_list(Ty) andalso length(Ty) >= I of true -> lists:nth(I, Ty); false -> undefined end end,
+            {Out_, _} = lists:mapfoldl(fun(V, I) ->
+                T_ = TyAt(I),
+                {case Named(V) of
+                    true -> maps:map(fun(K, X) -> Slot(X, case is_map(T_) of true -> maps:get(K, T_, undefined); false -> undefined end) end, V);
+                    false -> Slot(V, T_)
+                end, I + 1}
+            end, 1, Re),
+            Out_
+    end;
+bv_wire_own_ty_(_, Ty) -> Ty.
 %% A child's "me" (#<:>) as one slot of several: its parent swaps in what it knows
 %% the child as, at any depth. The matching ty slot holds a bare :, "my class".
 bv_swap_self_(<<"#<:>">>, With) -> With;
@@ -1926,7 +1999,7 @@ bv_lift_(Pid, Msg) ->
 bv_outer_send_(Msg, Silent) ->
     Seq_ = bv_next_seq_(),
     Id_ = integer_to_binary(Seq_),
-    io:put_chars([json_encode(Msg#{<<"id">> => Id_}), $\n]),
+    io:put_chars([json_encode(bv_wire_out_(Msg#{<<"id">> => Id_})), $\n]),
     case Silent of true -> null; false -> await_response_(Id_) end.
 %% The reply to a message this actor sent on the wire: {re, Message}, {ex, Message}
 %% or eof. Anything else that comes meanwhile is handled as it comes.
@@ -2030,10 +2103,16 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 {ok, <<"#<:>"/utf8>>, _} ->
                     io:put_chars([json_encode(Base_#{<<"re">> => [<<"#<:", Addr/binary, ">">>], <<"ty">> => [bv_addr_class_(Addr)]}), $\n]);
                 %% Its relative addresses, "me" among them, go under it.
-                {ok, V_, null} -> {W_, _} = bv_wrap_reply_(V_, null), io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(W_, Addr))}), $\n]);
+                %% An actor of ours it names is named by us, with its type.
                 {ok, V_, Tag_} ->
                     {W_, WTag_} = bv_wrap_reply_(V_, Tag_),
-                    io:put_chars([json_encode(Base_#{<<"re">> => bv_wire_own_(bv_under_payload_(W_, Addr)), <<"ty">> => bv_local_tag_(WTag_, Addr)}), $\n]);
+                    U_ = bv_under_payload_(W_, Addr),
+                    Re_ = bv_wire_own_(U_),
+                    Resp_ = case bv_wire_own_ty_(U_, case WTag_ of null -> null; _ -> bv_local_tag_(WTag_, Addr) end) of
+                        null -> Base_#{<<"re">> => Re_};
+                        T_ -> Base_#{<<"re">> => Re_, <<"ty">> => T_}
+                    end,
+                    io:put_chars([json_encode(Resp_), $\n]);
                 {failed, F_} -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => F_}}), $\n])
             end
     end.
@@ -2298,6 +2377,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_class_site/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };
