@@ -20,3 +20,4 @@ kanban/tickets/investigate-subscribability-as-a-function-property.md
 kanban/tickets/investigate-element-extension-names-on-the-element.md
 kanban/tickets/investigate-construction-time-reads-of-a-subclass-cell.md
 kanban/tickets/investigate-a-bare-zero-arity-lambda-in-an-untyped-slot.md
+kanban/tickets/a-type-declaration-carries-a-namespace-of-functions.md
