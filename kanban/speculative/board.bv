@@ -1,0 +1,636 @@
+===========================================================================
+kanban/speculative/board.bv: the kanban board (../board.mjs) as Brevity actors.
+
+Speculative notation: written in the language as intended, not as the
+compiler takes it today. The host services are imagined; nothing
+implements them yet.
+
+Persistence is board.mjs's: tickets are kanban/tickets/<slug>.md on main,
+and order is .kanban/lists/<status> on the kanban branch, one path per line.
+===========================================================================
+
+-- The repo checkout, given at load. --
+use root Text = root
+
+use Terminal = "host/terminal"
+use Process = "host/process"
+use :split, :wrap, slug: slugOf = "std/text"
+use Dir, File
+
+---------------------------------------------------------------------------
+Files are addressed values. A `Dir` is a live, keyed collection of files:
+its glob is the grant (hoisted into the manifest), and each key is what `*`
+matched. The left side gives the shape and the capability: `*` is a
+writable reference, so `<-` writes through to the file system. Each entry's
+type decides how it is stored: a `TicketFile` is front-matter (its body,
+then `status` and `created`); `Lines` is one text per line.
+---------------------------------------------------------------------------
+type TicketFile = FrontMatter[status Text?, created Text?]
+
+ticketFiles *Map[Text, TicketFile] = Dir("../tickets/*.md")
+listFiles *Map[Text, Lines] = Dir("../../.kanban/lists/*")
+
+:before, :after, :trim, :replace_first = Text
+:contains, :take, :from, :join, :concat = List
+
+---------------------------------------------------------------------------
+Terminal keys arrive decoded: "up", "enter", "esc", "space", or the
+character typed. `Terminal.hand!` runs a program on the real terminal,
+then takes the terminal back.
+---------------------------------------------------------------------------
+
+CSI = "\u{1b}["
+GAP = "   "
+MIN_COL = 40
+MAX_COL = 50
+ONE_COLUMN_BELOW = 45
+UP = -1
+DOWN = 1
+PAGE = 10
+CURSOR = "7"
+CARRIED = "30;43"
+LISTED_PREFIX = "kanban/tickets/"
+
+BOARD_KEYS = "arrows move  space grab  enter view  e edit  n new  r reload  q quit"
+CARRY_KEYS = "arrows carry  space drop  esc cancel"
+PEEK_KEYS = "arrows ticket  pgup/pgdn scroll  e edit  enter/esc back"
+
+============
+TEXT HELPERS
+============
+
+-- Pads or cuts `text` to exactly `width` graphemes. --
+fit = (
+    text Text
+    width Integer
+  ) {
+  n = Text.size(text)
+  if (n > width) { return "#{Text.slice(text, 0, width - 1)}…" }
+  "#{text}#{Text.repeat(" ", width - n)}"
+}
+
+styled = (style Text, text Text) -> "#{CSI}#{style}m#{text}#{CSI}0m"
+bold = (text Text) -> styled("1", text)
+dim = (text Text) -> styled("2", text)
+
+clamp = (n Integer, lo Integer, hi Integer) {
+  if (n < lo) { return lo }
+  if (n > hi) { return hi }
+  n
+}
+
+-- `text`, or `fallback` when it is empty. --
+either = (text Text, fallback Text) -> if (text == "") fallback else text
+
+=======
+TICKETS
+=======
+
+type Ticket (slug Text, title Text, status Text, created Text)
+
+-- A ticket from its file: the body's heading is the title; the front-matter gives the rest. --
+ticketFrom = (slug Text)
+  body, :status, :created = ticketFiles[slug]
+  heading = body |> after("# ") |> before("\n") |> trim
+  Ticket(
+    :slug
+    title: either(heading, slug)
+    status: status ?? "inbox"
+    created: created ?? ""
+  )
+end#ticketFrom
+
+-- Every ticket, read from its file. --
+Tickets = *()
+  all *List[Ticket] = []
+
+  @load! = { all <- map(ticketFiles.keys) (slug) { ticketFrom(slug) } }
+
+  @find = (slug Text) -> find(all) (t) { t.slug == slug }
+
+  -- Writes one front-matter field; the body is untouched. --
+  @restatus. = (t Ticket, status Text) { ticketFiles[t.slug].status <- status }
+
+  @create! = (
+      title Text
+      status Text
+    ) : Text {
+    slug = slugOf(title)
+    created = Process.today
+    ticketFiles[slug] <- ("# #{title}\n", :status, :created)
+    all.append!(Ticket(:slug, :title, :status, :created))
+    slug
+  }
+end#Tickets
+
+=======
+COLUMNS
+=======
+
+---------------------------------------------------------------------------
+One column: its cards (slugs, in board order), a cursor row, and how far
+it has scrolled. `listed` is its list file as last read; `saved` is its
+cards before a grab, for Esc.
+---------------------------------------------------------------------------
+Column = *(
+    slug Text
+    name Text
+  )
+  cards *List[Text] = []
+  listed *List[Text] = []
+  saved *List[Text] = []
+  row *Integer = 0
+  top *Integer = 0
+
+  @slug = () -> slug
+  @name = () -> name
+  @cards = () -> cards
+  @size = () -> List.size(cards)
+  @row = () -> row
+  @top = () -> top
+  @listed = () -> listed
+  @holds = (card Text) -> contains(cards, card)
+  @lists = (card Text) -> contains(listed, card)
+  @selected = () -> List.at(cards, row)
+  last = () -> List.size(cards) - 1
+
+  @read! = {
+    paths = listFiles[slug] ?? []
+    listed <- List.unique(map(paths) (path) { path |> after(LISTED_PREFIX) |> before(".md") })
+  }
+
+  -- Its list file's lines: one repo-relative path per card. --
+  @paths = () -> map(cards) (card) { "#{LISTED_PREFIX}#{card}.md" }
+
+  @fill! = (slugs List[Text]) {
+    cards <- slugs
+    row <- clamp(row, 0, last)
+  }
+
+  @remove! = (card Text) { cards <- filter(cards) (c) { c != card } }
+
+  @insert! = (card Text, at Integer) {
+    i = clamp(at, 0, List.size(cards))
+    cards <- take(cards, i) + [card] + from(cards, i)
+    row <- i
+  }
+
+  -- One step up or down wraps around the column; a page stops at the ends. --
+  @step! = (by Integer) {
+    if (cards == []) { return }
+    if (by == DOWN) { row <- if (row == last) 0 else row + 1 }
+    else if (by == UP) { row <- if (row == 0) last else row - 1 }
+    else { row <- clamp(row + by, 0, last) }
+  }
+
+  @point! = (at Integer) { row <- clamp(at, 0, last) }
+  @save! = { saved <- cards }
+  @restore! = { cards <- saved }
+
+  -- Scrolls until the cursor's card fits whole in `space` lines. --
+  @scroll! = (heights List[Integer], space Integer) {
+    if (row < top) { top <- row }
+    repeat while top < row {
+      if (sum(List.slice(heights, top, row + 1)) <= space) { return }
+      top <- top + 1
+    }
+  }
+end#Column
+
+=========
+THE BOARD
+=========
+
+Board = *(tickets Tickets)
+  columns *List[Column] = []
+
+  @columns = () -> columns
+  @at = (i Integer) -> List.at(columns, i)
+  @column = (slug Text) -> find(columns) (c) { c.slug == slug }
+
+  -- Columns from the columns file, then one for any status it doesn't name. --
+  @load! = {
+    columnsFile Lines = File("../columns")
+    tickets.load!
+    specs = filter(map(columnsFile) (line) { line |> before("#") |> trim }) (spec) { spec != "" }
+    columns <- map(specs) (spec) {
+      slug = before(spec, " ")
+      Column(slug, either(spec |> after(" ") |> trim, slug))
+    }
+    over(tickets.all) (t) {
+      if (@column(t.status) == null) { columns.append!(Column(t.status, "?#{t.status}")) }
+    }
+    arrange!
+  }
+
+  ---------------------------------------------------------------------------
+  The list holding a ticket decides its column. A ticket in no list goes by
+  its front-matter, at the top. A ticket in two lists stays where its
+  front-matter says, else in the first.
+  ---------------------------------------------------------------------------
+  arrange! = {
+    over(columns) (c) { c.read! }
+    over(columns) (c) {
+      :slug, :listed = c
+      mine = filter(tickets.all) (t) { home(t) == slug }
+      slugs = map(mine) (t) { t.slug }
+      -- Newest first: `a` sorts before `b` when it was created later. --
+      unlisted = List.sort(filter(mine) (t) { not contains(listed, t.slug) }) (a, b) { a.created > b.created }
+      ordered = filter(listed) (card) { contains(slugs, card) }
+      c.fill!(map(unlisted) (t) { t.slug } + ordered)
+    }
+  }
+
+  home = (t Ticket) {
+    holders = map(filter(columns) (c) { c.lists(t.slug) }) (c) { c.slug }
+    if (holders == [] or contains(holders, t.status)) { return t.status }
+    List.first(holders)
+  }
+
+  -- Moves a card to column `to`, row `at`. --
+  @place! = (card Text, to Column, at Integer) {
+    over(columns) (c) { if (c.holds(card)) { c.remove!(card) } }
+    to.insert!(card, at)
+  }
+
+  @save! = { over(columns) (c) { c.save! } }
+  @restore! = { over(columns) (c) { c.restore! } }
+
+  @write. = { over(columns) (c) { listFiles[c.slug] <- c.paths } }
+end#Board
+
+====
+SYNC
+====
+
+-- Its mailbox runs one message at a time, so git operations never overlap. --
+Sync = *(dir Text)
+  use Git = "host/git"
+  git = *Git(:dir)
+  @problem *Text = ""
+
+  -- Commits lists/ if it changed, then rebases onto origin and pushes. --
+  @publish! = {
+    git.run!(args: ["add", "-A", "lists"])
+    ok: unchanged = git.run!(args: ["diff", "--cached", "--quiet"])
+    if (not unchanged) { git.run!(args: ["commit", "-q", "-m", "order"]) }
+    @integrate!
+    ok: pushed = git.run!(args: ["push", "-q", "-u", "origin", "kanban"])
+    @problem <- if (pushed) "" else "sync: push failed"
+  }
+
+  -- Fetches and rebases; true when other machines' moves came in. --
+  @integrate! = () : Boolean {
+    out: was = git.run!(args: ["rev-parse", "HEAD"])
+    git.run!(args: ["fetch", "-q", "origin", "kanban"])
+    ok: rebased = git.run!(args: ["rebase", "-q", "--autostash", "origin/kanban"])
+    if (not rebased) {
+      git.run!(args: ["rebase", "--abort"])
+      @problem <- "sync: rebase conflict; order left local"
+      return false
+    }
+    out: now = git.run!(args: ["rev-parse", "HEAD"])
+    now != was
+  }
+end#Sync
+
+=====
+VIEWS
+=====
+
+-- What's on screen. A key press returns the view to show next. --
+View = *(board Board)
+  @message *Text = ""
+
+  @press! = (key Text) : View { @message <- ""; self }
+
+  @paint = (columns Integer, rows Integer) -> [] as List[Text]
+end#View
+
+---------------------------------------------------------------------------
+The board: a window of `count` columns starting at `left`, a cursor in
+column `col`, and the card being carried, if any. `width` and `space` are
+each column's size on screen, set by `resize!`.
+---------------------------------------------------------------------------
+BoardView = View ^ *(
+    board Board
+    tickets Tickets
+    sync Sync
+  )
+  super(board)
+  col *Integer = 0
+  left *Integer = 0
+  count *Integer = 1
+  width *Integer = MIN_COL
+  space *Integer = 0
+  carrying *Text? = null
+
+  @current = () -> board.at(col)
+
+  @selected = {
+    card = @current.selected
+    if (card == null) { return null }
+    tickets.find(card)
+  }
+
+  @press! = (key Text) : View {
+    super
+    if (carrying != null) { return carry!(key) }
+
+    key |> [
+      "enter" -> peek
+      "space" -> grab!
+      "n" -> PromptView(board, tickets, self)
+      "e" -> edit!
+      "r" -> { board.load!; return self } // I think `self` still tracks, despite the closure
+      else -> @walk!(key)
+    ]
+  }
+
+  ---------------------------------------------------------------------------
+  Arrows move the cursor: up and down within a column (wrapping), left
+  and right to the card nearest the same screen line in the next column.
+  ---------------------------------------------------------------------------
+
+  @walk! = (key Text) {
+    c = @current
+    key |> [
+      "up" -> c.step!(UP)
+      "down" -> c.step!(DOWN)
+      "pgup" -> c.step!(-PAGE)
+      "pgdn" -> c.step!(PAGE)
+      "left" -> across!(UP)
+      "right" -> across!(DOWN)
+      else -> self
+    ]
+    settle!
+  }
+
+  @resize! = (columns Integer, rows Integer) {
+    count <- fitting(columns, List.size(board.columns))
+    width <- (columns - Text.size(GAP) * (count - 1)) / count
+    space <- rows - 4
+    settle!
+  }
+
+  -- Keeps the cursor on screen: its column in the window, its card in view. --
+  settle! = {
+    if (col < left) { left <- col }
+    else if (col >= left + count) { left <- col - count + 1 }
+    left <- clamp(left, 0, List.size(board.columns) - count)
+    c = @current
+    c.scroll!(map(c.cards) (card) { List.size(cardShape(card)) }, space)
+  }
+
+  across! = (by Integer) {
+    next = clamp(col + by, 0, List.size(board.columns) - 1)
+    if (next == col) { return }
+    here = @current
+    line = here.row - here.top
+    col <- next
+    there = @current
+    there.point!(there.top + line)
+  }
+
+  peek = {
+    t = @selected
+    if (t == null) { return self }
+    PeekView(board, tickets, self, t.slug)
+  }
+
+  grab! = {
+    t = @selected
+    if (t == null) { return }
+    board.save!
+    carrying <- t.slug
+  }
+
+  carry! = (key Text) {
+    c = @current
+    key |> [
+      "esc" -> { board.restore!; carrying <- null }
+      "space" -> drop!
+      "up" -> board.place!(carrying, c, c.row - 1)
+      "down" -> board.place!(carrying, c, c.row + 1)
+      "left" -> carryTo!(col - 1)
+      "right" -> carryTo!(col + 1)
+      else -> self
+    ]
+    settle!
+  }
+
+  carryTo! = (i Integer) {
+    to = board.at(i)
+    if (to == null) { return }
+    board.place!(carrying, to, @current.row)
+    col <- i
+  }
+
+  -- Ends a move: the order publishes, and a column change edits the front-matter. --
+  drop! = {
+    t = tickets.find(carrying)
+    c = @current
+    if (t.status != c.slug) { tickets.restatus(t, c.slug)... }
+    board.write...
+    sync.publish!
+    carrying <- null
+  }
+
+  edit! = {
+    t = @selected
+    if (t == null) { return }
+    Editor(t.slug).run!
+    board.load!
+  }
+
+  @paint = (columns Integer, rows Integer) {
+    shown = List.slice(board.columns, left, left + count)
+    joined = (cells List[Text]) -> join(cells, GAP)
+    head = joined(map(shown) (c) { bold(fit(" #{c.name} #{c.size}", width)) })
+    rule = joined(map(shown) (c) { Text.repeat("─", width) })
+    stacks = map(shown) (c) { cardLines(c) }
+    grid *List[Text] = []
+    repeat while List.size(grid) < space {
+      y = List.size(grid)
+      grid.append!(joined(map(stacks) (lines) { List.at(lines, y) ?? Text.repeat(" ", width) }))
+    }
+    t = @selected
+    status = if (t == null) "" else "#{t.title}  (#{t.slug})"
+    keys = if (carrying != null) CARRY_KEYS else BOARD_KEYS
+    [head, rule] + grid + [
+      dim(fit(status, columns))
+      dim(fit(either(@message, keys), columns))
+    ]
+  }
+
+  -- A card is its title on up to two lines: "- ", then a two-space indent. --
+  cardShape = (card Text) {
+    wrapped = wrap(text: tickets.find(card).title, width: width - 2)
+    first = "- #{List.first(wrapped)}"
+    if (List.size(wrapped) == 1) { return [first] }
+    [first, "  #{wrapped |> from(1) |> join(" ")}"]
+  }
+
+  -- A column's cards from its scroll position, highlighted, cut to the screen. --
+  cardLines = (c Column) {
+    lines = concat(map(from(c.cards, c.top)) (card) {
+      style = if (card == carrying) CARRIED else if (card == c.selected) CURSOR else ""
+      map(cardShape(card)) (l) { if (style == "") fit(l, width) else styled(style, fit(l, width)) }
+    })
+    take(lines, space)
+  }
+
+  -- Columns 40-50 wide, as many as fit; two hold down to a 45-wide screen. --
+  fitting = (columns Integer, total Integer) {
+    g = Text.size(GAP)
+    atMin = (columns + g) / (MIN_COL + g)
+    atMax = (columns + g + MAX_COL + g - 1) / (MAX_COL + g)
+    floor = if (columns < ONE_COLUMN_BELOW) 1 else 2
+    n = if (atMax < atMin) atMax else atMin
+    clamp(if (n < floor) floor else n, 1, total)
+  }
+end#BoardView
+
+-- The quick-view: a ticket's body. Arrows walk to neighbouring tickets as on the board. --
+PeekView = View ^ *(
+    board Board
+    tickets Tickets
+    back BoardView
+    slug Text
+  )
+  super(board)
+  scroll *Integer = 0
+
+  @press! = (key Text) : View {
+    super
+    key |> [
+      "enter" | "esc" -> back
+      "pgdn" -> { scroll <- scroll + PAGE; self }
+      "pgup" -> { scroll <- clamp(scroll - PAGE, 0, scroll); self }
+      "e" -> back.press!("e")
+      else -> follow(key)
+    ]
+  }
+
+  -- Walks the board, then shows the ticket the cursor lands on. --
+  follow = (key Text) {
+    back.walk!(key)
+    t = back.selected
+    if (t == null) { return back }
+    PeekView(board, tickets, back, t.slug)
+  }
+
+  @paint = (columns Integer, rows Integer) {
+    :title, :status, :created = tickets.find(slug)
+    c = board.column(status)
+    body = ticketFiles[slug]
+    text = body |> replace_first(/#\s+.+\n?/, "") |> trim
+    lines = concat(map(split(text)) (l) { wrap(text: l, width: columns - 2) })
+    shown = lines |> from(scroll) |> take(rows - 4)
+    lag = if (c.slug == status) "" else "  (front-matter says #{status})"
+    [
+      bold(fit(" #{title}", columns))
+      dim(fit(" #{c.name}#{lag}  ·  #{created}  ·  #{slug}.md", columns))
+      Text.repeat("─", columns)
+    ] + map(shown) (l) { fit(" #{l}", columns) } + [dim(fit(PEEK_KEYS, columns))]
+  }
+end#PeekView
+
+-- A one-line prompt for a new ticket's title, over the board. --
+PromptView = View ^ *(
+    board Board
+    tickets Tickets
+    back BoardView
+  )
+  super(board)
+  typed *Text = ""
+
+  @press! = (key Text) : View {
+    super
+    key |> [
+      "esc" -> back
+      "enter" -> submit
+      "backspace" -> { typed <- Text.slice(typed, 0, Text.size(typed) - 1); self }
+      else {
+        if (Text.size(key) == 1) { typed <- "#{typed}#{key}" }
+        self
+      }
+    ]
+  }
+
+  -- Files the new ticket at the top of the cursor's column. --
+  submit = {
+    c = back.current
+    board.place!(tickets.create!(typed, c.slug), c, 0)
+    board.write...
+    back
+  }
+
+  @paint = (columns Integer, rows Integer) -> (back.paint(columns, rows) |> take(rows - 1)) + [fit("New ticket title: #{typed}", columns)]
+end#PromptView
+
+---------------------------------------------------------------------------
+Edits a ticket's body in $VISUAL or $EDITOR, through a scratch file the
+host provides. Writing a plain value to the ticket replaces only its body,
+so the front-matter never reaches the editor and can't be damaged.
+---------------------------------------------------------------------------
+Editor = *(slug Text)
+  scratch *Map[Text, Text] = Dir("host/tmp/*")
+
+  @run! = {
+    body = ticketFiles[slug]
+    name = "kanban-#{slug}.md"
+    scratch[name] <- body
+    :file = scratch[name]
+    editor = Process.env(name: "VISUAL", fallback: Process.env(name: "EDITOR", fallback: "vi"))
+    Terminal.hand!(command: "#{editor} \"#{file.path}\"")
+    edited = scratch[name]
+    scratch.remove!(name)
+    if (edited != body) { ticketFiles[slug] <- edited }
+  }
+end#Editor
+
+=======
+THE APP
+=======
+
+tickets = Tickets()
+board = Board(tickets)
+sync = Sync("#{root}/.kanban")
+main = BoardView(board, tickets, sync)
+view *View = main
+width *Integer = 80
+height *Integer = 24
+
+@repaint. = { Terminal.paint(lines: view.paint(width, height))... }
+
+@start. = {
+  use Clock = "host/clock"
+  board.load!
+  Terminal.enter(title: "Kanban")...
+
+  sub Terminal.size, (columns: Integer, rows: Integer) {
+    width <- columns
+    height <- rows
+    main.resize!(columns, rows)
+    @repaint...
+  }
+
+  sub Terminal.key, (key) {
+    if (key == "q") { @quit... }
+    else {
+      view <- view.press!(key)
+      @repaint...
+    }
+  }
+
+  sub Clock.every(seconds: 15), (_) {
+    if (sync.integrate!) { board.load!; @repaint... }
+  }
+}
+
+@quit. = {
+  Terminal.leave...
+  sync.publish!
+  Process.exit(code: 0)...
+}

@@ -1,115 +1,141 @@
 # Files as addressed values — 2026-11-25
 
 Concept, a potential direction; not decided or implemented. Came out of asking what file access
-in `kanban/board.bv` should look like. Builds on `use-as-binding-2026-11-18.md` (binding,
-destructure, backticks as implicit `use`), `backticks-as-dynamic-names-2026-04-16.md`,
-`callable-files-2026-04-14.md`, and the Object as the arguments-and-replies shape
+in `kanban/board.bv` (now `kanban/speculative/board.bv`) should look like. Builds on
+`use-as-binding-2026-11-18.md` (binding, destructure, backticks as implicit `use`),
+`capability-sigils-2026-05-06.md` and `capability-sigils-2026-05-16.md` (`&` and `*`
+references), `callable-files-2026-04-14.md`, and the Object as the arguments-and-replies shape
 (`xml-construction-named-only-2026-10-26.md`). Answers the empty `file-system` ticket.
 
 ## The idea
 
 Brevity is built on an addressable file system, and data files should take part in it, not only
-`.bv` files. A file is addressed like any dependency, and it answers like a call: **one
-positional value, its contents, plus named entries.** Binding follows the existing rules: a plain
-name takes the positional value (as `x = f()` takes a reply's one positional value), and `:name`
-takes a key.
+`.bv` files. A file answers like a call: **one positional value, its contents, plus named
+entries.** A directory is a live, keyed collection of files.
 
 ```brevity
-use done *Lines = "../.kanban/lists/done"              -- contents
-use :file = "../.kanban/lists/done"                    -- file-system metadata
-use done *Lines, :file = "../.kanban/lists/done"       -- both
+use Dir, File
+
+type TicketFile = FrontMatter[status Text?, created Text?]
+
+tickets *Map[Text, TicketFile] = Dir("./tickets/*.md")
+lists *Map[Text, Lines] = Dir("../.kanban/lists/*")
+columns Lines = File("./columns")
 ```
 
-So the data never shares a namespace with metadata: `done` is the contents and nothing else, and
-`done.modified` doesn't exist.
+## `use Dir, File`
 
-## The contents are a cell
+The program depends on the host's file system once, by name. For a root `.bv` file the runtime
+environment defines what `Dir` and `File` mean and the limits of what they may reach. Each
+directory or file is then an ordinary construction, not a `use` of its own.
 
-A file's contents are a value at an address that can be read, rebound and watched, which is what
-a cell is:
+**The grant is hoisted.** A construction with a literal path is hoisted into the manifest, as a
+backtick address is an implicit `use`, so the manifest still lists everything the file may touch.
+A path computed at runtime must fall under a grant that is declared statically; outside every
+grant it is a compile error.
 
-```brevity
-cards = done                  -- read (a message to the host; async)
-done <- paths                 -- write: replaces the contents
-sub done, (paths) { … }       -- watch
-```
+## The left side: shape and capability
 
-`*` makes the contents writable; without it they are read-only. Anything richer than read, write
-and watch (append, atomic replace) is a message on the file's address, as `grid.append!` is on a
-cell.
+The binding's annotation gives the shape of what it holds and the capability it asks for, with
+the capability sigils references already use:
 
-## Formats
+| Binding | Means |
+|---|---|
+| `x Map[Text, T] = Dir(…)` | a snapshot, read once |
+| `x &Map[Text, T] = Dir(…)` | a live, read-only reference |
+| `x *Map[Text, T] = Dir(…)` | a live, writable reference |
 
-- **The default is Brevity's own serialization.** A typed file with no format round-trips any
-  value; a text containing a line break survives.
-- **A plain-text format is named as a format type:**
-  - `Lines`: a `List[Text]` stored one item per line. An item containing a line break can't be
-    written; the write fails, never silently splitting.
-  - `Json[T]`: a `T` stored as JSON.
-  - `FrontMatter`: a Markdown body with front-matter fields.
-- **A format is a pair of functions,** decode and encode, so a library can define new ones. The
-  host deals only in bytes and Text.
-- **An untyped file is `Text`.** `Blob` when bytes are wanted, stated.
+- **The fold-back is a reference write.** `tickets` isn't a local copy that syncs: it refers to
+  the cell the `Dir` actor holds, and `<-` writes the cell it refers to, as a callee writes a `*`
+  param it was granted. The sigil on a literal construction is hoisted as a read or read-write
+  grant.
+- **The type flows into the constructor.** The annotation is the call's expected type, so the
+  compiler hands the element type, with its stored form, to the `Dir` it builds: the reverse of
+  "a bind takes its callee's type" (`session-2026-11-06-bind-takes-callee-type.md`). The `Dir`
+  moves bytes and applies the type's encode and decode; it never parses.
+- **`Map`, not `List`.** A directory is keyed by name. Per-entry writes (`tickets[slug] <- …`) are
+  the ordinary case; replacing the whole collection (`tickets <- …`) is a visibly different act,
+  and bang enforcement carries it out: a function containing that `<-` must be named `!`, so the
+  write shows at every call site. A `<-` through a `*` reference counts as a write for the `!`
+  rule.
+- **Open: a new cell or a reference.** `x *Integer = 0` declares a new cell, while
+  `x *Map[…] = Dir(…)` binds a reference. The rule would be: a right side that yields a cell binds
+  a reference to it, as passing a cell to a `*` param does; any other value initialises a new
+  cell. That follows the param precedent, but the meaning depends on the right side.
 
-## Named entries belong to the format; file-system metadata is `:file`
+## Live and static
 
-The format owns the named lane. A front-matter file's positional value is its body, and its named
-entries are its front-matter fields:
+A `Dir` is an actor, so it's live: `.keys` lists what's there now, and `sub` reports keys
+arriving and leaving. The board needs that: `@create!` adds a ticket, another machine's
+`git pull` adds and removes files, a list file appears the first time a column is saved. A static
+list taken at load is just a value read from it (`names = tickets.keys`), so no second form is
+needed.
 
-```brevity
-use body, :status, :created = "../kanban/tickets/x.md"
-status <- "done"              -- rewrites that field, nothing else
-```
+## Entry types own their stored form
 
+The element type says what each file is, and the type decides how it is stored. No format
+appears where a type goes.
+
+- **`Lines`** is a list of single-line texts, stored one per line. An item containing a line break
+  can't be written; the write fails, never silently splitting.
+- **`FrontMatter[fields]`** is a Markdown document: its body as the positional value, the named
+  fields as named entries, stored as front-matter ahead of the body. `type TicketFile =
+  FrontMatter[status Text?, created Text?]` names one; its field types are checked
+  (`tickets[slug].status` is a `Text?`).
+- **Any other type is stored in Brevity's native serialization,** so `*Map[Text, List[Text]]`
+  round-trips any text, line breaks included.
+- **An untyped file is `Text`;** `Blob` when bytes are wanted, stated.
+- A document type is a value shape plus a decode and an encode, so a library can define new ones;
+  the host deals only in bytes and Text. (Precedent: types that carry their serialization, as with
+  Rust's serde or Haskell's `Show`/`Read`.)
+
+## Named entries belong to the type; file-system metadata is `:file`
+
+The entry type owns the named lane: a ticket's named entries are its front-matter fields.
 File-system metadata is always under one reserved key, `:file`: an Object of `path`, `modified`,
-`created`, `size`, `exists?`. It never collides with a format's keys (a ticket's `created` is
-front-matter; `file.created` is the file system's), and reaching it is one step: `file.modified`.
+`created`, `size`, `exists?`. It never collides with a type's keys (a ticket's `created` is
+front-matter; `file.created` is the file system's).
+
+## Using an entry
+
+| Code | What the `Dir` does |
+|---|---|
+| `body, :status, :created = tickets[slug]` | reads `slug.md`, decodes it, returns the Object |
+| `tickets[slug].status <- "review"` | sets that field and rewrites the file; the body is untouched |
+| `tickets[slug] <- edited` (a Text) | replaces only the positional value, the body; the front-matter is untouched |
+| `tickets[slug] <- ("# Title\n", :status, :created)` | a new key: creates `slug.md` |
+| `tickets.keys` | lists the matching files' keys |
+| `tickets.remove!(slug)` | deletes `slug.md` |
+| `:file = tickets[slug]` | file-system metadata (`file.path`, `file.modified`) |
+| `sub tickets, (change) { … }` | watches the directory |
 
 **Writes touch only what they name.** Writing a plain value replaces the positional value and
 leaves the named entries alone, so editing a ticket's body can't damage its front-matter. Writing
-an Object, `("# Title\n", :status, :created)`, sets the entries it gives.
+an Object sets the entries it gives.
 
-## Directories
-
-A directory is an Object keyed by filename: each entry is a file, answering as above.
-
-```brevity
-use lists Dir[*Lines] = "../.kanban/lists/*"
-use tickets Dir[*FrontMatter] = "../kanban/tickets/*.md"
-
-paths = lists[status]                    -- one file's contents
-lists[status] <- paths                   -- write (creates the file if new)
-over(tickets.keys) (slug) { … }          -- list
-ticket = tickets[slug]                   -- body; `tickets[slug].status` a field
-tickets[slug].status <- "done"           -- write one field
-lists.remove!(status)                    -- delete: a message on the directory
-sub lists, (change) { … }                -- watch the directory
-```
-
-- **The glob is the grant and the key.** `"…/tickets/*.md"` grants every `.md` file there, and
-  each key is what `*` matched: the slug, without `.md`.
-- **Dynamic paths stay auditable.** A backtick address is an implicit `use`, hoisted into the
-  manifest, but `` `…/lists/#{status}` `` can't be listed statically. A directory grant covers
-  it: the manifest says "this file may touch `.kanban/lists/*`", and `lists[status]` stays
-  inside. An interpolated backtick path outside every granted prefix is a compile error.
-- **Backticks remain for one-off access** to a literal path or one under a grant.
+Binding follows the existing destructure rules: positional names take positional values, `:name`
+takes a key, and a positional destructure ignores named keys when the count matches (checked on
+js; a mismatched count is the ticket
+`a-positional-destructure-with-too-many-names-binds-null`).
 
 ## What `board.bv` loses
 
 The `Files` service; the list-filter-read-parse loop in `Tickets.@load!`; the front-matter regex
-helpers (`field`, `bodyOf`, `FRONT_MATTER`); `@restatus.`'s whole-file rewrite; the list-file
-read and join in `Column` and `Board.@write.`; the `Editor`'s front-matter split and rejoin; and
-`Ticket.path`. The `Sync` actor stays: git is a process, not a file.
+helpers; `@restatus.`'s whole-file rewrite; the list-file read and join in `Column` and
+`Board.@write.`; the `Editor`'s front-matter split and rejoin; and `Ticket.path`. The `Sync` actor
+stays: git is a process, not a file.
 
 ## Open questions
 
+- **Cell or reference** on the left (above).
 - **Concurrency.** Two actors writing one file: does a host actor per file serialize them through
   its mailbox, as `Sync` serializes git?
 - **Watch granularity.** What does `sub` on a directory deliver: the changed key, or the whole
   Object?
-- **Metadata writes.** Is `:file` read-only, or can some entries (`modified`) be set?
-- **Scratch files for other programs.** The editor needs a real path. A host-provided scratch
-  directory (`use scratch Dir[*Text] = "host/tmp/*"`) with `file.path` covers it; is that the
-  right shape?
-- **Format and key typing.** Should a `FrontMatter` file declare its fields' types
-  (`FrontMatter[(status Text, created Text)]`), so `tickets[slug].status` is checked?
+- **Metadata writes.** Is `:file` read-only, or can some entries be set?
+- **Host-defined addresses.** The editor's scratch directory (`Dir("host/tmp/*")`) is a host
+  address, not a real path; it needs a convention.
+- **Where document types live.** `TicketFile` in the program, or beside the tickets
+  (`tickets.bv`) so other tools share it?
+- **Collection type names.** `Dir` (files, live) was chosen over `Store` (interface-neutral, so a
+  browser key-value store could share it), `Glob`, `Files`, `Collection`.
