@@ -60,9 +60,9 @@ describe('the service document', () => {
       },
       ':G': {
         public: {
-          $new: [{ re: [':G:*'], writes: false }],
+          $new: [{ re: [':G'], writes: false }],
         },
-        ':*': {
+        instance: {
           protected: {
             '~step': [{ re: ['Integer'], writes: false }],
           },
@@ -71,10 +71,10 @@ describe('the service document', () => {
       ':T': {
         extends: [':G'],
         public: {
-          $new: [{ args: ['Text'], re: [':T:*'], writes: false }],
+          $new: [{ args: ['Text'], re: [':T'], writes: false }],
           made: [{ re: ['Integer'], writes: false }],
         },
-        ':*': {
+        instance: {
           public: {
             get: [{ re: ['Anything'], writes: false }],
           },
@@ -97,16 +97,16 @@ describe('the service document', () => {
     expect(iface.service).toEqual({
       ':G': {
         public: {
-          $new: [{ args: ['Integer'], re: [':G:*'], writes: false }],
+          $new: [{ args: ['Integer'], re: [':G'], writes: false }],
         },
-        ':*': {},
+        instance: {},
       },
       ':U': {
         extends: [':G'],
         public: {
-          $new: [{ args: ['Integer'], re: [':U:*'], writes: false }],
+          $new: [{ args: ['Integer'], re: [':U'], writes: false }],
         },
-        ':*': {
+        instance: {
           public: {
             more: [{ re: ['Integer'], writes: false }],
           },
@@ -125,12 +125,12 @@ describe('the service document', () => {
     expect(iface.service).toEqual({
       ':W': {
         public: {
-          $new: [{ re: [':W:*'], writes: false }],
+          $new: [{ re: [':W'], writes: false }],
         },
         types: {
           ':X': ['Integer'],
         },
-        ':*': {
+        instance: {
           public: {
             x: [{ args: [':W:X'], re: [':W:X'], writes: false }],
           },

@@ -56,8 +56,11 @@ the reduction rule.
 
 - **A declared actor as a value is `"*"`,** a class included, as on the wire. There is no
   class type: a class is an actor whose `$new` constructs.
-- **No self-return form.** `=> self` on an instance is `"re": [":T"]`; `{ "%self": true }` is
-  retired. The document says what class a reply is, never that it is the receiver.
+- **A self-return's type is `":*"`, self's class** (2026-11-26, revising "`=> self` on an
+  instance is `":T"`"). On the wire the reply is `re: ['#<:>']`, `ty: [':*']`, and the document
+  types it the same: `"re": [":*"]`, the receiver's class wherever the op is called, so an op
+  `Node` declares and `Element` inherits gives an Element on an Element. `{ "%self": true }` is
+  retired; `":*"` is an ordinary type string, not a marker.
 
 ## Chains come from the source
 

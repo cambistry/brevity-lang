@@ -373,8 +373,8 @@ describe('an unclaimed dependency — requires a document', () => {
 
 describe('an unclaimed dependency — document from options.remotes', () => {
   const ctorManifest = {
-    public: { $new: [{ args: [{ a: 'Integer' }], re: [':*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ args: [{ a: 'Integer' }], re: [':'], writes: false }] },
+    instance: {
       public: { 'ping.': [{ writes: true }], get: [{ re: [{ value: 'Integer' }], writes: false }] },
     },
   };

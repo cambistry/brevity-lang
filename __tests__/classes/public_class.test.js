@@ -200,8 +200,8 @@ describe('Box and @Box are different classes', () => {
   it('the doc names only the public class, without its @', () => {
     const { interface: doc } = compileSource(script);
     expect(doc.service[':Box']).toEqual({
-      public: { $new: [{ re: [':Box:*'], writes: false }] },
-      ':*': { public: { who: [{ re: ['Text'], writes: false }] } },
+      public: { $new: [{ re: [':Box'], writes: false }] },
+      instance: { public: { who: [{ re: ['Text'], writes: false }] } },
     });
     expect(doc.service[':PubSub'].extends).toEqual([':Box']);
     expect(Object.keys(doc.service).filter(k => k.startsWith(':'))).toEqual([':Box', ':Arg', ':PubSub', ':Wrapper', ':Nearer']);
@@ -471,7 +471,7 @@ describe('passing an actor to a function', () => {
   `;
 
   it('the doc names the param\'s type without its @', () => {
-    expect(extract(script).interface.service.public.takes).toEqual([{ args: [':Box:*'], re: ['Text'], writes: false }]);
+    expect(extract(script).interface.service.public.takes).toEqual([{ args: [':Box'], re: ['Text'], writes: false }]);
   });
 
   const reads = (op, value, type = 'Text') => expectBehavior(script,

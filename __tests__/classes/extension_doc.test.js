@@ -27,7 +27,7 @@ describe('the extension section', () => {
       public: { go: [{ re: ['Integer'], writes: false }] },
       ':A': {
         public: {
-          $new: [{ args: ['Integer'], re: [':A:*'], writes: false }],
+          $new: [{ args: ['Integer'], re: [':A'], writes: false }],
           total: [{ re: ['Integer'], writes: false }],
           f: [{ re: ['Integer'], writes: false }],
         },
@@ -49,7 +49,7 @@ describe('the extension section', () => {
           },
         },
         ':~limit': { public: { $get: [{ re: ['Integer'], writes: false }] } },
-        ':*': { public: { n: [{ re: ['Anything'], writes: false }] } },
+        instance: { public: { n: [{ re: ['Anything'], writes: false }] } },
       },
     });
   });
@@ -71,7 +71,7 @@ describe('the extension section', () => {
     `).interface.service[':B']).toEqual({
       extends: [':A'],
       public: {
-        $new: [{ re: [':B:*'], writes: false }],
+        $new: [{ re: [':B'], writes: false }],
         total: [{ re: ['Integer'], writes: false }],
         f: [{ re: ['Integer'], writes: false }],
       },
@@ -88,7 +88,7 @@ describe('the extension section', () => {
         public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
       },
       ':~limit': { public: { $get: [{ re: ['Integer'], writes: false }] } },
-      ':*': {},
+      instance: {},
     });
   });
 
@@ -102,8 +102,8 @@ describe('the extension section', () => {
       }
       @go = -> 1
     `).interface.service[':T']).toEqual({
-      public: { $new: [{ args: [{ n: 'Integer' }], re: [':T:*'], writes: false }] },
-      ':*': {
+      public: { $new: [{ args: [{ n: 'Integer' }], re: [':T'], writes: false }] },
+      instance: {
         public: { n: [{ re: ['Integer'], writes: false }], f: [{ re: ['Integer'], writes: false }] },
         protected: {
           '~count': [{ re: ['Integer'], writes: false }],
@@ -132,8 +132,8 @@ describe('the extension section', () => {
       @go = -> 1
     `).interface.service[':U']).toEqual({
       extends: [':T'],
-      public: { $new: [{ args: ['Integer'], re: [':U:*'], writes: false }] },
-      ':*': {
+      public: { $new: [{ args: ['Integer'], re: [':U'], writes: false }] },
+      instance: {
         public: { n: [{ re: ['Integer'], writes: false }] },
         protected: {
           '~count': [{ re: ['Integer'], writes: false }],
@@ -155,7 +155,7 @@ describe('the extension section', () => {
     const doc = documentShape({
       ':A': {
         public: {
-          $new: [{ args: [{ n: 'Integer' }], re: [':A:*'], writes: false }],
+          $new: [{ args: [{ n: 'Integer' }], re: [':A'], writes: false }],
           g: [{ re: ['Integer'], writes: false }],
         },
         protected: {
@@ -163,7 +163,7 @@ describe('the extension section', () => {
           '~h': [{ args: ['Integer'], re: ['Integer'], writes: false }],
         },
         ':~count': cell,
-        ':*': {
+        instance: {
           public: { n: [{ re: ['Integer'], writes: false }], f: [{ re: ['Integer'], writes: false }] },
           protected: { '~step': [{ re: ['Integer'], writes: false }] },
         },
@@ -188,7 +188,7 @@ describe('the extension section', () => {
 const DOC = {
   ':A': {
     public: {
-      $new: [{ re: [':A:*'], writes: false }],
+      $new: [{ re: [':A'], writes: false }],
       total: [{ re: ['Integer'], writes: false }],
       f: [{ re: ['Integer'], writes: false }],
     },
@@ -203,7 +203,7 @@ const DOC = {
     ':~count': {
       public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
     },
-    ':*': {},
+    instance: {},
   },
 };
 const child = `

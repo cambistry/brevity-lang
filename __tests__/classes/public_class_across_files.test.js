@@ -33,17 +33,17 @@ const DOC = {
   public: { plain: [{ re: ['Integer'], writes: false }], origin: [{ re: [':Point'], writes: false }] },
   types: { ':Point': [{ x: 'Integer' }] },
   ':Counter': {
-    public: { $new: [{ args: ['Integer', { step: 'Integer' }], re: [':Counter:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ args: ['Integer', { step: 'Integer' }], re: [':Counter'], writes: false }] },
+    instance: {
       public: {
         get: [{ re: ['Integer'], writes: false }],
-        'inc!': [{ re: [{ '%self': true }], writes: true }],
+        'inc!': [{ re: [':*'], writes: true }],
       },
     },
   },
   ':W!': {
-    public: { $new: [{ re: [':W!:*'], writes: true }] },
-    ':*': { public: { one: [{ re: ['Integer'], writes: false }] } },
+    public: { $new: [{ re: [':W!'], writes: true }] },
+    instance: { public: { one: [{ re: ['Integer'], writes: false }] } },
   },
 };
 const remotes = [{ path: 'svc.bv', service: DOC }];
@@ -115,18 +115,18 @@ describe('checks', () => {
   it('a class with a constructor of its own takes its own params; one without, its parent\'s', () => {
     const service = {
       ':Base': {
-        public: { $new: [{ args: [{ a: 'Integer' }], re: [':Base:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ a: 'Integer' }], re: [':Base'], writes: false }] },
+        instance: {},
       },
       ':Sub': {
         extends: [':Base'],
-        public: { $new: [{ args: [{ b: 'Integer' }], re: [':Sub:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ b: 'Integer' }], re: [':Sub'], writes: false }] },
+        instance: {},
       },
       ':Same': {
         extends: [':Base'],
-        public: { $new: [{ args: [{ a: 'Integer' }], re: [':Same:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ a: 'Integer' }], re: [':Same'], writes: false }] },
+        instance: {},
       },
     };
     const check = (cls, args) => compileSource(`use :${cls} = "svc.bv"\n@go = {\n  s = ${cls}(${args})\n  return 1\n}\n`, { remotes: [{ path: 'svc.bv', service }] });
@@ -320,8 +320,8 @@ describe('constructing and messaging a dependency', () => {
         return v
       }
     `, { remotes: [{ path: 'thing.bv', service: {
-      public: { $new: [{ args: [{ a: 'Integer' }], re: [':*'], writes: false }] },
-      ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+      public: { $new: [{ args: [{ a: 'Integer' }], re: [':'], writes: false }] },
+      instance: { public: { get: [{ re: ['Integer'], writes: false }] } },
     } }] })).not.toThrow();
   });
 });
@@ -567,10 +567,10 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
     @bump! = { total <- total + 10 }
   `;
   const readerRemotes = [{ path: 'svc.bv', service: {
-    public: { 'bump!': [{ re: [{ '%self': true }], writes: true }] },
+    public: { 'bump!': [{ re: [':*'], writes: true }] },
     ':Reader': {
-      public: { $new: [{ re: [':Reader:*'], writes: false }] },
-      ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+      public: { $new: [{ re: [':Reader'], writes: false }] },
+      instance: { public: { get: [{ re: ['Integer'], writes: false }] } },
     },
   } }];
   const shared = `use Svc = "svc.bv"\n@read = { return Svc.Reader().get() }\n`;

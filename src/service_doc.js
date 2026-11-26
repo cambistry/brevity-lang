@@ -83,14 +83,14 @@ function typesOf(typeDecls) {
   return out;
 }
 
-// A class's node: `$new`, its class block's ops beside it, its instances under `:*`.
+// A class's node: `$new`, its class block's ops beside it, its instances' interface as `instance`.
 function classNode(name, cls, outer) {
   const node = {};
   const scope = outer.within(name);
-  if (cls.supertypes?.length) node.extends = cls.supertypes.map(st => outer.resolve(st.supertype.split('::'), { asClass: true }));
+  if (cls.supertypes?.length) node.extends = cls.supertypes.map(st => outer.resolve(st.supertype.split('::')));
   const block = cls.members ? interfaceNode(cls.members, scope) : {};
-  // Its instances are the `:*` under it.
-  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams) }), re: [`:${quote(name)}:*`] };
+  // `$new` replies an instance: its type is the class's address.
+  const newSig = { ...(cls.initParams?.length && { args: entries(cls.initParams) }), re: [`:${quote(name)}`] };
   const writes = cls.effect === undefined ? false : WRITES[cls.effect];
   if (writes !== undefined) newSig.writes = writes;
   node.public = { $new: [newSig], ...block.public };
@@ -106,7 +106,7 @@ function classNode(name, cls, outer) {
   section(instDoc, scope, inst, 'public');
   if (cls.instanceProtected) section(cls.instanceProtected, scope, inst, 'protected');
   for (const [sub, svc] of Object.entries(cls.services || {})) inst[`:${sub}`] = interfaceNode(svc, scope);
-  node[':*'] = inst;
+  node.instance = inst;
   return node;
 }
 
@@ -127,7 +127,7 @@ export function interfaceNode(doc, scope) {
 // `extends`, `public`, `protected`, `types`, then nested addresses.
 function orderNode(node) {
   const out = {};
-  for (const k of ['extends', 'public', 'protected', 'types']) if (node[k]) out[k] = node[k];
+  for (const k of ['extends', 'public', 'protected', 'types', 'instance']) if (node[k]) out[k] = node[k];
   for (const k of Object.keys(node)) if (k.startsWith(':')) out[k] = node[k];
   return out;
 }
@@ -135,7 +135,7 @@ function orderNode(node) {
 // The names of a file's types, classes and dependencies, for its addresses.
 // `remotes` (`[{ path, service }]`, parsed) says which names a dependency binds
 // are classes.
-export function fileScope(ast, remoteDocs = {}) {
+export function fileScope(ast, remoteDocs = {}, classTypes = null) {
   const services = {};
   const bindings = {};
   for (const d of ast.dependencies || []) {
@@ -156,6 +156,7 @@ export function fileScope(ast, remoteDocs = {}) {
     types: (ast.types || []).map(t => t.name),
     classes,
     tokensOf,
+    classTypes,
     services,
     bindings,
     serviceClasses: (path, rest) => {
@@ -164,6 +165,19 @@ export function fileScope(ast, remoteDocs = {}) {
       return !!doc?.__types?.[rest[rest.length - 1]];
     },
   });
+}
+
+// The classes a service document declares, by address from here (`path`, the
+// service's): each node with a `$new`, the service's own included (a constructor
+// document). An instance's type is its class's address.
+export function documentClassTypes(service, path, out = new Set()) {
+  const walk = (node, at) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.public?.$new) out.add(at);
+    for (const [k, child] of Object.entries(node)) if (k.startsWith(':')) walk(child, `${at}${k}`);
+  };
+  walk(service, path);
+  return out;
 }
 
 // A file's published document: the node of its service, each class's instances
@@ -201,9 +215,9 @@ export function expandInheritance(root) {
     done.add(node);
     const parents = (node.extends || []).map(at).filter(Boolean);
     parents.forEach(expand);
-    const inst = node[':*'] ??= {};
+    const inst = node.instance ??= {};
     for (const p of parents) {
-      const theirs = p[':*'] || {};
+      const theirs = p.instance || {};
       for (const sec of ['public', 'protected']) {
         if (!theirs[sec]) continue;
         inst[sec] = { ...inst[sec] };
@@ -211,7 +225,7 @@ export function expandInheritance(root) {
       }
       for (const k of Object.keys(theirs)) if (k.startsWith(':') && !(k in inst)) inst[k] = theirs[k];
     }
-    node[':*'] = orderNode(inst);
+    node.instance = orderNode(inst);
   };
   for (const [key, node] of Object.entries(root)) if (key.startsWith(':') && node.public?.$new) expand(node);
   return root;
@@ -240,7 +254,7 @@ const orderSig = (s) => {
 // parseInterface gives (src/parser_interface.js), each type encoded (`…Enc`).
 
 const isEntryObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
-const isSelf = (shape) => shape.length === 1 && shape[0]?.['%self'] === true;
+const isSelf = (shape) => shape.length === 1 && shape[0] === SELF;
 
 // An address in the document as the service names it: a parent class's name.
 function addressName(address) {
@@ -330,7 +344,7 @@ export function documentShape(node) {
     doc.__protected = prot;
   }
   if (node.types) doc.__typeDecls = readTypes(node.types);
-  for (const key of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) {
+  for (const key of Object.keys(node).filter(k => k.startsWith(':'))) {
     const name = key.slice(1);
     const child = node[key];
     if (doc.__fields?.[name] || doc.__protected?.__fields?.[name]) continue;
@@ -347,7 +361,7 @@ export function documentShape(node) {
 function readClass(node) {
   const { $new: [newSig], ...blockOps } = node.public;
   const nu = decodeSignature(newSig);
-  const inst = documentShape(node[':*'] || {});
+  const inst = documentShape(node.instance || {});
   // A published param reads as an op of its name and type, taking nothing.
   for (const p of nu.params) {
     const sigs = inst[p.name];
@@ -357,7 +371,7 @@ function readClass(node) {
   const functions = Object.keys(inst).filter(k => !k.startsWith('__')).flatMap(name => inst[name].map(s => ({ name, ...s })));
   const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, typeEnc: f.typeEnc }));
   const block = { public: blockOps, ...(node.protected && { protected: node.protected }) };
-  for (const k of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) block[k] = node[k];
+  for (const k of Object.keys(node).filter(k => k.startsWith(':'))) block[k] = node[k];
   const hasBlock = Object.keys(blockOps).length || node.protected;
   return {
     effect: nu.effect,

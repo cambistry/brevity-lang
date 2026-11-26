@@ -67,13 +67,13 @@ const ELEMENT_ARGS = {
   writingsuggestions: { '%opt': 'Text' },
   virtualkeyboardpolicy: { '%opt': 'Text' },
   data: { '%opt': 'Object' },
-  aria: { '%opt': ':Aria:*' },
+  aria: { '%opt': ':Aria' },
 };
 
 export const documentDocument = {
   ':document': {
-    public: { $new: [{ re: [':document:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ re: [':document'], writes: false }] },
+    instance: {
       public: {
         title: [{ re: ['Text'], writes: false }],
         first: [{ args: [{ selector: 'Text' }], re: ['Element'], writes: false }],
@@ -113,7 +113,7 @@ export const documentDocument = {
           { args: ['Node'], re: ['Boolean'], writes: false },
           { args: [{ other: 'Node' }], re: ['Boolean'], writes: false },
         ],
-        'normalize!': [{ re: [{ '%self': true }], writes: true }],
+        'normalize!': [{ re: [':*'], writes: true }],
         query_selector: [
           { args: ['Text'], re: [{ '%or': ['Element', null] }], writes: false },
           { args: [{ selector: 'Text' }], re: [{ '%or': ['Element', null] }], writes: false },
@@ -150,9 +150,9 @@ export const domDocument = expandInheritance({
         default_prevented: { '%opt': 'Boolean' },
         is_trusted: { '%opt': 'Boolean' },
         time_stamp: { '%opt': 'Float' },
-        target: { '%opt': ':Element:*' },
-        current_target: { '%opt': ':Element:*' },
-        related_target: { '%opt': ':Element:*' },
+        target: { '%opt': ':Element' },
+        current_target: { '%opt': ':Element' },
+        related_target: { '%opt': ':Element' },
         key: { '%opt': 'Text' },
         code: { '%opt': 'Text' },
         repeat: { '%opt': 'Boolean' },
@@ -176,61 +176,61 @@ export const domDocument = expandInheritance({
     ],
   },
   ':Node': {
-    public: { $new: [{ re: [':Node:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ re: [':Node'], writes: false }] },
+    instance: {
       public: {
         node_name: [{ re: ['Text'], writes: false }],
         node_type: [{ re: ['Integer'], writes: false }],
         node_value: [{ re: [{ '%or': ['Text', null] }], writes: false }],
-        parent_node: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
-        parent_element: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
+        parent_node: [{ re: [{ '%or': [':Node', null] }], writes: false }],
+        parent_element: [{ re: [{ '%or': [':Element', null] }], writes: false }],
         child_nodes: [{ re: [[['Nodes'], { '%t': 'List' }]], writes: false }],
-        first_child: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
-        last_child: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
-        next_sibling: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
-        previous_sibling: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
-        owner_document: [{ re: [{ '%or': [':Node:*', null] }], writes: false }],
+        first_child: [{ re: [{ '%or': [':Node', null] }], writes: false }],
+        last_child: [{ re: [{ '%or': [':Node', null] }], writes: false }],
+        next_sibling: [{ re: [{ '%or': [':Node', null] }], writes: false }],
+        previous_sibling: [{ re: [{ '%or': [':Node', null] }], writes: false }],
+        owner_document: [{ re: [{ '%or': [':Node', null] }], writes: false }],
         is_connected: [{ re: ['Boolean'], writes: false }],
-        get_root_node: [{ re: [':Node:*'], writes: false }],
+        get_root_node: [{ re: [':Node'], writes: false }],
         contains: [
-          { args: [':Node:*'], re: ['Boolean'], writes: false },
-          { args: [{ other: ':Node:*' }], re: ['Boolean'], writes: false },
+          { args: [':Node'], re: ['Boolean'], writes: false },
+          { args: [{ other: ':Node' }], re: ['Boolean'], writes: false },
         ],
         compare_document_position: [
-          { args: [':Node:*'], re: ['Integer'], writes: false },
-          { args: [{ other: ':Node:*' }], re: ['Integer'], writes: false },
+          { args: [':Node'], re: ['Integer'], writes: false },
+          { args: [{ other: ':Node' }], re: ['Integer'], writes: false },
         ],
         clone_node: [
-          { re: [':Node:*'], writes: false },
-          { args: ['Boolean'], re: [':Node:*'], writes: false },
-          { args: [{ deep: 'Boolean' }], re: [':Node:*'], writes: false },
+          { re: [':Node'], writes: false },
+          { args: ['Boolean'], re: [':Node'], writes: false },
+          { args: [{ deep: 'Boolean' }], re: [':Node'], writes: false },
         ],
         is_equal_node: [
-          { args: [':Node:*'], re: ['Boolean'], writes: false },
-          { args: [{ other: ':Node:*' }], re: ['Boolean'], writes: false },
+          { args: [':Node'], re: ['Boolean'], writes: false },
+          { args: [{ other: ':Node' }], re: ['Boolean'], writes: false },
         ],
         is_same_node: [
-          { args: [':Node:*'], re: ['Boolean'], writes: false },
-          { args: [{ other: ':Node:*' }], re: ['Boolean'], writes: false },
+          { args: [':Node'], re: ['Boolean'], writes: false },
+          { args: [{ other: ':Node' }], re: ['Boolean'], writes: false },
         ],
-        'normalize!': [{ re: [{ '%self': true }], writes: true }],
+        'normalize!': [{ re: [':*'], writes: true }],
       },
     },
   },
-  ':Text': { extends: [':Node'], public: { $new: [{ re: ['Text'], writes: false }] }, ':*': {} },
-  ':Comment': { extends: [':Node'], public: { $new: [{ re: [':Comment:*'], writes: false }] }, ':*': {} },
+  ':Text': { extends: [':Node'], public: { $new: [{ re: ['Text'], writes: false }] }, instance: {} },
+  ':Comment': { extends: [':Node'], public: { $new: [{ re: [':Comment'], writes: false }] }, instance: {} },
   ':Document': {
     extends: [':Node'],
-    public: { $new: [{ re: [':Document:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ re: [':Document'], writes: false }] },
+    instance: {
       public: {
         title: [{ re: ['Text'], writes: false }],
-        first: [{ args: [{ selector: 'Text' }], re: [':Element:*'], writes: false }],
-        body: [{ re: [':body:*'], writes: false }],
+        first: [{ args: [{ selector: 'Text' }], re: [':Element'], writes: false }],
+        body: [{ re: [':body'], writes: false }],
         eval: [{ args: ['Text'], re: ['Text'], writes: false }],
         query_selector: [
-          { args: ['Text'], re: [{ '%or': [':Element:*', null] }], writes: false },
-          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element:*', null] }], writes: false },
+          { args: ['Text'], re: [{ '%or': [':Element', null] }], writes: false },
+          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element', null] }], writes: false },
         ],
         query_selector_all: [
           { args: ['Text'], re: [[['Elements'], { '%t': 'List' }]], writes: false },
@@ -249,8 +249,8 @@ export const domDocument = expandInheritance({
   },
   ':Element': {
     extends: [':Node'],
-    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':Element:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':Element'], writes: false }] },
+    instance: {
       ':scroll_top': { public: { $set: [{ args: ['Decimal'], writes: true }] } },
       ':scroll_left': { public: { $set: [{ args: ['Decimal'], writes: true }] } },
       public: {
@@ -286,9 +286,9 @@ export const domDocument = expandInheritance({
         itemtype: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         writingsuggestions: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         virtualkeyboardpolicy: [{ re: [{ '%or': ['Text', null] }], writes: false }],
-        aria: [{ re: [{ '%or': [':Aria:*', null] }], writes: false }],
-        class_list: [{ re: [':ClassList:*'], writes: false }],
-        dataset: [{ re: [':Dataset:*'], writes: false }],
+        aria: [{ re: [{ '%or': [':Aria', null] }], writes: false }],
+        class_list: [{ re: [':ClassList'], writes: false }],
+        dataset: [{ re: [':Dataset'], writes: false }],
         outer_html: [{ re: ['Text'], writes: false }],
         outer_text: [{ re: ['Text'], writes: false }],
         tag_name: [{ re: ['Text'], writes: false }],
@@ -296,10 +296,10 @@ export const domDocument = expandInheritance({
         namespace_uri: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         prefix: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         children: [{ re: [[['Elements'], { '%t': 'List' }]], writes: false }],
-        first_element_child: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
-        last_element_child: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
-        next_element_sibling: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
-        previous_element_sibling: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
+        first_element_child: [{ re: [{ '%or': [':Element', null] }], writes: false }],
+        last_element_child: [{ re: [{ '%or': [':Element', null] }], writes: false }],
+        next_element_sibling: [{ re: [{ '%or': [':Element', null] }], writes: false }],
+        previous_element_sibling: [{ re: [{ '%or': [':Element', null] }], writes: false }],
         child_element_count: [{ re: ['Integer'], writes: false }],
         has_attributes: [{ re: ['Boolean'], writes: false }],
         get_attribute_names: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }],
@@ -312,33 +312,33 @@ export const domDocument = expandInheritance({
           { args: [{ name: 'Text' }], re: ['Boolean'], writes: false },
         ],
         'set_attribute!': [
-          { args: ['Text', 'Text'], re: [{ '%self': true }], writes: true },
-          { args: [{ name: 'Text', value: 'Text' }], re: [{ '%self': true }], writes: true },
+          { args: ['Text', 'Text'], re: [':*'], writes: true },
+          { args: [{ name: 'Text', value: 'Text' }], re: [':*'], writes: true },
         ],
         'remove_attribute!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [{ name: 'Text' }], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [{ name: 'Text' }], re: [':*'], writes: true },
         ],
         'toggle_attribute!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: ['Text', 'Boolean'], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: ['Text', 'Boolean'], re: [':*'], writes: true },
           {
             args: [{ name: 'Text', force: { '%opt': 'Boolean' } }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         query_selector: [
-          { args: ['Text'], re: [{ '%or': [':Element:*', null] }], writes: false },
-          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element:*', null] }], writes: false },
+          { args: ['Text'], re: [{ '%or': [':Element', null] }], writes: false },
+          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element', null] }], writes: false },
         ],
         query_selector_all: [
           { args: ['Text'], re: [[['Elements'], { '%t': 'List' }]], writes: false },
           { args: [{ selector: 'Text' }], re: [[['Elements'], { '%t': 'List' }]], writes: false },
         ],
         closest: [
-          { args: ['Text'], re: [{ '%or': [':Element:*', null] }], writes: false },
-          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element:*', null] }], writes: false },
+          { args: ['Text'], re: [{ '%or': [':Element', null] }], writes: false },
+          { args: [{ selector: 'Text' }], re: [{ '%or': [':Element', null] }], writes: false },
         ],
         matches: [
           { args: ['Text'], re: ['Boolean'], writes: false },
@@ -360,7 +360,7 @@ export const domDocument = expandInheritance({
         offset_height: [{ re: ['Integer'], writes: false }],
         offset_top: [{ re: ['Integer'], writes: false }],
         offset_left: [{ re: ['Integer'], writes: false }],
-        offset_parent: [{ re: [{ '%or': [':Element:*', null] }], writes: false }],
+        offset_parent: [{ re: [{ '%or': [':Element', null] }], writes: false }],
         scroll_width: [{ re: ['Integer'], writes: false }],
         scroll_height: [{ re: ['Integer'], writes: false }],
         scroll_top: [{ re: ['Decimal'], writes: false }],
@@ -368,17 +368,17 @@ export const domDocument = expandInheritance({
         bounding_client_rect: [{ re: ['Object'], writes: false }],
         client_rects: [{ re: [[['Objects'], { '%t': 'List' }]], writes: false }],
         'focus!': [
-          { re: [{ '%self': true }], writes: true },
+          { re: [':*'], writes: true },
           {
             args: [{ prevent_scroll: { '%opt': 'Boolean' } }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
-        'blur!': [{ re: [{ '%self': true }], writes: true }],
-        'click!': [{ re: [{ '%self': true }], writes: true }],
+        'blur!': [{ re: [':*'], writes: true }],
+        'click!': [{ re: [':*'], writes: true }],
         'scroll!': [
-          { args: ['Decimal', 'Decimal'], re: [{ '%self': true }], writes: true },
+          { args: ['Decimal', 'Decimal'], re: [':*'], writes: true },
           {
             args: [
               {
@@ -387,12 +387,12 @@ export const domDocument = expandInheritance({
                 behavior: { '%opt': 'Text' },
               },
             ],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'scroll_to!': [
-          { args: ['Decimal', 'Decimal'], re: [{ '%self': true }], writes: true },
+          { args: ['Decimal', 'Decimal'], re: [':*'], writes: true },
           {
             args: [
               {
@@ -401,12 +401,12 @@ export const domDocument = expandInheritance({
                 behavior: { '%opt': 'Text' },
               },
             ],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'scroll_by!': [
-          { args: ['Decimal', 'Decimal'], re: [{ '%self': true }], writes: true },
+          { args: ['Decimal', 'Decimal'], re: [':*'], writes: true },
           {
             args: [
               {
@@ -415,13 +415,13 @@ export const domDocument = expandInheritance({
                 behavior: { '%opt': 'Text' },
               },
             ],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'scroll_into_view!': [
-          { re: [{ '%self': true }], writes: true },
-          { args: ['Boolean'], re: [{ '%self': true }], writes: true },
+          { re: [':*'], writes: true },
+          { args: ['Boolean'], re: [':*'], writes: true },
           {
             args: [
               {
@@ -430,44 +430,44 @@ export const domDocument = expandInheritance({
                 inline: { '%opt': 'Text' },
               },
             ],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'before!': [
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'after!': [
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'replace_with!': [
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
-        'remove!': [{ re: [{ '%self': true }], writes: true }],
+        'remove!': [{ re: [':*'], writes: true }],
         'insert_adjacent_element!': [
           {
-            args: [{ position: 'Text', element: ':Element:*' }],
-            re: [{ '%self': true }],
+            args: [{ position: 'Text', element: ':Element' }],
+            re: [':*'],
             writes: true,
           },
         ],
-        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [{ '%self': true }], writes: true }],
-        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [{ '%self': true }], writes: true }],
+        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [':*'], writes: true }],
+        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [':*'], writes: true }],
       },
     },
   },
@@ -527,12 +527,12 @@ export const domDocument = expandInheritance({
               setsize: { '%opt': 'Integer' },
             },
           ],
-          re: [':Aria:*'],
+          re: [':Aria'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         role: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         label: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -586,8 +586,8 @@ export const domDocument = expandInheritance({
     },
   },
   ':ClassList': {
-    public: { $new: [{ re: [':ClassList:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ re: [':ClassList'], writes: false }] },
+    instance: {
       ':value': { public: { $set: [{ args: ['Text'], writes: true }] } },
       public: {
         length: [{ re: ['Integer'], writes: false }],
@@ -601,20 +601,20 @@ export const domDocument = expandInheritance({
           { args: [{ token: 'Text' }], re: ['Boolean'], writes: false },
         ],
         'add!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Text'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Text'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ tokens: [['Text'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'remove!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Text'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Text'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ tokens: [['Text'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
@@ -635,8 +635,8 @@ export const domDocument = expandInheritance({
     },
   },
   ':Dataset': {
-    public: { $new: [{ re: [':Dataset:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ re: [':Dataset'], writes: false }] },
+    instance: {
       public: {
         size: [{ re: ['Integer'], writes: false }],
         has: [
@@ -648,12 +648,12 @@ export const domDocument = expandInheritance({
           { args: [{ key: 'Text' }], re: [{ '%or': ['Text', null] }], writes: false },
         ],
         'put!': [
-          { args: ['Text', 'Text'], re: [{ '%self': true }], writes: true },
-          { args: [{ key: 'Text', value: 'Text' }], re: [{ '%self': true }], writes: true },
+          { args: ['Text', 'Text'], re: [':*'], writes: true },
+          { args: [{ key: 'Text', value: 'Text' }], re: [':*'], writes: true },
         ],
         'remove!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [{ key: 'Text' }], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [{ key: 'Text' }], re: [':*'], writes: true },
         ],
         keys: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }],
         values: [{ re: [[['Text'], { '%t': 'List' }]], writes: false }],
@@ -667,12 +667,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Text'], { '%t': 'List' }] } }],
-          re: [':TextElement:*'],
+          re: [':TextElement'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       ':inner_html': { public: { $set: [{ args: ['Text'], writes: true }] } },
       ':text_content': { public: { $set: [{ args: ['Text'], writes: true }] } },
       ':inner_text': { public: { $set: [{ args: ['Text'], writes: true }] } },
@@ -681,34 +681,34 @@ export const domDocument = expandInheritance({
         text_content: [{ re: ['Text'], writes: false }],
         inner_text: [{ re: ['Text'], writes: false }],
         'append!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Text'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Text'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Text'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'prepend!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Text'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Text'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Text'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'replace_children!': [
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Text'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Text'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Text'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
-        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [{ '%self': true }], writes: true }],
-        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [{ '%self': true }], writes: true }],
+        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [':*'], writes: true }],
+        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [':*'], writes: true }],
       },
     },
   },
@@ -718,12 +718,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':ParentElement:*'],
+          re: [':ParentElement'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       ':inner_html': { public: { $set: [{ args: ['Text'], writes: true }] } },
       ':text_content': { public: { $set: [{ args: ['Text'], writes: true }] } },
       ':inner_text': { public: { $set: [{ args: ['Text'], writes: true }] } },
@@ -732,68 +732,68 @@ export const domDocument = expandInheritance({
         text_content: [{ re: ['Text'], writes: false }],
         inner_text: [{ re: ['Text'], writes: false }],
         'append_child!': [
-          { args: [':Element:*'], re: [{ '%self': true }], writes: true },
-          { args: [{ child: ':Element:*' }], re: [{ '%self': true }], writes: true },
+          { args: [':Element'], re: [':*'], writes: true },
+          { args: [{ child: ':Element' }], re: [':*'], writes: true },
         ],
         'insert_before!': [
-          { args: [':Element:*', { '%opt': ':Element:*' }], re: [{ '%self': true }], writes: true },
+          { args: [':Element', { '%opt': ':Element' }], re: [':*'], writes: true },
           {
-            args: [{ new_child: ':Element:*', ref_child: { '%opt': ':Element:*' } }],
-            re: [{ '%self': true }],
+            args: [{ new_child: ':Element', ref_child: { '%opt': ':Element' } }],
+            re: [':*'],
             writes: true,
           },
         ],
         'remove_child!': [
-          { args: [':Element:*'], re: [{ '%self': true }], writes: true },
-          { args: [{ child: ':Element:*' }], re: [{ '%self': true }], writes: true },
+          { args: [':Element'], re: [':*'], writes: true },
+          { args: [{ child: ':Element' }], re: [':*'], writes: true },
         ],
         'replace_child!': [
-          { args: [':Element:*', ':Element:*'], re: [{ '%self': true }], writes: true },
+          { args: [':Element', ':Element'], re: [':*'], writes: true },
           {
-            args: [{ new_child: ':Element:*', old_child: ':Element:*' }],
-            re: [{ '%self': true }],
+            args: [{ new_child: ':Element', old_child: ':Element' }],
+            re: [':*'],
             writes: true,
           },
         ],
         'append!': [
-          { args: [':Element:*'], re: [{ '%self': true }], writes: true },
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [':Element'], re: [':*'], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'prepend!': [
-          { args: [':Element:*'], re: [{ '%self': true }], writes: true },
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [':Element'], re: [':*'], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'replace_children!': [
-          { args: [':Element:*'], re: [{ '%self': true }], writes: true },
-          { args: ['Text'], re: [{ '%self': true }], writes: true },
-          { args: [[['Anything'], { '%t': 'List' }]], re: [{ '%self': true }], writes: true },
+          { args: [':Element'], re: [':*'], writes: true },
+          { args: ['Text'], re: [':*'], writes: true },
+          { args: [[['Anything'], { '%t': 'List' }]], re: [':*'], writes: true },
           {
             args: [{ items: [['Anything'], { '%t': 'List' }] }],
-            re: [{ '%self': true }],
+            re: [':*'],
             writes: true,
           },
         ],
         'insert_adjacent_element!': [
           {
-            args: [{ position: 'Text', element: ':Element:*' }],
-            re: [{ '%self': true }],
+            args: [{ position: 'Text', element: ':Element' }],
+            re: [':*'],
             writes: true,
           },
         ],
-        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [{ '%self': true }], writes: true }],
-        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [{ '%self': true }], writes: true }],
+        'insert_adjacent_text!': [{ args: [{ position: 'Text', text: 'Text' }], re: [':*'], writes: true }],
+        'insert_adjacent_html!': [{ args: [{ position: 'Text', html: 'Text' }], re: [':*'], writes: true }],
       },
     },
   },
@@ -803,12 +803,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':html:*'],
+          re: [':html'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':head': {
     extends: [':ParentElement'],
@@ -816,12 +816,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':head:*'],
+          re: [':head'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':style': {
     extends: [':TextElement'],
@@ -835,12 +835,12 @@ export const domDocument = expandInheritance({
               media: { '%opt': 'Text' },
             },
           ],
-          re: [':style:*'],
+          re: [':style'],
           writes: false,
         },
       ],
     },
-    ':*': { public: { media: [{ re: [{ '%or': ['Text', null] }], writes: false }] } },
+    instance: { public: { media: [{ re: [{ '%or': ['Text', null] }], writes: false }] } },
   },
   ':body': {
     extends: [':ParentElement'],
@@ -848,12 +848,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':body:*'],
+          re: [':body'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':header': {
     extends: [':ParentElement'],
@@ -861,12 +861,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':header:*'],
+          re: [':header'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':footer': {
     extends: [':ParentElement'],
@@ -874,12 +874,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':footer:*'],
+          re: [':footer'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':main': {
     extends: [':ParentElement'],
@@ -887,12 +887,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':main:*'],
+          re: [':main'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':nav': {
     extends: [':ParentElement'],
@@ -900,12 +900,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':nav:*'],
+          re: [':nav'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':section': {
     extends: [':ParentElement'],
@@ -913,12 +913,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':section:*'],
+          re: [':section'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':article': {
     extends: [':ParentElement'],
@@ -926,12 +926,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':article:*'],
+          re: [':article'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':aside': {
     extends: [':ParentElement'],
@@ -939,12 +939,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':aside:*'],
+          re: [':aside'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h1': {
     extends: [':ParentElement'],
@@ -952,12 +952,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h1:*'],
+          re: [':h1'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h2': {
     extends: [':ParentElement'],
@@ -965,12 +965,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h2:*'],
+          re: [':h2'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h3': {
     extends: [':ParentElement'],
@@ -978,12 +978,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h3:*'],
+          re: [':h3'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h4': {
     extends: [':ParentElement'],
@@ -991,12 +991,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h4:*'],
+          re: [':h4'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h5': {
     extends: [':ParentElement'],
@@ -1004,12 +1004,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h5:*'],
+          re: [':h5'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':h6': {
     extends: [':ParentElement'],
@@ -1017,12 +1017,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':h6:*'],
+          re: [':h6'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':div': {
     extends: [':ParentElement'],
@@ -1030,12 +1030,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':div:*'],
+          re: [':div'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':p': {
     extends: [':ParentElement'],
@@ -1043,12 +1043,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':p:*'],
+          re: [':p'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':span': {
     extends: [':ParentElement'],
@@ -1056,12 +1056,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':span:*'],
+          re: [':span'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':pre': {
     extends: [':ParentElement'],
@@ -1069,22 +1069,22 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':pre:*'],
+          re: [':pre'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':hr': {
     extends: [':Element'],
-    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':hr:*'], writes: false }] },
-    ':*': {},
+    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':hr'], writes: false }] },
+    instance: {},
   },
   ':br': {
     extends: [':Element'],
-    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':br:*'], writes: false }] },
-    ':*': {},
+    public: { $new: [{ args: [{ ...ELEMENT_ARGS }], re: [':br'], writes: false }] },
+    instance: {},
   },
   ':blockquote': {
     extends: [':ParentElement'],
@@ -1098,12 +1098,12 @@ export const domDocument = expandInheritance({
               cite: { '%opt': 'Text' },
             },
           ],
-          re: [':blockquote:*'],
+          re: [':blockquote'],
           writes: false,
         },
       ],
     },
-    ':*': { public: { cite: [{ re: [{ '%or': ['Text', null] }], writes: false }] } },
+    instance: { public: { cite: [{ re: [{ '%or': ['Text', null] }], writes: false }] } },
   },
   ':a': {
     extends: [':ParentElement'],
@@ -1124,12 +1124,12 @@ export const domDocument = expandInheritance({
               referrerpolicy: { '%opt': 'Text' },
             },
           ],
-          re: [':a:*'],
+          re: [':a'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         href: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         target: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1148,12 +1148,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':em:*'],
+          re: [':em'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':strong': {
     extends: [':ParentElement'],
@@ -1161,12 +1161,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':strong:*'],
+          re: [':strong'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':code': {
     extends: [':ParentElement'],
@@ -1174,12 +1174,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':code:*'],
+          re: [':code'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':mark': {
     extends: [':ParentElement'],
@@ -1187,12 +1187,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':mark:*'],
+          re: [':mark'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':small': {
     extends: [':ParentElement'],
@@ -1200,12 +1200,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':small:*'],
+          re: [':small'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':ul': {
     extends: [':ParentElement'],
@@ -1213,12 +1213,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':ul:*'],
+          re: [':ul'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':ol': {
     extends: [':ParentElement'],
@@ -1234,12 +1234,12 @@ export const domDocument = expandInheritance({
               reversed: { '%opt': 'Boolean' },
             },
           ],
-          re: [':ol:*'],
+          re: [':ol'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         type: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         start: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
@@ -1259,12 +1259,12 @@ export const domDocument = expandInheritance({
               value: { '%opt': 'Integer' },
             },
           ],
-          re: [':li:*'],
+          re: [':li'],
           writes: false,
         },
       ],
     },
-    ':*': { public: { value: [{ re: [{ '%or': ['Integer', null] }], writes: false }] } },
+    instance: { public: { value: [{ re: [{ '%or': ['Integer', null] }], writes: false }] } },
   },
   ':dl': {
     extends: [':ParentElement'],
@@ -1272,12 +1272,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':dl:*'],
+          re: [':dl'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':dt': {
     extends: [':ParentElement'],
@@ -1285,12 +1285,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':dt:*'],
+          re: [':dt'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':dd': {
     extends: [':ParentElement'],
@@ -1298,12 +1298,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':dd:*'],
+          re: [':dd'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':table': {
     extends: [':ParentElement'],
@@ -1311,12 +1311,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':table:*'],
+          re: [':table'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':thead': {
     extends: [':ParentElement'],
@@ -1324,12 +1324,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':thead:*'],
+          re: [':thead'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':tbody': {
     extends: [':ParentElement'],
@@ -1337,12 +1337,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':tbody:*'],
+          re: [':tbody'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':tr': {
     extends: [':ParentElement'],
@@ -1350,12 +1350,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':tr:*'],
+          re: [':tr'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':td': {
     extends: [':ParentElement'],
@@ -1371,12 +1371,12 @@ export const domDocument = expandInheritance({
               headers: { '%opt': 'Text' },
             },
           ],
-          re: [':td:*'],
+          re: [':td'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         colspan: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
         rowspan: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
@@ -1400,12 +1400,12 @@ export const domDocument = expandInheritance({
               abbr: { '%opt': 'Text' },
             },
           ],
-          re: [':th:*'],
+          re: [':th'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         colspan: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
         rowspan: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
@@ -1421,12 +1421,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':caption:*'],
+          re: [':caption'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':form': {
     extends: [':ParentElement'],
@@ -1446,12 +1446,12 @@ export const domDocument = expandInheritance({
               name: { '%opt': 'Text' },
             },
           ],
-          re: [':form:*'],
+          re: [':form'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         action: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         method: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1497,12 +1497,12 @@ export const domDocument = expandInheritance({
               size: { '%opt': 'Integer' },
             },
           ],
-          re: [':input:*'],
+          re: [':input'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         type: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         name: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1551,12 +1551,12 @@ export const domDocument = expandInheritance({
               formtarget: { '%opt': 'Text' },
             },
           ],
-          re: [':button:*'],
+          re: [':button'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         type: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         name: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1588,12 +1588,12 @@ export const domDocument = expandInheritance({
               form: { '%opt': 'Text' },
             },
           ],
-          re: [':select:*'],
+          re: [':select'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         name: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         multiple: [{ re: [{ '%or': ['Boolean', null] }], writes: false }],
@@ -1620,12 +1620,12 @@ export const domDocument = expandInheritance({
               label: { '%opt': 'Text' },
             },
           ],
-          re: [':option:*'],
+          re: [':option'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         value: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         selected: [{ re: [{ '%or': ['Boolean', null] }], writes: false }],
@@ -1657,12 +1657,12 @@ export const domDocument = expandInheritance({
               form: { '%opt': 'Text' },
             },
           ],
-          re: [':textarea:*'],
+          re: [':textarea'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         name: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         rows: [{ re: [{ '%or': ['Integer', null] }], writes: false }],
@@ -1692,12 +1692,12 @@ export const domDocument = expandInheritance({
               form: { '%opt': 'Text' },
             },
           ],
-          re: [':label:*'],
+          re: [':label'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         for: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         form: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1727,12 +1727,12 @@ export const domDocument = expandInheritance({
               ismap: { '%opt': 'Boolean' },
             },
           ],
-          re: [':img:*'],
+          re: [':img'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         src: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         srcset: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1763,12 +1763,12 @@ export const domDocument = expandInheritance({
               height: { '%opt': { '%or': ['Integer', 'Text'] } },
             },
           ],
-          re: [':canvas:*'],
+          re: [':canvas'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         width: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         height: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1796,12 +1796,12 @@ export const domDocument = expandInheritance({
               height: { '%opt': { '%or': ['Integer', 'Text'] } },
             },
           ],
-          re: [':iframe:*'],
+          re: [':iframe'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         src: [{ re: [{ '%or': ['Text', null] }], writes: false }],
         srcdoc: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1822,12 +1822,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':figure:*'],
+          re: [':figure'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':figcaption': {
     extends: [':ParentElement'],
@@ -1835,12 +1835,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':figcaption:*'],
+          re: [':figcaption'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':details': {
     extends: [':ParentElement'],
@@ -1855,12 +1855,12 @@ export const domDocument = expandInheritance({
               name: { '%opt': 'Text' },
             },
           ],
-          re: [':details:*'],
+          re: [':details'],
           writes: false,
         },
       ],
     },
-    ':*': {
+    instance: {
       public: {
         open: [{ re: [{ '%or': ['Boolean', null] }], writes: false }],
         name: [{ re: [{ '%or': ['Text', null] }], writes: false }],
@@ -1873,12 +1873,12 @@ export const domDocument = expandInheritance({
       $new: [
         {
           args: [{ ...ELEMENT_ARGS, children: { '%opt': [['Anything'], { '%t': 'List' }] } }],
-          re: [':summary:*'],
+          re: [':summary'],
           writes: false,
         },
       ],
     },
-    ':*': {},
+    instance: {},
   },
   ':dialog': {
     extends: [':ParentElement'],
@@ -1892,11 +1892,11 @@ export const domDocument = expandInheritance({
               open: { '%opt': 'Boolean' },
             },
           ],
-          re: [':dialog:*'],
+          re: [':dialog'],
           writes: false,
         },
       ],
     },
-    ':*': { public: { open: [{ re: [{ '%or': ['Boolean', null] }], writes: false }] } },
+    instance: { public: { open: [{ re: [{ '%or': ['Boolean', null] }], writes: false }] } },
   },
 });

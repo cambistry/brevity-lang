@@ -49,7 +49,7 @@ describe('bang enforcement — interface methods (bidirectional)', () => {
   const WIDGET = {
     public: {
       'watch.': [{ args: [{ on: { '%fn': [{ args: [{ s: ':Signal' }], writes: true }] } }], writes: true }],
-      'poke!': [{ re: [{ '%self': true }], writes: true }],
+      'poke!': [{ re: [':*'], writes: true }],
     },
     types: { ':Signal': [{ 'dismiss.': { '%fn': [{ writes: true }] }, code: 'Integer' }] },
   };

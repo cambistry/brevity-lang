@@ -261,8 +261,8 @@ describe('return shape — inherited methods', () => {
   describe('manifest classes', () => {
     const shapes = {
       ':Base': {
-        public: { $new: [{ re: [':Base:*'], writes: false }] },
-        ':*': {
+        public: { $new: [{ re: [':Base'], writes: false }] },
+        instance: {
           public: {
             get: [{ re: [{ value: 'Integer' }], writes: false }],
             size: [{ re: ['Integer'], writes: false }],
@@ -271,8 +271,8 @@ describe('return shape — inherited methods', () => {
       },
       ':Box': {
         extends: [':Base'],
-        public: { $new: [{ re: [':Box:*'], writes: false }] },
-        ':*': {
+        public: { $new: [{ re: [':Box'], writes: false }] },
+        instance: {
           public: {
             get: [{ re: [{ value: 'Integer' }], writes: false }],
             size: [{ re: ['Integer'], writes: false }],

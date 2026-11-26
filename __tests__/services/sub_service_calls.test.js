@@ -19,8 +19,8 @@ const DOC = {
     ':inner': { public: { ping: [{ re: ['Integer'], writes: false }] } },
   },
   ':Box': {
-    public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
-    ':*': { ':tally': { public: { get: [{ re: ['Integer'], writes: false }] } } },
+    public: { $new: [{ args: ['Integer'], re: [':Box'], writes: false }] },
+    instance: { ':tally': { public: { get: [{ re: ['Integer'], writes: false }] } } },
   },
 };
 const remotes = [{ path: 'svc.bv', service: DOC }];

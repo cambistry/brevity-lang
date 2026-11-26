@@ -10,7 +10,7 @@ const doc = (source) => extract(source).interface.service;
 describe('generated docs', () => {
   const sig = (body, params = 'b Boolean') => doc(`@f = (${params}) {\n${body}\n}\n`).public.f;
   const or = (...members) => ({ '%or': members });
-  const self = { '%self': true };
+  const self = ':*';
 
   it('merges paths with the same slots', () => {
     expect(sig('if b { return 1 }\nreturn "x"')).toEqual([{ args: ['Boolean'], re: [or('Integer', 'Text')], writes: false }]);
@@ -45,7 +45,7 @@ describe('reading a doc', () => {
   it('states every shape', () => {
     const { f, g } = documentShape({ public: {
       f: [{ re: { '%or': [['Integer'], [{ a: 'Text' }]] }, writes: false }],
-      g: [{ re: { '%or': [['Integer'], ['Text'], [{ '%self': true }]] }, writes: true }],
+      g: [{ re: { '%or': [['Integer'], ['Text'], [':*']] }, writes: true }],
     } });
     expect(f[0].returnAlternatives).toEqual([
       [expect.objectContaining({ typeEnc: 'Integer', positional: true })],

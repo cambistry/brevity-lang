@@ -99,9 +99,9 @@ describe('a type declared in a class', () => {
       types: { ':P': ['Integer'] },
       ':S': { types: { ':Widget': ['Text', 'Text'] } },
       ':W': {
-        public: { $new: [{ re: [':W:*'], writes: false }] },
+        public: { $new: [{ re: [':W'], writes: false }] },
         types: { ':X': ['Integer'] },
-        ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
+        instance: { public: { get: [{ re: [':W:X'], writes: false }] } },
       },
     });
   });
@@ -174,9 +174,9 @@ describe('a type of another file, reached through the service', () => {
   const DOC = {
     types: { ':Point': ['Integer', 'Integer'] },
     ':W': {
-      public: { $new: [{ re: [':W:*'], writes: false }] },
+      public: { $new: [{ re: [':W'], writes: false }] },
       types: { ':X': ['Integer'] },
-      ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
+      instance: { public: { get: [{ re: [':W:X'], writes: false }] } },
     },
   };
   const remotes = [{ path: 'svc.bv', service: DOC }];

@@ -20,6 +20,8 @@ import { codegen as jsCodegen } from '../javascript/classes.js';
 import { start } from './runtime.js';
 import { _opre_quote as quote, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 import { runExtractPasses } from '../../extract_passes.js';
+import { withInstanceTypes } from '../../type_enc.js';
+import { documentClassTypes } from '../../service_doc.js';
 import { settleOverrideTables } from '../../service_shape.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -44,15 +46,20 @@ function normalizeBigInts(val) {
 export function extract(source, { remotes = null } = {}) {
   const tokens = tokenize(source);
   const ast = parse(tokens, { remotes });
-  runExtractPasses(ast);
+  withInstanceTypes(ast.instanceTypes, () => runExtractPasses(ast));
   return { ast };
 }
 
 export function compile(ast, options = {}) {
-  settleOverrideTables(ast);
-  renamePublicClasses(ast);
-  validateWithSourceNames(validate, ast, options);
-  return jsCodegen(ast, options);
+  if (!ast.instanceTypes) Object.defineProperty(ast, 'instanceTypes', { value: new Set(), configurable: true, enumerable: false });
+  const remotes = Array.isArray(options.remotes) ? options.remotes.map(r => [r?.path, r?.service]) : Object.entries(options.remotes || {});
+  for (const [path, service] of remotes) if (service && typeof service === 'object') documentClassTypes(service, path, ast.instanceTypes);
+  return withInstanceTypes(ast.instanceTypes, () => {
+    settleOverrideTables(ast);
+    renamePublicClasses(ast);
+    validateWithSourceNames(validate, ast, options);
+    return jsCodegen(ast, options);
+  });
 }
 
 async function compileAndLoad(source, compileOptions = {}) {

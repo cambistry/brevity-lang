@@ -31,15 +31,15 @@ describe('a type is an address', () => {
   });
 
   it('a class in a type position is an instance of it', () => {
-    expect(enc('T')).toEqual(':T:*');
-    expect(enc('@Pub')).toEqual(':Pub:*');
+    expect(enc('T')).toEqual(':T');
+    expect(enc('@Pub')).toEqual(':Pub');
   });
 
   it('a type reached through another service', () => {
     expect(enc('Svc')).toEqual('svc.bv');
     expect(enc('Svc::Point')).toEqual('svc.bv:Point');
-    expect(enc('Svc::C')).toEqual('svc.bv:C:*');
-    expect(enc('B')).toEqual('other.bv:B:*');
+    expect(enc('Svc::C')).toEqual('svc.bv:C');
+    expect(enc('B')).toEqual('other.bv:B');
   });
 });
 
@@ -91,12 +91,12 @@ describe('a function type is its signature', () => {
   });
 
   it('a reply that is the receiver', () => {
-    expect(enc('() => self')).toEqual({ '%fn': [{ re: [{ '%self': true }], writes: true }] });
+    expect(enc('() => self')).toEqual({ '%fn': [{ re: [':*'], writes: true }] });
   });
 
   it('a reply that depends on the path', () => {
     expect(enc('(Integer) -> (Integer) | (Text)')).toEqual({ '%fn': [{ args: ['Integer'], re: { '%or': [['Integer'], ['Text']] }, writes: false }] });
-    expect(enc('() => (Integer) | self')).toEqual({ '%fn': [{ re: { '%or': [['Integer'], [{ '%self': true }]] }, writes: true }] });
+    expect(enc('() => (Integer) | self')).toEqual({ '%fn': [{ re: { '%or': [['Integer'], [':*']] }, writes: true }] });
   });
 
   it('a function of a function', () => {
@@ -146,6 +146,6 @@ describe('entry lists', () => {
   });
 
   it('actor-typed params: a class, a service\'s class, a cell, a read-only cell', () => {
-    expect(params('(t T, c: Svc::C, n *Integer, r: &Text) -> *{}')).toEqual([':T:*', 'Integer', { c: 'svc.bv:C:*', r: 'Text' }]);
+    expect(params('(t T, c: Svc::C, n *Integer, r: &Text) -> *{}')).toEqual([':T', 'Integer', { c: 'svc.bv:C', r: 'Text' }]);
   });
 });

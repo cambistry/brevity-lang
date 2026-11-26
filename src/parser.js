@@ -1,3 +1,4 @@
+import { withInstanceTypes } from './type_enc.js';
 import { settleWriterBody } from './writer_body.js';
 import * as ASTNodes from './ast.js';
 import { declaredTypeNames } from './names.js';
@@ -6534,12 +6535,14 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // are types. Its types are encoded here (src/parser_types.js), and the lowerings
   // after read and make encoded types.
   encodeAstTypes(result, remotes);
-  lowerFunctionSupers(actors);
-  lowerBaseLayers(actors);
-  lowerSuperCalls(actors, resolveSuperclassChain);
-  lowerInheritedBlockCells(actors);
-  lowerBlockDelegation(actors);
-  dropRemoteParents(actors, remoteStubs);
+  withInstanceTypes(result.instanceTypes, () => {
+    lowerFunctionSupers(actors);
+    lowerBaseLayers(actors);
+    lowerSuperCalls(actors, resolveSuperclassChain);
+    lowerInheritedBlockCells(actors);
+    lowerBlockDelegation(actors);
+    dropRemoteParents(actors, remoteStubs);
+  });
   byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
   checkTokensAccounted();

@@ -17,8 +17,8 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const GT_MANIFEST = {
-  public: { $new: [{ args: [{ text: 'Text' }], re: [':*'], writes: false }] },
-  ':*': {
+  public: { $new: [{ args: [{ text: 'Text' }], re: [':'], writes: false }] },
+  instance: {
     public: {
       size: [{ re: [{ result: 'Integer' }], writes: false }],
       'empty?': [{ re: ['Boolean'], writes: false }],

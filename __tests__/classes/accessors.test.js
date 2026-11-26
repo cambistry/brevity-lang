@@ -61,8 +61,8 @@ describe('published params — service document', () => {
       @test = -> 1
     `);
     expect(iface.service[':T']).toEqual({
-      public: { $new: [{ args: ['Integer', { label: 'Text', quiet: 'Text' }], re: [':T:*'], writes: false }] },
-      ':*': {
+      public: { $new: [{ args: ['Integer', { label: 'Text', quiet: 'Text' }], re: [':T'], writes: false }] },
+      instance: {
         public: {
           a: [{ re: ['Integer'], writes: false }],
           label: [{ re: ['Text'], writes: false }],

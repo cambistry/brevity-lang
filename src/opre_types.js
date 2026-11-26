@@ -4,14 +4,16 @@
 //   "Integer"                           a type the service's parent defines
 //   ":Point"                            the file's own type
 //   "svc.bv:Point"                      a type reached through another service
-//   ":T:*"                              an instance of the file's class `T`
+//   ":T"                                an instance of the file's class `T`: a class's
+//                                       address is its instances' type (which an
+//                                       address names, a class or a type, is what it is)
 //   [["Integer"], { "%t": "List" }]     a generic: its parameters, then a `%t` entry
 //                                       (named parameters in it); a nested list is
 //                                       "any number of"
 //   { "%opt": T }                       optional
 //   { "%or": [A, B] }                   a union; `null` is JSON null
 //   { "%fn": [signature] }              a function: `args`, `re`, `writes`, as an op's
-//   { "%self": true }                   a reply that is the receiver itself
+//   ":*"                                self's class: a reply that is the receiver itself
 //
 // An entry list (params, a reply, a type's fields) is written as `ty` writes it:
 // positional entries are items, named entries sit in one object, after them.
@@ -29,7 +31,8 @@ const PLURAL = new Map([
   ['Blobs', 'Blob'], ['Decimals', 'Decimal'], ['Actors', 'Actor'],
 ]);
 
-export const SELF = Object.freeze({ '%self': true });
+// A self-return's type: self's class, `:*`, as on the wire (notes/class-of-and-self-return-2026-11-23.md).
+export const SELF = ':*';
 
 // What a type name in a file means, for its address.
 //   types     names of the file's `type`s (`Point`; `C::X` for one declared in `C`)
@@ -41,7 +44,8 @@ export const SELF = Object.freeze({ '%self': true });
 //             class declared in one is named bare
 //   tokensOf  a declared type's or class's address tokens, by its name as declared,
 //             where they aren't its name's (`W::X` in a private `W` is `~W:X`)
-export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [], tokensOf = {} } = {}) {
+//   classTypes  a Set each class address it resolves to is added to (an instance's type)
+export function typeScope({ types = [], classes = [], services = {}, serviceClasses = () => false, bindings = {}, within = [], tokensOf = {}, classTypes = null } = {}) {
   const strip = (n) => n.replace(/^@/, '');
   const typeSet = new Set([...types].map(strip));
   // A class by its name as declared: `@Pub` is the public class, and a bare `Pub`
@@ -52,14 +56,20 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
   const declared = (segs) => typeSet.has(segs.join('::')) || isClassName(segs.join('::'));
   return {
     // The same names, read inside the class `name`.
-    within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, name], tokensOf }),
-    // The address of the type `path` names: an instance for a class, unless `asClass`.
-    resolve(path, { asClass = false } = {}) {
+    within: (name) => typeScope({ types, classes, services, serviceClasses, bindings, within: [...within, name], tokensOf, classTypes }),
+    // The address of the type `path` names. A class's is its instances' type.
+    resolve(path) {
+      const at = this.resolveAddress(path);
+      if (at.isClass) classTypes?.add(at.address);
+      return at.address;
+    },
+    resolveAddress(path) {
       let segs = path.map(strip);
-      const instance = asClass ? '' : ':*';
+      const cls = (address) => ({ address, isClass: true });
+      const other = (address) => ({ address, isClass: false });
       const own = (name) => tokensOf[name] ?? name.split('::').map(n => quote(strip(n)));
       // `class`, the class of the actor the type is in.
-      if (segs[0] === 'class' && within.length) return `:${own(within[within.length - 1]).join(':')}${segs.length > 1 ? `:${tokens(segs.slice(1))}` : instance}`;
+      if (segs[0] === 'class' && within.length) return segs.length > 1 ? other(`:${own(within[within.length - 1]).join(':')}:${tokens(segs.slice(1))}`) : cls(`:${own(within[within.length - 1]).join(':')}`);
       let nested = false;
       const withinNames = within.map(strip);
       for (let i = withinNames.length; i > 0; i--) {
@@ -69,22 +79,24 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
       if (Object.hasOwn(bindings, segs[0])) {
         const b = bindings[segs[0]];
         const rest = segs.slice(1);
-        if (!rest.length) return `${b.address}${b.isClass ? instance : ''}`;
-        return `${b.address}:${tokens(rest)}${serviceClasses(b.address, rest) ? instance : ''}`;
+        if (!rest.length) return b.isClass ? cls(b.address) : other(b.address);
+        const at = `${b.address}:${tokens(rest)}`;
+        return serviceClasses(b.address, rest) ? cls(at) : other(at);
       }
       if (Object.hasOwn(services, segs[0])) {
         const [, ...rest] = segs;
         const head = quote(services[segs[0]]);
-        if (!rest.length) return head;
-        return `${head}:${tokens(rest)}${serviceClasses(services[segs[0]], rest) ? instance : ''}`;
+        if (!rest.length) return other(head);
+        const at = `${head}:${tokens(rest)}`;
+        return serviceClasses(services[segs[0]], rest) ? cls(at) : other(at);
       }
       const joined = segs.join('::');
-      if (typeSet.has(joined)) return `:${own(joined).join(':')}`;
+      if (typeSet.has(joined)) return other(`:${own(joined).join(':')}`);
       const written = path.join('::');
-      if (classSet.has(written)) return `:${own(written).join(':')}${instance}`;
-      if (path[0].startsWith('@')) return `:${tokens(segs)}${instance}`;
-      if (nested && isClassName(joined)) return `:${own(classSet.has(joined) ? joined : `@${joined}`).join(':')}${instance}`;
-      return tokens(segs);
+      if (classSet.has(written)) return cls(`:${own(written).join(':')}`);
+      if (path[0].startsWith('@')) return cls(`:${tokens(segs)}`);
+      if (nested && isClassName(joined)) return cls(`:${own(classSet.has(joined) ? joined : `@${joined}`).join(':')}`);
+      return other(tokens(segs));
     },
   };
 }

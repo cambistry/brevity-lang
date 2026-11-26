@@ -85,12 +85,12 @@ export function resolveTypeNames(program, remotesParsed = {}) {
     if (!isType(tokens) && !own?.has(tokens.join('::'))) throw notAType(tokens.join('::'));
   };
   const checkEnc = (t, own) => {
-    if (typeof t === 'string') { checkAddress(t, own); return; }
+    if (typeof t === 'string') { if (t !== ':*') checkAddress(t, own); return; }
     if (!t || typeof t !== 'object') return;
     if (Array.isArray(t)) { t.forEach(x => checkEnc(x, own)); return; }
     for (const [k, v] of Object.entries(t)) {
       if (k === '%t') checkAddress(v, own);
-      else if (k !== '%self') checkEnc(v, own);
+      else checkEnc(v, own);
     }
   };
 

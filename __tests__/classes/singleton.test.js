@@ -232,8 +232,8 @@ describe('a public singleton in the service document', () => {
       }
     `).interface.service).toEqual({
       ':Box': {
-        public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
-        ':*': {
+        public: { $new: [{ args: ['Integer'], re: [':Box'], writes: false }] },
+        instance: {
           public: { read: [{ re: ['Integer'], writes: false }] },
           ':tally': { public: { get: [{ re: ['Integer'], writes: false }] } },
         },

@@ -170,8 +170,8 @@ describe('service document — emitted form', () => {
     const { interface: iface } = extract('@Empty = (x: Integer) *{}\n');
     expect(iface.service).toEqual({
       ':Empty': {
-        public: { $new: [{ args: [{ x: 'Integer' }], re: [':Empty:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ x: 'Integer' }], re: [':Empty'], writes: false }] },
+        instance: {},
       },
     });
   });
@@ -236,8 +236,8 @@ describe('service document — emitted form', () => {
     `);
     expect(iface.service).toEqual({
       ':Box': {
-        public: { $new: [{ args: ['Integer'], re: [':Box:*'], writes: false }] },
-        ':*': {
+        public: { $new: [{ args: ['Integer'], re: [':Box'], writes: false }] },
+        instance: {
           public: {
             start: [{ re: ['Integer'], writes: false }],
             slot: [{ re: ['Integer'], writes: false }],
@@ -303,8 +303,8 @@ describe('props and cells — validation', () => {
 
   const shapes = {
     ':Box': {
-      public: { $new: [{ re: [':Box:*'], writes: false }] },
-      ':*': {
+      public: { $new: [{ re: [':Box'], writes: false }] },
+      instance: {
         public: { total: [{ re: ['Integer'], writes: false }], slot: [{ re: ['Integer'], writes: false }] },
         ':slot': {
           public: {

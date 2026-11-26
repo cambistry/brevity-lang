@@ -735,7 +735,8 @@ function validateProgram(ast, options = {}) {
       // dependency of its own (src/public_classes.js) is at that dependency's address.
       const dep = (ast.dependencies || []).find(d => d.name === remoteName);
       const at = dep?.wireTarget ?? `${quoteToken(dep?.path ?? remoteName)}:${quoteToken(typeName)}`;
-      run.classEncByName.set(typeName, `${at}:*`);
+      run.classEncByName.set(typeName, at);
+      run.ast?.instanceTypes?.add(at);
     }
   }
 
@@ -2065,13 +2066,13 @@ function checkListMethodArgs(ast) {
 // A remote's document as `options.remotes` gives it, a JSON document
 // (notes/opre-type-encoding-2026-11-21.md), from the service at `path`: its
 // interface, as the compiler reads one, and the params of its `new` when it is a
-// constructor document, a service whose own `$new` replies `:*`.
+// constructor document, a service whose own `$new` replies `:`, an instance of itself.
 export function readRemote(service, { path = null, params = null } = {}) {
   const { $new, ...rest } = service?.public || {};
-  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: readDocument(service, path), ctorParams: params ? readParamsDocument(params) : null };
+  if ($new?.[0]?.re?.[0] !== ':' || Object.keys(rest).length) return { doc: readDocument(service, path), ctorParams: params ? readParamsDocument(params) : null };
   const ctorParams = readDocument({ public: { $new } }, path).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), typeEnc: p.typeEnc }));
-  // An instance's own addresses are under the instance; its node is the service's `:*`.
-  return { doc: readDocument(service[':*'] || {}, path), ctorParams };
+  // An instance's own addresses are under the instance; its interface is the service's `instance`.
+  return { doc: readDocument(service.instance || {}, path), ctorParams };
 }
 
 // ── Private function access check ──────────────────────────────────────────

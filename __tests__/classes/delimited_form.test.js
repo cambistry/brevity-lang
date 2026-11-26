@@ -259,13 +259,13 @@ describe('constructor delimited form — optional args — runtime', () => {
     `).interface.service).toEqual({
       ':Offset': {
         public: {
-          $new: [{ args: ['Integer', { b: { '%opt': 'Integer' } }], re: [':Offset:*'], writes: false }],
+          $new: [{ args: ['Integer', { b: { '%opt': 'Integer' } }], re: [':Offset'], writes: false }],
         },
-        ':*': {},
+        instance: {},
       },
       ':Below': {
-        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Below:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Below'], writes: false }] },
+        instance: {},
       },
     });
   });
@@ -382,15 +382,15 @@ describe('constructor delimited form — expression defaults', () => {
       @Sum = (a Integer, b Integer = 1 + 2) *{}
       @Sub = @A ^ (n Integer = 1 + 2) *{ super() }
     `).interface.service).toEqual({
-      ':A': { public: { $new: [{ re: [':A:*'], writes: false }] }, ':*': {} },
+      ':A': { public: { $new: [{ re: [':A'], writes: false }] }, instance: {} },
       ':Sum': {
-        public: { $new: [{ args: ['Integer', { '%opt': 'Integer' }], re: [':Sum:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: ['Integer', { '%opt': 'Integer' }], re: [':Sum'], writes: false }] },
+        instance: {},
       },
       ':Sub': {
         extends: [':A'],
-        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Sub:*'], writes: false }] },
-        ':*': {},
+        public: { $new: [{ args: [{ '%opt': 'Integer' }], re: [':Sub'], writes: false }] },
+        instance: {},
       },
     });
   });

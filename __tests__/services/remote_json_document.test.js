@@ -64,17 +64,17 @@ describe('a document read from another service', () => {
     public: {
       origin: [{ re: [':Point'], writes: false }],
       count: [{ re: ['Integer'], writes: false }],
-      move: [{ args: [':Point', { by: [[':Point'], { '%t': 'List' }] }], re: [':T:*'], writes: false }],
+      move: [{ args: [':Point', { by: [[':Point'], { '%t': 'List' }] }], re: [':T'], writes: false }],
     },
     types: { ':Point': ['Integer', 'Integer'] },
-    ':T': { public: { $new: [{ re: [':T:*'], writes: false }] }, ':*': {} },
+    ':T': { public: { $new: [{ re: [':T'], writes: false }] }, instance: {} },
   };
 
   it("puts the service's own addresses under its path", () => {
     const read = readDocument(doc, 'svc.bv');
     expect(read.origin[0].returns[0].typeEnc).toBe('svc.bv:Point');
     expect(read.move[0].params.map(p => p.typeEnc)).toEqual(['svc.bv:Point', [['svc.bv:Point'], { '%t': 'List' }]]);
-    expect(read.move[0].returns[0].typeEnc).toBe('svc.bv:T:*');
+    expect(read.move[0].returns[0].typeEnc).toBe('svc.bv:T');
     expect(read.__typeDecls.Point.fields.map(f => f.paramTypeEnc)).toEqual(['Integer', 'Integer']);
   });
 

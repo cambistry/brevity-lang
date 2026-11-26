@@ -25,8 +25,8 @@ import { extract } from '../../index.js';
 describe('destructure params — single function', () => {
   const manifest = {
     ':Point': {
-      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point:*'], writes: false }] },
-      ':*': {
+      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point'], writes: false }] },
+      instance: {
         public: { x: [{ re: ['Integer'], writes: false }], y: [{ re: ['Integer'], writes: false }] },
       },
     },
@@ -135,8 +135,8 @@ describe('destructure params — aliasing', () => {
       Scale: [{ re: ['Integer'], writes: false }],
     },
     ':Point': {
-      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point:*'], writes: false }] },
-      ':*': { public: { x: [{ re: ['Integer'], writes: false }] } },
+      public: { $new: [{ args: ['Integer', 'Integer'], re: [':Point'], writes: false }] },
+      instance: { public: { x: [{ re: ['Integer'], writes: false }] } },
     },
   };
 

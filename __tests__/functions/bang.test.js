@@ -3,7 +3,7 @@ import { parseInterface } from '../../src/parser_interface.js';
 
 // An op's signatures in a service document, at whichever address has it.
 const opIn = (node, name) => node?.public?.[name]
-  ?? Object.entries(node || {}).filter(([k]) => k.startsWith(':')).map(([, n]) => opIn(n, name)).find(Boolean);
+  ?? Object.entries(node || {}).filter(([k]) => k.startsWith(':') || k === 'instance').map(([, n]) => opIn(n, name)).find(Boolean);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // A `!` function writes. Its return paths say what it yields: falling off the end
@@ -863,7 +863,7 @@ describe('a function named like a builtin', () => {
 describe('effect arrows in signatures', () => {
   const widget = (entry) => ({ remotes: [{ path: 'Widget', service: { public: entry } }] });
   const useWidget = 'use Widget\n@go. = { x Integer = 1 }\n';
-  const self = { '%self': true };
+  const self = ':*';
 
   it.each([
     ['a read', { total: [{ re: ['Integer'], writes: false }] }],
@@ -957,10 +957,10 @@ describe('effect arrows in signatures', () => {
       @me = { self }
       @total = { return a }
     `);
-    expect(opIn(doc.service, 'inc!')).toEqual([{ args: ['Integer'], re: [{ '%self': true }], writes: true }]);
+    expect(opIn(doc.service, 'inc!')).toEqual([{ args: ['Integer'], re: [':*'], writes: true }]);
     expect(opIn(doc.service, 'take!')).toEqual([{ re: ['Integer'], writes: true }]);
     expect(opIn(doc.service, 'ping.')).toEqual([{ writes: true }]);
-    expect(opIn(doc.service, 'me')).toEqual([{ re: [{ '%self': true }], writes: false }]);
+    expect(opIn(doc.service, 'me')).toEqual([{ re: [':*'], writes: false }]);
     expect(opIn(doc.service, 'total')[0].writes).toBe(false);
   });
 
@@ -1132,7 +1132,7 @@ describe('effect enforcement', () => {
   });
 
   it('a foreign writer counts, by its arrow', () => {
-    expect(() => compileSource(`${REMOTE}@go = { Svc.sort(1)\n return 1 }\n`, docs({ public: { sort: [{ args: ['Integer'], re: [{ '%self': true }], writes: true }] } }))).toThrow(/'@go' writes/);
+    expect(() => compileSource(`${REMOTE}@go = { Svc.sort(1)\n return 1 }\n`, docs({ public: { sort: [{ args: ['Integer'], re: [':*'], writes: true }] } }))).toThrow(/'@go' writes/);
   });
 
   it('a foreign read doesn\'t count, even with a bang in its name', () => {
@@ -1269,7 +1269,7 @@ describe('effect enforcement', () => {
 
     it('`!` and `.` keep `=>` in their docs', () => {
       const { interface: doc } = compileSource(`${SVC}@a! = {\n${reads}}\n@b. = {\n${reads}}\n`);
-      expect(opIn(doc.service, 'a!')).toEqual([{ re: [{ '%self': true }], writes: true }]);
+      expect(opIn(doc.service, 'a!')).toEqual([{ re: [':*'], writes: true }]);
       expect(opIn(doc.service, 'b.')).toEqual([{ writes: true }]);
     });
   });
@@ -1384,7 +1384,7 @@ describe('effect enforcement', () => {
 
   it('a class that writes while constructing must be `!`', () => {
     const source = (name) => `${REMOTE}${name} = *{\n  Svc.ping!()\n  @get = { return 1 }\n}\n@go = { return 1 }\n`;
-    expect(() => compileSource(source('W'), docs({ public: { 'ping!': [{ re: [{ '%self': true }], writes: true }] } }))).toThrow(/Class 'W' writes/);
+    expect(() => compileSource(source('W'), docs({ public: { 'ping!': [{ re: [':*'], writes: true }] } }))).toThrow(/Class 'W' writes/);
   });
 
   it('a file constructor\'s alias and arrow must agree', () => {

@@ -87,21 +87,21 @@ describe('DI spread operator — <HTML: (...)>', () => {
     const OTHER = {
       ':div': {
         public: {
-          $new: [{ args: [{ inner_html: { '%or': ['Text', null] } }], re: [':div:*'], writes: false }],
+          $new: [{ args: [{ inner_html: { '%or': ['Text', null] } }], re: [':div'], writes: false }],
         },
-        ':*': {},
+        instance: {},
       },
       ':section': {
         public: {
           $new: [
             {
               args: [{ inner_html: { '%or': ['Text', null] } }],
-              re: [':section:*'],
+              re: [':section'],
               writes: false,
             },
           ],
         },
-        ':*': {},
+        instance: {},
       },
     };
     const source = `

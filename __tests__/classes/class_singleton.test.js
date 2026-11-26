@@ -428,7 +428,7 @@ describe('class members in the service document', () => {
     `).interface.service).toEqual({
       ':C': {
         public: {
-          $new: [{ args: ['Integer'], re: [':C:*'], writes: false }],
+          $new: [{ args: ['Integer'], re: [':C'], writes: false }],
           count: [{ re: ['Integer'], writes: false }],
         },
         ':count': {
@@ -437,7 +437,7 @@ describe('class members in the service document', () => {
             $set: [{ args: ['Integer'], writes: true }],
           },
         },
-        ':*': { public: { n: [{ re: ['Integer'], writes: false }] } },
+        instance: { public: { n: [{ re: ['Integer'], writes: false }] } },
       },
     });
   });

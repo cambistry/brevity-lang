@@ -8,7 +8,7 @@
 import { parseTypeTree } from './parser.js';
 import { encodeType, typeScope } from './opre_types.js';
 import { intern } from './type_enc.js';
-import { fileScope, readDocument } from './service_doc.js';
+import { fileScope, readDocument, documentClassTypes } from './service_doc.js';
 import { parseInterface, parseParamsDocument } from './parser_interface.js';
 
 // A node's `type` is its kind; a param's or field's `type` is a type.
@@ -55,7 +55,13 @@ function remoteDocs(remotes) {
 const ownerOf = (a) => a.singletonOf ?? a.membersOf ?? a.name;
 
 export function encodeAstTypes(ast, remotes = null) {
-  const scope = fileScope(ast, remoteDocs(remotes));
+  // Every address a type resolves to that names a class: an instance's type. Each
+  // class of the file, and of the documents of the files it uses, is one.
+  if (!ast.instanceTypes) Object.defineProperty(ast, 'instanceTypes', { value: new Set(), configurable: true, enumerable: false });
+  const classTypes = ast.instanceTypes;
+  const entries = Array.isArray(remotes) ? remotes.map(r => [r.path, r.service]) : Object.entries(remotes || {});
+  for (const [path, service] of entries) if (service && typeof service === 'object') documentClassTypes(service, path, classTypes);
+  const scope = fileScope(ast, remoteDocs(remotes), classTypes);
   const cache = new Map();
   // A constructor profile or an interface has no encoding (src/opre_types.js): a
   // name typed with one carries its text, and why it has no encoding
@@ -116,6 +122,12 @@ export function encodeAstTypes(ast, remotes = null) {
   });
   for (const t of ast.types || []) visit(t, t.ownerClass ? inside(root, t.ownerClass) : root);
   visit(ast.dependencies, root);
+  const byName = new Map((ast.actors || []).filter(a => a.name).map(a => [a.name, a]));
+  for (const a of ast.actors || []) {
+    if (!a.name || a.singletonOf || a.membersOf || a.remoteStub) continue;
+    const encl = byName.get(a.home ?? a.enclosing);
+    (encl ? inside(root, ownerOf(encl)) : root).resolve([a.sourceName ?? a.name]);
+  }
   return ast;
 }
 

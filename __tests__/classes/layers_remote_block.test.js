@@ -12,7 +12,7 @@ import { extract } from '../../index.js';
 const DOC = {
   ':T': {
     public: {
-      $new: [{ args: [{ n: 'Integer' }], re: [':T:*'], writes: false }],
+      $new: [{ args: [{ n: 'Integer' }], re: [':T'], writes: false }],
       all: [{ re: ['Integer'], writes: false }],
     },
     protected: {
@@ -22,7 +22,7 @@ const DOC = {
     ':~total': {
       public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
     },
-    ':*': {
+    instance: {
       public: { n: [{ re: ['Integer'], writes: false }], get: [{ re: ['Integer'], writes: false }] },
       protected: {
         '~count': [{ re: ['Integer'], writes: false }],

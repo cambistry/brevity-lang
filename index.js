@@ -6,7 +6,8 @@ import { loadTargets, getTarget, getTargetNames } from './src/codegen/targets.js
 import { runExtractPasses } from './src/extract_passes.js';
 import { RUNTIME_MODULE } from './src/codegen/erlang/preambles.js';
 import { serviceShape, settleOverrideTables } from './src/service_shape.js';
-import { serviceDocument, fileScope } from './src/service_doc.js';
+import { serviceDocument, fileScope, documentClassTypes } from './src/service_doc.js';
+import { withInstanceTypes } from './src/type_enc.js';
 import { nodeTypeShown, dependencyAliases } from './src/type_shown.js';
 
 await loadTargets();
@@ -79,16 +80,18 @@ export function extract(source, { remotes = null } = {}) {
   }
   const tokens = tokenize(source);
   const ast = parse(tokens, { remotes });
-  runExtractPasses(ast);
-  const remoteDocs = remoteDocsByPath(ast, remotes);
-  return {
-    ast,
-    interface: {
-      structures: [],
-      params: buildParamsDocument(ast),
-      service: serviceDocument(serviceShape(ast, remoteDocs), fileScope(ast, remoteDocs)),
-    },
-  };
+  return withInstanceTypes(ast.instanceTypes, () => {
+    runExtractPasses(ast);
+    const remoteDocs = remoteDocsByPath(ast, remotes);
+    return {
+      ast,
+      interface: {
+        structures: [],
+        params: buildParamsDocument(ast),
+        service: serviceDocument(serviceShape(ast, remoteDocs), fileScope(ast, remoteDocs, ast.instanceTypes)),
+      },
+    };
+  });
 }
 
 // The Erlang target's shared runtime, brevity_rt.erl. Every module the Erlang
@@ -100,13 +103,19 @@ export function erlangRuntime() {
 export { settleOverrideTables };
 
 export function compile(ast, options = {}) {
-  settleOverrideTables(ast);
-  renamePublicClasses(ast);
-  validateWithSourceNames(validate, ast, options);
-  const name = options.target || process.env.BREVITY_TARGET || 'js';
-  const target = getTarget(name);
-  if (!target) {
-    throw new Error(`Unknown BREVITY_TARGET: '${name}'. Valid targets: ${getTargetNames().join(', ')}`);
-  }
-  return target.codegen(ast, options);
+  // The classes of the documents it's compiled against are instances' types too.
+  if (!ast.instanceTypes) Object.defineProperty(ast, 'instanceTypes', { value: new Set(), configurable: true, enumerable: false });
+  const remotes = Array.isArray(options.remotes) ? options.remotes.map(r => [r?.path, r?.service]) : Object.entries(options.remotes || {});
+  for (const [path, service] of remotes) if (service && typeof service === 'object') documentClassTypes(service, path, ast.instanceTypes);
+  return withInstanceTypes(ast.instanceTypes, () => {
+    settleOverrideTables(ast);
+    renamePublicClasses(ast);
+    validateWithSourceNames(validate, ast, options);
+    const name = options.target || process.env.BREVITY_TARGET || 'js';
+    const target = getTarget(name);
+    if (!target) {
+      throw new Error(`Unknown BREVITY_TARGET: '${name}'. Valid targets: ${getTargetNames().join(', ')}`);
+    }
+    return target.codegen(ast, options);
+  });
 }

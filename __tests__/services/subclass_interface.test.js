@@ -7,12 +7,12 @@ import { expectBehavior } from '../helpers.js';
 //
 // A class's node lists its parents under `extends`, in order, each an address. Its
 // `$new` takes its own params when it has a constructor of its own, and its parents'
-// when it hasn't. Its instances' node (`:*`) is the composite: its own ops, then
+// when it hasn't. Its instances' interface (`instance`) is the composite: its own ops, then
 // what it inherits that it doesn't define (notes/opre-type-encoding-2026-11-21.md).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const svc = (source) => extract(source).interface.service;
-const $new = (args, cls) => [{ ...(args && { args }), re: [`:${cls}:*`], writes: false }];
+const $new = (args, cls) => [{ ...(args && { args }), re: [`:${cls}`], writes: false }];
 const v = [{ re: [{ v: 'Integer' }], writes: false }];
 
 describe('subclass interface — $new', () => {
@@ -74,7 +74,7 @@ describe('subclass interface — its instances', () => {
       @T = (x: Integer) *{ @a = -> v: x as Integer }
       @U = @T ^ *{}
     `);
-    expect(s[':U'][':*']).toEqual({ public: { a: v } });
+    expect(s[':U'].instance).toEqual({ public: { a: v } });
   });
 
   it('its own ops, then what it inherits', () => {
@@ -82,7 +82,7 @@ describe('subclass interface — its instances', () => {
       @T = (x: Integer) *{ @a = -> v: x as Integer }
       @U = @T ^ (y: Integer) *{ super(x: y); @b = -> v: y as Integer }
     `);
-    expect(Object.keys(s[':U'][':*'].public)).toEqual(['b', 'a']);
+    expect(Object.keys(s[':U'].instance.public)).toEqual(['b', 'a']);
   });
 
   it('two parents\' ops, in order', () => {
@@ -91,7 +91,7 @@ describe('subclass interface — its instances', () => {
       @B = (b: Integer) *{ @gb = -> v: b as Integer }
       @C = @A ^ @B ^ (c: Integer) *{ super[@A](a: c); super[@B](b: c) }
     `);
-    expect(s[':C'][':*']).toEqual({ public: { ga: v, gb: v } });
+    expect(s[':C'].instance).toEqual({ public: { ga: v, gb: v } });
   });
 });
 
@@ -103,7 +103,7 @@ describe('subclass interface — chain depth', () => {
       @C = @B ^ (c: Integer) *{ super(b: c); @gc = -> v: c as Integer }
     `);
     expect(s[':C'].extends).toEqual([':B']);
-    expect(s[':C'][':*']).toEqual({ public: { gc: v, gb: v, ga: v } });
+    expect(s[':C'].instance).toEqual({ public: { gc: v, gb: v, ga: v } });
   });
 });
 
@@ -113,7 +113,7 @@ describe('subclass interface — the parent', () => {
       @T = (x: Integer) *{ @a = -> v: x as Integer }
       @U = @T ^ (y: Integer) *{ super(x: y) }
     `);
-    expect(s[':T']).toEqual({ public: { $new: $new([{ x: 'Integer' }], 'T') }, ':*': { public: { a: v } } });
+    expect(s[':T']).toEqual({ public: { $new: $new([{ x: 'Integer' }], 'T') }, instance: { public: { a: v } } });
   });
 });
 
@@ -141,7 +141,7 @@ describe('subclass interface — private parent', () => {
   it('states inherited members in place, with no extends, and only its own params', () => {
     expect(doc[':U']).toEqual({
       public: { $new: $new([{ y: 'Integer' }], 'U') },
-      ':*': { public: { k: int, a: int, b: int } },
+      instance: { public: { k: int, a: int, b: int } },
     });
   });
 
@@ -149,7 +149,7 @@ describe('subclass interface — private parent', () => {
     expect(doc[':V']).toEqual({
       extends: [':G'],
       public: { $new: $new([{ z: 'Integer' }], 'V') },
-      ':*': { public: { p: int, m: int, g: int } },
+      instance: { public: { p: int, m: int, g: int } },
     });
   });
 
@@ -165,7 +165,7 @@ describe('subclass interface — ^ forms', () => {
       @T = *{ @a = -> v: 1 as Integer }
       @U = @T^
     `);
-    expect(s[':U']).toEqual({ extends: [':T'], public: { $new: $new(null, 'U') }, ':*': { public: { a: v } } });
+    expect(s[':U']).toEqual({ extends: [':T'], public: { $new: $new(null, 'U') }, instance: { public: { a: v } } });
   });
 
   it('two parents with no params', () => {
@@ -184,7 +184,7 @@ describe('subclass interface — ^ forms', () => {
       @U = @A ^ (b Box) *{ super() }
     `);
     expect(s[':U'].extends).toEqual([':A']);
-    expect(s[':U'].public.$new).toEqual($new([':~Box:*'], 'U'));
+    expect(s[':U'].public.$new).toEqual($new([':~Box'], 'U'));
   });
 
   it('a param typed with a public class is a param, not a wrapped parent', () => {
@@ -194,7 +194,7 @@ describe('subclass interface — ^ forms', () => {
       @U = @A ^ (b @Box) *{ super() }
     `);
     expect(s[':U'].extends).toEqual([':A']);
-    expect(s[':U'].public.$new).toEqual($new([':Box:*'], 'U'));
+    expect(s[':U'].public.$new).toEqual($new([':Box'], 'U'));
   });
 
   it('reads parents and params back', () => {
@@ -242,11 +242,11 @@ describe('class params typed with a public class', () => {
   `;
 
   it('a positional one is one param', () => {
-    expect(svc(script)[':U'].public.$new).toEqual($new([':Box:*'], 'U'));
+    expect(svc(script)[':U'].public.$new).toEqual($new([':Box'], 'U'));
   });
 
   it('a named one is one param', () => {
-    expect(svc(script)[':V'].public.$new).toEqual($new([{ b: ':Box:*' }], 'V'));
+    expect(svc(script)[':V'].public.$new).toEqual($new([{ b: ':Box' }], 'V'));
   });
 
   it('the actor reaches a positional one', () => expectBehavior(script,

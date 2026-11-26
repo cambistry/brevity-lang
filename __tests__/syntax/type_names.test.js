@@ -10,12 +10,12 @@ const SVC_DOC = {
   public: { origin: [{ re: [':Point'], writes: false }] },
   types: { ':Point': [{ x: 'Integer' }] },
   ':Counter': {
-    public: { $new: [{ args: ['Integer'], re: [':Counter:*'], writes: false }] },
-    ':*': { public: { get: [{ re: ['Integer'], writes: false }] } },
+    public: { $new: [{ args: ['Integer'], re: [':Counter'], writes: false }] },
+    instance: { public: { get: [{ re: ['Integer'], writes: false }] } },
   },
   ':W!': {
-    public: { $new: [{ re: [':W!:*'], writes: true }] },
-    ':*': { public: { one: [{ re: ['Integer'], writes: false }] } },
+    public: { $new: [{ re: [':W!'], writes: true }] },
+    instance: { public: { one: [{ re: ['Integer'], writes: false }] } },
   },
 };
 const remotes = { remotes: [{ path: 'svc.bv', service: SVC_DOC }] };

@@ -181,7 +181,7 @@ describe('extract — basic (continued)', () => {
         @get = -> value
       }
     `);
-    expect(iface.service[':Box'].public.$new).toEqual([{ args: [{ value: 'Integer' }], re: [':Box:*'], writes: false }]);
+    expect(iface.service[':Box'].public.$new).toEqual([{ args: [{ value: 'Integer' }], re: [':Box'], writes: false }]);
   });
 });
 
@@ -299,7 +299,7 @@ describe('extract + compile — optional args round-trip', () => {
       }
     `);
 
-    expect(ifaceA.service[':Counter'].public.$new).toEqual([{ args: [{ '%opt': 'Integer' }], re: [':Counter:*'], writes: false }]);
+    expect(ifaceA.service[':Counter'].public.$new).toEqual([{ args: [{ '%opt': 'Integer' }], re: [':Counter'], writes: false }]);
   });
 });
 

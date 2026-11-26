@@ -12,9 +12,9 @@ import { extract } from '../../index.js';
 const DOC = {
   ':T': {
     public: {
-      $new: [{ re: [':T:*'], writes: false }],
+      $new: [{ re: [':T'], writes: false }],
       connect: [{ re: ['Integer'], writes: false }],
-      'bump!': [{ re: [{ '%self': true }], writes: true }],
+      'bump!': [{ re: [':*'], writes: true }],
       read: [{ re: ['Integer'], writes: false }],
     },
     protected: {
@@ -24,7 +24,7 @@ const DOC = {
     ':~timeout': {
       public: { $get: [{ re: ['Integer'], writes: false }], $set: [{ args: ['Integer'], writes: true }] },
     },
-    ':*': {},
+    instance: {},
   },
 };
 

@@ -21,8 +21,8 @@ export function intern(t) {
 }
 const keyOf = (t) => JSON.stringify(t);
 
-const SELF_KEY = '%self';
-export const isSelf = (t) => !!t && typeof t === 'object' && t[SELF_KEY] === true;
+// Self's class, `:*`: a reply that is the receiver itself.
+export const isSelf = (t) => t === ':*';
 
 // The addresses an encoding names (a generic's `%t` among them), as a Set.
 export const addressesIn = (t, out = new Set()) => {
@@ -98,7 +98,19 @@ export const ownPath = (t) => {
 // The same, by the names the source declares them with: a private class's `~`
 // is its wire label's, not its name's.
 export const ownNames = (t) => ownPath(t)?.map(s => s.replace(/^~/, '')) ?? null;
-export const isInstance = (t) => typeof t === 'string' && t.endsWith(':*');
+
+// An instance's type is its class's address (`:Box`, `svc.bv:W`), spelled as a
+// declared type's is (`:Point`): which one an address names is what it names. The
+// program being compiled says which addresses are classes (`ast.instanceTypes`,
+// filled as its types are encoded); `withInstanceTypes` makes them the ones
+// `isInstance` answers for while a pass over it runs.
+let INSTANCE_TYPES = new Set();
+export function withInstanceTypes(set, fn) {
+  const prev = INSTANCE_TYPES;
+  INSTANCE_TYPES = set ?? new Set();
+  try { return fn(); } finally { INSTANCE_TYPES = prev; }
+}
+export const isInstance = (t) => typeof t === 'string' && INSTANCE_TYPES.has(t);
 
 // ── Text, for a message ───────────────────────────────────────────────────────
 const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals'], ['Actor', 'Actors']]);

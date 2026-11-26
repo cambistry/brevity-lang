@@ -15,18 +15,18 @@ import { extract } from '../../index.js';
 
 const DOC = {
   ':G': {
-    public: { $new: [{ re: [':G:*'], writes: false }] },
-    ':*': { protected: { '~g': [{ re: ['Integer'], writes: false }] } },
+    public: { $new: [{ re: [':G'], writes: false }] },
+    instance: { protected: { '~g': [{ re: ['Integer'], writes: false }] } },
   },
   ':T': {
     extends: [':G'],
-    public: { $new: [{ args: [{ n: 'Integer' }], re: [':T:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ args: [{ n: 'Integer' }], re: [':T'], writes: false }] },
+    instance: {
       public: {
         n: [{ re: ['Integer'], writes: false }],
         get: [{ re: ['Integer'], writes: false }],
         gee: [{ re: ['Integer'], writes: false }],
-        'bump!': [{ re: [{ '%self': true }], writes: true }],
+        'bump!': [{ re: [':*'], writes: true }],
       },
       protected: {
         '~count': [{ re: ['Integer'], writes: false }],
@@ -39,15 +39,15 @@ const DOC = {
     },
   },
   ':A': {
-    public: { $new: [{ args: ['Integer'], re: [':A:*'], writes: false }] },
-    ':*': {
+    public: { $new: [{ args: ['Integer'], re: [':A'], writes: false }] },
+    instance: {
       public: { ha: [{ re: ['Integer'], writes: false }] },
       protected: { '~h': [{ re: ['Anything'], writes: false }] },
     },
   },
   ':B': {
-    public: { $new: [{ args: ['Integer'], re: [':B:*'], writes: false }] },
-    ':*': { public: { hb: [{ re: ['Integer'], writes: false }] } },
+    public: { $new: [{ args: ['Integer'], re: [':B'], writes: false }] },
+    instance: { public: { hb: [{ re: ['Integer'], writes: false }] } },
   },
 };
 
@@ -423,18 +423,18 @@ describe('instance layers in another file — compile errors', () => {
     `, {
       remotes: [{ path: 'lib', service: {
         ':S': {
-          public: { $new: [{ re: [':S:*'], writes: false }] },
-          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+          public: { $new: [{ re: [':S'], writes: false }] },
+          instance: { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
         },
         ':P': {
           extends: [':S'],
-          public: { $new: [{ re: [':P:*'], writes: false }] },
-          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+          public: { $new: [{ re: [':P'], writes: false }] },
+          instance: { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
         },
         ':Q': {
           extends: [':S'],
-          public: { $new: [{ re: [':Q:*'], writes: false }] },
-          ':*': { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
+          public: { $new: [{ re: [':Q'], writes: false }] },
+          instance: { protected: { '~s': [{ re: ['Integer'], writes: false }] } },
         },
       } }],
     })).toThrow("'R' extends 'P' and 'Q', which both extend 'S': a diamond of instance layers isn't supported yet");
