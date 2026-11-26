@@ -885,6 +885,12 @@ bv_publish_new_(Class, Pid) ->
     Addr_ = <<Class/binary, ":", (integer_to_binary(N_))/binary>>,
     bv_publish_at_(Addr_, Pid),
     <<"#<:", Addr_/binary, ">">>.
+%% \`$new\` is answered by the class, relative to itself: #<:N>, tagged :. A class
+%% of ours (Class, its label's token) we pass on under its label (#<:C:N>, :C),
+%% as we translate what an actor of ours sends.
+bv_new_reply_(Class, Pid) ->
+    N_ = lists:last(binary:split(bv_to_addr_(bv_publish_(Class, Pid)), <<":">>, [global])),
+    {bv_under_payload_(<<"#<:", N_/binary, ">">>, Class), bv_opre_under_(<<":">>, Class)}.
 %% The same for an actor of our own class (a file with a \`*\` section): N, #<:N>.
 bv_publish_own_(Pid) ->
     N_ = case get({bv_inst_seq, own}) of undefined -> 1; C_ -> C_ + 1 end,

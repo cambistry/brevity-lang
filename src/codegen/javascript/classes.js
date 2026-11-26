@@ -128,12 +128,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
   const tailIf = ctx.tailIfVar;
   const isPrivate = !name.startsWith('@') && name !== 'set' && name !== 'update' && name !== 'new' && !name.startsWith('set@') && !name.startsWith('new@');
   let reLine;
-  if (name.startsWith('new@')) {
-    const selector = name.slice('new@'.length);
-    reLine = `\n        re = '#<:' + this.#_publishInstance(${JSON.stringify(selector)}, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ${JSON.stringify(selfAddress('@' + selector))};`;
-  } else if (name === 'new') {
-    // The file's own class: its actor is `n` under us, and its class is ours, `.`.
-    reLine = `\n        re = '#<:' + this.#_publishInstance(null, ${genExpr(ctx, AST.identifier('_inst'))}) + '>';\n        _ty_re = ':';`;
+  if (name.startsWith('new@') || name === 'new') {
+    // The class answers, relative to itself; a class of ours is passed on under its label.
+    const cls = name === 'new' ? 'null' : JSON.stringify(name.slice('new@'.length));
+    reLine = `\n        ({ re, ty: _ty_re } = this.#_newReply(${cls}, ${genExpr(ctx, AST.identifier('_inst'))}));`;
   } else if (reply) {
     reLine = `\n        re = ${genReBody(ctx, reply.fields, typeEnv, null, { skipTypeCheck: isPrivate })};`;
   } else if (implicitReturn) {
@@ -1476,6 +1474,17 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
     this.#_instanceSeq.set(cls, n);
     if (cls === null) return this.#_publishAt(String(n), ':', inst);
     return this.#_publishAt(_opre_join([cls, String(n)]), _opre_join([null, cls]), inst);
+  }
+
+  // \`$new\` is answered by the class, relative to itself: \`#<:N>\`, tagged \`:\`.
+  // Our own class's reply is ours; a class of ours we pass on under its label
+  // (\`#<:C:N>\`, \`:C\`), as we translate what an actor of ours sends.
+  #_newReply(cls, inst) {
+    const at = this.#_publishInstance(cls, inst);
+    const reply = { re: '#<:' + _opre_split(at).at(-1) + '>', ty: ':' };
+    if (cls === null) return reply;
+    const label = _opre_quote(cls);
+    return { re: _opre_map_bracketed(reply.re, (a) => _opre_under(a, label)), ty: _opre_under(reply.ty, label) };
   }
 
   // Publish an actor of ours under the tokens \`addr\`, its class tagged \`tag\`:

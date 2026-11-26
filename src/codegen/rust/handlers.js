@@ -1,7 +1,7 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import { paramTag, typeText, classNameOf, hasType, envTypeOf, hasGeneric, declaredReturn, orAny } from '../enc_names.js';
 import { isFn, isList, listElement } from '../../type_enc.js';
-import { intrinsicArm, selfAddress, wireLabel } from '../wire_labels.js';
+import { intrinsicArm, wireLabel } from '../wire_labels.js';
 
 // The key a handler's match arm answers: its wire op, or for a cell or class arm
 // (`set@val`, `new@Box`) the pair of intrinsic and target, "$set val", as the
@@ -338,15 +338,18 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
     // (value-less) reply, distinct from silent (which suppresses the reply).
     lines.push('                re = Some(Value::Array(vec![]));');
   }
-  // new@<class>: the reply is the new actor's address, relative to us.
+  // new@<class>: the class answers, relative to itself (`#<:N>`, `:`); we pass
+  // it on under its label (`#<:C:N>`, `:C`), as we translate what an actor of ours sends.
   if (name && name.startsWith('new@')) {
     const selector = name.slice('new@'.length);
     lines.push(`                let _addr = format!("${quoteToken(selector)}:{}", bv_inst_id(&${rustSsaResolve('_inst')}));`);
     lines.push(`                self.published_instances.insert(_addr.clone());`);
     lines.push(`                self.lift_of.insert(${rustSsaResolve('_inst')}.as_str().unwrap_or("").to_string(), _addr.clone());`);
     if (G.ctx.publicSingletons) lines.push(`                self.bv_publish_under(&_addr, ${rustSsaResolve('_inst')}.as_str().unwrap_or(""));`);
-    lines.push(`                re = Some(Value::String(format!("#<:{}>", _addr)));`);
-    lines.push(`                ty_re = Some(json!(${JSON.stringify(selfAddress('@' + selector))}));`);
+    const label = JSON.stringify(quoteToken(selector));
+    lines.push(`                let _class_re = Value::String(format!("#<:{}>", bv_inst_id(&${rustSsaResolve('_inst')})));`);
+    lines.push(`                re = Some(bv_under_payload(&_class_re, ${label}));`);
+    lines.push(`                ty_re = Some(json!(bv_opre_under(":", ${label})));`);
   }
   // new: the file's own class (it declares `new`): its actor is `N` under us, of class `:`.
   if (name === 'new') {

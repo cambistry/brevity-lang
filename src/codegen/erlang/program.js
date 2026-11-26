@@ -781,10 +781,10 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
 
   let replyBlock;
   if (fn.name?.startsWith('new@')) {
-    // The reply is the new actor's address, relative to us: `#<:C:N>`, `:C`.
+    // The class answers, relative to itself; we pass it on under its label.
     const selector = fn.name.slice('new@'.length);
     const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));
-    replyBlock = `${I}{ok, bv_publish_(${erlString(quoteToken(selector))}, ${inst}), ${erlString(selfAddress('@' + selector))}}`;
+    replyBlock = `${I}{NewRe_, NewTy_} = bv_new_reply_(${erlString(quoteToken(selector))}, ${inst}),\n${I}{ok, NewRe_, NewTy_}`;
   } else if (fn.name === 'new') {
     // The file's own class (it declares `new`): its actor is `N` under us, of class `:`.
     const inst = erlVarName(resolveSSAName('_inst', body.length, sCtx.ssaEnv));

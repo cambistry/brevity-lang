@@ -24,8 +24,7 @@ Decided in discussion, not implemented. Supersedes, in `opre-type-encoding-2026-
 - **Self-return is `{ re: ['#<:>'], ty: [':*'] }`,** from any actor. The bare `:` in `ty` meaning
   "the sender's class" is gone: `:` in `ty` is an address like any other.
 
-Today a file answers `new@Box` itself, with `#<:Box:1>` / `:Box`; a file that declares `new`
-already answers `#<:1>` / `:`. An instance's self-return sends `ty: [':']`, which its host swaps
+An instance's self-return sends `ty: [':']`, which its host swaps
 for the class tag (`localTy`, `classes.js`), and a declared actor sends `*`. Both give way to
 the reduction rule.
 
