@@ -21,6 +21,17 @@ Decided in discussion, not implemented. Supersedes, in `opre-type-encoding-2026-
 - **`$new` is answered by the class:** `{ re: ['#<:1>'], ty: [':'] }`. The `re` is wherever the
   instance lives; `:` is right because the replier is the class. Its parent translates both
   (`#<:Box:1>`, `:Box`).
+- **An actor lives under its class, whoever asked for it** (2026-11-26). `@Box()` from a
+  function of `w` is still `$new` to `Box`, so the file's callers see `#<:Box:1>`, `:Box`, never
+  `w`'s path in front. This supersedes "the actor does live wherever it was constructed" in
+  `session-2026-11-07-instance-type-authority.md`.
+- **A class declared in a class lives where its declaration is** (2026-11-26). In the class
+  block (`A = *{ … } ^ { B = *{ … } }`), the class itself, there is one `B`, under the class:
+  `#<:~A:~B:1>`. In the instance body (`Outer = *{ Inner = *{ … } }`), `Inner` captures that
+  instance's scope, so each instance has its own, under it: `#<:Outer:1:~Inner:1>`. It is still
+  one code; only the address differs, but `Inner` of one instance is not `Inner` of another.
+- **A class an instance declares is protected.** A public one there is a compile error, until
+  `investigate-a-public-class-declared-in-an-instance` settles what it would mean.
 - **Self-return is `{ re: ['#<:>'], ty: [':*'] }`,** from any actor. The bare `:` in `ty` meaning
   "the sender's class" is gone: `:` in `ty` is an address like any other.
 
