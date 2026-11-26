@@ -5,8 +5,6 @@ kanban/tickets/service-doc-t-is-an-instance-instance-section-retire-self.md
 kanban/tickets/review-fn-encoding-as-implemented.md
 kanban/tickets/investigate-retire-constructor-return-as.md
 kanban/tickets/switch-subscribe-to-keyword-form-sub-subject-args-value.md
-kanban/tickets/is-better-for-class-composition-than-function-overload.md
-kanban/tickets/limit-interface-doc-sent-with-an-extend-call-to-relevant.md
 kanban/tickets/extend-provides-the-full-relevant-service-description-not.md
 kanban/tickets/synonym-of-actor.md
 kanban/tickets/q-empty-subclass-u-as-opposed-to-u.md
@@ -14,7 +12,6 @@ kanban/tickets/gaps-in-super-implementation.md
 kanban/tickets/opre-op-chains-args1-op1-args2-op2.md
 kanban/tickets/thought-about-trace-ctor-encoding.md
 kanban/tickets/invoke-add-trace-when-a-function-or-constructor-returns-a.md
-kanban/tickets/spec-change-from-names-the-calling-scope-won-t-do.md
 kanban/tickets/style.md
 kanban/tickets/pass-event-to-html-handler-and-read-properties-e-g.md
 kanban/tickets/allow-calls-to-stoppropagation-and-preventdefault-checking.md
@@ -26,13 +23,11 @@ kanban/tickets/type-of-type.md
 kanban/tickets/class-and-type-equality-comparison.md
 kanban/tickets/class-inheritance-test-is-a.md
 kanban/tickets/type-inheritance-inheritance-test.md
-kanban/tickets/consider-should-self-return-be-expressed-the-same-way-as.md
 kanban/tickets/broaden-catch-to-cover-error-handling.md
 kanban/tickets/repeat.md
 kanban/tickets/nested-reactivity.md
 kanban/tickets/nested-components.md
 kanban/tickets/peer-peers-reserved-class-name.md
-kanban/tickets/support-more-events-onclick-etc.md
 kanban/tickets/browser-load-html-template-from-file.md
 kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
 kanban/tickets/browser-html-template-in-script-tag.md
