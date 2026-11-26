@@ -1,3 +1,4 @@
+kanban/tickets/js-test-get-on-a-list-cell-replies-the-internal-linked-list.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/a-positional-destructure-with-too-many-names-binds-null.md
 kanban/tickets/a-type-declaration-carries-a-namespace-of-functions.md
@@ -30,7 +31,6 @@ kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
 kanban/tickets/investigate-construction-time-reads-of-a-subclass-cell.md
 kanban/tickets/eliminate-need-for-the-noop-hack.md
 kanban/tickets/protected-classes-as-values-decide-what-leaves-the-actor.md
-kanban/tickets/t-x-from-a-subclass-that-has-a-class-block-of-its-own.md
 kanban/tickets/js-a-send-inside-a-compound-expression-isn-t-awaited.md
 kanban/tickets/consolidate-runtime-test-fixtures-phase-2-hand-merge.md
 kanban/tickets/explore-atomic-read-modify-write-on-another-actor-s-cell.md
@@ -40,9 +40,7 @@ kanban/tickets/retire-list-of-integers-and-such-feels-out-of-step-with-the.md
 kanban/tickets/opre-subops-object-elements-in-op.md
 kanban/tickets/lineal-rethink.md
 kanban/tickets/used-for-accessing-nested-constants.md
-kanban/tickets/should-over-have-a-mutational-twin-over-that-pemits-side.md
 kanban/tickets/on-a-class-typed-declaration.md
-kanban/tickets/consider-reserved-names-okay-as-public-names.md
 kanban/tickets/error-replies-don-t-say-which-member-an-intrinsic-op-failed.md
 kanban/tickets/opre-call-context-decide-the-mechanism-behind-call-scoped.md
 kanban/tickets/for-reactive-text-interpolation-beyond-element-content.md
@@ -53,13 +51,10 @@ kanban/tickets/investigate-a-bare-zero-arity-lambda-in-an-untyped-slot.md
 kanban/tickets/take-eval-off-document-make-arbitrary-js-an-explicit-grant.md
 kanban/tickets/reference-to-a-foreign-function-svc-fn-not-svc-fn.md
 kanban/tickets/js-a-class-can-t-subscribe-to-a-file-s-private-cell-passed.md
-kanban/tickets/a-call-to-a-file-s-own-typed-overload-picks-the-clause-by.md
 kanban/tickets/remaining-gaps-in-a-a-a-as-separate-names.md
 kanban/tickets/what-s-the-ty-type-of-a-value-cell.md
 kanban/tickets/switch-to-for-mutation-function-types-and-maybe-instead-of.md
-kanban/tickets/consider-deprecate-generic-functions.md
 kanban/tickets/keywords-can-t-be-bare-names-inflected-forms-must-work.md
-kanban/tickets/ty-representing-anonymous-function-constructor-or-type-types.md
 kanban/tickets/opre-escape-a-literal-in-message-strings.md
 kanban/tickets/replace-caller-based-type-inference-for-actor-params.md
 kanban/tickets/a-bare-value-in-a-tail-branch-is-lost.md
@@ -69,7 +64,6 @@ kanban/tickets/constructor-blocks-bind-cells-the-way-handlers-do.md
 kanban/tickets/define-what-a-failed-file-construction-does.md
 kanban/tickets/rust-r-b-get-with-a-named-reply-binds-null.md
 kanban/tickets/objects-in-parens-on-a-bind.md
-kanban/tickets/revise-lineal-header-notation.md
 kanban/tickets/unannotated-call-arithmetic-in-a-return-differs-between.md
 kanban/tickets/rust-arithmetic-on-untyped-operands-defaults-to-0.md
 kanban/tickets/null-as-list-from-a-remote-passes-on-js.md
@@ -81,21 +75,15 @@ kanban/tickets/add-a-compiler-warning-channel-and-the-warnings-waiting-on.md
 kanban/tickets/field-level-editing-of-actorized-types-recursive.md
 kanban/tickets/declared-read-only-public-fields-name-expr.md
 kanban/tickets/support-class-shorthand-a-type.md
-kanban/tickets/allow-implicit-tail-expression-return-in-lineal-form.md
 kanban/tickets/how-do-libraries-work-such-as-for-array-map.md
 kanban/tickets/array-type-package.md
 kanban/tickets/map-type-package.md
 kanban/tickets/optimisation-flatten-single-construction-classes-on-rust.md
 kanban/tickets/implement-return-unhandled-bv-equivalent-of-a-guard.md
 kanban/tickets/preamble-tree-shaking.md
-kanban/tickets/integer-integer.md
 kanban/tickets/catch-label-passing.md
-kanban/tickets/import.md
-kanban/tickets/get-pure-function-enforcement.md
 kanban/tickets/xml-reactivity.md
-kanban/tickets/abstract-class-e-g-html-element.md
 kanban/tickets/optional-field-prefer-no-space-after-slot-opening.md
-kanban/tickets/fix-blob-slice-in-rust-erlang.md
 kanban/tickets/release-expired-dom-rep-actors-reference-counting-gc.md
 kanban/tickets/represent-negated-self-as-clauses-in-service-document.md
 kanban/tickets/predicates.md

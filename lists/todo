@@ -17,14 +17,11 @@ kanban/tickets/silent-lambdas-how-an-anonymous-function-declares-silence.md
 kanban/tickets/valueless-attributes.md
 kanban/tickets/class-ancestry.md
 kanban/tickets/type-of-type.md
-kanban/tickets/class-and-type-equality-comparison.md
-kanban/tickets/class-inheritance-test-is-a.md
 kanban/tickets/type-inheritance-inheritance-test.md
 kanban/tickets/broaden-catch-to-cover-error-handling.md
 kanban/tickets/repeat.md
 kanban/tickets/nested-reactivity.md
 kanban/tickets/nested-components.md
-kanban/tickets/peer-peers-reserved-class-name.md
 kanban/tickets/browser-load-html-template-from-file.md
 kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
 kanban/tickets/browser-html-template-in-script-tag.md
