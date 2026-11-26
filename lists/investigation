@@ -9,3 +9,4 @@ kanban/tickets/could-the-extract-compile-cycle-itself-be-run-over-cam-at.md
 kanban/tickets/optimize-and-or-inline-local-self-call-messages.md
 kanban/tickets/investigate-frames-that-outlive-their-call.md
 kanban/tickets/investigate-subscribability-as-a-function-property.md
+kanban/tickets/investigate-element-extension-names-on-the-element.md
