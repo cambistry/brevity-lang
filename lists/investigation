@@ -7,3 +7,4 @@ kanban/tickets/multiple-inheritance-diamond-case.md
 kanban/tickets/rename-cam-to-opre.md
 kanban/tickets/could-the-extract-compile-cycle-itself-be-run-over-cam-at.md
 kanban/tickets/optimize-and-or-inline-local-self-call-messages.md
+kanban/tickets/investigate-frames-that-outlive-their-call.md
