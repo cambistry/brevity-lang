@@ -15,6 +15,7 @@ kanban/tickets/line-breaks-separate-items-in-multi-line-brackets.md
 kanban/tickets/list-concat-and-list-sort.md
 kanban/tickets/make-kanban-speculative-board-bv-compile-and-run.md
 kanban/tickets/parens-around-if-conditions.md
+kanban/tickets/type-of-type.md
 kanban/tickets/return-types-in-the-function-header.md
 kanban/tickets/type-inheritance-inheritance-test.md
 kanban/tickets/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
