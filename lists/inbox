@@ -8,7 +8,6 @@ kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/opre-op-chains-args1-op1-args2-op2.md
 kanban/tickets/document-pure-functions-in-the-service-document.md
 kanban/tickets/files-as-addressed-values-dir-and-file.md
-kanban/tickets/lambda-params-take-their-types-from-the-slot.md
 kanban/tickets/line-breaks-separate-items-in-multi-line-brackets.md
 kanban/tickets/list-concat-and-list-sort.md
 kanban/tickets/valueless-attributes.md
