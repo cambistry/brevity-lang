@@ -229,3 +229,45 @@ describe('a class using an actor it got from a dependency', () => {
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [2], 'ty': ['Integer'], to: 'c' }]);
   });
 });
+
+// An `if` statement in a constructor block runs its branch while constructing, as a
+// function body's does: in a class, and in the file.
+describe('an if statement in a constructor block', () => {
+  const script = `
+    @C = (k Integer) *{
+      n *Integer = 0
+      if k > 0 {
+        n <- k * 2
+      } else {
+        n <- 1
+      }
+      @n = -> n
+    }
+    flag *Boolean = true
+    m *Integer = 0
+    if flag {
+      m <- 7
+    }
+    @m = -> m
+  `;
+
+  it('runs the branch its condition picks', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':C', from: 'c' } },
+      { output: { id: '1', re: ['#<:C:1>'], ty: [':C'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':C:1', from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c', from: ':C:1' } },
+      { input: { id: '3', op: [[0], '$new'], ty: [['Integer']], to: ':C', from: 'c' } },
+      { output: { id: '3', re: ['#<:C:2>'], ty: [':C'], to: 'c' } },
+      { input: { id: '4', op: 'n', to: ':C:2', from: 'c' } },
+      { output: { id: '4', re: [1], ty: ['Integer'], to: 'c', from: ':C:2' } },
+    );
+  });
+
+  it('in the file', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'm', from: 'c' } },
+      { output: { id: '1', re: [7], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});

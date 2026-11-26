@@ -122,31 +122,62 @@ describe('super — in a constructor', () => {
   });
 });
 
-// `super` on each branch of an `if`: the branch binds the parent's params, and the
-// base is built once, after the statement the `if` is in.
+// `super` on each branch of an `if`, a statement or an expression: the base is
+// built on the branch taken, at the call, so what follows it there reads the base.
 describe('super — in a constructor, on the branches of an if', () => {
   const script = `
-    @T = (n Integer) *{ @n = -> n }
+    @T = (n Integer) *{
+      seen *Integer = n
+      @n = -> n
+    }
     @U = @T ^ (k Integer) *{
       x Integer = if k > 0 {
         super(k * 10)
-        1
+        seen + 1
       } else {
         super(0)
         2
       }
       @x = -> x
     }
+    @V = @T ^ (k Integer) *{
+      y *Integer = 0
+      if k > 0 {
+        super(k)
+        y <- seen * 2
+      } else {
+        super(5)
+      }
+      @y = -> y
+    }
   `;
 
-  it('builds the base with the branch taken', async () => {
+  it('as a statement: the branch taken builds the base, and reads it after', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[4], '$new'], ty: [['Integer']], to: ':V', from: 'c' } },
+      { output: { id: '1', re: ['#<:V:1>'], ty: [':V'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':V:1', from: 'c' } },
+      { output: { id: '2', re: [4], ty: ['Integer'], to: 'c', from: ':V:1' } },
+      { input: { id: '3', op: 'y', to: ':V:1', from: 'c' } },
+      { output: { id: '3', re: [8], ty: ['Integer'], to: 'c', from: ':V:1' } },
+      { input: { id: '4', op: [[0], '$new'], ty: [['Integer']], to: ':V', from: 'c' } },
+      { output: { id: '4', re: ['#<:V:2>'], ty: [':V'], to: 'c' } },
+      { input: { id: '5', op: 'n', to: ':V:2', from: 'c' } },
+      { output: { id: '5', re: [5], ty: ['Integer'], to: 'c', from: ':V:2' } },
+      { input: { id: '6', op: 'y', to: ':V:2', from: 'c' } },
+      { output: { id: '6', re: [0], ty: ['Integer'], to: 'c', from: ':V:2' } },
+    );
+  });
+
+
+  it('in an expression: the branch taken builds the base, and its value reads it', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
       { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
       { input: { id: '2', op: 'n', to: ':U:1', from: 'c' } },
       { output: { id: '2', re: [30], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '3', op: 'x', to: ':U:1', from: 'c' } },
-      { output: { id: '3', re: [1], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { output: { id: '3', re: [31], ty: ['Integer'], to: 'c', from: ':U:1' } },
       { input: { id: '4', op: [[-1], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
       { output: { id: '4', re: ['#<:U:2>'], ty: [':U'], to: 'c' } },
       { input: { id: '5', op: 'n', to: ':U:2', from: 'c' } },
@@ -188,8 +219,10 @@ describe('super — in a constructor — compile errors', () => {
       .toThrow("in an 'if', each branch calls 'super' once, as a statement of the branch");
   });
 
-  it('a base name read on a branch after its super: the base is built after the statement', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    super(n)\n    seen\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+  it('a base name read on a branch above its super, or in the if\'s condition', () => {
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    y Integer = seen\n    super(n)\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+      .toThrow("'seen' in 'U' is the base's, read before 'super'");
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  if seen > 0 {\n    super(n)\n  } else {\n    super(0)\n  }\n}\n`))
       .toThrow("'seen' in 'U' is the base's, read before 'super'");
   });
 

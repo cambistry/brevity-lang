@@ -45,7 +45,10 @@ const isFunctionNode = (n) => n.type === 'Function' || n.type === 'FunctionDecl'
 // synthetic actor) carry along. A parent the constructor never builds has a marker
 // with `none`: the class has no base for it.
 // A class from another file's document says so with `ownNew`.
-export const buildsBase = (actor) => !!actor?.ownNew || (actor?.initBody || []).some(s => s.type === 'SuperInit');
+// A `SuperInit` is a statement of the constructor block, or of an `if`'s branch there.
+const hasSuperInit = (n) => !!n && typeof n === 'object' && (n.type === 'SuperInit' || (Array.isArray(n) ? n.some(hasSuperInit)
+  : Object.entries(n).some(([k, v]) => k !== 'loc' && v && typeof v === 'object' && hasSuperInit(v))));
+export const buildsBase = (actor) => !!actor?.ownNew || hasSuperInit(actor?.initBody || []);
 
 // ── Renaming a parent layer's params ───────────────────────────────────────────
 
@@ -204,11 +207,20 @@ export function effectiveInit(actorByName, A, chain) {
 // `A`'s init with each `SuperInit` replaced by its parent's constructor body. A cell
 // `A` declares itself takes `A`'s initial value only.
 export function expandSuperInits(actorByName, A, init, chain) {
-  if (!init.some(s => s.type === 'SuperInit')) return init;
+  const has = (node) => { let found = false; const look = (n) => { if (found || !n || typeof n !== 'object') return; if (n.type === 'SuperInit') { found = true; return; } for (const v of Object.values(n)) if (v && typeof v === 'object') look(v); }; look(node); return found; };
+  if (!has(init)) return init;
   const own = new Set((A.stateVarDecls || []).filter(d => !d.baseOf).map(d => d.name));
   const hiddenOf = new Map((A.stateVarDecls || []).filter(d => d.baseOf).map(d => [d.baseOf, d]));
-  return init.flatMap((s) => {
-    if (s.type !== 'SuperInit') return [s];
+  // A branch of an 'if' builds the base where it calls 'super': the same, in its
+  // body, on a copy of the statement.
+  const inBranches = (n) => {
+    if (!n || typeof n !== 'object' || !has(n)) return n;
+    if (Array.isArray(n)) return n.map(inBranches);
+    if (n.type === 'IfBranch' && Array.isArray(n.body)) return { ...n, body: expand(n.body) };
+    return Object.fromEntries(Object.entries(n).map(([k, v]) => [k, v && typeof v === 'object' ? inBranches(v) : v]));
+  };
+  const expand = (list) => list.flatMap((s) => {
+    if (s.type !== 'SuperInit') return [inBranches(s)];
     const P = actorByName?.get(s.layer);
     // A backend leaves out a class with nothing in it.
     if (s.none || !P) return [];
@@ -223,6 +235,7 @@ export function expandSuperInits(actorByName, A, init, chain) {
       return [copy];
     });
   });
+  return expand(init);
 }
 
 // ── `super` in a function: the base's same function ────────────────────────────
@@ -330,15 +343,15 @@ export function lowerSuperCalls(actors, chain) {
         if (branches.filter(b => b !== undefined).some(b => !b || !callsIn(b))) {
           throw new Error(`'${written}' in '${U.name}' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too`);
         }
-        // Each branch calls it once, as a statement of its own body; the base is
-        // built once, after the statement the 'if' is in
-        // (constructor-block-if-statements removes this shim).
+        // Each branch calls it once, as a statement of its own body: the base is
+        // built there, on the branch taken.
         const direct = (b) => (b.body || []).filter(st => (st.type === 'ExprStatement' || st.type === 'ImplicitReturn') && st.expr?.type === 'SuperCall' && st.expr.layer === n.layer);
         const deep = (b) => { let k = 0; walk(b, (m) => { if (m.type === 'SuperCall' && m.layer === n.layer) k++; }); return k; };
         if (ifs.length > 1 || branches.filter(Boolean).some(b => direct(b).length !== 1 || deep(b) !== 1)) {
           throw new Error(`'${written}' in '${U.name}': in an 'if', each branch calls 'super' once, as a statement of the branch`);
         }
         c.branchStmt = path[0];
+        c.branch = [...path].reverse().find(p => p.type === 'IfBranch');
       }
     }
     for (const P of parents) {
@@ -380,11 +393,17 @@ export function lowerSuperCalls(actors, chain) {
     };
     const init = U.initBody;
     for (const P of built) {
-      const branched = calls.find(c => c.n.layer === P && c.branchStmt);
-      const at = branched ? init.indexOf(branched.branchStmt) : init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
+      const branched = calls.filter(c => c.n.layer === P && c.branchStmt);
+      const at = branched.length ? init.indexOf(branched[0].branchStmt) : init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
       const names = baseNamesOf(byName.get(P));
-      // Called on an 'if''s branches, the base is built after that statement.
-      const before = branched ? init.slice(0, at + 1) : [...init.slice(0, at), init[at].expr.args];
+      // Called on an 'if''s branches, the base is built on each, at the call: what
+      // runs before it is the lines above the 'if', its conditions, and the
+      // branch's own lines above the call.
+      const ifsOf = (c) => c.path.filter(p => p.type === 'IfExpr' || p.type === 'IfStatement');
+      const before = branched.length
+        ? [...init.slice(0, at), ...ifsOf(branched[0]).flatMap(f => { const cs = []; for (let b = f; b; b = b.else?.type === 'IfExpr' ? b.else : null) cs.push(b.cond); return cs; }),
+          ...branched.flatMap(c => { const body = c.branch.body; const k = body.findIndex(st => st.expr === c.n); return [...body.slice(0, k), c.n.args]; })]
+        : [...init.slice(0, at), init[at].expr.args];
       walk(before, (m) => {
         if (isFunctionNode(m)) return false;
         const name = m.type === 'FunctionCallExpr' && m.callee?.type === 'Identifier' ? m.callee.name
@@ -402,7 +421,7 @@ export function lowerSuperCalls(actors, chain) {
     for (const c of calls) if (c.branchStmt) (branchLayers.get(c.branchStmt) ?? branchLayers.set(c.branchStmt, new Set()).get(c.branchStmt)).add(c.n.layer);
     U.initBody = init.flatMap((s) => {
       // A statement whose 'if' calls 'super' on each branch: each branch binds the
-      // parent's params, and the base is built after the statement.
+      // parent's params and builds the base, at the call.
       if (branchLayers.has(s)) {
         walk(s, (m) => {
           if (m.type !== 'IfBranch' || !Array.isArray(m.body)) return;
@@ -410,10 +429,10 @@ export function lowerSuperCalls(actors, chain) {
             if ((st.type !== 'ExprStatement' && st.type !== 'ImplicitReturn') || st.expr?.type !== 'SuperCall') return [st];
             const P = byName.get(st.expr.layer);
             if (P.remoteStub) throw new Error(`'${shown(st.expr)}' in '${U.name}': in an 'if', 'super' builds a parent in this file only`);
-            return bindArgs(U, P, parentView(byName, P, chain), st.expr.args);
+            return [...bindArgs(U, P, parentView(byName, P, chain), st.expr.args), { type: 'SuperInit', layer: st.expr.layer }];
           });
         });
-        return [s, ...[...branchLayers.get(s)].map(layer => ({ type: 'SuperInit', layer }))];
+        return [s];
       }
       if (s.type !== 'ExprStatement' || s.expr?.type !== 'SuperCall') return [s];
       const { layer, args } = s.expr;

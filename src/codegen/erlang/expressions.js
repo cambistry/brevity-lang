@@ -1776,6 +1776,8 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
 
   function innerVarName(name) {
     if (innerRenames.has(name)) return innerRenames.get(name);
+    // A cell is read where it's kept, as genExpr reads one.
+    if (ctx.stateVarNames?.has(name)) return `get(${erlStateKey(ctx, name)})`;
     // Fall back to outer SSA resolution
     if (sCtx?.ssaEnv && sCtx.stmtIdx !== undefined) {
       return erlVarName(resolveSSAName(name, sCtx.stmtIdx, sCtx.ssaEnv));

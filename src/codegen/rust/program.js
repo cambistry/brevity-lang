@@ -566,7 +566,7 @@ ${sourceArms}
         stateInitLines.push(`    let _ = ${genRustFnCallExpr(s.expr, initTypeEnv).replace(/\bself\./g, 'actor.')};`);
         continue;
       }
-      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
+      if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew' || s.expr?.type === 'IfExpr'))) {
         // A write or a call in the constructor block, generated as in a function body.
         const lines = genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '        ', new Map());
         stateInitLines.push(`    {\n${lines.replace(/\bself\./g, 'actor.')}\n    }`);

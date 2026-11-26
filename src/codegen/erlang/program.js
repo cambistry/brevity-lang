@@ -1711,7 +1711,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
       continue;
     }
     if (isOwnCallStatement(s, ownFnNames)) { blockLines.push(`    _ = ${genExpr(ctx, s.expr, ownCallEnv, {})}`); continue; }
-    if (s.type === 'SetStatement') {
+    if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && s.expr?.type === 'IfExpr')) {
       const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv([s]) };
       blockLines.push(genLocals(ctx, [s], ownCallEnv, sCtx, '    ').join('\n').replace(/,\s*$/, ''));
       continue;

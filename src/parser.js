@@ -5194,6 +5194,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // time; as an ExprStatement it is routed to initBody.
         const expr = parseExpr();
         constructorBody.push(AST.exprStatement(expr));
+      } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
+        // An `if` statement runs its branch at construction time, as a function
+        // body's does.
+        const expr = parseExpr();
+        constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {
         const op = take().value;
         declCtx = declFor(op);

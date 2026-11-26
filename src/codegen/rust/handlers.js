@@ -1116,7 +1116,7 @@ function genRustChildInit(actor) {
     } else if (isOwnCallStatement(s)) {
       // A call to the class's own function, run while constructing.
       lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
+    } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew' || s.expr?.type === 'IfExpr'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
@@ -1176,7 +1176,7 @@ function genRustChildInit(actor) {
     for (const s of postIngestBody) {
       if (isOwnCallStatement(s)) {
         lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew'))) {
+      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew' || s.expr?.type === 'IfExpr'))) {
         // A write or a call in the constructor block, generated as in a function body.
         lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
       } else if (s.type === 'StateAssign') {
