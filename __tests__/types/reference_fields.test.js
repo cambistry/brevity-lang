@@ -97,7 +97,7 @@ describe('reference fields — captured in the type declaration', () => {
     // downstream discipline selection can distinguish it from a value field.
     const field = decl.fields.find(f => f.name === 'push');
     expect(field).toBeTruthy();
-    expect(field.paramType).toMatch(/=>\s*\.$/);
+    expect(field.paramTypeEnc).toEqual({ '%fn': [{ writes: true }] });
   });
 });
 

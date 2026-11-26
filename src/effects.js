@@ -9,6 +9,7 @@ import { receiverDoc, receiverLabel } from './opre.js';
 import { fnArrow, fnReply, fnSignature, showReply, ownNames } from './type_enc.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 import { resolveSuperclassChain } from './subclass.js';
+import { buildTypeTable } from './codegen/type_table.js';
 import { settleWriterBody, eachReturn } from './writer_body.js';
 
 const isSuffixed = (name) => name.endsWith('!') || name.endsWith('.');
@@ -72,6 +73,8 @@ function settleWritingSlot(fn, type, calleeLabel) {
 }
 
 export function checkEffects(ast, remotesParsed = {}) {
+  const typesAt = new Map([...buildTypeTable(ast).values()].map(e => [e.key, e]));
+  const typeAt = (t) => typesAt.get(t);
   const classes = classesByName(ast);
   const dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   const claimedByActor = purportedFunctions(ast);
@@ -198,7 +201,7 @@ export function checkEffects(ast, remotesParsed = {}) {
           return;
         case 'TypeConstruction':
           checkReadOnlySlots(
-            ast.types?.find(t => t.name === node.typeName)?.fields?.map(f => ({ name: f.name, typeEnc: f.paramTypeEnc })),
+            typeAt(node.typeNameEnc)?.fields?.map(f => ({ name: f.name, typeEnc: f.paramTypeEnc })),
             node.args || [], node.typeName, scope,
           );
           walk(node.args, scope);

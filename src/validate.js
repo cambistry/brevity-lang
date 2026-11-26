@@ -1,13 +1,16 @@
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
-import { parseFieldList } from './codegen/javascript/types.js';
 import { checkEffects } from './effects.js';
 import { readDocument } from './service_doc.js';
-import { isFn, fnReply, fnSignature, isList, listElement, listOf, show, members as encMembers, isUnion, isInstance, ownPath, ownNames } from './type_enc.js';
+import { readParamsDocument } from './parser_types.js';
+import { isFn, fnReply, fnSignature, isList, listElement, listOf, show, members as encMembers, isUnion, isInstance, ownPath, ownNames, addressesIn } from './type_enc.js';
 import { _opre_split as splitAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { inferType, typesCompatible as typesCompatibleEnc, binaryResultType as binaryResultTypeEnc, ANY_LIST } from './type_infer.js';
 import { lowerAs } from './as_check.js';
+import { buildTypeTable } from './codegen/type_table.js';
+import { addressShown, dependencyAliases } from './type_shown.js';
+import { renderType } from './type_tree.js';
 import { lowerBranchOrder } from './branch_order.js';
 import { lowerParamScope } from './param_scope.js';
 import { lowerPublicClassCalls, addConstructHandlers } from './public_classes.js';
@@ -18,7 +21,7 @@ import { resolveNames } from './names.js';
 import { resolveTypeNames } from './type_names.js';
 import { markCallResultTypes } from './call_types.js';
 import { checkInitOrder } from './init_order.js';
-import { returnShapes, docReturnShapes, fieldAcrossReturns, mergeShapes, mergeTypes, mergeTypesEnc } from './return_shapes.js';
+import { returnShapes, docReturnShapes, fieldAcrossReturns, mergeShapes, mergeTypesEnc } from './return_shapes.js';
 import { parseDecimalLiteral, isTerminatingDivision } from './codegen/decimal_utils.js';
 import { MATH_METHODS } from './math_methods.js';
 import { BUILTIN_TYPE_NAMES, launchStatement } from './ast.js';
@@ -78,7 +81,6 @@ export function validate(ast, options = {}) {
 
 function validateProgram(ast, options = {}) {
   run.ast = ast;
-  run.declsByAddress = null;
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
@@ -101,12 +103,8 @@ function validateProgram(ast, options = {}) {
   const remotesParsed = {};
   const factoryDecls = {};
   for (const d of (ast.dependencies || [])) {
-    if (d.interface) {
-      // The parser read it, its types encoded (src/parser_types.js).
-      const { asTypes } = splitAsTypes(d.interface);
-      remotesParsed[d.name] = d.interfaceDoc;
-      if (asTypes.length > 0) remotesParsed[d.name].__asTypes = asTypes;
-    }
+    // The parser read it, its types encoded (src/parser_types.js).
+    if (d.interface) remotesParsed[d.name] = d.interfaceDoc;
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
   }
   // Collect dep names whose manifest is provided inline by a constructor
@@ -187,10 +185,10 @@ function validateProgram(ast, options = {}) {
       return { remote: entry.key, discard: true };
     }
     if (entry.named) {
-      return { local: entry.name, remote: entry.name, ...(entry.type && { type: entry.type }) };
+      return { local: entry.name, remote: entry.name, ...(entry.typeEnc !== undefined && { typeEnc: entry.typeEnc }) };
     }
     if (entry.key) {
-      return { local: entry.name, remote: entry.key, ...(entry.type && { type: entry.type }) };
+      return { local: entry.name, remote: entry.key, ...(entry.typeEnc !== undefined && { typeEnc: entry.typeEnc }) };
     }
     return null;
   };
@@ -203,7 +201,7 @@ function validateProgram(ast, options = {}) {
   );
   const isUseAlias = (node) => (
     node && typeof node === 'object' &&
-    (node.type === 'Assign' || node.type === 'StateAssign' || (node.type === 'TypedAssign' && !node.typeName)) &&
+    (node.type === 'Assign' || node.type === 'StateAssign' || (node.type === 'TypedAssign' && node.typeNameEnc === undefined)) &&
     node.value?.type === 'Identifier' && node.value.fromUse
   );
   // Does `arr` (a block, or a constructor body) bind `name` with a scoped DI
@@ -230,7 +228,7 @@ function validateProgram(ast, options = {}) {
         if (Array.isArray(node.params) && node.params.some(p => p?.name === from)) throw again();
       }
       if (node.type === 'Identifier' && node.name === from) node.name = to;
-      if (node.typeName === from) { node.typeName = to; node.typeNameEnc = classEnc(to); }
+      if (node.typeNameEnc === from) node.typeNameEnc = classEnc(to);
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         walk(node[k]);
@@ -671,7 +669,7 @@ function validateProgram(ast, options = {}) {
         methods.add(fn.name);
         // Extract return type info from Reply nodes
         const reply = fn.body?.find(s => s.type === 'Reply');
-        const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
+        const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, typeEnc: f.typeEnc })).filter(f => f.typeEnc !== undefined) : null;
         sigs.set(fn.name, { params: fn.params || [], returns });
       }
     }
@@ -717,8 +715,8 @@ function validateProgram(ast, options = {}) {
         body: f.returns ? (f.returnAlternatives ?? [f.returns]).map(alt => ({
           type: 'Reply',
           fields: alt.map(r => (r.positional
-            ? { name: r.name, type: r.type, typeEnc: r.typeEnc, positional: true }
-            : { key: r.name, name: r.name, type: r.type, typeEnc: r.typeEnc, positional: r.positional })),
+            ? { name: r.name, typeEnc: r.typeEnc, positional: true }
+            : { key: r.name, name: r.name, typeEnc: r.typeEnc, positional: r.positional })),
         })) : [],
       }));
       const synthetic = {
@@ -750,15 +748,15 @@ function validateProgram(ast, options = {}) {
       const cls = actorByName.get(tag);
       if (!cls) return null;
       const own = (cls.initParams || []).find(p => p.name === 'children');
-      if (own) return own.type ?? own.typeName ?? null;
+      if (own) return own.typeEnc ?? own.typeNameEnc;
       const { inheritedParams } = resolveSuperclassChain(actorByName, cls);
       const p = inheritedParams.find(q => q.name === 'children');
-      return p ? (p.type ?? p.typeName ?? null) : null;
+      return p ? (p.typeEnc ?? p.typeNameEnc) : undefined;
     };
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { for (const n of node) walk(n); return; }
-      if (node.type === 'DomConstructor' && childrenType(node.tag) === 'List of Texts') {
+      if (node.type === 'DomConstructor' && childrenType(node.tag) === listOf('Text')) {
         const el = (node.children || []).find(c => c?.type === 'DomConstructor');
         if (el) throw new Error(`<${node.tag}> takes text only — <${el.tag}> can't be its child`);
       }
@@ -856,7 +854,7 @@ function validateProgram(ast, options = {}) {
     for (const fn of fns) {
       if (!fn.name?.startsWith('@')) continue;
       const reply = fn.body?.find(s => s.type === 'Reply');
-      const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, type: f.type })).filter(f => f.type) : null;
+      const returns = reply ? reply.fields.map(f => ({ name: f.key || f.name, typeEnc: f.typeEnc })).filter(f => f.typeEnc !== undefined) : null;
       layer.set(fn.name, [...(layer.get(fn.name) || []), { params: fn.params || [], returns }]);
     }
     for (const [name, clauses] of layer) sigMap.set(name, clauses);
@@ -943,8 +941,8 @@ function validateProgram(ast, options = {}) {
   for (const synth of manifestActors) {
     const own = new Map();
     const { inheritedSetters } = resolveSuperclassChain(actorByName, synth);
-    for (const s of inheritedSetters) own.set(s.name, s.type);
-    for (const s of (synth.setters || [])) own.set(s.name, s.type);
+    for (const s of inheritedSetters) own.set(s.name, s.typeEnc);
+    for (const s of (synth.setters || [])) own.set(s.name, s.typeEnc);
     actorSettersFlat.set(synth.name, own);
   }
 
@@ -979,8 +977,8 @@ function validateProgram(ast, options = {}) {
       const superParams = new Map((buildsBase(actor) ? [] : superActor.initParams || []).map(p => [p.name, p]));
       for (const p of (actor.initParams || [])) {
         const sp = superParams.get(p.name);
-        if (sp && sp.type && p.type && sp.type !== p.type) {
-          throw new Error(`Subclass '${actor.name}' cannot change type of inherited arg '${p.name}' from '${sp.type}' to '${p.type}'`);
+        if (sp && sp.typeEnc !== undefined && p.typeEnc !== undefined && sp.typeEnc !== p.typeEnc) {
+          throw new Error(`Subclass '${actor.name}' cannot change type of inherited arg '${p.name}' from '${tyShown(sp.typeEnc)}' to '${tyShown(p.typeEnc)}'`);
         }
       }
 
@@ -999,10 +997,10 @@ function validateProgram(ast, options = {}) {
 
         // Compare implicit return types
         if (superImplicit && ownImplicit) {
-          const superType = superImplicit.typeName || inferExprType(superImplicit.expr);
-          const ownType = ownImplicit.typeName || inferExprType(ownImplicit.expr);
-          if (superType && ownType && superType !== ownType) {
-            throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' from '${superType}' to '${ownType}'`);
+          const superType = superImplicit.typeNameEnc ?? inferType(superImplicit.expr, new Map());
+          const ownType = ownImplicit.typeNameEnc ?? inferType(ownImplicit.expr, new Map());
+          if (superType !== undefined && ownType !== undefined && superType !== ownType) {
+            throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' from '${tyShown(superType)}' to '${tyShown(ownType)}'`);
           }
         }
 
@@ -1010,8 +1008,8 @@ function validateProgram(ast, options = {}) {
         if (superReply && ownReply) {
           for (const sf of superReply.fields) {
             const of2 = ownReply.fields.find(f => (f.key || f.name) === (sf.key || sf.name));
-            if (of2 && of2.type && sf.type && of2.type !== sf.type) {
-              throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' field '${sf.key || sf.name}' from '${sf.type}' to '${of2.type}'`);
+            if (of2 && of2.typeEnc !== undefined && sf.typeEnc !== undefined && of2.typeEnc !== sf.typeEnc) {
+              throw new Error(`Subclass '${actor.name}' cannot change return type of '${fn.name}' field '${sf.key || sf.name}' from '${tyShown(sf.typeEnc)}' to '${tyShown(of2.typeEnc)}'`);
             }
           }
         }
@@ -1027,14 +1025,14 @@ function validateProgram(ast, options = {}) {
           const implicitReturn = overrideFn.body?.find(s => s.type === 'ImplicitReturn');
           if (reply) {
             for (const f of reply.fields) {
-              if (f.type && f.type !== sp.type) {
-                throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${f.type}'`);
+              if (f.typeEnc !== undefined && f.typeEnc !== sp.typeEnc) {
+                throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${tyShown(sp.typeEnc)}' to '${tyShown(f.typeEnc)}'`);
               }
             }
           } else if (implicitReturn) {
-            const irType = implicitReturn.typeName || inferExprType(implicitReturn.expr);
-            if (irType && irType !== sp.type) {
-              throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${sp.type}' to '${irType}'`);
+            const irType = implicitReturn.typeNameEnc ?? inferType(implicitReturn.expr, new Map());
+            if (irType !== undefined && irType !== sp.typeEnc) {
+              throw new Error(`Subclass '${actor.name}' cannot change type of inherited accessor '@${accessorName}' from '${tyShown(sp.typeEnc)}' to '${tyShown(irType)}'`);
             }
           }
         }
@@ -1092,8 +1090,8 @@ function validateProgram(ast, options = {}) {
             const sig = iface[methodName]?.[0] || iface['@' + methodName]?.[0];
             if (!sig?.returns) continue;
             for (const item of s.pattern) {
-              if (item.discard || !item.name || item.type) continue;
-              if (fieldAcrossReturns(sig, item.name)?.type) {
+              if (item.discard || !item.name || item.typeEnc !== undefined) continue;
+              if (fieldAcrossReturns(sig, item.name)) {
                 remoteInferred.add(item.name);
               }
             }
@@ -1101,10 +1099,10 @@ function validateProgram(ast, options = {}) {
         }
         if (remoteInferred.size === 0) continue;
         for (const field of reply.fields) {
-          if ('sigil' in field && !field.type && remoteInferred.has(field.sigil)) {
+          if ('sigil' in field && field.typeEnc === undefined && remoteInferred.has(field.sigil)) {
             throw new Error(`Reply type for ':${field.sigil}' cannot be inferred from local declarations — annotate explicitly`);
           }
-          if (field.key !== undefined && !field.type) {
+          if (field.key !== undefined && field.typeEnc === undefined) {
             const expr = field.value;
             if (expr?.type === 'Identifier' && remoteInferred.has(expr.name)) {
               throw new Error(`Reply type for ':${expr.name}' cannot be inferred from local declarations — annotate explicitly`);
@@ -1256,27 +1254,8 @@ function checkTypeDecls(ast) {
   }
 }
 
-// Slice 3 of types-implementation-plan-2026-04-27: validate `Name(args)` call
-// sites against the declared type. For now (positional fields only), arg
-// count must equal the field count exactly. Slice 8 (named/mixed fields) and
-// slice 11 (optional fields) will relax this for the variants they introduce.
-// Split a callback field/param type string at its top-level `->`, returning the
-// input param list (name+type records from parseFieldList) or null when the
-// string is not a function signature. Depth-aware so a nested `->` inside a
-// higher-order input is not mistaken for the top-level arrow (mirrors the scan
-// in tokenizeManifestEntries).
-// NOTE: single-input callbacks only for now — parseFieldList splits on commas
-// naively, so a multi-input signature whose input itself nests a function type
-// would mis-split. Depth-aware comma split is future work.
-// A record's encoded type at `key` (`paramType` → `paramTypeEnc`). One with the
-// type's text and no encoding is the compiler's mistake.
-function encAt(record, key) {
-  const enc = record?.[`${key}Enc`];
-  if (enc === undefined && typeof record?.[key] === 'string' && record[key] !== 'Anything') {
-    throw new Error(`Compiler bug: the type '${record[key]}' has no encoding`);
-  }
-  return enc;
-}
+// A record's encoded type at `key` (`paramType` → `paramTypeEnc`).
+const encAt = (record, key) => record?.[`${key}Enc`];
 
 // A field's call discipline from its declared type: 'value' (not behavioral,
 // cannot be invoked), 'silent' (it never replies), 'callback' (a function that
@@ -1299,25 +1278,6 @@ function callbackInputsEnc(t) {
   };
 }
 
-// The code generators' text of a callback type's inputs (read until they read
-// encodings).
-function callbackInputTypes(paramTypeStr) {
-  if (typeof paramTypeStr !== 'string') return null;
-  let depth = 0, arrowIdx = -1;
-  for (let i = 0; i < paramTypeStr.length; i++) {
-    if ('-=~'.includes(paramTypeStr[i]) && paramTypeStr[i + 1] === '>') {
-      if (depth === 0) { arrowIdx = i; break; }
-      i++; continue;
-    }
-    const c = paramTypeStr[i];
-    if (c === '(' || c === '<' || c === '{') depth++;
-    else if (c === ')' || c === '>' || c === '}') depth--;
-  }
-  if (arrowIdx === -1) return null;
-  const inputStr = paramTypeStr.slice(0, arrowIdx).trim().replace(/^\(/, '').replace(/\)$/, '').trim();
-  return inputStr ? parseFieldList(inputStr) : [];
-}
-
 // The name, when an encoded type is a single name this file didn't resolve and
 // isn't a built-in: neither declared nor imported (a declared or imported one is
 // an address). Otherwise null.
@@ -1326,22 +1286,19 @@ function unknownBareType(t) {
   return t;
 }
 
-// Infer a lambda's untyped positional params from a callback-signature string.
-// `resolve(bareType)` maps a signature input's type name to the type the param
-// should carry — identity for a local type, the canonical `Alias::Name` for a
-// service-hosted type. Matching is positional-by-index; an explicit annotation
-// is never overwritten. When `nameable` is provided, an explicit bare type that
-// is not declared/imported is rejected (naming a type requires an explicit
-// import; implicit import is inference-only). Mutates `fnNode.params[i].type` in
-// place (the single source of truth read by both validation and every codegen
-// backend). Returns the resolved type names actually applied.
-function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, paramTypeEnc, resolve = (t) => t, nameable = null) {
+// Infer a lambda's untyped params from a callback signature (encoded): param i
+// takes the signature's input i, its positional inputs then its named ones.
+// `resolve(t)` is told each input type a param takes (a service-hosted one is
+// registered for the code generators there). An explicit annotation is never
+// overwritten. When `nameable` is provided, an explicit bare type that is not
+// declared/imported is rejected (naming a type requires an explicit import;
+// implicit import is inference-only). Sets `fnNode.params[i].typeEnc` in place.
+// Returns the types applied.
+function inferLambdaParamsFromCallbackType(fnNode, paramTypeEnc, resolve = (t) => t, nameable = null) {
   if (!fnNode || fnNode.type !== 'Function' || !Array.isArray(fnNode.params)) return [];
   if (!isFn(paramTypeEnc)) return [];
-  const inputs = callbackInputTypes(paramTypeStr);
-  if (!inputs) return [];
   const inputsEnc = callbackInputsEnc(paramTypeEnc);
-  let nextPositional = 0;
+  const inputs = [...inputsEnc.positional, ...Object.values(inputsEnc.named)];
   // A lambda filling a silent slot (`-> .`) is itself silent: it yields no
   // reply, so the synthesized dispatch arm must not produce one. Without this
   // the arm sets `re` and routes a spurious reply, which on local self-dispatch
@@ -1351,7 +1308,7 @@ function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, paramTypeEnc, r
   for (let i = 0; i < fnNode.params.length; i++) {
     const p = fnNode.params[i];
     if (!p || p.rest) continue;
-    if (p.type != null) {
+    if (p.typeEnc !== undefined || p.typeUnencoded) {
       // Explicit annotation: honored, never overwritten — but a bare,
       // undeclared/unimported type name is an error.
       if (nameable) {
@@ -1366,13 +1323,9 @@ function inferLambdaParamsFromCallbackType(fnNode, paramTypeStr, paramTypeEnc, r
       continue;
     }
     const input = inputs[i];
-    const inputEnc = input?.name ? inputsEnc.named[input.name] : inputsEnc.positional[nextPositional++];
-    if (!input?.type) continue;
-    const resolved = resolve(input.type);
-    if (!resolved) continue;
-    p.type = resolved;
-    if (inputEnc !== undefined) p.typeEnc = inputEnc;
-    applied.push(resolved);
+    if (input === undefined) continue;
+    p.typeEnc = resolve(input);
+    applied.push(p.typeEnc);
   }
   return applied;
 }
@@ -1390,7 +1343,7 @@ function forEachCallbackLambdaArg(node, fields, onCallbackLambda) {
     if (!isFn(encAt(field, 'paramType'))) continue;
     const arg = fi < positional.length ? positional[fi] : named[field.name];
     const fn = asFunction(arg);
-    if (fn) onCallbackLambda(fn, field.paramType, field.paramTypeEnc, field);
+    if (fn) onCallbackLambda(fn, field.paramTypeEnc, field);
   }
 }
 
@@ -1407,23 +1360,11 @@ function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
     ...(ast.types || []).map(t => t.name),
     ...Object.keys(ast.importedTypes || {}),
   ]);
-  const resolverFor = (alias) => {
-    const declMap = remotesParsed[alias]?.__typeDecls;
-    const dep = (ast.dependencies || []).find(d => d.name === alias);
-    return (bareType) => {
-      if (!declMap || bareType.includes('::') || nameable.has(bareType) || !declMap[bareType]) return bareType;
-      const qualified = `${alias}::${bareType}`;
-      (ast.crossModuleTypes ||= {})[qualified] = {
-        name: bareType, fields: declMap[bareType].fields, path: dep?.path || alias,
-      };
-      return qualified;
-    };
-  };
+  const resolverFor = (alias) => serviceTypesIn(ast, remotesParsed, alias);
   const aliasOf = (obj, env) => {
     if (!obj || (obj.type !== 'Identifier' && obj.type !== 'RefRead')) return null;
     if (dependencyNames.has(obj.name)) return obj.name;
-    const t = env.get(obj.name);
-    return (t && dependencyNames.has(t)) ? t : null;
+    return depOfEnc(env.get(obj.name), dependencyNames);
   };
   const inferCall = (call, env) => {
     const alias = aliasOf(call.object, env);
@@ -1444,7 +1385,7 @@ function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
         const argExpr = p.name ? named[p.name] : positional[pi++];
         if (isFn(encAt(p, 'type'))) {
           const fn = asFn(argExpr);
-          if (fn) inferLambdaParamsFromCallbackType(fn, p.type, p.typeEnc, resolve, nameable);
+          if (fn) inferLambdaParamsFromCallbackType(fn, p.typeEnc, resolve, nameable);
         }
       }
     }
@@ -1464,16 +1405,34 @@ function inferRemoteCallbackLambdas(ast, remotesParsed, dependencyNames) {
   }
 }
 
+// Each type a value can have, by its address: this file's, an imported one (under
+// the address of the name it's imported as), and one reached through a service.
+function typesByAddress(ast) {
+  return new Map([...buildTypeTable(ast).values()].map(e => [e.key, e]));
+}
+
+// The types of the service `alias` that `t` names, registered in
+// `ast.crossModuleTypes` for the code generators; `t` itself.
+function serviceTypesIn(ast, remotesParsed, alias) {
+  const declMap = remotesParsed?.[alias]?.__typeDecls;
+  const dep = (ast.dependencies || []).find(d => d.name === alias);
+  const nameable = new Set([...(ast.types || []).map(t => t.name), ...Object.keys(ast.importedTypes || {})]);
+  return (t) => {
+    if (!declMap || !dep?.path) return t;
+    for (const a of addressesIn(t)) {
+      const tokens = a.startsWith(':') ? [] : splitAddress(a);
+      if (tokens.length !== 2 || tokens[0] !== dep.path || nameable.has(tokens[1]) || !declMap[tokens[1]]) continue;
+      (ast.crossModuleTypes ||= {})[`${alias}::${tokens[1]}`] = { name: tokens[1], fields: declMap[tokens[1]].fields, path: dep.path };
+    }
+    return t;
+  };
+}
+
+// Slice 3 of types-implementation-plan-2026-04-27: validate `Name(args)` call
+// sites against the declared type: positional and named args against its fields.
 function checkTypeConstructions(ast, remotesParsed = {}) {
-  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
-  // Slice 15: imported types are addressed by their *canonical* (remote)
-  // name — the validate-time rewrite turns local `P(...)` into a
-  // TypeConstruction with typeName `Point`, so we register the imported
-  // decl under the canonical name for the lookup below.
-  for (const info of Object.values(ast.importedTypes || {})) {
-    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
-  }
-  if (typesByName.size === 0) return;
+  const declByAddress = typesByAddress(ast);
+  if (declByAddress.size === 0) return;
 
   // File-scope nameable types: locally declared types plus explicitly
   // imported names. An *explicit* lambda-param annotation naming a bare type
@@ -1493,32 +1452,19 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
   //    becoming nameable at file scope.
   function resolveCallbackParamType(hostTypeName) {
     const hostImport = Object.values(ast.importedTypes || {}).find(i => i.remote === hostTypeName);
-    if (!hostImport) return (t) => t;
-    const alias = hostImport.sourceAlias;
-    const declMap = remotesParsed?.[alias]?.__typeDecls;
-    if (!declMap) return (t) => t;
-    const dep = (ast.dependencies || []).find(d => d.name === alias);
-    return (bareType) => {
-      // Already qualified, in-namespace, or not a service type → leave as-is.
-      if (bareType.includes('::') || nameable.has(bareType) || !declMap[bareType]) return bareType;
-      const qualified = `${alias}::${bareType}`;
-      (ast.crossModuleTypes ||= {})[qualified] = {
-        name: bareType,
-        fields: declMap[bareType].fields,
-        path: dep?.path || alias,
-      };
-      return qualified;
-    };
+    return hostImport ? serviceTypesIn(ast, remotesParsed, hostImport.sourceAlias) : (t) => t;
   }
 
   function walk(node) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) walk(n); return; }
     if (node.type === 'TypeConstruction') {
-      const decl = typesByName.get(node.typeName);
+      const decl = declByAddress.get(node.typeNameEnc);
       if (!decl) {
-        throw new Error(`Type '${node.typeName}' is referenced but not declared`);
+        throw new Error(`Type '${shown(node.typeNameEnc)}' is referenced but not declared`);
       }
+      // Its name as the message writes it: an imported type by its name there.
+      const label = node.typeNameEnc?.startsWith?.(':') ? shown(node.typeNameEnc) : node.typeName;
       // Args follow FunctionCallExpr's calling convention: bare expressions
       // for positional fields, plus an optional trailing `NamedArgsBag` for
       // `name: expr` arguments. Positional args fill fields left-to-right;
@@ -1535,10 +1481,10 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
         for (const key of Object.keys(namedBag.fields)) {
           const plain = key.endsWith('.') ? key.slice(0, -1) : key;
           if (key.endsWith('.') && fields.some(f => f.name === plain) && !isSilent(plain)) {
-            throw new Error(`Type construction '${node.typeName}(...)': field '${plain}' is not silent — write '${plain}:'`);
+            throw new Error(`Type construction '${label}(...)': field '${plain}' is not silent — write '${plain}:'`);
           }
           if (!key.endsWith('.') && isSilent(key)) {
-            throw new Error(`Type construction '${node.typeName}(...)': field '${key}.' is silent — write '${key}.:'`);
+            throw new Error(`Type construction '${label}(...)': field '${key}.' is silent — write '${key}.:'`);
           }
           if (plain !== key) {
             namedBag.fields = Object.fromEntries(Object.entries(namedBag.fields).map(([k, v]) => [k === key ? plain : k, v]));
@@ -1557,7 +1503,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
           const range = requiredCount === total
             ? `${total} argument${total === 1 ? '' : 's'}`
             : `${requiredCount}–${total} arguments`;
-          throw new Error(`Type construction '${node.typeName}(...)' expects ${range}, got ${argCount}`);
+          throw new Error(`Type construction '${label}(...)' expects ${range}, got ${argCount}`);
         }
       } else {
         // Named or mixed construction. Positional args still fill by index, so
@@ -1565,7 +1511,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
         // not-already-filled fields; every required field must be supplied.
         if (positional.length > total) {
           throw new Error(
-            `Type construction '${node.typeName}(...)' expects at most ${total} ` +
+            `Type construction '${label}(...)' expects at most ${total} ` +
             `positional argument${total === 1 ? '' : 's'}, got ${positional.length}`,
           );
         }
@@ -1573,11 +1519,11 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
         const filled = new Set(fields.slice(0, positional.length).map(f => f.name));
         for (const key of namedKeys) {
           if (!fieldNames.has(key)) {
-            throw new Error(`Type construction '${node.typeName}(...)' has no field named '${key}'`);
+            throw new Error(`Type construction '${label}(...)' has no field named '${key}'`);
           }
           if (filled.has(key)) {
             throw new Error(
-              `Type construction '${node.typeName}(...)' supplies field '${key}' both positionally and by name`,
+              `Type construction '${label}(...)' supplies field '${key}' both positionally and by name`,
             );
           }
           filled.add(key);
@@ -1585,7 +1531,7 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
         const missing = fields.filter(f => !f.optional && !filled.has(f.name)).map(f => f.name);
         if (missing.length > 0) {
           throw new Error(
-            `Type construction '${node.typeName}(...)' is missing required ` +
+            `Type construction '${label}(...)' is missing required ` +
             `field${missing.length === 1 ? '' : 's'} ${missing.map(m => `'${m}'`).join(', ')}`,
           );
         }
@@ -1595,8 +1541,8 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
       // For a locally-declared host type the input type name is used as-is; a
       // service-hosted host resolves the name to its authority (see C2).
       const resolve = resolveCallbackParamType(node.typeName);
-      forEachCallbackLambdaArg(node, fields, (fn, sig, sigEnc) => {
-        inferLambdaParamsFromCallbackType(fn, sig, sigEnc, resolve, nameable);
+      forEachCallbackLambdaArg(node, fields, (fn, sigEnc) => {
+        inferLambdaParamsFromCallbackType(fn, sigEnc, resolve, nameable);
       });
     }
     for (const k of Object.keys(node)) {
@@ -1612,23 +1558,12 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
 // an identifier whose typeEnv binding is a user-declared type), the
 // property must be one of that type's declared fields.
 function checkTypeFieldAccess(ast) {
-  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
-  // Slice 15: register imported types under their canonical name so `.field`
-  // accesses on imported-typed values validate against the source decl.
-  for (const info of Object.values(ast.importedTypes || {})) {
-    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
-  }
-  // Cross-module types (`Alias::Name`), explicit or implicitly imported for a
-  // callback param, are registered under their qualified key so a lambda param
-  // typed `Alias::Name` resolves its fields (never widening the nameable set).
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!typesByName.has(key)) typesByName.set(key, { name: info.name, fields: info.fields });
-  }
+  const typesByName = typesByAddress(ast);
   if (typesByName.size === 0) return;
 
   function objStaticType(obj, env) {
     if (!obj) return null;
-    if (obj.type === 'TypeConstruction') return obj.typeName;
+    if (obj.type === 'TypeConstruction') return obj.typeNameEnc;
     if (obj.type === 'Identifier' && env.has(obj.name)) return env.get(obj.name);
     return null;
   }
@@ -1648,8 +1583,7 @@ function checkTypeFieldAccess(ast) {
     if (expr?.type === 'DotAccessExpr' && expr.property.endsWith('!')) { obj = expr.object; name = expr.property.slice(0, -1); }
     else if (expr?.type === 'DotCallExpr') { obj = expr.object; name = expr.method.endsWith('!') ? expr.method.slice(0, -1) : expr.method; }
     else return false;
-    const tname = objStaticType(obj, env);
-    const decl = tname ? typesByName.get(tname) : null;
+    const decl = typesByName.get(objStaticType(obj, env));
     return !!decl && fieldDiscipline(decl, name) === 'silent';
   }
 
@@ -1669,9 +1603,10 @@ function checkTypeFieldAccess(ast) {
     // Field access / invocation on a typed value. The bang (`v.ref!`) rides in
     // the property name; a DotCall carries the field as `method`.
     if (expr.type === 'DotAccessExpr' || expr.type === 'DotCallExpr') {
-      const tname = objStaticType(expr.object, env);
-      const decl = tname ? typesByName.get(tname) : null;
+      const t = objStaticType(expr.object, env);
+      const decl = typesByName.get(t);
       if (decl) {
+        const tname = shown(t);
         const raw = expr.type === 'DotAccessExpr' ? expr.property : expr.method;
         const bang = raw.endsWith('!');
         const dotted = raw.endsWith('.');
@@ -1755,18 +1690,12 @@ function checkTypeFieldAccess(ast) {
 // reference call). Broadening the barrier to every awaited send (remote/child
 // method calls) is future work — see the design note.
 function checkSilentRefOrdering(ast) {
-  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
-  for (const info of Object.values(ast.importedTypes || {})) {
-    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
-  }
-  for (const [key, info] of Object.entries(ast.crossModuleTypes || {})) {
-    if (!typesByName.has(key)) typesByName.set(key, { name: info.name, fields: info.fields });
-  }
+  const typesByName = typesByAddress(ast);
   if (typesByName.size === 0) return;
 
   const objStaticType = (obj, env) => {
     if (!obj) return null;
-    if (obj.type === 'TypeConstruction') return obj.typeName;
+    if (obj.type === 'TypeConstruction') return obj.typeNameEnc;
     if (obj.type === 'Identifier' && env.has(obj.name)) return env.get(obj.name);
     return null;
   };
@@ -1781,8 +1710,7 @@ function checkSilentRefOrdering(ast) {
     else if (node?.type === 'DotAccessExpr' && node.property.endsWith('!')) { obj = node.object; raw = node.property; }
     else return null;
     const name = raw.endsWith('!') ? raw.slice(0, -1) : raw;
-    const tname = objStaticType(obj, env);
-    const decl = tname ? typesByName.get(tname) : null;
+    const decl = typesByName.get(objStaticType(obj, env));
     return decl ? fieldDiscipline(decl, name) : null;
   };
 
@@ -1823,23 +1751,21 @@ function checkSilentRefOrdering(ast) {
 // error). Positional destructure may take at most N fields where N is the
 // declared field count.
 function checkTypeDestructure(ast) {
-  const typesByName = new Map((ast.types || []).map(t => [t.name, t]));
-  for (const info of Object.values(ast.importedTypes || {})) {
-    if (!typesByName.has(info.remote)) typesByName.set(info.remote, info.decl);
-  }
+  const typesByName = typesByAddress(ast);
   if (typesByName.size === 0) return;
 
   function sourceTypeName(src, env) {
     if (!src) return null;
-    if (src.type === 'TypeConstruction') return src.typeName;
+    if (src.type === 'TypeConstruction') return src.typeNameEnc;
     if (src.type === 'Identifier' && env.has(src.name)) return env.get(src.name);
     return null;
   }
 
   function checkOne(s, env) {
-    const tname = sourceTypeName(s.source, env);
-    const decl = tname ? typesByName.get(tname) : null;
+    const t = sourceTypeName(s.source, env);
+    const decl = typesByName.get(t);
     if (!decl) return;
+    const tname = shown(t);
     const fields = decl.fields || [];
     for (const item of s.pattern) {
       if (item.discard || item.spread) continue;
@@ -1917,14 +1843,21 @@ function rewriteImportedTypeConstructions(ast, importedTypes) {
 // types — `Name` must be one of those types.
 function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
   const checked = new Set();
-  const localTypeNames = new Set((ast.types || []).map(t => t.name));
-  const check = (typeStr) => {
-    if (typeof typeStr !== 'string') return;
-    if (checked.has(typeStr)) return;
-    checked.add(typeStr);
-    const m = typeStr.match(/^(\w+)::(\w+)(?:\s*\|\s*null)?$/);
-    if (!m || localTypeNames.has(`${m[1]}::${m[2]}`)) return; // a class's type in this file
-    const [, alias, remoteName] = m;
+  // A service's address head, by the alias the file writes it with.
+  const aliasOf = new Map((ast.dependencies || []).filter(d => d.type === 'Dependency' && d.path && !d.destructures).map(d => [d.path, d.name]));
+  // A type that is a name reached through another actor, `A::B` (or `A::B | null`):
+  // an address relative to this file, of two tokens.
+  const check = (t) => {
+    if (t === undefined || checked.has(t)) return;
+    checked.add(t);
+    const named = encMembers(t).filter(m => m !== null);
+    if (named.length !== 1 || (isUnion(t) && encMembers(t).length !== 2)) return;
+    const [a] = named;
+    if (typeof a !== 'string' || a.startsWith(':') || isInstance(a) || !a.includes(':')) return;
+    const tokens = splitAddress(a);
+    if (tokens.length !== 2) return;
+    const alias = aliasOf.get(tokens[0]) ?? tokens[0];
+    const remoteName = tokens[1];
     if (!dependencyNames.has(alias)) {
       throw new Error(`Cross-module type '${alias}::${remoteName}' references unknown dependency alias '${alias}'`);
     }
@@ -1944,20 +1877,17 @@ function validateCrossModuleTypeRefs(ast, dependencyNames, remotesParsed) {
     };
   };
   for (const decl of (ast.types || [])) {
-    for (const f of (decl.fields || [])) check(f.paramType);
+    for (const f of (decl.fields || [])) check(f.paramTypeEnc);
   }
   function walk(node) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) walk(n); return; }
-    if (typeof node.typeName === 'string') check(node.typeName);
-    if (typeof node.paramType === 'string') check(node.paramType);
-    // Param-shaped node `{ name, type, positional, ... }` — `type` here
-    // is the declared type string, not an AST node tag.
-    if (typeof node.name === 'string' && typeof node.type === 'string' && 'positional' in node) {
-      check(node.type);
-    }
+    check(node.typeNameEnc);
+    check(node.paramTypeEnc);
+    // A param: `{ name, typeEnc, positional, ... }`.
+    if (typeof node.name === 'string' && 'positional' in node) check(node.typeEnc);
     for (const k of Object.keys(node)) {
-      if (k === 'type') continue;
+      if (k === 'type' || k.endsWith('Enc')) continue;
       walk(node[k]);
     }
   }
@@ -2162,83 +2092,10 @@ function checkListMethodArgs(ast) {
 // constructor document, a service whose own `$new` replies `:*`.
 export function readRemote(service, { path = null, params = null } = {}) {
   const { $new, ...rest } = service?.public || {};
-  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: readDocument(service, path), ctorParams: params ? parseParamsDocument(params) : null };
-  const ctorParams = readDocument({ public: { $new } }, path).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), type: p.type, typeEnc: p.typeEnc }));
+  if ($new?.[0]?.re?.[0] !== ':*' || Object.keys(rest).length) return { doc: readDocument(service, path), ctorParams: params ? readParamsDocument(params) : null };
+  const ctorParams = readDocument({ public: { $new } }, path).$new[0].params.map(p => ({ name: p.name, ...(p.name && { key: p.name }), typeEnc: p.typeEnc }));
   // An instance's own addresses are under the instance; its node is the service's `:*`.
   return { doc: readDocument(service[':*'] || {}, path), ctorParams };
-}
-
-function splitAsTypes(service) {
-  const t = service.trim();
-  let depth = 0;
-  let braceEnd = -1;
-  for (let i = 0; i < t.length; i++) {
-    if (t[i] === '{') depth++;
-    else if (t[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
-  }
-  if (braceEnd === -1) return { iface: t, asTypes: [] };
-  const iface = t.slice(0, braceEnd + 1);
-  const rest = t.slice(braceEnd + 1).trim();
-  const asTypes = [];
-  for (const part of rest.split('|')) {
-    const name = part.trim();
-    if (name) asTypes.push(name);
-  }
-  return { iface, asTypes };
-}
-
-// The params document (`interface.params`): the caller-facing side of a
-// file's header, `( … )`, one entry per line (an entry's interface may span
-// lines). A positional entry is a type; a named entry is `key: Type`. Yields
-// the scalar constructor args. Dependency entries — a type that is an
-// interface, a constructor profile, `#`, or absent (`key:`) — are skipped:
-// checking a caller-supplied dependency is not implemented yet.
-function parseParamsDocument(params) {
-  const t = params.trim();
-  if (!t.startsWith('(') || !t.endsWith(')')) return null;
-  const result = [];
-  for (const entry of splitParamsEntries(t.slice(1, -1))) {
-    const named = entry.match(/^("[^"]*"|\w+):\s*([\s\S]*)$/);
-    if (!named) { result.push({ name: null, type: entry }); continue; }
-    const type = named[2].trim();
-    if (!type || /^[#{(]/.test(type)) continue;
-    const key = named[1].startsWith('"') ? JSON.parse(named[1]) : named[1];
-    result.push({ name: key, key, type });
-  }
-  return result;
-}
-
-// Entries are separated by newlines (or commas) outside brackets and quotes.
-function splitParamsEntries(inner) {
-  const entries = [];
-  let depth = 0, inQuote = false, current = '';
-  for (const ch of inner) {
-    if (inQuote) { current += ch; if (ch === '"') inQuote = false; continue; }
-    if (ch === '"') inQuote = true;
-    else if (ch === '(' || ch === '{') depth++;
-    else if (ch === ')' || ch === '}') depth--;
-    if ((ch === '\n' || ch === ',') && depth === 0) {
-      if (current.trim()) entries.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim()) entries.push(current.trim());
-  return entries;
-}
-
-// ── Expression type inference (for validation) ────────────────────────────
-
-function inferExprType(expr) {
-  if (!expr) return null;
-  if (expr.type === 'StringLiteral') return 'Text';
-  if (expr.type === 'InterpolatedString') return 'Text';
-  if (expr.type === 'IntLiteral') return 'Integer';
-  if (expr.type === 'DecimalLiteral') return 'Decimal';
-  if (expr.type === 'FloatLiteral') return 'Float';
-  if (expr.type === 'BoolLiteral') return 'Boolean';
-  return null;
 }
 
 // ── Private function access check ──────────────────────────────────────────
@@ -2359,9 +2216,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
   // calls, method names and args are checked against the same declarations.
   if (actor.constructorBody?.length) {
     const ctorTypeEnv = buildTypeEnv(actor.initParams || [], actor.constructorBody, null, localDepNames);
-    for (const [k, v] of ctorTypeEnv) if (!v) ctorTypeEnv.delete(k);
+    for (const [k, v] of ctorTypeEnv) if (v === undefined) ctorTypeEnv.delete(k);
     for (const [k, v] of stateTypeEnv) if (!ctorTypeEnv.has(k)) ctorTypeEnv.set(k, v);
-    mergeEnc(ctorTypeEnv, stateTypeEnv);
     validateBody(actor.constructorBody, actorInfo, localDepNames, localRemotes, localFactoryDecls, ctorTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 
@@ -2372,7 +2228,6 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
     for (const [k, v] of stateTypeEnv) {
       if (!typeEnv.has(k)) typeEnv.set(k, v);
     }
-    mergeEnc(typeEnv, stateTypeEnv);
     validateBody(fn.body, actorInfo, localDepNames, localRemotes, localFactoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
   }
 }
@@ -2402,26 +2257,22 @@ function actorDeps(actor, dependencyNames, remotesParsed, factoryDecls) {
 
 function actorStateTypes(actor, localDepNames) {
   const stateTypeEnv = new Map();
-  const enc = stateTypeEnv.enc = new Map();
   for (const s of (actor.constructorBody || [])) {
-    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeName) {
-      stateTypeEnv.set(s.name, s.typeName);
-      if (s.typeNameEnc !== undefined) enc.set(s.name, s.typeNameEnc);
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeNameEnc !== undefined) {
+      stateTypeEnv.set(s.name, s.typeNameEnc);
     }
     // Infer actor type from class calls against declared dependencies
     // (or against class coercions, which are in localDepNames):
     //   t = Thing(args)    →  t : Thing
     //   t = Coerced(args)  →  t : Coerced
-    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && !s.typeName &&
+    if ((s.type === 'RefDecl' || s.type === 'TypedAssign') && s.typeNameEnc === undefined &&
         s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' &&
         localDepNames.has(s.value.callee.name)) {
-      stateTypeEnv.set(s.name, s.value.callee.name);
-      enc.set(s.name, classEnc(s.value.callee.name));
+      stateTypeEnv.set(s.name, classEnc(s.value.callee.name));
     }
   }
   for (const d of (actor.stateVarDecls || [])) {
-    if (d.typeName) stateTypeEnv.set(d.name, d.typeName);
-    if (d.typeNameEnc !== undefined) enc.set(d.name, d.typeNameEnc);
+    if (d.typeNameEnc !== undefined) stateTypeEnv.set(d.name, d.typeNameEnc);
   }
   return stateTypeEnv;
 }
@@ -2441,16 +2292,14 @@ function inferCallBinds(ast, args) {
       // A constructor block's unannotated `e = f()` is a decl the parser left as Anything.
       const decls = new Map((actor.stateVarDecls || []).map(d => [d.name, d]));
       const binds = (actor.constructorBody || [])
-        .filter(s => s.type === 'TypedAssign' && !s.typeName && !s.rhsType && decls.get(s.name)?.typeName === 'Anything'
+        .filter(s => s.type === 'TypedAssign' && s.typeNameEnc === undefined && !s.rhsType && decls.get(s.name)?.typeNameEnc === 'Anything'
           && (s.value?.type === 'FunctionCallExpr' || s.value?.type === 'DotCallExpr'))
         .map(stmt => ({ type: 'Assign', name: stmt.name, value: stmt.value, stmt }));
       if (binds.length) {
         inferred += infer(binds, actorStateTypes(actor, localDepNames));
         for (const b of binds) {
           if (b.type !== 'TypedAssign') continue;
-          b.stmt.typeName = b.typeName;
-          decls.get(b.name).typeName = b.typeName;
-          if (b.typeNameEnc !== undefined) b.stmt.typeNameEnc = decls.get(b.name).typeNameEnc = b.typeNameEnc;
+          b.stmt.typeNameEnc = decls.get(b.name).typeNameEnc = b.typeNameEnc;
         }
       }
       const stateTypeEnv = actorStateTypes(actor, localDepNames);
@@ -2458,7 +2307,6 @@ function inferCallBinds(ast, args) {
         if (!fn.body) continue;
         const typeEnv = buildTypeEnv(fn.params || [], fn.body, null, localDepNames);
         for (const [k, v] of stateTypeEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
-        mergeEnc(typeEnv, stateTypeEnv);
         inferred += infer(fn.body, typeEnv);
       }
     }
@@ -2471,22 +2319,22 @@ function checkAsClauses(actor) {
   const seen = new Set();
   for (const c of clauses) {
     if (c.negated) continue;
-    if (seen.has(c.targetType)) {
-      throw new Error(`Duplicate 'as ${c.targetType}' clause in actor '${actor.name}'`);
+    if (seen.has(c.targetTypeEnc)) {
+      throw new Error(`Duplicate 'as ${nodeShown(c, 'targetType')}' clause in actor '${actor.name}'`);
     }
-    seen.add(c.targetType);
+    seen.add(c.targetTypeEnc);
   }
 }
 
 function checkAsClauseMatch(targetType, actorName, actorInfo) {
   const info = actorInfo.get(actorName);
   if (!info) return; // no as clauses — normal actor construction
-  if (targetType === actorName) return; // identity — no cast needed
+  if (targetType === classEnc(actorName)) return; // identity — no cast needed
   for (const clause of info.asClauses) {
-    if (!clause.negated && clause.targetType === targetType) return; // positive match
-    if (clause.negated && clause.targetType !== targetType) return; // negated catch-all
+    if (!clause.negated && clause.targetTypeEnc === targetType) return; // positive match
+    if (clause.negated && clause.targetTypeEnc !== targetType) return; // negated catch-all
   }
-  throw new Error(`No matching 'self-as' clause in actor '${actorName}' for type '${targetType}'`);
+  throw new Error(`No matching 'self-as' clause in actor '${actorName}' for type '${shown(targetType)}'`);
 }
 
 function checkNamespaceConflict(actor) {
@@ -2786,48 +2634,10 @@ function checkSilentFunctionUsage(actor, constructorNames = new Set()) {
 
 // ── Scope name collection (mirrors buildTypeEnv in codegen.js) ──────────
 
-// `depNames`: a local constructed from one of these, `t = Thing()`, is a Thing,
-// as it is for the file's own cells.
-// The env's twin by encoded types rides on it as `env.enc` (buildTypeEnvEnc), for
-// the checks that read encodings; a copy or a merge carries it (`withEncOf`).
-function buildTypeEnv(params, body, typeDecls = null, depNames = null) {
-  const env = new Map();
-  env.enc = buildTypeEnvEnc(params, body, { decls: declsByAddress(), depNames, typeOfName: classEnc });
-  for (const p of params) {
-    if (p.rest) continue;
-    if (p.name && p.type) env.set(p.name, p.type);
-  }
-  for (const s of body) {
-    if (s.type === 'TypedAssign' || s.type === 'BareTypeDecl') {
-      env.set(s.name, s.typeName);
-    } else if (s.type === 'RefDecl' && s.typeName) {
-      env.set(s.name, s.typeName);
-    } else if (s.type === 'Assign') {
-      const t = inferLiteralType(s.value)
-        || (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier'
-          && depNames?.has(s.value.callee.name) ? s.value.callee.name : null);
-      if (t) env.set(s.name, t);
-    } else if (s.type === 'DestructureAssign' && typeDecls) {
-      const src = s.source;
-      let srcTypeName = null;
-      if (src?.type === 'TypeConstruction') srcTypeName = src.typeName;
-      else if (src?.type === 'Identifier' && env.has(src.name)) srcTypeName = env.get(src.name);
-      const srcDecl = (srcTypeName && typeDecls.has(srcTypeName)) ? typeDecls.get(srcTypeName) : null;
-      if (srcDecl) {
-        const fields = srcDecl.fields || [];
-        for (const item of s.pattern) {
-          if (item.discard || !item.name || env.has(item.name)) continue;
-          if (item.type) { env.set(item.name, item.type); continue; }
-          let field;
-          if (item.named) field = fields.find(f => f.name === item.name);
-          else if (item.key !== undefined) field = fields.find(f => f.name === item.key);
-          else if (item.positional) field = fields[item.idx];
-          if (field?.paramType && !field.optional) env.set(item.name, field.paramType);
-        }
-      }
-    }
-  }
-  return env;
+// A scope's names by their encoded types. `depNames`: a local constructed from one
+// of these, `t = Thing()`, is a Thing, as it is for the file's own cells.
+function buildTypeEnv(params, body, _typeDecls = null, depNames = null) {
+  return buildTypeEnvEnc(params, body, { decls: typesByAddress(run.ast), depNames, typeOfName: classEnc });
 }
 
 // The same scope's names by their encoded types (src/type_enc.js). `decls`, by a
@@ -2871,11 +2681,6 @@ function buildTypeEnvEnc(params, body, { decls = null, depNames = null, typeOfNa
 }
 
 // `into`'s encoded twin takes what `from`'s has that it doesn't.
-function mergeEnc(into, from) {
-  into.enc ??= new Map();
-  for (const [k, v] of from.enc || []) if (!into.enc.has(k)) into.enc.set(k, v);
-}
-
 function inferLiteralTypeEnc(expr) {
   switch (expr?.type) {
     case 'IntLiteral': return 'Integer';
@@ -2887,19 +2692,6 @@ function inferLiteralTypeEnc(expr) {
     case 'TypeConstruction': return expr.typeNameEnc;
     default: return undefined;
   }
-}
-
-function inferLiteralType(expr) {
-  if (!expr) return null;
-  if (expr.type === 'IntLiteral')     return 'Integer';
-  if (expr.type === 'StringLiteral')  return 'Text';
-  if (expr.type === 'InterpolatedString') return 'Text';
-  if (expr.type === 'DecimalLiteral') return 'Decimal';
-  if (expr.type === 'FloatLiteral')   return 'Float';
-  if (expr.type === 'BoolLiteral')    return 'Boolean';
-  if (expr.type === 'NullLiteral')    return 'null';
-  if (expr.type === 'TypeConstruction') return expr.typeName;
-  return null;
 }
 
 // Best-effort type of an expression given the current scope's type env and
@@ -2916,17 +2708,24 @@ function inferExpressionTypeEnc(expr, env, localActorTypes, actorNameSet) {
   }
   if (expr.type === 'RefRead') return env?.get(expr.name);
   if (expr.type === 'FunctionCallExpr' && expr.callee?.type === 'Identifier' && actorNameSet?.has(expr.callee.name)) return classEnc(expr.callee.name);
-  if (expr.type === 'TypedValue' && expr.typeName) return expr.typeNameEnc;
-  if (expr.type === 'AsClause' && expr.targetType) return expr.targetTypeEnc;
+  if (expr.type === 'TypedValue') return expr.typeNameEnc;
+  if (expr.type === 'AsClause') return expr.targetTypeEnc;
   return undefined;
 }
 
 function inferArgType(expr, typeEnv) {
-  if (!expr) return null;
-  const lit = inferLiteralType(expr);
-  if (lit) return lit;
+  if (!expr) return undefined;
+  const lit = inferLiteralTypeEnc(expr);
+  if (lit !== undefined) return lit;
   // Resolve identifiers from the type environment
-  if (expr.type === 'Identifier' && typeEnv?.has(expr.name)) return typeEnv.get(expr.name);
+  if (expr.type === 'Identifier') return typeEnv?.get(expr.name);
+  return undefined;
+}
+
+// The dependency an encoded type names (an actor of it), by its name here; null if none.
+function depOfEnc(t, dependencyNames) {
+  if (t === undefined || t === null) return null;
+  for (const n of dependencyNames || []) if (classEnc(n) === t) return n;
   return null;
 }
 
@@ -2948,16 +2747,15 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       localActorTypes.set(s.name, s.value.callee.name);
     }
     // A constructor block's unannotated bind is a TypedAssign with no typeName.
-    const unannotated = s.type === 'Assign' || (s.type === 'TypedAssign' && !s.typeName && !s.rhsType);
-    if (!unannotated || (typeEnv.get(s.name) && typeEnv.get(s.name) !== 'Anything')) continue;
+    const unannotated = s.type === 'Assign' || (s.type === 'TypedAssign' && s.typeNameEnc === undefined && !s.rhsType);
+    if (!unannotated || (typeEnv.get(s.name) !== undefined && typeEnv.get(s.name) !== 'Anything')) continue;
     // An unannotated bind whose class is certain types its name, so calls on it
     // are checked like calls on an annotated one: `el = <div>…</div>` is a
     // `div`, and `b = document.body()` is whatever class every clause returns.
     const cls = s.value?.type === 'DomConstructor' ? s.value.tag : soleRemoteClass(s.value);
     if (cls && actorNameSet?.has(cls)) {
       localActorTypes.set(s.name, cls);
-      typeEnv.set(s.name, cls);
-      (typeEnv.enc ??= new Map()).set(s.name, classEnc(cls));
+      typeEnv.set(s.name, classEnc(cls));
     }
   }
 
@@ -2968,7 +2766,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // to T, so calling a U-only method on x is rejected (Liskov).
   const resolveObjType = (objName) => {
     const typed = typeEnv.get(objName);
-    if (typed) return typed;
+    if (typed !== undefined) return classOfEnc(typed, actorByName) ?? (typeof typed === 'string' && !typed.includes(':') ? typed : null);
     return localActorTypes.get(objName) || null;
   };
   const checkMethodCall = (call) => {
@@ -3005,10 +2803,10 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       // (`name Type` in its document) is not settable.
       const field = remotesParsed?.[objName]?.__fields?.[s.fieldName];
       if (field && !field.cell) {
-        throw new Error(`'${objName}.${s.fieldName}' is a prop, not an address, so it can't be set (a settable member is a cell: '${s.fieldName} *${field.type}')`);
+        throw new Error(`'${objName}.${s.fieldName}' is a prop, not an address, so it can't be set (a settable member is a cell: '${s.fieldName} *${shown(field.typeEnc)}')`);
       }
       if (field?.readOnly) {
-        throw new Error(`'${objName}.${s.fieldName}' is a read-only cell ('${s.fieldName} &${field.type}')`);
+        throw new Error(`'${objName}.${s.fieldName}' is a read-only cell ('${s.fieldName} &${shown(field.typeEnc)}')`);
       }
     }
     const typeName = resolveObjType(objName);
@@ -3027,7 +2825,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const m = remoteMember(sub.target, remotesParsed || {});
     if (!m || !dependencyNames?.has(m.root) || !m.field) return;
     if (!m.field.cell) {
-      throw new Error(`'${m.label}' is a prop, not an address, so it can't be subscribed to (a live read-only member is a cell: '${m.name} &${m.field.type}')`);
+      throw new Error(`'${m.label}' is a prop, not an address, so it can't be subscribed to (a live read-only member is a cell: '${m.name} &${shown(m.field.typeEnc)}')`);
     }
     if (m.field.writeOnly) throw new Error(`'${m.label}' is a write-only cell, so it can't be subscribed to`);
   };
@@ -3090,7 +2888,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // Types here are encoded. `class` in a param's type is the class it's declared
   // in, as the parser encoded it. A class of another file constructed through its
   // service (`Svc.Counter(…)`) fits a param typed with its name there (`Counter`).
-  const argTypeOf = (expr) => inferExpressionTypeEnc(expr, typeEnv.enc, localActorTypes, actorNameSet);
+  const argTypeOf = (expr) => inferExpressionTypeEnc(expr, typeEnv, localActorTypes, actorNameSet);
   const remoteName = (t) => (typeof t === 'string' && t.includes(':') ? splitAddress(t).filter(x => x !== '*').at(-1) : null);
   const acceptsArg = (argType, expected) => assignableEnc(argType, expected, actorByName)
     || (remoteName(argType) !== null && remoteName(argType) === expected);
@@ -3100,7 +2898,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const { sigPos, sigNamed } = clauseArity(clause);
     for (let i = 0; i < call.positional.length && i < sigPos.length; i++) {
       const sp = sigPos[i];
-      if (!sp.type || sp.typeEnc === undefined) continue;
+      if (sp.typeEnc === undefined) continue;
       const argExpr = call.positional[i]?.expr || call.positional[i];
       const argType = argTypeOf(argExpr);
       if (argType === undefined) continue;
@@ -3111,7 +2909,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     for (const sp of sigNamed) {
       const key = sp.key || sp.name;
       const argExpr = call.named.get(key);
-      if (!argExpr || !sp.type || sp.typeEnc === undefined) continue;
+      if (!argExpr || sp.typeEnc === undefined) continue;
       const argType = argTypeOf(argExpr);
       if (argType === undefined) continue;
       if (!acceptsArg(argType, sp.typeEnc)) {
@@ -3123,7 +2921,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     const parts = params.map(p => {
       const opt = isOptional(p) ? '? ' : '';
       const nm = p.positional ? '' : `:${p.key || p.name} `;
-      const ty = p.type || 'Anything';
+      const ty = nodeShown(p);
       const rest = p.rest ? '*' : '';
       return `${opt}${nm}${ty}${rest}`;
     });
@@ -3254,8 +3052,8 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const fns = (cls?.functions || []).filter(f => f.name === method && !f.emptyOverload);
       if (fns.length > 0) {
         const classTypes = new Map();
-        for (const v of (cls.stateVarDecls || [])) if (v.typeName) classTypes.set(v.name, v.typeName);
-        for (const p of (cls.initParams || [])) if (p.type) classTypes.set(p.key || p.name, p.type);
+        for (const v of (cls.stateVarDecls || [])) if (v.typeNameEnc !== undefined) classTypes.set(v.name, v.typeNameEnc);
+        for (const p of (cls.initParams || [])) if (p.typeEnc !== undefined) classTypes.set(p.key || p.name, p.typeEnc);
         return { label: `${callSrc.object.name}.${callSrc.method}`, shape: knownReturnShape(fns, classTypes), fns };
       }
       // An auto-accessor replies with its param's value, positionally.
@@ -3277,7 +3075,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // the search goes on; one they can't fit is passed over. Empty when none fits.
   const argFit = (argExpr, param) => {
     const expected = param?.typeEnc;
-    if (!param?.type || expected === undefined || expected === 'Anything') return 'yes';
+    if (expected === undefined || expected === 'Anything') return 'yes';
     const argType = argTypeOf(argExpr);
     if (argType === undefined) return 'maybe';
     if (param.rest) return 'maybe';
@@ -3337,11 +3135,11 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   };
   const mentionsName = mentions(n => n.type === 'Identifier' || n.type === 'RefRead');
   const mentionsCall = mentions(n => isCall(n) || n.type === 'Function');
-  const mentionsLiteral = mentions(n => LITERAL_FORMS.has(inferLiteralType(n)) && n.type !== 'TypeConstruction');
+  const mentionsLiteral = mentions(n => LITERAL_FORMS.has(inferLiteralTypeEnc(n)) && n.type !== 'TypeConstruction');
   const valueType = (expr) => {
     if (!expr) return null;
     if (isCall(expr)) {
-      if (expr.attestedAs) return null;
+      if (expr.attestedAsEnc !== undefined) return null;
       const shapes = callReturns(expr)?.shapes;
       if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
       const slots = shapes.alternatives.map(alt => alt.find(slot => slot.name === null));
@@ -3352,7 +3150,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     if (expr.type === 'ParenExpr') return valueType(expr.expr);
     if (expr.type === 'Identifier' || expr.type === 'RefRead') {
       if (dependencyNames?.has(expr.name)) return null;
-      const type = typeEnv.enc?.get(expr.name) ?? (localActorTypes.has(expr.name) ? classEnc(localActorTypes.get(expr.name)) : undefined);
+      const type = typeEnv.get(expr.name) ?? (localActorTypes.has(expr.name) ? classEnc(localActorTypes.get(expr.name)) : undefined);
       return type !== undefined ? { type, narrowable: true, literal: false } : null;
     }
     if (expr.type === 'BinaryExpr') {
@@ -3371,7 +3169,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
     if (expr.type === 'UnaryExpr' && expr.op === '-') return valueType(expr.operand ?? expr.arg);
     if (mentionsCall(expr)) return null;
-    const type = inferType(expr, typeEnv.enc);
+    const type = inferType(expr, typeEnv);
     return type !== undefined ? { type, narrowable: mentionsName(expr), literal: mentionsLiteral(expr) } : null;
   };
 
@@ -3379,7 +3177,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
   // just one: every return is a single positional value, of one type that isn't a
   // union, an Object, a function or an actor. `x = f()` is then `x T = f()`.
   const singleReturnType = (call) => {
-    if (call.attestedAs) return null;
+    if (call.attestedAsEnc !== undefined) return null;
     const shapes = callReturns(call)?.shapes;
     if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
     if (shapes.alternatives.some(alt => alt.length !== 1 || alt[0].name !== null)) return null;
@@ -3388,8 +3186,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     // Nor an actor: a class here or in another file, or a dependency itself.
     if (isInstance(enc) || classOfEnc(enc, actorByName) || [...actorNameSet].some(n => classEnc(n) === enc)
       || [...dependencyNames].some(n => classEnc(n) === enc)) return null;
-    // The code generators' text, while they read it.
-    return { text: shapes.alternatives.map(alt => alt[0].type).reduce(mergeTypes), enc };
+    return enc;
   };
   if (inferOnly) {
     let inferred = 0;
@@ -3398,10 +3195,8 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const type = singleReturnType(s.value);
       if (!type) continue;
       s.type = 'TypedAssign';
-      s.typeName = type.text;
-      if (type.enc !== undefined) s.typeNameEnc = type.enc;
-      typeEnv.set(s.name, type.text);
-      if (type.enc !== undefined) (typeEnv.enc ??= new Map()).set(s.name, type.enc);
+      s.typeNameEnc = type;
+      typeEnv.set(s.name, type);
       inferred++;
     }
     return inferred;
@@ -3417,8 +3212,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     if (expr?.type !== 'DotCallExpr' || expr.object?.type !== 'Identifier') return null;
     const objName = expr.object.name;
     if (dependencyNames.has(objName)) return null; // already a direct dep
-    const t = typeEnv.get(objName);
-    return (t && dependencyNames.has(t)) ? t : null;
+    return depOfEnc(typeEnv.get(objName), dependencyNames);
   };
 
   // Wraps an actor method call into a direct-dep-shaped expr so the
@@ -3480,13 +3274,13 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
           for (const callArg of site.args) {
             const argName = callArg.name;
             const argType = inferArgType(callArg.expr, siteTypeEnv);
-            if (!argType) continue; // can't infer — skip, no false positives
+            if (argType === undefined) continue; // can't infer — skip, no false positives
             const methodParam = methodSig.params.find(mp => mp.name === argName);
-            if (!methodParam || !methodParam.type) continue;
-            if (argType !== methodParam.type) {
+            if (!methodParam || methodParam.typeEnc === undefined) continue;
+            if (argType !== methodParam.typeEnc) {
               throw new Error(
                 `Type mismatch in '${targetActor}': ref param '${p.name}' calls '${site.method}' ` +
-                `with '${argName}: ${argType}', but '${argActorName}.${site.method}' expects '${argName}: ${methodParam.type}'`,
+                `with '${argName}: ${shown(argType)}', but '${argActorName}.${site.method}' expects '${argName}: ${shown(methodParam.typeEnc)}'`,
               );
             }
           }
@@ -3506,10 +3300,10 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
             if (sig && spec.params) {
               for (const cp of spec.params) {
                 const ap = sig.params.find(sp => sp.name === cp.name);
-                if (ap && cp.type && ap.type && cp.type !== ap.type) {
+                if (ap && cp.typeEnc !== undefined && ap.typeEnc !== undefined && cp.typeEnc !== ap.typeEnc) {
                   throw new Error(
-                    `Type mismatch: '${argActorName}.${methodName}' param '${cp.name}' is '${ap.type}', ` +
-                    `but constraint on '${p.name}' expects '${cp.type}'`,
+                    `Type mismatch: '${argActorName}.${methodName}' param '${cp.name}' is '${shown(ap.typeEnc)}', ` +
+                    `but constraint on '${p.name}' expects '${shown(cp.typeEnc)}'`,
                   );
                 }
               }
@@ -3518,10 +3312,10 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
             if (sig && spec.returns && sig.returns && !sig.returnAlternatives) {
               for (const cr of spec.returns) {
                 const ar = sig.returns.find(sr => sr.name === cr.name);
-                if (ar && cr.type && ar.type && cr.type !== ar.type) {
+                if (ar && cr.typeEnc !== undefined && ar.typeEnc !== undefined && cr.typeEnc !== ar.typeEnc) {
                   throw new Error(
-                    `Type mismatch: '${argActorName}.${methodName}' returns '${cr.name}: ${ar.type}', ` +
-                    `but constraint on '${p.name}' expects '${cr.name}: ${cr.type}'`,
+                    `Type mismatch: '${argActorName}.${methodName}' returns '${cr.name}: ${shown(ar.typeEnc)}', ` +
+                    `but constraint on '${p.name}' expects '${cr.name}: ${shown(cr.typeEnc)}'`,
                   );
                 }
               }
@@ -3543,14 +3337,14 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     // Call-result shape checks: `:x = f()` needs a named `x`; `x T = f()`
     // needs a positional. Only where f's returns are statically known.
     const callSrc = s.type === 'DestructureAssign' ? s.source
-      : (s.type === 'TypedAssign' && s.typeName !== 'Object' ? s.value : null);
+      : (s.type === 'TypedAssign' && s.typeNameEnc !== 'Object' ? s.value : null);
     if (s.type === 'DestructureAssign') checkNamedFields(s.pattern, s.source);
     const callShape = callSrc ? resolveCall(callSrc) : null;
     if (callShape) {
       if (s.type === 'DestructureAssign') checkNamedReturns(s.pattern, callShape.label, callShape.shape);
       else checkPositionalReturn(s, callShape.label, callShape.shape);
     }
-    if (callSrc && !callSrc.attestedAs) {
+    if (callSrc && callSrc.attestedAsEnc === undefined) {
       const called = callReturns(callSrc, callShape);
       if (called) checkAnnotationCovers(s, called.label, called.shapes, actorByName);
       else if (s.type === 'TypedAssign' && !isCall(callSrc)) checkAnnotationValue(s, valueType(callSrc), actorByName);
@@ -3565,19 +3359,19 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
 
     // as-clause type check on TypedAssign + FunctionCallExpr (actor construction)
     if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {
-      checkAsClauseMatch(s.typeName, s.value.callee.name, actorInfo);
+      checkAsClauseMatch(s.typeNameEnc, s.value.callee.name, actorInfo);
     }
     // as-type check for dependency typed assign: n Integer = Dep or n Integer = Dep()
-    if (s.type === 'TypedAssign' && s.typeName) {
+    if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined) {
       const depName = s.value?.type === 'Identifier' ? s.value.name
         : (s.value?.type === 'FunctionCallExpr' ? s.value.callee?.name : null);
       // A dependency's own class is no conversion: `t Thing = Thing()`.
-      if (depName && depName !== s.typeName && dependencyNames.has(depName) && remotesParsed[depName]) {
-        const asTypes = remotesParsed[depName].__asTypes;
-        if (asTypes && !asTypes.includes(s.typeName)) {
-          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${s.typeName}'`);
+      if (depName && classEnc(depName) !== s.typeNameEnc && dependencyNames.has(depName) && remotesParsed[depName]) {
+        const asTypes = remotesParsed[depName].__asTypesEnc;
+        if (asTypes && !asTypes.includes(s.typeNameEnc)) {
+          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${shown(s.typeNameEnc)}'`);
         } else if (!asTypes && !actorInfo?.has(depName)) {
-          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${s.typeName}'`);
+          throw new Error(`No matching 'self-as' clause in service '${depName}' for type '${shown(s.typeNameEnc)}'`);
         }
       }
     }
@@ -3596,12 +3390,12 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
             for (const callArg of coercionDot.args) {
               const argName = callArg.name;
               const argType = inferArgType(callArg.expr, typeEnv);
-              if (!argType) continue;
+              if (argType === undefined) continue;
               const specParam = spec.params.find(sp => sp.name === argName);
-              if (specParam && specParam.type && argType !== specParam.type) {
+              if (specParam && specParam.typeEnc !== undefined && argType !== specParam.typeEnc) {
                 throw new Error(
-                  `Type mismatch: cast '${objName}' constrains '${methodName}' param '${argName}' to '${specParam.type}', ` +
-                  `but got '${argType}'`,
+                  `Type mismatch: cast '${objName}' constrains '${methodName}' param '${argName}' to '${shown(specParam.typeEnc)}', ` +
+                  `but got '${shown(argType)}'`,
                 );
               }
             }
@@ -3626,8 +3420,8 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       }
       // Actor call: view.open() where view is typed as a dependency name
       if (objName && !dependencyNames.has(objName)) {
-        const objType = typeEnv.get(objName);
-        if (objType && dependencyNames.has(objType) && remotesParsed[objType]) {
+        const objType = depOfEnc(typeEnv.get(objName), dependencyNames);
+        if (objType && remotesParsed[objType]) {
           // Validate against the actor interface
           const instanceExpr = { ...dotCall, object: { type: 'Identifier', name: objType } };
           validateRemoteCall(instanceExpr, remotesParsed, typeEnv, actorByName);
@@ -3670,26 +3464,26 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
 
 function checkTypeConsistency(body) {
   const typeMap = new Map();
-  function checkAndSet(name, typeName) {
-    if (typeMap.has(name) && typeMap.get(name) !== typeName) {
-      throw new Error(`Conflicting type declarations for '${name}': '${typeMap.get(name)}' vs '${typeName}'`);
+  function checkAndSet(name, t) {
+    if (typeMap.has(name) && typeMap.get(name) !== t) {
+      throw new Error(`Conflicting type declarations for '${name}': '${shown(typeMap.get(name))}' vs '${shown(t)}'`);
     }
-    typeMap.set(name, typeName);
+    typeMap.set(name, t);
   }
   for (const s of body) {
     if (s.type === 'BareTypeDecl') {
-      checkAndSet(s.name, s.typeName);
+      checkAndSet(s.name, s.typeNameEnc);
     } else if (s.type === 'TypedAssign') {
-      checkAndSet(s.name, s.typeName);
-    } else if (s.type === 'RefDecl' && s.typeName) {
-      checkAndSet(s.name, s.typeName);
+      checkAndSet(s.name, s.typeNameEnc);
+    } else if (s.type === 'RefDecl' && s.typeNameEnc !== undefined) {
+      checkAndSet(s.name, s.typeNameEnc);
     } else if (s.type === 'DestructureAssign') {
       for (const item of s.pattern) {
-        if (!item.discard && item.name && item.type) checkAndSet(item.name, item.type);
+        if (!item.discard && item.name && item.typeEnc !== undefined) checkAndSet(item.name, item.typeEnc);
       }
     } else if (s.type === 'ListDestructure') {
       for (const item of s.pattern) {
-        if (!item.discard && !item.rest && item.name && item.type) checkAndSet(item.name, item.type);
+        if (!item.discard && !item.rest && item.name && item.typeEnc !== undefined) checkAndSet(item.name, item.typeEnc);
       }
     }
   }
@@ -3718,13 +3512,13 @@ function knownReturnShape(fns, outerTypes = new Map()) {
   let hasPositional = false;
   for (const fn of fns) {
     const types = new Map(outerTypes);
-    for (const p of (fn.params || [])) if (p.type) types.set(p.key || p.name, p.type);
+    for (const p of (fn.params || [])) if (p.typeEnc !== undefined) types.set(p.key || p.name, p.typeEnc);
     const returns = [];
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(walk); return; }
       if (node.type === 'Function') return;
-      if (node.type === 'TypedAssign' && node.typeName) types.set(node.name, node.typeName);
+      if (node.type === 'TypedAssign' && node.typeNameEnc !== undefined) types.set(node.name, node.typeNameEnc);
       if (node.type === 'Reply' || node.type === 'Return' || node.type === 'ImplicitReturn') returns.push(node);
       for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v);
     };
@@ -3738,7 +3532,7 @@ function knownReturnShape(fns, outerTypes = new Map()) {
         // A sole Object return was already lowered to a spread
         // (spreadObjectReturns); one still positional is one value of several.
         const t = types.get(e.name);
-        return !t || /(^|\|)\s*Anything\s*($|\|)/.test(t);
+        return t === undefined || encMembers(t).includes('Anything');
       }
       return true;
     };
@@ -3771,9 +3565,9 @@ function lowerFunctionAs(ast) {
     const walk = (node, fns) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(n => walk(n, fns)); return; }
-      if (node.type === 'Identifier' && node.attestedAs === 'Function' && fns.has(node.name)) {
+      if (node.type === 'Identifier' && node.attestedAsEnc === 'Function' && fns.has(node.name)) {
         node.type = 'FnRef';
-        delete node.attestedAs;
+        delete node.attestedAsEnc;
         return;
       }
       const params = Array.isArray(node.params) ? node.params.map(p => p?.name) : [];
@@ -3793,21 +3587,21 @@ function spreadObjectReturns(ast) {
     if (Array.isArray(node)) { node.forEach(n => walk(n, types, retType)); return; }
     if (Array.isArray(node.params) && Array.isArray(node.body)) {
       const inner = new Map(types);
-      for (const p of node.params) if (p?.name) { inner.set(p.key || p.name, p.type || null); locals.delete(p.name); }
+      for (const p of node.params) if (p?.name) { inner.set(p.key || p.name, p.typeEnc); locals.delete(p.name); }
       walk(node.body, inner, node.type === 'Function' ? 'Return' : 'Reply');
       return;
     }
-    if (node.type === 'TypedAssign' && node.name) { types.set(node.name, node.typeName || null); locals.add(node.name); }
+    if (node.type === 'TypedAssign' && node.name) { types.set(node.name, node.typeNameEnc); locals.add(node.name); }
     const isObject = (name) => types.get(name) === 'Object';
     if ((node.type === 'Reply' || node.type === 'Return') && node.fields?.length === 1) {
       const f = node.fields[0];
-      if (f.positional && f.name && !f.expr && !f.type && isObject(f.name)) {
-        node.fields = [{ spread: true, name: f.name, type: null, localObject: locals.has(f.name) }];
+      if (f.positional && f.name && !f.expr && f.typeEnc === undefined && isObject(f.name)) {
+        node.fields = [{ spread: true, name: f.name, localObject: locals.has(f.name) }];
       }
     } else if (node.type === 'ImplicitReturn' && node.expr?.type === 'Identifier' && isObject(node.expr.name)) {
       const name = node.expr.name;
       for (const k of Object.keys(node)) delete node[k];
-      Object.assign(node, { type: retType, fields: [{ spread: true, name, type: null, localObject: locals.has(name) }] });
+      Object.assign(node, { type: retType, fields: [{ spread: true, name, localObject: locals.has(name) }] });
       return;
     }
     for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') walk(v, types, retType);
@@ -3823,7 +3617,7 @@ function checkNamedReturns(pattern, calleeLabel, shape) {
   for (const item of pattern) {
     const key = item.key !== undefined ? item.key : item.named ? item.name : null;
     if (key !== null && !keys.has(key)) {
-      const typed = item.type ? `${item.name} ${item.type}` : item.name;
+      const typed = item.typeEnc !== undefined ? `${item.name} ${nodeShown(item)}` : item.name;
       throw new Error(`Cannot destructure '${key}' from '${calleeLabel}()' — it returns no named '${key}' (to bind a positional result, write '${typed} = ${calleeLabel}()')`);
     }
   }
@@ -3839,8 +3633,13 @@ const COMPARABLE_SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Decimal', 'Fl
 // ── Encoded types (src/type_enc.js) ──────────────────────────────────────────
 //
 // What one run of validation needs to read encoded types: the program, for the
-// encoding a name has in it, and its declared types by address.
-const run = { ast: null, declsByAddress: null, classEncByName: new Map() };
+// encoding a name has in it.
+const run = { ast: null, classEncByName: new Map() };
+// A type as a message shows it (`shown`).
+const tyShown = (t) => shown(t);
+// The type a node holds under `key`, as a message shows it: one with no encoding
+// (a constructor profile, an interface) from its type tree.
+const nodeShown = (node, key = 'type') => (node?.[`${key}Tree`] ? renderType(node[`${key}Tree`]) : shown(node?.[`${key}Enc`]));
 
 // A class, by its name here (a public one is `C__pub` while validation runs), as an
 // encoded type: an instance of it, as an annotation naming it would be encoded.
@@ -3865,16 +3664,15 @@ function classOfEnc(t, actorByName) {
 // its name while validation runs (`C__pub`, shown as `@C`); a type of another
 // service, by its name there.
 function shown(t) {
+  const aliases = dependencyAliases(run.ast);
   return show(t, (a) => {
     const own = ownPath(a);
     if (own) {
       const names = ownNames(a);
       return own.length === 1 && isInstance(a) && !own[0].startsWith('~') ? `${names[0]}${PUBLIC_CLASS_SUFFIX}` : names.join('::');
     }
-    if (!a.includes(':')) return a;
-    const tokens = splitAddress(a).filter(x => x !== '*');
-    return tokens.slice(1).join('::') || tokens[0];
-  });
+    return addressShown(a, aliases);
+  }, { bareList: true });
 }
 
 const comparable = (m) => m === null || (typeof m === 'string' && COMPARABLE_SCALARS.has(m));
@@ -3919,44 +3717,31 @@ function assignableEnc(from, to, actorByName) {
 const mentionsAnythingEnc = (t) => t === 'Anything' || (Array.isArray(t) ? t.some(mentionsAnythingEnc)
   : t && typeof t === 'object' ? Object.values(t).some(mentionsAnythingEnc) : false);
 
-// Declared types by address, for the destructure inference.
-function declsByAddress() {
-  if (!run.declsByAddress && run.ast) {
-    const table = new Map();
-    for (const t of run.ast.types || []) table.set(t.typeNameEnc ?? addressOfDecl(t), t);
-    run.declsByAddress = table;
-  }
-  return run.declsByAddress;
-}
-const addressOfDecl = (t) => [':', [...(t.ownerTokens ?? t.owner ?? []), t.bareName ?? t.name].map(quoteToken).join(':')].join('');
-
-// The types of the names a function's owner gives it, by their text (`env`) and
-// encoded (`envEnc`), as src/return_shapes.js reads an outer scope.
+// The encoded types of the names a function's owner gives it, as
+// src/return_shapes.js reads an outer scope.
 function fnOuterTypes(fn) {
   const owner = functionOwners.get(fn);
   const env = new Map();
-  const envEnc = new Map();
-  for (const v of (owner?.stateVarDecls || [])) {
-    if (v.typeName) env.set(v.name, v.typeName);
-    if (v.typeNameEnc !== undefined) envEnc.set(v.name, v.typeNameEnc);
-  }
-  for (const p of (owner?.initParams || [])) {
-    if (p.type) env.set(p.name, p.type);
-    if (p.typeEnc !== undefined) envEnc.set(p.name, p.typeEnc);
-  }
-  return { env, envEnc };
+  for (const v of (owner?.stateVarDecls || [])) if (v.typeNameEnc !== undefined) env.set(v.name, v.typeNameEnc);
+  for (const p of (owner?.initParams || [])) if (p.typeEnc !== undefined) env.set(p.name, p.typeEnc);
+  return env;
 }
 
 // `select` narrows a doc's signatures to those the call could select.
 // The one class a dependency call returns on every clause (`document.body()` →
 // `body`), or null.
 function soleRemoteClassOf(call, remotesParsed, typeEnv, dependencyNames) {
-  if (call?.attestedAs) return null;
+  if (call?.attestedAsEnc !== undefined) return null;
   const shapes = remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, sigs => sigs)?.shapes;
   if (!shapes || shapes.opaque || shapes.orSelf || shapes.alternatives.length === 0) return null;
   if (shapes.alternatives.some(alt => alt.length !== 1 || alt[0].name !== null)) return null;
-  const types = new Set(shapes.alternatives.map(alt => alt[0].type));
-  return types.size === 1 ? [...types][0] : null;
+  const types = new Set(shapes.alternatives.map(alt => alt[0].typeEnc));
+  if (types.size !== 1) return null;
+  // The class by its name in the document: an instance's last token.
+  const [t] = types;
+  if (typeof t !== 'string') return null;
+  const tokens = t.startsWith(':') ? ownNames(t) ?? [] : splitAddress(t).filter(x => x !== '*');
+  return tokens.length ? tokens[tokens.length - 1] : null;
 }
 
 function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, select) {
@@ -3970,7 +3755,7 @@ function remoteReturnShapes(call, remotesParsed, typeEnv, dependencyNames, selec
   }
   if (call.object?.type !== 'Identifier') return null;
   const name = call.object.name;
-  const dep = dependencyNames?.has(name) ? name : typeEnv?.get(name);
+  const dep = dependencyNames?.has(name) ? name : depOfEnc(typeEnv?.get(name), dependencyNames);
   const doc = remotesParsed[dep];
   if (!doc) return null;
   const sigs = doc[call.method] ?? doc.__types?.[dep]?.functions?.filter(f => f.name === call.method);
@@ -3986,9 +3771,9 @@ function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actor
     && assignableEnc(actual, declared, actorByName) === false;
 
   if (s.type === 'TypedAssign') {
-    const declared = s.typeName;
     const declaredEnc = s.typeNameEnc;
-    if (!declared || declaredEnc === undefined || declaredEnc === 'Anything') return;
+    if (declaredEnc === undefined || declaredEnc === 'Anything') return;
+    const declared = shown(declaredEnc);
     const slots = alternatives.map(alt => alt.find(slot => slot.name === null));
     const missing = alternatives.find((alt, i) => alt.length > 0 && !slots[i]);
     if (missing) {
@@ -4015,8 +3800,8 @@ function checkAnnotationCovers(s, label, { alternatives, orSelf, opaque }, actor
     for (const alt of alternatives) {
       const slot = alt.find(c => c.name === key);
       if (!slot) throw new Error(`Cannot destructure '${key}' from '${label}()' — only some of its paths return it`);
-      if (item.type && item.typeEnc !== undefined && slot.typeEnc !== undefined && mismatch(item.typeEnc, slot.typeEnc)) {
-        throw new Error(`Cannot bind '${key} ${item.type}' to '${label}()' — it can return ${shown(slot.typeEnc)} there`);
+      if (item.typeEnc !== undefined && slot.typeEnc !== undefined && mismatch(item.typeEnc, slot.typeEnc)) {
+        throw new Error(`Cannot bind '${key} ${shown(item.typeEnc)}' to '${label}()' — it can return ${shown(slot.typeEnc)} there`);
       }
     }
     if (orSelf) throw new Error(`Cannot destructure '${key}' from '${label}()' — some of its paths return self`);
@@ -4033,9 +3818,9 @@ const LITERAL_FORMS = new Map([
 ]);
 
 function checkAnnotationValue(s, value, actorByName) {
-  const declared = s.typeName;
   const declaredEnc = s.typeNameEnc;
-  if (!value || !declared || declaredEnc === undefined || declaredEnc === 'Anything') return;
+  if (!value || declaredEnc === undefined || declaredEnc === 'Anything') return;
+  const declared = shown(declaredEnc);
   const { type, narrowable, literal } = value;
   if (!canJudgeEnc(declaredEnc, actorByName) || !canJudgeEnc(type, actorByName)) return;
   const members = encMembers(type);
@@ -4060,7 +3845,8 @@ function checkAnnotationValue(s, value, actorByName) {
 function checkPositionalReturn(s, calleeLabel, shape) {
   if (!shape || shape.hasPositional || shape.keys.size === 0) return;
   const named = [...shape.keys].sort();
-  const hint = named.includes(s.name) ? `:${s.name} ${s.typeName} = ${calleeLabel}()` : `${named[0]}: ${s.name} ${s.typeName} = ${calleeLabel}()`;
+  const declared = nodeShown(s, 'typeName');
+  const hint = named.includes(s.name) ? `:${s.name} ${declared} = ${calleeLabel}()` : `${named[0]}: ${s.name} ${declared} = ${calleeLabel}()`;
   throw new Error(`Cannot bind '${s.name}' to '${calleeLabel}()' — it returns only named fields (${named.join(', ')}); destructure instead: '${hint}'`);
 }
 
@@ -4158,7 +3944,7 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
   if (!declaredParams) return;
 
   // Build a single signature from the constructor params
-  const sig = { params: declaredParams.map(p => ({ name: p.key || p.name, type: p.type, ...(p.optional && { optional: true }) })) };
+  const sig = { params: declaredParams.map(p => ({ name: p.key || p.name, typeEnc: p.typeEnc, ...(p.optional && { optional: true }) })) };
 
   // Extract call args — may come from parseCallArgs (NamedArgsBag) or parseSendArgs (direct)
   const callNamed = new Map();
@@ -4166,10 +3952,10 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
   for (const a of expr.args) {
     if (a.type === 'NamedArgsBag') {
       for (const [k, v] of Object.entries(a.fields)) {
-        callNamed.set(k, { expr: v, typeName: null });
+        callNamed.set(k, { expr: v });
       }
     } else if (a.positional === false && a.name) {
-      callNamed.set(a.name, { expr: a.expr, typeName: a.typeName });
+      callNamed.set(a.name, { expr: a.expr, typeNameEnc: a.typeNameEnc });
     } else {
       callPositional.push(a);
     }
@@ -4181,7 +3967,7 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
 
   // Check positional count (accounting for optional params)
   if (callPositional.length < requiredPositional || callPositional.length > sigPositional.length) {
-    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
+    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${shown(p.typeEnc)}` : shown(p.typeEnc)).join(', ')})`;
     throw new Error(`'${name}()' arguments don't match constructor signature: ${sigStr}. Expected ${requiredPositional === sigPositional.length ? sigPositional.length : requiredPositional + '-' + sigPositional.length} positional arg(s), got ${callPositional.length}`);
   }
 
@@ -4192,7 +3978,7 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
   const missing = [...requiredNamedKeys].filter(k => !callNamedKeys.has(k));
   const extra = [...callNamedKeys].filter(k => !allNamedKeys.has(k));
   if (missing.length > 0 || extra.length > 0) {
-    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type).join(', ')})`;
+    const sigStr = `(${sig.params.map(p => p.name ? `${p.name}: ${shown(p.typeEnc)}` : shown(p.typeEnc)).join(', ')})`;
     const parts = [];
     if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
     if (extra.length) parts.push(`unexpected: ${extra.join(', ')}`);
@@ -4201,17 +3987,17 @@ function validateConstructorCall(expr, factoryDecls, _typeEnv) {
 
   // Check types
   const argType = (a) => {
-    if (a.typeName) return a.typeName;
-    if (a.expr) return inferLiteralType(a.expr);
-    return null;
+    if (a.typeNameEnc !== undefined) return a.typeNameEnc;
+    if (a.expr) return inferLiteralTypeEnc(a.expr);
+    return undefined;
   };
 
   for (const sp of sigNamed) {
     const ca = callNamed.get(sp.name);
     if (!ca) continue;
     const ct = argType(ca);
-    if (ct && sp.type && !sp.type.split('|').some(t => t.trim() === ct)) {
-      throw new Error(`'${name}()' constructor arg '${sp.name}': expected ${sp.type}, got ${ct}`);
+    if (ct !== undefined && sp.typeEnc !== undefined && !encMembers(sp.typeEnc).some(m => m === ct || m === 'Anything')) {
+      throw new Error(`'${name}()' constructor arg '${sp.name}': expected ${shown(sp.typeEnc)}, got ${shown(ct)}`);
     }
   }
 }
@@ -4244,7 +4030,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
       sigs = fns.map(fn => {
         const reply = fn.body?.find(s => s.type === 'Reply');
         const returns = reply ? reply.fields.map(f => ({
-          name: f.key || f.name, type: f.type, positional: f.positional,
+          name: f.key || f.name, typeEnc: f.typeEnc, positional: f.positional,
         })) : null;
         return { params: fn.params || [], returns };
       });
@@ -4295,8 +4081,8 @@ function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
   // Types are encoded: a document's are in this file's terms as it's read
   // (src/service_doc.js, readDocument), so `Svc::Point` here is its `:Point`.
   const argType = (a) => {
-    if (a.typeName) return a.typeNameEnc;
-    if (a.expr?.type === 'Identifier') return typeEnv?.enc?.get(a.expr.name);
+    if (a.typeNameEnc !== undefined) return a.typeNameEnc;
+    if (a.expr?.type === 'Identifier') return typeEnv?.get(a.expr.name);
     if (a.expr) return inferLiteralTypeEnc(a.expr);
     return undefined;
   };
@@ -4346,7 +4132,7 @@ function matchRemoteSigs(expr, sigs, label, dep, typeEnv, actorByName) {
     return; // match found
   }
   const sigStrs = sigs.map(s => {
-    const parts = s.params.map(p => p.name ? `${p.name}: ${p.type}` : p.type);
+    const parts = s.params.map(p => p.name ? `${p.name}: ${shown(p.typeEnc)}` : shown(p.typeEnc));
     return `(${parts.join(', ')})`;
   });
   throw new Error(`'${label}.${methodName}()' arguments don't match any signature: ${sigStrs.join(' | ')}. ${errors[0]}`);
@@ -4379,8 +4165,9 @@ function checkWhileReturnType(fnNode) {
     if (s.type !== 'BareTypeDecl') last = s;
   }
   if (!last || last.type !== 'WhileStatement') return;
-  if (!fnNode.returnType || fnNode.returnType === '()') return;
+  if (fnNode.returnType === '()' || (fnNode.returnType === undefined && fnNode.returnTypeEnc === undefined)) return;
+  const declared = fnNode.returnTypeEnc !== undefined ? shown(fnNode.returnTypeEnc) : fnNode.returnType;
   throw new Error(
-    `tail \`repeat\` makes this function Void — declared return '${fnNode.returnType}' cannot be satisfied by a loop`,
+    `tail \`repeat\` makes this function Void — declared return '${declared}' cannot be satisfied by a loop`,
   );
 }

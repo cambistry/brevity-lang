@@ -5,6 +5,7 @@
 // param, a local, a loop variable) is that local, as before.
 
 import { buildActorMap, resolveSuperclassChain } from './subclass.js';
+import { classNameOf } from './codegen/enc_names.js';
 
 const DECLS = new Set(['Assign', 'TypedAssign', 'RefDecl', 'StateAssign']);
 
@@ -69,7 +70,7 @@ export function lowerBareCalls(ast) {
         return { params: zero ? [] : decls[0].params ?? [] };
       };
       const asCall = (name, node) => {
-        if (node?.attestedAs === 'Function') {
+        if (node?.attestedAsEnc === 'Function') {
           throw new Error(`'${name} as Function' — the function itself is '&${name}'`);
         }
         const target = resolve(name);
@@ -78,7 +79,7 @@ export function lowerBareCalls(ast) {
           throw new Error(`'${name}' takes arguments — call it '${name}(…)', or use &${name} for the function itself`);
         }
         const call = { type: 'FunctionCallExpr', callee: { type: 'Identifier', name }, args: [] };
-        if (node?.attestedAs) call.attestedAs = node.attestedAs;
+        if (node?.attestedAsEnc !== undefined) call.attestedAsEnc = node.attestedAsEnc;
         return call;
       };
       const visit = (node) => {
@@ -138,13 +139,13 @@ export function lowerBareMemberCalls(ast, remotesParsed = {}) {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(scan); return; }
         if ((n.type === 'Assign' || n.type === 'TypedAssign') && typeof n.name === 'string') {
-          if (isCtor(n.value) || (n.type === 'TypedAssign' && classes.has(n.typeName))) actorLocals.add(n.name);
+          if (isCtor(n.value) || (n.type === 'TypedAssign' && classes.has(classNameOf(n.typeNameEnc)))) actorLocals.add(n.name);
           else shadowed.add(n.name);
         }
         for (const v of Object.values(n)) if (v && typeof v === 'object') scan(v);
       };
       scan(fn.body);
-      for (const p of fn.params || []) if (p?.name) { if (classes.has(p.type)) actorLocals.add(p.name); else shadowed.add(p.name); }
+      for (const p of fn.params || []) if (p?.name) { if (classes.has(classNameOf(p.typeEnc))) actorLocals.add(p.name); else shadowed.add(p.name); }
       const isActor = (o) => isCtor(o) ||
         (o?.type === 'Identifier' && actorLocals.has(o.name) && !shadowed.has(o.name));
       const docFunction = (o, m) => o?.type === 'Identifier' && !shadowed.has(o.name) && !actorLocals.has(o.name) &&

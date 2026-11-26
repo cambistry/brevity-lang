@@ -12,7 +12,7 @@ import { publicLabel } from '../../singleton_classes.js';
 import { LIST_PREAMBLE, OBJECT_PREAMBLE, AS_PREAMBLE, TEXT_PREAMBLE, MATH_PREAMBLE, DECIMAL_PREAMBLE, STRING_PREAMBLE, EQUALITY_PREAMBLE, WIRE_PREAMBLE } from './preambles.js';
 import { buildTypeEnv } from './types.js';
 import { readRemote } from '../../validate.js';
-export { parseInterface } from './types.js';
+export { parseInterface } from '../../parser_interface.js';
 import {
   CALL_LIKE, genExpr, genTailValue, genDestructure, genReBody, genTyBody,
   genTypeCondition, genValueCondition, genDefaultValue, stateKey,
@@ -666,7 +666,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       if (!ownStateNames.has(ingest.name)) {
         mergedActor.stateVarDecls = [
           ...(mergedActor.stateVarDecls || []),
-          { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
+          { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
         ];
       }
     }
@@ -760,7 +760,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   }
   const stateVarEnv = new Map([
     // The file's names a class reads (src/outer_reads.js); its own come after, and win.
-    ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined) : []),
+    ...(actor.name && ctx.readsOuter ? [...outerNamesFor(ctx.program, actor)].filter(([, t]) => t !== undefined) : []),
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
     ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);

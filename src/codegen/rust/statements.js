@@ -171,7 +171,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
     const match = candidates.find(c => {
       if (c.params.length !== argCount) return false;
       for (let j = 0; j < argCount; j++) {
-        if (argTypes[j] && c.params[j]?.type && c.params[j].type !== 'Anything' && argTypes[j] !== c.params[j].type) return false;
+        if (argTypes[j] && c.params[j]?.typeEnc !== undefined && c.params[j].typeEnc !== "Anything" && argTypes[j] !== c.params[j].typeEnc) return false;
       }
       return true;
     });
@@ -375,7 +375,7 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
               if (implRetB) innerRetExprB = implRetB.expr;
             }
             const innerExpr = innerRetExprB ? genRustExpr(innerRetExprB, fnTypeEnv) : 'Value::Null';
-            const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+            const rtype = bs.type === 'TypedAssign' ? bs.typeNameEnc : inferLiteralType(bs.value);
             if (innerLines.length > 0) {
               const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
               blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${innerBlock};`);
@@ -385,7 +385,7 @@ function handleTypedAssign_ActorFnCall(s, typeEnv, fnDefs, I, lines, fns) {
           } else if (cp.kind === 'method') {
             const innerArgs = bs.value.args.filter(a => a.type !== 'NamedArgsBag');
             const argVals = innerArgs.map(a => forceJsonWrap(genRustExpr(a, fnTypeEnv)));
-            const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
+            const rtype = bs.type === 'TypedAssign' ? bs.typeNameEnc : null;
             const fnCall = `self.${cp.name}_fn(&BvObject { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
             blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rtype ? rustType(rtype) : 'Value'} = ${rtype ? convertFromValue(fnCall, rtype) : fnCall};`);
           }
@@ -548,7 +548,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
           }
           continue;
         }
-        const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+        const paramType = param.typeEnc || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
         let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
         if (paramType) {
           if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
@@ -624,7 +624,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
             let nfPosIdx = 0;
             for (const np of nfParams) {
               const narg = nfArgs[nfPosIdx++];
-              const ntype = np.type || inferLiteralType(narg) || (narg?.type === 'Identifier' ? typeEnv.get(narg.name) : null) || (np.defaultValue ? inferLiteralType(np.defaultValue) : null);
+              const ntype = np.typeEnc || inferLiteralType(narg) || (narg?.type === 'Identifier' ? typeEnv.get(narg.name) : null) || (np.defaultValue ? inferLiteralType(np.defaultValue) : null);
               const nexpr = narg ? genRustExpr(narg, typeEnv) : (np.defaultValue ? genRustDefaultExpr(np, typeEnv) : 'Value::Null');
               if (ntype) {
                 nfLines.push(`${I}        let ${rustIdent(np.name)}: ${rustType(ntype)} = ${nexpr};`);
@@ -638,7 +638,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
               if (implRetN) nfRetExpr = implRetN.expr;
             }
             const nfExpr = nfRetExpr ? genRustExpr(nfRetExpr, typeEnv) : 'Value::Null';
-            const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+            const rtype = bs.type === 'TypedAssign' ? bs.typeNameEnc : inferLiteralType(bs.value);
             if (nfLines.length > 0) {
               const nfBlock = `{\n${nfLines.join('\n')}\n${I}        ${nfExpr}\n${I}    }`;
               if (rtype) {
@@ -670,7 +670,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
               let iposIdx = 0;
               for (const ip of innerParams) {
                 const iarg = innerArgs[iposIdx++];
-                const itype = ip.type || inferLiteralType(iarg) || (iarg?.type === 'Identifier' ? typeEnv.get(iarg.name) : null) || (ip.defaultValue ? inferLiteralType(ip.defaultValue) : null);
+                const itype = ip.typeEnc || inferLiteralType(iarg) || (iarg?.type === 'Identifier' ? typeEnv.get(iarg.name) : null) || (ip.defaultValue ? inferLiteralType(ip.defaultValue) : null);
                 const iexpr = iarg ? genRustExpr(iarg, typeEnv) : (ip.defaultValue ? genRustDefaultExpr(ip, typeEnv) : 'Value::Null');
                 if (itype) {
                   innerLines.push(`${I}        let ${rustIdent(ip.name)}: ${rustType(itype)} = ${iexpr};`);
@@ -684,7 +684,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
                 if (implRetH) innerRetExprH = implRetH.expr;
               }
               const innerExpr = innerRetExprH ? genRustExpr(innerRetExprH, typeEnv) : 'Value::Null';
-              const rtype = bs.type === 'TypedAssign' ? bs.typeName : inferLiteralType(bs.value);
+              const rtype = bs.type === 'TypedAssign' ? bs.typeNameEnc : inferLiteralType(bs.value);
               if (innerLines.length > 0) {
                 const innerBlock = `{\n${innerLines.join('\n')}\n${I}        ${innerExpr}\n${I}    }`;
                 if (rtype) {
@@ -707,7 +707,7 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
                 const t = a.type === 'Identifier' ? typeEnv.get(a.name) : inferLiteralType(a);
                 return forceJsonWrap(toJsonValue(raw, t));
               });
-              const rtype = bs.type === 'TypedAssign' ? bs.typeName : null;
+              const rtype = bs.type === 'TypedAssign' ? bs.typeNameEnc : null;
               const fnCall = `self.${cp.name}_fn(&BvObject { positional: vec![${argVals.join(', ')}], named: Map::new() }).one()`;
               if (rtype) {
                 blockLines.push(`${I}    let ${rustIdent(bs.name)}: ${rustType(rtype)} = ${convertFromValue(fnCall, rtype)};`);
@@ -1129,7 +1129,7 @@ function genRustTypedAssignBody(s, typeEnv, fnDefs, sCtx, I, lines, i, body, mut
       } else if (s.value?.type === 'DotCallExpr' && (s.value.object.type === 'Identifier' || s.value.object.type === 'RefRead')
           && sCtx?.selfSpawnedRefs?.has(s.value.object.name)) {
         // Self-spawned actor: same dispatch as a destructure, binding the sole positional.
-        genRustDestructureAssign({ type: 'DestructureAssign', source: s.value, pattern: [{ positional: true, idx: 0, name: s.name, type: s.typeName, typeEnc: s.typeNameEnc }] }, typeEnv, sCtx, I, lines, i, fnDefs);
+        genRustDestructureAssign({ type: 'DestructureAssign', source: s.value, pattern: [{ positional: true, idx: 0, name: s.name, typeEnc: s.typeNameEnc }] }, typeEnv, sCtx, I, lines, i, fnDefs);
       } else if (s.value?.type === 'DotCallExpr' && (() => {
         const dotObj = s.value.object;
         const dn = dotObj.type === 'RefRead' ? dotObj.name : (dotObj.type === 'Identifier' ? dotObj.name : null);
@@ -1247,7 +1247,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             } else if (namedArgsBagD && namedArgsBagD.fields && lookupKey in namedArgsBagD.fields) {
               arg = namedArgsBagD.fields[lookupKey];
             }
-            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+            const paramType = param.typeEnc || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
             let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';
@@ -1472,7 +1472,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           // External DotCallExpr await: send outgoing message, then await response on stdin
           const dotObjName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
           // Check for wrapped child dispatch
-          {const isWrappedChildD = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
+          {const isWrappedChildD = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeNameEnc === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
           if (isWrappedChildD) {
             const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
             const method = JSON.stringify(wireOpOf(expr));
@@ -1646,7 +1646,7 @@ function genRustAssignFnCall(s, typeEnv, sCtx, I, lines, fnDefs, body, mutableVa
           // Find the returned function from Reply and register it under the call-site name
           if (fnReply) {
             const retField = fnReply.fields.find(f =>
-              f.type === 'Function' || (typeof f.type === 'string' && /[-=~]>/.test(f.type)));
+              f.typeEnc === "Function" || isFn(f.typeEnc));
             if (retField) {
               const retFunction = fnLocalFunctions.get(retField.name);
               if (retFunction) {
@@ -1779,7 +1779,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         payload = 'json!({})';
       }
       const childCall = `self.child_${actorName.toLowerCase()}_dispatch(${method}, &${payload}, "", "__parent")`;
-      const knownType = (s.type === 'TypedAssign' && s.typeName) || typeEnv.get(s.name);
+      const knownType = (s.type === 'TypedAssign' ? s.typeNameEnc : undefined) ?? typeEnv.get(s.name);
       if (knownType) {
         // Extract single value: child dispatch returns a json object, use Object to extract the one value
         const accessor = `{ let _cr = ${childCall}; let _cs = BvObject::pack(&_cr); _cs.one() }`;
@@ -2160,7 +2160,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         ? `self.child_${sCtx.childActorRefs.get(objName).toLowerCase()}_dispatch(${method}, &json!({}), "", "__parent")`
         : `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(objName).toLowerCase(), rustSsaResolve(objName))}${method}, &json!({}), "", "__parent")`;
       const accessor = `{ let _cr = ${childCall}; let _cs = BvObject::pack(&_cr); _cs.one() }`;
-      const knownType = (s.type === 'TypedAssign') ? s.typeName : typeEnv.get(s.name);
+      const knownType = (s.type === 'TypedAssign') ? s.typeNameEnc : typeEnv.get(s.name);
       if (knownType) {
         lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(knownType)} = ${convertFromValue(accessor, knownType)};`);
       } else {
@@ -2486,7 +2486,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const coll = genRustExpr(s.expr.collection, typeEnv);
         lines.push(`${I}if let Some(_arr) = ${coll}.as_array().cloned() {`);
         lines.push(`${I}    for _el in _arr {`);
-        if (param?.type) {
+        if (param && hasType(param)) {
           lines.push(`${I}        let ${rustIdent(param.name)}: ${rustType(envTypeOf(param))} = ${convertFromValue('_el.clone()', envTypeOf(param))};`);
           loopEnv.set(param.name, envTypeOf(param));
         } else if (param) {
@@ -2848,7 +2848,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
               }
               continue;
             }
-            const paramType = param.type || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
+            const paramType = param.typeEnc || inferLiteralType(arg) || (arg?.type === 'Identifier' ? typeEnv.get(arg.name) : null) || (param.defaultValue ? inferLiteralType(param.defaultValue) : null);
             let argExpr = arg ? genRustExpr(arg, typeEnv) : (param.defaultValue ? genRustDefaultExpr(param, typeEnv) : 'Value::Null');
             if (paramType) {
               if (paramType === 'Text' && arg?.type === 'StringLiteral') argExpr += '.to_string()';

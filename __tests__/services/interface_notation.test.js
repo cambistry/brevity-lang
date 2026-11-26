@@ -1,5 +1,5 @@
 import { extract, compile } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 import { documentShape } from '../../src/service_doc.js';
 
 // Service-document notation: every entry is a name, a space, and a
@@ -200,9 +200,9 @@ describe('service document — emitted form', () => {
     `);
     const p = documentShape(iface.service);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
-    expect(p.__fields.val).toEqual({ type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false });
+    expect(p.__fields.val).toEqual({ typeEnc: 'Integer', cell: true, readOnly: false });
     expect(p.__types.Counter.functions.map(f => f.name)).toEqual(['get']);
-    expect(p.add[0].returns).toEqual([{ name: 'sum', type: 'Integer', typeEnc: 'Integer', positional: false }]);
+    expect(p.add[0].returns).toEqual([{ name: 'sum', typeEnc: 'Integer', positional: false }]);
   });
 
   it('a public cell with no setter emits &, and round-trips', () => {
@@ -221,8 +221,8 @@ describe('service document — emitted form', () => {
       },
     });
     expect(documentShape(iface.service).__fields).toEqual({
-      names: { type: 'List of Texts', typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
-      val: { type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false },
+      names: { typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
+      val: { typeEnc: 'Integer', cell: true, readOnly: false },
     });
   });
 
@@ -256,8 +256,8 @@ describe('service document — emitted form', () => {
     });
     // A positional param has no name in the document, so its prop reads back as an op.
     expect(documentShape(iface.service).__types.Box.fields).toEqual({
-      slot: { type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false },
-      names: { type: 'List of Texts', typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
+      slot: { typeEnc: 'Integer', cell: true, readOnly: false },
+      names: { typeEnc: [['Text'], { '%t': 'List' }], cell: true, readOnly: true },
     });
   });
 });
@@ -340,7 +340,7 @@ describe('constructor profiles in source', () => {
     for (const arrow of ['-> ', '']) {
       const { ast } = extract(`use Thing = "thing.bv" as (a: Integer) ${arrow} *{ get () -> (value: Integer) }\n@go = -> 1\n`);
       const dep = ast.dependencies[0];
-      expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', type: 'Integer' })]);
+      expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', typeEnc: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
     }
   });
@@ -392,14 +392,14 @@ describe('file-level params — function-typed', () => {
   it('named: cb: (s: Integer) => .', () => {
     const { ast } = extract('*\n  cb: (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: false },
+      { type: 'FileParam', name: 'cb', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: false },
     ]);
   });
 
   it('positional: cb (s: Integer) => .', () => {
     const { ast } = extract('*\n  cb (s: Integer) => .\n*\n@go. = { cb(s: 1) }\n');
     expect(ast.dependencies).toEqual([
-      { type: 'FileParam', name: 'cb', paramType: '(s: Integer) => .', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: true },
+      { type: 'FileParam', name: 'cb', paramTypeEnc: { '%fn': [{ args: [{ s: 'Integer' }], writes: true }] }, positional: true },
     ]);
   });
 });

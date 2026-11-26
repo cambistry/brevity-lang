@@ -4,7 +4,7 @@
 // keys with a leading colon.
 //
 // `interfaceNode` builds a node from an interface as the compiler reads one
-// (the shape parseInterface gives, src/codegen/javascript/types.js), its types
+// (the shape parseInterface gives, src/parser_interface.js), its types
 // encoded by src/opre_types.js.
 
 import { cellNode, typeScope, SELF } from './opre_types.js';
@@ -14,13 +14,8 @@ import { wireLabel } from './codegen/wire_labels.js';
 
 const WRITES = { read: false, write: true };
 const own = (o) => Object.keys(o || {}).filter(k => !k.startsWith('__'));
-// A record's encoded type (`typeEnc`); `Anything` when it has no type. One with a
-// type's text and no encoding is the compiler's mistake, never `Anything`.
-const encOf = (r) => {
-  if (r?.typeEnc !== undefined) return r.typeEnc;
-  if (r?.type && r.type !== 'Anything') throw new Error(`Compiler bug: the type '${r.type}' has no encoding`);
-  return 'Anything';
-};
+// A record's encoded type (`typeEnc`); `Anything` when it has no type.
+const encOf = (r) => (r?.typeEnc !== undefined ? r.typeEnc : 'Anything');
 
 // Entries already encoded as an entry list: positional ones as items, named ones in
 // one object after them.
@@ -116,7 +111,7 @@ function classNode(name, cls, outer) {
   const instDoc = {};
   for (const f of cls.functions || []) (instDoc[f.name] ??= []).push(f);
   if (cls.fields) instDoc.__fields = cls.fields;
-  for (const s of cls.setters || []) if (!cls.fields?.[s.name]) (instDoc.__fields ??= {})[s.name] = { type: s.type, typeEnc: s.typeEnc, cell: true, writeOnly: true };
+  for (const s of cls.setters || []) if (!cls.fields?.[s.name]) (instDoc.__fields ??= {})[s.name] = { typeEnc: s.typeEnc, cell: true, writeOnly: true };
   section(instDoc, scope, inst, 'public');
   if (cls.instanceProtected) section(cls.instanceProtected, scope, inst, 'protected');
   for (const [sub, svc] of Object.entries(cls.services || {})) inst[`:${sub}`] = interfaceNode(svc, scope);
@@ -251,13 +246,12 @@ const orderSig = (s) => {
 // ── Reading a document ───────────────────────────────────────────────────────
 //
 // A service's published document, as the compiler reads an interface: the shape
-// parseInterface gives (src/codegen/javascript/types.js), each type as the service
-// names it (`:Point` is `Point`, `:T:*` an instance of its class `T`).
+// parseInterface gives (src/parser_interface.js), each type encoded (`…Enc`).
 
-const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals']]);
 const isEntryObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
+const isSelf = (shape) => shape.length === 1 && shape[0]?.['%self'] === true;
 
-// An address in the document as a type name of the service's.
+// An address in the document as the service names it: a parent class's name.
 function addressName(address) {
   if (!address.startsWith(':')) {
     if (address.includes(':')) throw new Error(`A type from another service ('${address}') in a service document isn't supported yet`);
@@ -268,54 +262,15 @@ function addressName(address) {
   return segs.join('::');
 }
 
-// A generic's element, after `of`: a plural for "any number of".
-function elementText(param) {
-  if (!Array.isArray(param)) return typeText(param);
-  const [inner] = param;
-  if (typeof inner === 'string' && PLURAL_OF.has(inner)) return PLURAL_OF.get(inner);
-  if (Array.isArray(inner) && inner[inner.length - 1]?.['%t'] === 'List') return `Lists of ${elementText(inner[0])}`;
-  return typeText(inner);
-}
-
-export function typeText(t) {
-  if (t === null) return 'null';
-  if (typeof t === 'string') return addressName(t);
-  if (Array.isArray(t)) {
-    const tag = t[t.length - 1];
-    if (!tag || typeof tag !== 'object' || !('%t' in tag)) throw new Error(`A type list ends in its '%t' entry: ${JSON.stringify(t)}`);
-    const { '%t': name, ...named } = tag;
-    const items = t.slice(0, -1);
-    if (name === 'Object') return `(${fieldsText(decodeEntries([...items, ...(Object.keys(named).length ? [named] : [])]))})`;
-    if (items.length !== 1 || Object.keys(named).length) throw new Error(`'${name}' takes one parameter in Brevity: ${JSON.stringify(t)}`);
-    return `${addressName(name)} of ${elementText(items[0])}`;
-  }
-  if ('%or' in t) return t['%or'].map(typeText).join(' | ');
-  if ('%fn' in t) return fnText(t['%fn'][0]);
-  throw new Error(`Unrecognized type in a service document: ${JSON.stringify(t)}`);
-}
-
-const fieldsText = (fields) => fields.map(f => `${f.optional ? '? ' : ''}${f.positional ? f.type : `${f.name}: ${f.type}`}`).join(', ');
-const ARROW = (writes) => (writes === false ? '->' : writes === undefined ? '~>' : '=>');
-const isSelf = (shape) => shape.length === 1 && shape[0]?.['%self'] === true;
-
-function fnText(sig) {
-  const args = `(${fieldsText(decodeEntries(sig.args || []))})`;
-  if (!sig.re) return `${args} => .`;
-  const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
-  const self = shapes.some(isSelf);
-  const values = shapes.filter(s => !isSelf(s)).map(s => `(${fieldsText(decodeEntries(s))})`);
-  return `${args} ${ARROW(sig.writes)} ${[...values, ...(self ? ['self'] : [])].join(' | ')}`;
-}
-
 const isCell = (node) => node?.public?.$get && Object.keys(node.public).every(k => k === '$get' || k === '$set');
 
-// An entry list as fields: `[{ name, type, positional, optional }]`.
+// An entry list as fields: `[{ name, typeEnc, positional, optional }]`.
 function decodeEntries(list) {
   const fields = [];
   const one = (name, t) => {
     const optional = t && typeof t === 'object' && '%opt' in t;
     const bare = optional ? t['%opt'] : t;
-    fields.push({ name, type: typeText(bare), typeEnc: intern(bare), positional: name === null, ...(optional && { optional: true }) });
+    fields.push({ name, typeEnc: intern(bare), positional: name === null, ...(optional && { optional: true }) });
   };
   for (const e of list) {
     if (isEntryObject(e)) for (const [k, v] of Object.entries(e)) one(k, v);
@@ -348,9 +303,8 @@ function readSection(ops, node, doc) {
     const child = node[`:${op}`];
     if (isCell(child)) {
       const enc = intern(child.public.$get[0].re[0]);
-      const type = typeText(enc);
-      (doc[op] ??= []).push({ params: [], returns: [{ name: null, type, typeEnc: enc, positional: true }] });
-      (doc.__fields ??= {})[op] = { type, typeEnc: enc, cell: true, readOnly: !child.public.$set };
+      (doc[op] ??= []).push({ params: [], returns: [{ name: null, typeEnc: enc, positional: true }] });
+      (doc.__fields ??= {})[op] = { typeEnc: enc, cell: true, readOnly: !child.public.$set };
       if (child.public.$set?.[0]?.writes === 'untracked') (doc.__untracked ??= []).push(op);
       continue;
     }
@@ -372,7 +326,7 @@ function readTypes(types) {
     // A silent-function field is named with its silent `.`, stored without it.
     const bare = (name, enc) => (name?.endsWith('.') && fnReply(enc) === 'silent' ? name.slice(0, -1) : name);
     const fields = decodeEntries(entries).map(f => ({
-      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.typeEnc), paramType: f.type, paramTypeEnc: f.typeEnc,
+      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.typeEnc), paramTypeEnc: f.typeEnc,
       ...(f.optional && { optional: true }), ...(!f.positional && { named: true }),
     }));
     return [key.slice(1), { fields }];
@@ -384,7 +338,7 @@ export function documentShape(node) {
   const doc = {};
   const { $as, ...ops } = node.public || {};
   readSection(ops, node, doc);
-  if ($as) doc.__asTypes = $as.map(s => typeText(s.re[0]));
+  if ($as) doc.__asTypesEnc = $as.map(s => intern(s.re[0]));
   if (node.protected) {
     const prot = {};
     readSection(node.protected, node, prot);
@@ -398,9 +352,8 @@ export function documentShape(node) {
     if (child.public?.$new) (doc.__types ??= {})[name] = readClass(child);
     else if (child.public?.$set && Object.keys(child.public).length === 1) {
       const enc = intern(child.public.$set[0].args[0]);
-      const type = typeText(enc);
-      (doc.__setters ??= []).push({ name, type, typeEnc: enc });
-      (doc.__fields ??= {})[name] = { type, typeEnc: enc, cell: true, writeOnly: true };
+      (doc.__setters ??= []).push({ name, typeEnc: enc });
+      (doc.__fields ??= {})[name] = { typeEnc: enc, cell: true, writeOnly: true };
     } else (doc.__services ??= {})[name] = documentShape(child);
   }
   return doc;
@@ -413,11 +366,11 @@ function readClass(node) {
   // A published param reads as an op of its name and type, taking nothing.
   for (const p of nu.params) {
     const sigs = inst[p.name];
-    if (p.positional || inst.__fields?.[p.name] || sigs?.length !== 1 || sigs[0].params.length || sigs[0].returns?.[0]?.type !== p.type) continue;
-    (inst.__fields ??= {})[p.name] = { type: p.type, typeEnc: p.typeEnc, cell: false, readOnly: true };
+    if (p.positional || inst.__fields?.[p.name] || sigs?.length !== 1 || sigs[0].params.length || sigs[0].returns?.[0]?.typeEnc !== p.typeEnc) continue;
+    (inst.__fields ??= {})[p.name] = { typeEnc: p.typeEnc, cell: false, readOnly: true };
   }
   const functions = Object.keys(inst).filter(k => !k.startsWith('__')).flatMap(name => inst[name].map(s => ({ name, ...s })));
-  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, type: f.type, typeEnc: f.typeEnc }));
+  const setters = Object.entries(inst.__fields || {}).filter(([, f]) => f.cell && !f.readOnly).map(([name, f]) => ({ name, typeEnc: f.typeEnc }));
   const block = { public: blockOps, ...(node.protected && { protected: node.protected }) };
   for (const k of Object.keys(node).filter(k => k.startsWith(':') && k !== ':*')) block[k] = node[k];
   const hasBlock = Object.keys(blockOps).length || node.protected;
@@ -437,8 +390,7 @@ function readClass(node) {
 }
 
 // The document of the service at `path`, as this file reads it: each type's
-// encoding in this file's terms (src/type_enc.js, translate). Its text stays as the
-// service writes it.
+// encoding in this file's terms (src/type_enc.js, translate).
 export function readDocument(node, path) {
   const doc = documentShape(node);
   if (!path) return doc;

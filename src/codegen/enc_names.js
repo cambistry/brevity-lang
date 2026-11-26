@@ -7,6 +7,7 @@ import { PUBLIC_CLASS_SUFFIX } from '../subclass.js';
 import { _opre_quote as quote, _opre_split } from './opre_tokens.js';
 import { publicLabel } from '../singleton_classes.js';
 import { makerTag } from '../actor_values.js';
+import { renderType } from '../type_tree.js';
 
 // The actor a type names, by its name as compiled: the class an instance is of (a
 // public `@C` is `C__pub`, a private `C` is `C`), or a bare name, as an actor no
@@ -39,16 +40,7 @@ export function typeText(t, aliases = null) {
   });
 }
 
-// Each dependency's address, and each name one binds, by the alias the file gives it.
-export function dependencyAliases(ast) {
-  const byAddress = new Map();
-  for (const d of ast.dependencies || []) {
-    if (d.type !== 'Dependency' || !d.path) continue;
-    if (!d.destructures) byAddress.set(quote(d.path), d.name);
-    for (const { local, remote } of d.destructures || []) if (remote) byAddress.set(`${quote(d.path)}:${quote(remote)}`, local);
-  }
-  return byAddress;
-}
+export { dependencyAliases } from '../type_shown.js';
 
 // Whether a type is a list, or a union led by one (`List of Integers | null`): a
 // value of it is generated as a list.
@@ -85,7 +77,7 @@ const SCALARS = new Set(['Integer', 'Float', 'Decimal', 'Text', 'Boolean', 'Obje
 export function paramTag(ctx, p) {
   const t = p.typeEnc;
   // A param with no type at all (a named one, `a: b`) expects an untagged arg.
-  if (t === undefined) return p.typeKind === 'ctor' ? '*' : p.typeUnencoded ? p.type : null;
+  if (t === undefined) return p.typeKind === 'ctor' ? '*' : p.typeTree ? renderType(p.typeTree) : null;
   if (t === 'Actor') return '*';
   const cls = classNameOf(t);
   const node = cls && (ctx.program?.actors || []).find(a => a.name === cls && !a.singletonOf && !a.membersOf);

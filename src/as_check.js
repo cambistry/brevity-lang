@@ -3,11 +3,11 @@
 // emits as a call to its `as` runtime. It also adds that check to typed binds of
 // remote replies, whose docs are only claims. See notes/session-2026-11-01-as-renders-or-fails.md.
 import { inferType } from './type_infer.js';
-import { members, isUnion, isList, listElement, isFn, isInstance, ownPath, show } from './type_enc.js';
+import { members, isUnion, isList, listElement, isFn, isInstance, ownPath } from './type_enc.js';
+import { typeShown } from './type_shown.js';
 import { buildTypeTable } from './codegen/type_table.js';
 
-// Types here are encoded (src/type_enc.js). A node this pass makes carries a type
-// both ways: its text, for the code generators, and its encoding (`…Enc`).
+// Types here are encoded (src/type_enc.js).
 
 const SCALARS = new Set(['Integer', 'Text', 'Boolean', 'Float', 'Decimal', 'Blob']);
 const NUMBERS = new Set(['Integer', 'Float', 'Decimal']);
@@ -69,7 +69,7 @@ function checkRenderable(t, s, expr, typeDecls) {
   const fractional = (expr?.type === 'FloatLiteral' || expr?.type === 'DecimalLiteral')
     && Number(expr.value) % 1 !== 0 && want.length === 1 && want[0] === 'Integer';
   if (fractional || !want.some(renders)) {
-    throw new Error(`Cannot render ${show(s)} as ${show(t)} — no such rendering, so this 'as' can only fail`);
+    throw new Error(`Cannot render ${typeShown(s)} as ${typeShown(t)} — no such rendering, so this 'as' can only fail`);
   }
 }
 
@@ -80,7 +80,7 @@ function checkActorRenderable(s, typeDecls) {
   if (!known(t)) return;
   const value = (m) => SCALARS.has(m) || m === null || isList(m) || typeDecls.has(m);
   if (members(t).every(value)) {
-    throw new Error(`Cannot render ${show(t)} as an actor — no such rendering, so this 'as' can only fail`);
+    throw new Error(`Cannot render ${typeShown(t)} as an actor — no such rendering, so this 'as' can only fail`);
   }
 }
 
@@ -114,10 +114,9 @@ export function lowerAs(ast) {
     for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') collectActors(v);
   };
 
-  // A type both ways: `{ text, enc }`.
-  const asExpr = (expr, t, desc) => ({ type: 'AsExpr', expr, typeName: t.text, typeNameEnc: t.enc, desc });
-  const typedAssign = (name, t, value) => ({ type: 'TypedAssign', name, typeName: t.text, typeNameEnc: t.enc, value });
-  const OBJECT = { text: 'Object', enc: 'Object' };
+  const asExpr = (expr, t, desc) => ({ type: 'AsExpr', expr, typeNameEnc: t, desc });
+  const typedAssign = (name, t, value) => ({ type: 'TypedAssign', name, typeNameEnc: t, value });
+  const OBJECT = 'Object';
   const raw = (name) => `asraw${++seq}_${name}`;
 
   // The check a value needs against t: null when it's settled at compile time.
@@ -167,7 +166,7 @@ export function lowerAs(ast) {
     if (lambdaDepth > 0) return;
     for (const f of fields) {
       const source = f.expr ?? f.value;
-      if (f.type || f.spread || f.selfReturn || !(onActor(source) || isMemberCall(source) || onUntyped(source, env))) continue;
+      if (f.typeEnc !== undefined || f.spread || f.selfReturn || !(onActor(source) || isMemberCall(source) || onUntyped(source, env))) continue;
       const whole = fields.length === 1 && f.expr && source.type !== 'DotAccessExpr' && !source.method?.endsWith('!');
       const name = raw('r');
       pre.push(whole ? typedAssign(name, OBJECT, source) : { type: 'Assign', name, value: source });
@@ -176,7 +175,7 @@ export function lowerAs(ast) {
         delete f.expr;
         delete f.positional;
         delete f.typeEnc;
-        Object.assign(f, { spread: true, name, type: null, localObject: true });
+        Object.assign(f, { spread: true, name, localObject: true });
       } else if (f.expr) f.expr = { type: 'Identifier', name };
       else f.value = { type: 'Identifier', name };
     }
@@ -186,21 +185,21 @@ export function lowerAs(ast) {
   const returnTailCall = (fn) => {
     if (lambdaDepth > 0) return;
     const last = fn.body[fn.body.length - 1];
-    const expr = last?.type === 'ExprStatement' || (last?.type === 'ImplicitReturn' && !last.typeName) ? last.expr : null;
+    const expr = last?.type === 'ExprStatement' || (last?.type === 'ImplicitReturn' && last.typeNameEnc === undefined) ? last.expr : null;
     if (!expr || !(onActor(expr) || isMemberCall(expr)) || expr.silent || expr.method?.endsWith('.')) return;
     if (fn.body.some(s => s.type === 'SilentTerminator' || s.type === 'Reply')) return;
-    fn.body[fn.body.length - 1] = { type: 'Reply', fields: [{ positional: true, expr, type: null }] };
+    fn.body[fn.body.length - 1] = { type: 'Reply', fields: [{ positional: true, expr }] };
   };
 
   const lowerField = (f, env, pre) => {
-    if (f.selfReturn || f.spread || !f.type) return;
+    if (f.selfReturn || f.spread || f.typeEnc === undefined) return;
     const source = f.expr ?? f.value ?? (f.name ? { type: 'Identifier', name: f.name }
       : f.sigil ? { type: f.ref ? 'RefRead' : 'Identifier', name: f.sigil } : null);
     if (!source || source.type === 'StateVar') return;
-    if (f.typeEnc === 'Object' && SCALARS.has(inferType(source, env))) { f.type = null; delete f.typeEnc; return; }
+    if (f.typeEnc === 'Object' && SCALARS.has(inferType(source, env))) { delete f.typeEnc; return; }
     const desc = descFor(f.typeEnc, source, env);
     if (desc === null) return;
-    const value = checked(source, { text: f.type, enc: f.typeEnc }, desc, pre);
+    const value = checked(source, f.typeEnc, desc, pre);
     if (f.value !== undefined) f.value = value;
     else if (f.sigil) { f.key = f.sigil; f.value = value; delete f.sigil; delete f.ref; }
     else { f.expr = value; delete f.name; }
@@ -212,14 +211,14 @@ export function lowerAs(ast) {
   };
 
   const lowerTypedBind = (s, env, out) => {
-    const t = { text: s.typeName, enc: s.typeNameEnc };
-    const claimed = !!s.value?.attestedAs;
+    const t = s.typeNameEnc;
+    const claimed = s.value?.attestedAsEnc !== undefined;
     const remote = isRemoteCall(s.value) || isActorSource(s.value);
-    if (s.value && t.enc === 'Object' && claimed && SCALARS.has(inferType(s.value, env))) {
-      s.value = { type: 'ObjectConstructor', args: [{ positional: true, expr: s.value, type: null }] };
+    if (s.value && t === 'Object' && claimed && SCALARS.has(inferType(s.value, env))) {
+      s.value = { type: 'ObjectConstructor', args: [{ positional: true, expr: s.value }] };
     }
     if (!s.value || !(claimed || remote)) { out.push(s); return; }
-    const desc = descFor(t.enc, s.value, env);
+    const desc = descFor(t, s.value, env);
     if (desc === null) { out.push(s); return; }
     if (!CALLS.has(s.value.type) && !isActorSource(s.value)) {
       s.value = asExpr(s.value, t, desc);
@@ -233,8 +232,7 @@ export function lowerAs(ast) {
       out.push(s);
       return;
     }
-    const held = rawType(t, desc, s.value);
-    out.push({ ...s, name, typeName: held.text, typeNameEnc: held.enc });
+    out.push({ ...s, name, typeNameEnc: rawType(t, desc, s.value) });
     out.push(typedAssign(s.name, t, asExpr({ type: 'Identifier', name }, t, desc)));
   };
 
@@ -242,11 +240,10 @@ export function lowerAs(ast) {
     out.push(s);
     if (!isRemoteCall(s.source)) return;
     for (const item of s.pattern || []) {
-      const desc = item.type && !item.discard && item.typeEnc !== 'Object' ? asDescriptor(item.typeEnc, typeDecls) : null;
+      const desc = item.typeEnc !== undefined && !item.discard && item.typeEnc !== 'Object' ? asDescriptor(item.typeEnc, typeDecls) : null;
       if (desc === null) continue;
       const name = raw(item.name);
-      const t = { text: item.type, enc: item.typeEnc };
-      out.push(typedAssign(item.name, t, asExpr({ type: 'Identifier', name }, t, desc)));
+      out.push(typedAssign(item.name, item.typeEnc, asExpr({ type: 'Identifier', name }, item.typeEnc, desc)));
       if (item.named) { item.key = item.name; delete item.named; }
       item.name = name;
     }
@@ -274,11 +271,11 @@ export function lowerAs(ast) {
       out.push(s);
       return;
     }
-    if (s.type === 'ImplicitReturn' && s.typeName && s.expr) {
+    if (s.type === 'ImplicitReturn' && s.typeNameEnc !== undefined && s.expr) {
       visit(s.expr, env);
-      if (s.typeNameEnc === 'Object' && SCALARS.has(inferType(s.expr, env))) { s.typeName = null; delete s.typeNameEnc; }
+      if (s.typeNameEnc === 'Object' && SCALARS.has(inferType(s.expr, env))) delete s.typeNameEnc;
       const desc = descFor(s.typeNameEnc, s.expr, env);
-      if (desc !== null) s.expr = checked(s.expr, { text: s.typeName, enc: s.typeNameEnc }, desc, out);
+      if (desc !== null) s.expr = checked(s.expr, s.typeNameEnc, desc, out);
       out.push(s);
       return;
     }
@@ -298,8 +295,8 @@ export function lowerAs(ast) {
 
   // An `as` inside an expression has nowhere to hoist to, so it wraps in place.
   const wrapInPlace = (holder, key, t, env) => {
-    if (t.enc === 'Object' || !holder[key]) return;
-    const desc = descFor(t.enc, holder[key], env);
+    if (t === 'Object' || !holder[key]) return;
+    const desc = descFor(t, holder[key], env);
     if (desc !== null) holder[key] = asExpr(holder[key], t, desc);
   };
 
@@ -308,13 +305,13 @@ export function lowerAs(ast) {
   const checkParams = (fn) => {
     const leading = fn.body.findIndex(s => s.type !== 'BareTypeDecl');
     const at = leading === -1 ? fn.body.length : leading;
-    const params = [...fn.params, ...fn.body.slice(0, at).map(s => ({ name: s.name, type: s.typeName, typeEnc: s.typeNameEnc }))];
+    const params = [...fn.params, ...fn.body.slice(0, at).map(s => ({ name: s.name, typeEnc: s.typeNameEnc }))];
     const assigned = new Set(fn.body.filter(s => s.type === 'Assign' || s.type === 'TypedAssign').map(s => s.name));
     const checks = [];
     for (const p of params) {
       if (!p?.name || p.rest || p.defaultValue || assigned.has(p.name) || p.typeEnc === undefined || p.typeEnc === 'Object') continue;
       const desc = asDescriptor(p.typeEnc, typeDecls);
-      if (desc !== null) checks.push({ type: 'ExprStatement', expr: asExpr({ type: 'Identifier', name: p.name }, { text: p.type, enc: p.typeEnc }, desc) });
+      if (desc !== null) checks.push({ type: 'ExprStatement', expr: asExpr({ type: 'Identifier', name: p.name }, p.typeEnc, desc) });
     }
     // Never last: a trailing bare expression would become the reply.
     if (at < fn.body.length) fn.body.splice(at, 0, ...checks);
@@ -342,7 +339,7 @@ export function lowerAs(ast) {
     if (node.type === 'ObjectLiteral' || node.type === 'ObjectConstructor') {
       for (const a of node.args || []) {
         visit(a.expr, env);
-        if (a.type && a.expr) wrapInPlace(a, 'expr', { text: a.type, enc: a.typeEnc }, env);
+        if (a.typeEnc !== undefined && a.expr) wrapInPlace(a, 'expr', a.typeEnc, env);
       }
       return;
     }
@@ -351,15 +348,15 @@ export function lowerAs(ast) {
       for (const a of node.args || []) {
         if (a.expr) {
           visit(a.expr, env);
-          if (a.typeName) wrapInPlace(a, 'expr', { text: a.typeName, enc: a.typeNameEnc }, env);
+          if (a.typeNameEnc !== undefined) wrapInPlace(a, 'expr', a.typeNameEnc, env);
         } else visit(a, env);
       }
       return;
     }
-    if (node.type === 'IfBranch' || (node.expr && node.typeName && !STATEMENTS.has(node.type))) {
+    if (node.type === 'IfBranch' || (node.expr && node.typeNameEnc !== undefined && !STATEMENTS.has(node.type))) {
       visit(node.expr, env);
       if (node.body) visit(node.body, new Map(env));
-      if (node.expr && node.typeName) wrapInPlace(node, 'expr', { text: node.typeName, enc: node.typeNameEnc }, env);
+      if (node.expr && node.typeNameEnc !== undefined) wrapInPlace(node, 'expr', node.typeNameEnc, env);
       return;
     }
     for (const [k, v] of Object.entries(node)) {
@@ -379,7 +376,7 @@ export function lowerAs(ast) {
       if (s.type !== 'StateAssign') continue;
       const decl = (actor.stateVarDecls || []).find(d => d.name === s.name);
       if (s.value?.type === 'FunctionCallExpr' && (ownFns.has(s.value.callee?.name) || s.value.outerFnCall) && decl?.typeNameEnc !== 'Object') s.soleValue = true;
-      if (actor.name && s.value?.attestedAs) wrapInPlace(s, 'value', { text: s.value.attestedAs, enc: s.value.attestedAsEnc }, env);
+      if (actor.name && s.value?.attestedAsEnc !== undefined) wrapInPlace(s, 'value', s.value.attestedAsEnc, env);
       env.set(s.name, decl?.typeNameEnc);
     }
   };

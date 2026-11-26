@@ -1,5 +1,5 @@
 import { extract, compile } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 
 // Slice 15 of types-implementation-plan-2026-04-27: import binding plumbing
 // for type imports. Reuses the destructure grammar — `(:Point)` and

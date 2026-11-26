@@ -512,14 +512,14 @@ function genRustExpr(expr, typeEnv, eCtx) {
     const named = expr.args.filter(a => a.key !== undefined && a.type !== 'Function');
     const posVals = positional.map(a => {
       const raw = genRustExpr(a.expr, typeEnv, eCtx);
-      const t = a.type || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
+      const t = a.typeEnc || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
       return toJsonValue(raw, t);
     }).join(', ');
     let namedBlock;
     if (named.length > 0) {
       const inserts = named.map(a => {
         const raw = genRustExpr(a.expr, typeEnv, eCtx);
-        const t = a.type || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
+        const t = a.typeEnc || (a.expr?.type === 'Identifier' && typeEnv ? typeEnv.get(a.expr.name) : null) || inferLiteralType(a.expr);
         const val = toJsonValue(raw, t);
         return `m.insert(${JSON.stringify(a.key)}.to_string(), ${val});`;
       }).join(' ');
@@ -974,7 +974,7 @@ ${subRegLines.join('\n')}
     }`;
     }
     // Wrapped child param: dispatch through child_dispatch
-    const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeName === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
+    const isWrappedChild = dotObjName && G.ctx.stateVarNames.has(dotObjName) && (G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeNameEnc === 'Anything' || (expr.object.type === 'Identifier' && !G.ctx.actorInfo.has(dotObjName) && !G.ctx.remoteInstanceVars.has(dotObjName)));
     if (isWrappedChild) {
       const childRef = `self.state.get("${stateKey(dotObjName)}").and_then(|v| v.as_str()).unwrap_or("").to_string()`;
       const method = JSON.stringify(wireOpOf(expr));
@@ -1501,7 +1501,7 @@ function genRustIfBranch(branch, typeEnv, eCtx, indent, targetType) {
           lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${converted};`);
         } else {
           let val = genRustExpr(s.value, typeEnv, eCtx);
-          if (s.typeName === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
+          if (s.typeNameEnc === 'Text' && s.value.type === 'StringLiteral') val += '.to_string()';
           lines.push(`${indent}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`);
         }
       } else if (s.type === 'DestructureAssign') {
@@ -1656,7 +1656,7 @@ function genRustBranchBind(s, typeEnv, indent) {
   if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorFnNames.has(s.value.callee.name)) {
     return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${convertFromValue(val, s.typeNameEnc)};`;
   }
-  if ((s.typeName === 'Text' || s.typeName === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
+  if ((s.typeNameEnc === 'Text' || s.typeNameEnc === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
   return `${indent}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`;
 }
 

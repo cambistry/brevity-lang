@@ -363,7 +363,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
 
       // Typed dep constructor: n Integer = Service() → emit `new` then [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.dependencyNames.has(s.value.callee.name) && !ctx.destructuredMembers?.has(s.value.callee.name)) {
         genErlDepConstructorAsAssign(ctx, s, varName, typeEnv, stmtCtx, I, lines);
         continue;
       }
@@ -420,7 +420,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
 
       // Typed assign from dependency service ref: n Integer = Counter → send [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.dependencyNames.has(s.value.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && ctx.dependencyNames.has(s.value.name)) {
         if (ctx.destructuredMembers?.has(s.value.name)) {
           const { service, remote } = ctx.destructuredMembers.get(s.value.name);
           const to = erlString(service);
@@ -438,7 +438,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
 
       // Typed assign from in-file child actor ref: n Integer = c → child dispatch [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.name)) {
         const actorName = stmtCtx.childActorRefs.get(s.value.name);
         const prefix = `child_${actorName.toLowerCase()}`;
         const n = ctx.ephCounter++;
@@ -447,20 +447,20 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         continue;
       }
       // ...or from an instance process.
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(s.value.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && stmtCtx.selfSpawnedRefs?.has(s.value.name)) {
         const pid = genExpr(ctx, { type: stmtCtx.refVars?.has(s.value.name) ? 'RefRead' : 'Identifier', name: s.value.name }, typeEnv, stmtCtx);
         lines.push(`${I}${varName} = hd(bv_inst_call_(${pid}, <<"$as">>, ${erlString(typeText(s.typeNameEnc, ctx.depAliases))})),`);
         continue;
       }
 
       // Typed assign from remote actor ref (state var): n Integer = s → send [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && ctx.remoteInstanceVars?.has(s.value.name)) {
         const target = `get(${erlStateKey(ctx, s.value.name)})`;
         genErlAsSend(ctx, varName, s.typeNameEnc, target, I, lines);
         continue;
       }
       // Typed assign from local actor ref (handler-scoped): n Integer = t → send [Type, as]
-      if (s.type === 'TypedAssign' && s.typeName && s.value?.type === 'Identifier' && ctx.localInstanceVars?.has(s.value.name)) {
+      if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && ctx.localInstanceVars?.has(s.value.name)) {
         const resolved = resolveSSAName(s.value.name, ssaEnv);
         const target = erlVarName(resolved);
         genErlAsSend(ctx, varName, s.typeNameEnc, target, I, lines);
@@ -497,7 +497,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
           const match = candidates.find(c => {
             if (c.params.length !== argCount) return false;
             for (let j = 0; j < argCount; j++) {
-              if (argTypes[j] && c.params[j]?.type && c.params[j].type !== 'Anything' && argTypes[j] !== c.params[j].type) return false;
+              if (argTypes[j] && c.params[j]?.typeEnc !== undefined && c.params[j].typeEnc !== "Anything" && argTypes[j] !== c.params[j].typeEnc) return false;
             }
             return true;
           });
@@ -644,7 +644,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         (s.value.object.type === 'Identifier' && stmtCtx.childActorRefs?.has(s.value.object.name))
       )) {
         const reply = genChildDotCallAwait(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `bv_object_one(${reply})`},`);
+        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeNameEnc === 'Object' ? reply : `bv_object_one(${reply})`},`);
       } else if (s.value?.type === 'DotAccessExpr' && s.value.object?.type === 'Identifier'
           && (stmtCtx.childActorRefs?.has(s.value.object.name) || stmtCtx.selfSpawnedRefs?.has(s.value.object.name))) {
         // Bare field read on a child actor: v = c.val — same shape as no-args DotCallExpr
@@ -654,7 +654,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         // Self-spawned PID: the dispatch awaits and packs the reply. An Object bind keeps it whole;
         // any other binds its sole positional.
         const reply = genExpr(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeName === 'Object' ? reply : `bv_object_one(${reply})`},`);
+        lines.push(`${I}${varName} = ${s.type === 'TypedAssign' && s.typeNameEnc === 'Object' ? reply : `bv_object_one(${reply})`},`);
       } else if (s.value?.type === 'DotCallExpr') {
         // Use genDotCallAwait for remote calls that return values
         const dotObj = s.value.object;
@@ -662,7 +662,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         const needsAwait = isOpreAddressed(s.value)
           || (dotObjName && (ctx.remoteInstanceVars.has(dotObjName) || ctx.localInstanceVars?.has(dotObjName)))
           || refFieldInvocationErl(ctx, dotObj, s.value.method, typeEnv)?.discipline === 'callback';
-        if (needsAwait && s.type === 'TypedAssign' && s.typeName === 'Object') {
+        if (needsAwait && s.type === 'TypedAssign' && s.typeNameEnc === 'Object') {
           lines.push(`${I}${varName} = ${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)},`);
         } else if (needsAwait) {
           lines.push(`${I}${varName} = bv_object_one(${genDotCallAwait(ctx, s.value, typeEnv, stmtCtx)}),`);

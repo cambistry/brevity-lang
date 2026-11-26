@@ -7,14 +7,15 @@ import { runExtractPasses } from './src/extract_passes.js';
 import { RUNTIME_MODULE } from './src/codegen/erlang/preambles.js';
 import { serviceShape, settleOverrideTables } from './src/service_shape.js';
 import { serviceDocument, fileScope } from './src/service_doc.js';
+import { nodeTypeShown, dependencyAliases } from './src/type_shown.js';
 
 await loadTargets();
 
-// A param as the params document writes it. A public class has no `@` there.
-function formatParam(param) {
+// A param as the params document writes it, its type shown from its encoding
+// (src/type_shown.js). A public class has no `@` there.
+function formatParam(param, aliases) {
   const opt = (param.defaultValue || param.optional) ? '? ' : '';
-  if (!param?.type) return `${opt}Anything`;
-  const type = param.type.replace(/@(?=\w)/g, '');
+  const type = nodeTypeShown(param, 'type', aliases);
   if (param.positional) return `${opt}${type}`;
   return `${opt}${param.key || param.name}: ${type}`;
 }
@@ -25,14 +26,14 @@ function formatParam(param) {
 // its type; a named entry is `"key": Type`, and a dependency with no declared
 // type (it comes from the remote's own document) is `"key":`. Every named key
 // is quoted: keys are paths.
-function renderParamsEntry(entry) {
+function renderParamsEntry(entry, aliases) {
   if (entry.type === 'FileParam') {
-    const typeName = entry.paramType || 'Anything';
+    const typeName = nodeTypeShown(entry, 'paramType', aliases);
     if (entry.positional) return typeName;
     return `${renderParamsKey(entry.key || entry.name)}: ${typeName}`;
   }
   const key = renderParamsKey(entry.path);
-  const type = dependencyTypeText(entry);
+  const type = dependencyTypeText(entry, aliases);
   return type ? `${key}: ${type.replace(/\n/g, '\n  ')}` : `${key}:`;
 }
 
@@ -40,9 +41,9 @@ function renderParamsKey(key) {
   return JSON.stringify(key);
 }
 
-function dependencyTypeText(dep) {
+function dependencyTypeText(dep, aliases) {
   if (dep.constructorParams) {
-    const params = dep.constructorParams.map(p => formatParam(p)).join(', ');
+    const params = dep.constructorParams.map(p => formatParam(p, aliases)).join(', ');
     return `(${params}) -> *${dep.interface || '{}'}`;
   }
   return dep.interface || null;
@@ -51,7 +52,7 @@ function dependencyTypeText(dep) {
 function buildParamsDocument(ast) {
   const entries = (ast.dependencies || [])
     .filter(d => d.type === 'FileParam' || (d.type === 'Dependency' && d.path))
-    .map(renderParamsEntry);
+    .map(entry => renderParamsEntry(entry, dependencyAliases(ast)));
   // Same outer shape as a delimited header's param list: `( … )`.
   if (entries.length === 0) return '()';
   return '(\n  ' + entries.join('\n  ') + '\n)';

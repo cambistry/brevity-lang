@@ -103,13 +103,13 @@ describe('use — the manifest', () => {
     ['use :div = HTML', 'use HTML::div', [dep('HTML', { destructures: [member('div')] })]],
     ['use "/service"::Widget', 'use Widget = "/service"::Widget', [dep('/service', { destructures: [member('Widget')] })]],
     ['use d = HTML::div', 'use div: d = HTML', [dep('HTML', { destructures: [member('d', 'div')] })]],
-    ['use d Div = HTML::div', 'use div: d Div = HTML', [dep('HTML', { destructures: [{ local: 'd', remote: 'div', type: 'Div', typeEnc: 'Div' }] })]],
+    ['use d Div = HTML::div', 'use div: d Div = HTML', [dep('HTML', { destructures: [{ local: 'd', remote: 'div', typeEnc: 'Div' }] })]],
     ['use :div, :span, p: para = HTML', 'use (:div, :span, p: para) = HTML',
       [dep('HTML', { destructures: [member('div'), member('span'), member('para', 'p')] })]],
     ['use Svc = "svc.bv"', 'use Svc = \'svc.bv\'', [dep('Svc', { path: 'svc.bv' })]],
-    ['use limit Integer = limit', 'use limit = limit as Integer', [{ type: 'FileParam', name: 'limit', paramType: 'Integer', paramTypeEnc: 'Integer', positional: false }]],
-    ['use n Integer = size', 'use n = size as Integer', [{ type: 'FileParam', name: 'n', key: 'size', paramType: 'Integer', paramTypeEnc: 'Integer', positional: false }]],
-    ['use slot *Integer = slot', 'use slot Integer = slot', [{ type: 'FileParam', name: 'slot', paramType: 'Integer', paramTypeEnc: 'Integer', positional: false }]],
+    ['use limit Integer = limit', 'use limit = limit as Integer', [{ type: 'FileParam', name: 'limit', paramTypeEnc: 'Integer', positional: false }]],
+    ['use n Integer = size', 'use n = size as Integer', [{ type: 'FileParam', name: 'n', key: 'size', paramTypeEnc: 'Integer', positional: false }]],
+    ['use slot *Integer = slot', 'use slot Integer = slot', [{ type: 'FileParam', name: 'slot', paramTypeEnc: 'Integer', positional: false }]],
   ])('%s is %s', (a, b, manifest) => {
     expect(deps(a)).toEqual(manifest);
     expect(deps(b)).toEqual(manifest);
@@ -155,7 +155,7 @@ describe('use — the manifest', () => {
     ]);
     expect(deps('use Svc = "svc.bv" as {\n  n () -> (Integer)\n}')).toEqual(deps('use Svc = "svc.bv" as { n () -> (Integer) }'));
     expect(deps('use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }')).toEqual([
-      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', interfaceDoc: expect.any(Object), constructorParams: [{ name: 'a', type: 'Integer', typeEnc: 'Integer', positional: false }], constructorArrow: '->' }),
+      dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', interfaceDoc: expect.any(Object), constructorParams: [{ name: 'a', typeEnc: 'Integer', positional: false }], constructorArrow: '->' }),
     ]);
   });
 

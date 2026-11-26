@@ -14,7 +14,7 @@ describe('type cross-module reference — Foo::Bar', () => {
     expect(ast.types[0]).toEqual({
       type: 'TypeDecl',
       name: 'User',
-      fields: [{ type: 'TypeField', name: 'profile', paramType: 'Geom::Profile', paramTypeEnc: 'Geom:Profile' }],
+      fields: [{ type: 'TypeField', name: 'profile', paramTypeEnc: 'Geom:Profile' }],
     });
   });
 
@@ -24,7 +24,7 @@ describe('type cross-module reference — Foo::Bar', () => {
       type Mixed (here Local, there Geom::Point)
     `);
     const mixed = ast.types.find(t => t.name === 'Mixed');
-    expect(mixed.fields.map(f => f.paramType)).toEqual(['Local', 'Geom::Point']);
+    expect(mixed.fields.map(f => f.paramTypeEnc)).toEqual([':Local', 'Geom:Point']);
   });
 
   it('parses Foo::Bar in a typed parameter annotation', () => {
@@ -33,7 +33,7 @@ describe('type cross-module reference — Foo::Bar', () => {
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
     expect(fn.params[0].name).toBe('p');
-    expect(fn.params[0].type).toBe('Geom::Point');
+    expect(fn.params[0].typeEnc).toBe('Geom:Point');
   });
 
   it('parses Foo::Bar | null union', () => {
@@ -41,7 +41,7 @@ describe('type cross-module reference — Foo::Bar', () => {
       @go = (p: Geom::Point | null) -> result: 1
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
-    expect(fn.params[0].type).toBe('Geom::Point | null');
+    expect(fn.params[0].typeEnc).toEqual({ '%or': ['Geom:Point', null] });
   });
 
   it('parses Foo::Bar as a typed local declaration', () => {
@@ -54,7 +54,7 @@ describe('type cross-module reference — Foo::Bar', () => {
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
     const decl = fn.body.find(s => s.type === 'BareTypeDecl');
     expect(decl.name).toBe('p');
-    expect(decl.typeName).toBe('Geom::Point');
+    expect(decl.typeNameEnc).toBe('Geom:Point');
   });
 
   it('parses Foo::Bar as a typed local with a value', () => {
@@ -67,6 +67,6 @@ describe('type cross-module reference — Foo::Bar', () => {
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
     const decl = fn.body.find(s => s.type === 'TypedAssign');
     expect(decl.name).toBe('p');
-    expect(decl.typeName).toBe('Geom::Point');
+    expect(decl.typeNameEnc).toBe('Geom:Point');
   });
 });

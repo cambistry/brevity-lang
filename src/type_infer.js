@@ -1,6 +1,5 @@
-// The type of an expression, as an encoded type (src/type_enc.js): what
-// src/inference.js infers as text, for the passes that read encodings. An env maps
-// a name to its encoded type.
+// The type of an expression, as an encoded type (src/type_enc.js). An env maps a
+// name to its encoded type.
 //
 // An unknown type is `undefined`. `null` is the type of `null`, as in an encoding.
 

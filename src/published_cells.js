@@ -78,7 +78,7 @@ export function lowerOwnCellWrites(ast) {
           if (!s.name.startsWith('@')) {
             if (declared.has(s.name)) continue;
             if (subscribed.has(s.name)) {
-              node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name, cellType: state.get(s.name).typeName, cellTypeEnc: state.get(s.name).typeNameEnc, label: s.name } });
+              node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name, cellTypeEnc: state.get(s.name).typeNameEnc, label: s.name } });
             }
             continue;
           }
@@ -86,7 +86,7 @@ export function lowerOwnCellWrites(ast) {
           const cell = state.get(s.name);
           if (!cell && outer.has(s.name)) continue;
           if (!cell || cell.isRef === false) throw new Error(`Cannot set '${s.name}' — it isn't a published cell of this ${actor.name ? 'class' : 'file'}`);
-          node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name.slice(1), cellType: cell.typeName, cellTypeEnc: cell.typeNameEnc } });
+          node.splice(++i, 0, { type: 'ExprStatement', expr: { type: 'CellNotify', cell: s.name.slice(1), cellTypeEnc: cell.typeNameEnc } });
         }
         return;
       }

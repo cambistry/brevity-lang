@@ -82,9 +82,9 @@ describe('a document read from another service', () => {
     expect(readDocument(doc, 'svc.bv').count[0].returns[0].typeEnc).toBe('Integer');
   });
 
-  it('keeps the text as the service writes it', () => {
+  it("reads the service's types at their addresses there", () => {
     const read = readDocument(doc, 'svc.bv');
-    expect(read.origin[0].returns[0].type).toBe('Point');
+    expect(read.origin[0].returns[0].typeEnc).toBe('svc.bv:Point');
     expect(read.__typeDecls.Point.fields.map(f => f.name)).toEqual(['x', 'y']);
   });
 

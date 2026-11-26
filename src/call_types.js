@@ -4,8 +4,8 @@ import { isUnion } from './type_enc.js';
 // The type of a call to a function of this actor, or of one enclosing it
 // (src/outer_reads.js marks those `outerFnCall`), when that function has one
 // return of one value with a known type: `f()` of `f = -> 16` is an Integer.
-// Kept on a call that is an operand (`resultType`, and encoded `resultTypeEnc`)
-// for inference (src/inference.js, src/type_infer.js), so `x Integer = f() + #f()`
+// Kept on a call that is an operand (`resultTypeEnc`, encoded) for inference
+// (src/type_infer.js), so `x Integer = f() + #f()`
 // is Integer arithmetic on every target.
 
 export function markCallResultTypes(ast) {
@@ -14,14 +14,14 @@ export function markCallResultTypes(ast) {
   const typeOf = (actor, name) => {
     const key = `${actor.name ?? ''}\u0000${name}`;
     if (resultOf.has(key)) return resultOf.get(key);
-    resultOf.set(key, null); // a recursive call doesn't type itself
+    resultOf.set(key, undefined); // a recursive call doesn't type itself
     const fns = (actor.functions || []).filter(f => f.name === name);
-    let type = null;
+    let type;
     if (fns.length === 1 && !fns[0].params?.some(p => p.rest)) {
       const { alternatives, orSelf, opaque } = returnShapes(fns[0]);
       const [only] = alternatives;
       if (!orSelf && !opaque && alternatives.length === 1 && only.length === 1 && !only[0].name
-        && only[0].typeEnc !== 'Anything' && !isUnion(only[0].typeEnc)) type = { text: only[0].type, enc: only[0].typeEnc };
+        && only[0].typeEnc !== undefined && only[0].typeEnc !== 'Anything' && !isUnion(only[0].typeEnc)) type = only[0].typeEnc;
     }
     resultOf.set(key, type);
     return type;
@@ -37,10 +37,8 @@ export function markCallResultTypes(ast) {
       const owner = node.inheritedFrom ? byName.get(node.inheritedFrom) : node.outerFnCall ? byName.get(node.outerClass ?? null) : actor;
       if (!owner) return;
       const t = typeOf(owner, node.callee.name);
-      if (!t) return;
-      node.resultTypeEnc = t.enc;
-      // The code generators' text, while they read it: none where its inference had none.
-      if (t.text !== 'Anything') node.resultType = t.text;
+      if (t === undefined) return;
+      node.resultTypeEnc = t;
     };
     for (const fn of actor.functions || []) visit(fn.body);
     visit(actor.initBody);

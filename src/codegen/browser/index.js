@@ -7,6 +7,7 @@
 
 import { codegen } from '../javascript/classes.js';
 import { callHarness, getHarness } from './harness.js';
+import { isList } from '../../type_enc.js';
 
 // Normalize BigInt values for test output consistency with JSON-based targets.
 function normalizeBigInts(val) {
@@ -29,7 +30,7 @@ function _toConsList(arr) {
 }
 
 function _coerceArg(value, type) {
-  if (typeof type === 'string' && type.startsWith('List') && Array.isArray(value)) {
+  if (isList(type) && Array.isArray(value)) {
     return _toConsList(value);
   }
   return value;
@@ -41,9 +42,9 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   const fileActor = (ast.actors || []).find(a => !a.name);
   const params = fileActor?.initParams || [];
   if (Array.isArray(constructorArgs)) {
-    return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.type));
+    return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.typeEnc));
   }
-  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.type));
+  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.typeEnc));
 }
 
 export default {

@@ -1,4 +1,4 @@
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 
 // A service method whose parameter is itself a callback (a nested function type)
 // must parse with the *top-level* arrow as the signature's arrow — not the

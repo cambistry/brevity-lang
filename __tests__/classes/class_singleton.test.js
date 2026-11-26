@@ -1,6 +1,6 @@
 import { compileSource, expectBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 
 // A class can have members of its own: a singleton, built once where the class is
 // declared, that every actor of the class shares.

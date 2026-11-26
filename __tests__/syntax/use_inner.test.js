@@ -180,7 +180,7 @@ describe('use in inner scopes — the manifest', () => {
 
   it('an inner typed value shares the top-level entry for its key', () => {
     const src = 'use limit Integer = limit\n@a = {\n  use n Integer = limit\n  return n + 1\n}\n';
-    expect(deps(src)).toEqual([expect.objectContaining({ type: 'FileParam', name: 'limit', paramType: 'Integer' })]);
+    expect(deps(src)).toEqual([expect.objectContaining({ type: 'FileParam', name: 'limit', paramTypeEnc: 'Integer' })]);
   });
 
   it('an inner typed value of a different type is an error', () => {

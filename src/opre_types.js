@@ -21,7 +21,6 @@
 // constructor profile `(p) -> *{ … }` claim a dependency's shape, after `as`; neither
 // is a type that encodes.
 
-import { parseTypeTree } from './parser.js';
 import { TT, renderType } from './type_tree.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
 
@@ -117,11 +116,6 @@ export function encodeType(node, scope = NO_SCOPE) {
     case 'iface': throw new Error(`An interface can't be a type here: '${renderType(node).replace(/\s+/g, ' ')}'`);
     default: throw new Error(`Unknown type node '${node.k}'`);
   }
-}
-
-// `text`, a type as the parser reads one, encoded.
-export function encodeTypeText(text, scope = NO_SCOPE) {
-  return encodeType(parseTypeTree(text), scope);
 }
 
 // An entry list: `[{ name, type, optional }]`, `name` null (or absent) for a

@@ -1,4 +1,5 @@
-import { encodeTypeText, encodeParams, encodeEntries, typeScope } from '../../src/opre_types.js';
+import { encodeParams, encodeEntries, typeScope } from '../../src/opre_types.js';
+import { encodeTypeText } from '../../src/parser_types.js';
 import { parseTypeTree } from '../../src/parser.js';
 
 // Brevity type notation as an Opre type: notes/opre-type-encoding-2026-11-21.md

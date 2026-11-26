@@ -13,8 +13,8 @@ describe('type declaration — parser', () => {
         type: 'TypeDecl',
         name: 'Point',
         fields: [
-          { type: 'TypeField', name: 'x', paramType: 'Integer', paramTypeEnc: 'Integer' },
-          { type: 'TypeField', name: 'y', paramType: 'Integer', paramTypeEnc: 'Integer' },
+          { type: 'TypeField', name: 'x', paramTypeEnc: 'Integer' },
+          { type: 'TypeField', name: 'y', paramTypeEnc: 'Integer' },
         ],
       },
     ]);
@@ -45,9 +45,9 @@ describe('type declaration — parser', () => {
     const { ast } = extract('type Mixed (count Integer, label Text, ok Boolean)\n');
     const [decl] = ast.types;
     expect(decl.fields).toEqual([
-      { type: 'TypeField', name: 'count', paramType: 'Integer', paramTypeEnc: 'Integer' },
-      { type: 'TypeField', name: 'label', paramType: 'Text', paramTypeEnc: 'Text' },
-      { type: 'TypeField', name: 'ok',    paramType: 'Boolean', paramTypeEnc: 'Boolean' },
+      { type: 'TypeField', name: 'count', paramTypeEnc: 'Integer' },
+      { type: 'TypeField', name: 'label', paramTypeEnc: 'Text' },
+      { type: 'TypeField', name: 'ok',    paramTypeEnc: 'Boolean' },
     ]);
   });
 

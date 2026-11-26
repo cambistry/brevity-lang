@@ -884,7 +884,7 @@ export function genExpr(ctx, expr) {
             if (c.params.length !== argCount) return false;
             // If arg types are known, check they match param types
             for (let i = 0; i < argCount; i++) {
-              if (argTypes[i] && c.params[i]?.type && c.params[i].type !== 'Anything' && argTypes[i] !== c.params[i].type) return false;
+              if (argTypes[i] && c.params[i]?.typeEnc !== undefined && c.params[i].typeEnc !== "Anything" && argTypes[i] !== c.params[i].typeEnc) return false;
             }
             return true;
           });

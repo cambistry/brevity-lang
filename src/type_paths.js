@@ -8,20 +8,18 @@
 // knows: a class or singleton of this file, an injected service, or a local
 // holding an actor of a known class.
 //
-// This pass rewrites every such path, in a construction (`TypeConstruction`
-// with a `qualifier`) or a type annotation, to the type's key:
-//   - a type of this file → its name in the program: its path (`W::X`), or its
-//     bare name for a type of the file actor (`Point`);
-//   - a type of an injected service → `Svc::X` / `Svc::C::X`, registered in
+// The parser encodes a path it can resolve on its own (`W::X`, `Svc::X`). This
+// pass settles the rest, in a construction (`TypeConstruction` with a `qualifier`)
+// or a type's encoding, at the type's address:
+//   - a path through a local (`w::X`, encoded `w:X`), at its class's type;
+//   - a type of an injected service (`svc.bv:C:X`), registered in
 //     `ast.crossModuleTypes` with its authority (the service's path) and its
-//     owner classes, so codegen can tag it `svc.bv:C:X`.
-// A bare type becomes the one declared nearest the scope it's written in, and is
-// rejected outside the actor it belongs to.
+//     owner classes;
+//   - a bare type of a class (`X`), at the one declared nearest the scope it's
+//     written in; it is rejected outside the actor it belongs to.
 
-import { _opre_quote as quote } from './codegen/opre_tokens.js';
-import { intern } from './type_enc.js';
-
-const PATH_RE = /(?<![\w:@#])(\w+(?:::\w+)+)/g;
+import { _opre_quote as quote, _opre_split as split } from './codegen/opre_tokens.js';
+import { intern, ownNames, isInstance, addressesIn } from './type_enc.js';
 
 // A type's address: its authority ('' for this file), then the classes that own
 // it and its name (src/codegen/type_table.js).
@@ -45,8 +43,6 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
   const localTypes = ast.types || [];
   const bareOf = (t) => t.bareName ?? t.name;
   const owned = localTypes.filter(t => t.owner?.length);
-  const hasQualified = JSON.stringify(ast).includes('::') || owned.length > 0;
-  if (!hasQualified) return;
 
   const actors = (ast.actors || []).filter(a => a.name);
   const pathOf = (a) => a.classPath ?? [(a.singletonOf ?? a.selector ?? a.name).replace(/^@/, '')];
@@ -86,9 +82,12 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     }
     return null;
   };
-  const classOfType = (typeName, scope) => {
-    if (typeof typeName !== 'string' || !/^@?\w+$/.test(typeName)) return null;
-    const p = localClass(typeName, scope);
+  // The class of an actor a type names: an instance of a class of this file.
+  const classOfType = (t, scope) => {
+    if (!isInstance(t) || !ownNames(t)) return null;
+    const names = ownNames(t);
+    const p = names.length === 1 ? localClass(names[0], scope)
+      : (classByName.get(names[names.length - 1]) || []).find(q => samePath(q, names));
     return p ? { local: p } : null;
   };
 
@@ -99,14 +98,14 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => collect(n, scope, env)); return; }
     if ((node.type === 'Assign' || node.type === 'TypedAssign' || node.type === 'RefDecl') && node.name) {
-      const c = classOfValue(node.value, scope) ?? classOfType(node.typeName, scope);
+      const c = classOfValue(node.value, scope) ?? classOfType(node.typeNameEnc, scope);
       if (c) env.set(node.name, c);
     }
-    if (typeof node.name === 'string' && typeof node.type === 'string' && 'positional' in node) {
-      const c = classOfType(node.type, scope);
+    if (typeof node.name === 'string' && node.typeEnc !== undefined && 'positional' in node) {
+      const c = classOfType(node.typeEnc, scope);
       if (c) env.set(node.name, c);
     }
-    for (const k of Object.keys(node)) if (k !== 'type') collect(node[k], scope, env);
+    for (const k of Object.keys(node)) if (!k.endsWith('Enc')) collect(node[k], scope, env);
   };
   const scopeOf = (a) => (a.name ? pathOf(a) : []);
   const fileActors = (ast.actors || []).filter(a => !a.name);
@@ -121,10 +120,8 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     envOf.set(scope.join(' '), env);
   }
 
-  // The address each path resolves to, by how it's written: the parser could only
-  // guess one reached through a local (`w::X`), whose class it can't know.
-  const resolvedAddress = new Map();
-  // Resolve one path (`A::B::X`), written in `scope`.
+  // The address of one path (`A::B::X`), written in `scope`; null for one left to
+  // the dependency checks.
   const resolve = (segments, scope, env) => {
     const written = segments.join('::');
     const [head, ...rest] = segments;
@@ -137,15 +134,14 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
       if (p) base = { local: p };
     }
     if (!base) {
-      if (dependencyNames.has(head) || deps.has(head)) return written; // a document that isn't known: left to the dependency checks
+      if (dependencyNames.has(head) || deps.has(head)) return null; // a document that isn't known: left to the dependency checks
       throw new Error(`Can't tell the class of '${head}' in '${written}'`);
     }
     if (base.local) {
       const owner = [...base.local, ...between];
       const decl = localTypes.find(t => bareOf(t) === name && samePath(t.owner || [], owner));
       if (!decl) throw new Error(`'${[...segments.slice(0, -1)].join('::')}' has no type '${name}'`);
-      resolvedAddress.set(written, addressOf('', decl.ownerTokens ?? decl.owner, bareOf(decl)));
-      return decl.name;
+      return addressOf('', decl.ownerTokens ?? decl.owner, bareOf(decl));
     }
     const classes = [...base.classes, ...between];
     let doc = remotesParsed[base.alias];
@@ -160,53 +156,65 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     if (!decls?.[name]) {
       // `Svc::Point` on its own is checked by validateCrossModuleTypeRefs, which
       // knows whether the document says anything about types.
-      if (!classes.length) return written;
+      if (!classes.length) return null;
       throw new Error(`'${segments.slice(0, -1).join('::')}' has no type '${name}'`);
     }
     const key = [base.alias, ...classes, name].join('::');
     const dep = deps.get(base.alias);
-    resolvedAddress.set(written, addressOf(quote(dep?.path || base.alias), classes, name));
     (ast.crossModuleTypes ||= {})[key] = {
       name, fields: decls[name].fields, path: dep?.path || base.alias, ...(classes.length ? { owner: classes } : {}),
     };
-    return key;
+    return addressOf(quote(dep?.path || base.alias), classes, name);
   };
   // In an annotation, `Alias::Name` with an alias nobody declared is left for
   // validateCrossModuleTypeRefs to report.
   const knownHead = (head, env, scope) => env.has(head) || dependencyNames.has(head) || deps.has(head) || !!localClass(head, scope);
-  const resolveString = (str, scope, env) => (typeof str === 'string' && str.includes('::')
-    ? str.replace(PATH_RE, (m) => {
-      const segments = m.split('::');
-      return segments.length === 2 && !knownHead(segments[0], env, scope) ? m : resolve(segments, scope, env);
-    })
-    : str);
+  // A service's address head, by the alias the file writes it with.
+  const aliasOf = new Map((ast.dependencies || []).filter(d => d.type === 'Dependency' && d.path && !d.destructures).map(d => [quote(d.path), d.name]));
 
   // A bare type is the one declared in the nearest actor enclosing the scope. A
-  // class's type is visible only inside the class. Its name in the program is
-  // its path (`W::X`).
+  // class's type is visible only inside the class.
   const bareNames = new Set(owned.map(bareOf));
-  const bareToName = (name, scope) => {
-    if (!bareNames.has(name)) return name;
+  const bareDecl = (name, scope) => {
     const seen = localTypes.filter(t => bareOf(t) === name && isPrefix(t.owner || [], scope));
-    if (seen.length) return seen.reduce((best, t) => ((t.owner || []).length > (best.owner || []).length ? t : best)).name;
+    if (seen.length) return seen.reduce((best, t) => ((t.owner || []).length > (best.owner || []).length ? t : best));
     const t = owned.find(o => bareOf(o) === name);
     throw new Error(`'${name}' is a type of '${t.owner.join('::')}' — reach it as '${t.owner.join('::')}::${name}'`);
   };
-  const bareString = (str, scope) => (typeof str === 'string' && bareNames.size
-    ? str.replace(/(?<![\w:@#])\w+(?![\w:])/g, (m) => bareToName(m, scope))
-    : str);
 
-  // A type's text, rewritten to its key for the code generators, and its encoding,
-  // with each path it reaches through a local at the address it resolved to.
+  // Where one address of an encoding settles, or null where it stays.
+  const settleAddress = (a, scope, env) => {
+    if (a === null) return null;
+    // The file's own, the parser resolved; a path through a class names a type it declares.
+    if (a.startsWith(':')) {
+      const names = ownNames(a);
+      if (isInstance(a) || !names || names.length < 2) return null;
+      const name = names[names.length - 1];
+      const owner = names.slice(0, -1);
+      if (localTypes.some(t => bareOf(t) === name && samePath(t.owner || [], owner))) return null;
+      if (!(classByName.get(owner[owner.length - 1]) || []).some(p => samePath(p, owner))) return null;
+      throw new Error(`'${owner.join('::')}' has no type '${name}'`);
+    }
+    if (!a.includes(':')) {
+      if (!bareNames.has(a)) return null;
+      const decl = bareDecl(a, scope);
+      return addressOf('', decl.ownerTokens ?? decl.owner, bareOf(decl));
+    }
+    if (isInstance(a)) return null;
+    const tokens = split(a);
+    const alias = aliasOf.get(quote(tokens[0]));
+    const segments = alias !== undefined ? [alias, ...tokens.slice(1)] : tokens;
+    if (segments.length === 2 && !knownHead(segments[0], env, scope)) return null;
+    return resolve(segments, scope, env);
+  };
+  // A type's encoding, with each address settled.
   const settle = (node, k, scope, env) => {
-    const text = node[k];
-    node[k] = resolveString(bareString(text, scope), scope, env);
     const enc = node[`${k}Enc`];
-    if (enc === undefined || !text.includes('::')) return;
+    if (enc === undefined) return;
     const fix = new Map();
-    for (const m of text.match(PATH_RE) || []) {
-      const address = resolvedAddress.get(m);
-      if (address) fix.set(m.split('::').map(quote).join(':'), address);
+    for (const a of addressesIn(enc)) {
+      const to = settleAddress(a, scope, env);
+      if (to && to !== a) fix.set(a, to);
     }
     if (fix.size) node[`${k}Enc`] = rewrite(enc, fix);
   };
@@ -216,14 +224,10 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
     if (Array.isArray(node)) { node.forEach(n => visit(n, scope, env)); return; }
     if (node.type === 'TypeConstruction') {
       if (node.qualifier?.length) {
-        const segments = [...node.qualifier, node.typeName];
-        node.typeName = resolve(segments, scope, env);
-        const address = resolvedAddress.get(segments.join('::'));
+        const address = resolve([...node.qualifier, node.typeName], scope, env);
         if (address) node.typeNameEnc = intern(address);
         delete node.qualifier;
-      } else {
-        node.typeName = bareToName(node.typeName, scope);
-      }
+      } else settle(node, 'typeName', scope, env);
     }
     if (node.type === 'DotCallExpr' && node.object?.type === 'Identifier') {
       const c = env.get(node.object.name) ?? (localClass(node.object.name, scope) ? { local: localClass(node.object.name, scope) } : null);
@@ -232,10 +236,10 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
       }
     }
     for (const k of ['typeName', 'paramType']) {
-      if (typeof node[k] === 'string' && node.type !== 'TypeConstruction') settle(node, k, scope, env);
+      if (node.type !== 'TypeConstruction') settle(node, k, scope, env);
     }
-    if (typeof node.name === 'string' && typeof node.type === 'string' && 'positional' in node) settle(node, 'type', scope, env);
-    for (const k of Object.keys(node)) if (k !== 'type') visit(node[k], scope, env);
+    if (typeof node.name === 'string' && 'positional' in node) settle(node, 'type', scope, env);
+    for (const k of Object.keys(node)) if (!k.endsWith('Enc')) visit(node[k], scope, env);
   };
   for (const a of ast.actors || []) {
     const scope = scopeOf(a);

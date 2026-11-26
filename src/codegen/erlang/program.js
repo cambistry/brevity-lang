@@ -122,7 +122,7 @@ function buildErlCaseChain(ctx, guards, typeEnv, sCtx, I, makeRet, makeFinalRet,
     const termRet = branchBody.find(s => s.type === 'Return');
     if (termRet) return makeRet(termRet.fields, scope);
     const last = branchBody[branchBody.length - 1];
-    if (isTail && last?.type === 'ImplicitReturn') return makeRet([{ expr: last.expr, type: last.typeName ?? null, positional: true }], scope);
+    if (isTail && last?.type === 'ImplicitReturn') return makeRet([{ expr: last.expr, ...(last.typeNameEnc !== undefined && { typeEnc: last.typeNameEnc }), positional: true }], scope);
     return null;
   }
 
@@ -745,7 +745,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   // using the stored id. Notification shape matches the getter (positional Re
   // + optional ty type tag).
   if (fn.name && fn.name.startsWith('set@')) {
-    lines.push(...erlCellNotifyLines(ctx, fn.name.slice('set@'.length), params[0]?.type, I));
+    lines.push(...erlCellNotifyLines(ctx, fn.name.slice("set@".length), params[0]?.typeEnc, I));
     // Derived fn replay for this cell is emitted by the underlying
     // SetStatement codegen (set@<cell>'s body is `<cell> <- _v`), so no
     // additional replay block here.
@@ -1195,7 +1195,7 @@ function genChildActorCode(ctx, actors) {
     // Constructor body and init body often duplicate the same SubscribeCall
     // (parser populates both). Keep a per-class set of seen callback names
     // so we only emit one handler per param.
-    const paramSubInfo = []; // {paramName, callbackName, paramType}
+    const paramSubInfo = []; // {paramName, callbackName}
     const seenCallbacks = new Set();
     const transformSubscribeOnParam = (body) => {
       if (!Array.isArray(body)) return body;
@@ -1215,8 +1215,7 @@ function genChildActorCode(ctx, actors) {
               params: sub.params || [],
               body: sub.body || [],
             });
-            const paramType = (actor.initParams || []).find(p => p.name === paramName)?.type;
-            paramSubInfo.push({ paramName, callbackName, paramType });
+            paramSubInfo.push({ paramName, callbackName });
           }
           continue; // drop the SubscribeCall from the body
         }
@@ -1246,7 +1245,7 @@ function genChildActorCode(ctx, actors) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }
@@ -1268,7 +1267,7 @@ function genChildActorCode(ctx, actors) {
     savedTypeEnv = ctx.stateVarTypeEnv;
     ctx.stateVarTypeEnv = new Map([
       // The names this class reads from the actors it's declared in (src/outer_reads.js); its own win.
-      ...[...outerNamesFor(ctx.program, actor, { enc: true })].filter(([, t]) => t !== undefined),
+      ...[...outerNamesFor(ctx.program, actor)].filter(([, t]) => t !== undefined),
       ...childStateDecls.map(v => [v.name, v.typeNameEnc]),
       ...childParams.map(p => [p.name, orAny(envTypeOf(p))]),
       ...childCoercions.map(s => [s.name, 'Anything']),

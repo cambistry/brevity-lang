@@ -24,7 +24,7 @@ describe('use bindings — forms', () => {
     expect(deps('DB = "/db" as { get (key: Text) -> (value: Text) }')[0])
       .toEqual(expect.objectContaining({ name: 'DB', iface: '{\n  get (key: Text) -> (value: Text)\n}' }));
     expect(deps('Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }')[0])
-      .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', type: 'Integer', typeEnc: 'Integer', positional: false }] }));
+      .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', typeEnc: 'Integer', positional: false }] }));
   });
 
   it(':member = Source, Source::member and member = Source::member are one binding', () => {
@@ -40,8 +40,8 @@ describe('use bindings — forms', () => {
   it('a typed binding is a value supplied at construction', () => {
     const { ast } = extract('use limit Integer = limit\nuse n Integer = size\n@go = -> limit\n');
     expect(ast.dependencies).toEqual([
-      expect.objectContaining({ type: 'FileParam', name: 'limit', paramType: 'Integer' }),
-      expect.objectContaining({ type: 'FileParam', key: 'size', name: 'n', paramType: 'Integer' }),
+      expect.objectContaining({ type: 'FileParam', name: 'limit', paramTypeEnc: 'Integer' }),
+      expect.objectContaining({ type: 'FileParam', key: 'size', name: 'n', paramTypeEnc: 'Integer' }),
     ]);
   });
 

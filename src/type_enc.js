@@ -24,6 +24,14 @@ const keyOf = (t) => JSON.stringify(t);
 const SELF_KEY = '%self';
 export const isSelf = (t) => !!t && typeof t === 'object' && t[SELF_KEY] === true;
 
+// The addresses an encoding names (a generic's `%t` among them), as a Set.
+export const addressesIn = (t, out = new Set()) => {
+  if (typeof t === 'string') out.add(t);
+  else if (Array.isArray(t)) t.forEach(x => addressesIn(x, out));
+  else if (t && typeof t === 'object') for (const [k, v] of Object.entries(t)) if (k !== '%names') addressesIn(v, out);
+  return out;
+};
+
 // ── Unions ────────────────────────────────────────────────────────────────────
 export const isUnion = (t) => !!t && typeof t === 'object' && !Array.isArray(t) && '%or' in t;
 // A union's members, or the type alone.
@@ -85,25 +93,26 @@ export const isInstance = (t) => typeof t === 'string' && t.endsWith(':*');
 const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals'], ['Actor', 'Actors']]);
 const isEntries = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
 const showName = (a) => (ownNames(a) ? ownNames(a).join('::') : a);
-const showEntries = (list, nameOf = showName) => list.flatMap(e => (isEntries(e)
-  ? Object.entries(e).map(([k, v]) => `${k}: ${show(v, nameOf)}`)
-  : [show(e, nameOf)])).join(', ');
-const showElement = (p, nameOf) => {
-  if (!Array.isArray(p)) return show(p, nameOf);
+const showEntries = (list, nameOf = showName, opts = {}) => list.flatMap(e => (isEntries(e)
+  ? Object.entries(e).map(([k, v]) => `${k}: ${show(v, nameOf, opts)}`)
+  : [show(e, nameOf, opts)])).join(', ');
+const showElement = (p, nameOf, opts) => {
+  if (!Array.isArray(p)) return show(p, nameOf, opts);
   const [inner] = p;
   if (typeof inner === 'string' && PLURAL_OF.has(inner)) return PLURAL_OF.get(inner);
-  if (isList(inner)) return `Lists of ${showElement(inner[0], nameOf)}`;
-  return show(inner, nameOf);
+  if (isList(inner)) return `Lists of ${showElement(inner[0], nameOf, opts)}`;
+  return show(inner, nameOf, opts);
 };
 // A function type's reply, as its signature writes it after the arrow.
-export const showReply = (sig, nameOf = showName) => {
+export const showReply = (sig, nameOf = showName, opts = {}) => {
   if (!sig.re) return '.';
   const shapes = Array.isArray(sig.re) ? [sig.re] : sig.re['%or'];
   const self = shapes.some(s => s.length === 1 && isSelf(s[0]));
-  return [...shapes.filter(s => !(s.length === 1 && isSelf(s[0]))).map(s => `(${showEntries(s, nameOf)})`), ...(self ? ['self'] : [])].join(' | ');
+  return [...shapes.filter(s => !(s.length === 1 && isSelf(s[0]))).map(s => `(${showEntries(s, nameOf, opts)})`), ...(self ? ['self'] : [])].join(' | ');
 };
-// `nameOf` renders each address; by default, as the type's own name.
-export function show(t, nameOf = showName) {
+// `nameOf` renders each address; by default, as the type's own name. With
+// `opts.bareList`, a List of anything is `List`, as the source writes it.
+export function show(t, nameOf = showName, opts = {}) {
   if (t === undefined) return 'Anything';
   if (t === null) return 'null';
   if (typeof t === 'string') return nameOf(t);
@@ -111,15 +120,16 @@ export function show(t, nameOf = showName) {
     const name = genericName(t);
     if (name === 'Object') {
       const named = Object.fromEntries(Object.entries(t[t.length - 1]).filter(([k]) => k !== '%t'));
-      return `(${showEntries([...t.slice(0, -1), ...(Object.keys(named).length ? [named] : [])], nameOf)})`;
+      return `(${showEntries([...t.slice(0, -1), ...(Object.keys(named).length ? [named] : [])], nameOf, opts)})`;
     }
-    return `${nameOf(name)} of ${showElement(t[0], nameOf)}`;
+    if (opts.bareList && name === 'List' && listElement(t) === 'Anything') return nameOf(name);
+    return `${nameOf(name)} of ${showElement(t[0], nameOf, opts)}`;
   }
-  if (isUnion(t)) return t['%or'].map(m => show(m, nameOf)).join(' | ');
-  if ('%opt' in t) return show(t['%opt'], nameOf);
+  if (isUnion(t)) return t['%or'].map(m => show(m, nameOf, opts)).join(' | ');
+  if ('%opt' in t) return show(t['%opt'], nameOf, opts);
   if (isFn(t)) {
     const sig = fnSignature(t);
-    return `(${showEntries(sig.args || [], nameOf)}) ${sig.re ? fnArrow(t) : '=>'} ${showReply(sig, nameOf)}`;
+    return `(${showEntries(sig.args || [], nameOf, opts)}) ${sig.re ? fnArrow(t) : '=>'} ${showReply(sig, nameOf, opts)}`;
   }
   throw new Error(`Unrecognized type: ${JSON.stringify(t)}`);
 }

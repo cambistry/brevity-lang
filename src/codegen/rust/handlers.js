@@ -35,7 +35,7 @@ import { capturedRefs } from '../ref_captures.js';
 
 // The names a class reads from the actors it's declared in, with their types.
 function outerTypesOf(actor) {
-  return G.ctx.outerProgram && actor?.name ? outerNamesFor(G.ctx.outerProgram, actor, { enc: true }) : (G.ctx.outerTypes || new Map());
+  return G.ctx.outerProgram && actor?.name ? outerNamesFor(G.ctx.outerProgram, actor) : (G.ctx.outerTypes || new Map());
 }
 
 // A param typed as a class of this file holds one of its actors.
@@ -363,7 +363,7 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
   // emitted by the underlying SetStatement codegen (set@<cell>'s body is
   // `<cell> <- _v`), so no additional fn replay here.
   if (name && name.startsWith('set@')) {
-    lines.push(...rustCellNotifyLines(name.slice('set@'.length), params[0]?.type));
+    lines.push(...rustCellNotifyLines(name.slice("set@".length), params[0]?.typeEnc));
   }
   lines.push('                handled = true;');
   G.ctx.ssaScope = savedSsaScope;
@@ -872,7 +872,7 @@ function genRustChildPublicFnCode(fn, eCtx, classTypes = new Map(), isPublic = f
   // replay for this cell is emitted by the underlying SetStatement codegen
   // (set@<cell>'s body is `<cell> <- _v`), so no fn replay here.
   if (name.startsWith('set@')) {
-    lines.push(...rustCellNotifyLines(name.slice('set@'.length), fn.params?.[0]?.type, G.ctx.childStatePrefix || ''));
+    lines.push(...rustCellNotifyLines(name.slice("set@".length), fn.params?.[0]?.typeEnc, G.ctx.childStatePrefix || ''));
   }
   G.ctx.ssaScope = savedSsaScope;
   G.ctx.ssaCounts = savedSsaCounts;
@@ -1265,7 +1265,7 @@ function genRustChildMethods(allActors) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }
@@ -1287,8 +1287,8 @@ function genRustChildMethods(allActors) {
     savedDecls = G.ctx.stateVarDecls;
     G.ctx.stateVarDecls = [
       ...childStateDecls,
-      ...childParams.map(p => ({ name: p.name, typeName: p.type || 'Anything', typeNameEnc: orAny(envTypeOf(p)) })),
-      ...childCoercions.map(s => ({ name: s.name, typeName: 'Anything', typeNameEnc: 'Anything' })),
+      ...childParams.map(p => ({ name: p.name, typeNameEnc: orAny(envTypeOf(p)) })),
+      ...childCoercions.map(s => ({ name: s.name, typeNameEnc: 'Anything' })),
     ];
     G.ctx.childStatePrefix = actor.name.toLowerCase();
     G.ctx.childConstructorParams = new Set(childParams.map(p => p.name));

@@ -112,6 +112,12 @@ function renamedCopy(node, renames) {
 
 // `chain` is resolveSuperclassChain, passed in to avoid a cycle. Validation lowers
 // the parent's code in place, so a view is taken fresh each time, never kept.
+// This runs as the file is parsed (src/parser.js), and again after: a param's type
+// is its text until the parser encodes it (src/parser_types.js), then its encoding.
+// A cell made from one carries whichever it has; untyped, `Anything`.
+const typeOfParam = (p) => (p.type !== undefined ? { typeName: p.type, typeNameEnc: p.typeEnc } : { typeNameEnc: p.typeEnc === undefined ? 'Anything' : p.typeEnc });
+const typeOfCell = (c) => (c?.typeName !== undefined ? { typeName: c.typeName, typeNameEnc: c.typeNameEnc } : { typeNameEnc: c?.typeNameEnc });
+
 export function parentView(actorByName, P, chain) {
   const pc = chain(actorByName, P);
   // The params `new` takes: its own when it builds its base or has none, else (a
@@ -123,7 +129,7 @@ export function parentView(actorByName, P, chain) {
   // A published param is read on the wire as `@name`: the layer keeps answering it.
   for (const p of params) {
     if (!p.accessor || functions.some(f => f.name === '@' + p.accessor)) continue;
-    functions.push(AST.functionDecl('@' + p.accessor, [], [AST.implicitReturn(AST.identifier(renames.get(p.name)), p.type || null)]));
+    functions.push(AST.functionDecl('@' + p.accessor, [], [{ ...AST.implicitReturn(AST.identifier(renames.get(p.name)), p.type || null), ...(p.typeEnc !== undefined && { typeNameEnc: p.typeEnc }) }]));
   }
   return {
     params: params.map(p => ({
@@ -134,7 +140,7 @@ export function parentView(actorByName, P, chain) {
     })),
     sourceParams: params,
     functions,
-    cells: params.map(p => ({ name: renames.get(p.name), typeName: p.type || 'Anything', typeNameEnc: p.typeEnc ?? 'Anything', isRef: !!p.ref })),
+    cells: params.map(p => ({ name: renames.get(p.name), ...typeOfParam(p), isRef: !!p.ref })),
     init: renamedCopy(effectiveInit(actorByName, P, chain), renames),
   };
 }
@@ -390,7 +396,10 @@ export function lowerSuperCalls(actors, chain) {
       // (notes/opre-extend-and-as-2026-11-20.md, "Instance layers").
       if (P.remoteStub) {
         const byParam = new Map(view.params.map(p => [p.name, p]));
-        const passed = binds.map(b => ({ key: byParam.get(b.name).key, positional: byParam.get(b.name).positional, type: byParam.get(b.name).type ?? null, value: b.value }));
+        const passed = binds.map(b => {
+          const p = byParam.get(b.name);
+          return { key: p.key, positional: p.positional, ...(p.type !== undefined ? { type: p.type } : p.typeEnc !== undefined ? { typeEnc: p.typeEnc } : {}), value: b.value };
+        });
         return [{ type: 'ExprStatement', expr: { type: 'RemoteNew', layer, address: P.remoteAddress, args: passed } }];
       }
       return [...binds, { type: 'SuperInit', layer }];
@@ -400,8 +409,8 @@ export function lowerSuperCalls(actors, chain) {
     U.constructorBody = (U.constructorBody || []).flatMap((s) => {
       const binds = s.type === 'ExprStatement' && lowered.get(s.expr);
       if (!binds) return [s];
-      const typeOf = new Map(parentView(byName, byName.get(s.expr.layer), chain).cells.map(c => [c.name, c.typeName]));
-      return binds.map(b => AST.typedAssign(b.name, typeOf.get(b.name), b.value));
+      const typeOf = new Map(parentView(byName, byName.get(s.expr.layer), chain).cells.map(c => [c.name, c]));
+      return binds.map(b => ({ type: 'TypedAssign', name: b.name, ...typeOfCell(typeOf.get(b.name)), value: b.value }));
     });
   }
 }

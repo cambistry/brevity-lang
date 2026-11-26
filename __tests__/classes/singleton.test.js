@@ -1,6 +1,6 @@
 import { compileSource, expectBehavior } from '../helpers.js';
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 
 // `name = actor { … }` defines an actor and creates it once, when its enclosing
 // actor is constructed; `name` holds it. `*{ … }` is run once per new actor;

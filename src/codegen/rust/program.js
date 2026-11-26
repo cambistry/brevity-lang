@@ -283,8 +283,8 @@ ${sourceArms}
   ]);
   G.ctx.stateVarDecls = [
     ...(actor.stateVarDecls || []),
-    ...constructorParams.map(p => ({ name: p.name, typeName: p.type || 'Anything', typeNameEnc: orAny(envTypeOf(p)) })),
-    ...serviceCoercions.map(s => ({ name: s.name, typeName: 'Anything', typeNameEnc: 'Anything' })),
+    ...constructorParams.map(p => ({ name: p.name, typeNameEnc: orAny(envTypeOf(p)) })),
+    ...serviceCoercions.map(s => ({ name: s.name, typeNameEnc: 'Anything' })),
   ];
   G.ctx.remoteInstanceVars = new Set();
   // Constructor coercions: alias name → the underlying dep's wire address. Treat the alias
@@ -353,8 +353,7 @@ ${sourceArms}
               params: sub.params || [],
               body: sub.body || [],
             });
-            const paramType = (childActor.initParams || []).find(p => p.name === paramName)?.type;
-            paramSubInfo.push({ paramName, callbackName, paramType });
+            paramSubInfo.push({ paramName, callbackName });
           }
           continue;
         }
@@ -2927,7 +2926,7 @@ function codegenRust(ast, options = {}) {
   // An actor that may be extended, or extends one in another file, runs as a class
   // that reaches the actors around it (its delegation runtime is there).
   G.ctx.readsOuter = hasOuterReads(ast) || G.ctx.publicSingletons || ast.actors.some(a => a.membersOf || a.isPublic || a.remoteLayers?.length);
-  G.ctx.outerTypes = fileOuterNames(ast, { enc: true });
+  G.ctx.outerTypes = fileOuterNames(ast);
   G.ctx.program = ast;
   G.ctx.outerProgram = ast;
   G.ctx.actorFnNames = new Set();
@@ -3085,7 +3084,7 @@ function codegenRust(ast, options = {}) {
         if (!ownStateNames.has(ingest.name)) {
           mergedActor.stateVarDecls = [
             ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeName: ingest.typeName, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
+            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
           ];
         }
       }

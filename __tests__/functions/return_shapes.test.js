@@ -48,8 +48,8 @@ describe('reading a doc', () => {
       g: [{ re: { '%or': [['Integer'], ['Text'], [{ '%self': true }]] }, writes: true }],
     } });
     expect(f[0].returnAlternatives).toEqual([
-      [expect.objectContaining({ type: 'Integer', positional: true })],
-      [expect.objectContaining({ name: 'a', type: 'Text' })],
+      [expect.objectContaining({ typeEnc: 'Integer', positional: true })],
+      [expect.objectContaining({ name: 'a', typeEnc: 'Text' })],
     ]);
     expect(f[0].returns).toEqual(f[0].returnAlternatives[0]);
     expect(g[0].returnsSelf).toBe(true);

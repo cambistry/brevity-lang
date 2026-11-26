@@ -2,7 +2,7 @@
 // Node entry point (index.js) and the in-page compiler (src/codegen/browser/brevity.js),
 // so this module must not import anything that needs Node.
 
-import { isInterned } from './type_enc.js';
+import { isInterned, isInstance, ownNames } from './type_enc.js';
 
 function hasRefRead(node) {
   if (!node || typeof node !== 'object') return false;
@@ -54,7 +54,7 @@ export function synthesizeTemplateClosures(ast) {
     // Text-typed non-ref state bindings: safe to inline as a text splice.
     const textVars = new Set();
     for (const decl of (actor.stateVarDecls || [])) {
-      if (!decl.isRef && decl.typeName === 'Text') textVars.add(decl.name);
+      if (!decl.isRef && decl.typeNameEnc === 'Text') textVars.add(decl.name);
     }
 
     let counter = 0;
@@ -323,7 +323,6 @@ export function injectFileParamsIntoFileActor(ast) {
     .map(p => ({
       name: p.name,
       ...(p.key ? { key: p.key } : {}),
-      type: p.paramType,
       ...(p.paramTypeEnc !== undefined && { typeEnc: p.paramTypeEnc }),
       positional: !!p.positional,
       ...(p.defaultValue ? { defaultValue: p.defaultValue } : {}),
@@ -344,6 +343,10 @@ export function coerceObjectsToTypes(ast) {
   // A class's type is written bare inside the class; validate settles which.
   const typesByName = new Map((ast.types || []).flatMap(t => (t.bareName ? [[t.bareName, t], [t.name, t]] : [[t.name, t]])));
   if (typesByName.size === 0) return;
+  // The name a type's encoding gives it: a type of this file by its path, one a
+  // class's block names bare (settled by validate) as it's written.
+  const typeNameOf = (t) => (typeof t !== 'string' || isInstance(t) ? null
+    : ownNames(t)?.join('::') ?? (t.includes(':') ? null : t));
 
   function structureToTypeConstruction(typeName, typeNameEnc, structureExpr) {
     const decl = typesByName.get(typeName);
@@ -356,10 +359,10 @@ export function coerceObjectsToTypes(ast) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { for (const n of node) walk(n); return; }
     if (node.type === 'TypedAssign' &&
-        typesByName.has(node.typeName) &&
+        typesByName.has(typeNameOf(node.typeNameEnc)) &&
         node.value &&
         (node.value.type === 'ObjectConstructor' || node.value.type === 'ObjectLiteral')) {
-      const rewritten = structureToTypeConstruction(node.typeName, node.typeNameEnc, node.value);
+      const rewritten = structureToTypeConstruction(typeNameOf(node.typeNameEnc), node.typeNameEnc, node.value);
       if (rewritten) node.value = rewritten;
     }
     for (const k of Object.keys(node)) {

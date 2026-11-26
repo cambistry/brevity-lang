@@ -1,5 +1,5 @@
 import { expectBehavior, compileSource, createActor, expectActorBehavior } from '../helpers.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 
 // An op's signatures in a service document, at whichever address has it.
 const opIn = (node, name) => node?.public?.[name]

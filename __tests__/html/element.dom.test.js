@@ -159,7 +159,7 @@ describe('HTML element compile — type mismatches (sad path)', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(aria: "Close") }
-    `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'Aria'/);
+    `)).toThrow(/named arg 'aria'.*'Text' is not assignable to 'HTML::Aria'/);
   });
 
   it('div(spellcheck: Integer) is rejected — expects Boolean', () => {
@@ -593,7 +593,7 @@ describe('HTML element compile — unannotated element binds are typed', () => {
         body = document.body()
         body.append!(5)
       }
-    `)).toThrow(/'Integer' is not assignable to 'Element'/);
+    `)).toThrow(/'Integer' is not assignable to 'HTML::Element'/);
   });
 
   it('in the constructor block, a method the body element lacks is rejected', () => {

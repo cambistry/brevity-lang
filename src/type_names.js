@@ -11,20 +11,7 @@
 import { declaredTypeNames } from './names.js';
 import { _opre_quote as quote, _opre_split as split } from './codegen/opre_tokens.js';
 
-// A node's `type` is its kind; a param's or field's `type` is a type.
-const NODE_KINDS = new Set(['Actor', 'ActorFieldSet', 'ActorSetStatement', 'ActorValue', 'AnonymousHtmlActor', 'AsClause',
-  'AsExpr', 'Assign', 'BareTypeDecl', 'BaseCall', 'BaseMember', 'BaseSet', 'SuperCall', 'SuperInit', 'BinaryExpr', 'BlobMethodExpr', 'BoolLiteral', 'CatchExpr', 'CellNotify', 'CellReady',
-  'DecimalLiteral', 'Dependency', 'DestructureAssign', 'DomConstructor', 'DotAccessExpr', 'DotCallExpr', 'ExprStatement',
-  'FileParam', 'FloatLiteral', 'FnRef', 'ForStatement', 'Function', 'FunctionCallExpr', 'FunctionDecl', 'FunctionType',
-  'GraphemeTextMethodExpr', 'HtmlLiteral', 'Identifier', 'IfBranch', 'IfExpr', 'IfStatement', 'ImplicitReturn', 'IndexExpr',
-  'IngestExpr', 'IntLiteral', 'InterpolatedString', 'LabelInvoke', 'Lambda', 'LaunchStatement', 'ListDestructure',
-  'ListLiteral', 'ListMethodExpr', 'MathMethodExpr', 'NamedArgsBag', 'NullLiteral', 'ObjectConstructor', 'ObjectLiteral',
-  'OuterSet', 'OverExpr', 'ParenExpr', 'PresenceCheck', 'Program', 'QualifiedMember', 'ReduceExpr', 'RefArg', 'RefDecl',
-  'RefRead', 'RegexLiteral', 'RemoteNew', 'Reply', 'Return', 'RunDeferred', 'SelfValue', 'ServiceCoercion', 'SetChain', 'SetExpr',
-  'SetStatement', 'SilentTerminator', 'SizeExpr', 'StateAssign', 'StateVar', 'StringLiteral', 'SubscribeCall',
-  'TextMethodExpr', 'TypeConstruction', 'TypeDecl', 'TypeField', 'TypedAssign', 'TypedValue',
-  'UnaryExpr', 'UseExpr', 'UseValue', 'WhileStatement', 'text', 'dom', 'interp', 'handler', 'closure_ref', 'strinterp']);
-// Keys whose string value is a type.
+// Keys whose encoding (`<key>Enc`) is a type.
 const TYPE_KEYS = ['typeName', 'paramType', 'targetType', 'attestedAs', 'valueType', 'returnType'];
 
 export function resolveTypeNames(program, remotesParsed = {}) {
@@ -39,10 +26,11 @@ export function resolveTypeNames(program, remotesParsed = {}) {
   // An imported type, by its local name and by the name its document gives it.
   for (const [name, { remote }] of Object.entries(program.importedTypes || {})) declared.add(name).add(remote);
 
-  // `A::B::X`: through a dependency, what its document declares; through a
-  // class of this file, a type or class declared in it.
+  // `A::B::X` (`path`, its names): through a dependency, what its document
+  // declares; through a class of this file, a type or class declared in it.
   const reachable = (path) => {
-    const [head, ...rest] = path.split('::');
+    const [head, ...rest] = path;
+    const written = path.join('::');
     let doc = remotesParsed[head];
     if (doc) {
       for (const [i, seg] of rest.entries()) {
@@ -51,7 +39,7 @@ export function resolveTypeNames(program, remotesParsed = {}) {
         if (!doc) return false;
       }
     }
-    return (program.types || []).some(t => t.name === path) || declared.has(path);
+    return (program.types || []).some(t => t.name === written) || declared.has(written);
   };
   // A type or class a dependency's document declares is a type here, bare.
   for (const d of program.dependencies || []) {
@@ -61,7 +49,8 @@ export function resolveTypeNames(program, remotesParsed = {}) {
   // A class named with `!` writes while constructing; its actors are typed
   // without it: `w W = W!()`.
   for (const name of [...declared]) if (typeof name === 'string' && name.endsWith('!')) declared.add(name.slice(0, -1));
-  const isType = (name) => declared.has(name) || (name.includes('::') && reachable(name));
+  // A type's names: one is a name in scope; more, a path.
+  const isType = (path) => (path.length === 1 ? declared.has(path[0]) : declared.has(path.join('::')) || reachable(path));
 
   // A public class is `@C`, so a bare `C` doesn't name it.
   const notAType = (name) => declared.has('@' + name)
@@ -89,12 +78,11 @@ export function resolveTypeNames(program, remotesParsed = {}) {
       const head = headOf.get(tokens.slice(0, n).map(quote).join(':'));
       if (head === undefined) continue;
       if (n === tokens.length) return;
-      const written = [head, ...tokens.slice(n)].join('::');
-      if (!isType(written)) throw notAType(written);
+      const path = [head, ...tokens.slice(n)];
+      if (!isType(path)) throw notAType(path.join('::'));
       return;
     }
-    const written = tokens.join('::');
-    if (!isType(written) && !own?.has(written)) throw notAType(written);
+    if (!isType(tokens) && !own?.has(tokens.join('::'))) throw notAType(tokens.join('::'));
   };
   const checkEnc = (t, own) => {
     if (typeof t === 'string') { checkAddress(t, own); return; }
@@ -109,8 +97,7 @@ export function resolveTypeNames(program, remotesParsed = {}) {
   const visit = (node, own) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(n => visit(n, own)); return; }
-    for (const k of TYPE_KEYS) checkEnc(node[`${k}Enc`], own);
-    if (typeof node.type === 'string' && !NODE_KINDS.has(node.type)) checkEnc(node.typeEnc, own);
+    for (const k of [...TYPE_KEYS, 'type']) checkEnc(node[`${k}Enc`], own);
     for (const [k, v] of Object.entries(node)) if (k !== 'loc' && !k.endsWith('Enc') && v && typeof v === 'object') visit(v, own);
   };
   visit(program.actors);
@@ -118,7 +105,7 @@ export function resolveTypeNames(program, remotesParsed = {}) {
   // A parent is checked as a class (validate.js); a bare one that's public is named.
   for (const a of program.actors || []) {
     for (const { supertype } of a.supertypes || []) {
-      if (typeof supertype === 'string' && !isType(supertype) && declared.has('@' + supertype)) throw notAType(supertype);
+      if (typeof supertype === 'string' && !isType(supertype.split('::')) && declared.has('@' + supertype)) throw notAType(supertype);
     }
   }
   for (const d of program.dependencies || []) {

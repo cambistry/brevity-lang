@@ -171,13 +171,13 @@ describe('the extension section', () => {
     });
     expect(doc.__types.A.functions.map(f => f.name)).toEqual(['n', 'f']);
     expect(doc.__types.A.instanceProtected).toEqual({
-      '~step': [{ params: [], returns: [{ name: null, type: 'Integer', typeEnc: 'Integer', positional: true }], effect: 'read' }],
+      '~step': [{ params: [], returns: [{ name: null, typeEnc: 'Integer', positional: true }], effect: 'read' }],
     });
     expect(Object.keys(doc.__types.A.members).filter(k => !k.startsWith('__'))).toEqual(['g']);
     expect(doc.__types.A.members.__protected).toEqual({
-      '~count': [{ params: [], returns: [{ name: null, type: 'Integer', typeEnc: 'Integer', positional: true }] }],
-      '~h': [{ params: [{ name: null, type: 'Integer', typeEnc: 'Integer', positional: true }], returns: [{ name: null, type: 'Integer', typeEnc: 'Integer', positional: true }], effect: 'read' }],
-      __fields: { '~count': { type: 'Integer', typeEnc: 'Integer', cell: true, readOnly: false } },
+      '~count': [{ params: [], returns: [{ name: null, typeEnc: 'Integer', positional: true }] }],
+      '~h': [{ params: [{ name: null, typeEnc: 'Integer', positional: true }], returns: [{ name: null, typeEnc: 'Integer', positional: true }], effect: 'read' }],
+      __fields: { '~count': { typeEnc: 'Integer', cell: true, readOnly: false } },
     });
   });
 });

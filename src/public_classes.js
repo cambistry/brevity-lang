@@ -10,10 +10,11 @@
 // public class: `$new` to `W`, as `set@a` is `$set` to `a`.
 
 import * as AST from './ast.js';
+import { addressesIn } from './type_enc.js';
 import { FILE_CLASS } from './singleton_classes.js';
 import { lowerConstructionChains } from './chains.js';
 import { resolveSuperclassChain, PUBLIC_CLASS_SUFFIX as PUBLIC_SUFFIX } from './subclass.js';
-import { _opre_join as joinAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
+import { _opre_join as joinAddress, _opre_quote as quoteToken, _opre_split as splitAddress } from './codegen/opre_tokens.js';
 
 // A constructor entry as the document of what it constructs.
 function docOfClass(type) {
@@ -25,10 +26,13 @@ function docOfClass(type) {
   return doc;
 }
 
-// `x W = W!()` names the class this construction produces, so nothing needs coercing.
-const namesClass = (typeName, remote, local) => {
+// `x W = W!()` names the class this construction produces, so nothing needs coercing:
+// `t` (encoded) is the class by its name, or the dependency `dep` itself.
+const namesClass = (t, remote, dep) => {
+  if (typeof t !== 'string') return false;
   const bare = remote.replace(/!$/, '');
-  return typeName === bare || typeName === local?.replace(/!$/, '');
+  const tokens = splitAddress(t.replace(/:\*$/, ''));
+  return tokens[tokens.length - 1] === bare || (!!dep?.path && tokens.length === 1 && tokens[0] === dep.path);
 };
 
 const constructionArgs = (args) => {
@@ -105,12 +109,19 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
 
   const depNamed = (name) => ast.dependencies.find(d => d.name === name && !d.wireTarget);
 
-  const localTypeNames = new Set((ast.types || []).map(t => t.name));
+  // A service's address head, by its alias.
+  const aliasOf = new Map(ast.dependencies.filter(d => d.type === 'Dependency' && d.path && !d.destructures).map(d => [d.path, d.name]));
   // `Svc::Point` names a type in Svc's document. A class has no `::` form.
   const checkQualifiedType = (node) => {
-    if (node.type !== 'TypedAssign' || typeof node.typeName !== 'string') return;
-    for (const [written, alias, member] of node.typeName.matchAll(/(?<![\w:])(\w+)::(\w+)(?![\w:])/g)) {
-      if (localTypeNames.has(written)) continue; // a class's type in this file
+    if (node.type !== 'TypedAssign' || node.typeNameEnc === undefined) return;
+    for (const a of addressesIn(node.typeNameEnc)) {
+      // The file's own (a class's type), the parser resolved.
+      if (a.startsWith(':') || !a.includes(':')) continue;
+      const tokens = splitAddress(a.replace(/:\*$/, ''));
+      if (tokens.length !== 2) continue;
+      const alias = aliasOf.get(tokens[0]) ?? tokens[0];
+      const member = tokens[1];
+      const written = `${alias}::${member}`;
       const dep = depNamed(alias);
       if (!dep) throw new Error(`'${alias}' in '${written}' isn't in the header`);
       const doc = remotesParsed[alias];
@@ -136,18 +147,18 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
         if (call.viaInstance && node.type === 'StateAssign') {
           throw new Error(`Cannot construct '${method}' on '${object.name}' at file level — '${object.name}' has no address yet; do it in a function`);
         }
-        if (node.type === 'TypedAssign' && namesClass(node.typeName, method, null)) {
+        if (node.type === 'TypedAssign' && namesClass(node.typeNameEnc, method, null)) {
           node.type = 'Assign';
-          delete node.typeName;
+          delete node.typeNameEnc;
         }
         node.value = lower(node.value, call);
         return;
       }
       if (node.value?.type === 'FunctionCallExpr' && node.value.callee?.type === 'Identifier') {
         const dep = ast.dependencies.find(d => d.name === node.value.callee.name);
-        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeName, dep.wireClass, dep.name)) {
+        if (dep?.wireTarget && node.type === 'TypedAssign' && namesClass(node.typeNameEnc, dep.wireClass, dep)) {
           node.type = 'Assign';
-          delete node.typeName;
+          delete node.typeNameEnc;
         } else if (typesOf(dep?.name) && !dep.wireTarget) {
           scope.set(node.name, dep.name);
         }
@@ -188,7 +199,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
       if (s.type !== 'StateAssign' || !synthetic.has(s.value?.callee?.name)) continue;
       s.isRef = true;
       const decl = actor.stateVarDecls?.find(v => v.name === s.name);
-      if (decl) Object.assign(decl, { typeName: s.value.callee.name, typeNameEnc: classTypeEnc(ast, s.value.callee.name), isRef: true });
+      if (decl) Object.assign(decl, { typeNameEnc: classTypeEnc(ast, s.value.callee.name), isRef: true });
     }
   }
 }
@@ -205,7 +216,7 @@ function inferActorParams(ast) {
     const functions = (actor.functions || []).filter(f => f.type === 'FunctionDecl' && typeof f.name === 'string' && !/^[@#]/.test(f.name));
     const candidates = new Map();
     for (const f of functions) {
-      const untyped = (f.params || []).map((p, i) => ({ p, i })).filter(({ p }) => p.positional && (!p.type || p.type === 'Anything') && !p.rest);
+      const untyped = (f.params || []).map((p, i) => ({ p, i })).filter(({ p }) => p.positional && ((p.typeEnc === undefined && !p.typeUnencoded) || p.typeEnc === 'Anything') && !p.rest);
       if (untyped.length && functions.filter(o => o.name === f.name).length === 1) candidates.set(f.name, { untyped, seen: new Map() });
     }
     if (!candidates.size) continue;
@@ -234,7 +245,7 @@ function inferActorParams(ast) {
     };
     for (const f of actor.functions || []) visit(f.body, new Map());
     for (const { seen } of candidates.values()) {
-      for (const [p, cls] of seen) if (cls) Object.assign(p, { type: cls, typeEnc: classTypeEnc(ast, cls) });
+      for (const [p, cls] of seen) if (cls) p.typeEnc = classTypeEnc(ast, cls);
     }
   }
 }

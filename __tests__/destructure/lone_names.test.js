@@ -24,7 +24,7 @@ describe('destructure — key: X resolves by scope', () => {
 
   it('a type in scope is the field type', () => {
     expect(patternOf(`${f}@go = { value: Integer = f(7); return :value }\n`))
-      .toEqual([{ named: true, name: 'value', type: 'Integer', typeEnc: 'Integer' }]);
+      .toEqual([{ named: true, name: 'value', typeEnc: 'Integer' }]);
   });
 
   it('a capitalized name with no type in scope is a local', () => {
@@ -34,12 +34,12 @@ describe('destructure — key: X resolves by scope', () => {
 
   it('a lowercase type in scope is the field type', () => {
     expect(patternOf(`type pt (x Integer)\ng = (n Integer) { return value: pt(n) }\n@go = { value: pt = g(7); return :value }\n`))
-      .toEqual([{ named: true, name: 'value', type: 'pt', typeEnc: ':pt' }]);
+      .toEqual([{ named: true, name: 'value', typeEnc: ':pt' }]);
   });
 
   it('a class declared later in the file is in scope', () => {
     expect(patternOf(`g = (n Integer) { return value: Box(n) }\n@go = { value: Box = g(7); return :value }\nBox = (v Integer) *{ @get = -> r: v }\n`))
-      .toEqual([{ named: true, name: 'value', type: 'Box', typeEnc: ':~Box:*' }]);
+      .toEqual([{ named: true, name: 'value', typeEnc: ':~Box:*' }]);
   });
 
   it('a local may not take the name of a type in scope', () => {

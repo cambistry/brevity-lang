@@ -1,5 +1,5 @@
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 import { expectBehavior } from '../helpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════

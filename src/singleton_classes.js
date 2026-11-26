@@ -302,7 +302,7 @@ export function lowerInheritedBlockCells(actors) {
     };
     const mark = (node, found) => {
       delete node.viaClass;
-      Object.assign(node, { outer: true, outerBase: true, outerLevel: 1, outerClass: found.owner, outerParam: false, outerType: found.decl.typeName ?? null });
+      Object.assign(node, { outer: true, outerBase: true, outerLevel: 1, outerClass: found.owner, outerParam: false });
       encodedLater(node, 'outerTypeEnc', found.decl, 'typeNameEnc');
       return node;
     };
@@ -330,7 +330,7 @@ export function lowerInheritedBlockCells(actors) {
           for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
           node.type = 'ExprStatement';
           const type = found.decl.typeName ?? null;
-          node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner, outerType: type };
+          node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner };
           encodedLater(node.expr, 'outerTypeEnc', found.decl, 'typeNameEnc');
           visit(value, bound);
           return;
@@ -388,7 +388,7 @@ export function addRemoteParents(actors, dependencies, remotes) {
     // Its `new`'s params, by the doc: a published one is a prop (`n Integer`).
     const props = new Set(Object.entries(cls.fields || {}).filter(([, f]) => !f.cell).map(([n]) => n));
     stubClass.initParams = (cls.initParams || []).map((p, i) => ({
-      name: p.name ?? `p${i}`, key: p.name ?? `p${i}`, type: p.type, typeEnc: p.typeEnc, positional: p.positional !== false,
+      name: p.name ?? `p${i}`, key: p.name ?? `p${i}`, typeEnc: p.typeEnc, positional: p.positional !== false,
       ...(p.optional && { remoteOptional: true }), ...(p.name && props.has(p.name) && { accessor: p.name }),
     }));
     if (cls.ownNew) stubClass.ownNew = true;
@@ -428,12 +428,12 @@ export function addRemoteParents(actors, dependencies, remotes) {
 // A placeholder's members, by its doc: public functions and cells, and protected
 // ones (`~`). Bodies are empty: nothing is generated for it.
 function fillStub(stub, publicSigs, fields, prot) {
-  const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, type: p.type, positional: p.positional !== false })), body: [], remoteReturns: sig.returns ?? null });
+  const fn = (n, sig) => ({ type: 'FunctionDecl', name: n, params: (sig.params || []).map((p, i) => ({ name: `p${i}`, typeEnc: p.typeEnc, positional: p.positional !== false })), body: [], remoteReturns: sig.returns ?? null });
   for (const [n, sigs] of Object.entries(publicSigs)) {
     if (n.startsWith('__')) continue;
     const field = fields[n];
     if (field) {
-      stub.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeName: field.type, typeNameEnc: field.typeEnc, isRef: !field.readOnly });
+      stub.stateVarDecls.push({ type: 'StateVarDecl', name: '@' + n, typeNameEnc: field.typeEnc, isRef: !field.readOnly });
       stub.functions.push({ ...fn('@' + n, { params: [], returns: sigs[0]?.returns }), cellGetter: true });
     } else for (const sig of sigs) stub.functions.push(fn('@' + n, sig));
   }
@@ -441,7 +441,7 @@ function fillStub(stub, publicSigs, fields, prot) {
     if (n.startsWith('__')) continue;
     const bare = n.replace(/^~/, '');
     const f = prot.__fields?.[n];
-    if (f) stub.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeName: f.type, typeNameEnc: f.typeEnc, isRef: !f.readOnly });
+    if (f) stub.stateVarDecls.push({ type: 'StateVarDecl', name: bare, typeNameEnc: f.typeEnc, isRef: !f.readOnly });
     else for (const sig of sigs) stub.functions.push(fn(bare, sig));
   }
 }
@@ -571,7 +571,7 @@ export function lowerBlockDelegation(actors) {
         visit(value, bound);
         for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
         node.type = 'ExprStatement';
-        node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, outerType: type, ctxCell: wireLabelOf(name) };
+        node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, ctxCell: wireLabelOf(name) };
         encodedLater(node.expr, 'outerTypeEnc', decl, 'typeNameEnc');
         return;
       }

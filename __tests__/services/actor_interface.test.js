@@ -1,5 +1,5 @@
 import { extract } from '../../index.js';
-import { parseInterface } from '../../src/codegen/javascript/types.js';
+import { parseInterface } from '../../src/parser_interface.js';
 import { documentShape } from '../../src/service_doc.js';
 import { compileSource } from '../helpers.js';
 
@@ -607,7 +607,7 @@ describe('class interface — return paths', () => {
     const [sig] = documentShape(docOf(fn('if b { return 1 }\n  return self')))['go!'];
     expect(sig.effect).toBe('write');
     expect(sig.returnsSelf).toBe(true);
-    expect(sig.returns.map(r => r.type)).toEqual(['Integer']);
+    expect(sig.returns.map(r => r.typeEnc)).toEqual(['Integer']);
   });
 
   it('inside a class', () => {
@@ -637,7 +637,7 @@ describe('class interface — return paths', () => {
     });
     const [sig] = documentShape(doc).__types.C.functions;
     expect(sig.returnsSelf).toBe(true);
-    expect(sig.returns.map(r => r.type)).toEqual(['Integer']);
+    expect(sig.returns.map(r => r.typeEnc)).toEqual(['Integer']);
   });
 
   it('a value returned only from branches is shown', () => {
@@ -705,7 +705,7 @@ describe('class interface — a read-only tail `if`', () => {
   it('shows the value its branches end in', () => {
     const doc = docOf('@f = (b Boolean) {\n  if b { 1 } else { 2 }\n}\n');
     expect(doc).toEqual({ public: { f: [{ args: ['Boolean'], re: ['Integer'], writes: false }] } });
-    expect(documentShape(doc).f[0].returns.map(r => r.type)).toEqual(['Integer']);
+    expect(documentShape(doc).f[0].returns.map(r => r.typeEnc)).toEqual(['Integer']);
   });
 
   it('through `else if`, with a local in a branch', () => {

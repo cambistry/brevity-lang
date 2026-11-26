@@ -1,5 +1,6 @@
 export { codegen, parseInterface } from './classes.js';
 import { codegen } from './classes.js';
+import { isList } from '../../type_enc.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -27,7 +28,7 @@ function _toConsList(arr) {
 }
 
 function _coerceArg(value, type) {
-  if (typeof type === 'string' && type.startsWith('List') && Array.isArray(value)) {
+  if (isList(type) && Array.isArray(value)) {
     return _toConsList(value);
   }
   return value;
@@ -39,10 +40,10 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   const fileActor = (ast.actors || []).find(a => !a.name);
   const params = fileActor?.initParams || [];
   if (Array.isArray(constructorArgs)) {
-    return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.type));
+    return constructorArgs.map((v, i) => _coerceArg(v, params[i]?.typeEnc));
   }
   // Named object: map to positional order via the file actor's initParams.
-  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.type));
+  return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.typeEnc));
 }
 
 let _moduleSeq = 0;
