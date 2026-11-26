@@ -1,3 +1,4 @@
+kanban/tickets/return-types-in-the-function-header.md
 kanban/tickets/clauses-added-with-on-an-inherited-name.md
 kanban/tickets/synonym-of-actor.md
 kanban/tickets/js-test-get-on-a-list-cell-replies-the-internal-linked-list.md
@@ -8,7 +9,6 @@ kanban/tickets/valueless-attributes.md
 kanban/tickets/agent-updates-tickets-through-the-board-s-opre-api.md
 kanban/tickets/make-kanban-speculative-board-bv-compile-and-run.md
 kanban/tickets/type-of-type.md
-kanban/tickets/return-types-in-the-function-header.md
 kanban/tickets/type-inheritance-inheritance-test.md
 kanban/tickets/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
 kanban/tickets/a-private-silent-function-that-writes-is-not-defined-at-its-calls.md
