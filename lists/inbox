@@ -1,3 +1,4 @@
+kanban/tickets/encode-types-before-the-parse-time-lowerings.md
 kanban/tickets/js-test-get-on-a-list-cell-replies-the-internal-linked-list.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/a-positional-destructure-with-too-many-names-binds-null.md
