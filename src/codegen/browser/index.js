@@ -47,6 +47,36 @@ function resolveConstructorArgs(ctx, source, constructorArgs) {
   return params.map(p => _coerceArg(constructorArgs[p.key || p.name], p.typeEnc));
 }
 
+// An actor in the page. Its posts reach Node only on a round-trip, so `refresh`
+// pulls what it has posted since (one may trail a send, made on handling a reply),
+// with whether construction has finished (`built`) or failed.
+async function liveActor(id) {
+  const posts = [];
+  const pending = [];
+  let built = false;
+  let failed = null;
+  const take = (drained) => {
+    posts.push(...drained.posts.map(normalizeBigInts));
+    built = drained.built;
+    if (drained.failed && !failed) failed = new Error(drained.failed);
+  };
+  // Pull construction-time posts (e.g., `new` emission) immediately so
+  // the returned `posts` array is populated as tests expect.
+  take(await callHarness('drainPosts', id));
+  return {
+    posts,
+    get built() { return built; },
+    get failed() { return failed; },
+    send(msg) { pending.push(msg); },
+    async sendAsync(msg) {
+      if (failed) throw failed;
+      pending.push(msg);
+      take(await callHarness('sendBatchAndDrain', { id, msgs: pending.splice(0) }));
+    },
+    async refresh() { take(await callHarness('drainPosts', id)); },
+  };
+}
+
 export default {
   name: 'browser',
   codegen,
@@ -65,22 +95,7 @@ export default {
     async createActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
       const args = resolveConstructorArgs(ctx, source, constructorArgs);
       const id = await callHarness('createActor', { source, compileOptions, args });
-      const posts = [];
-      // Pull construction-time posts (e.g., `new` emission) immediately so
-      // the returned `posts` array is populated as tests expect.
-      const initial = await callHarness('drainPosts', id);
-      posts.push(...initial.map(normalizeBigInts));
-      const pending = [];
-      return {
-        posts,
-        send(msg) { pending.push(msg); },
-        async sendAsync(msg) {
-          pending.push(msg);
-          const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
-          pending.length = 0;
-          posts.push(...fresh.map(normalizeBigInts));
-        },
-      };
+      return liveActor(id);
     },
 
     async compileActor(ctx, source, { compileOptions = {}, constructorArgs = null } = {}) {
@@ -89,20 +104,7 @@ export default {
       return {
         async spawn() {
           const id = await callHarness('spawnCompiled', { compiledId, args });
-          const posts = [];
-          const initial = await callHarness('drainPosts', id);
-          posts.push(...initial.map(normalizeBigInts));
-          const pending = [];
-          return {
-            posts,
-            send(msg) { pending.push(msg); },
-            async sendAsync(msg) {
-              pending.push(msg);
-              const fresh = await callHarness('sendBatchAndDrain', { id, msgs: pending });
-              pending.length = 0;
-              posts.push(...fresh.map(normalizeBigInts));
-            },
-          };
+          return liveActor(id);
         },
       };
     },

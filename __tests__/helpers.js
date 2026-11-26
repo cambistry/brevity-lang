@@ -111,6 +111,8 @@ export async function runActors(actors, { messages = [] } = {}) {
     let moved = false;
     for (const name of names) {
       const actor = live[name];
+      // A target whose posts arrive only on a round-trip (browser) pulls them.
+      await actor.refresh?.();
       while (seen[name] < actor.posts.length) {
         const msg = actor.posts[seen[name]++];
         moved = true;
@@ -273,5 +275,6 @@ async function _nextPost(actor, index) {
   const deadline = Date.now() + POST_WAIT_MS;
   while (actor.posts.length <= index && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 5));
+    await actor.refresh?.();
   }
 }

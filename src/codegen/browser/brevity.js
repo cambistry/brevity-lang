@@ -20,6 +20,7 @@ import { codegen as jsCodegen } from '../javascript/classes.js';
 import { start } from './runtime.js';
 import { _opre_quote as quote, _opre_resolve as resolve, _opre_map_bracketed as mapBracketed } from '../opre_tokens.js';
 import { runExtractPasses } from '../../extract_passes.js';
+import { settleOverrideTables } from '../../service_shape.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -39,21 +40,23 @@ function normalizeBigInts(val) {
   return val;
 }
 
-export function extract(source) {
+// As index.js: `remotes` lets the parse know a parent class from another file.
+export function extract(source, { remotes = null } = {}) {
   const tokens = tokenize(source);
-  const ast = parse(tokens);
+  const ast = parse(tokens, { remotes });
   runExtractPasses(ast);
   return { ast };
 }
 
 export function compile(ast, options = {}) {
+  settleOverrideTables(ast);
   renamePublicClasses(ast);
   validateWithSourceNames(validate, ast, options);
   return jsCodegen(ast, options);
 }
 
 async function compileAndLoad(source, compileOptions = {}) {
-  const { ast } = extract(source);
+  const { ast } = extract(source, { remotes: compileOptions.remotes });
   const output = compile(ast, { ...compileOptions, target: 'browser' });
   const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(output)}`;
   const mod = await import(/* webpackIgnore: true */ dataUrl);
@@ -129,32 +132,54 @@ async function runActor({ source, compileOptions = {}, receive = [] }) {
 
 async function createActor({ source, compileOptions = {}, args = [] }) {
   const ActorClass = await compileAndLoad(source, compileOptions);
+  return spawn(ActorClass, compileOptions.selfAddr, args);
+}
+
+// As the JS runner: construction may wait on a reply from another actor (a class
+// block's `$extend`), so the actor is handed back once construction finishes or
+// settles waiting. A failure later is kept, and thrown at the next send.
+async function spawn(ActorClass, selfAddr, args) {
   const posts = [];
-  const binding = wrapBindingPost(posts, compileOptions.selfAddr);
-  const instance = await ActorClass.create(binding, ...args);
+  const binding = wrapBindingPost(posts, selfAddr);
+  const h = { instance: null, posts, drained: 0, built: false, failed: null };
+  binding.created = (i) => { h.instance = i; };
+  const ready = ActorClass.create(binding, ...args);
+  ready.then(
+    (i) => { h.instance ??= i; h.built = true; },
+    // What it fails with may be a reply's `ex`: kept as a message, to cross the page boundary.
+    (err) => { h.built = true; h.failed = err instanceof Error ? err.message : `construction failed: ${JSON.stringify(err)}`; },
+  );
+  await Promise.race([ready.catch(() => {}), (async () => { for (let i = 0; i < 20; i++) await tick(); })()]);
+  if (h.failed) throw new Error(h.failed);
   const id = String(++nextId);
-  handles.set(id, { instance, posts, drained: 0 });
+  handles.set(id, h);
   return id;
 }
 
+// Posts since the last drain, and whether construction has finished or failed.
+function drain(h) {
+  const fresh = h.posts.slice(h.drained);
+  h.drained = h.posts.length;
+  return { posts: fresh.map(normalizeBigInts), built: h.built, failed: h.failed };
+}
+
+// An actor whose construction failed is gone: the send it fails on resolves, and
+// a send to it after that throws (as on every target).
 async function sendBatchAndDrain({ id, msgs }) {
   const h = handles.get(id);
   if (!h) throw new Error(`brevity.js: no actor handle ${id}`);
+  if (h.failed) throw new Error(h.failed);
   for (const msg of msgs) {
     h.instance.receive(msg);
     await tick(); await tick();
   }
-  const fresh = h.posts.slice(h.drained);
-  h.drained = h.posts.length;
-  return fresh.map(normalizeBigInts);
+  return drain(h);
 }
 
 function drainPosts(id) {
   const h = handles.get(id);
   if (!h) throw new Error(`brevity.js: no actor handle ${id}`);
-  const fresh = h.posts.slice(h.drained);
-  h.drained = h.posts.length;
-  return fresh.map(normalizeBigInts);
+  return drain(h);
 }
 
 async function compileActor({ source, compileOptions = {} }) {
@@ -167,13 +192,7 @@ async function compileActor({ source, compileOptions = {} }) {
 async function spawnCompiled({ compiledId, args = [] }) {
   const entry = compiled.get(compiledId);
   if (!entry) throw new Error(`brevity.js: no compiled actor ${compiledId}`);
-  const { ActorClass, selfAddr } = entry;
-  const posts = [];
-  const binding = wrapBindingPost(posts, selfAddr);
-  const instance = await ActorClass.create(binding, ...args);
-  const id = String(++nextId);
-  handles.set(id, { instance, posts, drained: 0 });
-  return id;
+  return spawn(entry.ActorClass, entry.selfAddr, args);
 }
 
 // Reset state between test invocations that want full isolation. Tests
