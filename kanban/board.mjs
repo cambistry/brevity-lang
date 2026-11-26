@@ -94,7 +94,8 @@ function slugOfPath(line) {
 // position, so a move shows everywhere once kanban syncs, before main's
 // front-matter catches up. A ticket in several lists stays in the one its
 // front-matter names, else the first. Tickets in no list go by front-matter,
-// at the top, newest first. Sets each ticket's `status` to its column.
+// at the top, newest first. Sets each ticket's `status` to its column, and
+// returns the lists with the unlisted slugs.
 function loadLists(tickets) {
   const lists = new Map();
   const files = fs.existsSync(ORDER_DIR) ? fs.readdirSync(ORDER_DIR).filter(f => !f.startsWith('.')).sort() : [];
@@ -113,7 +114,7 @@ function loadLists(tickets) {
     if (!lists.has(t.status)) lists.set(t.status, []);
     lists.get(t.status).unshift(t.slug);
   }
-  return lists;
+  return { lists, unlisted: unlisted.map(t => t.slug) };
 }
 
 function writeStatus(ticket, status) {
@@ -155,14 +156,18 @@ const S = {
   message: '',
   editing: false,
   peek: null,
+  confirm: null,
   stale: false,
   quitting: false,
 };
 
+// Returns the slugs of tickets no list holds (they sit at the top of their column).
 function reload() {
   S.columns = loadColumns();
   S.tickets = loadTickets();
-  S.lists = loadLists(S.tickets);
+  const { lists, unlisted } = loadLists(S.tickets);
+  S.lists = lists;
+  return unlisted;
 }
 
 function knownSlugs() {
@@ -300,7 +305,7 @@ function cancelGrab() {
   S.lists = S.grab.lists;
   t.status = S.grab.status;
   S.grab = null;
-  if (S.stale) { S.stale = false; reload(); }
+  if (S.stale) { S.stale = false; adopt(reload()); }
   focusSlug(t.slug);
 }
 
@@ -331,6 +336,21 @@ function newTicket(title) {
   S.message = `created ${slug}.md`;
 }
 
+// Removes the ticket file and its list entry; the quick-view moves to the
+// card now at the same position, or the column's last, and closes on an empty column.
+function deleteTicket(slug) {
+  const t = S.tickets.get(slug);
+  if (!t) return;
+  fs.rmSync(t.file, { force: true });
+  S.tickets.delete(slug);
+  for (const [status, list] of S.lists) S.lists.set(status, list.filter(s => s !== slug));
+  writeOrder();
+  publish();
+  const next = selected();
+  S.peek = S.peek && next ? { slug: next.slug, top: 0 } : null;
+  S.message = `deleted ${slug}.md`;
+}
+
 // ---------- terminal ----------
 
 const out = process.stdout;
@@ -359,7 +379,8 @@ function wrap(line, width) {
 
 function peekLines(width) {
   const t = S.tickets.get(S.peek.slug);
-  const text = fs.readFileSync(t.file, 'utf8').replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const raw = fs.existsSync(t.file) ? fs.readFileSync(t.file, 'utf8') : '';
+  const text = raw.replace(/^---\n[\s\S]*?\n---\n?/, '');
   const body = text.replace(/^#\s+.+\n?/m, '').replace(/^\n+/, '').replace(/\s+$/, '');
   return { t, lines: body ? body.split('\n').flatMap(l => wrap(l, width)) : ['(no description)'] };
 }
@@ -371,7 +392,7 @@ function columnName(slug) {
 
 function renderPeek(W, H) {
   const { t, lines } = peekLines(W - 2);
-  const bodyH = Math.max(1, H - 5);
+  const bodyH = Math.max(1, H - 4);
   S.peek.top = clamp(S.peek.top, 0, Math.max(0, lines.length - bodyH));
   const out = [
     `${ESC}1m${fit(` ${t.title}`, W)}${ESC}0m`,
@@ -380,7 +401,9 @@ function renderPeek(W, H) {
   ];
   for (let y = 0; y < bodyH; y++) out.push(fit(` ${lines[S.peek.top + y] ?? ''}`, W));
   const more = lines.length > bodyH ? `${S.peek.top + 1}-${Math.min(lines.length, S.peek.top + bodyH)}/${lines.length}  ` : '';
-  out.push(`${ESC}2m${fit(`${more}arrows ticket  pgup/pgdn scroll  e edit  enter/esc back`, W)}${ESC}0m`);
+  if (S.confirm) out.push(fit(`Delete ${t.slug}.md? (y/n)`, W));
+  else if (S.message) out.push(fit(S.message, W));
+  else out.push(`${ESC}2m${fit(`${more}arrows ticket  pgup/pgdn scroll  e edit  d delete  enter/esc back`, W)}${ESC}0m`);
   return out;
 }
 
@@ -454,7 +477,7 @@ function render() {
   const W = out.columns || 80;
   const H = out.rows || 24;
   if (S.peek) {
-    out.write(`${ESC}H` + renderPeek(W, H).slice(0, H).map(l => `${l}${ESC}K`).join('\r\n'));
+    out.write(`${ESC}H` + renderPeek(W, H).slice(0, H).map(l => `${l}${ESC}K`).join('\r\n') + `${ESC}J`);
     return;
   }
   const all = boardColumns();
@@ -465,7 +488,9 @@ function render() {
   const lines = [];
 
   lines.push(cols.map((c, i) => {
-    let label = fit(` ${c.name} ${members(c.slug).length}`, cw);
+    const n = members(c.slug).length;
+    const count = left + i === S.col && n ? `${currentRow() + 1} / ${n}` : `${n}`;
+    let label = fit(` ${c.name} ${count}`, cw);
     if (i === 0 && left > 0) label = '‹' + label.slice(1);
     if (i === cols.length - 1 && left + cols.length < all.length) label = label.slice(0, -1) + '›';
     return left + i === S.col ? `${ESC}1;7m${label}${ESC}0m` : `${ESC}1m${label}${ESC}0m`;
@@ -497,7 +522,7 @@ function render() {
     ? 'arrows carry  space drop  esc cancel'
     : 'arrows move  space grab  enter view  e edit  n new  r reload  q quit', W)}${ESC}0m`);
 
-  out.write(`${ESC}H` + lines.slice(0, H).map(l => `${l}${ESC}K`).join('\r\n'));
+  out.write(`${ESC}H` + lines.slice(0, H).map(l => `${l}${ESC}K`).join('\r\n') + `${ESC}J`);
 }
 
 function draw() {
@@ -633,6 +658,40 @@ function publish() {
   });
 }
 
+// Tickets no list holds go on record at the top of their column.
+function adopt(unlisted) {
+  if (!unlisted.length) return;
+  writeOrder();
+  publish();
+  S.message = unlisted.length === 1 ? `found ${unlisted[0]}.md` : `found ${unlisted.length} tickets`;
+}
+
+// A ticket file added, changed or removed on disk: reload, keeping the cursor
+// (and the quick-view, when its ticket still exists).
+function refreshTickets() {
+  if (S.editing || S.quitting) return; // the editor reloads on return
+  if (S.grab) { S.stale = true; return; }
+  const t = selected();
+  const unlisted = reload();
+  if (t) focusSlug(t.slug);
+  if (S.peek && !S.tickets.has(S.peek.slug)) {
+    const next = selected();
+    S.peek = next ? { slug: next.slug, top: 0 } : null;
+  }
+  if (S.confirm && !S.tickets.has(S.confirm.slug)) S.confirm = null;
+  adopt(unlisted);
+  draw();
+}
+
+let watchTimer = null;
+function watchTickets() {
+  fs.mkdirSync(TICKETS, { recursive: true });
+  fs.watch(TICKETS, () => {
+    clearTimeout(watchTimer);
+    watchTimer = setTimeout(refreshTickets, 150);
+  });
+}
+
 function poll() {
   if (S.grab || S.editing || S.prompt !== null) return;
   enqueue(async () => {
@@ -693,7 +752,7 @@ const KEYS = {
   '\x1b[H': 'home', '\x1b[1~': 'home', '\x1bOH': 'home', 'g': 'home',
   '\x1b[F': 'end', '\x1b[4~': 'end', '\x1bOF': 'end', 'G': 'end',
   ' ': 'space', '\r': 'enter', '\n': 'enter', '\x1b': 'esc', '\x03': 'quit', 'q': 'quit',
-  'n': 'new', 'r': 'reload', 'e': 'edit',
+  'n': 'new', 'r': 'reload', 'e': 'edit', 'd': 'delete',
 };
 
 function onPromptKey(k) {
@@ -713,12 +772,19 @@ function onPeekKey(key, page) {
   } else if (step) S.peek.top = Math.max(0, S.peek.top + step);
   else if (key === 'enter' || key === 'esc') S.peek = null;
   else if (key === 'edit') { S.peek = null; editSelected(); }
+  else if (key === 'delete') S.confirm = { slug: S.peek.slug };
   else if (key === 'quit') quit();
 }
 
 function onKey(k) {
   if (S.prompt !== null) return onPromptKey(k);
   S.message = '';
+  if (S.confirm) {
+    const { slug } = S.confirm;
+    S.confirm = null;
+    if (k === 'y' || k === 'Y') deleteTicket(slug);
+    return;
+  }
   const key = KEYS[k];
   const page = Math.max(1, (out.rows || 24) - 5);
   if (S.peek) return onPeekKey(key, page);
@@ -750,7 +816,7 @@ function printBoard(filter) {
 
 // ---------- main ----------
 
-reload();
+const startUnlisted = reload();
 const args = process.argv.slice(2);
 if (args[0] === '--print') {
   printBoard(args.slice(1));
@@ -765,6 +831,8 @@ if (args[0] === '--print') {
   }
   if (!APPLE) out.write(`${ESC}22;0t`); // push the current title
   enterScreen();
+  adopt(startUnlisted);
+  watchTickets();
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', data => {
     for (const k of tokens(data)) onKey(k);
