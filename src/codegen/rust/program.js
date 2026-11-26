@@ -907,10 +907,10 @@ ${bodyLines}
                 if !bv_from_wire_caller(from) { return (Some(json!([self.state.get(key).cloned().unwrap_or(Value::Null)])), None, true); }
             }
         }
-        // \`$subscribe\` to a target: stash the sub in cell_subs, keyed by the
+        // \`$sub\` to a target: stash the sub in cell_subs, keyed by the
         // target's wire name (\`a\`, \`~a\`, \`#a\`), and recurse with the target as
         // the op, so its own arm produces the initial re. A prop isn't an address.
-        if let Some(target) = op_name.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
+        if let Some(target) = op_name.strip_prefix("$sub ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = match message.get("op") {
                 Some(Value::Array(arr)) if arr.len() > 1 => bv_named_only(&arr[0]).unwrap_or_else(|| arr[0].clone()),
                 _ => Value::Null,
@@ -2708,7 +2708,7 @@ ${handleOpMethod}
         } else {
             return;
         };
-        // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
+        // An intrinsic (\`$set\`, \`$new\`, \`$sub\`, …) names its cell, class or
         // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
         // Its arm is keyed by the pair, op then target: "$set val".
         let wire_op = op_name.clone();

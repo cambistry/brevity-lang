@@ -3,6 +3,7 @@
 // so this module must not import anything that needs Node.
 
 import { isInterned, isInstance, ownNames } from './type_enc.js';
+import * as AST from './ast.js';
 
 function hasRefRead(node) {
   if (!node || typeof node !== 'object') return false;
@@ -415,8 +416,44 @@ export function rewriteTypeConstructions(ast) {
   walk(ast.dependencies);
 }
 
+// `sub subject, &f`: a subscription whose handler is a function of ours. It is
+// the lambda that calls `f` with each delivery, `f`'s own params bound and passed
+// on as `f` takes them (positional or named), so it is generated as any other.
+// `f` is a function of the actor the subscription is in, or of one it is declared in.
+export function lowerSubscriptionRefs(ast) {
+  const byName = new Map((ast.actors || []).filter(a => a.name).map(a => [a.name, a]));
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  const findFn = (actor, name) => {
+    for (let a = actor, seen = new Set(); a && !seen.has(a); seen.add(a), a = a.name ? (byName.get(a.home ?? a.enclosing) ?? fileActor) : null) {
+      const f = (a.functions || []).find(fn => fn.type === 'FunctionDecl' && fn.name === name);
+      if (f) return f;
+    }
+    return null;
+  };
+  const lower = (node, actor) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(n => lower(n, actor)); return; }
+    if (node.type === 'SubscribeCall' && node.handlerRef) {
+      const name = node.handlerRef.name;
+      const f = findFn(actor, name);
+      if (!f) throw new Error(`'sub' with '&${name}': '${name}' is not a function here`);
+      const params = (f.params || []).map(p => JSON.parse(JSON.stringify(p)));
+      const pos = params.filter(p => p.positional).map(p => AST.identifier(p.name));
+      const named = Object.fromEntries(params.filter(p => !p.positional).map(p => [p.name, AST.identifier(p.name)]));
+      const args = Object.keys(named).length ? [...pos, AST.namedArgsBag(named)] : pos;
+      node.params = params;
+      node.body = [AST.exprStatement(AST.functionCallExpr(AST.identifier(name), args))];
+      delete node.handlerRef;
+      return;
+    }
+    for (const [k, v] of Object.entries(node)) if (k !== 'type' && v && typeof v === 'object') lower(v, actor);
+  };
+  for (const actor of (ast.actors || [])) lower([actor.functions, actor.initBody, actor.constructorBody], actor);
+}
+
 // All of them, in order.
 export function runExtractPasses(ast) {
+  lowerSubscriptionRefs(ast);
   injectFileParamsIntoFileActor(ast);
   liftReactiveElements(ast);
   assignClosureAddresses(ast);

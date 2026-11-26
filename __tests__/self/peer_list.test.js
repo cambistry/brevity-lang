@@ -22,8 +22,8 @@ import { compileActor, expectActorBehavior } from '../helpers.js';
 
 const SCRIPT = `
 Peer = (@name: Text, P: *List of class) *{
-  peers List = []
-  P.subscribe (p List) { peers <- p }
+  peers *List = []
+  sub P, (p List) { peers <- p }
   @names = { over(peers) (p) { p.name() } }
 }
 

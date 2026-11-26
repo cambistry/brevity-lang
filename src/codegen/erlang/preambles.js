@@ -96,7 +96,7 @@ bv_any_bracketed_(_) -> false.
 bv_to_addr_(<<"#<", _/binary>> = A) when byte_size(A) >= 3 ->
     case binary:at(A, byte_size(A) - 1) of $> -> binary:part(A, 2, byte_size(A) - 3); _ -> A end;
 bv_to_addr_(A) -> A.
-%% The key an op dispatches on. An intrinsic ($set, $new, $subscribe, …) names
+%% The key an op dispatches on. An intrinsic ($set, $new, $sub, …) names
 %% its cell, class or function as the last token of to, relative to us:
 %% {<<"$set">>, <<"val">>}. One with no target, and any other op, is its name.
 bv_op_key_(<<"$", _/binary>> = Op, To) ->

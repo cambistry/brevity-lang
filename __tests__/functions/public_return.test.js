@@ -164,10 +164,10 @@ describe('public function return — lineal form', () => {
 
     @spaciousKeyValue
       =
-      result: x = sub()
+      result: x = part()
       return :x
 
-    sub
+    part
       =
       ->
         result: 99

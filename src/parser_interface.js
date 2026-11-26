@@ -334,7 +334,7 @@ function parseEntry(text) {
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
   // `name Type` is a prop: an attribute, read as `{op: 'name'}`, not an address.
   // `name &Type` is a read-only cell and `name *Type` a writable one: addresses
-  // that answer `$get` / `$subscribe` (and `$set`, for `*`).
+  // that answer `$get` / `$sub` (and `$set`, for `*`).
   const sigil = rest[0] === '*' || rest[0] === '&' ? rest[0] : null;
   const type = sigil ? rest.slice(1).trim() : rest;
   checkType(rest, `Interface entry '${name}'`);

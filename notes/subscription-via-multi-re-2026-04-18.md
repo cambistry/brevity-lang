@@ -1,5 +1,8 @@
 # Subscription as multi-response `re` (2026-04-18)
 
+**Superseded in part (2026-11-26):** the surface syntax and the "not a reserved keyword" answer, by
+`sub-keyword-2026-11-26.md` (`sub subject, (v) { … }`, wire op `$sub`).
+
 How Brevity expresses subscription to reactive values — public cells, closures, and user-defined observables. Extends `reactive-closures-2026-04-13.md` and `emit-subscribe-2026-03-27.md` by pinning the wire-level shape and the surface syntax.
 
 ## Core insight

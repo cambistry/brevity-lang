@@ -2,14 +2,14 @@ import { createActor, expectBehavior } from '../helpers.js';
 
 // What a member is decides which built-ins apply to it:
 //
-//               $get   $set   $subscribe
+//               $get   $set   $sub
 //   cell, &     yes    no     yes
 //   cell, *     yes    yes    yes
 //   function    no     no     yes
 //   prop        not an address
 //
-// A cell is an address: `$get`, `$set` and `$subscribe` go to `. cell`. A
-// function is an op, and an address only to `$subscribe`. A prop (a published
+// A cell is an address: `$get`, `$set` and `$sub` go to `. cell`. A
+// function is an op, and an address only to `$sub`. A prop (a published
 // param) is read as an op, `{op: 'prop'}`. A built-in that doesn't apply answers
 // unhandled. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 
@@ -33,9 +33,9 @@ describe('a * cell', () => {
     );
   });
 
-  it('answers $subscribe, first with its value', async () => {
+  it('answers $sub, first with its value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '$subscribe', to: ':val', from: 'c' } },
+      { input: { id: '1', op: '$sub', to: ':val', from: 'c' } },
       { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
       { input: { op: [[5], '$set'], ty: [['Integer']], to: ':val', from: 'c' } },
       { output: { id: '1', re: [5], ty: ['Integer'], to: 'c' } },
@@ -64,9 +64,9 @@ describe('a & cell', () => {
     );
   });
 
-  it('answers $subscribe, first with its value', async () => {
+  it('answers $sub, first with its value', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '$subscribe', to: ':ratio', from: 'c' } },
+      { input: { id: '1', op: '$sub', to: ':ratio', from: 'c' } },
       { output: { id: '1', re: [0.5], ty: ['Float'], to: 'c' } },
     );
   });
@@ -92,9 +92,9 @@ describe('a function', () => {
     );
   });
 
-  it('answers $subscribe at its address', async () => {
+  it('answers $sub at its address', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '$subscribe', to: ':double', from: 'c' } },
+      { input: { id: '1', op: '$sub', to: ':double', from: 'c' } },
       { output: { id: '1', re: [6], ty: ['Integer'], to: 'c' } },
       { input: { op: [[5], '$set'], ty: [['Integer']], to: ':val', from: 'c' } },
       { output: { id: '1', re: [10], ty: ['Integer'], to: 'c' } },
@@ -128,11 +128,11 @@ describe('a prop', () => {
     );
   });
 
-  it('isn\'t an address: $subscribe is unhandled', async () => {
+  it('isn\'t an address: $sub is unhandled', async () => {
     await expectBehavior(script,
       ...made,
-      { input: { id: '1', op: '$subscribe', to: ':Box:1:start', from: 'c' } },
-      { output: { id: '1', ex: { $subscribe: 'unhandled' }, from: ':Box:1', to: 'c' } },
+      { input: { id: '1', op: '$sub', to: ':Box:1:start', from: 'c' } },
+      { output: { id: '1', ex: { $sub: 'unhandled' }, from: ':Box:1', to: 'c' } },
     );
   });
 });
@@ -173,9 +173,9 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     @readProp = { n Integer = Remote.count(); return n }
     @readSeen = { n Integer = Remote.seen(); return n }
     @readSlot = { n Integer = Remote.slot(); return n }
-    @watchSeen. = { Remote.seen.subscribe (v) { last <- v } }
-    @watchSlot. = { Remote.slot.subscribe (v) { last <- v } }
-    @watchSum. = { Remote.sum.subscribe(a: 2) (v) { last <- v } }
+    @watchSeen. = { sub Remote.seen, (v) { last <- v } }
+    @watchSlot. = { sub Remote.slot, (v) { last <- v } }
+    @watchSum. = { sub Remote.sum(a: 2), (v) { last <- v } }
     @setSlot. = { Remote.slot <- 5 }
   `;
 
@@ -210,7 +210,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSeen.', from: 'c' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: 'remote.bv:seen' }) },
+        { output: expect.objectContaining({ op: '$sub', to: 'remote.bv:seen' }) },
       ],
     });
   });
@@ -219,7 +219,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSlot.', from: 'c' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: 'remote.bv:slot' }) },
+        { output: expect.objectContaining({ op: '$sub', to: 'remote.bv:slot' }) },
       ],
     });
   });
@@ -228,7 +228,7 @@ describe('a caller reads, subscribes to and sets what the document declares', ()
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'watchSum.', from: 'c' } },
-        { output: expect.objectContaining({ op: [[{ a: 2 }], '$subscribe'], to: 'remote.bv:sum' }) },
+        { output: expect.objectContaining({ op: [[{ a: 2 }], '$sub'], to: 'remote.bv:sum' }) },
       ],
     });
   });

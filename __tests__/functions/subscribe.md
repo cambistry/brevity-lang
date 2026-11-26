@@ -16,8 +16,8 @@ lastPub *Integer = 0
 lastPriv *Integer = 0
 
 @doSubs. = {
-  @pub.subscribe (v) { lastPub <- v } ;
-  #priv.subscribe (v) { lastPriv <- v }
+  sub @pub, (v) { lastPub <- v } ;
+  sub #priv, (v) { lastPriv <- v }
 }
 ```
 
@@ -29,7 +29,7 @@ Changing `body` re-evaluates subscribers.
 #parameterized = (p: Integer) { body + p }
 
 @doSub. = {
-  #parameterized.subscribe(p: 100) (v) { last <- v }
+  sub #parameterized(p: 100), (v) { last <- v }
 }
 ```
 
@@ -47,32 +47,32 @@ C = * {
 c = C()
 last *Integer = 0
 
-@doPubSub. = { c.pub.subscribe (v) { last <- v } }
+@doPubSub. = { sub c.pub, (v) { last <- v } }
 @bumpC. = (n: Integer) { c.body <- n }
 ```
 
 ## Remote Subscription Wire Shape
 
-Subscribing to a remote function posts `$subscribe` to a function-specific
+Subscribing to a remote function posts `$sub` to a function-specific
 address:
 
 ```text
 to: "Pub:pub"
-op: "$subscribe"
+op: "$sub"
 ```
 
 Parameterized subscribe carries args:
 
 ```text
 to: "Pub:pub_w_params"
-op: [[{ p: 100 }], "$subscribe"]
+op: [[{ p: 100 }], "$sub"]
 ```
 
 Later `re` messages with the same id update subscriber state.
 
 ## LLM Rules
 
-- Use `.subscribe (v) { ... } ;` for local subscription blocks.
+- Use `sub subject, (v) { ... }` for a subscription; its args follow the subject: `sub c.pub(p: 1), (v) { … }`.
 - Keep subscription handlers silent.
 - Store subscription results in `*Type` cells.
 - For remote subscription examples, include the `#<Alias:@member>` address shape.

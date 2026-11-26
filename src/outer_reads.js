@@ -51,7 +51,7 @@ export function readableNames(actor) {
 }
 
 // An actor's props, by source name: its published params (`@name Type` in a
-// header). A prop is read as an op and isn't an address: `$get` and `$subscribe`
+// header). A prop is read as an op and isn't an address: `$get` and `$sub`
 // to it answer unhandled.
 export function propNames(actor) {
   return (actor.initParams || []).filter(p => p.accessor).map(p => p.accessor.replace(/^@/, ''));

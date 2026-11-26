@@ -170,11 +170,11 @@ A subscription is almost a normal message exchange. The subscriber sends an
 `op`; the publisher replies with `re`. The difference is that the publisher may
 send more than one `re` for the same `id`.
 
-For a value subscription, the request is the intrinsic `$subscribe`, with the
+For a value subscription, the request is the intrinsic `$sub`, with the
 cell named by the last token of `to`:
 
 ```json
-{ "id": "9", "op": "$subscribe", "to": ". val", "from": "Subscriber" }
+{ "id": "9", "op": "$sub", "to": ". val", "from": "Subscriber" }
 ```
 
 The first reply carries the current value:
@@ -196,7 +196,7 @@ Later changes replay through the same correlation:
 Remote function subscriptions use the same idea with an addressed member:
 
 ```json
-{ "id": "1", "op": "$subscribe", "to": "#<Remote val>" }
+{ "id": "1", "op": "$sub", "to": "#<Remote val>" }
 ```
 
 The important point is that subscription does not introduce a second protocol.

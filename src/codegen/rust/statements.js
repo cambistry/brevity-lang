@@ -2555,12 +2555,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         }
         const objectName = isSelfTarget ? null : target.object.name;
         // Arm key (for direct handle_op / child_dispatch calls): the pair
-        // "$subscribe <name>". Wire op (for outbound binding.send):
-        // "$subscribe", the member the last token of the to-field.
+        // "$sub <name>". Wire op (for outbound binding.send):
+        // "$sub", the member the last token of the to-field.
         const internalSelector = isSelfTarget
-          ? '$subscribe ' + wireLabel(target.name)
-          : '$subscribe ' + wireLabel('@' + target.property);
-        const wireOp = '$subscribe';
+          ? '$sub ' + wireLabel(target.name)
+          : '$sub ' + wireLabel('@' + target.property);
+        const wireOp = '$sub';
         const toSelector = isSelfTarget ? addressToken(target.name) : target.property;
 
         // Infer the target's return type so the dispatch_sub body destructures
@@ -2654,7 +2654,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const typeOf = (a) => a.typeNameEnc ?? (inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv));
         // Build two opExpr forms: wireOpExpr (bare "subscribe" for outbound
         // posts) and internalOpExpr (compound selector for inline handle_op /
-        // child_dispatch, where the $subscribe prologue pattern-matches the
+        // child_dispatch, where the $sub prologue pattern-matches the
         // full compound).
         const buildOpExpr = (opStr) => {
           if (positional.length === 0 && named.length === 0) {
@@ -2700,7 +2700,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
 
         if (isSelfTarget) {
           // Self-dispatch: call handle_op inline with the compound selector
-          // so the $subscribe prologue fires. sub_msg's op carries the
+          // so the $sub prologue fires. sub_msg's op carries the
           // compound too for the prologue's args extraction.
           lines.push(`${I}{`);
           lines.push(`${I}    let seq = self.send_seq.get();`);

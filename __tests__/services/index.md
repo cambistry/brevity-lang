@@ -43,14 +43,14 @@ definition: no entry colon, no `=` on types.
   }
   Text Node ^ -> *{}                     supertype, no members of its own
   set label (Text)                        write-only cell ($set only)
-  count *Integer                          writable cell ($get, $set, $subscribe)
-  seen &Integer                           read-only cell ($get, $subscribe)
+  count *Integer                          writable cell ($get, $set, $sub)
+  seen &Integer                           read-only cell ($get, $sub)
   total Integer                           prop: read as an op, not an address
 }
 ```
 
 A cell is an address: its reads, writes and subscriptions are `$get`, `$set`
-and `$subscribe` sent to `… count`. A prop is an attribute of its actor, read
+and `$sub` sent to `… count`. A prop is an attribute of its actor, read
 with `{op: 'total'}`; it can't be set or subscribed to (compile errors). Source
 reads every member the same way (`Remote.count()`); the compiler picks the wire
 form from the document. See

@@ -1283,7 +1283,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         } else {
           const subId = `_sub_${++subCounter}`;
           elemSubs.set(subId, { attrName: k });
-          Promise.resolve().then(() => route({ id: subId, op: '$subscribe', to: unbracket(v), from: addr }));
+          Promise.resolve().then(() => route({ id: subId, op: '$sub', to: unbracket(v), from: addr }));
         }
       } else {
         applyDomAttribute(el, k, v);
@@ -1326,7 +1326,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
         const subId = `_sub_${++subCounter}`;
         elemSubs.set(subId, textNode);
         Promise.resolve().then(() => route({
-          id: subId, op: '$subscribe', to: inner, from: addr,
+          id: subId, op: '$sub', to: inner, from: addr,
         }));
         continue;
       }

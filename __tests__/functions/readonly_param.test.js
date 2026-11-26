@@ -9,7 +9,7 @@ import { expectBehavior, compileSource, compileActor } from '../helpers.js';
 //   - `<-` against the parameter is a compile error
 //   - calling any `.X!` (bang) method on the parameter is a compile error
 //
-// Read access (.size, .first, .contains, .subscribe, plain field reads on
+// Read access (.size, .first, .contains, `sub`, plain field reads on
 // types) remains allowed.
 //
 // Per notes/capability-sigils-2026-05-06.md.
@@ -45,10 +45,13 @@ describe('readonly param — &Type is live', () => {
     @n *Integer = 0
 
     Watcher = (n &Integer) *{
-      n.subscribe (v Integer) { Svc.note(v)... }
+      sub n, (v Integer) { Svc.note(v)... }
     }
     NamedWatcher = (n: &Integer) *{
-      n.subscribe (v Integer) { Svc.note(v)... }
+      sub n, (v Integer) { Svc.note(v)... }
+    }
+    StarWatcher = (n *Integer) *{
+      sub n, (v Integer) { Svc.note(v)... }
     }
     Reader = (n &Integer) *{
       @get = {
@@ -63,6 +66,10 @@ describe('readonly param — &Type is live', () => {
     }
     @watchNamed = {
       w = NamedWatcher(n: @n)
+      return 1
+    }
+    @watchStar = {
+      w = StarWatcher(@n)
       return 1
     }
     @read = {
@@ -97,6 +104,16 @@ describe('readonly param — &Type is live', () => {
     ]);
   });
 
+  it('a `*` one is live too', async () => {
+    const actor = await (await compileActor(script)).spawn();
+    await actor.sendAsync({ id: '1', op: 'watchStar', from: 'c' });
+    await actor.sendAsync({ id: '2', op: 'bump!', from: 'c' });
+    expect(notes(actor)).toEqual([
+      expect.objectContaining({ op: [[0], 'note.'], to: 'svc.bv' }),
+      expect.objectContaining({ op: [[1], 'note.'], to: 'svc.bv' }),
+    ]);
+  });
+
   it('a class that only reads it gets the cell\'s value', () => expectBehavior(script,
     { input: { id: '1', op: 'bump!', from: 'c' } },
     { output: expect.objectContaining({ id: '1', re: ['#<:>'], to: 'c' }) },
@@ -112,7 +129,7 @@ describe('readonly param — a function can\'t subscribe to its param', () => {
     expect(() => compileSource(`
       @n *Integer = 0
       watch = (n &Integer) {
-        n.subscribe (v Integer) { v }
+        sub n, (v Integer) { v }
         return 1
       }
       @go = {
@@ -126,7 +143,7 @@ describe('readonly param — a function can\'t subscribe to its param', () => {
     expect(() => compileSource(`
       @n *Integer = 0
       @watch = (n &Integer) {
-        n.subscribe (v Integer) { v }
+        sub n, (v Integer) { v }
         return 1
       }
     `)).toThrow(/'n' is a param of '@watch', and a function can't subscribe to its param/);
@@ -137,7 +154,7 @@ describe('readonly param — a function can\'t subscribe to its param', () => {
       @n *Integer = 0
       @go = {
         watch = (n &Integer) {
-          n.subscribe (v Integer) { v }
+          sub n, (v Integer) { v }
           return 1
         }
         k Integer = watch(@n)

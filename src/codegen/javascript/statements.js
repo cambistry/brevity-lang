@@ -15,7 +15,7 @@ import {
 
 // Escape a string for use inside a #<...> wire address.
 // Subscribe call-site codegen. `c.x.subscribe |v| { ... }` posts
-// op:"$subscribe" to c's address, with the member `x` appended to the `to`
+// op:"$sub" to c's address, with the member `x` appended to the `to`
 // field as its last token (`svc.bv:x` for a remote, `:x` for a child).
 // Registers a persistent pending entry keyed by a fresh id, and routes each
 // incoming `re` to the handler body with params bound from the positional
@@ -45,9 +45,9 @@ export function genSubscribeCall(ctx, expr) {
     throw new Error('subscribe: target must be self (@name / #name), a cell-handle param, or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget || isCellHandleTarget || isOuterTarget ? null : target.object.name;
-  // Wire shape: op is "$subscribe"; the member is the last token of the
+  // Wire shape: op is "$sub"; the member is the last token of the
   // `to` address (a public member bare, `#x` private).
-  const selector = '$subscribe';
+  const selector = '$sub';
   // The member's token: self uses its own label's wire name (`@x` → `x`, `#x`);
   // remote and child members are public (`x`). Cell-handle reads the cell name
   // from the runtime handle, so it's set later.
@@ -94,7 +94,7 @@ export function genSubscribeCall(ctx, expr) {
     }
   }
 
-  // A cell of an actor this one is declared in (src/outer_reads.js): `$subscribe` to
+  // A cell of an actor this one is declared in (src/outer_reads.js): `$sub` to
   // it there, from inside, as a write or a call to it goes. That actor replies with
   // its value now and on each write, to our pending entry.
   if ((target?.type === 'Identifier' || target?.type === 'RefRead') && target.outer) {

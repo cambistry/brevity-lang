@@ -52,7 +52,7 @@ describe('type actorization — *Point state cell', () => {
   it('subscribe@get re-emits when coords changes', async () => {
     await createActor(script, {
       expects: [
-        { input: { id: 'sub-1', op: '$subscribe', to: ':get', from: 'c' } },
+        { input: { id: 'sub-1', op: '$sub', to: ':get', from: 'c' } },
         { output: { id: 'sub-1', 'ty': [{ coords: ':Point' }], re: [{ coords: [0, 0] }], to: 'c' } },
         { input: { id: '2', op: [[1, 2], 'shift!'], 'ty': [['Integer', 'Integer']], from: 'c' } },
         // Handler-body re-emit fires before the handler's own reply.

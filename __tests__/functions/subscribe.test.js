@@ -16,9 +16,9 @@ describe('subscribe — runtime', () => {
     lastParam *Integer = 0
 
     @doSubs. = {
-      @pub.subscribe (v) { lastPub <- v } ;
-      #priv.subscribe (v) { lastPriv <- v } ;
-      #parameterized.subscribe(p: 100) (v) { lastParam <- v }
+      sub @pub, (v) { lastPub <- v } ;
+      sub #priv, (v) { lastPriv <- v } ;
+      sub #parameterized(p: 100), (v) { lastParam <- v }
     }
 
     @bump. = (n: Integer) { body <- n }
@@ -31,7 +31,7 @@ describe('subscribe — runtime', () => {
     @ownRef = { held *Integer = 7; held }
     @writeOwn = { held *Integer = 1; held <- 2; held }
     replays *Integer = 0
-    @doOwnSub. = { @ownRef.subscribe (v) { replays <- replays + 1 } }
+    @doOwnSub. = { sub @ownRef, (v) { replays <- replays + 1 } }
     @readReplays = -> :replays as Integer
 
     // subscribe — in-script fns (local child actor)
@@ -44,15 +44,15 @@ describe('subscribe — runtime', () => {
     c = C()
     last *Integer = 0
 
-    @doPubSub.   = { c.pub.subscribe (v) { last <- v } }
-    @doParamSub. = { c.pub_w_params.subscribe(p: 100) (v) { last <- v } }
+    @doPubSub.   = { sub c.pub, (v) { last <- v } }
+    @doParamSub. = { sub c.pub_w_params(p: 100), (v) { last <- v } }
     @bumpC.      = (n: Integer) { c.body <- n }
     @readLast   = -> :last as Integer
 
     // subscribe — remote fn (stubbed publisher)
 
-    @doPubSub3.   = { Pub.pub.subscribe (v) { last <- v } }
-    @doParamSub3. = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } }
+    @doPubSub3.   = { sub Pub.pub, (v) { last <- v } }
+    @doParamSub3. = { sub Pub.pub_w_params(p: 100), (v) { last <- v } }
 
   `;
 
@@ -125,8 +125,8 @@ describe('subscribe — runtime', () => {
       lastB *Integer = 0
 
       @doSubs. = {
-        #parameterized.subscribe(p: 10) (v) { lastA <- v } ;
-        #parameterized.subscribe(p: 20) (v) { lastB <- v }
+        sub #parameterized(p: 10), (v) { lastA <- v } ;
+        sub #parameterized(p: 20), (v) { lastB <- v }
       }
 
       @bump. = (n: Integer) { body <- n }
@@ -152,7 +152,7 @@ describe('subscribe — runtime', () => {
   // Behavior-only; matches the existing cell call-site test style.
   // ───────────────────────────────────────────────────────────────────────────────
 
-  it('subscribe — in-script fns (local child actor) — c.pub.subscribe — initial value after subscribe', async () => {
+  it('subscribe — in-script fns (local child actor) — sub c.pub — initial value after subscribe', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
@@ -160,7 +160,7 @@ describe('subscribe — runtime', () => {
     );
   });
 
-  it('subscribe — in-script fns (local child actor) — c.pub.subscribe — replays on set of captured body ref', async () => {
+  it('subscribe — in-script fns (local child actor) — sub c.pub — replays on set of captured body ref', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doPubSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
@@ -169,7 +169,7 @@ describe('subscribe — runtime', () => {
     );
   });
 
-  it('subscribe — in-script fns (local child actor) — c.pub_w_params.subscribe(p: 100) — initial evaluation uses caller args', async () => {
+  it('subscribe — in-script fns (local child actor) — sub c.pub_w_params(p: 100) — initial evaluation uses caller args', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: 'readLast', from: 'caller' } },
@@ -177,7 +177,7 @@ describe('subscribe — runtime', () => {
     );
   });
 
-  it('subscribe — in-script fns (local child actor) — c.pub_w_params.subscribe — replays with stored args on dep change', async () => {
+  it('subscribe — in-script fns (local child actor) — sub c.pub_w_params — replays with stored args on dep change', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'doParamSub.', from: 'caller' } },
       { input: { id: '2', op: [[{ n: 5 }], 'bumpC.'], 'ty': [[{ n: 'Integer' }]], from: 'caller' } },
@@ -196,7 +196,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ op: '$subscribe', to: 'Pub:pub' }) },
+        { output: expect.objectContaining({ op: '$sub', to: 'Pub:pub' }) },
       ],
     });
   });
@@ -206,7 +206,7 @@ describe('subscribe — runtime', () => {
       expects: [
         { input: { id: '1', op: 'doParamSub3.', from: 'caller' } },
         { output: expect.objectContaining({
-          op: [[{ p: 100 }], '$subscribe'],
+          op: [[{ p: 100 }], '$sub'],
           'ty': [[{ p: 'Integer' }]],
           to: 'Pub:pub_w_params',
         }) },
@@ -218,7 +218,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Pub:pub' }) },
+        { output: expect.objectContaining({ id: '1', op: '$sub', to: 'Pub:pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '2', op: 'readLast', from: 'caller' } },
         { output: { id: '2', 'ty': [{ last: 'Integer' }], re: [{ last: 0 }], to: 'caller' } },
@@ -230,7 +230,7 @@ describe('subscribe — runtime', () => {
     await createActor(script, {
       expects: [
         { input: { id: '1', op: 'doPubSub3.', from: 'caller' } },
-        { output: expect.objectContaining({ id: '1', op: '$subscribe', to: 'Pub:pub' }) },
+        { output: expect.objectContaining({ id: '1', op: '$sub', to: 'Pub:pub' }) },
         { input: { id: '1', re: [0] } },
         { input: { id: '1', re: [10] } },
         { input: { id: '1', re: [42] } },
@@ -246,7 +246,7 @@ describe('subscribe — runtime', () => {
         { input: { id: '1', op: 'doParamSub3.', from: 'caller' } },
         { output: expect.objectContaining({
           id: '1',
-          op: [[{ p: 100 }], '$subscribe'],
+          op: [[{ p: 100 }], '$sub'],
           to: 'Pub:pub_w_params',
         }) },
         { input: { id: '1', re: [100] } },
@@ -290,8 +290,8 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
 
     last *Integer = 0
 
-    @doPubSub.   = { Pub.pub.subscribe (v) { last <- v } }
-    @doParamSub. = { Pub.pub_w_params.subscribe(p: 100) (v) { last <- v } }
+    @doPubSub.   = { sub Pub.pub, (v) { last <- v } }
+    @doParamSub. = { sub Pub.pub_w_params(p: 100), (v) { last <- v } }
     @setRemote.  = (n: Integer) { Pub.body <- n }
     @readLast   = -> :last as Integer
   `;

@@ -2182,6 +2182,50 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
   }
 
+  // `sub subject, handler` in the forms `over` takes: `sub(subject, fn)`,
+  // `sub(subject) block`, `sub subject, fn`, `sub subject block`. The subject is
+  // what is subscribed to, written as it's read or called: a name, `c.x`, `@pub`,
+  // `#priv`, or a call with the subscription's args, `c.pub(p: 1)`. The handler is
+  // a function (its params bind each delivery, any subset of it, none included)
+  // or a reference to one, `&f`.
+  function parseSubExpr() {
+    let subject, handler;
+    if (peek().type === 'LPAREN') {
+      const args = parseCallArgs();
+      appendTrailingBlocks(args, true);
+      if (args.length !== 2 || args.some(a => a?.type === 'NamedArgsBag')) throw new Error("'sub' takes what it subscribes to and a function");
+      [subject, handler] = args;
+    } else {
+      subject = parseExpr();
+      if (peek().type === 'COMMA') {
+        take();
+        handler = parsePrimary();
+      } else {
+        const trailing = [];
+        appendTrailingBlocks(trailing, true);
+        if (trailing.length === 0) throw new Error("'sub' requires a function argument");
+        handler = trailing[0];
+      }
+    }
+    requireFunctionRef(handler, 'sub');
+    // A call's args are the subscription's, in the shape a send takes.
+    let target = subject;
+    let subArgs = [];
+    if (subject?.type === 'DotCallExpr') {
+      target = AST.dotAccessExpr(subject.object, subject.method);
+      subArgs = subject.args;
+    } else if (subject?.type === 'FunctionCallExpr') {
+      target = subject.callee;
+      subArgs = subject.args.flatMap(a => (a?.type === 'NamedArgsBag'
+        ? Object.entries(a.fields).map(([name, expr]) => ({ name, expr, typeName: null, positional: false }))
+        : [{ expr: a, typeName: null, positional: true }]));
+    }
+    if (handler?.type === 'FnRef') return AST.subscribeCall(target, [], [], subArgs, handler);
+    if (handler?.type !== 'Function') throw new Error("'sub' takes a function or a function reference ('&f')");
+    const body = Array.isArray(handler.body) ? handler.body : [AST.exprStatement(handler.expr)];
+    return AST.subscribeCall(target, handler.params || [], body, subArgs);
+  }
+
   function parseXmlConstructor() {
     take(); // <
     const name = take().value; // IDENT (constructor name)
@@ -2667,6 +2711,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         result = parseIfExpr();
       } else if (tok.type === 'KEYWORD' && tok.value === 'over') {
         result = parseOverExpr();
+      } else if (tok.type === 'KEYWORD' && tok.value === 'sub') {
+        result = parseSubExpr();
       } else if (tok.type === 'KEYWORD' && tok.value === 'reduce') {
         result = parseReduceExpr();
       } else if (tok.type === 'KEYWORD' && tok.value === 'catch') {
@@ -2716,47 +2762,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
     // Dot-call: expr.method(args), expr.method!(args), or dot-access: expr.property
     const _isMethodKeyword = () => tokens[pos + 1]?.type === 'KEYWORD' && (TEXT_METHODS.has(tokens[pos + 1]?.value) || BLOB_METHODS.has(tokens[pos + 1]?.value) || GRAPHEME_TEXT_METHODS.has(tokens[pos + 1]?.value) || LIST_METHODS.has(tokens[pos + 1]?.value));
-    const _isSubscribe = () => tokens[pos + 1]?.type === 'KEYWORD' && tokens[pos + 1]?.value === 'subscribe';
     // `x.#name` / `x.@name` after a call (the lexer catches them after a name).
-    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword() || _isSubscribe())) {
-      // .subscribe(args) |params| { body } — subscription call-site; terminates the dot-chain.
-      // `args` are forwarded to the publisher's fn body per subscription;
-      // `params` bind the incoming re payload on the caller side.
-      if (_isSubscribe()) {
-        take(); // DOT
-        take(); // subscribe
-        let subArgs = [];
-        let subParams = [];
-        // (args) — only if next isn't a `(params) ->` / `(params) {` shape.
-        if (peek().type === 'LPAREN' && !isParenFunctionStart()) {
-          subArgs = parseSendArgs();
-        }
-        if (peek().type === 'LPAREN' && isParenFunctionStart()) {
-          subParams = parseFunctionParamsParen();
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
-          // Bare-param form: .subscribe(args) name -> body
-          const pName = take().value;
-          subParams.push({ name: pName, type: null, positional: true });
-        }
-        for (const p of subParams) if (p.name) declareLocal(p.name);
-        skipNewlines();
-        let subBody;
-        // The subscription body is a callback: a lambda, not the enclosing
-        // declaration's body.
-        const outerDecl = declCtx;
-        declCtx = null;
-        if (peek().type === 'LBRACE') {
-          take();
-          subBody = parseBody('RBRACE');
-          skipNewlines();
-          expect('RBRACE');
-        } else {
-          subBody = parseBody();
-        }
-        declCtx = outerDecl;
-        result = AST.subscribeCall(result, subParams, subBody, subArgs);
-        break;
-      }
+    while (peek().type === 'DOT' && (tokens[pos + 1]?.type === 'IDENT' || _isMethodKeyword())) {
       take(); // DOT
       let method = (peek().type === 'KEYWORD' && (TEXT_METHODS.has(peek().value) || BLOB_METHODS.has(peek().value) || GRAPHEME_TEXT_METHODS.has(peek().value) || LIST_METHODS.has(peek().value) || MATH_METHODS.has(peek().value))) ? take().value : expect('IDENT').value;
       if (peek().type === 'BANG') {
@@ -4046,8 +4053,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // Standalone function call, dot-call, or self-handler dot-call (side effects)
         const expr = parseExpr();
         pushExprOrBang(body, expr);
-      } else if (peek().type === 'KEYWORD' && peek().value === 'over') {
-        // Standalone over: run the per-element body for its side effects.
+      } else if (peek().type === 'KEYWORD' && (peek().value === 'over' || peek().value === 'sub')) {
+        // Standalone over: run the per-element body for its side effects. A
+        // subscription runs its body on each delivery.
         body.push(AST.exprStatement(parseExpr()));
       } else if (peek().type === 'KEYWORD' && peek().value === 'reduce') {
         throw new Error("'reduce' must be assigned to a variable — use 'result : Type = reduce ...'");
@@ -4174,7 +4182,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           [{ name: '_v', type: typeName, positional: true }],
           [AST.setStatement('@' + op, AST.identifier('_v')), AST.silentTerminator()],
         );
-        // `$subscribe` to a cell is not a declared handler — it's an implicit
+        // `$sub` to a cell is not a declared handler — it's an implicit
         // affordance on every non-silent public surface, dispatched generically
         // from the receive loop. Synthesizing it here would pollute the class
         // method set and the actor function list.
@@ -5180,11 +5188,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // obj.method..., or a bare obj.method! (zero-arity: parens optional).
         const expr = parseExpr();
         pushExprOrBang(constructorBody, expr);
-      } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'DOT' &&
-                 tokens[pos + 2]?.type === 'KEYWORD' && tokens[pos + 2]?.value === 'subscribe') {
-        // Class-body subscription: `<param>.subscribe |args| { body }` runs at
-        // construction time. parsePrimary handles the trailing-block; we wrap
-        // as ExprStatement so the back-compat conversion routes it to initBody.
+      } else if (peek().type === 'KEYWORD' && peek().value === 'sub') {
+        // Class-body subscription: `sub n, (v) { body }` runs at construction
+        // time; as an ExprStatement it is routed to initBody.
         const expr = parseExpr();
         constructorBody.push(AST.exprStatement(expr));
       } else if (peek().type === 'IDENT') {

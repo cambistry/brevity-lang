@@ -125,7 +125,7 @@ describe('subscribers', () => {
       @bump! = { @a <- @a + 1 }
     `)).spawn();
     await expectActorBehavior(actor,
-      { input: { id: 's', op: '$subscribe', to: ':a', from: 'sub' } },
+      { input: { id: 's', op: '$sub', to: ':a', from: 'sub' } },
       { output: expect.objectContaining({ id: 's', re: [3], to: 'sub' }) },
       { input: { id: '1', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: 's', re: [4], to: 'sub' }) },
@@ -140,7 +140,7 @@ describe('subscribers', () => {
       @bump! = { @a <- @a + 1 }
     `)).spawn();
     await expectActorBehavior(actor,
-      { input: { id: 's', op: '$subscribe', to: ':twice', from: 'sub' } },
+      { input: { id: 's', op: '$sub', to: ':twice', from: 'sub' } },
       { output: expect.objectContaining({ id: 's', re: [6], to: 'sub' }) },
       { input: { id: '1', op: 'bump!', from: 'c' } },
       { output: expect.objectContaining({ id: 's', re: [8], to: 'sub' }) },
@@ -158,7 +158,7 @@ describe('subscribers', () => {
       seen *Integer = 0
       c = C()
 
-      @watch. = { c.a.subscribe (v) { seen <- v } }
+      @watch. = { sub c.a, (v) { seen <- v } }
       @go! = {
         c.bump!()
         return seen

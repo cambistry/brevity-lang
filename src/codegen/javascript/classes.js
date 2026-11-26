@@ -1160,7 +1160,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   const isPublicCell = (n) => n.startsWith('@') && mergedActor.functions.some(f => f.name === n && f.cellGetter);
   const readable = ownNames.filter(n => typeof n === 'string')
     .map(n => `${JSON.stringify(wireLabel(n))}: { read: () => this.#${stateKey(n)}, open: ${isPublicCell(n)} }`).join(', ');
-  // Published params: props, which `$subscribe` doesn't apply to.
+  // Published params: props, which `$sub` doesn't apply to.
   const propNames = [...new Set([...(actor.initParams || []), ...(mergedActor.initParams || [])].filter(p => p.accessor).map(p => p.accessor.replace(/^@/, '')))];
 
   // #_cellSubs: subscription lists keyed by target label (`@a`), filled by the
@@ -1712,16 +1712,16 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
     const from = message.from;
     const _replyTo = message._replyTo || from;
     let opName = typeof message.op === 'string' ? message.op : message.op[message.op.length - 1];
-    // An intrinsic (\`$set\`, \`$new\`, \`$subscribe\`, …) names its cell, class or
+    // An intrinsic (\`$set\`, \`$new\`, \`$sub\`, …) names its cell, class or
     // function as the last token of \`to\` (\`:val\`, \`:Box\`), relative to us.
     const _target = typeof opName === 'string' && opName.startsWith('$') ? (_bv_local_tokens(message.to).pop() ?? null) : null;${homeExt ? `
     // A class of ours extended from another file, or a layer built for one there.
     if (this.#_classHandshake(message, opName, _target, from, _replyTo)) return;` : ''}
-    if (opName === '$subscribe' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
+    if (opName === '$sub' && _target !== null${propNames.length ? ` && !${JSON.stringify(propNames.map(n => wireLabel("@" + n)))}.includes(_target)` : ''}) {
       // A protected or private name (\`~a\`, \`#a\`) is subscribed to only from inside:
       // from outside it isn't there, and nothing is registered.
       if (/^[~#]/.test(_target) && !(from === '__self' || from === '__test' || from === '__parent' || from === '__child' || from === '__inner')) {
-        (message._route || ((msg) => this.#binding.post(msg)))({ id, ex: { $subscribe: 'unhandled' }, to: _replyTo });
+        (message._route || ((msg) => this.#binding.post(msg)))({ id, ex: { $sub: 'unhandled' }, to: _replyTo });
         return;
       }
       const _subArgs = Array.isArray(message.op) && message.op.length > 1 ? message.op[0] : null;

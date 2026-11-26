@@ -412,10 +412,10 @@ const propTokens = (actor) => propNames(actor).map(n => wireLabel('@' + n));
 
 // `$get` to one of an actor's names. A public cell answers anyone, through its
 // own reader; any other name answers only from inside, or from a class declared
-// in this actor (its outer reads, bv_outer_get_). A prop's `$subscribe` is unhandled.
+// in this actor (its outer reads, bv_outer_get_). A prop's `$sub` is unhandled.
 function genGetClauses(fnName, actor) {
   const inside = ['__self', '__test', '__parent', '__bv_internal', '__child'].map(f => `From =:= <<"${f}">>`).join('; ');
-  const clauses = propTokens(actor).map(t => `${fnName}({<<"$subscribe">>, ${erlString(t)}}, _Message, _Payload, _Id, _From) ->\n    {error, <<"$subscribe">>}`);
+  const clauses = propTokens(actor).map(t => `${fnName}({<<"$sub">>, ${erlString(t)}}, _Message, _Payload, _Id, _From) ->\n    {error, <<"$sub">>}`);
   for (const e of readEntries(actor)) {
     clauses.push(e.open
       ? `${fnName}({<<"$get">>, ${erlString(e.token)}}, Message, Payload, Id, From) ->\n    ${fnName}(${erlString(e.token)}, Message, Payload, Id, From)`
@@ -501,7 +501,7 @@ function genReadTable(actors) {
 }
 
 // Generic subscribe prologue: a handle_op clause that intercepts
-// {$subscribe, Target}, stashes {Id, From, Args} in the cell_subs list (keyed
+// {$sub, Target}, stashes {Id, From, Args} in the cell_subs list (keyed
 // by the target's wire name: `a`, `~a`, `#a`), and recurses with the target as
 // the op so its own arm gives the first value. Args come from the incoming op-array payload (null for no-arg
 // subscribe). Route (the JS _route callback) has no Erlang analogue — the
@@ -523,9 +523,9 @@ function genSubscribePrologue(fnName, actor = null) {
   return [
     // A protected or private name (`~a`, `#a`) is subscribed to only from inside: from
     // outside it isn't there, and nothing is registered.
-    `${fnName}({<<"$subscribe">>, <<P_, _/binary>>}, _Message, _Payload, _Id, From) when (P_ =:= $~ orelse P_ =:= $#), not (${inside}) ->
-    {error, <<"$subscribe">>};
-${fnName}({<<"$subscribe">>, Target_}, Message, Payload, Id, From) ->
+    `${fnName}({<<"$sub">>, <<P_, _/binary>>}, _Message, _Payload, _Id, From) when (P_ =:= $~ orelse P_ =:= $#), not (${inside}) ->
+    {error, <<"$sub">>};
+${fnName}({<<"$sub">>, Target_}, Message, Payload, Id, From) ->
     SubArgs_ = ${extractArgs},
     %% Kept as in process, where a named-only call is its fields alone.
     SubTy_ = case maps:get(<<"ty">>, Message, null) of [[TM_] | TR_] when is_map(TM_) -> [TM_ | TR_]; T_ -> T_ end,
@@ -548,7 +548,7 @@ function genDispatch(ctx, publicFns, actor = null) {
     grouped.get(h.name).push(h);
   }
 
-  const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$subscribe')) : []), ...genSubscribePrologue('handle_op', actor), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$subscribe')) : [])];
+  const clauses = [...(actor ? genGetClauses('handle_op', actor).filter(c => c.includes('$sub')) : []), ...genSubscribePrologue('handle_op', actor), ...(actor ? genGetClauses('handle_op', actor).filter(c => !c.includes('$sub')) : [])];
   for (const [op, variants] of grouped) {
     // Outside, only `@name` is exposed.
     if (isPrivateOp(op)) clauses.push(`handle_op(${erlOp(op)}, _Message, _Payload, _Id, From) when From =/= <<"__self">>, From =/= <<"__test">>, From =/= <<"__parent">>, From =/= <<"__bv_internal">> ->\n    {error, ${erlExKey(op)}}`);
@@ -935,7 +935,7 @@ function genChildHandleOp(ctx, actor) {
   const name = actor.name.toLowerCase();
   const prefix = `child_${name}`;
   const getClauses = genGetClauses(`${prefix}_handle_op`, actor);
-  const clauses = [...getClauses.filter(c => c.includes('$subscribe')), ...genSubscribePrologue(`${prefix}_handle_op`, actor), ...getClauses.filter(c => !c.includes('$subscribe'))];
+  const clauses = [...getClauses.filter(c => c.includes('$sub')), ...genSubscribePrologue(`${prefix}_handle_op`, actor), ...getClauses.filter(c => !c.includes('$sub'))];
 
   const _isPublicFn = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update');
   const childPublicFns = actor.functions.filter(f => _isPublicFn(f));

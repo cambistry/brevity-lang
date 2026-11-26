@@ -1014,10 +1014,10 @@ ${m[2]}
                 if !bv_from_wire_caller(from) { return json!([self.state.get(key).cloned().unwrap_or(Value::Null)]); }
             }
         }
-        // \`$subscribe\` to a target: stash the sub in _cell_subs_<target>
+        // \`$sub\` to a target: stash the sub in _cell_subs_<target>
         // (prefixed by child name, keyed by the target's wire name), and
         // recurse with the target as the op. A prop isn't an address.
-        if let Some(target) = op.strip_prefix("$subscribe ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
+        if let Some(target) = op.strip_prefix("$sub ")${propNames(actor).length ? `.filter(|t| !${JSON.stringify(propNames(actor).map(n => wireLabel('@' + n)))}.contains(t))` : ''} {
             let sub_args = payload.clone();
             let sub_ty = Value::Null;
             // A protected or private name is subscribed to only from inside.

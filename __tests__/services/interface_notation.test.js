@@ -270,7 +270,7 @@ describe('props and cells — validation', () => {
   });
 
   it('a prop cannot be subscribed to', () => {
-    expect(() => remote('{ count Integer }', '@go. = { Remote.count.subscribe (v) { . } }'))
+    expect(() => remote('{ count Integer }', '@go. = { sub Remote.count, (v) { . } }'))
       .toThrow(/'Remote.count' is a prop, not an address, so it can't be subscribed to \(a live read-only member is a cell: 'count &Integer'\)/);
   });
 
@@ -280,7 +280,7 @@ describe('props and cells — validation', () => {
   });
 
   it('a & cell can be read and subscribed to', () => {
-    expect(() => remote('{ count &Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
+    expect(() => remote('{ count &Integer }', '@go. = { sub Remote.count, (v) { . } }')).not.toThrow();
     expect(() => remote('{ count &Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
   });
 
@@ -291,13 +291,13 @@ describe('props and cells — validation', () => {
 
   it('a * cell can be read, subscribed to and set', () => {
     expect(() => remote('{ count *Integer }', '@go. = { Remote.count <- 5 }')).not.toThrow();
-    expect(() => remote('{ count *Integer }', '@go. = { Remote.count.subscribe (v) { . } }')).not.toThrow();
+    expect(() => remote('{ count *Integer }', '@go. = { sub Remote.count, (v) { . } }')).not.toThrow();
     expect(() => remote('{ count *Integer }', '@go = { n Integer = Remote.count(); return n }')).not.toThrow();
   });
 
   it('a write-only cell can be set, not subscribed to', () => {
     expect(() => remote('{ set label (Text) }', '@go. = { Remote.label <- "x" }')).not.toThrow();
-    expect(() => remote('{ set label (Text) }', '@go. = { Remote.label.subscribe (v) { . } }'))
+    expect(() => remote('{ set label (Text) }', '@go. = { sub Remote.label, (v) { . } }'))
       .toThrow(/'Remote.label' is a write-only cell, so it can't be subscribed to/);
   });
 

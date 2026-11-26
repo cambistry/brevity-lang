@@ -142,9 +142,9 @@ const fileScript = `
     if c > 0 { #w!() }
   }
   // Subscribing, from the actor's own handler and from a local function.
-  @subscribe. = { c.subscribe (v Integer) { last <- v + k } }
+  @subscribe. = { sub c, (v Integer) { last <- v + k } }
   @subscribeLocal. = {
-    h. = () { @pc.subscribe (v Integer) { last <- v + f() } }
+    h. = () { sub @pc, (v Integer) { last <- v + f() } }
     h.()
   }
 
@@ -359,8 +359,8 @@ const classScript = `
         i <- i + 1
       }
     }
-    @subscribe. = { c.subscribe (v Integer) { last <- v + k } }
-    @subscribePublic. = { @pc.subscribe (v Integer) { last <- v + f() } }
+    @subscribe. = { sub c, (v Integer) { last <- v + k } }
+    @subscribePublic. = { sub @pc, (v Integer) { last <- v + f() } }
 
     // A class inside it, at depth 1 and 2; a constructor block; a param default.
     D = *{
@@ -730,15 +730,15 @@ describe('a class subscribes to the cells of the actors it\'s declared in', () =
       Inner = *{
         deep *Integer = 0
         mine *Integer = 0
-        @watch. = { c.subscribe (v Integer) { deep <- v } }
-        @watchMine. = { seenC.subscribe (v Integer) { mine <- v } }
+        @watch. = { sub c, (v Integer) { deep <- v } }
+        @watchMine. = { sub seenC, (v Integer) { mine <- v } }
         @deep = { return deep }
         @mine = { return mine }
       }
       inner = Inner()
 
-      @watchC. = { c.subscribe (v Integer) { seenC <- v } }
-      @watchP. = { @p.subscribe (v Integer) { seenP <- v } }
+      @watchC. = { sub c, (v Integer) { seenC <- v } }
+      @watchP. = { sub @p, (v Integer) { seenP <- v } }
       @watchDeep. = { inner.watch()... }
       @watchMine. = { inner.watchMine()... }
       @mine = {
@@ -799,11 +799,11 @@ describe('a class subscribes to the cells of the actors it\'s declared in', () =
   // tell nobody.
   it('a protected cell refuses a subscribe from outside', async () => {
     await expectBehavior(script,
-      { input: { id: '1', op: '$subscribe', to: ':~c', from: 'c' } },
-      { output: { id: '1', ex: { $subscribe: 'unhandled' }, to: 'c' } },
+      { input: { id: '1', op: '$sub', to: ':~c', from: 'c' } },
+      { output: { id: '1', ex: { $sub: 'unhandled' }, to: 'c' } },
       { input: { id: '2', op: 'bumpC!', from: 'c' } },
       { output: { id: '2', re: ['#<:>'], ty: ['*'], to: 'c' } },
-      { input: { id: '3', op: '$subscribe', to: ':p', from: 'c' } },
+      { input: { id: '3', op: '$sub', to: ':p', from: 'c' } },
       { output: { id: '3', re: [10], ty: ['Integer'], to: 'c' } },
     );
   });

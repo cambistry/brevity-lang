@@ -9,7 +9,7 @@ import { _opre_quote as quote } from './opre_tokens.js';
 //   @a       a       public: travels bare
 //   a        ~a      protected
 //   #a       #a      private
-//            $set    an intrinsic op: $get, $set, $new, $subscribe, $update, $as
+//            $set    an intrinsic op: $get, $set, $new, $sub, $update, $as
 //
 // A synthesized name keeps its `@`: a closure's `@0` or an event endpoint's
 // `@__evt_…` is the whole name, not a public member `0`.
@@ -17,7 +17,7 @@ import { _opre_quote as quote } from './opre_tokens.js';
 
 // Source handler names that are intrinsics: `set` (the whole-actor setter),
 // `update`, and the `as` clauses.
-const INTRINSIC = new Set(['set', 'update', 'new', 'as', 'subscribe', 'get']);
+const INTRINSIC = new Set(['set', 'update', 'new', 'as', 'get']);
 
 // A synthesized name: the whole token, `@` and all.
 const SYNTHESIZED = /^@(\d+$|__)/;
@@ -27,7 +27,7 @@ export function wireLabel(name) {
   if (SYNTHESIZED.test(name)) return name;
   if (name.startsWith('@')) return name.slice(1);
   if (/^[#~$]/.test(name)) return name;
-  if (INTRINSIC.has(name)) return '$' + name;
+  if (INTRINSIC.has(name)) return intrinsicOp(name);
   return '~' + name;
 }
 
@@ -36,9 +36,9 @@ export function memberOp(member) {
   return wireLabel(member.startsWith('@') ? member : '@' + member);
 }
 
-// An intrinsic op by its source name: `set` is `$set`.
+// An intrinsic op by its source name: `set` is `$set`, `subscribe` is `$sub`.
 export function intrinsicOp(name) {
-  return '$' + name;
+  return '$' + (name === 'subscribe' ? 'sub' : name);
 }
 
 // A compiled cell or class arm (`set@val`, `set.val`, `new@Box`) as the

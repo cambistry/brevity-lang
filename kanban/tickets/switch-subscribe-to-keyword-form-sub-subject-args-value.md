@@ -1,5 +1,5 @@
 ---
-status: queued
+status: review
 created: 2026-11-10
 ---
 # switch `subscribe` to keyword form: sub subject[(args…)], (value) { handler }
@@ -48,3 +48,12 @@ sub(abc, &fn)                               // or pass a function reference (loc
 use. The lambda's header fits the subscribed function's output Object under the normal
 destructuring rules: it takes any subset, including nothing, so `sub @pub, () { effect }` (or
 whatever header-less form `over` accepts) is fine. Accept exactly the forms `over` accepts.
+
+**Decided (2026-11-26):**
+
+- **The wire op is `$sub`,** renamed from `$subscribe`, to match the keyword; on all three targets
+  and in the service document. Nothing else on the wire changes: the subscribe message, its args,
+  and the notifications under the subscription's id stay as they are.
+- **A function reference as the handler** (`sub(abc, &fn)`, local or remote) is in this ticket:
+  `SubscribeCall` takes a reference in place of an inline lambda, and each target calls it with
+  each delivery. That is subscriber-side codegen only.

@@ -86,10 +86,10 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
     throw new Error('subscribe: target must be self (@name / #name) or <remoteOrChild>.<field>');
   }
   const objectName = isSelfTarget || isOuterTarget ? null : target.object.name;
-  // The op is "$subscribe"; its target is the member's wire name, the last
+  // The op is "$sub"; its target is the member's wire name, the last
   // token of to (`a`, `#a` for self, a public member bare). Direct handle_op
-  // calls dispatch on {<<"$subscribe">>, Target}.
-  const wireOp = '$subscribe';
+  // calls dispatch on {<<"$sub">>, Target}.
+  const wireOp = '$sub';
   const toSelector = isSelfTarget || isOuterTarget ? addressToken(target.name) : memberOp(target.property);
 
   // Build the body's Erlang fun() — params destructured from Re_ positional.
@@ -178,7 +178,7 @@ function genSubscribeCallStmt(ctx, expr, _typeEnv, _sCtx, I, outLines) {
   // Self/child direct dispatch passes the compound selector as handle_op's
   // first arg (so the subscribe@/# prologue pattern-matches). Remote posts
   // the bare verb on the wire, with the @field selector in the to-field.
-  const selectorBin = `{<<"$subscribe">>, ${erlString(toSelector)}}`;
+  const selectorBin = `{<<"$sub">>, ${erlString(toSelector)}}`;
   if (isOuterTarget) {
     outLines.push(`${I}${V('Sub_init_re_')} = bv_outer_subscribe_(${target.outerLevel ?? 1}, ${erlString(wireLabel(target.name))}, ${V('Sub_id_')}),`);
     outLines.push(`${I}(get({pending_subscribe, ${V('Sub_id_')}}))([${V('Sub_init_re_')}]),`);

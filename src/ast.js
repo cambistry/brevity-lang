@@ -51,8 +51,10 @@ export const fileParam = (name, { type = null, positional = false, defaultValue 
 export const functionDecl = (name, params, body, { overloadMode = 'create', actorDef = null, emptyOverload = false } = {}) =>
   ({ type: 'FunctionDecl', name, params, body, ...(overloadMode !== 'create' && { overloadMode }), ...(actorDef && { actorDef }), ...(emptyOverload && { emptyOverload }) });
 
-export const subscribeCall = (target, params, body, args = []) =>
-  ({ type: 'SubscribeCall', target, params, body, args });
+// A subscription: each delivery binds `params` and runs `body`, or, with a
+// `handlerRef` (a function reference, `&f`), calls that function with it.
+export const subscribeCall = (target, params, body, args = [], handlerRef = null) =>
+  ({ type: 'SubscribeCall', target, params, body, args, ...(handlerRef && { handlerRef }) });
 
 export const refDecl = (name, typeName, value) =>
   ({ type: 'RefDecl', name, typeName, value });
