@@ -42,8 +42,9 @@ const WIDGET_METHOD = {
 };
 
 // A Signal value as it arrives on the wire: its silent `dismiss` reference
-// holds an address, its `code` a datum. Positional — all fields required.
-const sigWire = ['#<caller:d>', 7];
+// holds an address, its `code` a datum. Its fields are named, so it travels as
+// a list holding the named object.
+const sigWire = [{ dismiss: '#<caller:d>', code: 7 }];
 const sigTag = 'Widget:Signal';
 
 // ── Carrier 1: a service-hosted type's callback field ────────────────────────

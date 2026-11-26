@@ -9,10 +9,11 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('type coercion — typed assignment', () => {
   it('rewrites a positional Object RHS to a TypeConstruction', () => {
     const { ast } = extract(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p Point = 1, 2
-        return result: p.x as Integer
+        (x) = p
+        return result: x
       }
     `);
     const fn = ast.actors[0].functions.find(f => f.name === '@go');
@@ -23,10 +24,11 @@ describe('type coercion — typed assignment', () => {
 
   it('runs end-to-end with field access on the coerced value', async () => {
     await expectBehavior(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p Point = 1, 2
-        return result: p.x as Integer
+        (x) = p
+        return result: x
       }
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
@@ -36,10 +38,11 @@ describe('type coercion — typed assignment', () => {
 
   it('explicit construction still works alongside coercion', async () => {
     await expectBehavior(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p Point = Point(1, 2)
-        return result: p.y as Integer
+        (x, y) = p
+        return result: y
       }
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
@@ -49,7 +52,7 @@ describe('type coercion — typed assignment', () => {
 
   it('rejects coercion when arg count does not match field count', () => {
     expect(() => compileSource(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p Point = 1, 2, 3
         return result: 1

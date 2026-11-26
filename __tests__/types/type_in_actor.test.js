@@ -9,15 +9,15 @@ import { extract } from '../../index.js';
 describe('a type declared in a class', () => {
   const script = `
     W = *{
-      type X (n Integer)
+      type X (Integer)
       @make = -> X(1)
     }
     S = actor {
-      type Widget (a Text, b Text)
+      type Widget (Text, Text)
     }
     A = *{
       B = *{
-        type Y (n Integer)
+        type Y (Integer)
       }
     }
     @byClass = -> result: W::X(2)
@@ -30,9 +30,13 @@ describe('a type declared in a class', () => {
     @inside = {
       w = W()
       p W::X = w.make()
-      return result: p.n as Integer
+      (n) = p
+      return result: n
     }
-    @read = (p: W::X) -> result: p.n as Integer
+    @read = (p: W::X) {
+      (n) = p
+      return result: n
+    }
   `;
 
   it('is constructed through its class, and tagged with the class', async () => {
@@ -79,24 +83,24 @@ describe('a type declared in a class', () => {
 
   it('goes in the class\'s entry in the service document', () => {
     const { interface: iface } = extract(`
-      type P (x Integer)
+      type P (Integer)
       @W = *{
-        type X (n Integer)
+        type X (Integer)
         @get = -> X(1)
       }
       @S = actor {
-        type Widget (a Text, b Text)
+        type Widget (Text, Text)
       }
       Q = *{
-        type Hidden (n Integer)
+        type Hidden (Integer)
       }
     `);
     expect(iface.service).toEqual({
-      types: { ':P': ['Integer', { '%names': ['x'] }] },
-      ':S': { types: { ':Widget': ['Text', 'Text', { '%names': ['a', 'b'] }] } },
+      types: { ':P': ['Integer'] },
+      ':S': { types: { ':Widget': ['Text', 'Text'] } },
       ':W': {
         public: { $new: [{ re: [':W:*'], writes: false }] },
-        types: { ':X': ['Integer', { '%names': ['n'] }] },
+        types: { ':X': ['Integer'] },
         ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
       },
     });
@@ -106,13 +110,13 @@ describe('a type declared in a class', () => {
 // Each type is known by its address, so two of one bare name are two types.
 describe('types of one name in different actors', () => {
   const script = `
-    type X (n Integer)
+    type X (Integer)
     W = *{
-      type X (n Integer)
+      type X (Integer)
       @make = -> X(1)
     }
     V = *{
-      type X (n Integer, m Integer)
+      type X (Integer, Integer)
     }
     @file = -> result: X(1)
     @w = -> result: W::X(2)
@@ -124,8 +128,14 @@ describe('types of one name in different actors', () => {
       return result: a == b
     }
     @differ = -> result: X(1) == W::X(1)
-    @readW = (p: W::X) -> result: p.n as Integer
-    @readV = (p: V::X) -> result: p.m as Integer
+    @readW = (p: W::X) {
+      (n) = p
+      return result: n
+    }
+    @readV = (p: V::X) {
+      (n, m) = p
+      return result: m
+    }
   `;
 
   it('each is tagged with its own address', async () => {
@@ -162,10 +172,10 @@ describe('types of one name in different actors', () => {
 
 describe('a type of another file, reached through the service', () => {
   const DOC = {
-    types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    types: { ':Point': ['Integer', 'Integer'] },
     ':W': {
       public: { $new: [{ re: [':W:*'], writes: false }] },
-      types: { ':X': ['Integer', { '%names': ['n'] }] },
+      types: { ':X': ['Integer'] },
       ':*': { public: { get: [{ re: [':W:X'], writes: false }] } },
     },
   };
@@ -177,7 +187,8 @@ describe('a type of another file, reached through the service', () => {
     @got = {
       w = Svc.W()
       p w::X = w.get()
-      return result: p.n as Integer
+      (n) = p
+      return result: n
     }
   `;
   const compileOptions = { remotes };
@@ -216,11 +227,11 @@ describe('types of one name in two services', () => {
   const remotes = [
     { path: 'svc.bv', service: {
       public: { origin: [{ re: [':Point'], writes: false }] },
-      types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+      types: { ':Point': ['Integer', 'Integer'] },
     } },
     { path: 'geo.bv', service: {
       public: { origin: [{ re: [':Point'], writes: false }] },
-      types: { ':Point': ['Integer', 'Integer', 'Integer', { '%names': ['lat', 'lon', 'alt'] }] },
+      types: { ':Point': ['Integer', 'Integer', 'Integer'] },
     } },
   ];
   const script = `
@@ -230,11 +241,13 @@ describe('types of one name in two services', () => {
     @geo = -> result: Geo::Point(1, 2, 3)
     @fromSvc = {
       p Svc::Point = Svc.origin()
-      return result: p.y as Integer
+      (x, y) = p
+      return result: y
     }
     @fromGeo = {
       p Geo::Point = Geo.origin()
-      return result: p.alt as Integer
+      (lat, lon, alt) = p
+      return result: alt
     }
   `;
   const compileOptions = { remotes };
@@ -278,10 +291,10 @@ describe('types of one name in two services', () => {
 });
 
 describe('reaching a type: errors', () => {
-  const W = 'W = *{\n  type X (n Integer)\n  @get = -> 1\n}\n';
+  const W = 'W = *{\n  type X (Integer)\n  @get = -> 1\n}\n';
 
   it('a type and a class of the same name in one actor', () => {
-    expect(() => compileSource('type Box (n Integer)\n@Box = *{}\n@go = -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
+    expect(() => compileSource('type Box (Integer)\n@Box = *{}\n@go = -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
   });
 
   it('a class\'s type, bare outside the class', () => {
@@ -309,7 +322,7 @@ describe('reaching a type: errors', () => {
   });
 
   it('two types of one name in one class', () => {
-    expect(() => compileSource(`W = *{\n  type X (n Integer)\n  type X (m Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
+    expect(() => compileSource(`W = *{\n  type X (Integer)\n  type X (Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
   });
 
   it('`::Name (…)` in a class body', () => {

@@ -545,9 +545,9 @@ describe('if — runtime', () => {
       return 0
     }
     held *Integer = 0
-    type Holder (count Integer)
+    type Holder (Integer)
     @refShadowed = (held: Holder) {
-      got Integer = held.count
+      (got) = held
       return got
     }
 

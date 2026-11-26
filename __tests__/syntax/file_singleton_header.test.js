@@ -132,7 +132,7 @@ describe('file actor — actor { } only at the head of a file', () => {
 
   it('after a type', () => {
     expect(() => compileSource(`
-      type Point (x Integer)
+      type Point (Integer)
       actor {
         @get = -> 1
       }

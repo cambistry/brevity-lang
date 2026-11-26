@@ -11,14 +11,15 @@ import { createActor } from '../helpers.js';
 
 describe('type actorization — *Point state cell', () => {
   const script = `
-    type Point (x Integer, y Integer)
+    type Point (Integer, Integer)
 
     coords *Point = Point(0, 0)
 
     @get = -> coords: coords
 
     @shift! = (x Integer, y Integer) {
-      coords <- Point(coords.x + x, coords.y + y)
+      (cx, cy) = coords
+      coords <- Point(cx + x, cy + y)
       return coords: coords
     }
 

@@ -1,13 +1,15 @@
 import { _opre_split } from '../../opre_tokens.js';
 
-// Slice 12+13 wire format helpers. Outbound: strip the `__type` tag from a
-// runtime tagged object and reshape to wire form (positional list when
-// all-required, named map when any field is optional). Inbound: reconstruct
-// the tagged object given a type's tag and wire payload.
+// Wire format helpers. A typed value goes on the wire as a list
+// (notes/positional-type-fields-2026-11-26.md): the positional values given
+// (always a prefix, as positional args fill in order), then the named values
+// given in one trailing object. Always a list, so it is never taken for a
+// named-args bag. A type with named fields reads a trailing plain object as
+// them.
 //
 // The type registry `_bv_types` is emitted per-program by the codegen and
-// carries the field order plus a flag indicating whether the type has any
-// optional fields. Without that registry these helpers are no-ops.
+// carries each type's field keys, positional first (`pos` of them). Without
+// that registry these helpers are no-ops.
 
 export function _bv_to_wire(v, _bv_types) {
   if (v == null || typeof v !== 'object') return v;
@@ -15,13 +17,16 @@ export function _bv_to_wire(v, _bv_types) {
   if (typeof tag !== 'string') return v;
   const decl = _bv_types && _bv_types[tag];
   if (!decl) return v;
-  if (decl.allRequired) {
-    return decl.fields.map(f => v[f]);
+  const named = {};
+  for (const f of decl.fields.slice(decl.pos)) {
+    if (v[f] !== undefined) named[f] = v[f];
   }
-  const out = {};
-  for (const f of decl.fields) {
-    if (f in v && v[f] !== undefined) out[f] = v[f];
+  const out = [];
+  for (const f of decl.fields.slice(0, decl.pos)) {
+    if (v[f] === undefined) break;
+    out.push(v[f]);
   }
+  if (Object.keys(named).length > 0) out.push(named);
   return out;
 }
 
@@ -36,16 +41,17 @@ export function _bv_type_name(tag, _bv_types) {
 
 export function _bv_from_wire(tag, payload, _bv_types) {
   const key = _bv_type_name(tag, _bv_types);
-  if (!key) return payload;
+  if (!key || !Array.isArray(payload)) return payload;
   const decl = _bv_types[key];
   const out = { __type: key };
-  if (Array.isArray(payload)) {
-    for (let i = 0; i < decl.fields.length && i < payload.length; i++) {
-      out[decl.fields[i]] = payload[i];
-    }
-  } else if (payload && typeof payload === 'object') {
-    for (const f of decl.fields) {
-      if (f in payload) out[f] = payload[f];
+  const last = payload[payload.length - 1];
+  // A trailing plain object holds the named values of a type that has them.
+  const named = decl.pos < decl.fields.length && last != null && typeof last === 'object' && !Array.isArray(last) ? last : null;
+  const positional = named ? payload.slice(0, -1) : payload;
+  positional.slice(0, decl.pos).forEach((x, i) => { out[decl.fields[i]] = x; });
+  if (named) {
+    for (const f of decl.fields.slice(decl.pos)) {
+      if (f in named) out[f] = named[f];
     }
   }
   return out;

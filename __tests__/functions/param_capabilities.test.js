@@ -50,7 +50,7 @@ describe('param capabilities — *Integer write-cap on lambda', () => {
 
 describe('param capabilities — *Point write-cap on lambda', () => {
   const script = `
-    type Point (x Integer, y Integer)
+    type Point (Integer, Integer)
 
     @replace!
       =

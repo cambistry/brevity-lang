@@ -536,11 +536,11 @@ describe('type coercion — runtime', () => {
         { output: { id: '99', re: [{ r: 3 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
-    it('as — remote replies — a tagged positional passes', async () => {
+    it('as — remote replies — a tagged value passes', async () => {
       await expectBehavior(script,
         { input: { id: '99', op: 'point', from: 'c' } },
         { output: expect.objectContaining({ id: '1', op: 'any', to: '/s' }) },
-        { input: { id: '1', re: [[1, 2]], 'ty': [':Point'] } },
+        { input: { id: '1', re: [[{ x: 1, y: 2 }]], 'ty': [':Point'] } },
         { output: { id: '99', re: [{ r: 3 }], 'ty': [{ r: 'Integer' }], to: 'c' } },
       );
     });
@@ -774,7 +774,7 @@ describe('as — provably wrong is a compile error', () => {
     ['true as Text', 'return true as Text', 'Boolean as Text'],
     ['bound first', 'x = "x" as Integer\nreturn x', 'Text as Integer'],
     ['"x" as a Type', 'return "x" as Point', 'Text as Point'],
-    ['a Type as a scalar', 'p Point = Point(1, 2)\nreturn p as Text', 'Point as Text'],
+    ['a Type as a scalar', 'p Point = Point(x: 1, y: 2)\nreturn p as Text', 'Point as Text'],
   ])('%s', (_, body, message) => {
     expect(() => compileSource(`type Point (x: Integer, y: Integer)\n@go = {\n${body}\n}\n`)).toThrow(`Cannot render ${message}`);
   });
@@ -783,7 +783,7 @@ describe('as — provably wrong is a compile error', () => {
     ['a path as a constructor profile', 'Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }', 'Text'],
     ['a number as an interface', 'Thing = 5 as { get () -> (Integer) }', 'Integer'],
     ['a list as an interface', 'Thing = [1] as { get () -> (Integer) }', 'List of Integers'],
-    ['a Type as an interface', 'Thing = Point(1, 2) as { get () -> (Integer) }', 'Point'],
+    ['a Type as an interface', 'Thing = Point(x: 1, y: 2) as { get () -> (Integer) }', 'Point'],
   ])('%s', (_, decl, type) => {
     expect(() => compileSource(`type Point (x: Integer, y: Integer)\n${decl}\n@go = -> 1\n`)).toThrow(`Cannot render ${type} as an actor — no such rendering, so this 'as' can only fail`);
   });

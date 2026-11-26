@@ -16,6 +16,7 @@ import { compileSource } from '../helpers.js';
 const TYPES = `
   type Signal (code: Integer)
   type Panel (onpress.: (s: Signal) => ., label: Text)
+  type Tap ((s: Signal) => ., label: Text)
 `;
 
 describe('lambda param inference — C1 local type callback field', () => {
@@ -27,7 +28,7 @@ describe('lambda param inference — C1 local type callback field', () => {
 
   it('infers from a positional callback field too', () => {
     expect(() => compileSource(`${TYPES}
-      @make = -> p: Panel((s) { use: Integer = s.code . }, "x")
+      @make = -> p: Tap((s) { use: Integer = s.code . }, label: "x")
     `)).not.toThrow();
   });
 

@@ -42,7 +42,7 @@ export function parseFieldList(str) {
 // A service document is `{ entries }`, one entry per line (or comma-separated).
 // Every entry is a name, a space, and a definition — there is no entry colon:
 //
-//   type Point (x Integer, y Integer)     type declaration
+//   type Point (Integer, y: Integer)      type declaration
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
 //   Counter (start: Integer) -> *{ … }    constructor; body always written
@@ -108,8 +108,8 @@ function splitLeadingParents(rest) {
 }
 
 // Parses the inner of a `(...)` typedecl into AST-shape TypeField nodes.
-// Field syntax is `[? ]name[: ]Type` — `name Type` is positional,
-// `name: Type` is named, with optional `? ` prefix in either form.
+// A field is `[? ]Type` (positional) or `[? ]name: Type` (named); positional
+// fields come first, keyed by their index among them (as the parser does).
 function parseTypeDeclFields(valueText) {
   const inner = valueText.replace(/^\(/, '').replace(/\)$/, '').trim();
   if (!inner) return [];
@@ -122,20 +122,14 @@ function parseTypeDeclFields(valueText) {
     if (!trimmed) continue;
     let optional = false;
     if (trimmed.startsWith('? ')) { optional = true; trimmed = trimmed.slice(2).trim(); }
-    const colonIdx = trimmed.indexOf(':');
-    const spaceIdx = trimmed.indexOf(' ');
-    let name, paramType, named;
-    if (colonIdx !== -1 && (spaceIdx === -1 || colonIdx < spaceIdx)) {
-      name = trimmed.slice(0, colonIdx).trim();
-      paramType = trimmed.slice(colonIdx + 1).trim();
-      named = true;
-    } else if (spaceIdx !== -1) {
-      name = trimmed.slice(0, spaceIdx).trim();
-      paramType = trimmed.slice(spaceIdx + 1).trim();
-      named = false;
-    } else {
+    const label = trimmed.match(/^([A-Za-z_]\w*[.!]?)\s*:(?!:)/);
+    if (!label) {
+      if (fields.some(f => f.named)) throw new Error(`A positional field follows a named one: positional fields come first ('${trimmed}')`);
+      fields.push({ type: 'TypeField', name: String(fields.length), paramType: trimmed, ...(optional && { optional: true }) });
       continue;
     }
+    let name = label[1];
+    const paramType = trimmed.slice(label[0].length).trim();
     // A silent-function field is named with the silent `.`, stored without it
     // (same rule as the parser's silentFieldName).
     const silentType = /=>\s*\.\s*$/.test(paramType);
@@ -146,9 +140,8 @@ function parseTypeDeclFields(valueText) {
       throw new Error(`Field '${name}' holds a silent function — name it '${name}.'`);
     }
     if (silentType) name = name.slice(0, -1);
-    const out = { type: 'TypeField', name, paramType };
+    const out = { type: 'TypeField', name, paramType, named: true };
     if (optional) out.optional = true;
-    if (named) out.named = true;
     fields.push(out);
   }
   return fields;

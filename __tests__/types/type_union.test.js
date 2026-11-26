@@ -183,7 +183,7 @@ describe('General unions — runtime behaviour', () => {
 
 describe('Unions — ty is the type of the value sent', () => {
   const script = `
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
 
       @point
         =

@@ -149,17 +149,21 @@ show a positional form.
 ## Types
 
 ```brevity
-type Point (x Integer, y Integer)
+type Point (Integer, Integer)
+type Pair (x: Integer, y: Integer)
 
 @make = -> point: Point(1, 2)
 
-@x = {
-  p Point = Point(3, 4)
-  return result: p.x as Integer
+@first = {
+  (a, b) = Point(3, 4)
+  return result: a
 }
+@x = -> result: Pair(x: 3, y: 4).x
 ```
 
-`Point(1, 2)` is a value. Type field access on a value is local — not a CAM
+A positional field is a bare type, read only by positional destructuring. A
+named field (`x: Integer`) is filled by name only (`Pair(x: 3, y: 4)`) and read
+by name. `Point(1, 2)` is a value. Type field access on a value is local — not a CAM
 round trip. `*Point(1, 2)` would produce an actor with the same shape; field
 access on the actor would be a message send.
 

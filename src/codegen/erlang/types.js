@@ -35,8 +35,7 @@ function erlTypeWireWrap(ctx, valueExpr, t) {
   const wire = (v, name) => {
     const decl = ctx.typeDecls.get(name);
     const fieldList = (decl.fields || []).map(fl => erlString(fl.name)).join(', ');
-    const allRequired = (decl.fields || []).every(fl => !fl.optional);
-    return `bv_to_wire(${v}, [${fieldList}], ${allRequired})`;
+    return `bv_to_wire(${v}, [${fieldList}])`;
   };
   if (ctx.typeDecls.has(t)) return wire(valueExpr, t);
   // A union: the value's own `__type` says which type's fields to send.

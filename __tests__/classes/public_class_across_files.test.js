@@ -628,11 +628,11 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
 // address and each local ty tag.
 describe('end to end: type values cross to and from a class in another file', () => {
   const POINT_SVC = `
-    type Point (x Integer, y Integer)
+    type Point (Integer, y: Integer)
 
     @W = *{
-      @get = { return Point(1, 2) }
-      @pair = { return (p: Point(1, 2), n: 1) }
+      @get = { return Point(1, y: 2) }
+      @pair = { return (p: Point(1, y: 2), n: 1) }
     }
 
     @Holder = (p Point) *{
@@ -646,7 +646,8 @@ describe('end to end: type values cross to and from a class in another file', ()
     @got = {
       w = Svc.W()
       p Svc::Point = w.get()
-      return p.x
+      (x) = p
+      return x
     }
 
     @paired = {
@@ -746,13 +747,13 @@ describe('end to end: type values cross to and from a class in another file', ()
   it('the class replies with the value in wire form, and its ty', async () => {
     const { sent, served } = await call('got');
     const get = sent.findIndex(m => m.op === 'get');
-    expect(served[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: [':Point'], to: 'Caller', from: ':W:1' });
+    expect(served[get]).toEqual({ id: expect.any(String), re: [[1, { y: 2 }]], ty: [':Point'], to: 'Caller', from: ':W:1' });
   }, 120000);
 
   it('the caller receives the ty with the file as its authority', async () => {
     const { sent, received } = await call('got');
     const get = sent.findIndex(m => m.op === 'get');
-    expect(received[get]).toEqual({ id: expect.any(String), re: [[1, 2]], ty: ['svc.bv:Point'], to: undefined, from: 'svc.bv:W:1' });
+    expect(received[get]).toEqual({ id: expect.any(String), re: [[1, { y: 2 }]], ty: ['svc.bv:Point'], to: undefined, from: 'svc.bv:W:1' });
   }, 120000);
 
   it('a type nested in a reply decodes in the caller', async () => {
@@ -774,8 +775,8 @@ describe('end to end: type values cross to and from a class in another file', ()
   it('a type nested in a reply is tagged the same way', async () => {
     const { sent, served, received } = await call('paired');
     const pair = sent.findIndex(m => m.op === 'pair');
-    expect(served[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, 2], n: 1 }], ty: [{ p: ':Point', n: 'Integer' }], to: 'Caller', from: ':W:1' });
-    expect(received[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, 2], n: 1 }], ty: [{ p: 'svc.bv:Point', n: 'Integer' }], to: undefined, from: 'svc.bv:W:1' });
+    expect(served[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, { y: 2 }], n: 1 }], ty: [{ p: ':Point', n: 'Integer' }], to: 'Caller', from: ':W:1' });
+    expect(received[pair]).toEqual({ id: expect.any(String), re: [{ p: [1, { y: 2 }], n: 1 }], ty: [{ p: 'svc.bv:Point', n: 'Integer' }], to: undefined, from: 'svc.bv:W:1' });
   }, 120000);
 
   it('a type value passed to a constructor decodes in the class', async () => {
@@ -785,6 +786,6 @@ describe('end to end: type values cross to and from a class in another file', ()
 
   it('the #new carries the value in wire form, and its ty', async () => {
     const { sent } = await call('passed');
-    expect(sent.find(m => m.to === 'svc.bv:Holder')).toEqual({ id: expect.any(String), op: [[[1, 2]], '$new'], ty: [['svc.bv:Point']], to: 'svc.bv:Holder' });
+    expect(sent.find(m => m.to === 'svc.bv:Holder')).toEqual({ id: expect.any(String), op: [[[1, { y: 2 }]], '$new'], ty: [['svc.bv:Point']], to: 'svc.bv:Holder' });
   }, 120000);
 });

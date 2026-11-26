@@ -381,12 +381,19 @@ The returned actor address remains messageable.
 Types declare value shapes with `::`:
 
 ```brevity
-type Point (x Integer, y Integer)
+type Point (Integer, Integer)
+type Pair (x: Integer, y: Integer)
 
-@x = -> result: Point(1, 2).x as Integer
+@first = {
+  (a, b) = Point(1, 2)
+  return result: a
+}
+@x = -> result: Pair(x: 1, y: 2).x
 ```
 
-Type field access is local value access, not a CAM round trip. A `Point(1, 2)`
+A positional field is a bare type, read by positional destructuring; a named
+field is `name: Type`, filled and read by name. Type field access is local
+value access, not a CAM round trip. A `Point(1, 2)`
 is a value. An `*Point(1, 2)` is an actor with the same shape.
 
 ## Data and Collections

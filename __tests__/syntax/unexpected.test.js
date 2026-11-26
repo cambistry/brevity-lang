@@ -95,11 +95,11 @@ describe('unseparated input', () => {
   });
 
   it('a type\'s fields with no comma', () => {
-    expect(() => compileSource('type P (x Integer y Integer)\n@go = -> 1\n')).toThrow("Expected a line break or ',' between fields, got IDENT 'y'");
+    expect(() => compileSource('type P (Integer y Integer)\n@go = -> 1\n')).toThrow("Expected a line break or ',' between fields, got IDENT 'y'");
   });
 
   it('a doubled comma in a type\'s fields', () => {
-    expect(() => compileSource('type P (x Integer, , y Integer)\n@f = -> 1\n')).toThrow("Unexpected ',' in fields");
+    expect(() => compileSource('type P (Integer, , Integer)\n@f = -> 1\n')).toThrow("Unexpected ',' in fields");
   });
 
   it('header entries on one line with no comma', () => {

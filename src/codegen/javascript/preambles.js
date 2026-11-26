@@ -552,13 +552,20 @@ const _bvTyOf = (v, m) => {
   return k;
 };
 const _bvAsFields = (v, d) => {
+  // A positional field's key is its index; positional values fill only those.
+  const fill = (pos, named) => {
+    const out = { ...named };
+    pos.forEach((x, i) => { if (d.f[i]?.[0] === String(i)) out[i] = x; });
+    return out;
+  };
   let src = v;
-  if (Array.isArray(v.positional) && 'named' in v) {
-    src = { ...v.named };
-    v.positional.forEach((x, i) => { if (d.f[i]) src[d.f[i][0]] = x; });
-  } else if (Array.isArray(v)) {
-    src = {};
-    v.forEach((x, i) => { if (d.f[i]) src[d.f[i][0]] = x; });
+  if (Array.isArray(v.positional) && 'named' in v) src = fill(v.positional, v.named);
+  else if (Array.isArray(v)) {
+    // A typed value's wire list: its positional values, then its named object.
+    const pos = d.f.filter(([name], i) => name === String(i)).length;
+    const last = v[v.length - 1];
+    const hasNamed = pos < d.f.length && last != null && typeof last === 'object' && !Array.isArray(last);
+    src = fill((hasNamed ? v.slice(0, -1) : v).slice(0, pos), hasNamed ? last : {});
   }
   const out = { __type: d.t };
   for (const [name, fd, optional] of d.f) {

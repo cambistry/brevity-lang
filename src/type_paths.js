@@ -31,7 +31,7 @@ const rewrite = (t, from) => {
     if (typeof v === 'string') return from.get(v) ?? v;
     if (!v || typeof v !== 'object') return v;
     if (Array.isArray(v)) return v.map(walk);
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === '%names' ? x : walk(x)]));
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
   };
   return intern(walk(t));
 };

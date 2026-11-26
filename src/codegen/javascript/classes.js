@@ -1946,13 +1946,13 @@ export function codegen(ast, options = {}) {
   // Parse all remote interfaces for compile-time validation (TODO)
   const classes = active.map(a => genClass(ctx, a, a.name ? '' : 'export default ', _remotes) + '\n').join('\n');
 
-  // The wire registry, by tag: each type's key and field order, plus an
-  // `allRequired` flag so wire helpers encode positional vs. named payload
-  // without re-inspecting the AST. `_bv_type_keys` maps the source's name for a
+  // The wire registry, by tag: each type's key and field keys in order, the
+  // positional ones first (`pos` of them), so wire helpers shape the payload
+  // as an Object's without re-inspecting the AST. `_bv_type_keys` maps the source's name for a
   // type to its key, for matching a tag against a param's type.
   const wireRegistryEntries = registryEntries(ast, ctx.typeTable).map(([lookup, key, fields]) => {
-    const allRequired = fields.every(f => !f.optional);
-    return `${JSON.stringify(lookup)}: { key: ${JSON.stringify(key)}, fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], allRequired: ${allRequired} }`;
+    const pos = fields.filter(f => !f.named).length;
+    return `${JSON.stringify(lookup)}: { key: ${JSON.stringify(key)}, fields: [${fields.map(f => JSON.stringify(f.name)).join(', ')}], pos: ${pos} }`;
   }).join(', ');
   const typeKeyEntries = [...ctx.typeTable.entries()].map(([name, e]) => `${JSON.stringify(name)}: ${JSON.stringify(e.key)}`).join(', ');
   const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\nconst _bv_type_keys = { ${typeKeyEntries} };\n${WIRE_PREAMBLE}\n\n`;

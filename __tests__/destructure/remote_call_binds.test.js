@@ -140,11 +140,11 @@ describe('destructured service member — bare read', () => {
 
 describe('reference-field callback — typed bind', () => {
   const fixture = `
-    type Call (arg Integer, fn: (value: Integer) -> (Integer))
-    @go = (c: Call) { out Integer = c.fn(c.arg); return a1: out }
+    type Call (Integer, fn: (value: Integer) -> (Integer))
+    @go = (c: Call) { (arg) = c; out Integer = c.fn(arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,
-    { input: { id: '50', op: [[{ c: [200, '#<caller:cb>'] }], 'go'], 'ty': [[{ c: ':Call' }]], from: 'caller' } },
+    { input: { id: '50', op: [[{ c: [200, { fn: '#<caller:cb>' }] }], 'go'], 'ty': [[{ c: ':Call' }]], from: 'caller' } },
     { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: 'caller:cb' }) },
     { input: { id: '1', ...reply } },
     { output: expect.objectContaining({ id: '50', ...expected, to: 'caller' }) },

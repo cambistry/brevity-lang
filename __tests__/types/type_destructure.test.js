@@ -1,21 +1,21 @@
 import { expectBehavior, compileSource } from '../helpers.js';
 
-// Spec tests for typed-value destructuring. Spec lives in
-// notes/types-implementation-plan-2026-04-27.md, section "Destructuring"
-// (lines 194-258): destructuring of typed values supports both positional
-// and named forms with permissive selection and strict existence.
+// Spec tests for typed-value destructuring (notes/types-implementation-plan-
+// 2026-04-27.md, "Destructuring"; notes/positional-type-fields-2026-11-26.md):
+// positional destructure reads the positional fields, named destructure the
+// named ones, with permissive selection and strict existence.
 //
 // Codegen detects when the destructure source is a typed value and reads
-// fields by name on the tagged object (`p.x`) instead of going through
-// the generic-Object unpacker (`p.positional[i]`). Validation in
-// src/validate.js rejects over-arity and undeclared-field references.
+// fields by key on the tagged object instead of going through the
+// generic-Object unpacker (`p.positional[i]`). Validation in src/validate.js
+// rejects over-arity and undeclared-field references.
 
 describe('type destructure — runtime', () => {
   const script = `
-    type Point (x Integer, y Integer)
+    type Point (Integer, Integer)
     type Pair (x: Integer, y: Integer)
-    type Mixed (count Integer, label: Text)
-    type Game (? started Boolean, ? turn: Integer)
+    type Mixed (Integer, label: Text)
+    type Game (? Boolean, ? turn: Integer)
 
     @parenPositional = {
       p = Point(1, 2)
@@ -42,49 +42,37 @@ describe('type destructure — runtime', () => {
     }
 
     @fullNamed = {
-      p = Point(1, 2)
+      p = Pair(x: 1, y: 2)
       :x, :y = p
       return rx: x, ry: y
     }
 
     @selectiveNamed = {
-      p = Point(7, 8)
+      p = Pair(x: 7, y: 8)
       :x = p
       return rx: x
     }
 
     @aliasNamed = {
-      p = Point(7, 8)
+      p = Pair(x: 7, y: 8)
       x: alias_x = p
       return rx: alias_x
     }
 
     @reorderedNamed = {
-      p = Point(1, 2)
+      p = Pair(x: 1, y: 2)
       :y, :x = p
       return rx: x, ry: y
     }
 
-    @namedDeclaredNamed = {
-      p = Pair(1, 2)
-      :x, :y = p
-      return rx: x, ry: y
-    }
-
-    @namedDeclaredPositional = {
-      p = Pair(1, 2)
-      (a, b) = p
-      return ra: a, rb: b
-    }
-
     @mixedDeclared = {
-      m = Mixed(3, "hi")
-      :count, :label = m
+      m = Mixed(3, label: "hi")
+      count, :label = m
       return rc: count, rl: label
     }
 
     @optionalPresent = {
-      g = Game(true, 5)
+      g = Game(true, turn: 5)
       :turn = g
       return rt: turn as Integer
     }
@@ -163,33 +151,8 @@ describe('type destructure — runtime', () => {
   });
 
   // ── mixed-form types ──
-  // Field-name identity is what matters at the destructure boundary
-  // (spec lines 244-257); declaration form is implementation detail.
 
-  it('mixed-form — positional-declared fields are reachable by named destructure', async () => {
-    await expectBehavior(script,
-      { input: { id: '9', op: 'fullNamed', from: 'c' } },
-      { output: { id: '9', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
-    );
-  });
-
-  it('mixed-form — named-declared fields are reachable by named destructure', async () => {
-    await expectBehavior(script,
-      { input: { id: '10', op: 'namedDeclaredNamed', from: 'c' } },
-      { output: { id: '10', 'ty': [{ rx: 'Integer', ry: 'Integer' }], re: [{ rx: 1, ry: 2 }], to: 'c' } },
-    );
-  });
-
-  it('mixed-form — named-declared fields are reachable by positional destructure', async () => {
-    // Spec line 203: "Pulls field values by position." — applies regardless
-    // of declaration form. Declaration order is the position.
-    await expectBehavior(script,
-      { input: { id: '11', op: 'namedDeclaredPositional', from: 'c' } },
-      { output: { id: '11', 'ty': [{ ra: 'Integer', rb: 'Integer' }], re: [{ ra: 1, rb: 2 }], to: 'c' } },
-    );
-  });
-
-  it('mixed-form — mixed positional/named declaration: both forms reach both fields', async () => {
+  it('mixed-form — the positional field by position, the named field by name', async () => {
     await expectBehavior(script,
       { input: { id: '12', op: 'mixedDeclared', from: 'c' } },
       { output: { id: '12', 'ty': [{ rc: 'Integer', rl: 'Text' }], re: [{ rc: 3, rl: 'hi' }], to: 'c' } },
@@ -230,7 +193,7 @@ describe('type destructure — runtime', () => {
 describe('type destructure — compile errors', () => {
   it('rejects positional destructure with more locals than fields', () => {
     expect(() => compileSource(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p = Point(1, 2)
         x, y, z = p
@@ -239,9 +202,31 @@ describe('type destructure — compile errors', () => {
     `)).toThrow();
   });
 
+  it('rejects positional destructure of a named field', () => {
+    expect(() => compileSource(`
+      type Pair (x: Integer, y: Integer)
+      @go = {
+        p = Pair(x: 1, y: 2)
+        (a, b) = p
+        return result: 1
+      }
+    `)).toThrow("Type 'Pair' has 0 positional fields; positional destructure requested 1");
+  });
+
+  it('rejects named destructure of a positional field', () => {
+    expect(() => compileSource(`
+      type Point (Integer, y: Integer)
+      @go = {
+        p = Point(1, y: 2)
+        :x = p
+        return result: 1
+      }
+    `)).toThrow("Type 'Point' has no field 'x'");
+  });
+
   it('rejects named destructure of an undeclared field', () => {
     expect(() => compileSource(`
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @go = {
         p = Point(1, 2)
         :z = p

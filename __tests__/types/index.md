@@ -8,7 +8,7 @@ type declaration and type-value work.
 Declare a type:
 
 ```brevity
-type Point (x Integer, y Integer)
+type Point (Integer, Integer)
 ```
 
 Construct a value:
@@ -17,10 +17,15 @@ Construct a value:
 p Point = Point(1, 2)
 ```
 
-Access fields locally:
+Read positional fields by destructuring, named fields by name:
 
 ```brevity
-@get_x = -> result: Point(7, 8).x as Integer
+type Pair (x: Integer, y: Integer)
+@first = {
+  (a, b) = Point(7, 8)
+  return result: a
+}
+@get_x = -> result: Pair(x: 7, y: 8).x
 ```
 
 Use unions:
@@ -33,8 +38,8 @@ maybe Text | null = null
 ## Tested Areas
 
 - Type declaration parsing and validation.
-- Type construction with positional and named fields.
-- Field access on typed values.
+- Type construction: positional args fill positional fields, named args named fields.
+- Field access on typed values (named fields only).
 - Type equality and tag-aware comparison.
 - Type destructuring, including optional fields and fallback.
 - Type wire format with `authority Name` tags.
@@ -44,9 +49,8 @@ maybe Text | null = null
 ## Wire Notes
 
 - Tagged type values use `authority Name` tags in `ty`.
-- All-required positional types can travel as positional payloads.
-- Optional-bearing types can travel as named maps with absent optional fields
-  omitted.
+- A typed value travels as a list: its positional values, then its present
+  named values in one trailing object. Absent named fields are omitted.
 
 ## LLM Rules
 

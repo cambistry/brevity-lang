@@ -230,12 +230,17 @@ use :Item, :Widget! = "other.bv"
 ## Type
 
 ```brevity
-type Point (x Integer, y Integer)
+type Point (Integer, Integer)       // positional fields: bare types
+type Pair (x: Integer, y: Integer)  // named fields
 
-@x = -> result: Point(1, 2).x as Integer
+@first = {
+  (a, b) = Point(1, 2)            // positional fields by destructuring
+  return result: a
+}
+@x = -> result: Pair(x: 1, y: 2).x  // named fields by name
 
 W = *{
-  type X (n Integer)              // W's type: bare inside W
+  type X (Integer)              // W's type: bare inside W
   @make = -> X(1)
 }
 
@@ -244,7 +249,8 @@ W = *{
   a = W::X(2)                     // reached through the actor W
   b = w::X(3)                     // or an actor of it
   p W::X = w.make()
-  return result: p.n as Integer
+  (n) = p
+  return result: n
 }
 
 @z = -> result: Svc::Point(1, 2)  // a service's type, without importing it

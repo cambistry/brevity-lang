@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 created: 2026-11-23
 ---
 # Positional type fields should *not* be named

@@ -90,7 +90,7 @@ export function resolveTypeNames(program, remotesParsed = {}) {
     if (Array.isArray(t)) { t.forEach(x => checkEnc(x, own)); return; }
     for (const [k, v] of Object.entries(t)) {
       if (k === '%t') checkAddress(v, own);
-      else if (k !== '%names' && k !== '%self') checkEnc(v, own);
+      else if (k !== '%self') checkEnc(v, own);
     }
   };
 

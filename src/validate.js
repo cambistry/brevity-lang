@@ -1341,7 +1341,7 @@ function forEachCallbackLambdaArg(node, fields, onCallbackLambda) {
   for (let fi = 0; fi < fields.length; fi++) {
     const field = fields[fi];
     if (!isFn(encAt(field, 'paramType'))) continue;
-    const arg = fi < positional.length ? positional[fi] : named[field.name];
+    const arg = field.named ? named[field.name] : positional[fi];
     const fn = asFunction(arg);
     if (fn) onCallbackLambda(fn, field.paramTypeEnc, field);
   }
@@ -1466,21 +1466,21 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
       // Its name as the message writes it: an imported type by its name there.
       const label = node.typeNameEnc?.startsWith?.(':') ? shown(node.typeNameEnc) : node.typeName;
       // Args follow FunctionCallExpr's calling convention: bare expressions
-      // for positional fields, plus an optional trailing `NamedArgsBag` for
-      // `name: expr` arguments. Positional args fill fields left-to-right;
-      // named args fill by field name. A field may be supplied one way or the
-      // other, not both. Positional, named, and mixed are all allowed.
+      // fill the positional fields in order, and a trailing `NamedArgsBag`
+      // fills the named fields by name. Neither reaches the other's fields
+      // (notes/positional-type-fields-2026-11-26.md).
       const fields = decl.fields;
-      const total = fields.length;
+      const posFields = fields.filter(f => !f.named);
+      const namedFields = fields.filter(f => f.named);
       const positional = node.args.filter(a => a?.type !== 'NamedArgsBag');
       const namedBag = node.args.find(a => a?.type === 'NamedArgsBag');
       // A silent field's key carries its silent `.` (`onpress.: …`); the field
       // is stored without it.
       if (namedBag?.fields) {
-        const isSilent = (n) => { const f = fields.find(x => x.name === n); return !!f && fieldDisciplineOf(f) === 'silent'; };
+        const isSilent = (n) => { const f = namedFields.find(x => x.name === n); return !!f && fieldDisciplineOf(f) === 'silent'; };
         for (const key of Object.keys(namedBag.fields)) {
           const plain = key.endsWith('.') ? key.slice(0, -1) : key;
-          if (key.endsWith('.') && fields.some(f => f.name === plain) && !isSilent(plain)) {
+          if (key.endsWith('.') && namedFields.some(f => f.name === plain) && !isSilent(plain)) {
             throw new Error(`Type construction '${label}(...)': field '${plain}' is not silent — write '${plain}:'`);
           }
           if (!key.endsWith('.') && isSilent(key)) {
@@ -1492,49 +1492,24 @@ function checkTypeConstructions(ast, remotesParsed = {}) {
         }
       }
       const namedKeys = Object.keys(namedBag?.fields || {});
-
-      if (namedKeys.length === 0) {
-        // Positional-only construction: required fields must all be present,
-        // then any trailing optionals may be supplied. Slice 11.
-        const firstOptional = fields.findIndex(f => f.optional);
-        const requiredCount = firstOptional === -1 ? total : firstOptional;
-        const argCount = positional.length;
-        if (argCount < requiredCount || argCount > total) {
-          const range = requiredCount === total
-            ? `${total} argument${total === 1 ? '' : 's'}`
-            : `${requiredCount}–${total} arguments`;
-          throw new Error(`Type construction '${label}(...)' expects ${range}, got ${argCount}`);
+      const firstOptional = posFields.findIndex(f => f.optional);
+      const requiredCount = firstOptional === -1 ? posFields.length : firstOptional;
+      if (positional.length < requiredCount || positional.length > posFields.length) {
+        const n = posFields.length;
+        const range = requiredCount === n ? `${n}` : `${requiredCount}–${n}`;
+        throw new Error(`Type construction '${label}(...)' expects ${range} positional argument${range === '1' ? '' : 's'}, got ${positional.length}`);
+      }
+      for (const key of namedKeys) {
+        if (!namedFields.some(f => f.name === key)) {
+          throw new Error(`Type construction '${label}(...)' has no field named '${key}'`);
         }
-      } else {
-        // Named or mixed construction. Positional args still fill by index, so
-        // they cannot exceed the field count; named keys must name declared,
-        // not-already-filled fields; every required field must be supplied.
-        if (positional.length > total) {
-          throw new Error(
-            `Type construction '${label}(...)' expects at most ${total} ` +
-            `positional argument${total === 1 ? '' : 's'}, got ${positional.length}`,
-          );
-        }
-        const fieldNames = new Set(fields.map(f => f.name));
-        const filled = new Set(fields.slice(0, positional.length).map(f => f.name));
-        for (const key of namedKeys) {
-          if (!fieldNames.has(key)) {
-            throw new Error(`Type construction '${label}(...)' has no field named '${key}'`);
-          }
-          if (filled.has(key)) {
-            throw new Error(
-              `Type construction '${label}(...)' supplies field '${key}' both positionally and by name`,
-            );
-          }
-          filled.add(key);
-        }
-        const missing = fields.filter(f => !f.optional && !filled.has(f.name)).map(f => f.name);
-        if (missing.length > 0) {
-          throw new Error(
-            `Type construction '${label}(...)' is missing required ` +
-            `field${missing.length === 1 ? '' : 's'} ${missing.map(m => `'${m}'`).join(', ')}`,
-          );
-        }
+      }
+      const missing = namedFields.filter(f => !f.optional && !namedKeys.includes(f.name)).map(f => f.name);
+      if (missing.length > 0) {
+        throw new Error(
+          `Type construction '${label}(...)' is missing required ` +
+          `field${missing.length === 1 ? '' : 's'} ${missing.map(m => `'${m}'`).join(', ')}`,
+        );
       }
       // Contextual inference: a callback field (`paramType` is a function sig)
       // filled by a lambda gets its untyped params typed from that signature.
@@ -1572,7 +1547,7 @@ function checkTypeFieldAccess(ast) {
   // cannot be invoked), 'silent' (`() -> .`, fire-and-forget, no reply),
   // 'callback' (any other `->` output, reply-awaiting), or null (no such field).
   function fieldDiscipline(decl, name) {
-    const f = decl.fields.find(ff => ff.name === name);
+    const f = decl.fields.find(ff => ff.named && ff.name === name);
     return f ? fieldDisciplineOf(f) : null;
   }
 
@@ -1700,7 +1675,7 @@ function checkSilentRefOrdering(ast) {
     return null;
   };
   const fieldDiscipline = (decl, name) => {
-    const f = decl.fields.find(ff => ff.name === name);
+    const f = decl.fields.find(ff => ff.named && ff.name === name);
     return f ? fieldDisciplineOf(f) : null;
   };
   // Classify an invocation node as 'silent' | 'callback' (barrier) | null.
@@ -1749,7 +1724,7 @@ function checkSilentRefOrdering(ast) {
 // destructuring a typed value is permissive selection (a subset of fields
 // may be pulled) but strict existence (referencing an undeclared field is an
 // error). Positional destructure may take at most N fields where N is the
-// declared field count.
+// count of positional fields; named destructure reaches named fields only.
 function checkTypeDestructure(ast) {
   const typesByName = typesByAddress(ast);
   if (typesByName.size === 0) return;
@@ -1766,19 +1741,20 @@ function checkTypeDestructure(ast) {
     const decl = typesByName.get(t);
     if (!decl) return;
     const tname = shown(t);
-    const fields = decl.fields || [];
+    const posCount = (decl.fields || []).filter(f => !f.named).length;
+    const named = (decl.fields || []).filter(f => f.named);
     for (const item of s.pattern) {
       if (item.discard || item.spread) continue;
       if (item.positional) {
-        if (item.idx >= fields.length) {
-          throw new Error(`Type '${tname}' has ${fields.length} field${fields.length === 1 ? '' : 's'}; positional destructure requested ${item.idx + 1}`);
+        if (item.idx >= posCount) {
+          throw new Error(`Type '${tname}' has ${posCount} positional field${posCount === 1 ? '' : 's'}; positional destructure requested ${item.idx + 1}`);
         }
       } else if (item.named) {
-        if (!fields.find(f => f.name === item.name)) {
+        if (!named.find(f => f.name === item.name)) {
           throw new Error(`Type '${tname}' has no field '${item.name}'`);
         }
       } else if (item.key !== undefined) {
-        if (!fields.find(f => f.name === item.key)) {
+        if (!named.find(f => f.name === item.key)) {
           throw new Error(`Type '${tname}' has no field '${item.key}'`);
         }
       }

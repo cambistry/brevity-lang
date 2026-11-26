@@ -29,7 +29,7 @@ The split is visible at the source level. Brevity has two kinds of constructor.
 A **type** constructs values:
 
 ```brevity
-type Point (x Integer, y Integer)
+type Point (Integer, Integer)
 
 p = Point(1, 2)
 ```

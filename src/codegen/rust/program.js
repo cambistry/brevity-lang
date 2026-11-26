@@ -904,9 +904,8 @@ ${bodyLines}
             let rewritten = target.to_string();
             return self.handle_op(&rewritten, message, payload, from, id);
         }
-        // Slice 12 inbound: reconstruct any type-tagged values
-        // from their wire payload (positional list or named map without
-        // __type) so handler bodies can read them as tagged structures.
+        // Inbound: reconstruct any type-tagged values from their wire list
+        // so handler bodies can read them as tagged structures.
         // We shadow payload with a locally-owned reconstructed copy so
         // both payload.get(...) and BvObject::pack downstream see it.
         let _payload_owned = payload.clone();
@@ -1842,7 +1841,14 @@ fn bv_as_try(v: &Value, d: &Value) -> Option<Value> {
     let fields = o.get("f")?.as_array()?;
     let mut src: Map<String, Value> = match v {
         Value::Object(m) => m.clone(),
-        Value::Array(a) => fields.iter().zip(a.iter()).map(|(f, x)| (f[0].as_str().unwrap_or("").to_string(), x.clone())).collect(),
+        Value::Array(a) => {
+            // A typed value's wire list: its positional values, then its named object.
+            let keys: Vec<&str> = fields.iter().map(|f| f[0].as_str().unwrap_or("")).collect();
+            let (vals, named) = bv_wire_split(a, bv_pos(&keys), keys.len());
+            let mut m = named.cloned().unwrap_or_default();
+            for (k, x) in keys.iter().zip(vals.iter()) { m.insert(k.to_string(), x.clone()); }
+            m
+        }
         _ => return None,
     };
     let mut out = Map::new();
@@ -2204,41 +2210,55 @@ fn bv_unwire_reply(re: &Value, ty: &Value) -> Value {
     }
 }
 
-fn bv_to_wire(v: &Value, fields: &[&str], all_required: bool) -> Value {
+// A typed value goes on the wire as a list (notes/positional-type-fields-
+// 2026-11-26.md): the positional values given (always a prefix), then the named
+// values given in one trailing object. A type with named fields reads a
+// trailing object as them. A positional field's key is its index among them
+// ("0", "1"), so the leading run of such keys counts the positional fields.
+fn bv_pos<S: AsRef<str>>(fields: &[S]) -> usize {
+    fields.iter().enumerate().take_while(|(i, f)| f.as_ref() == i.to_string()).count()
+}
+// A typed value's wire list, split: its positional values and its named object.
+// A type with named fields (more fields than pos) reads a trailing object as them.
+fn bv_wire_split(arr: &[Value], pos: usize, n_fields: usize) -> (&[Value], Option<&Map<String, Value>>) {
+    match arr.last() {
+        Some(Value::Object(m)) if n_fields > pos => (&arr[..arr.len() - 1], Some(m)),
+        _ => (arr, None),
+    }
+}
+
+fn bv_to_wire(v: &Value, fields: &[&str]) -> Value {
     let m = match v { Value::Object(m) => m, _ => return v.clone() };
     if !m.contains_key("__type") { return v.clone(); }
-    if all_required {
-        let arr: Vec<Value> = fields.iter()
-            .map(|f| m.get(*f).cloned().unwrap_or(Value::Null))
-            .collect();
-        return Value::Array(arr);
-    }
-    let mut out = Map::new();
-    for f in fields {
+    let pos = bv_pos(fields);
+    let mut named = Map::new();
+    for f in &fields[pos..] {
         if let Some(val) = m.get(*f) {
-            if !matches!(val, Value::Null) { out.insert(f.to_string(), val.clone()); }
+            if !val.is_null() { named.insert(f.to_string(), val.clone()); }
         }
     }
-    Value::Object(out)
+    let mut out: Vec<Value> = fields[..pos].iter()
+        .map_while(|f| m.get(*f).filter(|x| !x.is_null()).cloned())
+        .collect();
+    if !named.is_empty() { out.push(Value::Object(named)); }
+    Value::Array(out)
 }
 
 #[allow(dead_code)]
 fn bv_from_wire(tag: &str, payload: &Value, fields: &[&str]) -> Value {
     let name = match bv_type_name(tag) { Some(n) => n, None => return payload.clone() };
+    let arr = match payload { Value::Array(a) => a, _ => return payload.clone() };
+    let pos = bv_pos(fields);
+    let (vals, named) = bv_wire_split(arr, pos, fields.len());
     let mut out = Map::new();
     out.insert("__type".to_string(), Value::String(name.to_string()));
-    match payload {
-        Value::Array(arr) => {
-            for (i, f) in fields.iter().enumerate() {
-                if i < arr.len() { out.insert(f.to_string(), arr[i].clone()); }
-            }
+    for (f, v) in fields[..pos].iter().zip(vals.iter()) {
+        out.insert(f.to_string(), v.clone());
+    }
+    if let Some(m) = named {
+        for f in &fields[pos..] {
+            if let Some(v) = m.get(*f) { out.insert(f.to_string(), v.clone()); }
         }
-        Value::Object(m) => {
-            for f in fields {
-                if let Some(v) = m.get(*f) { out.insert(f.to_string(), v.clone()); }
-            }
-        }
-        _ => return payload.clone(),
     }
     Value::Object(out)
 }

@@ -73,7 +73,7 @@ describe('a name is bound by', () => {
   it('a constant of the actor', () => compiles('limit = 4\n@f = -> limit\n'));
   it('a function of the actor, declared below', () => compiles('@f = -> h()\nh = -> 1\n'));
   it('a class', () => compiles('C = *{ @ping = -> 1 }\n@f = {\n  c = C()\n  return c.ping()\n}\n'));
-  it('a type', () => compiles('type Point (x Integer, y Integer)\n@f = -> Point(1, 2)\n'));
+  it('a type', () => compiles('type Point (Integer, Integer)\n@f = -> Point(1, 2)\n'));
   it('a `use` later in the file', () => compiles('@f = -> Svc.n()\nuse Svc = "svc.bv" as { n () -> (Integer) }\n'));
   it('a dependency destructure', () => compiles('use :n = "svc.bv" as { n () -> (Integer) }\n@f = -> n()\n'));
   it('an enclosing actor\'s cell, from a nested class', () => compiles('total *Integer = 4\nW = *{ @get = { return total } }\n@f = -> 1\n'));

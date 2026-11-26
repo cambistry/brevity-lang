@@ -109,11 +109,11 @@ describe('a typed reply from a class in the same file', () => {
   it('re-encodes when returned onward', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'onward', from: 'c' } },
-      { output: { id: '1', re: [['x']], 'ty': [':Item'], to: 'c' } },
+      { output: { id: '1', re: [[{ name: 'x' }]], 'ty': [':Item'], to: 'c' } },
     );
   });
 
-  it('decodes a type with optional fields, which travels as a map', async () => {
+  it('decodes a type with an optional field', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'optional', from: 'c' } },
       { output: { id: '1', re: [3], 'ty': ['Integer'], to: 'c' } },
@@ -150,7 +150,7 @@ describe('a typed reply from a remote', () => {
       { input: { id: '1', re: ['#<Thing/1>'], 'ty': ['thing.bv'], from: 'thing.bv' } },
       { input: { id: '99', op: 'go', from: 'caller' } },
       { output: expect.objectContaining({ op: 'pop', to: 'Thing/1' }) },
-      { input: { id: '2', re: [['x']], 'ty': ['thing.bv:Item'] } },
+      { input: { id: '2', re: [[{ name: 'x' }]], 'ty': ['thing.bv:Item'] } },
       { output: expect.objectContaining({ id: '99', re: ['x'], to: 'caller' }) },
     );
   });

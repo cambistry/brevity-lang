@@ -467,18 +467,15 @@ function genRustExpr(expr, typeEnv, eCtx) {
     return `${obj}.positional.get(${expr.index}).cloned().unwrap_or(Value::Null)`;
   }
   if (expr.type === 'TypeConstruction') {
-    // Slice 3 of types-implementation-plan-2026-04-27 (Rust target):
-    // emit a JSON object carrying the type tag and per-field values keyed
-    // by the type's declared field names. Args follow FunctionCallExpr's
-    // calling convention: bare expressions for positional plus an optional
-    // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields whose
-    // value was not provided so absent optionals read as null.
+    // A JSON object carrying the type tag and per-field values keyed by field
+    // key. Positional args fill the positional fields in order; a trailing
+    // `NamedArgsBag` fills the named fields by name. Fields not provided are
+    // omitted, so absent optionals read as null.
     const decl = G.ctx.typeDecls?.get(expr.typeNameEnc);
     const fields = decl?.fields ?? [];
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
     const named = namedBag?.fields || {};
-    const seen = new Set();
     const inserts = [];
     inserts.push(`m.insert("__type".to_string(), Value::String(${JSON.stringify(decl?.key ?? typeText(expr.typeNameEnc, G.ctx.depAliases))}.to_string()));`);
     // A lambda stored in a type field is a callback reference that travels with
@@ -489,12 +486,11 @@ function genRustExpr(expr, typeEnv, eCtx) {
       const t = inferLiteralType(e) ?? inferType(e, typeEnv);
       return toJsonValue(raw, orAny(t));
     };
-    fields.slice(0, positional.length).forEach((f, i) => {
-      seen.add(f.name);
+    fields.filter(f => !f.named).slice(0, positional.length).forEach((f, i) => {
       inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${fieldValue(positional[i])});`);
     });
     for (const f of fields) {
-      if (seen.has(f.name)) continue;
+      if (!f.named) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
         inserts.push(`m.insert(${JSON.stringify(f.name)}.to_string(), ${fieldValue(named[f.name])});`);
       }

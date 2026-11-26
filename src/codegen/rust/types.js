@@ -484,17 +484,15 @@ export function rustSlotTag(t, valueExpr) {
   return valueExpr ? rustTyOf(t, valueExpr) : 'null';
 }
 
-// Wrap a Value expression with `bv_to_wire` when its type is a type decl
-// (positional list when all-required, named map when any optional); null
-// otherwise so the caller keeps the plain value.
+// Wrap a Value expression with `bv_to_wire` when its type is a type decl;
+// null otherwise so the caller keeps the plain value.
 export function rustTypeWireWrap(valueExpr, t) {
   const types = wireTypes(t, G.ctx.typeDecls);
   if (types.length === 0) return null;
   const wire = (v, name) => {
     const decl = G.ctx.typeDecls.get(name);
-    const fieldList = (decl.fields || []).map(f => `"${f.name}"`).join(', ');
-    const allRequired = (decl.fields || []).every(f => !f.optional);
-    return `bv_to_wire(&${v}, &[${fieldList}], ${allRequired})`;
+    const fieldList = (decl.fields || []).map(f => JSON.stringify(f.name)).join(', ');
+    return `bv_to_wire(&${v}, &[${fieldList}])`;
   };
   if (G.ctx.typeDecls.has(t)) return wire(valueExpr, t);
   // A union: the value's own `__type` says which type's fields to send.
@@ -518,6 +516,8 @@ function buildTypeEnv(params, body) {
       let srcType;
       if (src?.type === 'TypeConstruction') srcType = src.typeNameEnc;
       else if (src?.type === 'Identifier' && env.has(src.name)) srcType = env.get(src.name);
+      // A cell of the actor: its declared type.
+      else if ((src?.type === 'Identifier' || src?.type === 'RefRead') && G.ctx?.stateVarNames?.has(src.name)) srcType = G.ctx.stateVarDecls?.find(d => d.name === src.name)?.typeNameEnc;
       const srcDecl = G.ctx?.typeDecls && known(srcType) ? G.ctx.typeDecls.get(srcType) ?? null : null;
       for (const item of s.pattern) {
         if (item.discard) continue;

@@ -19,26 +19,46 @@ const asideLine = (loop) => `{io_reply, LRef_, LData_} -> bv_line_aside_(LRef_, 
 // The runtime every module shares: functions that don't call back into an actor's
 // module. Compiled once as brevity_rt; each generated module imports them.
 const RUNTIME = `
-%% ── Slice 12+13 wire format helpers ──────────────────────────────────────
-%% Outbound: strip __type from a tagged object and reshape to wire form.
-%% Inbound: reconstruct a tagged object from a positional list or named
-%% map given the type tag and declared fields.
-bv_to_wire(V, _Fields, _AllRequired) when not is_map(V) -> V;
-bv_to_wire(V, Fields, AllRequired) ->
+%% ── Wire format helpers ─────────────────────────────────────────────────────
+%% A typed value goes on the wire as a list (notes/positional-type-fields-
+%% 2026-11-26.md): the positional values given (always a prefix), then the
+%% named values given in one trailing map. A type with named fields reads a
+%% trailing map as them. A positional field's key is its index among them
+%% (<<"0">>, <<"1">>), so the leading run of such keys counts the positional
+%% fields.
+bv_pos_(Fields) -> bv_pos_(Fields, 0).
+bv_pos_([F | Fs], I) ->
+    case F =:= integer_to_binary(I) of
+        true -> bv_pos_(Fs, I + 1);
+        false -> I
+    end;
+bv_pos_([], I) -> I.
+bv_to_wire(V, _Fields) when not is_map(V) -> V;
+bv_to_wire(V, Fields) ->
     case maps:is_key(<<"__type">>, V) of
         false -> V;
         true ->
-            case AllRequired of
-                true -> [maps:get(F, V, null) || F <- Fields];
-                false ->
-                    lists:foldl(fun(F, Acc) ->
-                        case maps:get(F, V, undefined) of
-                            undefined -> Acc;
-                            null -> Acc;
-                            Val -> Acc#{F => Val}
-                        end
-                    end, #{}, Fields)
+            {PosFs, NamedFs} = lists:split(bv_pos_(Fields), Fields),
+            Named = lists:foldl(fun(F, Acc) ->
+                case maps:get(F, V, null) of
+                    null -> Acc;
+                    Val -> Acc#{F => Val}
+                end
+            end, #{}, NamedFs),
+            Present = [maps:get(F, V) || F <- lists:takewhile(fun(F) -> maps:get(F, V, null) =/= null end, PosFs)],
+            case map_size(Named) of
+                0 -> Present;
+                _ -> Present ++ [Named]
             end
+    end.
+%% A typed value's wire list, split: its positional values and its named map.
+%% A type with named fields (more fields than Pos) reads a trailing map as them.
+bv_wire_split_([], _Pos, _NFields) -> {[], #{}};
+bv_wire_split_(Payload, Pos, NFields) ->
+    Last = lists:last(Payload),
+    case NFields > Pos andalso is_map(Last) of
+        true -> {lists:droplast(Payload), Last};
+        false -> {Payload, #{}}
     end.
 
 %% ── Reference-field invocation: op selector for a held address ──────────────
@@ -210,7 +230,9 @@ bv_as_try(V, {l, E}) when is_list(V) ->
 bv_as_try(V, {t, Name, Fields}) when is_map(V) -> bv_as_fields(V, Name, Fields);
 bv_as_try(V, {t, Name, Fields}) when is_list(V) ->
     Keys = [K || {K, _, _} <- Fields],
-    bv_as_fields(maps:from_list(lists:zip(lists:sublist(Keys, length(V)), lists:sublist(V, length(Keys)))), Name, Fields);
+    {PosVals, Named} = bv_wire_split_(V, bv_pos_(Keys), length(Keys)),
+    N = min(bv_pos_(Keys), length(PosVals)),
+    bv_as_fields(maps:merge(Named, maps:from_list(lists:zip(lists:sublist(Keys, N), lists:sublist(PosVals, N)))), Name, Fields);
 bv_as_try(_, _) -> no.
 bv_as_first(_, []) -> no;
 bv_as_first(V, [M | Ms]) ->
@@ -1381,24 +1403,20 @@ bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_list(Payload) ->
     case (bv_mod_()):bv_type_name(Tag) of
         undefined -> Payload;
         Name ->
-            PLen = length(Payload),
-            FLen = length(Fields),
-            N = if PLen < FLen -> PLen; true -> FLen end,
-            Pairs = lists:zip(lists:sublist(Fields, N), lists:sublist(Payload, N)),
-            Base = #{<<"__type">> => Name},
-            lists:foldl(fun({F, V}, Acc) -> Acc#{F => V} end, Base, Pairs)
-    end;
-bv_from_wire(Tag, Payload, Fields) when is_binary(Tag), is_map(Payload) ->
-    case (bv_mod_()):bv_type_name(Tag) of
-        undefined -> Payload;
-        Name ->
-            Base = #{<<"__type">> => Name},
+            Pos = bv_pos_(Fields),
+            {PosFs, NamedFs} = lists:split(Pos, Fields),
+            {PosVals, Named} = bv_wire_split_(Payload, Pos, length(Fields)),
+            N = min(Pos, length(PosVals)),
+            Base = lists:foldl(fun
+                ({_F, null}, Acc) -> Acc;
+                ({F, V}, Acc) -> Acc#{F => V}
+            end, #{<<"__type">> => Name}, lists:zip(lists:sublist(PosFs, N), lists:sublist(PosVals, N))),
             lists:foldl(fun(F, Acc) ->
-                case maps:get(F, Payload, undefined) of
+                case maps:get(F, Named, undefined) of
                     undefined -> Acc;
                     V -> Acc#{F => V}
                 end
-            end, Base, Fields)
+            end, Base, NamedFs)
     end;
 bv_from_wire(_Tag, Payload, _Fields) -> Payload.
 bv_inst_call_(Pid, Op, Payload) when is_pid(Pid) ->

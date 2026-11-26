@@ -7,19 +7,19 @@ import { parseInterface } from '../../src/parser_interface.js';
 // Aliases are source-local; the wire tag stays canonical.
 
 const remoteIface = extract(`
-  type Point (x Integer, y Integer)
-  type Pair (a Integer, b Integer)
+  type Point (Integer, Integer)
+  type Pair (Integer, Integer)
   @get_origin = -> coords: Point(0, 0)
 `).interface.service;
 
 describe('type imports — interface parser captures `type Name (...)`', () => {
   it('parses a single typedecl into __typeDecls', () => {
-    const parsed = parseInterface('{ type Point (x Integer, y Integer) }');
+    const parsed = parseInterface('{ type Point (Integer, Integer) }');
     expect(parsed.__typeDecls).toEqual({
       Point: {
         fields: [
-          { type: 'TypeField', name: 'x', paramType: 'Integer' },
-          { type: 'TypeField', name: 'y', paramType: 'Integer' },
+          { type: 'TypeField', name: '0', paramType: 'Integer' },
+          { type: 'TypeField', name: '1', paramType: 'Integer' },
         ],
       },
     });
@@ -28,13 +28,13 @@ describe('type imports — interface parser captures `type Name (...)`', () => {
   it('parses optional/named field forms', () => {
     const parsed = parseInterface(`{
       type Game (
-        ? started Boolean,
+        ? Boolean,
         ? turn: Integer,
         ? players: List of Texts
       )
     }`);
     expect(parsed.__typeDecls.Game.fields).toEqual([
-      { type: 'TypeField', name: 'started', paramType: 'Boolean', optional: true },
+      { type: 'TypeField', name: '0', paramType: 'Boolean', optional: true },
       { type: 'TypeField', name: 'turn', paramType: 'Integer', optional: true, named: true },
       { type: 'TypeField', name: 'players', paramType: 'List of Texts', optional: true, named: true },
     ]);
@@ -47,7 +47,7 @@ describe('type imports — interface parser captures `type Name (...)`', () => {
 
   it('keeps method entries alongside typedecls', () => {
     const parsed = parseInterface(`{
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       get_origin () -> (coords: Point)
     }`);
     expect(Object.keys(parsed.__typeDecls)).toEqual(['Point']);
@@ -80,7 +80,7 @@ describe('type imports — destructured type binding', () => {
   it('rejects local type colliding with destructured type name', () => {
     const { ast } = extract(`
       use :Point = "geometry.bv"
-      type Point (x Integer, y Integer)
+      type Point (Integer, Integer)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
@@ -103,7 +103,7 @@ describe('type imports — destructured type binding', () => {
       @bad = -> p: Point(0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
-      .toThrow(/expects 2 arguments, got 1/);
+      .toThrow(/expects 2 positional arguments, got 1/);
   });
 
   it('a type the source does not export is a compile error, not an actor construction', () => {
@@ -120,7 +120,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('accepts Geom::Point in a field annotation when Geom exports Point', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
-      type User (profile Geom::Point)
+      type User (Geom::Point)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
@@ -129,7 +129,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('rejects Geom::NoSuch when NoSuch is not exported', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
-      type User (profile Geom::NoSuch)
+      type User (Geom::NoSuch)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
@@ -138,7 +138,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
 
   it('rejects Alias::Name when Alias is not a declared dependency', () => {
     const { ast } = extract(`
-      type User (profile NoSuch::Point)
+      type User (NoSuch::Point)
       @noop = -> ok: 1
     `);
     expect(() => compile(ast)).toThrow(/unknown dependency alias 'NoSuch'/);
@@ -160,6 +160,6 @@ describe('type imports — wire registry includes imported types', () => {
       @origin = -> p: P(0, 0)
     `);
     const code = compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
-    expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"geometry\.bv:Point":\s*\{\s*key:\s*"geometry\.bv:Point",\s*fields:\s*\["x",\s*"y"\]/);
+    expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"geometry\.bv:Point":\s*\{\s*key:\s*"geometry\.bv:Point",\s*fields:\s*\["0",\s*"1"\]/);
   });
 });

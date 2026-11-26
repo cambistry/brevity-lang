@@ -72,22 +72,13 @@ function section(doc, scope, node, sectionName, untracked = new Set()) {
   if (Object.keys(ops).length) node[sectionName] = { ...node[sectionName], ...ops };
 }
 
-// A declared type's fields, as an entry list. A positional field is read by its
-// name too (`p.x`), so the names of the positional ones, in order, are its
-// `%names`, in the object of its named entries.
+// A declared type's fields, as an entry list: positional entries, then named.
 function typesOf(typeDecls) {
   const out = {};
   for (const [name, { fields }] of Object.entries(typeDecls || {})) {
-    const list = [...entryList((fields || []).map(f => ({
+    out[`:${name}`] = [...entryList((fields || []).map(f => ({
       name: f.named ? f.name : null, enc: f.paramTypeEnc ?? 'Anything', optional: f.optional,
     })))];
-    const names = (fields || []).filter(f => !f.named).map(f => f.name);
-    if (names.length) {
-      const last = list[list.length - 1];
-      if (isEntryObject(last)) list[list.length - 1] = { ...last, '%names': names };
-      else list.push({ '%names': names });
-    }
-    out[`:${name}`] = list;
   }
   return out;
 }
@@ -315,18 +306,12 @@ function readSection(ops, node, doc) {
 
 function readTypes(types) {
   return Object.fromEntries(Object.entries(types || {}).map(([key, list]) => {
-    const last = list[list.length - 1];
-    const names = last && typeof last === 'object' && !Array.isArray(last) ? last['%names'] || [] : [];
-    let entries = list;
-    if (names.length) {
-      const named = Object.fromEntries(Object.entries(last).filter(([k]) => k !== '%names'));
-      entries = [...list.slice(0, -1), ...(Object.keys(named).length ? [named] : [])];
-    }
     let i = 0;
     // A silent-function field is named with its silent `.`, stored without it.
     const bare = (name, enc) => (name?.endsWith('.') && fnReply(enc) === 'silent' ? name.slice(0, -1) : name);
-    const fields = decodeEntries(entries).map(f => ({
-      type: 'TypeField', name: bare(f.positional ? names[i++] : f.name, f.typeEnc), paramTypeEnc: f.typeEnc,
+    // A positional field's key is its index among the positional fields.
+    const fields = decodeEntries(list).map(f => ({
+      type: 'TypeField', name: f.positional ? String(i++) : bare(f.name, f.typeEnc), paramTypeEnc: f.typeEnc,
       ...(f.optional && { optional: true }), ...(!f.positional && { named: true }),
     }));
     return [key.slice(1), { fields }];

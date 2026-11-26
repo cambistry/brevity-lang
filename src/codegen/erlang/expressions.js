@@ -399,18 +399,15 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
   }
 
   if (expr.type === 'TypeConstruction') {
-    // Slice 3 of types-implementation-plan-2026-04-27 (Erlang target):
-    // emit a tagged map carrying the type identity plus per-field values
-    // keyed by declared field names. Args follow FunctionCallExpr's
-    // calling convention: bare expressions for positional plus an optional
-    // trailing `NamedArgsBag` for `name: expr`. Slice 11: omit fields
-    // whose value was not provided so absent optionals read as null.
+    // A tagged map carrying the type identity plus per-field values keyed by
+    // field key. Positional args fill the positional fields in order; a
+    // trailing `NamedArgsBag` fills the named fields by name. Fields not
+    // provided are omitted, so absent optionals read as null.
     const decl = ctx.typeDecls?.get(expr.typeNameEnc);
     const fields = decl?.fields ?? [];
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
     const named = namedBag?.fields || {};
-    const seen = new Set();
     const fieldPairs = [];
     // A lambda stored in a type field is a callback reference that travels with
     // the value: lower it to a routable self-address (#<@N>), not a bare local
@@ -418,12 +415,11 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const fieldValue = (e) => (e?.type === 'Function'
       ? erlGenLambdaArgLabel(ctx, e, typeEnv, sCtx, { wire: true })
       : genExpr(ctx, e, typeEnv, sCtx));
-    fields.slice(0, positional.length).forEach((f, i) => {
-      seen.add(f.name);
+    fields.filter(f => !f.named).slice(0, positional.length).forEach((f, i) => {
       fieldPairs.push(`${erlString(f.name)} => ${fieldValue(positional[i])}`);
     });
     for (const f of fields) {
-      if (seen.has(f.name)) continue;
+      if (!f.named) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
         fieldPairs.push(`${erlString(f.name)} => ${fieldValue(named[f.name])}`);
       }

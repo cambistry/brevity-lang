@@ -66,7 +66,7 @@ describe('a document read from another service', () => {
       count: [{ re: ['Integer'], writes: false }],
       move: [{ args: [':Point', { by: [[':Point'], { '%t': 'List' }] }], re: [':T:*'], writes: false }],
     },
-    types: { ':Point': ['Integer', 'Integer', { '%names': ['x', 'y'] }] },
+    types: { ':Point': ['Integer', 'Integer'] },
     ':T': { public: { $new: [{ re: [':T:*'], writes: false }] }, ':*': {} },
   };
 
@@ -85,7 +85,7 @@ describe('a document read from another service', () => {
   it("reads the service's types at their addresses there", () => {
     const read = readDocument(doc, 'svc.bv');
     expect(read.origin[0].returns[0].typeEnc).toBe('svc.bv:Point');
-    expect(read.__typeDecls.Point.fields.map(f => f.name)).toEqual(['x', 'y']);
+    expect(read.__typeDecls.Point.fields.map(f => f.name)).toEqual(['0', '1']);
   });
 
   it("names a type as this file's own spelling of it does", () => {

@@ -741,7 +741,6 @@ export function genExpr(ctx, expr) {
     const positional = expr.args.filter(a => a?.type !== 'NamedArgsBag');
     const namedBag = expr.args.find(a => a?.type === 'NamedArgsBag');
     const named = namedBag?.fields || {};
-    const seen = new Set();
     const pairs = [];
     // A lambda stored in a type field is a callback reference that travels with
     // the value: lower it to a routable self-address (#<@N>), not a bare local
@@ -749,12 +748,11 @@ export function genExpr(ctx, expr) {
     const fieldValue = (v) => (v?.type === 'Function'
       ? genLambdaArgLabel(ctx, v, { wire: true })
       : genExpr(ctx, v));
-    fields.slice(0, positional.length).forEach((f, i) => {
-      seen.add(f.name);
+    fields.filter(f => !f.named).slice(0, positional.length).forEach((f, i) => {
       pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(positional[i])}`);
     });
     for (const f of fields) {
-      if (seen.has(f.name)) continue;
+      if (!f.named) continue;
       if (Object.prototype.hasOwnProperty.call(named, f.name)) {
         pairs.push(`${JSON.stringify(f.name)}: ${fieldValue(named[f.name])}`);
       }
@@ -1289,7 +1287,7 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
       if (item.key !== undefined)
         return `\n${indent}const ${ssaName} = ${src}.${item.key};`;
       if (item.positional)
-        return `\n${indent}const ${ssaName} = ${src}.${fields[item.idx].name};`;
+        return `\n${indent}const ${ssaName} = ${src}[${JSON.stringify(fields[item.idx].name)}];`;
       return '';
     }).join('');
   }

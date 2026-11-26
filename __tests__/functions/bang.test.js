@@ -332,10 +332,11 @@ describe('! functions — runtime', () => {
     @shadowsLate = { return first(2) as Integer }
 
     // a writing type field
-    type Act (arg Integer, run!: (value: Integer) => (out: Integer))
+    type Act (Integer, run!: (value: Integer) => (out: Integer))
 
     @go5! = (a: Act) {
-      out: Integer = a.run!(a.arg)
+      (arg) = a
+      out: Integer = a.run!(arg)
       return result: out
     }
   `;
@@ -681,7 +682,7 @@ describe('! functions — runtime', () => {
 
   it('a writing type field — is invoked at the address it holds', async () => {
     await expectBehavior(script,
-      { input: { id: '50', op: [[{ a: [200, '#<caller:cb>'] }], 'go5!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
+      { input: { id: '50', op: [[{ a: [200, { 'run!': '#<caller:cb>' }] }], 'go5!'], 'ty': [[{ a: ':Act' }]], from: 'caller' } },
       { output: expect.objectContaining({ id: '1', op: [[200], 'cb'], to: 'caller:cb' }) },
       { input: { id: '1', re: [{ out: 999 }], 'ty': [{ out: 'Integer' }] } },
       { output: expect.objectContaining({ id: '50', re: [{ result: 999 }], 'ty': [{ result: 'Integer' }], to: 'caller' }) },

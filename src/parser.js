@@ -5971,11 +5971,12 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   }
 
   // Parse one type field declaration:
-  //   `name Type`   — positional (no colon)
-  //   `name: Type`  — named (postfix colon)
-  //   `? name Type` — positional, optional
-  //   `? name: Type` — named, optional
-  // Slices 1, 7, 8, 11 of types-implementation-plan-2026-04-27.
+  //   `Type`         — positional
+  //   `name: Type`   — named
+  //   `? Type`, `? name: Type` — optional
+  // A positional field has no name: it is read by position, as an Object's
+  // positional entries are (notes/positional-type-fields-2026-11-26.md). Its
+  // runtime key is its index among the positional fields, which no name spells.
   // A field holding a silent function is named with the silent `.`
   // (`press.: () -> .`); the stored name drops it — a type can't hold both
   // `press` and `press.`, and the dot is restored wherever the type is shown.
@@ -6012,20 +6013,23 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return null;
   }
 
-  function parseTypeField() {
+  function parseTypeField(fields) {
     let optional = false;
     if (peek().type === 'QUESTION') {
       take();
       optional = true;
     }
-    const fieldName = expect('IDENT').value;
-    let named = false;
-    if (peek().type === 'COLON') {
-      take();
-      named = true;
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
+      const fieldName = take().value;
+      take(); // :
+      const paramType = parseType();
+      return AST.typeField(silentFieldName(fieldName, paramType), paramType, { optional, named: true });
     }
+    const line = peek().line;
+    if (fields.some(f => f.named)) throw new Error(`A positional field follows a named one: positional fields come first (line ${line})`);
+    if (!optional && fields.some(f => f.optional)) throw new Error(`A required positional field follows an optional one (line ${line})`);
     const paramType = parseType();
-    return AST.typeField(silentFieldName(fieldName, paramType), paramType, { optional, named });
+    return AST.typeField(String(fields.length), paramType, { optional });
   }
 
   // Parse `type Name (fields)` (delimited form, single- or multi-line) or
@@ -6047,7 +6051,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           continue;
         }
         last = pos;
-        fields.push(parseTypeField());
+        fields.push(parseTypeField(fields));
       }
       expect('RPAREN');
     } else {
@@ -6058,11 +6062,12 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       while (peek().type === 'NEWLINE') consume();
       let last = -1;
       while (peek().type !== 'EOF' && peek().type !== 'BLOCK_SEP' && !isTypeKw()) {
-        expectEntryEnd(last, () => peek().type !== 'IDENT', 'fields');
+        const startsField = () => ['IDENT', 'LPAREN', 'QUESTION'].includes(peek().type);
+        expectEntryEnd(last, () => !startsField(), 'fields');
         if (peek().type === 'COMMA' || peek().type === 'NEWLINE') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
-        if (peek().type !== 'IDENT') break;
+        if (!startsField()) break;
         last = pos;
-        fields.push(parseTypeField());
+        fields.push(parseTypeField(fields));
       }
     }
     return AST.typeDecl(name, fields);

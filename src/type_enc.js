@@ -28,7 +28,7 @@ export const isSelf = (t) => !!t && typeof t === 'object' && t[SELF_KEY] === tru
 export const addressesIn = (t, out = new Set()) => {
   if (typeof t === 'string') out.add(t);
   else if (Array.isArray(t)) t.forEach(x => addressesIn(x, out));
-  else if (t && typeof t === 'object') for (const [k, v] of Object.entries(t)) if (k !== '%names') addressesIn(v, out);
+  else if (t && typeof t === 'object') for (const [k, v] of Object.entries(t)) addressesIn(v, out);
   return out;
 };
 
@@ -158,7 +158,7 @@ export function translate(t, path) {
     if (v === null || typeof v !== 'object') return v;
     if (Array.isArray(v)) return v.map(walk);
     // A key is a name, never an address; `%t` names a generic by its address.
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === '%names' ? x : walk(x)]));
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
   };
   return intern(walk(t));
 }
