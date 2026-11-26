@@ -1,3 +1,5 @@
+kanban/tickets/investigate-a-public-class-declared-in-an-instance.md
+kanban/tickets/investigate-addressing-a-type-declared-in-an-instance.md
 kanban/tickets/type-field-access-should-use-rather-than-dot-since-it-is.md
 kanban/tickets/q-empty-subclass-u-as-opposed-to-u.md
 kanban/tickets/investigate-dot-chains-on-a-cell-derive-a-live-cell.md
