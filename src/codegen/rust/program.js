@@ -1863,13 +1863,13 @@ fn bv_addr_class(addr: &str) -> String {
         _ => format!(":{}", addr),
     }
 }
-// A tag from an actor we published, relative to it: a bare : is its class; any
-// other relative tag goes under its address. A type's tag names its authority
+// A tag from an actor we published, relative to it: :* is its class (self::class),
+// which we know, so we reduce it; any other relative tag goes under its address. A type's tag names its authority
 // from the file (:Point, :W:X), so it stays as it is. A global tag passes.
 #[allow(dead_code)]
 fn bv_local_tag(t: &Value, addr: &str) -> Value {
     match t {
-        Value::String(s) if s == ":" => json!(bv_addr_class(addr)),
+        Value::String(s) if s == ":*" => json!(bv_addr_class(addr)),
         Value::String(s) if s.starts_with(':') && bv_type_name(s).is_some() => t.clone(),
         Value::String(s) if bv_opre_is_relative(s) => json!(bv_opre_under(s, addr)),
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_local_tag(x, addr)).collect()),
@@ -1880,7 +1880,7 @@ fn bv_local_tag(t: &Value, addr: &str) -> Value {
 #[allow(dead_code)]
 fn bv_swap_self_tag(t: &Value, class: &str) -> Value {
     match t {
-        Value::String(s) if s == ":" => Value::String(class.to_string()),
+        Value::String(s) if s == ":*" => Value::String(class.to_string()),
         Value::Array(a) => Value::Array(a.iter().map(|x| bv_swap_self_tag(x, class)).collect()),
         Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), bv_swap_self_tag(x, class))).collect()),
         _ => t.clone(),

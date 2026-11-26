@@ -1030,12 +1030,12 @@ bv_wire_own_ty_(Re, Ty) when is_list(Re) ->
     end;
 bv_wire_own_ty_(_, Ty) -> Ty.
 %% A child's "me" (#<:>) as one slot of several: its parent swaps in what it knows
-%% the child as, at any depth. The matching ty slot holds a bare :, "my class".
+%% the child as, at any depth. The matching ty slot holds :*, "my class".
 bv_swap_self_(<<"#<:>">>, With) -> With;
 bv_swap_self_(L, With) when is_list(L) -> [bv_swap_self_(X, With) || X <- L];
 bv_swap_self_(M, With) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_self_(X, With) end, M);
 bv_swap_self_(V, _) -> V.
-bv_swap_tag_(<<":">>, Class) -> Class;
+bv_swap_tag_(<<":*">>, Class) -> Class;
 bv_swap_tag_(L, Class) when is_list(L) -> [bv_swap_tag_(X, Class) || X <- L];
 bv_swap_tag_(M, Class) when is_map(M) -> maps:map(fun(_, X) -> bv_swap_tag_(X, Class) end, M);
 bv_swap_tag_(T, _) -> T.
@@ -2068,11 +2068,11 @@ bv_next_line_() ->
                 ${serveClasses('bv_next_line_()')}
             end
     end.
-%% A tag from an actor we published, relative to it: a bare : is its class;
-%% any other relative tag goes under its address. A type's tag names its
-%% authority from the file actor (:Point, :W:X), so it stays as it is. A
-%% global tag passes.
-bv_local_tag_(<<":">>, Addr) -> bv_addr_class_(Addr);
+%% A tag from an actor we published, relative to it: :* is its class (self::class),
+%% which we know, so we reduce it; any other relative tag goes under its address.
+%% A type's tag names its authority from the file actor (:Point, :W:X), so it
+%% stays as it is. A global tag passes.
+bv_local_tag_(<<":*">>, Addr) -> bv_addr_class_(Addr);
 bv_local_tag_(<<":", _/binary>> = T, Addr) ->
     case (bv_mod_()):bv_type_name(T) of undefined -> bv_opre_under_(T, Addr); _ -> T end;
 bv_local_tag_(L, Addr) when is_list(L) -> [bv_local_tag_(X, Addr) || X <- L];

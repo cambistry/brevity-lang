@@ -48,9 +48,9 @@ export function expectedTag(t, actors) {
   return cls ? makerTag(t) : t;
 }
 
-// A `self` slot's tag: `:`, the actor's class, which its parent fills in; in the
-// file actor, which no `new` built and no parent translates, `*`.
-export const selfSlotTag = (actor) => (actor && actor.name ? ':' : '*');
+// A `self` slot's type: `:*`, the actor's class (`self::class`), which its host
+// reduces; in the file actor, which no `new` built and no parent translates, `*`.
+export const selfSlotTag = (actor) => (actor && actor.name ? ':*' : '*');
 
 // A constructor profile, `(…) -> *{ … }`: the type of an actor with a `new`.
 export const isCtorProfile = (t) => typeof t === 'string' && /^\(.*\)\s*->\s*\*\{/s.test(t);

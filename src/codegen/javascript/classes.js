@@ -1512,11 +1512,12 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
       if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, local(x)]));
       return v;
     };
-    // \`ty\` has no brackets. A bare \`:\` is the sender's own class, which we know.
-    // A type's tag names its authority from the file actor (\`:Point\`,
-    // \`:W:X\`), which is where the instance found it: it stays as it is.
+    // \`ty\` has no brackets. \`:*\` is the sender's class (\`self::class\`): to us it's
+    // \`<addr>:*\`, and we know that class, so we reduce it. A type's tag names its
+    // authority from the file actor (\`:Point\`, \`:W:X\`), which is where the
+    // instance found it: it stays as it is. Any other relative tag goes under it.
     const localTy = (v) => {
-      if (v === ':') return tag;
+      if (v === ':*') return tag;
       if (typeof v === 'string') return _bv_type_name(v) ? v : _opre_under(v, addr);
       if (Array.isArray(v)) return v.map(localTy);
       if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localTy(x)]));
@@ -1780,10 +1781,10 @@ ${ifChain}
     } else if (re !== undefined) {
       // A reply is a return Object, and its wire form is a list: an address is
       // its one value (\`re: ['#<…>']\`), named values its last (\`re: [{ … }]\`).
-      // A self-return is tagged with our class (\`:\`, which our parent fills
-      // in), or \`*\` when no \`new\` built us.
+      // A self-return is typed with our class, \`:*\` (\`self::class\`, which our host
+      // reduces), or \`*\` when no \`new\` built us.
       if (!Array.isArray(re)) {
-        if (_ty_re === undefined && re === '#<:>') _ty_re = ${JSON.stringify(declaredActor(actor) ? '*' : ':')};
+        if (_ty_re === undefined && re === '#<:>') _ty_re = ${JSON.stringify(declaredActor(actor) ? '*' : ':*')};
         re = [re];
         if (_ty_re !== undefined && !Array.isArray(_ty_re)) _ty_re = [_ty_re];
       }
