@@ -126,7 +126,6 @@ kanban/tickets/change-self-as-to-get-as-eh-maybe.md
 kanban/tickets/union-base-class-cells.md
 kanban/tickets/bang-functions.md
 kanban/tickets/release-expired-dom-rep-actors-reference-counting-gc.md
-kanban/tickets/expectbehavior-and-expectactorbehavior-should-return.md
 kanban/tickets/represent-negated-self-as-clauses-in-service-document.md
 kanban/tickets/predicates.md
 kanban/tickets/clone.md
