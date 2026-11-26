@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-25
 ---
-# Return types in the function header
+# REVISIT: Return types in the function header
 
 Design: `notes/return-types-in-the-header-2026-11-25.md`. Supersedes the `!` body rules in `notes/mutation-suffix-2026-10-31.md`.
 
@@ -10,7 +10,7 @@ Want:
 
 ```brevity
 @create! = (title Text, status Text) : Text { …; slug }
-@point! = (at Integer) { row <- clamp(at, 0, last) }       -- returns self
+@point! = (at Integer) : self { row <- clamp(at, 0, last) } // explicit self
 carryTo! = (i Integer) { if (board.at(i) == null) { return }; … }
 ```
 

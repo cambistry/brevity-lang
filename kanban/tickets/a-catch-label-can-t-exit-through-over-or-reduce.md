@@ -1,5 +1,5 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-25
 ---
 # Fix: a `catch` label should exit through `over` and `reduce`

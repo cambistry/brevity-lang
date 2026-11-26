@@ -1,5 +1,5 @@
 ---
-status: inbox
+status: queued
 created: 2026-11-25
 ---
 # Parens around `if` conditions: when required

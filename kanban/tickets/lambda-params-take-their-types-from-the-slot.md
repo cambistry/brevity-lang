@@ -1,5 +1,5 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-25
 ---
 # Lambda params should take their types from the slot

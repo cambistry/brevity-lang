@@ -15,3 +15,7 @@ Open: which operations the API exposes, how the agent reaches it (a CLI client, 
 Today: sync is git: each drop commits `lists/` on the `kanban` branch and pushes, and an open board fetches and rebases every 15 s (`kanban/README.md`).
 
 Want (possibly): workstations' boards are actors that reach each other over Bluster, the authenticated wire (`notes/stack-and-origin-2026-11-24.md`), so a move made through the API reaches other boards as a message rather than a git round trip.
+
+Today: Binder, the sync application on Bluster, could almost carry ticket sync between workstations already.
+
+Want: Binder rewritten in Brevity, and ticket sync built on that version. That makes this ticket depend on two ports: the board's and Binder's.

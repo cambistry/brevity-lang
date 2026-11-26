@@ -1,5 +1,5 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-26
 ---
 # Publish an actor of a class nested deeper in an instance

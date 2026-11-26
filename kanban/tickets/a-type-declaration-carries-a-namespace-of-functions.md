@@ -1,5 +1,5 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-25
 ---
 # A type declaration should carry a namespace of functions
