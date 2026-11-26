@@ -27,6 +27,7 @@ kanban/tickets/an-unannotated-bind-infers-only-literals-and-own-calls.md
 kanban/tickets/over-and-reduce-accept-an-integer-as-the-list.md
 kanban/tickets/parse-errors-carry-no-position.md
 kanban/tickets/invoke-add-trace-when-a-function-or-constructor-returns-a.md
+kanban/tickets/pass-event-to-html-handler-and-read-properties-e-g.md
 kanban/tickets/allow-calls-to-stoppropagation-and-preventdefault-checking.md
 kanban/tickets/browser-load-html-template-from-file.md
 kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
