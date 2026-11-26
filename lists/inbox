@@ -25,7 +25,6 @@ kanban/tickets/parse-errors-carry-no-position.md
 kanban/tickets/browser-load-html-template-from-file.md
 kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
 kanban/tickets/nested-reactivity.md
-kanban/tickets/investigate-subscribability-as-a-function-property.md
 kanban/tickets/investigate-element-extension-names-on-the-element.md
 kanban/tickets/a-constructor-profile-or-interface-as-a-param-s-type.md
 kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
