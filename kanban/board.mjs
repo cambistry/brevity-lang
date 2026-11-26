@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Terminal kanban board over kanban/tickets.
-// Status lives in each ticket's front-matter (main branch). Order lives in
-// lists/<status> on the kanban branch, checked out as a worktree at .kanban/,
-// one repo-relative ticket path per line.
+// Status and order live in lists/<status> on the kanban branch, checked out
+// as a worktree at .kanban/, one repo-relative ticket path per line.
+// Open tickets are in kanban/tickets/, done and won't-do ones in
+// kanban/finished/; a drop moves the file to its column's folder.
 // Each finished move commits and pushes lists/; while open, the board polls
 // origin and rebases onto other stations' moves.
 import fs from 'node:fs';
@@ -13,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TICKETS = path.join(HERE, 'tickets');
+const FINISHED = path.join(HERE, 'finished');
+const FINISHED_COLUMNS = new Set(['done', 'wont-do']);
 const REPO = path.resolve(HERE, '..');
 const WORKTREE = path.join(REPO, '.kanban');
 const ORDER_DIR = path.join(WORKTREE, 'lists');
@@ -48,7 +51,11 @@ function loadColumns() {
   return columns;
 }
 
-function parseTicket(slug, text) {
+function folderOf(status) {
+  return FINISHED_COLUMNS.has(status) ? FINISHED : TICKETS;
+}
+
+function parseTicket(slug, text, dir) {
   const fields = {};
   let body = text;
   const fm = text.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -62,40 +69,52 @@ function parseTicket(slug, text) {
   const heading = body.match(/^#\s+(.+)$/m);
   return {
     slug,
-    file: path.join(TICKETS, `${slug}.md`),
+    file: path.join(dir, `${slug}.md`),
     title: heading ? heading[1].trim() : slug,
-    status: fields.status || 'inbox',
-    fmStatus: fields.status || 'inbox',
+    status: dir === FINISHED ? 'done' : 'inbox',
     created: fields.created || '',
   };
 }
 
 function loadTickets() {
   const tickets = new Map();
-  if (!fs.existsSync(TICKETS)) return tickets;
-  for (const name of fs.readdirSync(TICKETS)) {
-    if (!name.endsWith('.md')) continue;
-    const slug = name.slice(0, -3);
-    tickets.set(slug, parseTicket(slug, fs.readFileSync(path.join(TICKETS, name), 'utf8')));
+  for (const dir of [TICKETS, FINISHED]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.endsWith('.md')) continue;
+      const slug = name.slice(0, -3);
+      if (tickets.has(slug)) throw new Error(`board: ${slug}.md is in both tickets/ and finished/`);
+      tickets.set(slug, parseTicket(slug, fs.readFileSync(path.join(dir, name), 'utf8'), dir));
+    }
   }
   return tickets;
 }
 
-function ticketPath(slug) {
-  return path.relative(REPO, path.join(TICKETS, `${slug}.md`));
+function ticketPath(slug, status) {
+  return path.relative(REPO, path.join(folderOf(status), `${slug}.md`));
 }
 
+// A list line names a ticket in either folder, so a list written after a
+// move still finds a file the local checkout has yet to move.
 function slugOfPath(line) {
   const abs = path.resolve(REPO, line);
-  return path.dirname(abs) === TICKETS && abs.endsWith('.md') ? path.basename(abs, '.md') : null;
+  const dir = path.dirname(abs);
+  return (dir === TICKETS || dir === FINISHED) && abs.endsWith('.md') ? path.basename(abs, '.md') : null;
+}
+
+// Moves the ticket's file to the folder its column keeps.
+function fileTicket(ticket, status) {
+  const file = path.join(folderOf(status), `${ticket.slug}.md`);
+  if (file === ticket.file) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.renameSync(ticket.file, file);
+  ticket.file = file;
 }
 
 // One list per status. The list holding a ticket decides its column and
-// position, so a move shows everywhere once kanban syncs, before main's
-// front-matter catches up. A ticket in several lists stays in the one its
-// front-matter names, else the first. Tickets in no list go by front-matter,
-// at the top, newest first. Sets each ticket's `status` to its column, and
-// returns the lists with the unlisted slugs.
+// position. A ticket in several lists stays in the first. Tickets in no list
+// go to the top of done if in finished/, else of inbox, newest first. Sets each ticket's `status` to its
+// column, and returns the lists with the unlisted slugs.
 function loadLists(tickets) {
   const lists = new Map();
   const files = fs.existsSync(ORDER_DIR) ? fs.readdirSync(ORDER_DIR).filter(f => !f.startsWith('.')).sort() : [];
@@ -104,7 +123,7 @@ function loadLists(tickets) {
     const slugs = [...new Set(fs.readFileSync(path.join(ORDER_DIR, status), 'utf8').split('\n')
       .map(l => l.trim()).filter(Boolean).map(slugOfPath).filter(s => s && tickets.has(s)))];
     lists.set(status, slugs);
-    for (const s of slugs) if (!homes.has(s) || status === tickets.get(s).fmStatus) homes.set(s, status);
+    for (const s of slugs) if (!homes.has(s)) homes.set(s, status);
   }
   for (const [status, list] of lists) lists.set(status, list.filter(s => homes.get(s) === status));
   for (const [s, status] of homes) tickets.get(s).status = status;
@@ -115,17 +134,6 @@ function loadLists(tickets) {
     lists.get(t.status).unshift(t.slug);
   }
   return { lists, unlisted: unlisted.map(t => t.slug) };
-}
-
-function writeStatus(ticket, status) {
-  const text = fs.readFileSync(ticket.file, 'utf8');
-  let out;
-  const fm = text.match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!fm) out = `---\nstatus: ${status}\n---\n${text}`;
-  else if (/^status:.*$/m.test(fm[1])) out = `---\n${fm[1].replace(/^status:.*$/m, `status: ${status}`)}\n---\n${text.slice(fm[0].length)}`;
-  else out = `---\nstatus: ${status}\n${fm[1]}\n---\n${text.slice(fm[0].length)}`;
-  fs.writeFileSync(ticket.file, out);
-  ticket.fmStatus = status;
 }
 
 function slugify(title) {
@@ -221,7 +229,7 @@ function writeOrder() {
   for (const [status, list] of S.lists) {
     const file = path.join(ORDER_DIR, status);
     if (!list.length && !fs.existsSync(file)) continue;
-    fs.writeFileSync(file, list.map(s => `${ticketPath(s)}\n`).join(''));
+    fs.writeFileSync(file, list.map(s => `${ticketPath(s, status)}\n`).join(''));
   }
 }
 
@@ -286,7 +294,7 @@ function grabOrDrop() {
   const t = S.tickets.get(S.grab.slug);
   const col = t.status;
   const row = members(col).indexOf(t.slug);
-  if (col !== S.grab.status) writeStatus(t, col);
+  fileTicket(t, col);
   S.grab = null;
   if (S.stale) {
     // Lists changed on disk during the move: reload them, then re-apply only this move.
@@ -326,9 +334,10 @@ function newTicket(title) {
   const status = c && knownSlugs().has(c.slug) ? c.slug : 'inbox';
   const base = slugify(title);
   let slug = base;
-  for (let n = 2; S.tickets.has(slug) || fs.existsSync(path.join(TICKETS, `${slug}.md`)); n++) slug = `${base}-${n}`;
-  fs.mkdirSync(TICKETS, { recursive: true });
-  fs.writeFileSync(path.join(TICKETS, `${slug}.md`), `---\nstatus: ${status}\ncreated: ${today()}\n---\n# ${title}\n`);
+  const taken = s => S.tickets.has(s) || [TICKETS, FINISHED].some(d => fs.existsSync(path.join(d, `${s}.md`)));
+  for (let n = 2; taken(slug); n++) slug = `${base}-${n}`;
+  fs.mkdirSync(folderOf(status), { recursive: true });
+  fs.writeFileSync(path.join(folderOf(status), `${slug}.md`), `---\ncreated: ${today()}\n---\n# ${title}\n`);
   S.tickets = loadTickets();
   place(slug, status, 0);
   writeOrder();
@@ -397,7 +406,7 @@ function renderPeek(W, H) {
   S.peek.top = clamp(S.peek.top, 0, Math.max(0, lines.length - bodyH));
   const out = [
     `${ESC}1m${fit(` ${t.title}`, W)}${ESC}0m`,
-    `${ESC}2m${fit(` ${columnName(t.status)}${t.fmStatus !== t.status ? `  (front-matter says ${columnName(t.fmStatus)})` : ''}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
+    `${ESC}2m${fit(` ${columnName(t.status)}${path.dirname(t.file) !== folderOf(t.status) ? `  (file in ${path.basename(path.dirname(t.file))}/)` : ''}${t.created ? `  ·  ${t.created}` : ''}  ·  ${t.slug}.md`, W)}${ESC}0m`,
     '─'.repeat(W),
   ];
   for (let y = 0; y < bodyH; y++) out.push(fit(` ${lines[S.peek.top + y] ?? ''}`, W));
@@ -717,11 +726,13 @@ function refreshTickets() {
 
 let watchTimer = null;
 function watchTickets() {
-  fs.mkdirSync(TICKETS, { recursive: true });
-  fs.watch(TICKETS, () => {
-    clearTimeout(watchTimer);
-    watchTimer = setTimeout(refreshTickets, 150);
-  });
+  for (const dir of [TICKETS, FINISHED]) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.watch(dir, () => {
+      clearTimeout(watchTimer);
+      watchTimer = setTimeout(refreshTickets, 150);
+    });
+  }
 }
 
 function poll() {

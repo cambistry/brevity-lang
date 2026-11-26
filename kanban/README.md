@@ -1,10 +1,9 @@
 # Kanban
 
-Tickets are `kanban/tickets/<slug>.md`, tracked on `main` with the work:
+Tickets are `<slug>.md` files tracked on `main` with the work: open ones in `kanban/tickets/`, done and won't-do ones in `kanban/finished/`.
 
 ```
 ---
-status: inbox
 created: 2026-11-24
 ---
 # Title
@@ -36,13 +35,13 @@ Problem: both compile, with no form behind them:
 Expected: a non-list fails where it's met.
 ```
 
-`status` is the column. A status change goes in the same commit as the work it reflects.
+A ticket's column lives only on the `kanban` branch (see Board). On `main`, the one status change is a ticket's move to `finished/`, which goes in the commit that accepts or rejects it.
 
 Columns: `investigation`, `inbox`, `todo`, `queued` (the work queue, in order), `in-progress`, `review`, `done`, `future`, `wont-do`, `icebox`.
 
 ## Board
 
-Order within each column lives on the `kanban` branch, checked out as a gitignored worktree at `.kanban/`. It holds only `lists/<status>`, one repo-relative ticket path per line. The app (`kanban/board.mjs`) and its `columns` file are on `main`. That branch shares no history with `main`, so reordering never appears in `main`'s log.
+Columns and the order within them live on the `kanban` branch, checked out as a gitignored worktree at `.kanban/`. It holds only `lists/<status>`, one repo-relative ticket path per line. The app (`kanban/board.mjs`) and its `columns` file are on `main`. That branch shares no history with `main`, so reordering never appears in `main`'s log.
 
 Setup, once per machine:
 
@@ -62,6 +61,6 @@ Run `npm run board`.
 - Space grabs a card; arrows carry it within or across columns; space drops it, Esc cancels.
 - `e` edits the ticket body (front-matter stays out of the editor) in `$VISUAL`/`$EDITOR`, `n` creates a ticket at the top of the current column, `r` reloads, `q` quits.
 
-Each drop commits `lists/` on `kanban` and pushes it. While open, the board fetches every 15 s (`KANBAN_POLL` seconds) and rebases onto other machines' moves. The lists decide the columns: a move shows on other machines as soon as `kanban` syncs. It also edits the ticket's `status` on `main`, which stays uncommitted until the work is committed; the quick-view flags a ticket whose front-matter lags its column. The board watches `kanban/tickets/`: a ticket added on disk (or present at startup) that no list holds goes by its front-matter, at the top, and is recorded there in `lists/`.
+Each drop commits `lists/` on `kanban` and pushes it. While open, the board fetches every 15 s (`KANBAN_POLL` seconds) and rebases onto other machines' moves. The lists decide the columns: a move shows on other machines as soon as `kanban` syncs. A drop into Done or Won't Do moves the file to `kanban/finished/`, and a drop out of them moves it back; the move stays uncommitted on `main` until it's committed. A list line finds its ticket in either folder, so a move from another machine shows before `main` catches up; the quick-view flags a ticket whose file is in the other folder. The board watches both folders: a ticket added on disk (or present at startup) that no list holds goes to the top of Done if it's in `finished/`, else of Inbox, and is recorded there in `lists/`.
 
 `npm run board -- --print [status…]` prints the board as text.
