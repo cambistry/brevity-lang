@@ -1,12 +1,16 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-26
 ---
 # Retire constructor return-as: findings
 
 From investigate-retire-constructor-return-as, against notes/constructor-return-as-retired-2026-11-23.md.
 
-## To decide first
+## Decided (2026-11-26)
+
+`notes/constructor-tail-and-ingest-retired-2026-11-26.md`: the bare tail value, the file opener and `ingest` all go, and losing memoization is accepted. The TextDiv failures don't block this work; they are filed as `fix-binding-an-element-projection-gives-a-self-contradicting-error` and `fix-reactive-interpolation-in-a-self-as-element-clause`.
+
+## The questions as found
 
 - **Three source forms set `declarationReturn`, not one.** The note covers `return expr` /
   `-> expr` at a constructor tail. There's also the **bare tail value**: a literal, `( … )`,
