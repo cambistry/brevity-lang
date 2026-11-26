@@ -122,7 +122,6 @@ kanban/tickets/abstract-class-e-g-html-element.md
 kanban/tickets/optional-field-prefer-no-space-after-slot-opening.md
 kanban/tickets/field-actor-nesting.md
 kanban/tickets/fix-blob-slice-in-rust-erlang.md
-kanban/tickets/change-self-as-to-get-as-eh-maybe.md
 kanban/tickets/release-expired-dom-rep-actors-reference-counting-gc.md
 kanban/tickets/represent-negated-self-as-clauses-in-service-document.md
 kanban/tickets/predicates.md
