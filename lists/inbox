@@ -27,7 +27,6 @@ kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
 kanban/tickets/nested-reactivity.md
 kanban/tickets/a-constructor-profile-or-interface-as-a-param-s-type.md
 kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
-kanban/tickets/investigate-construction-time-reads-of-a-subclass-cell.md
 kanban/tickets/eliminate-need-for-the-noop-hack.md
 kanban/tickets/protected-classes-as-values-decide-what-leaves-the-actor.md
 kanban/tickets/js-a-send-inside-a-compound-expression-isn-t-awaited.md
