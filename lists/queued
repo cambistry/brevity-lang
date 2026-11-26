@@ -3,3 +3,4 @@ kanban/tickets/investigate-retire-constructor-return-as.md
 kanban/tickets/gaps-in-super-implementation.md
 kanban/tickets/class-ancestry.md
 kanban/tickets/boolean-operators-and-unary-minus.md
+kanban/tickets/a-positional-destructure-with-too-many-names-binds-null.md
