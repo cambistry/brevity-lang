@@ -1002,8 +1002,11 @@ ${m[2]}
         {
             let (_, _, _, forwards, _, _, _) = bv_block_info(${JSON.stringify(name)});
             let inside = !bv_from_wire_caller(from) || self.bv_is_extender(from);
-            if let Some(t) = op.strip_prefix("$get ") { if inside && forwards.contains(&t) { return json!([self.bv_base_read(t)]); } }
-            if let Some(t) = op.strip_prefix("$set ") { if inside && forwards.contains(&t) { let v = payload.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null); self.bv_base_set(t, v); return Value::Null; } }
+            // A cell we inherit is our base's one cell: from anyone for a public one.
+            let reaches = |t: &str| inside || !(t.starts_with('~') || t.starts_with('#'));
+            if let Some(t) = op.strip_prefix("$get ") { if reaches(t) && forwards.contains(&t) { if bv_from_wire_caller(from) { if let Some(ty) = bv_forward_ty(${JSON.stringify(name)}, t) { self.wire_tag = Some(ty); } } return json!([self.bv_base_read(t)]); } }
+            if let Some(t) = op.strip_prefix("$set ") { if reaches(t) && forwards.contains(&t) { let v = payload.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null); self.bv_base_set(t, v); return Value::Null; } }
+            if let Some(t) = op.strip_prefix("$sub ") { if reaches(t) && forwards.contains(&t) { if bv_from_wire_caller(from) { if let Some(ty) = bv_forward_ty(${JSON.stringify(name)}, t) { self.wire_tag = Some(ty); } } return self.bv_base_sub(t, payload, id, from); } }
         }` : ''}
         // \`$get\` to one of our names (bv_get_key): a public cell answers anyone,
         // through its own reader; any other name only from inside or a class

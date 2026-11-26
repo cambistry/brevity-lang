@@ -369,11 +369,14 @@ function blockExtension(ctx, actor) {
     return false;
   }
 
-  // A message on to another actor, its reply relayed back as it comes.
-  #_relay(message, send, fields, route, replyTo) {
+  // A message on to another actor, its reply relayed back as it comes; each of
+  // them, for a subscription (\`keep\`).
+  #_relay(message, send, fields, route, replyTo, keep = false) {
     const id = String(++this.#nextId);
     // The reply is ours to send: its \`from\` is the actor we passed it to.
-    this.#_relays.set(id, (reply) => { const { _route, _replyTo, from: _from, ...r } = reply; route({ ...r, id: message.id, to: replyTo }); });
+    const relay = (reply) => { const { _route, _replyTo, from: _from, ...r } = reply; route({ ...r, id: message.id, to: replyTo }); };
+    relay.keep = keep;
+    this.#_relays.set(id, relay);
     const { _route, _replyTo, _ctx, ...rest } = message;
     queueMicrotask(() => send({ ...rest, ...fields, id, _route: (m) => this.receive(m) }));
   }
@@ -393,7 +396,8 @@ function blockExtension(ctx, actor) {
       return null;
     }
     // What the message names: a cell's for a cell op, else its op.
-    const name = (opName === '$get' || opName === '$set') ? target : opName;
+    const cellOp = opName === '$get' || opName === '$set' || opName === '$sub' || opName === '$update';
+    const name = cellOp ? target : opName;
     const isCall = !opName.startsWith('$');
     if (message.as !== undefined) {
       const as = message.as;
@@ -413,12 +417,14 @@ function blockExtension(ctx, actor) {
       ${hasBase ? `if (isCall && !${J(ownFns)}.includes(name)) { this.#_relay(message, (m) => ${baseFor(`${J(owners)}[name]`)}.receive(m), { to: undefined, from: ${SELF}, as }, route, replyTo); return null; }` : ''}
       return { ...message, from: '__inner', _replyTo: replyTo, as: undefined, _ctx: rec };
     }
-    if ((opName === '$get' || opName === '$set') && typeof target === 'string') {
+    if (cellOp && typeof target === 'string') {
       const inside = ['__self', '__test', '__parent', '__child', '__inner'].includes(message.from);
       // A recorded extender, or the instance that built us as its layer.
       const extender = !inside && (this.#_isExtender(message.from)${!isBlock ? ' || (this.#_layerCtx !== null && message.from === this.#_layerCtx.from)' : ''});
-      if (${J(forwards)}.includes(target) && (inside || extender)) {
-        ${hasBase ? `this.#_relay(message, (m) => ${baseFor('null')}.receive(m), { to: ':' + target, from: ${SELF} }, route, replyTo);
+      // A cell we inherit is our base's one cell: an op on it goes there, from
+      // anyone for a public one, and its answer comes from us.
+      if (${J(forwards)}.includes(target) && (inside || extender || !/^[~#]/.test(target))) {
+        ${hasBase ? `this.#_relay(message, (m) => ${baseFor('null')}.receive(m), { to: ':' + target, from: ${SELF} }, route, replyTo, opName === '$sub');
         return null;` : 'return message;'}
       }
       if (extender && target.startsWith('~')) return { ...message, from: '__inner', _replyTo: replyTo };
@@ -1699,7 +1705,7 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
     }
     // A reply nobody is waiting for, such as one to a silent call, has nothing to run.
     ${ext ? `// A reply to a message we passed on goes back where that one came from.
-    if (!('op' in message) && this.#_relays.has(message.id)) { const relay = this.#_relays.get(message.id); this.#_relays.delete(message.id); relay(message); return; }
+    if (!('op' in message) && this.#_relays.has(message.id)) { const relay = this.#_relays.get(message.id); if (!relay.keep) this.#_relays.delete(message.id); relay(message); return; }
     ` : ''}if (!('op' in message) && ('re' in message || 'ex' in message)) return;${ext ? `
     message = this.#_admit(message);
     if (!message) return;` : ''}

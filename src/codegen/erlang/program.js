@@ -6,7 +6,7 @@ import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { publicLabel, replyTy } from '../../singleton_classes.js';
-import { paramTag, typeText, classNameOf, hasGeneric, hasType, dependencyAliases, envTypeOf, orAny } from '../enc_names.js';
+import { paramTag, typeTag, typeText, classNameOf, hasGeneric, hasType, dependencyAliases, envTypeOf, orAny } from '../enc_names.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
 import { isOwnCallStatement } from '../../ast.js';
 import { resolveSuperclassChain, withInheritedState } from '../../subclass.js';
@@ -487,7 +487,11 @@ function genBlockInfo(actors, ctx = {}) {
   remotes.push('bv_block_remote_(_) -> {<<>>, []}');
   const wireIns = extensible.filter(a => (ctx.actorInfo?.has(a.name))).map(a => `bv_wire_in_(${erlString(a.name.toLowerCase())}, F_, O_, M_, P_, I_) -> bv_wire_in_${a.name.toLowerCase()}(F_, O_, M_, P_, I_)`);
   wireIns.push('bv_wire_in_(_, _, _, _, _, _) -> ok');
-  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${owners.join(';\n')}.\n\n${wireIns.join(';\n')}.`;
+  // The type of a cell a block inherits, for the answer it gives for it.
+  const fwdTys = extensible.flatMap(a => (a.forwardCells || []).filter(c => c.typeNameEnc !== undefined)
+    .map(c => `bv_forward_ty_(${erlString(a.name.toLowerCase())}, ${erlString(wireLabel(c.name))}) -> ${erlString(typeTag(ctx, c.typeNameEnc))}`));
+  fwdTys.push('bv_forward_ty_(_, _) -> null');
+  return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${owners.join(';\n')}.\n\n${wireIns.join(';\n')}.\n\n${fwdTys.join(';\n')}.`;
 }
 
 function genReadTable(actors) {

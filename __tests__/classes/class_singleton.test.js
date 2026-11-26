@@ -501,3 +501,32 @@ describe('class blocks inherit by delegation', () => {
     );
   });
 });
+
+// A public cell a class block inherits answers through the extending class, from
+// outside: `$get`, `$set` and `$sub` go to the parent block's one cell, and the
+// answer comes from the extending class.
+describe('class blocks inherit by delegation — from outside', () => {
+  const script = `
+    @P = *{ @a = -> 1 } ^ {
+      @count *Integer = 3
+    }
+    @Q = @P ^ *{ @b = -> 2 } ^ { }
+  `;
+
+  it('reads, writes and subscribes to the parent block\'s cell through the child', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: '$get', to: ':Q:count', from: 'c' } },
+      { output: { id: '1', re: [3], ty: ['Integer'], to: 'c', from: ':Q' } },
+      { input: { id: '2', op: '$sub', to: ':Q:count', from: 'c' } },
+      { output: { id: '2', re: [3], ty: ['Integer'], to: 'c', from: ':Q' } },
+      { input: { id: '3', op: [[5], '$set'], ty: [['Integer']], to: ':Q:count', from: 'c' } },
+      // The subscription's update; whether a target names its sender on one isn't
+      // settled (subscription-updates-name-their-sender).
+      { output: expect.objectContaining({ id: '2', re: [5], ty: ['Integer'], to: 'c' }) },
+      { input: { id: '4', op: '$get', to: ':P:count', from: 'c' } },
+      { output: { id: '4', re: [5], ty: ['Integer'], to: 'c', from: ':P' } },
+      { input: { id: '5', op: '$get', to: ':Q:count', from: 'c' } },
+      { output: { id: '5', re: [5], ty: ['Integer'], to: 'c', from: ':Q' } },
+    );
+  });
+});

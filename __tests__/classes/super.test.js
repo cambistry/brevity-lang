@@ -122,6 +122,41 @@ describe('super — in a constructor', () => {
   });
 });
 
+// `super` on each branch of an `if`: the branch binds the parent's params, and the
+// base is built once, after the statement the `if` is in.
+describe('super — in a constructor, on the branches of an if', () => {
+  const script = `
+    @T = (n Integer) *{ @n = -> n }
+    @U = @T ^ (k Integer) *{
+      x Integer = if k > 0 {
+        super(k * 10)
+        1
+      } else {
+        super(0)
+        2
+      }
+      @x = -> x
+    }
+  `;
+
+  it('builds the base with the branch taken', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[3], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
+      { output: { id: '1', re: ['#<:U:1>'], ty: [':U'], to: 'c' } },
+      { input: { id: '2', op: 'n', to: ':U:1', from: 'c' } },
+      { output: { id: '2', re: [30], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { input: { id: '3', op: 'x', to: ':U:1', from: 'c' } },
+      { output: { id: '3', re: [1], ty: ['Integer'], to: 'c', from: ':U:1' } },
+      { input: { id: '4', op: [[-1], '$new'], ty: [['Integer']], to: ':U', from: 'c' } },
+      { output: { id: '4', re: ['#<:U:2>'], ty: [':U'], to: 'c' } },
+      { input: { id: '5', op: 'n', to: ':U:2', from: 'c' } },
+      { output: { id: '5', re: [0], ty: ['Integer'], to: 'c', from: ':U:2' } },
+      { input: { id: '6', op: 'x', to: ':U:2', from: 'c' } },
+      { output: { id: '6', re: [2], ty: ['Integer'], to: 'c', from: ':U:2' } },
+    );
+  });
+});
+
 describe('super — in a constructor — compile errors', () => {
   const T = 'T = (n Integer = 7) *{\n  seen Integer = n\n  h = -> n\n  @seen = { return seen }\n}\n';
   const AB = 'A = *{}\nB = *{}\n';
@@ -144,6 +179,18 @@ describe('super — in a constructor — compile errors', () => {
       .toThrow("'super(…)' in 'U' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too");
     expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer | null = if n > 0 {\n    super(n)\n    1\n  }\n}\n`))
       .toThrow("needs an 'else' that calls it too");
+  });
+
+  it('on a branch, more than once or not as a statement of it', () => {
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    super(n)\n    super(n)\n    1\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+      .toThrow("'super(…)' in 'U': in an 'if', each branch calls 'super' once, as a statement of the branch");
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    y Integer = if n > 1 {\n      super(n)\n      1\n    } else {\n      super(1)\n      2\n    }\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+      .toThrow("in an 'if', each branch calls 'super' once, as a statement of the branch");
+  });
+
+  it('a base name read on a branch after its super: the base is built after the statement', () => {
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    super(n)\n    seen\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+      .toThrow("'seen' in 'U' is the base's, read before 'super'");
   });
 
   it('in a loop', () => {
@@ -586,8 +633,44 @@ describe('class::base', () => {
   });
 });
 
+// `class::base::x <- v` writes the parent's class-block cell, read back through
+// the class, which inherits it.
+describe('class::base — a write', () => {
+  const script = `
+    @G = *{} ^ {
+      count *Integer = 3
+    }
+    @T = @G ^ *{
+      @resetBase! = { class::base::count <- 0 }
+      @counts = {
+        b Integer = class::base::count
+        o Integer = class::count
+        return base: b, own: o
+      }
+    } ^ { }
+  `;
+
+  it("writes the parent block's cell", async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[], '$new'], to: ':T', from: 'c' } },
+      { output: { id: '1', re: ['#<:T:1>'], ty: [':T'], to: 'c' } },
+      { input: { id: '2', op: 'counts', to: ':T:1', from: 'c' } },
+      { output: { id: '2', re: [{ base: 3, own: 3 }], ty: [{ base: 'Integer', own: 'Integer' }], to: 'c', from: ':T:1' } },
+      { input: { id: '3', op: 'resetBase!', to: ':T:1', from: 'c' } },
+      { output: { id: '3', re: ['#<:T:1>'], ty: [':T'], to: 'c', from: ':T:1' } },
+      { input: { id: '4', op: 'counts', to: ':T:1', from: 'c' } },
+      { output: { id: '4', re: [{ base: 0, own: 0 }], ty: [{ base: 'Integer', own: 'Integer' }], to: 'c', from: ':T:1' } },
+    );
+  });
+});
+
 describe('class::base — compile errors', () => {
   const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+
+  it("a write to a cell the class's own block redeclares", () => {
+    expect(compile('G = *{} ^ { count *Integer = 3 }\nT = G ^ *{\n  @r! = { class::base::count <- 0 }\n} ^ { count *Integer = 5 }\n'))
+      .toThrow();
+  });
 
   it('in a class with no parent', () => {
     expect(compile('V = *{\n  @a = { x Integer = class::base::h(); return x }\n}\n'))

@@ -1788,12 +1788,32 @@ bv_block_wire_op_(Op, Msg, Payload, WFrom_) ->
     case Op of
         {<<"$extend">>, _} -> bv_block_extend_wire_(WFrom_, Msg, Payload);
         <<"$extend">> -> bv_block_extend_wire_(WFrom_, Msg, Payload);
+        %% A cell we inherit is our base's one cell: from anyone for a public one.
         {<<"$get">>, T_} ->
-            case bv_forwards_(T_) andalso bv_is_extender_(WFrom_) of true -> {reply, [bv_base_get_(T_)]}; false -> bv_admit_(T_, WFrom_) end;
+            case bv_forwards_(T_) andalso (bv_is_extender_(WFrom_) orelse bv_public_token_(T_)) of true -> {reply, [bv_base_get_(T_)], bv_forward_tys_(T_)}; false -> bv_admit_(T_, WFrom_) end;
+        {<<"$sub">>, T_} ->
+            case bv_forwards_(T_) andalso (bv_is_extender_(WFrom_) orelse bv_public_token_(T_)) of true -> bv_forward_sub_(T_, maps:get(<<"id">>, Msg, null), WFrom_); false -> pass end;
         {<<"$set">>, T_} ->
-            case bv_forwards_(T_) andalso bv_is_extender_(WFrom_) of true -> bv_base_set_(T_, Payload), {reply, null}; false -> bv_admit_(T_, WFrom_) end;
+            case bv_forwards_(T_) andalso (bv_is_extender_(WFrom_) orelse bv_public_token_(T_)) of true -> bv_base_set_(T_, Payload), {reply, null}; false -> bv_admit_(T_, WFrom_) end;
         _ -> pass
     end.
+%% A cell we inherit's type, for our answer for it.
+bv_forward_tys_(T) -> case (bv_mod_()):bv_forward_ty_(bv_my_class_(), T) of null -> null; Ty_ -> [Ty_] end.
+%% A subscription to a cell we inherit: we subscribe at our base, and tell the
+%% subscriber each value under its id, as from us.
+bv_forward_sub_(T, Id, To) ->
+    Key_ = {bv_fwd_sub, make_ref()},
+    Ty_ = bv_forward_tys_(T),
+    put({pending_subscribe, Key_}, fun(Re_) ->
+        Resp_ = #{<<"id">> => Id, <<"re">> => Re_, <<"to">> => To},
+        io:put_chars([json_encode(case Ty_ of null -> Resp_; _ -> Resp_#{<<"ty">> => Ty_} end), $\n])
+    end),
+    Ref_ = make_ref(),
+    get(bv_base_) ! {bv_outer_sub, self(), T, Key_, Ref_},
+    receive {bv_reply, Ref_, V_} -> {reply, [V_], Ty_} end.
+bv_public_token_(<<"~", _/binary>>) -> false;
+bv_public_token_(<<"#", _/binary>>) -> false;
+bv_public_token_(_) -> true.
 bv_admit_(<<"~", _/binary>>, From) -> case bv_is_extender_(From) of true -> inside; false -> pass end;
 bv_admit_(_, _) -> pass.
 %% ── Delegation (notes/opre-extend-and-as-2026-11-20.md, "as: a delegated call") ──
@@ -2377,6 +2397,6 @@ ${RUNTIME}`;
 const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`;
 
 // What brevity_rt calls back in an actor's module: each generated module exports these.
-const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_class_site/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
+const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_forward_ty_/2', 'bv_class_site/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
 
 export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };

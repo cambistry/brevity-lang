@@ -25,6 +25,9 @@ ${arms.join('\n')}
 // (notes/opre-extend-and-as-2026-11-20.md).
 function genBlockInfoFn(actors) {
   const strs = (xs) => `&[${xs.map(x => JSON.stringify(x)).join(', ')}]`;
+  const fwdTyArms = actors.filter(a => a.name && (a.membersOf || a.isPublic || a.remoteLayers?.length)).flatMap(a => (a.forwardCells || [])
+    .filter(c => c.typeNameEnc !== undefined)
+    .map(c => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(wireLabel(c.name))}) => Some(json!([${JSON.stringify(typeTag(G.ctx, c.typeNameEnc))}])),`));
   const extensible = (a) => a.name && (a.membersOf || a.isPublic || a.remoteLayers?.length);
   const ownerArms = actors.filter(a => a.name && a.inheritedOwners && Object.keys(a.inheritedOwners).length).flatMap(a =>
     Object.entries(a.inheritedOwners).map(([n, o]) => `        (${JSON.stringify(a.name.toLowerCase())}, ${JSON.stringify(n)}) => Some(${JSON.stringify(o)}),`));
@@ -81,6 +84,15 @@ ${classExtArms.join('\n')}
 fn bv_class_block(selector: &str) -> Option<&'static str> {
     match selector {
 ${classBlockArms.join('\n')}
+        _ => None,
+    }
+}
+
+// The type of a cell a block inherits, for the answer it gives for it.
+#[allow(dead_code)]
+fn bv_forward_ty(class: &str, token: &str) -> Option<Value> {
+    match (class, token) {
+${fwdTyArms.join('\n')}
         _ => None,
     }
 }
@@ -146,7 +158,7 @@ import { dependencyAddressing } from '../dep_address.js';
 import { classSites } from '../class_sites.js';
 import { _opre_join as joinTokens } from '../opre_tokens.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
-import { typeText, hasType, envTypeOf, dependencyAliases, orAny } from '../enc_names.js';
+import { typeText, typeTag, hasType, envTypeOf, dependencyAliases, orAny } from '../enc_names.js';
 import { isFn } from '../../type_enc.js';
 import { addressToken, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_quote as quoteToken } from '../opre_tokens.js';
@@ -1254,6 +1266,15 @@ ${hasBlocks ? `    // A class block that extends another holds it as its base: t
         let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let owner = self.bv_holder_of(&base, token);
         let _ = self.send_to_owner(&owner, &format!("$set {}", token), &Value::Array(vec![value]));
+    }
+
+    // A subscription to a cell we inherit: our base's one cell keeps the subscriber,
+    // under its own id, and tells it each value.
+    #[allow(dead_code)]
+    fn bv_base_sub(&mut self, token: &str, payload: &Value, id: &str, from: &str) -> Value {
+        let base = self.state.get("__base").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let owner = self.bv_holder_of(&base, token);
+        self.child_dispatch(&owner, &format!("$sub {}", token), payload, id, from)
     }
 
     // Our address, as a class block's is known or an instance's was published.

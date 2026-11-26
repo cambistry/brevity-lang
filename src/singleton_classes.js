@@ -626,7 +626,7 @@ export function lowerClassBase(actors, byName, extendsClass) {
   for (const X of actors) {
     const sites = [];
     for (const b of bodiesOf(X)) walk(b, (n) => {
-      if (isBase(n) || (n.type === 'TypeConstruction' && n.qualifier?.[0] === CLASS_BASE)) sites.push(n);
+      if (isBase(n) || (n.type === 'TypeConstruction' && n.qualifier?.[0] === CLASS_BASE) || (n.type === 'ActorFieldSet' && n.objectName === CLASS_BASE)) sites.push(n);
       for (const k of ['object', 'callee']) if (isBase(n[k])) sites.push(n);
     });
     if (!sites.length) continue;
@@ -642,7 +642,13 @@ export function lowerClassBase(actors, byName, extendsClass) {
       // The use as a template over the parent's name, and the args it passes.
       let args = [];
       let make;
-      if (n.type === 'TypeConstruction') {
+      let writes = false;
+      if (n.type === 'ActorFieldSet') {
+        // `class::base::x <- v`: the parent's protected cell, written as `P::x <- v` is.
+        args = [n.value];
+        writes = true;
+        make = (P, xs) => ({ ...n, objectName: P, value: xs[0] });
+      } else if (n.type === 'TypeConstruction') {
         args = n.args || [];
         make = (P, xs) => ({ ...n, qualifier: [P, ...n.qualifier.slice(1)], args: xs });
       } else if (n.type === 'FunctionCallExpr' && isBase(n.callee)) {
@@ -658,20 +664,22 @@ export function lowerClassBase(actors, byName, extendsClass) {
       } else {
         throw new Error("'class::base' here isn't supported yet: reach the parent's members as 'class::base::name', 'class::base.name' or 'class::base(…)'");
       }
-      const name = `classbase__${site++}`;
+      // A write's function is named for it (`!`); its params aren't.
+      const stem = `classbase__${site++}`;
+      const name = `${stem}${writes ? '!' : ''}`;
       // Params for what the use passes: positional ones by place, named ones by key.
       const params = [];
       const passed = args.map((a, i) => {
         if (a?.type === 'NamedArgsBag') {
           const fields = {};
-          for (const k of Object.keys(a.fields)) { const p = `${name}_${k}`; params.push({ name: p, positional: false, key: k }); fields[k] = AST_IDENT(p); }
+          for (const k of Object.keys(a.fields)) { const p = `${stem}_${k}`; params.push({ name: p, positional: false, key: k }); fields[k] = AST_IDENT(p); }
           return { type: 'NamedArgsBag', fields };
         }
         if (a && typeof a === 'object' && 'positional' in a && a.positional === false) {
-          const p = `${name}_${a.name}`; params.push({ name: p, positional: false, key: a.name });
+          const p = `${stem}_${a.name}`; params.push({ name: p, positional: false, key: a.name });
           return { ...a, expr: AST_IDENT(p) };
         }
-        const p = `${name}_${i}`; params.push({ name: p, positional: true });
+        const p = `${stem}_${i}`; params.push({ name: p, positional: true });
         return a && typeof a === 'object' && 'expr' in a && a.positional ? { ...a, expr: AST_IDENT(p) } : AST_IDENT(p);
       });
       // The call to it passes them the same way: positional values, then the named
@@ -686,10 +694,22 @@ export function lowerClassBase(actors, byName, extendsClass) {
       if (Object.keys(named).length) callArgs.push({ type: 'NamedArgsBag', fields: named });
       for (const C of family) {
         const P = parentOf(C, X);
-        (C.functions ||= []).push({ type: 'FunctionDecl', name, params: params.map(p => ({ ...p })), body: [{ type: 'ImplicitReturn', expr: structuredClone(make(P, passed)), typeName: null }] });
+        const use = structuredClone(make(P, passed));
+        const ps = params.map(p => ({ ...p }));
+        // A write's value takes the type of the cell it writes, in the parent's block.
+        if (writes) {
+          let decl = null;
+          for (let b = byName.get(byName.get(P)?.membersClass); b && !decl; b = b.blockParent ? byName.get(b.blockParent) : null) {
+            decl = (b.stateVarDecls || []).find(d => d.name === n.fieldName) ?? null;
+          }
+          if (decl?.typeNameEnc !== undefined) ps[0].typeEnc = decl.typeNameEnc;
+          if (decl?.typeName !== undefined) ps[0].type = decl.typeName;
+        }
+        (C.functions ||= []).push({ type: 'FunctionDecl', name, params: ps, body: writes ? [use] : [{ type: 'ImplicitReturn', expr: use, typeName: null }] });
       }
       for (const k of Object.keys(n)) if (k !== 'loc') delete n[k];
-      Object.assign(n, { type: 'FunctionCallExpr', callee: AST_IDENT(name), args: callArgs });
+      const call = { type: 'FunctionCallExpr', callee: AST_IDENT(name), args: callArgs };
+      Object.assign(n, writes ? { type: 'ExprStatement', expr: call } : call);
     }
   }
 }

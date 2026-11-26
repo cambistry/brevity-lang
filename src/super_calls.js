@@ -314,7 +314,8 @@ export function lowerSuperCalls(actors, chain) {
     const noBase = [];
     // Once on every path: a statement of the constructor block, never in a loop or a
     // function, never twice.
-    for (const { n, path, shown: written } of calls) {
+    for (const c of calls) {
+      const { n, path, shown: written } = c;
       if (path.some(p => LOOPS.has(p.type) || isFunctionNode(p))) {
         throw new Error(`'${written}' in '${U.name}' runs once: it can't be in a loop or a function`);
       }
@@ -329,13 +330,22 @@ export function lowerSuperCalls(actors, chain) {
         if (branches.filter(b => b !== undefined).some(b => !b || !callsIn(b))) {
           throw new Error(`'${written}' in '${U.name}' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too`);
         }
-        throw new Error(`'${written}' in '${U.name}': 'super' in a branch isn't supported yet — call it as a statement of the constructor block`);
+        // Each branch calls it once, as a statement of its own body; the base is
+        // built once, after the statement the 'if' is in
+        // (constructor-block-if-statements removes this shim).
+        const direct = (b) => (b.body || []).filter(st => (st.type === 'ExprStatement' || st.type === 'ImplicitReturn') && st.expr?.type === 'SuperCall' && st.expr.layer === n.layer);
+        const deep = (b) => { let k = 0; walk(b, (m) => { if (m.type === 'SuperCall' && m.layer === n.layer) k++; }); return k; };
+        if (ifs.length > 1 || branches.filter(Boolean).some(b => direct(b).length !== 1 || deep(b) !== 1)) {
+          throw new Error(`'${written}' in '${U.name}': in an 'if', each branch calls 'super' once, as a statement of the branch`);
+        }
+        c.branchStmt = path[0];
       }
     }
     for (const P of parents) {
       const mine = calls.filter(c => c.n.layer === P);
       const named = parents.length > 1 ? `super[${P}](…)` : 'super';
-      if (mine.length > 1) throw new Error(`'${named}' in '${U.name}' is called twice: the base is built once`);
+      // The calls on an 'if''s branches are one: one runs.
+      if (new Set(mine.map(c => c.branchStmt ?? c.n)).size > 1) throw new Error(`'${named}' in '${U.name}' is called twice: the base is built once`);
       if (!mine.length) noBase.push(P);
     }
     // No `super` for a parent: no base. The subclass stands in for the parent only if
@@ -370,9 +380,11 @@ export function lowerSuperCalls(actors, chain) {
     };
     const init = U.initBody;
     for (const P of built) {
-      const at = init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
+      const branched = calls.find(c => c.n.layer === P && c.branchStmt);
+      const at = branched ? init.indexOf(branched.branchStmt) : init.findIndex(s => s.type === 'ExprStatement' && s.expr?.type === 'SuperCall' && s.expr.layer === P);
       const names = baseNamesOf(byName.get(P));
-      const before = [...init.slice(0, at), init[at].expr.args];
+      // Called on an 'if''s branches, the base is built after that statement.
+      const before = branched ? init.slice(0, at + 1) : [...init.slice(0, at), init[at].expr.args];
       walk(before, (m) => {
         if (isFunctionNode(m)) return false;
         const name = m.type === 'FunctionCallExpr' && m.callee?.type === 'Identifier' ? m.callee.name
@@ -386,7 +398,23 @@ export function lowerSuperCalls(actors, chain) {
     // Lower each call: its args into the parent's param cells, then the marker. The
     // constructor block keeps them as typed bindings, which are checked as any are.
     const lowered = new Map();
+    const branchLayers = new Map();
+    for (const c of calls) if (c.branchStmt) (branchLayers.get(c.branchStmt) ?? branchLayers.set(c.branchStmt, new Set()).get(c.branchStmt)).add(c.n.layer);
     U.initBody = init.flatMap((s) => {
+      // A statement whose 'if' calls 'super' on each branch: each branch binds the
+      // parent's params, and the base is built after the statement.
+      if (branchLayers.has(s)) {
+        walk(s, (m) => {
+          if (m.type !== 'IfBranch' || !Array.isArray(m.body)) return;
+          m.body = m.body.flatMap((st) => {
+            if ((st.type !== 'ExprStatement' && st.type !== 'ImplicitReturn') || st.expr?.type !== 'SuperCall') return [st];
+            const P = byName.get(st.expr.layer);
+            if (P.remoteStub) throw new Error(`'${shown(st.expr)}' in '${U.name}': in an 'if', 'super' builds a parent in this file only`);
+            return bindArgs(U, P, parentView(byName, P, chain), st.expr.args);
+          });
+        });
+        return [s, ...[...branchLayers.get(s)].map(layer => ({ type: 'SuperInit', layer }))];
+      }
       if (s.type !== 'ExprStatement' || s.expr?.type !== 'SuperCall') return [s];
       const { layer, args } = s.expr;
       const P = byName.get(layer);
