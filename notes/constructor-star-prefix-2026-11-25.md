@@ -54,6 +54,9 @@ the type as in the source.
 Unchanged: `*`, params one per line, `*`. The lead star makes it fit better, since the lineal
 header already opens with the star before the params.
 
+A later concept, `lineal-definitions-2026-11-25.md`, would replace this header with `*(` and
+params one per line, closed by `)`, and a lineal body to `end#Name`.
+
 ## Why
 
 - **The lede comes first.** `val *Integer = 0` says "a cell" before anything else. In
