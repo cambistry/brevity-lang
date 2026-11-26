@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Decide whether an ex can be handled in Brevity

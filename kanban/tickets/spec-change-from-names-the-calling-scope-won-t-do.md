@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-14
 ---
 # Spec change: `from` names the calling scope

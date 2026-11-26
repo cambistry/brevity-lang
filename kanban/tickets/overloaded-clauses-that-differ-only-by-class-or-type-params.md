@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-10
 ---
 # Fix: in-process calls to an overload ignore arg types

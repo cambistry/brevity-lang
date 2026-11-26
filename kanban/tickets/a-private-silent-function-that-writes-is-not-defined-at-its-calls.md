@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-24
 ---
 # Fix: a private silent function that writes is "not defined" at its calls

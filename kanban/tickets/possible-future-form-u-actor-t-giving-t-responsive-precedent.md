@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-19
 ---
 # possible future form: `U = actor {} ^ T` giving T responsive precedent

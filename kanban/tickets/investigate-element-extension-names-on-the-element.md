@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-23
 ---
 # Investigate: element extension (names on the element)

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-13
 ---
 # `*` on a class-typed declaration

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-15
 ---
 # Opre op chains: `[args1] op1 [args2] op2 …`

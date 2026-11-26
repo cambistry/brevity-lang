@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-17
 ---
 # Explore: atomic read-modify-write on another actor's cell

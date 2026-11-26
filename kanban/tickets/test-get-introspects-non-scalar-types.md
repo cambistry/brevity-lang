@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-04-08
 ---
 # Fix: test get should introspect non-scalar types

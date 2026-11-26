@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-26
 ---
 # Investigate: a class actor that is an instance of a class

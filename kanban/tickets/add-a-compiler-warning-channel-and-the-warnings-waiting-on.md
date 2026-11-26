@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-01
 ---
 # Add a compiler warning channel and the warnings waiting on it

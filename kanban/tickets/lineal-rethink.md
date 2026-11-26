@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-14
 ---
 # Lineal definitions: parenthesised params, `end#name` closer, implicit tail return

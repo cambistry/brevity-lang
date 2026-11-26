@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-21
 ---
 # A missing actor and a missing method get the same reply

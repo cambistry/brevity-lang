@@ -1,5 +1,4 @@
 ---
-status: todo
 created: 2026-11-25
 ---
 # Clause lists follow-up: pipe into a list of functions

@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-19
 ---
 # a subscribe-only label / endpoint

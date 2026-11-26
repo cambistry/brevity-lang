@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-21
 ---
 # $extend should provide the full, relevant service description, not just names

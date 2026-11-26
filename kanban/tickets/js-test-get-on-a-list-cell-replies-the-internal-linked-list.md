@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-25
 ---
 # Fix: on js, `test.get` on a list cell replies the internal linked-list form

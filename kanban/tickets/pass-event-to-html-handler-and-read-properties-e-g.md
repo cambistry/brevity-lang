@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-10-26
 ---
 # Brower: pass event to HTML handler and read properties (e.g. coordinates)

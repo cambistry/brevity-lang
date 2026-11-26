@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-24
 ---
 # An unannotated bind should infer more than literals and own calls

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-15
 ---
 # Opre subops: object elements in `op`

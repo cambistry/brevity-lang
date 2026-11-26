@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-10
 ---
 # Fix: eval should come off document, and arbitrary JS should be an explicit grant

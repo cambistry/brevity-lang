@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-26
 ---
 # Question: should type field access use :: rather than dot (since it is not a message call)

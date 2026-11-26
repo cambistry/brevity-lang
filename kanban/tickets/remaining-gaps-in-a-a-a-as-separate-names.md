@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: remaining gaps in a / @a / #a as separate names

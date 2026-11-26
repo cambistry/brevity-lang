@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-24
 ---
 # Fix: a call on an actor-typed cell leaks an internal name

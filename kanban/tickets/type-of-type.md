@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-05-20
 ---
 # Class and type introspection: the class of a value, is-a, equality

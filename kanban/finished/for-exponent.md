@@ -1,0 +1,4 @@
+---
+created: 2026-11-11
+---
+# ^ for exponent

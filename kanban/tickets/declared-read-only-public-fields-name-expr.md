@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-10-29
 ---
 # Declared read-only public fields (`@name = expr`)

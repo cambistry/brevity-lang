@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: on Rust, `r = b.get()` with a named reply binds null

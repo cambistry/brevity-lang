@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-17
 ---
 # Explore: type rules for redeclaring an inherited cell

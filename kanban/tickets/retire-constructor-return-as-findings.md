@@ -1,5 +1,4 @@
 ---
-status: todo
 created: 2026-11-26
 ---
 # Retire constructor return-as: findings

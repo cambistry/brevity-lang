@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-03
 ---
 # Opre: escape a literal #< in message strings

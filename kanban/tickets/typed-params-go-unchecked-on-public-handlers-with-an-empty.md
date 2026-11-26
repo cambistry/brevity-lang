@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: typed params go unchecked on public handlers with an empty body

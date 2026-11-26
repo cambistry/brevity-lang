@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-26
 ---
 # Investigate: a public class declared in an instance

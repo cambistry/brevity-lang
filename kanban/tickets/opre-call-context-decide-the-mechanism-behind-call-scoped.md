@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-12
 ---
 # Opre call context: decide the mechanism behind call-scoped turns and transactions

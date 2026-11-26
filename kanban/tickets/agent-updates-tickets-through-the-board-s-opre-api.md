@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-26
 ---
 # The agent should update tickets through the board's Opre API

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: parens around an Object should work on a bind

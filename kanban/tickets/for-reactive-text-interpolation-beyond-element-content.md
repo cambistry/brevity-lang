@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-11
 ---
 # {{ }} for reactive text interpolation beyond element content

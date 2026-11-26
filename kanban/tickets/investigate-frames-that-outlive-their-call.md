@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-23
 ---
 # Investigate: frames that outlive their call

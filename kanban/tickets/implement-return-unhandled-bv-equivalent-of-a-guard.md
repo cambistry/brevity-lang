@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-05-13
 ---
 # `unhandled`: a clause should be able to decline with `return unhandled`

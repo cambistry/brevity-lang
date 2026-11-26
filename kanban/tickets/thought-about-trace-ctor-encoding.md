@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-15
 ---
 # Design: trace/ctor escape encoding

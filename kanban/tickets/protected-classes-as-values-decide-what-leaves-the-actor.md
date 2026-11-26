@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-19
 ---
 # Protected classes as values: decide what leaves the actor

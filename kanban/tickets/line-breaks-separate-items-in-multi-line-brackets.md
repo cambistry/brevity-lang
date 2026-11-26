@@ -1,5 +1,4 @@
 ---
-status: todo
 created: 2026-11-25
 ---
 # Line breaks should separate items in multi-line brackets

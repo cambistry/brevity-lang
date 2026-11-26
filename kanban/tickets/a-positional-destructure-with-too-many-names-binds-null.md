@@ -1,5 +1,4 @@
 ---
-status: queued
 created: 2026-11-25
 ---
 # Fix: a positional destructure with too many names binds null

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-05-19
 ---
 # How do libraries work? Native library types

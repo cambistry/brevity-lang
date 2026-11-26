@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-25
 ---
 # Investigate: a dot chain on a cell derives a live cell

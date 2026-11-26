@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-04-18
 ---
 # non-DOM browser capabilities

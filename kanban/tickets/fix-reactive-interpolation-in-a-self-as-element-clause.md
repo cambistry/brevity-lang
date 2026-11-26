@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-26
 ---
 # Fix: reactive interpolation in a `self as` element clause fails with an internal error

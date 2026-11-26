@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-04
 ---
 # Fix: on JS, a class can't subscribe to a file's private cell passed to it as a param

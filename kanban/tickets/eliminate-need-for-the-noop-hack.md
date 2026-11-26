@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-19
 ---
 # Fix: an actor should not need the noop hack

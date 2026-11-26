@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-06
 ---
 # Investigate: a bare zero-arity lambda in an untyped slot silently becomes a call

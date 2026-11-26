@@ -1,5 +1,4 @@
 ---
-status: queued
 created: 2026-11-25
 ---
 # Destructure a core type's functions

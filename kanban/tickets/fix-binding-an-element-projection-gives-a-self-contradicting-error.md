@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-26
 ---
 # Fix: binding an element projection gives a self-contradicting error

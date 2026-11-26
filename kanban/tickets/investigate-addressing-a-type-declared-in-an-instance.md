@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-26
 ---
 # Investigate: addressing a type declared in an instance

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-04-26
 ---
 # valueless attributes

@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-23
 ---
 # A constructor profile or interface as a param's type

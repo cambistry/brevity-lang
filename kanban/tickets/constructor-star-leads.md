@@ -1,5 +1,4 @@
 ---
-status: queued
 created: 2026-11-25
 ---
 # The constructor star should lead: `*(params) { body }`

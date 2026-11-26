@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-25
 ---
 # Investigate: `Type?` for nullable

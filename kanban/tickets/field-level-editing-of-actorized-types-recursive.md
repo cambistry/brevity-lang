@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-10-29
 ---
 # field-level editing of actorized types (recursive?)

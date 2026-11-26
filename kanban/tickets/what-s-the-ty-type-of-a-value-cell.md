@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-03
 ---
 # What's the 'ty' type of a value cell?

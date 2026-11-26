@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-15
 ---
 # Invoke `__add_trace__` when a function or constructor returns a new actor

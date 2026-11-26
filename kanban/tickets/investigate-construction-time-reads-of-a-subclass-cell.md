@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-20
 ---
 # Investigate: construction-time reads of a subclass cell through a late-bound override

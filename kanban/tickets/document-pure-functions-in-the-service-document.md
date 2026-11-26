@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-25
 ---
 # Document pure functions in the service document

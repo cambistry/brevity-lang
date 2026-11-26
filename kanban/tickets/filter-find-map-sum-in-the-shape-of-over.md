@@ -1,5 +1,4 @@
 ---
-status: queued
 created: 2026-11-25
 ---
 # `filter`, `find`, `map`, `sum` in the shape of `over`

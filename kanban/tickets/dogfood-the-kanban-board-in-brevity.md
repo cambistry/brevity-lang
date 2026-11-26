@@ -1,5 +1,4 @@
 ---
-status: todo
 created: 2026-11-24
 ---
 # Dogfood the kanban board in Brevity

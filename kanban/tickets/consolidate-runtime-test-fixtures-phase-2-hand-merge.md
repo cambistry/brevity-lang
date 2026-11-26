@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-17
 ---
 # Consolidate runtime test fixtures — phase 2 (hand-merge remaining files)

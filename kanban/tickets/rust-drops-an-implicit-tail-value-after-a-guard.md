@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: Rust drops an implicit tail value after a guard

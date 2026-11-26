@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-03
 ---
 # Fix: keywords as bare names should get a keyword error; inflected forms should work

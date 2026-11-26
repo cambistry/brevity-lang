@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-02
 ---
 # Fix: Rust arithmetic on untyped operands defaults to 0

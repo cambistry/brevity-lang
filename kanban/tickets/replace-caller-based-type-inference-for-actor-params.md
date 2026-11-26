@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-03
 ---
 # Untyped private params: replace caller-based actor inference; decide generics in signatures

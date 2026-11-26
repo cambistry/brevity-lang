@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-04-28
 ---
 # Optional field - prefer no space after slot ? opening

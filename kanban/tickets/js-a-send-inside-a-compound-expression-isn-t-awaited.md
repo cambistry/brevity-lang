@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-17
 ---
 # Fix: on js, a send inside a compound expression isn't awaited

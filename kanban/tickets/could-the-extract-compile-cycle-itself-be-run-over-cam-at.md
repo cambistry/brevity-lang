@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-05-12
 ---
 # could the extract/compile cycle itself be run over CAM? At least conceptually. Are we already doing this in any way?

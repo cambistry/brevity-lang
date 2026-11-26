@@ -1,8 +1,7 @@
 ---
-status: inbox
 created: 2026-11-25
 ---
-# REVISIT: Return types in the function header
+# Return types in the function header [REFINE THIS]
 
 Design: `notes/return-types-in-the-header-2026-11-25.md`. Supersedes the `!` body rules in `notes/mutation-suffix-2026-10-31.md`.
 

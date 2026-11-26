@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-10-30
 ---
 # Design: Silent lambdas: how an anonymous function declares silence once the terminating dot is gone (speculative)

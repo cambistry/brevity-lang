@@ -1,5 +1,4 @@
 ---
-status: investigation
 created: 2026-11-10
 ---
 # Multiple inheritance diamond case

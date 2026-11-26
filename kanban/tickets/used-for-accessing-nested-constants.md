@@ -1,5 +1,4 @@
 ---
-status: inbox
 created: 2026-11-14
 ---
 # `::` should reach a constant nested more than one level
