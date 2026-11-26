@@ -72,14 +72,14 @@ describe('a type is', () => {
   it('a union with null', () => compiles('@f = (x Integer | null) -> 1\n'));
   it('a function type, its field names aside', () => compiles('@f = (cb (n: Integer) -> (r: Text)) -> 1\n'));
   it('a cell\'s type', () => compiles('n *Integer = 1\n@f = -> n\n'));
-  it('a `type` the file declares', () => compiles('type Point (Integer)\n@f = (p Point) -> 1\n'));
-  it('a declared type after `of`', () => compiles('type Point (Integer)\n@f = (ps List of Point) -> 1\n'));
+  it('a `type` the file declares', () => compiles('type Point(Integer)\n@f = (p Point) -> 1\n'));
+  it('a declared type after `of`', () => compiles('type Point(Integer)\n@f = (ps List of Point) -> 1\n'));
   it('a class', () => compiles('C = *{ @ping = -> 1 }\n@f = {\n  c C = C()\n  return c.ping()\n}\n'));
   it('a public class, as `@C`', () => compiles('@Pub = *{}\n@go = (p @Pub) { return 1 }\n'));
   it('a writing class, without its `!`', () => compiles('use Log = "log.bv" as { note. () => . }\nW! = *{\n  Log.note...\n  @one = -> 1\n}\n@f! = {\n  w W = W!()\n  return w.one()\n}\n'));
   it('`class`', () => compiles('C = *{\n  @peer *class | null = null\n  @f = -> 1\n}\n@g = -> 1\n'));
   it('a type a dependency\'s document declares, through it', () => compiles('use Svc = "svc.bv"\n@f = (p Svc::Point) -> p.x\n', remotes));
   it('a class a dependency\'s document declares, bare', () => compiles('use Svc = "svc.bv"\nread = (w Counter) { return w.get() }\n@f = -> 1\n', remotes));
-  it('a type a document written here declares', () => compiles('use Svc = "svc.bv" as { type Point (x: Integer)\n  n () -> (Point) }\n@f = (p Svc::Point) -> 1\n'));
+  it('a type a document written here declares', () => compiles('use Svc = "svc.bv" as { type Point(x: Integer)\n  n () -> (Point) }\n@f = (p Svc::Point) -> 1\n'));
   it('in a constructor profile', () => compiles('use Svc = "svc.bv" as (n: Integer) -> *{ get () -> (Integer) }\n@f = -> 1\n'));
 });

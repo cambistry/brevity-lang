@@ -42,7 +42,7 @@ export function parseFieldList(str) {
 // A service document is `{ entries }`, one entry per line (or comma-separated).
 // Every entry is a name, a space, and a definition — there is no entry colon:
 //
-//   type Point (Integer, y: Integer)      type declaration
+//   type Point(Integer, y: Integer)       type declaration
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
 //   Counter (start: Integer) -> *{ … }    constructor; body always written

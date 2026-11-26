@@ -20,7 +20,7 @@ For source generation patterns, use
 - `use` declares the file singleton's DI (dependencies and load-time params);
   `use("source")` is the same in value position, scoped where it's bound.
 - `Name = (...) *{ ... }` declares an actor with a `new`, which builds actors.
-- `type Name (...)` declares a type (constructs values).
+- `type Name(...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` asks the named actor's `new` for an actor.
 - Argument lists can be positional, named, or mixed on both input and return.
@@ -381,8 +381,8 @@ The returned actor address remains messageable.
 Types declare value shapes with `::`:
 
 ```brevity
-type Point (Integer, Integer)
-type Pair (x: Integer, y: Integer)
+type Point(Integer, Integer)
+type Pair(x: Integer, y: Integer)
 
 @first = {
   (a, b) = Point(1, 2)

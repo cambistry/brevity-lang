@@ -13,7 +13,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - `use` declares the file singleton's DI (dependencies and load-time params).
 - `Name = (...) *{ ... }` declares an actor with a `new` (which builds actors). An actor is a
   value: `k = Name` holds its address, typed `Actor`; there is no `Class` type.
-- `type Name (...)` declares a type (constructs values).
+- `type Name(...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` asks the named actor's `new` for an actor.
 - Replies are explicit structures.
@@ -149,8 +149,8 @@ show a positional form.
 ## Types
 
 ```brevity
-type Point (Integer, Integer)
-type Pair (x: Integer, y: Integer)
+type Point(Integer, Integer)
+type Pair(x: Integer, y: Integer)
 
 @make = -> point: Point(1, 2)
 

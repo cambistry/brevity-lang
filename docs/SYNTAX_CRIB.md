@@ -230,8 +230,8 @@ use :Item, :Widget! = "other.bv"
 ## Type
 
 ```brevity
-type Point (Integer, Integer)       // positional fields: bare types
-type Pair (x: Integer, y: Integer)  // named fields
+type Point(Integer, Integer)       // positional fields: bare types
+type Pair(x: Integer, y: Integer)  // named fields
 
 @first = {
   (a, b) = Point(1, 2)            // positional fields by destructuring
@@ -240,7 +240,7 @@ type Pair (x: Integer, y: Integer)  // named fields
 @x = -> result: Pair(x: 1, y: 2).x  // named fields by name
 
 W = *{
-  type X (Integer)              // W's type: bare inside W
+  type X(Integer)              // W's type: bare inside W
   @make = -> X(1)
 }
 

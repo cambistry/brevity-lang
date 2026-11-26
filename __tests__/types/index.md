@@ -8,7 +8,7 @@ type declaration and type-value work.
 Declare a type:
 
 ```brevity
-type Point (Integer, Integer)
+type Point(Integer, Integer)
 ```
 
 Construct a value:
@@ -20,7 +20,7 @@ p Point = Point(1, 2)
 Read positional fields by destructuring, named fields by name:
 
 ```brevity
-type Pair (x: Integer, y: Integer)
+type Pair(x: Integer, y: Integer)
 @first = {
   (a, b) = Point(7, 8)
   return result: a
@@ -54,7 +54,7 @@ maybe Text | null = null
 
 ## LLM Rules
 
-- Use `type Name (...)` for type declarations.
+- Use `type Name(...)` for type declarations.
 - Use `Name(args)` for value construction.
 - Do not confuse values with actors. A `Point(1, 2)` is a value; `*Point(1, 2)`
   is an actor with the same shape.

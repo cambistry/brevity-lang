@@ -14,8 +14,8 @@ import { compileSource } from '../helpers.js';
 //    stripped and the call resolved to the no-bang field.)
 describe('bang enforcement — type reference fields', () => {
   const TYPES = `
-    type Signal (dismiss.: () => ., code: Integer)
-    type Panel (onpress.: (s: Signal) => ., label: Text)
+    type Signal(dismiss.: () => ., code: Integer)
+    type Panel(onpress.: (s: Signal) => ., label: Text)
   `;
 
   it('rejects a spurious bang on a silent reference field', () => {

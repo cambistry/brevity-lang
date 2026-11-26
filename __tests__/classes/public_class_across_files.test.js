@@ -11,7 +11,7 @@ const SVC = `
     note. () => .
   }
 
-  type Point (x: Integer)
+  type Point(x: Integer)
 
   @Counter = (start Integer, step: Integer) *{
     n *Integer = start
@@ -628,7 +628,7 @@ describe('end to end: Svc.W() and s.W() read different actors', () => {
 // address and each local ty tag.
 describe('end to end: type values cross to and from a class in another file', () => {
   const POINT_SVC = `
-    type Point (Integer, y: Integer)
+    type Point(Integer, y: Integer)
 
     @W = *{
       @get = { return Point(1, y: 2) }

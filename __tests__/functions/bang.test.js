@@ -123,7 +123,7 @@ describe('! functions — runtime', () => {
     @read = { return @log }
 
     // ! function — return paths
-    type Flag (untracked: Boolean)
+    type Flag(untracked: Boolean)
 
     acc *Integer = 0
     held *Integer = 5
@@ -332,7 +332,7 @@ describe('! functions — runtime', () => {
     @shadowsLate = { return first(2) as Integer }
 
     // a writing type field
-    type Act (Integer, run!: (value: Integer) => (out: Integer))
+    type Act(Integer, run!: (value: Integer) => (out: Integer))
 
     @go5! = (a: Act) {
       (arg) = a
@@ -692,7 +692,7 @@ describe('! functions — runtime', () => {
 
 describe('chains — validation', () => {
   const POP = `
-    type Item (name: Text)
+    type Item(name: Text)
     C = *{
       n *Integer = 0
       @pop! = {
@@ -1288,7 +1288,7 @@ describe('effect enforcement', () => {
   describe('`->` slots', () => {
     const WRITER = '() -> { a <- 1 }';
     const CLASSES = `
-      type R (f: () -> (), g!: () => ())
+      type R(f: () -> (), g!: () => ())
       a *Integer = 0
       C = (f: () -> ()) *{
         @take = (f () -> ()) { return 1 }
@@ -1507,7 +1507,7 @@ describe('chained calls', () => {
       note. () => .
     }
 
-    type Item (name: Text)
+    type Item(name: Text)
 
     C = *{
       acc *Integer = 0
@@ -1776,32 +1776,32 @@ describe('a public class named with `!`', () => {
 
 describe('a type field\'s name matches its arrow — validation', () => {
   it('a writing field must be named with `!`', () => {
-    expect(() => compileSource('type T (run: () => (Integer))\n@go = { return 1 }\n')).toThrow(/Field 'run' holds a writing function \('=>'\), so it must be named 'run!'/);
+    expect(() => compileSource('type T(run: () => (Integer))\n@go = { return 1 }\n')).toThrow(/Field 'run' holds a writing function \('=>'\), so it must be named 'run!'/);
   });
 
   it('a read-only field takes no `!`', () => {
-    expect(() => compileSource('type T (run!: () -> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!' — name it 'run'/);
-    expect(() => compileSource('type T (run!: () ~> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!'/);
+    expect(() => compileSource('type T(run!: () -> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!' — name it 'run'/);
+    expect(() => compileSource('type T(run!: () ~> (Integer))\n@go = { return 1 }\n')).toThrow(/takes no '!'/);
   });
 
   it('a value field takes no `!`', () => {
-    expect(() => compileSource('type T (n!: Integer)\n@go = { return 1 }\n')).toThrow(/Field 'n!' is a value/);
+    expect(() => compileSource('type T(n!: Integer)\n@go = { return 1 }\n')).toThrow(/Field 'n!' is a value/);
   });
 
   it('a silent field is named with `.` alone', () => {
-    expect(() => compileSource('type T (run!: () => .)\n@go = { return 1 }\n')).toThrow(/name it 'run\.', without '!'/);
+    expect(() => compileSource('type T(run!: () => .)\n@go = { return 1 }\n')).toThrow(/name it 'run\.', without '!'/);
   });
 
   it('reads the field\'s own arrow, not one inside its params', () => {
-    expect(() => compileSource('type T (run: (f: () => ()) -> (Integer))\n@go = { return 1 }\n')).not.toThrow();
+    expect(() => compileSource('type T(run: (f: () => ()) -> (Integer))\n@go = { return 1 }\n')).not.toThrow();
   });
 
   it('a writing field is called by its whole name', () => {
-    expect(() => compileSource('type T (run!: () => (Integer))\n@go! = (t T) { return t.run() }\n')).toThrow(/Field 'run!' on 'T' writes — call it '.run!\(…\)'/);
+    expect(() => compileSource('type T(run!: () => (Integer))\n@go! = (t T) { return t.run() }\n')).toThrow(/Field 'run!' on 'T' writes — call it '.run!\(…\)'/);
   });
 
   it('calling a writing field is a write', () => {
-    expect(() => compileSource('type T (run!: () => (Integer))\n@go = (t T) { return t.run!() }\n')).toThrow(/'@go' writes \(t\.run!\(…\)\)/);
-    expect(() => compileSource('type T (run!: () => (Integer))\n@go! = (t T) { return t.run!() }\n')).not.toThrow();
+    expect(() => compileSource('type T(run!: () => (Integer))\n@go = (t T) { return t.run!() }\n')).toThrow(/'@go' writes \(t\.run!\(…\)\)/);
+    expect(() => compileSource('type T(run!: () => (Integer))\n@go! = (t T) { return t.run!() }\n')).not.toThrow();
   });
 });

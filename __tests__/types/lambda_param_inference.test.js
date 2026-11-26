@@ -14,9 +14,9 @@ import { compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const TYPES = `
-  type Signal (code: Integer)
-  type Panel (onpress.: (s: Signal) => ., label: Text)
-  type Tap ((s: Signal) => ., label: Text)
+  type Signal(code: Integer)
+  type Panel(onpress.: (s: Signal) => ., label: Text)
+  type Tap((s: Signal) => ., label: Text)
 `;
 
 describe('lambda param inference — C1 local type callback field', () => {

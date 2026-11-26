@@ -6,7 +6,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('type equality — Name(args) ==', () => {
   const script = `
-    type Point (Integer, Integer)
+    type Point(Integer, Integer)
     type Pair  (Integer, Integer)
 
     @same       = -> result: (Point(1, 2) == Point(1, 2))

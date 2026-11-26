@@ -12,10 +12,10 @@ import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('type destructure — runtime', () => {
   const script = `
-    type Point (Integer, Integer)
-    type Pair (x: Integer, y: Integer)
-    type Mixed (Integer, label: Text)
-    type Game (? Boolean, ? turn: Integer)
+    type Point(Integer, Integer)
+    type Pair(x: Integer, y: Integer)
+    type Mixed(Integer, label: Text)
+    type Game(? Boolean, ? turn: Integer)
 
     @parenPositional = {
       p = Point(1, 2)
@@ -193,7 +193,7 @@ describe('type destructure — runtime', () => {
 describe('type destructure — compile errors', () => {
   it('rejects positional destructure with more locals than fields', () => {
     expect(() => compileSource(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @go = {
         p = Point(1, 2)
         x, y, z = p
@@ -204,7 +204,7 @@ describe('type destructure — compile errors', () => {
 
   it('rejects positional destructure of a named field', () => {
     expect(() => compileSource(`
-      type Pair (x: Integer, y: Integer)
+      type Pair(x: Integer, y: Integer)
       @go = {
         p = Pair(x: 1, y: 2)
         (a, b) = p
@@ -215,7 +215,7 @@ describe('type destructure — compile errors', () => {
 
   it('rejects named destructure of a positional field', () => {
     expect(() => compileSource(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = {
         p = Point(1, y: 2)
         :x = p
@@ -226,7 +226,7 @@ describe('type destructure — compile errors', () => {
 
   it('rejects named destructure of an undeclared field', () => {
     expect(() => compileSource(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @go = {
         p = Point(1, 2)
         :z = p

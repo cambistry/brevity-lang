@@ -42,7 +42,7 @@ Every Brevity runtime entity is either a **value** or an **actor**.
 
 The split shows up in source as two different constructor shapes:
 
-- **Types** construct values. `type Point (Integer, Integer)` declares a
+- **Types** construct values. `type Point(Integer, Integer)` declares a
   type; `Point(1, 2)` constructs a value.
 - **Actors with a `new`** build actors. `Counter = (start Integer) *{ ... }`
   declares the actor `Counter`; `Counter(0)` asks its `new` for one. The actors

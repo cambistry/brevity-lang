@@ -34,28 +34,28 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('reference fields — grammar', () => {
   it('a silent reference field `() => .` parses as a type field', () => {
     expect(() => compileSource(`
-      type Sink (push.: () => .)
+      type Sink(push.: () => .)
       @go = -> result: 1
     `)).not.toThrow();
   });
 
   it('a void-callback field `(x) -> ()` parses as a type field', () => {
     expect(() => compileSource(`
-      type Adder (add: (value: Integer) -> ())
+      type Adder(add: (value: Integer) -> ())
       @go = -> result: 1
     `)).not.toThrow();
   });
 
   it('a valued-callback field `() -> (n: Integer)` parses as a type field', () => {
     expect(() => compileSource(`
-      type Reader (get: () -> (n: Integer))
+      type Reader(get: () -> (n: Integer))
       @go = -> result: 1
     `)).not.toThrow();
   });
 
   it('mixes value fields and reference fields in one type', () => {
     expect(() => compileSource(`
-      type Mixed (seed: Integer, push.: () => ., check: (x: Integer) -> (ok: Boolean))
+      type Mixed(seed: Integer, push.: () => ., check: (x: Integer) -> (ok: Boolean))
       @go = -> result: 1
     `)).not.toThrow();
   });
@@ -63,7 +63,7 @@ describe('reference fields — grammar', () => {
   it('a multi-param function-sig field keeps its comma-separated inputs', () => {
     // The nested comma must not split the surrounding field list.
     expect(() => compileSource(`
-      type Handler (run: (a: Integer, b: Integer) -> ())
+      type Handler(run: (a: Integer, b: Integer) -> ())
       @go = -> result: 1
     `)).not.toThrow();
   });
@@ -88,7 +88,7 @@ describe('reference fields — captured in the type declaration', () => {
 
   it('records a silent reference field with its `() => .` signature', () => {
     const { ast } = extract(`
-      type Sink (push.: () => .)
+      type Sink(push.: () => .)
       @go = -> result: 1
     `);
     const decl = typeDeclNamed(ast, 'Sink');
@@ -116,8 +116,8 @@ describe('reference fields — captured in the type declaration', () => {
 
 describe('reference fields — runtime invocation', () => {
   const fixture = `
-    type Sink (push.: () => ., flush.: () => .)
-    type Call (Integer, fn: (value: Integer) -> (out: Integer))
+    type Sink(push.: () => ., flush.: () => .)
+    type Call(Integer, fn: (value: Integer) -> (out: Integer))
 
     // Silent reference, bang-invoked: fire-and-forget, no reply awaited;
     // handler is itself silent.
@@ -186,7 +186,7 @@ describe('reference fields — runtime invocation', () => {
 describe('reference fields — validation', () => {
   it('rejects binding the result of a silent reference call (no value)', () => {
     expect(() => compileSource(`
-      type Sink (push.: () => .)
+      type Sink(push.: () => .)
       @go = (s: Sink) {
         x = s.push...
         return result: 1
@@ -196,14 +196,14 @@ describe('reference fields — validation', () => {
 
   it('rejects invoking a plain value field as if it were a reference', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go. = (p: Point) { p.x! }
     `)).toThrow(/not a (function|reference|callable)|cannot call/i);
   });
 
   it('rejects invoking a field the type does not declare', () => {
     expect(() => compileSource(`
-      type Sink (push.: () => .)
+      type Sink(push.: () => .)
       @go. = (s: Sink) { s.bogus! }
     `)).toThrow(/has no field 'bogus'/);
   });
@@ -218,7 +218,7 @@ describe('reference fields — validation', () => {
 describe('reference fields — silent-call ordering check', () => {
   it('accepts a silent call before any awaited send', () => {
     expect(() => compileSource(`
-      type Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
+      type Mixed(push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         m.push...
         ok: Boolean = m.check("done")
@@ -229,7 +229,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('accepts two silent calls before an awaited send', () => {
     expect(() => compileSource(`
-      type Mixed (push.: () => ., flush.: () => ., check: (msg: Text) -> (ok: Boolean))
+      type Mixed(push.: () => ., flush.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         m.push...
         m.flush...
@@ -241,7 +241,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('rejects a silent call after an awaited send', () => {
     expect(() => compileSource(`
-      type Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
+      type Mixed(push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed) {
         ok: Boolean = m.check("first")
         m.push...
@@ -252,7 +252,7 @@ describe('reference fields — silent-call ordering check', () => {
 
   it('rejects a silent call after an awaited send inside an earlier branch', () => {
     expect(() => compileSource(`
-      type Mixed (push.: () => ., check: (msg: Text) -> (ok: Boolean))
+      type Mixed(push.: () => ., check: (msg: Text) -> (ok: Boolean))
       @go = (m: Mixed, flag: Boolean) {
         if flag { ok: Boolean = m.check("maybe") }
         m.push...

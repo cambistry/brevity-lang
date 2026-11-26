@@ -5,10 +5,10 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // in order; named args fill its named fields by name, in any order
 // (notes/positional-type-fields-2026-11-26.md):
 //
-//   type Point (x: Integer, y: Integer)
+//   type Point(x: Integer, y: Integer)
 //   Point(x: 1, y: 2)    — named (order-independent)
 //
-//   type Pt (Integer, y: Integer)
+//   type Pt(Integer, y: Integer)
 //   Pt(1, y: 2)          — mixed
 //
 // Neither reaches the other's fields. Named filling works for several fields
@@ -33,7 +33,7 @@ describe('named construction — parser', () => {
 
   it('all-named args collect into a single trailing NamedArgsBag', () => {
     const { ast } = extract(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(x: 1, y: 2)
         return r: 1 }
     `);
@@ -47,7 +47,7 @@ describe('named construction — parser', () => {
 
   it('mixed args keep positional expressions ahead of the NamedArgsBag', () => {
     const { ast } = extract(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = { p = Point(1, y: 2)
         return r: 1 }
     `);
@@ -67,7 +67,7 @@ describe('named construction — parser', () => {
 describe('named construction — accepted forms', () => {
   it('all required fields by name', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(x: 1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -75,7 +75,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fields in a different order than declared', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(y: 2, x: 1)
         return result: 1 }
     `)).not.toThrow();
@@ -83,7 +83,7 @@ describe('named construction — accepted forms', () => {
 
   it('mixed: leading positional, trailing named', () => {
     expect(() => compileSource(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = { p = Point(1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -91,7 +91,7 @@ describe('named construction — accepted forms', () => {
 
   it('three required fields, all named', () => {
     expect(() => compileSource(`
-      type Vec3 (x: Integer, y: Integer, z: Integer)
+      type Vec3(x: Integer, y: Integer, z: Integer)
       @go = { p = Vec3(z: 3, x: 1, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -99,7 +99,7 @@ describe('named construction — accepted forms', () => {
 
   it('mixed with more than one named field', () => {
     expect(() => compileSource(`
-      type Vec3 (Integer, y: Integer, z: Integer)
+      type Vec3(Integer, y: Integer, z: Integer)
       @go = { p = Vec3(1, z: 3, y: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -107,7 +107,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fills a required field and omits a trailing optional', () => {
     expect(() => compileSource(`
-      type User (id: Text, ? nickname: Text)
+      type User(id: Text, ? nickname: Text)
       @go = { u = User(id: "a")
         return result: 1 }
     `)).not.toThrow();
@@ -115,7 +115,7 @@ describe('named construction — accepted forms', () => {
 
   it('named fills both a required and an optional field', () => {
     expect(() => compileSource(`
-      type User (id: Text, ? nickname: Text)
+      type User(id: Text, ? nickname: Text)
       @go = { u = User(id: "a", nickname: "ace")
         return result: 1 }
     `)).not.toThrow();
@@ -123,7 +123,7 @@ describe('named construction — accepted forms', () => {
 
   it('named can supply an optional while skipping another optional', () => {
     expect(() => compileSource(`
-      type Opts (? a: Integer, ? b: Integer)
+      type Opts(? a: Integer, ? b: Integer)
       @go = { o = Opts(b: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -131,7 +131,7 @@ describe('named construction — accepted forms', () => {
 
   it('all-optional type constructed with every field named', () => {
     expect(() => compileSource(`
-      type Opts (? a: Integer, ? b: Integer)
+      type Opts(? a: Integer, ? b: Integer)
       @go = { o = Opts(a: 1, b: 2)
         return result: 1 }
     `)).not.toThrow();
@@ -142,7 +142,7 @@ describe('named construction — accepted forms', () => {
   // (for more). Pin down that a lone required field by name is legal.
   it('single required field, supplied by name', () => {
     expect(() => compileSource(`
-      type Id (v: Integer)
+      type Id(v: Integer)
       @go = { i = Id(v: 7)
         return result: 1 }
     `)).not.toThrow();
@@ -150,8 +150,8 @@ describe('named construction — accepted forms', () => {
 
   it('a nested construction may fill a named field', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
-      type Line (a: Point, b: Point)
+      type Point(x: Integer, y: Integer)
+      type Line(a: Point, b: Point)
       @go = { l = Line(a: Point(x: 1, y: 2), b: Point(x: 3, y: 4))
         return result: 1 }
     `)).not.toThrow();
@@ -165,7 +165,7 @@ describe('named construction — accepted forms', () => {
 describe('named construction — rejected forms', () => {
   it('rejects a named key that is not a declared field', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(x: 1, z: 2)
         return result: 1 }
     `)).toThrow(/has no field named 'z'/);
@@ -173,7 +173,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a named field filled positionally', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(1, 2)
         return result: 1 }
     `)).toThrow("Type construction 'Point(...)' expects 0 positional arguments, got 2");
@@ -181,7 +181,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a positional field filled by name', () => {
     expect(() => compileSource(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = { p = Point(x: 1, y: 2)
         return result: 1 }
     `)).toThrow("Type construction 'Point(...)' expects 1 positional argument, got 0");
@@ -189,7 +189,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a missing required field under named construction', () => {
     expect(() => compileSource(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @go = { p = Point(x: 1)
         return result: 1 }
     `)).toThrow(/missing required field 'y'/);
@@ -197,7 +197,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects more than one missing required field, naming both', () => {
     expect(() => compileSource(`
-      type Vec3 (x: Integer, y: Integer, z: Integer)
+      type Vec3(x: Integer, y: Integer, z: Integer)
       @go = { p = Vec3(x: 1)
         return result: 1 }
     `)).toThrow(/missing required fields 'y', 'z'/);
@@ -205,7 +205,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects too many positional args when a named arg is also present', () => {
     expect(() => compileSource(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = { p = Point(1, 2, 3, y: 9)
         return result: 1 }
     `)).toThrow("Type construction 'Point(...)' expects 1 positional argument, got 3");
@@ -213,7 +213,7 @@ describe('named construction — rejected forms', () => {
 
   it('rejects a required field left unfilled by a mix of pos + named', () => {
     expect(() => compileSource(`
-      type Vec3 (Integer, y: Integer, z: Integer)
+      type Vec3(Integer, y: Integer, z: Integer)
       @go = { p = Vec3(1, z: 3)
         return result: 1 }
     `)).toThrow(/missing required field 'y'/);
@@ -231,11 +231,11 @@ describe('named construction — rejected forms', () => {
 
 describe('named construction — runtime field placement', () => {
   const fixture = `
-    type Point (x: Integer, y: Integer)
-    type Pt (Integer, y: Integer)
-    type Vec3 (x: Integer, y: Integer, z: Integer)
-    type User (id: Integer, ? nickname: Integer)
-    type Person (name: Text, age: Integer)
+    type Point(x: Integer, y: Integer)
+    type Pt(Integer, y: Integer)
+    type Vec3(x: Integer, y: Integer, z: Integer)
+    type User(id: Integer, ? nickname: Integer)
+    type Person(name: Text, age: Integer)
 
     @allNamed = -> result: (Point(x: 10, y: 20).x)
 

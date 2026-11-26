@@ -171,7 +171,7 @@ describe('type coercion — runtime', () => {
     }
 
     // as — remote replies
-    type Point (x: Integer, y: Integer)
+    type Point(x: Integer, y: Integer)
 
     @overDoc = {
       x Integer = Svc.text() as Integer
@@ -776,7 +776,7 @@ describe('as — provably wrong is a compile error', () => {
     ['"x" as a Type', 'return "x" as Point', 'Text as Point'],
     ['a Type as a scalar', 'p Point = Point(x: 1, y: 2)\nreturn p as Text', 'Point as Text'],
   ])('%s', (_, body, message) => {
-    expect(() => compileSource(`type Point (x: Integer, y: Integer)\n@go = {\n${body}\n}\n`)).toThrow(`Cannot render ${message}`);
+    expect(() => compileSource(`type Point(x: Integer, y: Integer)\n@go = {\n${body}\n}\n`)).toThrow(`Cannot render ${message}`);
   });
 
   it.each([
@@ -785,6 +785,6 @@ describe('as — provably wrong is a compile error', () => {
     ['a list as an interface', 'Thing = [1] as { get () -> (Integer) }', 'List of Integers'],
     ['a Type as an interface', 'Thing = Point(x: 1, y: 2) as { get () -> (Integer) }', 'Point'],
   ])('%s', (_, decl, type) => {
-    expect(() => compileSource(`type Point (x: Integer, y: Integer)\n${decl}\n@go = -> 1\n`)).toThrow(`Cannot render ${type} as an actor — no such rendering, so this 'as' can only fail`);
+    expect(() => compileSource(`type Point(x: Integer, y: Integer)\n${decl}\n@go = -> 1\n`)).toThrow(`Cannot render ${type} as an actor — no such rendering, so this 'as' can only fail`);
   });
 });

@@ -391,7 +391,7 @@ describe('class and :: — what comes after `::`', () => {
   it('a type is still a type, not a value', () => {
     expect(() => compileSource(`
       C = *{
-        type P (Integer)
+        type P(Integer)
         @r = -> 1
       }
       @go = { return C::P }

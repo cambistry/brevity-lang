@@ -9,7 +9,7 @@ describe('the service document', () => {
   it('lists every op at every address', () => {
     const { interface: iface } = extract(`
       use Widget = "widget.bv" as { total () ~> (Integer) }
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @val = 100
       @origin = Point(0, y: 0)
       @cell *Text = "hi"
@@ -118,7 +118,7 @@ describe('the service document', () => {
   it('a type declared in a class is the class\'s, named bare inside it', () => {
     const { interface: iface } = extract(`
       @W = () *{
-        type X (Integer)
+        type X(Integer)
         @x = (p X) -> p
       }
     `);

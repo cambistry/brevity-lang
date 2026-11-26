@@ -9,15 +9,15 @@ import { extract } from '../../index.js';
 describe('a type declared in a class', () => {
   const script = `
     W = *{
-      type X (Integer)
+      type X(Integer)
       @make = -> X(1)
     }
     S = actor {
-      type Widget (Text, Text)
+      type Widget(Text, Text)
     }
     A = *{
       B = *{
-        type Y (Integer)
+        type Y(Integer)
       }
     }
     @byClass = -> result: W::X(2)
@@ -83,16 +83,16 @@ describe('a type declared in a class', () => {
 
   it('goes in the class\'s entry in the service document', () => {
     const { interface: iface } = extract(`
-      type P (Integer)
+      type P(Integer)
       @W = *{
-        type X (Integer)
+        type X(Integer)
         @get = -> X(1)
       }
       @S = actor {
-        type Widget (Text, Text)
+        type Widget(Text, Text)
       }
       Q = *{
-        type Hidden (Integer)
+        type Hidden(Integer)
       }
     `);
     expect(iface.service).toEqual({
@@ -110,13 +110,13 @@ describe('a type declared in a class', () => {
 // Each type is known by its address, so two of one bare name are two types.
 describe('types of one name in different actors', () => {
   const script = `
-    type X (Integer)
+    type X(Integer)
     W = *{
-      type X (Integer)
+      type X(Integer)
       @make = -> X(1)
     }
     V = *{
-      type X (Integer, Integer)
+      type X(Integer, Integer)
     }
     @file = -> result: X(1)
     @w = -> result: W::X(2)
@@ -291,10 +291,10 @@ describe('types of one name in two services', () => {
 });
 
 describe('reaching a type: errors', () => {
-  const W = 'W = *{\n  type X (Integer)\n  @get = -> 1\n}\n';
+  const W = 'W = *{\n  type X(Integer)\n  @get = -> 1\n}\n';
 
   it('a type and a class of the same name in one actor', () => {
-    expect(() => compileSource('type Box (Integer)\n@Box = *{}\n@go = -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
+    expect(() => compileSource('type Box(Integer)\n@Box = *{}\n@go = -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
   });
 
   it('a class\'s type, bare outside the class', () => {
@@ -322,7 +322,7 @@ describe('reaching a type: errors', () => {
   });
 
   it('two types of one name in one class', () => {
-    expect(() => compileSource(`W = *{\n  type X (Integer)\n  type X (Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
+    expect(() => compileSource(`W = *{\n  type X(Integer)\n  type X(Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
   });
 
   it('`::Name (…)` in a class body', () => {

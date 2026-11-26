@@ -10,7 +10,7 @@ import { compileSource } from '../helpers.js';
 describe('type field access — value.field', () => {
   it('reads a field directly from a TypeConstruction', async () => {
     await expectBehavior(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @get_x = -> result: Point(x: 7, y: 8).x as Integer
     `,
       { input: { id: '1', op: 'get_x', from: 'c' } },
@@ -20,7 +20,7 @@ describe('type field access — value.field', () => {
 
   it('reads a field from a typed local', async () => {
     await expectBehavior(`
-      type Point (x: Integer, y: Integer)
+      type Point(x: Integer, y: Integer)
       @get_y = {
         p = Point(x: 7, y: 8)
         return result: p.y as Integer
@@ -33,7 +33,7 @@ describe('type field access — value.field', () => {
 
   it('reads a named field after a positional one', async () => {
     await expectBehavior(`
-      type Mixed (Text, count: Integer, ok: Boolean)
+      type Mixed(Text, count: Integer, ok: Boolean)
       @sum = -> result: Mixed("hi", count: 3, ok: true).count as Integer
     `,
       { input: { id: '3', op: 'sum', from: 'c' } },
@@ -43,7 +43,7 @@ describe('type field access — value.field', () => {
 
   it('a positional field has no name to read', () => {
     expect(() => compileSource(`
-      type Point (Integer, y: Integer)
+      type Point(Integer, y: Integer)
       @go = {
         p = Point(1, y: 2)
         return result: p.x as Integer
@@ -53,14 +53,14 @@ describe('type field access — value.field', () => {
 
   it('rejects access to an undeclared field on a TypeConstruction', () => {
     expect(() => compileSource(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @go = -> result: Point(1, 2).bogus as Integer
     `)).toThrow(/Type 'Point' has no field 'bogus'/);
   });
 
   it('rejects access to an undeclared field on a typed local', () => {
     expect(() => compileSource(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @go = {
         p = Point(1, 2)
         return result: p.bogus as Integer
@@ -72,7 +72,7 @@ describe('type field access — value.field', () => {
     // .field access on a child-actor binding or unknown identifier should
     // pass through this validator without throwing.
     expect(() => compileSource(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @go = -> result: 1
     `)).not.toThrow();
   });

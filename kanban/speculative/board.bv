@@ -86,7 +86,7 @@ either = (text Text, fallback Text) -> if (text == "") fallback else text
 TICKETS
 =======
 
-type Ticket (slug Text, title Text, status Text, created Text)
+type Ticket(slug Text, title Text, status Text, created Text)
 
 -- A ticket from its file: the body's heading is the title; the front-matter gives the rest. --
 ticketFrom = (slug Text)

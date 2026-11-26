@@ -6032,7 +6032,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return AST.typeField(String(fields.length), paramType, { optional });
   }
 
-  // Parse `type Name (fields)` (delimited form, single- or multi-line) or
+  // Parse `type Name(fields)` (delimited form, single- or multi-line) or
   // `type Name <linebreak> <indented fields>` (lineal form). The lineal form
   // terminates at the first BLOCK_SEP (blank line) or EOF.
   const isTypeKw = (t = peek()) => t?.type === 'KEYWORD' && t.value === 'type';
@@ -6057,7 +6057,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     } else {
       // Lineal: the fields start on the line below the name.
       if (!['NEWLINE', 'BLOCK_SEP', 'EOF'].includes(peek().type)) {
-        throw new Error(`'type ${name}': its fields go on the lines below it, or in parens: 'type ${name} (…)' (line ${peek().line})`);
+        throw new Error(`'type ${name}': its fields go on the lines below it, or in parens: 'type ${name}(…)' (line ${peek().line})`);
       }
       while (peek().type === 'NEWLINE') consume();
       let last = -1;

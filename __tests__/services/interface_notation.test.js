@@ -5,7 +5,7 @@ import { documentShape } from '../../src/service_doc.js';
 // Service-document notation: every entry is a name, a space, and a
 // definition — no entry colon, no `=` on types, one line per overload.
 //
-//   type Point (Integer, Integer)        type declaration
+//   type Point(Integer, Integer)        type declaration
 //   my_func (Type) -> (Type)              function
 //   Counter (k: Type) -> *{ … }           constructor (body always written)
 //   set name (Type)                       settable field
@@ -65,8 +65,8 @@ describe('service document — entry forms', () => {
     expect(p.__types.Text).toEqual({ effect: 'read', supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
   });
 
-  it('type declaration: type Name (fields)', () => {
-    const p = parseInterface('{ type Point (Integer, y: Integer) }');
+  it('type declaration: type Name(fields)', () => {
+    const p = parseInterface('{ type Point(Integer, y: Integer) }');
     expect(p.__typeDecls.Point.fields).toEqual([
       { type: 'TypeField', name: '0', paramType: 'Integer' },
       { type: 'TypeField', name: 'y', paramType: 'Integer', named: true },
@@ -191,7 +191,7 @@ describe('service document — emitted form', () => {
 
   it('emitted document parses back', () => {
     const { interface: iface } = extract(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @val *Integer = 0
       @Counter = (start: Integer) *{
         @get = -> value: start as Integer
@@ -356,7 +356,7 @@ describe('constructor profiles in source', () => {
 
   it('header dependency: multi-line iface with a nested constructor body', () => {
     const { ast } = extract(`use Lib = "lib.bv" as {
-  type Point (Integer, Integer)
+  type Point(Integer, Integer)
   Counter (start: Integer) -> *{
     get () -> (value: Integer)
     slot *Integer

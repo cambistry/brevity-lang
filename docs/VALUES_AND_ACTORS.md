@@ -29,7 +29,7 @@ The split is visible at the source level. Brevity has two kinds of constructor.
 A **type** constructs values:
 
 ```brevity
-type Point (Integer, Integer)
+type Point(Integer, Integer)
 
 p = Point(1, 2)
 ```
@@ -67,7 +67,7 @@ constructor profile, `(start Integer) -> *{ … }`.
 
 The two declaration forms are distinguished by their prefix:
 
-- `type Name (...)` is a type declaration. No `*`.
+- `type Name(...)` is a type declaration. No `*`.
 - `Name = (params) *{ ... }` declares an actor with a `new`. The `*` on the body
   marks the form as actor-producing.
 

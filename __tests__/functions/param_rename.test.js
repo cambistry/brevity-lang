@@ -32,7 +32,7 @@ describe('named param — rename', () => {
 
   it('a lone name that is a type in scope is the type', async () => {
     await expectBehavior(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       f = (p: Point) {
         (x, y) = p
         x + y
@@ -102,10 +102,10 @@ describe('named param — a misspelt type', () => {
 describe('type names are reserved', () => {
   it.each([
     ['a built-in', 'f = (Integer Integer) { 1 }'],
-    ['a :: type', 'type Point (Integer)\nf = (Point Integer) { 1 }'],
+    ['a :: type', 'type Point(Integer)\nf = (Point Integer) { 1 }'],
     ['a class', 'Box = *{ @x = -> 1 }\nf = (Box Integer) { 1 }'],
-    ['a named param', 'type Point (Integer)\nf = (Point: Integer) { 1 }'],
-    ['a rename local', 'type Point (Integer)\nf = (p: Point Integer) { 1 }'],
+    ['a named param', 'type Point(Integer)\nf = (Point: Integer) { 1 }'],
+    ['a rename local', 'type Point(Integer)\nf = (p: Point Integer) { 1 }'],
   ])('a param may not share the name of %s', (_label, src) => {
     expect(() => compileSource(`${src}\n@test = -> 1\n`)).toThrow(/has the name of a type in scope/);
   });

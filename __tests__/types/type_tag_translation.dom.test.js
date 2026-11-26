@@ -19,7 +19,7 @@ async function forwardingActor(selfAddr) {
     use Sink = "Sink" as {
       take (p: Point) -> ()
     }
-    type Point (Integer, Integer)
+    type Point(Integer, Integer)
     @fwd
       =
       p: Point

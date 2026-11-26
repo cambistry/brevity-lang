@@ -140,7 +140,7 @@ describe('destructured service member — bare read', () => {
 
 describe('reference-field callback — typed bind', () => {
   const fixture = `
-    type Call (Integer, fn: (value: Integer) -> (Integer))
+    type Call(Integer, fn: (value: Integer) -> (Integer))
     @go = (c: Call) { (arg) = c; out Integer = c.fn(arg); return a1: out }
   `;
   const run = (reply, expected) => expectBehavior(fixture,

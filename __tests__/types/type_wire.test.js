@@ -14,7 +14,7 @@ import { expectBehavior, createActor } from '../helpers.js';
 describe('type wire — outbound payload + ty', () => {
   it('all-required type → positional payload + type tag', async () => {
     await expectBehavior(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @coords = -> result: Point(1, 2)
     `,
       { input: { id: '1', op: 'coords', from: 'c' } },
@@ -24,7 +24,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('all-required type with mixed scalar fields', async () => {
     await expectBehavior(`
-      type Mixed (Integer, Text, Boolean)
+      type Mixed(Integer, Text, Boolean)
       @go = -> result: Mixed(3, "hi", true)
     `,
       { input: { id: '2', op: 'go', from: 'c' } },
@@ -34,7 +34,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('absent positionals are not sent; absent named fields are omitted', async () => {
     await expectBehavior(`
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @go = -> result: Game(turn: 3)
     `,
       { input: { id: '3', op: 'go', from: 'c' } },
@@ -44,7 +44,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('type with optional fields, all present → positional values, then the named object', async () => {
     await expectBehavior(`
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @go = -> result: Game(true, turn: 5)
     `,
       { input: { id: '4', op: 'go', from: 'c' } },
@@ -54,7 +54,7 @@ describe('type wire — outbound payload + ty', () => {
 
   it('an absent trailing positional is not sent ahead of the named object', async () => {
     await expectBehavior(`
-      type Game (Integer, ? Boolean, ? turn: Integer)
+      type Game(Integer, ? Boolean, ? turn: Integer)
       @go = -> result: Game(1, turn: 5)
     `,
       { input: { id: '5', op: 'go', from: 'c' } },
@@ -66,7 +66,7 @@ describe('type wire — outbound payload + ty', () => {
 describe('type wire — inbound payload reconstruction', () => {
   it('all-required type: positional payload + type tag rebuilds the tagged value', async () => {
     await expectBehavior(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @get_x = (p: Point) {
         (x) = p
         return result: x
@@ -79,7 +79,7 @@ describe('type wire — inbound payload reconstruction', () => {
 
   it('optional-bearing type: a named field reads directly', async () => {
     await expectBehavior(`
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 0)
     `,
       { input: { id: '2', op: [[{ g: [{ turn: 7 }] }], 'get_turn'], 'ty': [[{ g: ':Game' }]], from: 'c' } },
@@ -89,7 +89,7 @@ describe('type wire — inbound payload reconstruction', () => {
 
   it('positional values, then the named object, rebuild both kinds of field', async () => {
     await expectBehavior(`
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @read = (g: Game) {
         (started) = g
         return s: started ?? false, t: g.turn ?? 0
@@ -102,7 +102,7 @@ describe('type wire — inbound payload reconstruction', () => {
 
   it('optional-bearing type: absent optional reads as null via ??', async () => {
     await expectBehavior(`
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @get_turn = (g: Game) -> result: (g.turn ?? 99)
     `,
       { input: { id: '3', op: [[{ g: [] }], 'get_turn'], 'ty': [[{ g: ':Game' }]], from: 'c' } },
@@ -121,7 +121,7 @@ describe('type wire — outbound argument payload + ty', () => {
       use Sink = "Sink" as {
         take (p: Point) -> ()
       }
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @fwd
         =
         p: Point
@@ -142,7 +142,7 @@ describe('type wire — outbound argument payload + ty', () => {
       use Sink = "Sink" as {
         take (g: Game) -> ()
       }
-      type Game (? Boolean, ? turn: Integer)
+      type Game(? Boolean, ? turn: Integer)
       @fwd
         =
         g: Game
@@ -163,7 +163,7 @@ describe('type wire — outbound argument payload + ty', () => {
       use Sink = "Sink" as {
         take (n: Integer, p: Point) -> ()
       }
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @fwd
         =
         p: Point
@@ -187,7 +187,7 @@ describe('type wire — outbound argument payload + ty', () => {
 // stands in for an absent positional ahead of the named object.
 describe('type wire — no padding for absent positionals', () => {
   const script = `
-    type Opts (? Boolean, ? Integer, ? k: Integer)
+    type Opts(? Boolean, ? Integer, ? k: Integer)
     @namedOnly = -> result: Opts(k: 1)
     @oneOfTwo = -> result: Opts(true, k: 1)
     @none = -> result: Opts()

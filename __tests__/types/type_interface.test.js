@@ -8,7 +8,7 @@ import { extract } from '../../index.js';
 describe('type interface — the document\'s types', () => {
   it('positional fields', () => {
     const { interface: iface } = extract(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({ ':Point': ['Integer', 'Integer'] });
@@ -16,7 +16,7 @@ describe('type interface — the document\'s types', () => {
 
   it('optional fields', () => {
     const { interface: iface } = extract(`
-      type Game (? Boolean, ? turn: Integer, ? players: List of Texts)
+      type Game(? Boolean, ? turn: Integer, ? players: List of Texts)
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({
@@ -26,7 +26,7 @@ describe('type interface — the document\'s types', () => {
 
   it('named fields', () => {
     const { interface: iface } = extract(`
-      type Rank (Integer, kind: Text)
+      type Rank(Integer, kind: Text)
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({ ':Rank': ['Integer', { kind: 'Text' }] });
@@ -34,7 +34,7 @@ describe('type interface — the document\'s types', () => {
 
   it('a type reached through another actor', () => {
     const { interface: iface } = extract(`
-      type User (Geom::Profile)
+      type User(Geom::Profile)
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({ ':User': ['Geom:Profile'] });
@@ -42,7 +42,7 @@ describe('type interface — the document\'s types', () => {
 
   it('a type with no fields', () => {
     const { interface: iface } = extract(`
-      type Empty ()
+      type Empty()
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({ ':Empty': [] });
@@ -50,8 +50,8 @@ describe('type interface — the document\'s types', () => {
 
   it('multiple type declarations all appear in interface', () => {
     const { interface: iface } = extract(`
-      type Point (Integer, Integer)
-      type Pair (Integer, Integer)
+      type Point(Integer, Integer)
+      type Pair(Integer, Integer)
       @noop = -> ok: true
     `);
     expect(iface.service.types).toEqual({
@@ -62,7 +62,7 @@ describe('type interface — the document\'s types', () => {
 
   it('a node has its ops, then its types', () => {
     const { interface: iface } = extract(`
-      type Point (Integer, Integer)
+      type Point(Integer, Integer)
       @get = -> coords: 1
     `);
     expect(iface.service).toEqual({
