@@ -20,10 +20,10 @@ metadata:
 - The commit and test gates above still apply.
 
 ## Tickets and pasteables
-- Tickets are `kanban/tickets/<slug>.md` with `status:` front-matter (format and columns in `kanban/README.md`). When something should be a ticket, write it with `status: inbox` and say so in one line.
+- Tickets are `kanban/tickets/<slug>.md` with `status:` front-matter (format and columns in `kanban/README.md`). When something should be a ticket, file it myself: write the file with `status: inbox` and say so in one line. Never hand over a draft to paste.
 - Status moves with the work: `in-progress` when I start, `review` when green, `done` in the acceptance commit itself.
 - Order is the user's. Never edit `.kanban/lists/` unless asked. Read the board with `npm run board -- --print [status…]`.
-- Pasteable text (tickets, messages, commit text) goes in a fenced code block, never `>` lines, because the markers come along on copy.
+- Pasteable text (messages, commit text) goes in a fenced code block, never `>` lines, because the markers come along on copy.
 
 ## notes/ and memory
 - Design state goes in `notes/` as dated `topic-YYYY-MM-DD.md`. Memory holds pointers and working rules, never design content.
