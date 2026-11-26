@@ -1,5 +1,5 @@
-// Part of the parser (src/parser.js): once a file is read, every type it writes
-// is encoded as an Opre type (src/opre_types.js), in place of its text. A node's
+// Part of the parser (src/parser.js): once a file's names are settled, every type
+// it writes is encoded as an Opre type (src/opre_types.js), in place of its text. A node's
 // `typeName` becomes a `typeNameEnc`, a param's `type` a `typeEnc`, and so on, for
 // the keys below; an inline interface is read into `interfaceDoc`. A construction's
 // `typeName` is the name it's made by, and stays beside its encoding. Names resolve in the file's scope (src/service_doc.js,

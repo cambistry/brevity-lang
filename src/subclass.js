@@ -97,7 +97,7 @@ export function resolveSuperclassChain(actorByName, actor) {
 
     for (const sv of (superActor.stateVarDecls || [])) {
       if (sv.ingest) {
-        inheritedIngests.push({ name: sv.name, ...(sv.typeName !== undefined && { typeName: sv.typeName }), typeNameEnc: sv.typeNameEnc, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
+        inheritedIngests.push({ name: sv.name, typeNameEnc: sv.typeNameEnc, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
       }
     }
 

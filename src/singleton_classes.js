@@ -28,12 +28,6 @@ import { lowerActorValues } from './actor_values.js';
 // only that, so it is reserved everywhere else.
 // See notes/class-singleton-forms-2026-11-13.md.
 
-// These lowerings run in the parse, before its types are encoded (src/parser_types.js):
-// a node takes a declaration's encoded type when it's asked for.
-const encodedLater = (node, key, decl, declKey) => Object.defineProperty(node, key, {
-  get: () => decl[declKey], enumerable: true, configurable: true,
-});
-
 // `class` as the parser leaves it: `class` is reserved, so no other name is spelled so.
 // Resolved here to the class of the actor it's in.
 export const CLASS_SELF = 'class';
@@ -64,7 +58,7 @@ function addImplicitBlock(actors, byName, a, parentBlock) {
   const cell = `${bare}__class`;
   const declarer = actors.find(x => (x.name ?? null) === (a.enclosing ?? null));
   const make = () => ({ type: 'FunctionCallExpr', callee: { type: 'Identifier', name: blockName }, args: [] });
-  declarer.stateVarDecls.push({ name: cell, typeName: blockName, typeNameEnc: `:${quoteToken(blockName)}:*`, typeFromCallee: true, isRef: false });
+  declarer.stateVarDecls.push({ name: cell, typeName: blockName, typeFromCallee: true, isRef: false });
   const place = (body, st) => {
     if (!body) return;
     const at = body.findIndex(x => x.name === parentBlock?.singletonOf);
@@ -280,7 +274,7 @@ export function lowerInheritedBlockCells(actors) {
       if (!inherited.has(d.name)) inherited.set(d.name, { decl: d, owner: b.name });
     }
     if (block.blockParent) block.enclosing = block.home ?? null;
-    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeName: decl.typeName ?? null, get typeNameEnc() { return decl.typeNameEnc; }, isRef: !!decl.isRef })), configurable: true });
+    Object.defineProperty(block, 'forwardCells', { value: [...inherited].map(([name, { decl }]) => ({ name, typeNameEnc: decl.typeNameEnc, isRef: !!decl.isRef })), configurable: true });
     // The cell a use names: an inherited one, or (`base::x`, `A::x`) an ancestor's.
     const resolve = (node, bound) => {
       if (typeof node.name !== 'string') return null;
@@ -303,7 +297,7 @@ export function lowerInheritedBlockCells(actors) {
     const mark = (node, found) => {
       delete node.viaClass;
       Object.assign(node, { outer: true, outerBase: true, outerLevel: 1, outerClass: found.owner, outerParam: false });
-      encodedLater(node, 'outerTypeEnc', found.decl, 'typeNameEnc');
+      node.outerTypeEnc = found.decl.typeNameEnc;
       return node;
     };
     const visit = (node, bound) => {
@@ -329,9 +323,8 @@ export function lowerInheritedBlockCells(actors) {
           const { name, value, updateOp } = node;
           for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
           node.type = 'ExprStatement';
-          const type = found.decl.typeName ?? null;
-          node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner };
-          encodedLater(node.expr, 'outerTypeEnc', found.decl, 'typeNameEnc');
+          const type = found.decl.typeNameEnc;
+          node.expr = { type: 'OuterSet', name, value, updateOp: SCALAR.has(type) ? null : updateOp ?? null, outerLevel: 1, outerBase: true, outerClass: found.owner, outerTypeEnc: type };
           visit(value, bound);
           return;
         }
@@ -563,7 +556,7 @@ export function lowerBlockDelegation(actors) {
       // through the cell's own `$set`, or at the extender (src/codegen/*).
       if (node.type === 'SetStatement' && ownCells.has(node.name) && !bound.has(node.name)) {
         const decl = block.stateVarDecls.find(d => d.name === node.name);
-        const type = decl.typeName ?? null;
+        const type = decl.typeNameEnc;
         if (node.updateOp === '<|' && !['Integer', 'Text', 'Boolean', 'Decimal', 'Float'].includes(type)) {
           throw new Error(`'${node.name} <|' in a function of a class block isn't supported yet: write '${node.name} <- …'`);
         }
@@ -571,8 +564,7 @@ export function lowerBlockDelegation(actors) {
         visit(value, bound);
         for (const k of Object.keys(node)) if (k !== 'loc') delete node[k];
         node.type = 'ExprStatement';
-        node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, ctxCell: wireLabelOf(name) };
-        encodedLater(node.expr, 'outerTypeEnc', decl, 'typeNameEnc');
+        node.expr = { type: 'OuterSet', name, value, updateOp: null, outerLevel: 0, outerSelf: true, ctxCell: wireLabelOf(name), outerTypeEnc: decl.typeNameEnc };
         return;
       }
       if (node.type === 'OuterSet' && node.outerBase) node.ctxCell = wireLabelOf(node.name);

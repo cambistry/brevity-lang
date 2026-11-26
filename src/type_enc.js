@@ -33,6 +33,17 @@ export const addressesIn = (t, out = new Set()) => {
 };
 
 // ── Unions ────────────────────────────────────────────────────────────────────
+// The type `node` has at `key`, as the fields that give it at `as`: its encoding
+// (`<key>Enc`), or what a type with none keeps (src/parser_types.js, setEnc).
+export const typeFields = (node, key, as = key) => {
+  if (!node) return {};
+  if (`${key}Enc` in node) return { [`${as}Enc`]: node[`${key}Enc`] };
+  if (`${key}Unencoded` in node) {
+    return { [`${as}Unencoded`]: node[`${key}Unencoded`], [`${as}Kind`]: node[`${key}Kind`], [`${as}Tree`]: node[`${key}Tree`] };
+  }
+  return {};
+};
+
 export const isUnion = (t) => !!t && typeof t === 'object' && !Array.isArray(t) && '%or' in t;
 // A union's members, or the type alone.
 export const members = (t) => (isUnion(t) ? t['%or'] : [t]);

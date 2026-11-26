@@ -19,6 +19,7 @@
 // case is open in the note.
 
 import * as AST from './ast.js';
+import { typeFields } from './type_enc.js';
 import { orderParamsForDefaults } from './param_defaults.js';
 
 // A public class is `@T` in the parse and `T__pub` (PUBLIC_CLASS_SUFFIX, src/subclass.js)
@@ -112,11 +113,12 @@ function renamedCopy(node, renames) {
 
 // `chain` is resolveSuperclassChain, passed in to avoid a cycle. Validation lowers
 // the parent's code in place, so a view is taken fresh each time, never kept.
-// This runs as the file is parsed (src/parser.js), and again after: a param's type
-// is its text until the parser encodes it (src/parser_types.js), then its encoding.
-// A cell made from one carries whichever it has; untyped, `Anything`.
-const typeOfParam = (p) => (p.type !== undefined ? { typeName: p.type, typeNameEnc: p.typeEnc } : { typeNameEnc: p.typeEnc === undefined ? 'Anything' : p.typeEnc });
-const typeOfCell = (c) => (c?.typeName !== undefined ? { typeName: c.typeName, typeNameEnc: c.typeNameEnc } : { typeNameEnc: c?.typeNameEnc });
+// A cell made from a param has its type; an untyped one from a parent's doc,
+// `Anything`.
+const typeOfParam = (p) => {
+  const fields = typeFields(p, 'type', 'typeName');
+  return Object.keys(fields).length || p.type === null ? fields : { typeNameEnc: 'Anything' };
+};
 
 export function parentView(actorByName, P, chain) {
   const pc = chain(actorByName, P);
@@ -129,7 +131,7 @@ export function parentView(actorByName, P, chain) {
   // A published param is read on the wire as `@name`: the layer keeps answering it.
   for (const p of params) {
     if (!p.accessor || functions.some(f => f.name === '@' + p.accessor)) continue;
-    functions.push(AST.functionDecl('@' + p.accessor, [], [{ ...AST.implicitReturn(AST.identifier(renames.get(p.name)), p.type || null), ...(p.typeEnc !== undefined && { typeNameEnc: p.typeEnc }) }]));
+    functions.push(AST.functionDecl('@' + p.accessor, [], [{ ...AST.implicitReturn(AST.identifier(renames.get(p.name))), ...typeFields(p, 'type', 'typeName') }]));
   }
   return {
     params: params.map(p => ({
@@ -398,7 +400,7 @@ export function lowerSuperCalls(actors, chain) {
         const byParam = new Map(view.params.map(p => [p.name, p]));
         const passed = binds.map(b => {
           const p = byParam.get(b.name);
-          return { key: p.key, positional: p.positional, ...(p.type !== undefined ? { type: p.type } : p.typeEnc !== undefined ? { typeEnc: p.typeEnc } : {}), value: b.value };
+          return { key: p.key, positional: p.positional, ...typeFields(p, 'type'), value: b.value };
         });
         return [{ type: 'ExprStatement', expr: { type: 'RemoteNew', layer, address: P.remoteAddress, args: passed } }];
       }
@@ -410,7 +412,7 @@ export function lowerSuperCalls(actors, chain) {
       const binds = s.type === 'ExprStatement' && lowered.get(s.expr);
       if (!binds) return [s];
       const typeOf = new Map(parentView(byName, byName.get(s.expr.layer), chain).cells.map(c => [c.name, c]));
-      return binds.map(b => ({ type: 'TypedAssign', name: b.name, ...typeOfCell(typeOf.get(b.name)), value: b.value }));
+      return binds.map(b => ({ type: 'TypedAssign', name: b.name, ...typeFields(typeOf.get(b.name), 'typeName'), value: b.value }));
     });
   }
 }

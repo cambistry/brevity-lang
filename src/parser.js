@@ -147,8 +147,7 @@ export function typeNamesIn(text) {
 // then with each chain decided. So is `D = A ^ "x"`: when `A` is a class, what
 // follows `^` must be a layer.
 export function parse(tokensIn, options = {}) {
-  const ast = parseProgram(tokensIn, options);
-  return options.typeOnly ? ast : encodeAstTypes(ast, options.remotes);
+  return parseProgram(tokensIn, options);
 }
 
 function parseProgram(tokensIn, options) {
@@ -6492,17 +6491,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // A parent class from another file, known by its published doc.
   const remoteStubs = addRemoteParents(actors, dependencies, remotes);
   lowerSingletonClasses(actors, types, { fileKind });
-  lowerFunctionSupers(actors);
-  lowerBaseLayers(actors);
-  lowerSuperCalls(actors, resolveSuperclassChain);
-  lowerInheritedBlockCells(actors);
-  lowerBlockDelegation(actors);
-  dropRemoteParents(actors, remoteStubs);
   // A nested type's owner: the path of classes from the file actor down to the
   // one whose constructor block declares it (`A::B::X` has owner ['A', 'B']).
   // A singleton is named by its binding. Its name in the program is its path
   // (`A::B::X`); `bareName` is the name it was declared with.
-  const byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  let byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
   const classPath = (name) => {
     const a = name && byName.get(name);
     if (!a) return [];
@@ -6523,11 +6516,22 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     t.bareName = t.name;
     t.name = [...t.owner, t.name].join('::');
   }
-  if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
-  checkTokensAccounted();
   const result = AST.program(actors, dependencies, types);
   result.fileKind = fileKind;
   resolveLoneNames(result);
+  // The file's names are settled: its classes, its types' paths, which lone names
+  // are types. Its types are encoded here (src/parser_types.js), and the lowerings
+  // after read and make encoded types.
+  encodeAstTypes(result, remotes);
+  lowerFunctionSupers(actors);
+  lowerBaseLayers(actors);
+  lowerSuperCalls(actors, resolveSuperclassChain);
+  lowerInheritedBlockCells(actors);
+  lowerBlockDelegation(actors);
+  dropRemoteParents(actors, remoteStubs);
+  byName = new Map(actors.filter(a => a.name).map(a => [a.name, a]));
+  if (types.some(t => t.owner)) for (const a of byName.values()) a.classPath = classPath(a.name);
+  checkTokensAccounted();
   // A `*` header makes the file a factory: its entries are `new`'s params, never
   // DI. Its DI is declared with `use` in the constructor body.
   if (fileKind === 'factory') {
