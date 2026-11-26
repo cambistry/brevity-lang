@@ -1,4 +1,5 @@
 kanban/tickets/the-class-answers-new.md
+kanban/tickets/no-space-after-name-in-a-type-declaration.md
 kanban/tickets/positional-type-fields-should-perhaps-not-be-named.md
 kanban/tickets/encode-types-before-the-parse-time-lowerings.md
 kanban/tickets/code-generation-reads-encoded-types.md
