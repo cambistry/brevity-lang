@@ -1,5 +1,5 @@
 ---
-status: todo
+status: queued
 created: 2026-11-23
 ---
 # Self-return tags `:*`; hosts reduce `X:*`

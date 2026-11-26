@@ -1,5 +1,5 @@
 ---
-status: todo
+status: queued
 created: 2026-11-23
 ---
 # Retire constructor return-as

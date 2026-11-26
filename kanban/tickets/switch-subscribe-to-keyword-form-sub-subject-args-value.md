@@ -1,5 +1,5 @@
 ---
-status: todo
+status: queued
 created: 2026-11-10
 ---
 # switch `subscribe` to keyword form: sub subject[(args…)], (value) { handler }

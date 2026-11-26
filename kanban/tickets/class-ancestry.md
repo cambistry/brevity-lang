@@ -1,5 +1,5 @@
 ---
-status: todo
+status: queued
 created: 2026-05-20
 ---
 # Fix: A typed local should not accept an actor of an unrelated class
