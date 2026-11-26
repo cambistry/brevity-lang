@@ -6,12 +6,12 @@
    - Messages are plain JSON.
    - Actors are sequential and don't know their own address; parents translate addresses on the way out.
    - Everything is async.
-3. **Binder** is the vertex-level messaging protocol.
-4. **Bluster** is the authenticated, content-addressed wire.
+3. **Bluster** is the authenticated, content-addressed wire, and all that node-to-node Opre messaging needs.
    - Digests are JCS (RFC 8785) with BLAKE3; URIs are `bluster://`.
    - The hop-mutable `from`/`to` are kept apart from the signed payload.
    - Node bind is a rare three-step handshake; vertex bind is light.
-5. **Topology.**
+   - **Binder** is not a layer of the stack. It is a sync application built on top of Bluster.
+4. **Topology.**
    - A node is a daemon, and a security boundary.
    - A vertex is an addressable endpoint.
    - An edge is a symmetric record, `hash(sort(a, b))`.

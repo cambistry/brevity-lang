@@ -16,3 +16,5 @@ Today: the board leans on:
 - Text: line splitting, regex-level parsing of front-matter and list files, Unicode-aware width and wrapping.
 
 Open: which of these are library actors vs. host bindings; whether the Node host is a target of its own or a mode of the JS one.
+
+Follow-on: `agent-updates-tickets-through-the-board-s-opre-api`, the agent working tickets through the board's Opre API.
