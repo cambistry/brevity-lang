@@ -2,9 +2,9 @@
 status: inbox
 created: 2026-11-24
 ---
-# `over` and `reduce` accept an Integer as the list
+# Fix: `over` and `reduce` accept an Integer as the list
 
-Both compile, with no form behind them:
+Problem: both compile, with no form behind them:
 
 ```brevity
 @f = (n Integer) {
@@ -17,4 +17,4 @@ Both compile, with no form behind them:
 }
 ```
 
-A non-list should fail where it's met. (If a range form is wanted, that's a design question for notes/.) Found writing `kanban/board.bv`.
+Expected: a non-list fails where it's met. (If a range form is wanted, that's a design question for notes/.) Found writing `kanban/board.bv`.

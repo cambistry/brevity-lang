@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# as doesn't check class types, function types or undeclared names
+# Fix: as doesn't check class types, function types or undeclared names
 
 **Problem:** x as Session, f as (Integer) -> Integer and as on a name the file doesn't declare only relabel, so the value is never checked. A class-typed as can't check for an address yet, because instance references differ by target: an address string, a JS handle, a Rust instance id or an Erlang pid.
 

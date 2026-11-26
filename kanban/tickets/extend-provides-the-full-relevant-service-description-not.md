@@ -1,8 +1,8 @@
 ---
-status: todo
+status: inbox
 created: 2026-11-21
 ---
-# $extend provides the full, relevant service description, not just names
+# $extend should provide the full, relevant service description, not just names
 
 Or maybe I am wrong about this… Is it only an override if it actually matches type?
 

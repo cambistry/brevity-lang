@@ -1,11 +1,10 @@
 ---
-status: todo
+status: inbox
 created: 2026-04-26
 ---
 # valueless attributes
 
-e.g. <input disabled>
+Want:
 
-Also important to support in implicit XML subclassing:
-
-<div disabled; \@var Integer! = 0; …>…
+- e.g. <input disabled>
+- Also important to support in implicit XML subclassing: <div disabled; \@var Integer! = 0; …>…

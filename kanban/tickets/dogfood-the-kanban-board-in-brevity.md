@@ -1,12 +1,12 @@
 ---
-status: inbox
+status: todo
 created: 2026-11-24
 ---
 # Dogfood the kanban board in Brevity
 
-Port `kanban/board.mjs` to Brevity, starting nestled in a Node.js project: the JS target plus a Node host, the way the browser target is the JS target plus `brevity.js` (`notes/browser-target-2026-04-01.md`). JS modules as actors (same note, "JS Interop") may be the first bridge: wrap the Node APIs the board needs, then replace wrappers with library support as it lands.
+Want: port `kanban/board.mjs` to Brevity, starting nestled in a Node.js project: the JS target plus a Node host, the way the browser target is the JS target plus `brevity.js` (`notes/browser-target-2026-04-01.md`). JS modules as actors (same note, "JS Interop") may be the first bridge: wrap the Node APIs the board needs, then replace wrappers with library support as it lands.
 
-What the board leans on today:
+Today: the board leans on:
 
 - Files: read, write, list a directory, existence, temp files.
 - Processes: async `git` with captured output and exit status, run serially; a blocking editor run that inherits the terminal.

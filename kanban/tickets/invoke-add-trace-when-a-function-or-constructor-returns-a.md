@@ -1,12 +1,12 @@
 ---
-status: todo
+status: inbox
 created: 2026-11-15
 ---
 # Invoke `__add_trace__` when a function or constructor returns a new actor
 
 Spec: notes/add-trace-on-return-2026-11-14.md
 
-A class (or service) may declare a method `__add_trace__` in its interface. When a Brevity function or constructor returns an actor that did not exist when its body started, BV must invoke `__add_trace__` on that actor, passing the address of the returning scope. Where the actor was created doesn't matter (this body, a local subcall, a remote subcall); only that it is new since the body started. BV decides whether to call it from the interface of the returned value's type: no declaration, no call.
+Want: a class (or service) may declare a method `__add_trace__` in its interface. When a Brevity function or constructor returns an actor that did not exist when its body started, BV must invoke `__add_trace__` on that actor, passing the address of the returning scope. Where the actor was created doesn't matter (this body, a local subcall, a remote subcall); only that it is new since the body started. BV decides whether to call it from the interface of the returned value's type: no declaration, no call.
 
 Example, with HTML's element interface declaring `__add_trace__`:
 

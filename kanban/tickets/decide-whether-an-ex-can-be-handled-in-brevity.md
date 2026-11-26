@@ -4,7 +4,7 @@ created: 2026-11-02
 ---
 # Decide whether an ex can be handled in Brevity
 
-**Problem:** nothing in the language can handle a failed call. catch is a label-based early exit, so a failed as or remote call always ends the enclosing call. There's no way to write "use this reply if it's an Integer, otherwise do something else".
+**Today:** nothing in the language can handle a failed call. catch is a label-based early exit, so a failed as or remote call always ends the enclosing call. There's no way to write "use this reply if it's an Integer, otherwise do something else".
 
 **To decide:**
 

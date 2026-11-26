@@ -2,15 +2,15 @@
 status: inbox
 created: 2026-11-19
 ---
-# eliminate need for the noop hack
+# Fix: an actor should not need the noop hack
 
-An actor should certainly be valid if it has any public interface, such as an actor-cell (@pub *Integer…).
+Expected:
 
-And it should also be valid even if it only has protected names, since it can, theoretically, be subclassed and these become accessible by the subclass.
+- An actor should certainly be valid if it has any public interface, such as an actor-cell (@pub *Integer…).
+- And it should also be valid even if it only has protected names, since it can, theoretically, be subclassed and these become accessible by the subclass.
+- An actor with nothing but private names seems like a compilation error, even if its construction, or especially if its construction, creates one-time side effects. That is simply one-time execution.
 
-An actor with nothing but private names seems like a compilation error, even if its construction, or especially if its construction, creates one-time side effects. That is simply one-time execution.
-
-## Today (checked 2026-11-25)
+Problem (checked 2026-11-25):
 
 - Only a public cell (`@pub *Integer = 1`): builds and answers on js, rust and erlang.
 - Only a protected cell (`x *Integer = 42`, read with `test.get '~x'`): works on js. Rust and Erlang emit an empty program: rust fails with "`main` function not found in crate `brevity_actor`", erlang with "no module definition". Adding `@noop = -> x` makes both work, so the hack still covers this.

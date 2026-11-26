@@ -4,7 +4,11 @@ created: 2026-11-25
 ---
 # Clause lists follow-up: pipe into a list of functions
 
-Design: `notes/clause-lists-2026-11-25.md`. A function is a list of functions (the 2026-04-06 overload model: `=` starts the list, `<<` appends, `Function()` is empty), and a list literal of clauses is that list written as a value.
+Design: `notes/clause-lists-2026-11-25.md`.
+
+Today: a function is a list of functions (the 2026-04-06 overload model: `=` starts the list, `<<` appends, `Function()` is empty).
+
+Want: a list literal of clauses is that list written as a value.
 
 ```brevity
 key |> [

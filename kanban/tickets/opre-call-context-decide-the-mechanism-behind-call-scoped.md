@@ -8,9 +8,13 @@ created: 2026-11-12
 
 - An actor handles one message at a time; handling one message is a **turn**. A turn can call another actor and wait for the reply. The question is what the actor does with other incoming messages while it waits. There are three options:
 - **Closed:** hold all of them until the turn ends. Any callback made during the awaited call deadlocks.
-- **Open:** handle any of them. State can change across any await. This is what JS, Erlang and Rust all do today.
+- **Open:** handle any of them. State can change across any await.
 - **Call-scoped:** handle only messages caused by the call being waited on, and hold the rest until the turn ends. Callbacks work, and unrelated traffic never sees the middle of a turn.
-- **Call-scoped turns are the chosen direction.** They need a token on the wire that marks which call a message is on behalf of.
+
+Today: JS, Erlang and Rust all use open turns.
+
+Want: **call-scoped turns**, the chosen direction. They need a token on the wire that marks which call a message is on behalf of.
+
 - That token is in effect a **transaction context**. Call-scoped turns give isolation along a call chain: they are the nested-transaction rule that a child inherits its parent's locks. There is no atomicity, commit or durability yet.
 - Cross-actor transactions are planned as an **Opre** feature, with no trusted coordinator across trust boundaries. Defining a Brevity-only field for the token now (on was the working name) would get ahead of that design. The work that needs it is deferred until this is decided.
 
@@ -56,7 +60,7 @@ created: 2026-11-12
 
 It also unblocks isolation across await in every handler.
 
-**Not affected:**
+**Today (not affected):**
 
 - A nested class's construction can read a cell of its enclosing class declared below it. The read waits for that line.
 - An inline singleton (`s = actor { … }`) runs its block in program order.

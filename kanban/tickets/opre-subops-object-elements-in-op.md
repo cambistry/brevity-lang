@@ -6,7 +6,7 @@ created: 2026-11-15
 
 Design: notes/opre-subops-2026-11-15.md
 
-An object in `op` is a subop, a message fragment run against the current subject. It lets a chain act on a child without moving the chain there: `a = Class(); a.val <- 100` → `op: ["$new", { op: [[100], "$set"], to: ":val", ty: [["Integer"]] }], to: "Class"`, replying with the new actor's address in one round trip. This assumes the chain semantics in notes/opre-op-chains-2026-11-15.md and bracketed arg lists from notes/op-args-always-bracketed-2026-11-15.md.
+Want: an object in `op` is a subop, a message fragment run against the current subject. It lets a chain act on a child without moving the chain there: `a = Class(); a.val <- 100` → `op: ["$new", { op: [[100], "$set"], to: ":val", ty: [["Integer"]] }], to: "Class"`, replying with the new actor's address in one round trip. This assumes the chain semantics in notes/opre-op-chains-2026-11-15.md and bracketed arg lists from notes/op-args-always-bracketed-2026-11-15.md.
 
 Behavior:
 

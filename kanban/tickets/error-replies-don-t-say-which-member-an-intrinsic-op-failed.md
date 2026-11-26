@@ -11,7 +11,7 @@ created: 2026-11-13
 {op: [{}, '#new'], to: '@ Good'}
 ```
 
-**Problem.** An error reply's ex is keyed by the op that failed. Today ex: {'set@val': 'error'} says which cell failed. After the change it reads ex: {'#set': 'error'}, which names neither a cell nor a class.
+Today: an error reply's ex is keyed by the op that failed. ex: {'set@val': 'error'} says which cell failed. After the change it reads ex: {'#set': 'error'}, which names neither a cell nor a class.
 
 **Who's affected.**
 

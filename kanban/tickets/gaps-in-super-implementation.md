@@ -4,6 +4,8 @@ created: 2026-11-20
 ---
 # gaps in `super` implementation
 
+Today:
+
 - super on both branches of an if in a constructor block is reported as not supported yet.
 
 - Writing a parent block's public cell from outside, through the child block, isn't supported.

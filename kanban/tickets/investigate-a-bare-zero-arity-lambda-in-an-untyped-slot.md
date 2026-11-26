@@ -1,12 +1,10 @@
 ---
-status: inbox
+status: investigation
 created: 2026-11-06
 ---
 # Investigate: a bare zero-arity lambda in an untyped slot silently becomes a call
 
-**Background**
-
-Since parens became optional on zero-arity calls (notes/zero-arity-calls-2026-11-06.md), a bare name of a function is a call. The function itself is &f. That's settled. The cost is that some code that used to pass a function now passes the function's result, and nothing reports it.
+**Today:** since parens became optional on zero-arity calls (notes/zero-arity-calls-2026-11-06.md), a bare name of a function is a call. The function itself is &f. That's settled. The cost is that some code that used to pass a function now passes the function's result, and nothing reports it.
 
 Example: __tests__/core_types/structure.test.js, @constructClosure:
 
@@ -20,13 +18,13 @@ result Integer = fn()        // fails at run time
 
 This compiled cleanly. It failed only at run time, as an ex from the handler. The fix was Object(fn: &f).
 
-**Where it's caught today**
+**Today (where it's caught):**
 
 - A slot typed Function or (…) -> (…): "use &f".
 - A function that takes args, used bare: "'f' takes arguments — call it 'f(…)', or use &f".
 - f as Function: "the function itself is '&f'".
 
-**Where it isn't**
+**Today (where it isn't):**
 
 A zero-arity lambda local, or a zero-arity file function, used bare where nothing says a function is wanted:
 

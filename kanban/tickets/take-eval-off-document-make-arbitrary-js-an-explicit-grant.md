@@ -2,13 +2,13 @@
 status: inbox
 created: 2026-11-10
 ---
-# Take eval off document; make arbitrary JS an explicit grant
+# Fix: eval should come off document, and arbitrary JS should be an explicit grant
 
-**Problem.** The DI header is meant to state exactly what a file can touch: HTML: (:main, :p) grants two tags and nothing more. But :document silently grants all of JavaScript, because documentManifest includes eval (Text) -> (Text), which runs at global scope. From there a file can reach the network, storage, window and everything else. One escape hatch in a common grant makes the header's precision meaningless.
+Problem: the DI header is meant to state exactly what a file can touch: HTML: (:main, :p) grants two tags and nothing more. But :document silently grants all of JavaScript, because documentManifest includes eval (Text) -> (Text), which runs at global scope. From there a file can reach the network, storage, window and everything else. One escape hatch in a common grant makes the header's precision meaningless.
 
 **How** **it** **surfaced.** The examples viewer (docs/site/viewer.bv) has no fetch, so it reads source files through a synchronous XHR passed to document.eval. The workaround works, and it shouldn't have been that easy.
 
-**Proposed.**
+Expected:
 
 - Remove eval from documentManifest, in src/codegen/browser/runtime.js (both places it's declared).
 - If arbitrary JS stays available, make it its own grant with a name that sounds as dangerous as it is (for example JS: (:eval)), so a file that can run anything says so in its header.

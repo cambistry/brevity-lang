@@ -1,10 +1,10 @@
 ---
-status: todo
+status: investigation
 created: 2026-11-15
 ---
-# Thought about trace/ctor encoding
+# Design: trace/ctor escape encoding
 
-**What I'd do: percent-encoding, applied only when an address goes into or comes out of a whitespace-separated list:**
+**Want: percent-encoding, applied only when an address goes into or comes out of a whitespace-separated list:**
 
 - % becomes %25, space %20, tab %09, LF %0A, FF %0C, CR %0D.
 - Decoding is the exact reverse, so nothing is lost. Everything else passes through unchanged.

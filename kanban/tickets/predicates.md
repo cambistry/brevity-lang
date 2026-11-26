@@ -8,4 +8,4 @@ predicate Signed : Unsigned :
 
 trust (about) Signed
 
-Predicates are declared and resolved in the authority.
+Want: predicates are declared and resolved in the authority.

@@ -2,11 +2,9 @@
 status: inbox
 created: 2026-11-10
 ---
-# In-process calls to an overload ignore arg types
+# Fix: in-process calls to an overload ignore arg types
 
-Calls between actors in the same process (parent to child, a file to itself, the test harness) send argument values without `ty` tags. For overloaded clauses, dispatch checks those values, but a value can only rule out a scalar param type: Integer, Text, Boolean, Float, Decimal, null. The guards also skip type matching for in-process senders: js `(from === '__parent' || from === '__self' || from === '__test' || …)` in src/codegen/javascript/classes.js; rust and erlang have the same bypass.
-
-The compile-time annotation check picks the first clause whose types accept the args, so at run time a different clause can run from the one the compiler judged.
+Problem: calls between actors in the same process (parent to child, a file to itself, the test harness) send argument values without `ty` tags. For overloaded clauses, dispatch checks those values, but a value can only rule out a scalar param type: Integer, Text, Boolean, Float, Decimal, null. The guards also skip type matching for in-process senders: js `(from === '__parent' || from === '__self' || from === '__test' || …)` in src/codegen/javascript/classes.js; rust and erlang have the same bypass. The compile-time annotation check picks the first clause whose types accept the args, so at run time a different clause can run from the one the compiler judged.
 
 ## Repro 1: a parent calls a child's overload that differs only by type
 
@@ -32,7 +30,9 @@ T = (n Integer) *{
 }
 ```
 
-`@viaPoint` replies `v: 1`, correctly. `@viaBox` should reply `v: 2`, but replies `ex: { "viaBox": "error" }` (js, 2026-11-25; confirmed on all three targets earlier). The same call works when the class has a single `(b Box)` clause.
+Problem: `@viaPoint` replies `v: 1`, correctly, but `@viaBox` replies `ex: { "viaBox": "error" }` (js, 2026-11-25; confirmed on all three targets earlier). The same call works when the class has a single `(b Box)` clause.
+
+Expected: `@viaBox` replies `v: 2`.
 
 ## Repro 2: a file calls its own overload
 
@@ -49,11 +49,13 @@ pick << (n Text) { return 1 }
 }
 ```
 
-`@g("z")` and `@h("z")` should reply `1`. On js they do (2026-11-25); on rust and erlang both reply `ex`.
+Problem: on rust and erlang, `@g("z")` and `@h("z")` both reply `ex`. On js they reply `1` (2026-11-25).
+
+Expected: both reply `1`.
 
 ## Fix
 
-In-process sends carry `ty`, as wire sends already do (`genArgSlots` builds it for dependency calls), and an in-process overloaded call is matched by its tags. The value check stays as the fallback for untagged messages. A call whose args match no clause's types fails the same way as a call from outside.
+Expected: in-process sends carry `ty`, as wire sends already do (`genArgSlots` builds it for dependency calls), and an in-process overloaded call is matched by its tags. The value check stays as the fallback for untagged messages. A call whose args match no clause's types fails the same way as a call from outside.
 
 To decide: should trusted in-process senders (`__parent`, `__test`) be type-matched too, or only `__self`?
 

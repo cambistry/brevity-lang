@@ -4,9 +4,7 @@ created: 2026-11-16
 ---
 # Private constants and cells
 
-Private constants and cells: `#x = 3`, `#n *Integer = 0`
-
-Per notes/private-names-lexical-2026-11-16.md, every form with a public or protected spelling has a private one, in the same places: file, class, class block, function body.
+Want: private constants and cells: `#x = 3`, `#n *Integer = 0`. Per notes/private-names-lexical-2026-11-16.md, every form with a public or protected spelling has a private one, in the same places: file, class, class block, function body.
 
 Today:
 

@@ -2,11 +2,9 @@
 status: inbox
 created: 2026-11-14
 ---
-# `::` reaches a constant nested more than one level
+# `::` should reach a constant nested more than one level
 
-One level works: from A's family, `A::k` reads a constant in A's class block.
-
-Two levels don't. With a class `B` declared in A's class block:
+Today: one level works: from A's family, `A::k` reads a constant in A's class block. Two levels don't. With a class `B` declared in A's class block:
 
 ```brevity
 A = (s Integer) *{

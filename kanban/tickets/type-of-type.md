@@ -1,12 +1,12 @@
 ---
-status: todo
+status: inbox
 created: 2026-05-20
 ---
 # Class and type introspection: the class of a value, is-a, equality
 
 ## The class of a value (`type of` / `#type`)
 
-Gets a fully qualified address pointer to a type or class declaration. Must work:
+Want: gets a fully qualified address pointer to a type or class declaration. Must work:
 
 - When the type/class is defined inside a file
 - When the type/class IS the file
@@ -16,11 +16,15 @@ Spelling in Brevity is open: `class(obj)`, `class of obj`, or similar. On the wi
 
 ## Is-a
 
-A test that a value is an instance of a class or any of its subclasses, or of a type. Compile-time assignability already follows ancestry for params (`g = (p P) -> …` takes a subclass of `P`); this is the runtime test.
+Want: a runtime test that a value is an instance of a class or any of its subclasses, or of a type.
+
+Today: compile-time assignability already follows ancestry for params (`g = (p P) -> …` takes a subclass of `P`).
 
 ## Equality
 
-What `==` means between classes and between types. `P == Q` on two declared classes compiles today, with no defined meaning: address identity, or structure?
+Decide: what `==` means between classes and between types.
+
+Today: `P == Q` on two declared classes compiles, with no defined meaning: address identity, or structure?
 
 ## Open
 

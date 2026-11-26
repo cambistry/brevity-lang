@@ -4,7 +4,7 @@ created: 2026-11-19
 ---
 # Protected classes as values: decide what leaves the actor
 
-Today `k = C` (C protected) works as an alias inside, and `return k` replies `#<:~C>` — the class's protected label. From outside, nothing answers there: `$new` and member reads to `:~C` are unhandled. Kept as is for now; current code may rely on it.
+Today: `k = C` (C protected) works as an alias inside, and `return k` replies `#<:~C>` — the class's protected label. From outside, nothing answers there: `$new` and member reads to `:~C` are unhandled. Kept as is for now; current code may rely on it.
 
 Options
 

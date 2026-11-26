@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# Unannotated call arithmetic in a return differs between targets
+# Fix: unannotated call arithmetic in a return differs between targets
 
 Problem: return r: g(1) + 10, where g holds a function, is refused at compile time on JS ("Reply/return field 'r: ...' requires a type annotation") but returned 12 on Erlang. Rust didn't compile it before the fix for calls through function values in arithmetic, and hasn't been re-run since. The JS check is in src/codegen/javascript/types.js, so it only applies to that target. It also has a positional form, "Reply/return expression requires a type annotation", which wasn't tried on the other targets. v Integer = g(1) + 10 gives 12 on all three.
 

@@ -1,20 +1,20 @@
 ---
-status: inbox
+status: investigation
 created: 2026-11-23
 ---
 # Investigate: element extension (names on the element)
 
 Design: notes/element-extension-2026-11-23.md (proposal; the `@name={ … }` form is the liked part, `^{ … }` is tentative)
 
-A tag head that declares names extends the element, as `HTML::div ^ { … }`. The element itself becomes the receiver, with no wrapper actor:
+Today: the 2026-04-27 behaviour (notes/session-2026-04-27.md) lifts tag-head declarations into the enclosing actor.
+
+Want: a tag head that declares names extends the element, as `HTML::div ^ { … }`. The element itself becomes the receiver, with no wrapper actor:
 
 Receiver = -> <div ^{ version *Integer = 1 } @bump={ version <- version + 1 }>{ version }</div>
 
 ```
 rx = Receiver(); rx.bump; body.append!(rx)
 ```
-
-This replaces the 2026-04-27 behaviour (notes/session-2026-04-27.md), which lifts tag-head declarations into the enclosing actor.
 
 Find and report (no changes yet):
 

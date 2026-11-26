@@ -4,7 +4,9 @@ created: 2026-11-17
 ---
 # Explore: type rules for redeclaring an inherited cell
 
-Background: discussion of 2026-11-16. A subclass may redeclare a parent's cell, and the redeclaration is late-bound: the parent's own code uses the subclass's cell. The parent's code was type-checked against the parent's declared type, so a redeclaration that changes the type can break code the subclass's author never wrote:
+Background: discussion of 2026-11-16.
+
+Today: a subclass may redeclare a parent's cell, and the redeclaration is late-bound: the parent's own code uses the subclass's cell. The parent's code was type-checked against the parent's declared type, so a redeclaration that changes the type can break code the subclass's author never wrote:
 
 ```
 T = *{

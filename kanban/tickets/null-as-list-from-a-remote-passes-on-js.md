@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# null as List from a remote passes on JS
+# Fix: null as List from a remote passes on JS
 
 **Problem:** null is JS's empty list, so _bvAs accepts a null reply as a List. Rust and Erlang fail it. A literal null as List is already a compile error on all three.
 

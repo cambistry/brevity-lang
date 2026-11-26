@@ -2,9 +2,9 @@
 status: inbox
 created: 2026-11-03
 ---
-# Keywords can't be bare names; inflected forms must work
+# Fix: keywords as bare names should get a keyword error; inflected forms should work
 
-Rule: a keyword (src/lexer.js:1: return, over, if, as, self, set, …) can't be used in bare form as any kind of name. That covers functions, cells, locals, params, classes and types, including ::over, because :: uses the name uninflected. Inflected forms are ordinary names: @over and #over. A keyword reserves only the bare name, as a keyword of the source grammar, not because of the wire (notes/at-sigil-internal-and-quoted-names-2026-11-12.md): a public `@if` is wire `if`, so an actor's external interface isn't limited by the source grammar.
+Expected: a keyword (src/lexer.js:1: return, over, if, as, self, set, …) can't be used in bare form as any kind of name. That covers functions, cells, locals, params, classes and types, including ::over, because :: uses the name uninflected. Inflected forms are ordinary names: @over and #over. A keyword reserves only the bare name, as a keyword of the source grammar, not because of the wire (notes/at-sigil-internal-and-quoted-names-2026-11-12.md): a public `@if` is wire `if`, so an actor's external interface isn't limited by the source grammar.
 
 Problem: the bare form is rejected today, but by accident, with messages that don't say why. And one of the inflected forms is broken:
 
@@ -30,7 +30,7 @@ Problem: the bare form is rejected today, but by accident, with messages that do
 └────────────────────────────────────────┴───────────────────────────────────────────────────────────┴───────────────────────────┘
 ```
 
-The error should name the keyword and the position, e.g. 'over' is a keyword and can't name a function; use '@over' or '#over'.
+Expected: the error names the keyword and the position, e.g. 'over' is a keyword and can't name a function; use '@over' or '#over'.
 
 To decide:
 

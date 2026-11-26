@@ -17,6 +17,8 @@ columns Lines = File("./columns")
 tickets[slug].status <- "review"
 ```
 
+Want:
+
 - `use Dir, File`: the runtime environment defines them and their limits.
 - A literal path is hoisted into the manifest as a grant; a computed path must fall under a declared grant.
 - The left side gives shape and capability: a snapshot, `&` live read-only, `*` live writable; `<-` through a `*` reference writes the file, and counts as a write for `!`.

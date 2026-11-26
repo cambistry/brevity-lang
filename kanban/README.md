@@ -13,6 +13,29 @@ Description: the problem, the expected behaviour, and pointers
 (tests, notes/, source files).
 ```
 
+### Bugs and features
+
+A **bug** is behaviour that is wrong: silent acceptance, a wrong reply, a crash, a leaked internal name, a misleading error. A clean refusal of something designed but unbuilt ("not supported yet") is a feature, not a bug.
+
+- A bug's title starts with `Fix:` and states the problem (`Fix: \`over\` accepts an Integer as the list`) or the fix with "should" (`Fix: a typed local should refuse an unrelated class`).
+- Other titles keep their prefix (`Investigate:`, `Design:`, `Explore:`, `Q:`). A title must not read as a description of current behaviour when it names a desire: `A type should be able to extend a type`, not `A type extends a type`.
+
+Every sentence in a body is labelled as either current state or desired state:
+
+- Bugs: `Problem:` (what happens today) and `Expected:` (what should happen).
+- Features: `Today:` (what exists or happens now) and `Want:` (what should exist).
+- A label heads its paragraph or list and covers all of it. Context, repros, pointers and task lists (`Decide:`, `Find:`, `Done when:`) may stand unlabelled, as long as they don't make a claim about what happens or should happen.
+
+```
+# Fix: `over` accepts an Integer as the list
+
+Problem: both compile, with no form behind them:
+
+    (code)
+
+Expected: a non-list fails where it's met.
+```
+
 `status` is the column. A status change goes in the same commit as the work it reflects.
 
 Columns: `investigation`, `inbox`, `todo`, `in-progress`, `review`, `done`, `future`, `wont-do`, `icebox`.

@@ -4,13 +4,13 @@ created: 2026-11-13
 ---
 # `*` on a class-typed declaration
 
-`w *W = W()` declares a writable cell holding a W actor's address. That reads as if W were being actorized, and the user expects it to be a syntax error; `w = W()` is the canonical form.
-
-Today:
+Today: `w *W = W()` declares a writable cell holding a W actor's address. That reads as if W were being actorized.
 
 - The parser synthesizes a setter for actor-reference cells (an address can be rebound safely).
 - `@peer *Self | null = null` relies on this in `__tests__/self/`.
 - `counter *Counter = Counter()` appears in `__tests__/classes/outer_reads.test.js` ("a file cell holding an actor").
+
+Want: the user expects `w *W = W()` to be a syntax error; `w = W()` is the canonical form.
 
 To decide:
 

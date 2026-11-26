@@ -4,7 +4,7 @@ created: 2026-11-14
 ---
 # Spec change: `from` names the calling scope
 
-Every outgoing call (ordinary ops, silent `!` and launched calls, and the intrinsics $get, $set, $new, $subscribe, $update) carries in `from` the address of the innermost named, addressable scope whose code made it, relative to the sending actor and translated by each parent as `from` is today. Replies (re/ex) are unchanged.
+Want: every outgoing call (ordinary ops, silent `!` and launched calls, and the intrinsics $get, $set, $new, $subscribe, $update) carries in `from` the address of the innermost named, addressable scope whose code made it, relative to the sending actor and translated by each parent as `from` is today. Replies (re/ex) are unchanged.
 
 Spec: notes/from-names-calling-scope-2026-11-14.md
 
@@ -15,9 +15,11 @@ Example (main.bv, header `HTML: (:div)`):
 @Constructor = *{ d = <div>456</div> }  -> $new to `HTML div`, from `. Constructor`
 ```
 
-HTML receives from `main template` / `main Constructor`. Today both arrive as `main`.
+Want: HTML receives from `main template` / `main Constructor`.
 
-Scope rules
+Today: both arrive as `main`.
+
+Want (scope rules):
 
 - Function (@f, ~f, #f; lineal or braced): the function, in wire form (`. template`, `. ~helper`, `. #panel`).
 - Class constructor block: the class (`. Constructor`), whether the class sends directly or the call is relayed through the file actor (src/outer_reads.js). The actor under construction may have no address yet.
@@ -26,12 +28,12 @@ Scope rules
 - File-level code: the actor itself (`.` / `from` omitted), as today.
 - Forwarding doesn't re-scope: in `@a = -> #b()`, calls made by #b carry `. #b`.
 
-Reply routing
+Want (reply routing):
 
 - A re/ex addressed to a function scope belongs to the actor holding that function; matched by id as now. The published-actor router must not claim it.
 - A re/ex addressed to a class scope goes to the class, which keeps the pending table for constructions in progress and routes by id (ids unique per class). This replaces the file actor's id renumbering for relayed class calls (JS `_outerFwd`, Erlang `bv_outer_call_`).
 
-Rule: `from` is a reply address only. Receivers never send a request to it.
+Want: `from` is a reply address only. Receivers never send a request to it.
 
 Scope of work
 

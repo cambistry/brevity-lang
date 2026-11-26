@@ -1,12 +1,12 @@
 ---
-status: todo
+status: inbox
 created: 2026-11-15
 ---
 # Opre op chains: `[args1] op1 [args2] op2 …`
 
 Design: notes/opre-op-chains-2026-11-15.md
 
-`op` becomes a sequence in reverse Polish order. Each `[args] op` step runs on the result of the previous step, and the first step's subject is `to`. It is dot-chaining with args and op name swapped: `Class().tweak!(123)` → `op: ["$new", [123], "tweak!"], to: "Class"`. `ty` has one entry per arg list. This assumes arg lists are always bracketed, as described in notes/op-args-always-bracketed-2026-11-15.md.
+Want: `op` becomes a sequence in reverse Polish order. Each `[args] op` step runs on the result of the previous step, and the first step's subject is `to`. It is dot-chaining with args and op name swapped: `Class().tweak!(123)` → `op: ["$new", [123], "tweak!"], to: "Class"`. `ty` has one entry per arg list. This assumes arg lists are always bracketed, as described in notes/op-args-always-bracketed-2026-11-15.md.
 
 Behavior:
 

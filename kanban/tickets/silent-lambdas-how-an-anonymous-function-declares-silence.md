@@ -1,10 +1,10 @@
 ---
-status: todo
+status: investigation
 created: 2026-10-30
 ---
-# Silent lambdas: how an anonymous function declares silence once the terminating dot is gone (speculative)
+# Design: Silent lambdas: how an anonymous function declares silence once the terminating dot is gone (speculative)
 
-**Background.** The silent-suffix ticket makes a silent function's silence part of its name (sfn.) and makes the terminating . in a body illegal. Silent reference fields follow the same rule (onpress.: (s: Signal) -> .). Anonymous lambdas fall through the gap. Today a lambda passed to a silent slot is marked silent only by the terminating dot:
+**Today:** the silent-suffix ticket makes a silent function's silence part of its name (sfn.) and makes the terminating . in a body illegal. Silent reference fields follow the same rule (onpress.: (s: Signal) -> .). Anonymous lambdas fall through the gap. A lambda passed to a silent slot is marked silent only by the terminating dot:
 
 ```brevity
 Panel(onpress.: (s) { s.code . }, label: "x")
@@ -12,7 +12,7 @@ Panel(onpress.: (s) { s.code . }, label: "x")
 
 Once that dot is illegal, a lambda has no name to carry the suffix and no body mark. This ticket decides how an anonymous function becomes silent. It depends on the silent-suffix ticket.
 
-**Leading proposal: silence comes from the expected type.** A lambda written where a silent function type is expected _is_ silent. Examples:
+**Want (leading proposal): silence comes from the expected type.** A lambda written where a silent function type is expected _is_ silent. Examples:
 
 - a silent field's argument: onpress.: (s) { … }
 - a silent parameter: watch(on.: (s) { … })

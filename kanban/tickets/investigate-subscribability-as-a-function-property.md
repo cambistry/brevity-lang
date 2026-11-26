@@ -1,12 +1,12 @@
 ---
-status: inbox
+status: investigation
 created: 2026-11-23
 ---
 # Investigate: subscribability as a function property
 
 Design: notes/subscribability-2026-11-23.md (proposal)
 
-Rule: a function is subscribable if it reads at least one outside subscribable address (transitively), makes no writes, and no actor it makes escapes by return, write or send. Subscriptions don't count as escaping. Open: for a fresh actor in the result, (a) forbid or (b) replace on replay.
+Want: a function is subscribable if it reads at least one outside subscribable address (transitively), makes no writes, and no actor it makes escapes by return, write or send. Subscriptions don't count as escaping. Open: for a fresh actor in the result, (a) forbid or (b) replace on replay.
 
 Find and report (no changes yet):
 

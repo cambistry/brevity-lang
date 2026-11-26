@@ -4,7 +4,7 @@ created: 2026-10-29
 ---
 # Declared read-only public fields (`@name = expr`)
 
-A class can't publish a read-only value computed from an expression, and has no read-only public field of a base type.
+Today: a class can't publish a read-only value computed from an expression, and has no read-only public field of a base type.
 
 | Declaration | Today | Service document (JSON) |
 |---|---|---|
@@ -14,7 +14,12 @@ A class can't publish a read-only value computed from an expression, and has no 
 | `@title = label` | "'@title' is public — only functions can be public…" | — |
 | `@title Text = label`, `@k Integer = 5` | parse error ("Unexpected token after '@title'") | — |
 
-Proposal: `@name = expr` declares a read-only public field, evaluated at construction; a read replies with the value positionally.
+Want: `@name = expr` declares a read-only public field, evaluated at construction; a read replies with the value positionally.
+
+- Service document: `title` as a read, plus a `:title` entry with `$get` only, as `@p *Point` has today.
+- `t Text = c.title()` binds positionally; `c.title <- "x"` is a compile error.
+- `sub c.title, (v) { … }` works as on any read-only field.
+- Subsumes `@k = 5`, which gains the same `:k` entry.
 
 ```brevity
 C = (label Text) *{
@@ -22,11 +27,6 @@ C = (label Text) *{
   @n *Integer = 0                // unchanged: readable and settable
 }
 ```
-
-- Service document: `title` as a read, plus a `:title` entry with `$get` only, as `@p *Point` has today.
-- `t Text = c.title()` binds positionally; `c.title <- "x"` is a compile error.
-- `sub c.title, (v) { … }` works as on any read-only field.
-- Subsumes `@k = 5`, which gains the same `:k` entry.
 
 Decide:
 

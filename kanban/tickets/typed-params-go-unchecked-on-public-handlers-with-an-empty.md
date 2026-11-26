@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# Typed params go unchecked on public handlers with an empty body
+# Fix: typed params go unchecked on public handlers with an empty body
 
 **Problem:** src/as_check.js skips the param check when a public handler's body is empty, because a trailing check would become the reply. On JS and Erlang, a wrong value in a typed param then goes unnoticed. Rust's decode still fails, and so does JS's for Integer.
 

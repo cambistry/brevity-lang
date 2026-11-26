@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# A bare value in a tail branch is lost
+# Fix: a bare value in a tail branch is lost
 
 Problem: a handler ending in if b { "x" } else { 9 } replies {} on JS, in file handlers and classes, because the branch value is computed and dropped. On Rust it doesn't build when the branches have different types. Erlang replies ["x"] or [9].
 

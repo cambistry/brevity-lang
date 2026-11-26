@@ -2,11 +2,11 @@
 status: inbox
 created: 2026-11-02
 ---
-# remove the flat call paths for class instances
+# Fix: Rust's flat call paths for class instances should be removed
 
 Problem: Rust still has a code path from when classes were flattened. For a call on a class instance, it runs the class's handler on the caller's state instead of creating an instance (statements.js, the hasInit checks at lines 1330 and 1686). Those checks ignore initBody, so a class with a constructor block and no params never runs that block, which can hide a failed as in it.
 
-lowerChains hoists the receiver in handler bodies, so those calls take the instance path. It deliberately doesn't hoist loop conditions, so while Box().get() { ... } may still reach the flat path. This is untested, and there may be other ways in.
+Problem: lowerChains hoists the receiver in handler bodies, so those calls take the instance path. It deliberately doesn't hoist loop conditions, so while Box().get() { ... } may still reach the flat path. This is untested, and there may be other ways in.
 
 Done when:
 

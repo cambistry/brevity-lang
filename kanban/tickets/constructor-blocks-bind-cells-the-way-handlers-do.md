@@ -2,10 +2,9 @@
 status: inbox
 created: 2026-11-02
 ---
-# Constructor blocks bind cells the way handlers do
+# Fix: constructor blocks should bind cells the way handlers do
 
-- **Problem:** cells in a constructor block are stored by a separate path from handler binds, so calls and as behave differently there.
-- **Symptoms:**
+- **Problem:** cells in a constructor block are stored by a separate path from handler binds, so calls and as behave differently there. Symptoms:
 - A remote call doesn't wait for its reply on Rust and Erlang.
 - as isn't checked in the file's own block, which also stores the wrong value on JS and Erlang.
 - A self-call in the file's own block doesn't build on Rust.

@@ -1,12 +1,12 @@
 ---
-status: inbox
+status: investigation
 created: 2026-11-23
 ---
 # Investigate: frames that outlive their call
 
 Design: notes/escaping-frames-2026-11-23.md (proposal)
 
-A function that returns a live element, e.g. `Clicker = { count *Integer = 0; <div onclick={ count <- count + 1 }>{ count }</div> }`, leaves cells and closures that the element still subscribes to after the call returns.
+Today: a function that returns a live element, e.g. `Clicker = { count *Integer = 0; <div onclick={ count <- count + 1 }>{ count }</div> }`, leaves cells and closures that the element still subscribes to after the call returns.
 
 Find and report (no changes yet):
 

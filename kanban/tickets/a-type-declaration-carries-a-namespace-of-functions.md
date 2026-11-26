@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-25
 ---
-# A type declaration carries a namespace of functions
+# A type declaration should carry a namespace of functions
 
 Design: `notes/type-namespaces-2026-11-25.md`.
 
@@ -15,6 +15,8 @@ type Ticket (slug Text, title Text, status Text, created Text) {
 Ticket.label(t)
 :label = Ticket
 ```
+
+Want:
 
 - The block holds functions only, none that write: a cell, a `!` function or a `.` function in it is a compile error.
 - Entries are reached through the type (`Ticket.label(t)`, `t |> Ticket.label`, `:label = Ticket`), never through a value: `t.label` stays a field read, and is an error when there is no such field.

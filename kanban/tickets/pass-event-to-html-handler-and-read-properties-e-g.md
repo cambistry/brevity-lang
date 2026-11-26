@@ -1,8 +1,8 @@
 ---
-status: todo
+status: inbox
 created: 2026-10-26
 ---
-# pass event to HTML handler and read properties (e.g. coordinates)
+# Brower: pass event to HTML handler and read properties (e.g. coordinates)
 
 <tag onclick=(e) → {e.key …}>
 

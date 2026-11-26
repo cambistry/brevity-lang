@@ -4,7 +4,7 @@ created: 2026-11-25
 ---
 # Document pure functions in the service document
 
-A signature's `writes` key says whether a call changes state (`notes/opre-type-encoding-2026-11-21.md`: `false`, `true`, `"untracked"`, or omitted for no claim). It tells a caller whether a call is safe to repeat. Nothing says whether a call is **pure**, which tells a caller more: the result depends only on the arguments, so the call can be cached, inlined, reordered or run anywhere.
+Today: a signature's `writes` key says whether a call changes state (`notes/opre-type-encoding-2026-11-21.md`: `false`, `true`, `"untracked"`, or omitted for no claim). It tells a caller whether a call is safe to repeat. Nothing says whether a call is **pure**, which tells a caller more: the result depends only on the arguments, so the call can be cached, inlined, reordered or run anywhere.
 
 **Pure:** a function that holds no state, reads no external mutable actor or cell except through its params, and calls only pure functions. It may create actors, internal or external, if their implementations are pure, and message them.
 

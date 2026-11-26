@@ -1,5 +1,5 @@
 ---
-status: todo
+status: inbox
 created: 2026-05-12
 ---
 # broaden catch/# to cover error handling.

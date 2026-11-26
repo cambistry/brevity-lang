@@ -2,9 +2,9 @@
 status: inbox
 created: 2026-11-17
 ---
-# js: a send inside a compound expression isn't awaited
+# Fix: on js, a send inside a compound expression isn't awaited
 
-A dot call that sends a message, used as an operand, is emitted without `await`:
+Problem: a dot call that sends a message, used as an operand, is emitted without `await`:
 
 ```
 @R = (seed Integer) *{

@@ -1,5 +1,5 @@
 ---
-status: todo
+status: inbox
 created: 2026-04-27
 ---
 # Nested reactivity
@@ -22,6 +22,4 @@ component:
 }
 ```
 
-I think this somewhat works.
-
-The outer closure inside of <div> subscribes to \@names, and republishes if that changes. The thunk gets evaluated by the parent, returning a NEW list of components - old ones are (should be) garbage collected.
+Today: I think this somewhat works. The outer closure inside of <div> subscribes to \@names, and republishes if that changes. The thunk gets evaluated by the parent, returning a NEW list of components - old ones are (should be) garbage collected.

@@ -4,6 +4,4 @@ created: 2026-11-13
 ---
 # private types
 
-type #Priv ()
-
-Only useable in scope.
+Want: type #Priv () is only useable in scope.

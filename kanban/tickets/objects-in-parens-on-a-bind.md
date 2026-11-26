@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# Objects in parens on a bind
+# Fix: parens around an Object should work on a bind
 
 Problem:
 
@@ -17,7 +17,7 @@ x Object = (a: 1)
 
 The unparenthesized typed form also fails: `x Object = a: 1` gives `Unexpected token in expression: COLON`, while `x = a: 1` and `x Object = 1, 2` work.
 
-Rule:
+Expected:
 
 On a bind, parens around an Object mean the same as the bare form. Parens with a top-level comma, a `key:` or a `:name` hold an Object. Anything else in parens stays grouping.
 

@@ -1,5 +1,5 @@
 ---
-status: todo
+status: inbox
 created: 2026-04-09
 ---
 # Browser: load HTML template from file

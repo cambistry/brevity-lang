@@ -2,7 +2,7 @@
 status: inbox
 created: 2026-11-02
 ---
-# Rust, r = b.get() with a named reply binds null
+# Fix: on Rust, `r = b.get()` with a named reply binds null
 
 - **Problem:** JS and Erlang fail with error, while Rust replies { r: null }.
 

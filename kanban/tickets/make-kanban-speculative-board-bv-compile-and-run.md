@@ -4,7 +4,9 @@ created: 2026-11-25
 ---
 # Make `kanban/speculative/board.bv` compile and run
 
-`kanban/speculative/board.bv` is the kanban board (`kanban/board.mjs`) written in Brevity as intended. Use it as a development target: a real program, about 630 lines, that exercises most of the language at once. Done when it compiles and runs as the board, with the same behaviour as `board.mjs`, and moves to `kanban/` beside or in place of it.
+`kanban/speculative/board.bv` is the kanban board (`kanban/board.mjs`) written in Brevity as intended. Use it as a development target: a real program, about 630 lines, that exercises most of the language at once.
+
+Done when: it compiles and runs as the board, with the same behaviour as `board.mjs`, and moves to `kanban/` beside or in place of it.
 
 It depends on these tickets landing (and on the design notes they point to):
 

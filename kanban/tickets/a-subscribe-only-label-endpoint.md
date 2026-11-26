@@ -6,9 +6,9 @@ created: 2026-11-19
 
 Design: a subscribe-only label / endpoint
 
-Replaces events as a separate mechanism (see the emit/on removal ticket). We need an address that answers only `$subscribe`: no `$get`, and no `$set` from outside. It serves event-shaped channels such as clicks, notifications and lifecycle signals, where each occurrence matters and there is no "current value".
+Want: replaces events as a separate mechanism (see the emit/on removal ticket). We need an address that answers only `$subscribe`: no `$get`, and no `$set` from outside. It serves event-shaped channels such as clicks, notifications and lifecycle signals, where each occurrence matters and there is no "current value".
 
-Working rules (from discussion, to confirm or refine):
+Want, working rules (from discussion, to confirm or refine):
 
 - Verbs: `$get` unhandled; `$set` unhandled from outside; `$subscribe` yes. It's the mirror of the write-only cell (`set label (Text)`). Add it as a row in the verb table in notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
 - No initial `re`. A subscription starts at "now", and the first `re` is the next push. (Otherwise subscribe-then-drop works as a `$get`.) This is what separates it from the function row, which also refuses `$get` but sends its current result first.

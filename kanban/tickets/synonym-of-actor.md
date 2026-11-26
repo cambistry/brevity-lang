@@ -1,5 +1,5 @@
 ---
-status: todo
+status: inbox
 created: 2026-11-21
 ---
-# `= ^ {}` synonym of `= actor {}`
+# `= ^ {}` should be a synonym of `= actor {}`

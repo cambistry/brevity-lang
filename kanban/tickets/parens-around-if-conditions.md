@@ -4,7 +4,9 @@ created: 2026-11-25
 ---
 # Parens around `if` conditions: when required
 
-`if (cond) …` is always allowed, and parses today (a parenthesized expression). Decide where it is required.
+Today: `if (cond) …` is always allowed, and parses (a parenthesized expression).
+
+Decide: where it is required.
 
 The problem is the inline value form, where nothing separates the condition from the value: `if row == last 0 else row + 1`, or `if col < left col else if col >= left + count col - count + 1 else left`. The block form already has a separator, since `{` ends the condition.
 

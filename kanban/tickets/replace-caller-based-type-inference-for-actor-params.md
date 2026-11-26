@@ -8,7 +8,7 @@ Design: notes/generic-function-args-2026-11-03.md. "Generic-by-default" for priv
 
 ## 1. Replace `inferActorParams`
 
-`inferActorParams` (src/public_classes.js) gives an untyped param of a private function a class type when every caller it finds passes an actor of that one class from the same file.
+Today: `inferActorParams` (src/public_classes.js) gives an untyped param of a private function a class type when every caller it finds passes an actor of that one class from the same file.
 
 ```brevity
 @Box = *{ @who = { return "x" } }
@@ -18,9 +18,9 @@ read = (b) { return b.who() }     // treated as (b @Box)
 @go = { return read(@box()) }
 ```
 
-It came in with the injected-actors work (notes/session-2026-11-02-injected-actors-in-place.md) without a design decision. An actor from the same file arrives as a local handle, a remote one as an address. JS checks which at runtime, in `#childSend`. Rust and Erlang decide at compile time, and treat an untyped param as an address unless inference applies.
+Today: it came in with the injected-actors work (notes/session-2026-11-02-injected-actors-in-place.md) without a design decision. An actor from the same file arrives as a local handle, a remote one as an address. JS checks which at runtime, in `#childSend`. Rust and Erlang decide at compile time, and treat an untyped param as an address unless inference applies.
 
-What's wrong with it (from reading the code; reproduce first):
+Today, what's wrong with it (from reading the code; reproduce first):
 
 - **A distant edit breaks working code:** a second caller passing a different class or an address turns inference off. `read(@box())` then stops working on Rust and Erlang with no compile error, while JS keeps working.
 - **It doesn't see every caller:** it reads only function bodies, so it misses calls from a constructor block and functions passed as values (`&read`). A missed caller passing an address could be sent down the in-process path.
@@ -37,7 +37,7 @@ If option 1 is too expensive on Rust, take 2 or 3: either fails at compile time 
 
 ## 2. Decide: a type variable in cross-file signatures
 
-A caller across a file boundary sees only the signature, so it can't infer a relationship between input and output types. Today these lose their types to `Anything`, checked at run time through `ty` and `as`:
+Today: a caller across a file boundary sees only the signature, so it can't infer a relationship between input and output types. These lose their types to `Anything`, checked at run time through `ty` and `as`:
 
 - containers of open-ended element types: `first (xs List of T) -> (T)`;
 - functions passed as arguments: `apply (f, x)`, `retry (f)`;

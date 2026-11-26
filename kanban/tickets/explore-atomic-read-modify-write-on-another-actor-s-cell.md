@@ -4,7 +4,9 @@ created: 2026-11-17
 ---
 # Explore: atomic read-modify-write on another actor's cell
 
-Background: discussion of 2026-11-16. A write to a cell owned by another actor, computed from that cell's own value, is two messages: a read, then a `$set`. Another writer can land in between, and an update is lost.
+Background: discussion of 2026-11-16.
+
+Today: a write to a cell owned by another actor, computed from that cell's own value, is two messages: a read, then a `$set`. Another writer can land in between, and an update is lost.
 
 ```
 D = (n Integer) *{ class::total <- class::total + 1 } ^ { total *Integer = 0 }
@@ -12,7 +14,7 @@ D = (n Integer) *{ class::total <- class::total + 1 } ^ { total *Integer = 0 }
 
 Build two actors at once and `total` can end at 1. The same applies to every write from an inner scope to an enclosing actor's cell (OuterSet), to a class block's cell from its instances, and to a parent class block's cell under the delegated rule. Remote parents make it worse.
 
-Within one actor, its own cells are safe only while a handler doesn't await between the read and the write. Turns are reentrant (T2).
+Today: within one actor, its own cells are safe only while a handler doesn't await between the read and the write. Turns are reentrant (T2).
 
 Directions to evaluate
 

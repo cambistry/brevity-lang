@@ -2,9 +2,11 @@
 status: todo
 created: 2026-05-20
 ---
-# A typed local accepts an actor of an unrelated class
+# Fix: A typed local should not accept an actor of an unrelated class
 
-A class-typed param checks ancestry: a subclass is accepted, an unrelated class is refused.
+Problem: a class-typed param checks ancestry (a subclass is accepted, an unrelated class is refused), but a typed local doesn't: `@f = { p P = R(1); return p.a() }` compiles.
+
+The param case:
 
 ```brevity
 P = (s Integer) *{ @a = -> 1 }
@@ -15,6 +17,4 @@ g = (p P) -> p.a()
 @bad = { return g(R(1)) }   // 'g()' positional arg 1: 'R' is not assignable to 'P'
 ```
 
-A typed local doesn't: `@f = { p P = R(1); return p.a() }` compiles.
-
-Done when, on js, rust and erlang, a typed local (and a typed cell) uses the param's check: `p P = R(1)` is a compile error and `p P = Q(1)` compiles. Tests beside the param case.
+Expected: on js, rust and erlang, a typed local (and a typed cell) uses the param's check: `p P = R(1)` is a compile error and `p P = Q(1)` compiles. Tests beside the param case.
