@@ -8,7 +8,6 @@ kanban/tickets/document-pure-functions-in-the-service-document.md
 kanban/tickets/files-as-addressed-values-dir-and-file.md
 kanban/tickets/filter-find-map-sum-in-the-shape-of-over.md
 kanban/tickets/investigate-dot-chains-on-a-cell-derive-a-live-cell.md
-kanban/tickets/investigate-nullable-type-suffix.md
 kanban/tickets/lambda-params-take-their-types-from-the-slot.md
 kanban/tickets/line-breaks-separate-items-in-multi-line-brackets.md
 kanban/tickets/list-concat-and-list-sort.md
