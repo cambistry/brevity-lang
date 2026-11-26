@@ -18,8 +18,8 @@ Behavior:
 Compiler:
 
 - Emit a chain for source dot-chains.
-- Merge consecutive calls on the same actor, with nothing else between them, into one chain (`actor = Class(); actor.tweak!(123)` emits the same chain as `Class().tweak!(123)`).
+- Only a source dot-chain becomes a chain. Separate statements on the same actor (`actor = Class(); actor.tweak!(123)`) stay two calls and two transactions (notes/class-of-and-self-return-2026-11-23.md, which supersedes the op-chains note's "Compiler use").
 
 Open, in the note (decide or record as part of this ticket): `ty` entries for steps without args; how the error reply shape identifies the failing step; what happens when a subject resolves outside the program.
 
-Done when: chained wire messages run on all three targets, with tests covering multi-step results, a subject that changes between steps, a non-address mid-chain error, rollback on failure, and statement merging.
+Done when: chained wire messages run on all three targets, with tests covering multi-step results, a subject that changes between steps, a non-address mid-chain error, rollback on failure, and two statements on one actor emitting two messages.

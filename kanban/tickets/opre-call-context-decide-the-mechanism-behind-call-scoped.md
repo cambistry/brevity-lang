@@ -38,6 +38,7 @@ created: 2026-11-12
 - untracked cells, which aren't rolled back;
 - fresh actors, which are discarded on abort;
 - committing across trust boundaries without a coordinator?
+- two-phase commit, in-process and cross-process: phase one isolates the change in each actor, under its own locking rules.
 1. **Targets.** Map what each runtime (JS, Erlang, Rust) must change to move from open turns to call-scoped ones.
 
 **Deliverables.**
@@ -58,7 +59,9 @@ It also unblocks isolation across await in every handler.
 **Not affected:**
 
 - A nested class's construction can read a cell of its enclosing class declared below it. The read waits for that line.
-- An inline singleton (s = **{ … }) runs its block in program order.
+- An inline singleton (`s = actor { … }`) runs its block in program order.
 - An actor reading or writing its own cell before the cell's declaration is a compile error.
+
+**Related:** `explore-atomic-read-modify-write-on-another-actor-s-cell` (a lost update on another actor's cell; asks whether call-scoped turns subsume it).
 
 **Background reading:** notes/cells-as-actors-ordering-2026-11-11.md (the cells-as-actors proposal, where the three options are labeled T1/T2/T3) and notes/refs-via-self-send-2026-04-09.md (the earlier open questions).

@@ -2,12 +2,26 @@
 status: todo
 created: 2026-05-20
 ---
-# `type of` / #type
+# Class and type introspection: the class of a value, is-a, equality
 
-Gets the a fully qualified address pointer to a type or class declaration.
+## The class of a value (`type of` / `#type`)
 
-Must work:
+Gets a fully qualified address pointer to a type or class declaration. Must work:
 
-- When type/class defined inside a file
-- When type/class IS the file
-- Within the same file (which must use CAM-relative internal addressing)
+- When the type/class is defined inside a file
+- When the type/class IS the file
+- Within the same file (which must use Opre-relative internal addressing)
+
+Spelling in Brevity is open: `class(obj)`, `class of obj`, or similar. On the wire, the class of an address is `X:*`, reduced by whoever knows `X`'s class (notes/class-of-and-self-return-2026-11-23.md), not a `#class` op.
+
+## Is-a
+
+A test that a value is an instance of a class or any of its subclasses, or of a type. Compile-time assignability already follows ancestry for params (`g = (p P) -> …` takes a subclass of `P`); this is the runtime test.
+
+## Equality
+
+What `==` means between classes and between types. `P == Q` on two declared classes compiles today, with no defined meaning: address identity, or structure?
+
+## Open
+
+What is the type of a type or class value, e.g. `A::B`? `type`? These need a typology alongside function types.

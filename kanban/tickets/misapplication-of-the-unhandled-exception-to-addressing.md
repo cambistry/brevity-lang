@@ -2,10 +2,10 @@
 status: inbox
 created: 2026-11-21
 ---
-# Misapplication of the "unhandled" exception to addressing failure?
+# A missing actor and a missing method get the same reply
 
-Need to think about this, but “unhandled” is meant to be the response to a missing method (with the idea that actors can/could chain and handle overloads in sequence).
+`unhandled` is the response to a message nothing answers, with the idea that actors can chain and handle overloads in sequence: an `unhandled` lets the caller fall through to the next handler (notes/clause-lists-2026-11-25.md: no matching clause is `unhandled`).
 
-I’m not sure it is the right message when the addressed actor does not exist.
+Today it's also the reply when the addressed actor doesn't exist. That's a different failure: nothing further along would answer it, so falling through is the wrong signal.
 
-Contemplate.
+Decide whether "no such actor" gets its own reply, and what a caller does with it. Related: `implement-return-unhandled-bv-equivalent-of-a-guard`.

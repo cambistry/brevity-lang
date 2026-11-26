@@ -2,6 +2,19 @@
 status: todo
 created: 2026-05-20
 ---
-# class ancestry?
+# A typed local accepts an actor of an unrelated class
 
-Most immediately for field type checking. (A subclass instance should be assignable to a slot types to a parent class.)
+A class-typed param checks ancestry: a subclass is accepted, an unrelated class is refused.
+
+```brevity
+P = (s Integer) *{ @a = -> 1 }
+Q = P ^ (t Integer) *{ super(t) }
+R = (s Integer) *{ @b = -> 1 }
+g = (p P) -> p.a()
+@ok = { return g(Q(1)) }    // compiles
+@bad = { return g(R(1)) }   // 'g()' positional arg 1: 'R' is not assignable to 'P'
+```
+
+A typed local doesn't: `@f = { p P = R(1); return p.a() }` compiles.
+
+Done when, on js, rust and erlang, a typed local (and a typed cell) uses the param's check: `p P = R(1)` is a compile error and `p P = Q(1)` compiles. Tests beside the param case.

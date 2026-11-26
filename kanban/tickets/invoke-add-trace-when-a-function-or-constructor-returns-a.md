@@ -8,14 +8,15 @@ Spec: notes/add-trace-on-return-2026-11-14.md
 
 A class (or service) may declare a method `__add_trace__` in its interface. When a Brevity function or constructor returns an actor that did not exist when its body started, BV must invoke `__add_trace__` on that actor, passing the address of the returning scope. Where the actor was created doesn't matter (this body, a local subcall, a remote subcall); only that it is new since the body started. BV decides whether to call it from the interface of the returned value's type: no declaration, no call.
 
-Example (current address syntax), header `HTML: (:div)`, HTML's element interface declaring `__add_trace__`:
+Example, with HTML's element interface declaring `__add_trace__`:
 
 ```
+use HTML::div
 @template = -> <div>123</div>
 
-{ op: '$new', to: 'HTML div' }
-{ re: '#<HTML div 123>', ty: 'HTML div' }
-{ op: [['#<. template>'], '__add_trace__'], to: 'HTML div 123' }
+{ op: '$new', to: 'HTML:div', from: ':template' }
+{ re: ['#<HTML:div:123>'], ty: ['HTML:div'] }
+{ op: [['#<:template>'], '__add_trace__'], to: 'HTML:div:123' }
 ```
 
 Behaviour to cover, on js, rust and erlang:
@@ -27,7 +28,7 @@ Behaviour to cover, on js, rust and erlang:
 - Function returning an actor it was handed (`@wrap = (el) -> el`): no call.
 - Constructor: `@make = -> Counter(5)` with `Counter` declaring `__add_trace__`: one call on the new Counter actor, with make's scope.
 - Returned type without `__add_trace__` in its interface: no call.
-- Scope addresses in wire form: public bare, protected `~`, private `#`; a class scope is the class (`. Constructor`).
+- Scope addresses in wire form: public bare, protected `~`, private `#`; a class scope is the class (`:Constructor`).
 
 Out of scope:
 

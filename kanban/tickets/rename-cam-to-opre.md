@@ -2,4 +2,4 @@
 status: investigation
 created: 2026-10-29
 ---
-# Rename CAM to Opre?
+# Doc updates: change CAM to Opre

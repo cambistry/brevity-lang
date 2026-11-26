@@ -2,65 +2,36 @@
 status: inbox
 created: 2026-10-29
 ---
-# Declared read-only public fields (@name = expr)
+# Declared read-only public fields (`@name = expr`)
 
-**Problem**
+A class can't publish a read-only value computed from an expression, and has no read-only public field of a base type.
 
-A class has no way to publish a read-only value computed from an expression, such as a constructor param. The public member forms today:
+| Declaration | Today | Service document (JSON) |
+|---|---|---|
+| `@n *Integer = 0` | public cell, read and set | `n` read, plus `:n` with `$get` and `$set` |
+| `@p *Point = Point(1, 2)` | public cell, read only (setters are made only for base types) | `p` read, plus `:p` with `$get` only |
+| `@k = 5` | public constant (literal or constructor call) | `k` read only, no cell entry |
+| `@title = label` | "'@title' is public — only functions can be public…" | — |
+| `@title Text = label`, `@k Integer = 5` | parse error ("Unexpected token after '@title'") | — |
 
-```text
-┌──────────────────────┬──────────────────────────────────────────────────────────────────────┬─────────────────┐
-│     Declaration      │                                Result                                │  Service doc    │
-│                      │                                                                      │      shows      │
-├──────────────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ @n *Integer = 0      │ public ref cell, getter and setter                                   │ n *Integer      │
-├──────────────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ @p *Point = Point(1, │ public ref cell, getter only (setters are synthesized only for base  │ p () -> (Point) │
-│  2)                  │ types and Self)                                                      │                 │
-├──────────────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ @k = 5               │ public constant: literal or constructor call only                    │ k () ->         │
-│                      │                                                                      │ (Integer)       │
-├──────────────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ @title = label       │ error: "'@title' is public — only functions can be public"           │ —               │
-├──────────────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ @title Text = label  │ parse error                                                          │ —               │
-└──────────────────────┴──────────────────────────────────────────────────────────────────────┴─────────────────┘
-```
+Proposal: `@name = expr` declares a read-only public field, evaluated at construction; a read replies with the value positionally.
 
-Gaps:
-
-1. No read-only public field of a base type: @n *Integer is always writable.
-1. No public field initialized from an arbitrary expression (@title = label is rejected).
-1. Read-only members appear in the service doc as zero-arg methods (k () -> (Integer)) instead of the read-only field notation k Integer that the doc grammar already supports (total Integer = read-only field).
-
-This blocks removing auto-accessors (a separate decision): the explicit replacement for a param's accessor is currently a full handler (@label = { label }).
-
-**Proposal**
-
-@name = expr in a constructor block declares a read-only public field. The value is evaluated at construction, and a read replies with the value positionally.
-
-```
-C = (label: Text) *{
+```brevity
+C = (label Text) *{
   @title = label                 // read-only public field
   @n *Integer = 0                // unchanged: readable and settable
 }
 ```
 
-- The service doc lists it as title Text.
-- c.title() (and a bare c.title, if field reads are supported) binds positionally: t Text = c.title().
-- c.title <- "x" is a compile error: "'title' is read-only".
-- .subscribe works like on any read-only field. Whether the value can ever change after construction (it can't, unless expr reads a cell) needs a decision: snapshot at construction, or a live derived field?
-- Subsumes the current public-constant form @k = 5, which becomes the same thing and should be listed as k Integer.
-- Decide whether the getter-only @p *Point keeps its current shape or is listed as p Point.
+- Service document: `title` as a read, plus a `:title` entry with `$get` only, as `@p *Point` has today.
+- `t Text = c.title()` binds positionally; `c.title <- "x"` is a compile error.
+- `sub c.title, (v) { … }` works as on any read-only field.
+- Subsumes `@k = 5`, which gains the same `:k` entry.
 
-**Open questions**
+Decide:
 
-- Optional type annotation: @title Text = label? Field-style declarations elsewhere use name Type. Consider allowing it for coercion or documentation.
-- Snapshot vs live (above). Snapshot is simplest. Live overlaps the reactive-value-cell direction in notes/capability-sigils-2026-05-16.md.
-- Parsing ambiguity: @name = <expr> vs a handler body. Today the parser speculatively treats a literal or constructor after = as a constant and falls through to handler parsing otherwise. Handlers already require ->, { or (params), so a bare expression after = can unambiguously be a field.
+- Snapshot at construction, or a live derived field when `expr` reads a cell (overlaps notes/capability-sigils-2026-05-16.md)? Snapshot is simplest.
+- An optional annotation, `@title Text = label`, for coercion or documentation; today a parse error.
+- Parsing: a handler needs `->`, `{` or `(params)` after `=`, so a bare expression can be a field.
 
-**Acceptance**
-
-- @title = label compiles on js, rust and erlang. The read binds positionally, a set is rejected at compile time, and the service doc lists title Text.
-- @k = 5 is listed as k Integer.
-- Tests: read, rejected set, subscribe, service-doc extraction, round-trip through parseInterface.
+Done when `@title = label` compiles on js, rust and erlang: read binds positionally, set is a compile error, the service document has the `$get`-only entry, and `@k = 5` matches. Tests: read, rejected set, sub, service-document extraction.

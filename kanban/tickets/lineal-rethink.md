@@ -2,36 +2,16 @@
 status: inbox
 created: 2026-11-14
 ---
-# Lineal rethink?
+# Lineal definitions: parenthesised params, `end#name` closer, implicit tail return
 
-Aim to tolerate LF…
+Concept, not decided: notes/lineal-definitions-2026-11-25.md.
 
-```
-**
-  <DI>
-**
-count *Integer = 0
-  new =
-  *
-    params
-  *
-  constructor
-  @fn =
-  (
-    params
-  )
-  body
-  @A =
-  **
-  sub-constructor
-```
+- Params on one line or one per line inside `(…)`; a constructor's lead `*(…)`. Replaces the `*` … `*` lineal constructor header.
+- A lineal body runs to `end#name`, which must equal the binding name; no bare closer; labels nest.
+- A function's body is lineal exactly when a matching `end#name` follows in the same scope; otherwise `f = (a, b)` is an Object.
 
-The principle here seems to be that a lineal header (no assignment) opens up a singleton/constructor/function for the full file. A file with no header implicitly opens a singleton:
+Implicit tail return: with `end#name` closing the body, its last expression is the value, as in a braced body (lineal bodies have none today: notes/lineal-termination-implicit-return-2026-10-26.md). A multi-value tail is an Object: `x, y` positional, `x: 123, y: 456` named.
 
-```
-new = *{
-}
-other class functions / names
-```
+Open (from the note): a blank line after `)`; return types on a lineal body; whether the file header follows the same shape; lineal singletons.
 
-LF termination applies to anything that is assigned to a name inside of a file, which can be overridden with end#Name, enabling internal LF.
+Done when decided in a note, then built on js, rust and erlang with lineal_form tests, and the `-> result: …` tails in those tests become bare tails.

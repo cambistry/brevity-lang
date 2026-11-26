@@ -1,8 +1,8 @@
 ---
-status: todo
+status: investigation
 created: 2026-11-14
 ---
-# Spec change: `from` names the calling scope - WON'T DO
+# Spec change: `from` names the calling scope
 
 Every outgoing call (ordinary ops, silent `!` and launched calls, and the intrinsics $get, $set, $new, $subscribe, $update) carries in `from` the address of the innermost named, addressable scope whose code made it, relative to the sending actor and translated by each parent as `from` is today. Replies (re/ex) are unchanged.
 

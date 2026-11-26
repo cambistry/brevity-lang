@@ -2,17 +2,17 @@
 status: inbox
 created: 2026-11-10
 ---
-# overloaded clauses that differ only by class or type params can't be told apart for in-process calls
+# In-process calls to an overload ignore arg types
 
-Calls between actors in the same process (parent to child, a file to itself, the test harness) send argument values without ty tags. For overloaded clauses, dispatch checks those values, but a value can only rule out a scalar param type: Integer, Text, Boolean, Float, Decimal, null.
+Calls between actors in the same process (parent to child, a file to itself, the test harness) send argument values without `ty` tags. For overloaded clauses, dispatch checks those values, but a value can only rule out a scalar param type: Integer, Text, Boolean, Float, Decimal, null. The guards also skip type matching for in-process senders: js `(from === '__parent' || from === '__self' || from === '__test' || …)` in src/codegen/javascript/classes.js; rust and erlang have the same bypass.
 
-When clauses differ only by class or type params, the call goes to the first clause that matches by arity. When that's the wrong clause, the handler errors. Confirmed on js, rust and erlang. The same call works when the class has a single (b Box) clause.
+The compile-time annotation check picks the first clause whose types accept the args, so at run time a different clause can run from the one the compiler judged.
 
-**Repro:**
+## Repro 1: a parent calls a child's overload that differs only by type
 
-```
-::Point (x Integer, y Integer)
-::Box (w Integer)
+```brevity
+type Point (x Integer, y Integer)
+type Box (w Integer)
 
 T = (n Integer) *{
   @put = (p Point) -> v: 1
@@ -32,14 +32,37 @@ T = (n Integer) *{
 }
 ```
 
-@viaPoint replies v: 1, which is correct. @viaBox should reply v: 2, but it replies ex: { "@viaBox": "error" }.
+`@viaPoint` replies `v: 1`, correctly. `@viaBox` should reply `v: 2`, but replies `ex: { "viaBox": "error" }` (js, 2026-11-25; confirmed on all three targets earlier). The same call works when the class has a single `(b Box)` clause.
 
-**Fix:** in-process sends carry ty, as wire sends already do (genArgSlots builds it for dependency calls), and an in-process overloaded call is then matched by its tags. The value check stays as the fallback for untagged messages.
+## Repro 2: a file calls its own overload
 
-**Watch** **for:**
+```brevity
+pick = (n Integer) { return "a" }
+pick << (n Text) { return 1 }
+@pk = (n Integer) { return "a" }
+@pk << (n Text) { return 1 }
+@g = (v Text) {
+  return pick(v)
+}
+@h = (v Text) {
+  return @pk(v)
+}
+```
 
-- A ty on a message makes the receiver decode type-valued arguments from wire form: _bv_unwire_packed in js, bv_unwire_* in rust. Either serialize the arguments as wire sends do, or skip decoding for in-process messages.
-- The send sites are js #childSend/#childFire, rust child_*_dispatch*/handle_op_at, and erlang child_dispatch/*_handle_op with From = <<"__parent">>.
-- Not yet run: two clauses taking different classes, a file calling its own handler overloaded on types, and rust parent calls into a file actor running as an instance of its own class (handle_op_at(…, "__parent"), where __parent isn't treated as in-process).
+`@g("z")` and `@h("z")` should reply `1`. On js they do (2026-11-25); on rust and erlang both reply `ex`.
 
-**Tests:** the repro above on all three targets, plus the variants listed under "Not yet run".
+## Fix
+
+In-process sends carry `ty`, as wire sends already do (`genArgSlots` builds it for dependency calls), and an in-process overloaded call is matched by its tags. The value check stays as the fallback for untagged messages. A call whose args match no clause's types fails the same way as a call from outside.
+
+To decide: should trusted in-process senders (`__parent`, `__test`) be type-matched too, or only `__self`?
+
+Watch for:
+
+- A `ty` on a message makes the receiver decode type-valued arguments from wire form: `_bv_unwire_packed` in js, `bv_unwire_*` in rust. Either serialize the arguments as wire sends do, or skip decoding for in-process messages.
+- The send sites are js `#childSend`/`#childFire`, rust `child_*_dispatch*`/`handle_op_at`, and erlang `child_dispatch`/`*_handle_op` with `From = <<"__parent">>`.
+- Not yet run: two clauses taking different classes, and rust parent calls into a file actor running as an instance of its own class (`handle_op_at(…, "__parent")`, where `__parent` isn't treated as in-process).
+
+## Done when
+
+Both repros and the "not yet run" variants pass on js, rust and erlang.
