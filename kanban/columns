@@ -3,6 +3,7 @@
 investigation  Investigation
 inbox          Inbox
 todo           To Do
+queued         Queued
 in-progress    In Progress
 review         Review
 done           Done

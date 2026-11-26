@@ -38,7 +38,7 @@ Expected: a non-list fails where it's met.
 
 `status` is the column. A status change goes in the same commit as the work it reflects.
 
-Columns: `investigation`, `inbox`, `todo`, `in-progress`, `review`, `done`, `future`, `wont-do`, `icebox`.
+Columns: `investigation`, `inbox`, `todo`, `queued` (the work queue, in order), `in-progress`, `review`, `done`, `future`, `wont-do`, `icebox`.
 
 ## Board
 

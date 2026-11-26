@@ -21,8 +21,10 @@ metadata:
 
 ## Tickets and pasteables
 - Tickets are `kanban/tickets/<slug>.md` with `status:` front-matter (format and columns in `kanban/README.md`). When something should be a ticket, file it myself: write the file with `status: inbox` and say so in one line. Never hand over a draft to paste.
-- Status moves with the work: `in-progress` when I start, `review` when green, `done` in the acceptance commit itself.
-- Order is the user's. Never edit `.kanban/lists/` unless asked. Read the board with `npm run board -- --print [status…]`.
+- Status moves with the work: `in-progress` when I start, `done` as soon as I judge it done and the suite is green. Don't commit for the status change; it goes in the same commit as the ticket's work, whenever that commit happens.
+- **Queued** (after To Do) is the user's work queue, in order. Take tickets from its top.
+- **Starting a ticket:** set its `status: in-progress`. Move its line out of its current `.kanban/lists/<status>` file to the bottom of `.kanban/lists/in-progress`. Then, in `.kanban`, commit (message `order`), `git pull --rebase` and push, so other workstations see the move. This push is standing-authorized; nothing else on `kanban` is.
+- Order is the user's. Apart from that move, never edit `.kanban/lists/` unless asked. Read the board with `npm run board -- --print [status…]`.
 - Pasteable text (messages, commit text) goes in a fenced code block, never `>` lines, because the markers come along on copy.
 
 ## notes/ and memory
