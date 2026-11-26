@@ -1,4 +1,5 @@
 kanban/tickets/type-field-access-should-use-rather-than-dot-since-it-is.md
+kanban/tickets/q-empty-subclass-u-as-opposed-to-u.md
 kanban/tickets/investigate-dot-chains-on-a-cell-derive-a-live-cell.md
 kanban/tickets/spec-change-from-names-the-calling-scope-won-t-do.md
 kanban/tickets/silent-lambdas-how-an-anonymous-function-declares-silence.md
