@@ -2,7 +2,7 @@
 status: todo
 created: 2026-11-23
 ---
-# Positional type fields should (perhaps) *not* be named
+# Positional type fields should *not* be named
 
 IDEA:
 
