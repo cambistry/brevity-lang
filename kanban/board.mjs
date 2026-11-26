@@ -219,6 +219,13 @@ function writeOrder() {
   }
 }
 
+// A single up/down step wraps to the other end of the list; paging and jumps stop at the ends.
+function stepRow(row, dr, length) {
+  if (length <= 0) return 0;
+  if (Math.abs(dr) === 1) return (row + dr + length) % length;
+  return clamp(row + dr, 0, length - 1);
+}
+
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -239,7 +246,7 @@ function moveCursor(dc, dr, { skipEmpty = false } = {}) {
     S.rows[cols[ni].slug] = rowAtY(cols[ni].slug, y, L);
   }
   const c = currentColumn();
-  if (dr && c) S.rows[c.slug] = clamp(currentRow() + dr, 0, Math.max(0, members(c.slug).length - 1));
+  if (dr && c) S.rows[c.slug] = stepRow(currentRow(), dr, members(c.slug).length);
 }
 
 function moveGrabbed(dc, dr) {
@@ -256,7 +263,7 @@ function moveGrabbed(dc, dr) {
   } else if (dr) {
     const m = members(t.status);
     const i = m.indexOf(g.slug);
-    const ni = clamp(i + dr, 0, m.length - 1);
+    const ni = stepRow(i, dr, m.length);
     if (ni === i) return;
     place(g.slug, t.status, ni);
   }
