@@ -87,7 +87,6 @@ kanban/tickets/array-type-package.md
 kanban/tickets/map-type-package.md
 kanban/tickets/optimisation-flatten-single-construction-classes-on-rust.md
 kanban/tickets/implement-return-unhandled-bv-equivalent-of-a-guard.md
-kanban/tickets/boilerplate-for-bv-wire-messages-cam-op-1.md
 kanban/tickets/preamble-tree-shaking.md
 kanban/tickets/integer-integer.md
 kanban/tickets/catch-label-passing.md
