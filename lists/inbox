@@ -11,7 +11,6 @@ kanban/tickets/constructor-star-leads.md
 kanban/tickets/destructure-a-core-type-s-functions.md
 kanban/tickets/document-pure-functions-in-the-service-document.md
 kanban/tickets/files-as-addressed-values-dir-and-file.md
-kanban/tickets/filter-find-map-sum-in-the-shape-of-over.md
 kanban/tickets/a-type-declaration-carries-a-namespace-of-functions.md
 kanban/tickets/lambda-params-take-their-types-from-the-slot.md
 kanban/tickets/line-breaks-separate-items-in-multi-line-brackets.md
