@@ -52,7 +52,6 @@ kanban/tickets/for-reactive-text-interpolation-beyond-element-content.md
 kanban/tickets/overloaded-clauses-that-differ-only-by-class-or-type-params.md
 kanban/tickets/docs-on-github.md
 kanban/tickets/non-dom-browser-capabilities.md
-kanban/tickets/investigate-a-bare-zero-arity-lambda-in-an-untyped-slot.md
 kanban/tickets/take-eval-off-document-make-arbitrary-js-an-explicit-grant.md
 kanban/tickets/reference-to-a-foreign-function-svc-fn-not-svc-fn.md
 kanban/tickets/js-a-class-can-t-subscribe-to-a-file-s-private-cell-passed.md
