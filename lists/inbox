@@ -130,7 +130,6 @@ kanban/tickets/expectbehavior-and-expectactorbehavior-should-return.md
 kanban/tickets/represent-negated-self-as-clauses-in-service-document.md
 kanban/tickets/plurals-for-types.md
 kanban/tickets/effectful-calls.md
-kanban/tickets/subscription-emit.md
 kanban/tickets/predicates.md
 kanban/tickets/clone.md
 kanban/tickets/test-get-introspects-non-scalar-types.md
