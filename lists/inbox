@@ -1,6 +1,5 @@
 kanban/tickets/lists-of-functions-as-runtime-values.md
 kanban/tickets/spelled-out-constructor-returns-an-actor-literal.md
-kanban/tickets/fix-a-bare-element-statement-in-a-function-body-is-dropped.md
 kanban/tickets/a-makers-style-element-styles-the-elements-it-makes.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/warn-on-an-unused-value-in-a-body.md
