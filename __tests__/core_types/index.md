@@ -24,7 +24,7 @@ and built-in methods.
 
 ## LLM Rules
 
-- Use `List of Integers`, `List of Texts`, etc. for typed lists.
+- Use `List[Integer]`, `List[Text]`, etc. for typed lists.
 - Empty lists are tested as `[]` at source level.
 - Use `Object` for rest payloads such as `(...args Object) -> `.
 - Prefer explicit casts such as `as Integer` when the example needs a stable

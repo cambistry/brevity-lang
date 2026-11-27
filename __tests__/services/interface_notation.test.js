@@ -86,19 +86,19 @@ describe('service document — entry forms', () => {
   });
 
   it('read-only cell: name &Type — readable, not settable', () => {
-    const p = parseInterface('{ count &Integer\n  names &List of Texts }');
+    const p = parseInterface('{ count &Integer\n  names &List[Text] }');
     expect(p.__fields).toEqual({
       count: { type: 'Integer', cell: true, readOnly: true },
-      names: { type: 'List of Texts', cell: true, readOnly: true },
+      names: { type: 'List[Text]', cell: true, readOnly: true },
     });
     expect(p.count).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
   });
 
   it('prop: name Type — an attribute, not a cell', () => {
-    const p = parseInterface('{ count Integer\n  names List of Texts\n  parent Node | null }');
+    const p = parseInterface('{ count Integer\n  names List[Text]\n  parent Node | null }');
     expect(p.__fields).toEqual({
       count: { type: 'Integer', cell: false, readOnly: true },
-      names: { type: 'List of Texts', cell: false, readOnly: true },
+      names: { type: 'List[Text]', cell: false, readOnly: true },
       parent: { type: 'Node | null', cell: false, readOnly: true },
     });
     expect(p.count).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
@@ -207,7 +207,7 @@ describe('service document — emitted form', () => {
 
   it('a public cell with no setter emits &, and round-trips', () => {
     const { interface: iface } = extract(`
-      @names *List of Texts = []
+      @names *List[Text] = []
       @val *Integer = 0
     `);
     expect(iface.service).toEqual({
@@ -230,7 +230,7 @@ describe('service document — emitted form', () => {
     const { interface: iface } = extract(`
       @Box = *(@start Integer) {
         @slot *Integer = 0
-        @names *List of Texts = []
+        @names *List[Text] = []
         @get = () -> value: start as Integer
       }
     `);
@@ -417,7 +417,7 @@ describe('service document — param and return fields', () => {
   });
 
   it('a param type that does not parse', () => {
-    expect(() => parseInterface('{ first (Text of) -> (Element) }')).toThrow("In '(Text of)': Expected type name, got EOF ''");
+    expect(() => parseInterface('{ first (List[) -> (Element) }')).toThrow("In '(List[)': Expected type name, got EOF ''");
   });
 
   it('a return type that does not parse', () => {

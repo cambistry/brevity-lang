@@ -742,7 +742,7 @@ function validateProgram(ast, options = {}) {
   }
 
   // ── Text-only templates: an element child is a compile error ──────────────
-  // A tag whose `children` slot is `List of Texts` (a TextElement: <style>,
+  // A tag whose `children` slot is `List[Text]` (a TextElement: <style>,
   // <textarea>, …) takes text, `{{ }}` and `#{ }` children only. A nested
   // element there would otherwise be sent and dropped by the runtime.
   {
@@ -1940,9 +1940,9 @@ function checkDecimalTermination(ast) {
 }
 
 // ── List method element-type compatibility ────────────────────────────────
-// Reject e.g. `List.contains(List of Integers, "x")` at compile time, because
+// Reject e.g. `List.contains(List[Integer], "x")` at compile time, because
 // the runtime equality helper would fall through to identity and return false
-// silently. Also restricts `join` to `List of Texts`.
+// silently. Also restricts `join` to `List[Text]`.
 //
 // Argument-position semantics by method:
 //   • element-position (contains, index_of, before, after, append, prepend,
@@ -1952,10 +1952,10 @@ function checkDecimalTermination(ast) {
 //   • list-position (starts_with, ends_with, concat):
 //       arg should be List of compatible Element
 //   • Integer-position (at, slice, take, from, repeat): arg must be Integer
-//   • join: receiver must be List of Texts; sep must be Text
-//   • flatten: receiver must be List of Lists
+//   • join: receiver must be List[Text]; sep must be Text
+//   • flatten: receiver must be List[List]
 //
-// Element checks pass when either side is 'Anything' / 'List of Anything', or
+// Element checks pass when either side is 'Anything' / 'List[Anything]', or
 // when the type can't be inferred (typeEnv miss). The only hard rejections are
 // confidently-known mismatches.
 function checkListMethodArgs(ast) {
@@ -2017,18 +2017,18 @@ function checkListMethodArgs(ast) {
         }
       }
     } else if (expr.method === 'join') {
-      // receiver must be List of Texts; sep must be Text.
+      // receiver must be List[Text]; sep must be Text.
       if (known(recvType) && recvType !== ANY_LIST && recvType !== listOf('Text')) {
-        throw new Error(`List.join is only valid on List of Texts, got ${show(recvType)}`);
+        throw new Error(`List.join is only valid on List[Text], got ${show(recvType)}`);
       }
       const sepType = inferType(expr.args[1], typeEnv);
       if (!scalarIs(sepType, 'Text')) {
         throw new Error(`List.join separator must be Text, got ${show(sepType)}`);
       }
     } else if (expr.method === 'flatten') {
-      // receiver must be List of Lists (any element type for the inner list).
+      // receiver must be List[List] (any element type for the inner list).
       if (known(recvType) && recvType !== ANY_LIST && !isList(elemType)) {
-        throw new Error(`List.flatten is only valid on a List of Lists, got ${show(recvType)}`);
+        throw new Error(`List.flatten is only valid on a List[List], got ${show(recvType)}`);
       }
     }
   }

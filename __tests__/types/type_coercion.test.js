@@ -782,7 +782,7 @@ describe('as — provably wrong is a compile error', () => {
   it.each([
     ['a path as a constructor profile', 'Thing = "thing.bv" as *(a: Integer) -> { get () -> (Integer) }', 'Text'],
     ['a number as an interface', 'Thing = 5 as { get () -> (Integer) }', 'Integer'],
-    ['a list as an interface', 'Thing = [1] as { get () -> (Integer) }', 'List of Integers'],
+    ['a list as an interface', 'Thing = [1] as { get () -> (Integer) }', 'List[Integer]'],
     ['a Type as an interface', 'Thing = Point(x: 1, y: 2) as { get () -> (Integer) }', 'Point'],
   ])('%s', (_, decl, type) => {
     expect(() => compileSource(`type Point(x: Integer, y: Integer)\n${decl}\n@go = () -> 1\n`)).toThrow(`Cannot render ${type} as an actor — no such rendering, so this 'as' can only fail`);

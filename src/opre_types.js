@@ -23,13 +23,8 @@
 // constructor profile `*(p) -> { … }` claim a dependency's shape, after `as`; neither
 // is a type that encodes.
 
-import { TT, renderType } from './type_tree.js';
+import { renderType } from './type_tree.js';
 import { _opre_quote as quote } from './codegen/opre_tokens.js';
-
-const PLURAL = new Map([
-  ['Integers', 'Integer'], ['Texts', 'Text'], ['Floats', 'Float'], ['Booleans', 'Boolean'],
-  ['Blobs', 'Blob'], ['Decimals', 'Decimal'], ['Actors', 'Actor'],
-]);
 
 // A self-return's type: self's class, `:*`, as on the wire (notes/class-of-and-self-return-2026-11-23.md).
 export const SELF = ':*';
@@ -103,23 +98,15 @@ export function typeScope({ types = [], classes = [], services = {}, serviceClas
 
 const NO_SCOPE = typeScope();
 
-const many = (node) => {
-  if (node.k === 'name' && node.path.length === 1 && PLURAL.has(node.path[0])) return { many: true, node: TT.name([PLURAL.get(node.path[0])]) };
-  if (node.k === 'of' && node.container === 'Lists') return { many: true, node: TT.of('List', node.arg) };
-  return { many: false, node };
-};
-
 export function encodeType(node, scope = NO_SCOPE) {
   switch (node.k) {
     case 'name': return scope.resolve(node.path);
     case 'null': return null;
     case 'union': return { '%or': node.members.map(m => encodeType(m, scope)) };
     case 'of': {
-      const arg = many(node.arg);
-      const enc = encodeType(arg.node, scope);
+      const enc = encodeType(node.arg, scope);
       // A List holds any number of its element.
-      const param = arg.many || node.container === 'List' ? [enc] : enc;
-      return [param, { '%t': scope.resolve([node.container], { asClass: true }) }];
+      return [node.container === 'List' ? [enc] : enc, { '%t': scope.resolve([node.container], { asClass: true }) }];
     }
     case 'shape': return tagged(encodeEntries(node.fields, scope), 'Object');
     case 'fn': return { '%fn': [fnSignature(node, scope)] };

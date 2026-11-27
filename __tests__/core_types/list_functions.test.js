@@ -9,32 +9,32 @@ describe('List.map, filter, find, sum', () => {
     big = (n Integer) -> n > 2
 
     @mapped = () {
-      xs List of Integers = [1, 2, 3]
-      v List of Integers = List.map(xs) (x) { x * 10 }
+      xs List[Integer] = [1, 2, 3]
+      v List[Integer] = List.map(xs) (x) { x * 10 }
       return v
     }
     @filtered = () {
-      xs List of Integers = [1, 2, 3, 4]
-      v List of Integers = filter(xs) (x) { x % 2 == 0 }
+      xs List[Integer] = [1, 2, 3, 4]
+      v List[Integer] = filter(xs) (x) { x % 2 == 0 }
       return v
     }
     @byRef = () {
-      xs List of Integers = [1, 2, 3, 4]
-      v List of Integers = filter(xs, &big)
+      xs List[Integer] = [1, 2, 3, 4]
+      v List[Integer] = filter(xs, &big)
       return v
     }
     @found = (k Integer) {
-      xs List of Integers = [3, 8, 12]
+      xs List[Integer] = [3, 8, 12]
       v Integer | null = find(xs) (x) { x > k }
       return v
     }
     @summed = () {
-      xs List of Integers = [1, 2, 3, 4]
+      xs List[Integer] = [1, 2, 3, 4]
       v Integer = sum(xs)
       return v
     }
     @ofCell = () {
-      cells *List of Integers = [5, 6]
+      cells *List[Integer] = [5, 6]
       v Integer = sum(map(cells) (x) { x + 1 })
       return v
     }
@@ -43,11 +43,11 @@ describe('List.map, filter, find, sum', () => {
   it('map and filter, with a block and a reference', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'mapped', from: 'c' } },
-      { output: { id: '1', re: [[10, 20, 30]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '1', re: [[10, 20, 30]], ty: ['List[Integer]'], to: 'c' } },
       { input: { id: '2', op: 'filtered', from: 'c' } },
-      { output: { id: '2', re: [[2, 4]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '2', re: [[2, 4]], ty: ['List[Integer]'], to: 'c' } },
       { input: { id: '3', op: 'byRef', from: 'c' } },
-      { output: { id: '3', re: [[3, 4]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '3', re: [[3, 4]], ty: ['List[Integer]'], to: 'c' } },
     );
   });
 
@@ -74,7 +74,7 @@ describe('List.map, filter, find, sum — compile errors', () => {
   it('a map whose value is unused', () => {
     expect(() => compileSource(`
       @g = () {
-        xs List of Integers = [1, 2]
+        xs List[Integer] = [1, 2]
         List.map(xs) (x) { x + 1 }
         return 1
       }
@@ -84,7 +84,7 @@ describe('List.map, filter, find, sum — compile errors', () => {
   it('sum takes no function', () => {
     expect(() => compileSource(`
       @g = () {
-        xs List of Integers = [1, 2]
+        xs List[Integer] = [1, 2]
         v Integer = List.sum(xs, &xs)
         return v
       }

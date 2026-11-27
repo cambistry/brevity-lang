@@ -35,12 +35,12 @@ describe('a read before its declaration — validation', () => {
   });
 
   it('a read in a function handed to `over`', () => {
-    expect(() => compileSource('nx = (i Integer) { return i + late }\nr List of Integers = over([1, 2], &nx)\nlate *Integer = 1\n@v = () -> r\n'))
+    expect(() => compileSource('nx = (i Integer) { return i + late }\nr List[Integer] = over([1, 2], &nx)\nlate *Integer = 1\n@v = () -> r\n'))
       .toThrow(/'late' is read before its declaration \(by 'r', through 'nx'\)/);
   });
 
   it('a read in a lambda handed to `over`', () => {
-    expect(() => compileSource('r List of Integers = over([1, 2], (v Integer) -> v + late)\nlate *Integer = 1\n@v = () -> r\n'))
+    expect(() => compileSource('r List[Integer] = over([1, 2], (v Integer) -> v + late)\nlate *Integer = 1\n@v = () -> r\n'))
       .toThrow(/'late' is read before its declaration \(by 'r'\)/);
   });
 

@@ -10,23 +10,23 @@ describe('List construction + destructure', () => {
 
       @emptyList
         =
-        empty List of Integers = []
+        empty List[Integer] = []
         return result: empty
 
       @singleHead
         =
-        nums List of Integers = [7]
+        nums List[Integer] = [7]
         [h Integer] = nums
         return head: h
 
       @typedList
         =
-        nums List of Integers = [1, 2, 3]
+        nums List[Integer] = [1, 2, 3]
         return result: nums
 
       @textHead
         =
-        words List of Texts = ["hello", "world"]
+        words List[Text] = ["hello", "world"]
         [h Text, ..._] = words
         return first: h
 
@@ -34,13 +34,13 @@ describe('List construction + destructure', () => {
 
       @posTwo
         =
-        nums List of Integers = [5, 6, 7]
+        nums List[Integer] = [5, 6, 7]
         [a Integer, b Integer, _] = nums
         return sum: a + b
 
       @posThree
         =
-        nums List of Integers = [1, 2, 3]
+        nums List[Integer] = [1, 2, 3]
         [a Integer, b Integer, c Integer] = nums
         return sum: a + b + c
 
@@ -48,37 +48,37 @@ describe('List construction + destructure', () => {
 
       @headTail
         =
-        nums List of Integers = [10, 20, 30]
+        nums List[Integer] = [10, 20, 30]
         [h Integer, ...t] = nums
         return head: h
 
       @singleTail
         =
-        nums List of Integers = [42]
+        nums List[Integer] = [42]
         [h Integer, ...t] = nums
         return tail: t
 
       @discardHead
         =
-        nums List of Integers = [100, 200, 300]
+        nums List[Integer] = [100, 200, 300]
         [_, ...t] = nums
         [h Integer, ..._] = t
         return second: h
   `;
 
   it('empty list is []', async () => {
-    await expectBehavior(script, { input: { id: '1', op: 'emptyList', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'List of Integers' }], re: [{ result: [] }], to: 'c' } });
+    await expectBehavior(script, { input: { id: '1', op: 'emptyList', from: 'c' } }, { output: { id: '1', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [] }], to: 'c' } });
   });
 
   it('[7] head destructure', async () => {
     await expectBehavior(script, { input: { id: '2', op: 'singleHead', from: 'c' } }, { output: { id: '2', 'ty': [{ head: 'Integer' }], re: [{ head: 7 }], to: 'c' } });
   });
 
-  it('typed list variable carries List of Integers in ty', async () => {
-    await expectBehavior(script, { input: { id: '3', op: 'typedList', from: 'c' } }, { output: expect.objectContaining({ id: '3', 'ty': [{ result: 'List of Integers' }], re: [{ result: [1, 2, 3] }] }) });
+  it('typed list variable carries List[Integer] in ty', async () => {
+    await expectBehavior(script, { input: { id: '3', op: 'typedList', from: 'c' } }, { output: expect.objectContaining({ id: '3', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [1, 2, 3] }] }) });
   });
 
-  it('List of Texts — head destructure', async () => {
+  it('List[Text] — head destructure', async () => {
     await expectBehavior(script, { input: { id: '4', op: 'textHead', from: 'c' } }, { output: { id: '4', 'ty': [{ first: 'Text' }], re: [{ first: 'hello' }], to: 'c' } });
   });
 
@@ -111,14 +111,14 @@ describe('List type matching + Anything + BV-A', () => {
   const script = `
       @sum
         =
-        nums: List of Integers
+        nums: List[Integer]
         =
         [a Integer, b Integer] = nums
         return total: a + b
 
       @buildAnything
         =
-        items List of Anything = [1, "hello"]
+        items List[Anything] = [1, "hello"]
         [h Anything, ..._] = items
         return first: h
 
@@ -129,7 +129,7 @@ describe('List type matching + Anything + BV-A', () => {
 
       @buildMixedTy
         =
-        items List of Anything = [1, "two"]
+        items List[Anything] = [1, "two"]
         return result: items
 
       @run
@@ -141,20 +141,20 @@ describe('List type matching + Anything + BV-A', () => {
 
       @arityError
         =
-        nums List of Integers = [1, 2, 3]
+        nums List[Integer] = [1, 2, 3]
         [a Integer, b Integer] = nums
         return result: 0
   `;
 
-  it('List of Integers param — type match dispatches', async () => {
-    await expectBehavior(script, { input: { id: '1', op: [[{ nums: [3, 4] }], 'sum'], 'ty': [[{ nums: 'List of Integers' }]], from: 'c' } }, { output: { id: '1', 'ty': [{ total: 'Integer' }], re: [{ total: 7 }], to: 'c' } });
+  it('List[Integer] param — type match dispatches', async () => {
+    await expectBehavior(script, { input: { id: '1', op: [[{ nums: [3, 4] }], 'sum'], 'ty': [[{ nums: 'List[Integer]' }]], from: 'c' } }, { output: { id: '1', 'ty': [{ total: 'Integer' }], re: [{ total: 7 }], to: 'c' } });
   });
 
-  it('List of Integers param — type mismatch → unhandled', async () => {
-    await expectBehavior(script, { input: { id: '2', op: [[{ nums: ['a'] }], 'sum'], 'ty': [[{ nums: 'List of Texts' }]], from: 'c' } }, { output: { id: '2', ex: { 'sum': 'unhandled' }, to: 'c' } });
+  it('List[Integer] param — type mismatch → unhandled', async () => {
+    await expectBehavior(script, { input: { id: '2', op: [[{ nums: ['a'] }], 'sum'], 'ty': [[{ nums: 'List[Text]' }]], from: 'c' } }, { output: { id: '2', ex: { 'sum': 'unhandled' }, to: 'c' } });
   });
 
-  it('List of Anything — mixed elements, head destructure', async () => {
+  it('List[Anything] — mixed elements, head destructure', async () => {
     await expectBehavior(script, { input: { id: '3', op: 'buildAnything', from: 'c' } }, { output: expect.objectContaining({ re: [{ first: 1 }] }) });
   });
 
@@ -162,7 +162,7 @@ describe('List type matching + Anything + BV-A', () => {
     await expectBehavior(script, { input: { id: '4', op: 'buildBareList', from: 'c' } }, { output: expect.objectContaining({ 'ty': [{ result: ['Integer', 'Integer', 'Integer'] }] }) });
   });
 
-  it('List of Anything → component types in ty', async () => {
+  it('List[Anything] → component types in ty', async () => {
     await expectBehavior(script, { input: { id: '5', op: 'buildMixedTy', from: 'c' } }, { output: { id: '5', 'ty': [{ result: ['Integer', 'Text'] }], re: [{ result: [1, 'two'] }], to: 'c' } });
   });
 
@@ -180,30 +180,21 @@ describe('List type matching + Anything + BV-A', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('List — compile errors', () => {
-  it('List of Integer (singular) throws', () => {
-    expect(() => compileSource(`@test = { x List of Integer = []; return result: 0 }\n`)).toThrow(/Use plural 'Integers' not 'Integer' after 'of'/);
+  it('a plural is not a type', () => {
+    expect(() => compileSource(`@test = { x Integers = []; return result: 0 }\n`)).toThrow();
   });
 
-  it('List of Text (singular) throws', () => {
-    expect(() => compileSource(`@test = { x List of Text = []; return result: 0 }\n`)).toThrow(/Use plural 'Texts' not 'Text' after 'of'/);
+  it('`of` is not a type form', () => {
+    expect(() => compileSource(`@test = { x List of Integers = []; return result: 0 }\n`)).toThrow();
   });
 
-  it('Integers as standalone type throws', () => {
-    expect(() => compileSource(`@test = { x Integers = []; return result: 0 }\n`)).toThrow(/'Integers' is not a valid standalone type/);
-  });
-
-  it('List of List (singular nested) throws', () => {
-    expect(() => compileSource(`
-      @test
-        =
-        x List of List of Integers = []
-        return result: 0
-    `)).toThrow(/Use plural 'Lists' not 'List' after 'of'/);
+  it('a container\'s `[` follows its name', () => {
+    expect(() => compileSource(`@test = { x List [Integer] = []; return result: 0 }\n`)).toThrow();
   });
 });
 
 describe('List — valid compilation', () => {
-  it('bare List = [] is valid (List of Anything)', () => {
+  it('bare List = [] is valid (List[Anything])', () => {
     expect(() => compileSource(`@test = { x List = []; return result: 0 }\n`)).not.toThrow();
   });
 
@@ -211,15 +202,15 @@ describe('List — valid compilation', () => {
     expect(() => compileSource('@test = (x: List) -> result: 0\n')).not.toThrow();
   });
 
-  it('List of Anything is a valid type', () => {
-    expect(() => compileSource(`@test = { x List of Anything = []; return result: 0 }\n`)).not.toThrow();
+  it('List[Anything] is a valid type', () => {
+    expect(() => compileSource(`@test = { x List[Anything] = []; return result: 0 }\n`)).not.toThrow();
   });
 
-  it('List of Lists of Integers is a valid type', () => {
+  it('List[List[Integer]] is a valid type', () => {
     expect(() => compileSource(`
       @test
         =
-        x List of Lists of Integers = []
+        x List[List[Integer]] = []
         return result: 0
     `)).not.toThrow();
   });

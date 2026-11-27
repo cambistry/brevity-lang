@@ -1,4 +1,4 @@
-export const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'of', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'as', 'self', 'set', 'update', 'sub', 'catch', 'untracked', 'new', 'class', 'base', 'super', 'use', 'and', 'or', 'not']);
+export const KEYWORDS = new Set(['return', 'returns', 'type', 'end', 'null', 'over', 'reduce', 'if', 'else', 'true', 'false', 'while', 'repeat', 'until', 'as', 'self', 'set', 'update', 'sub', 'catch', 'untracked', 'new', 'class', 'base', 'super', 'use', 'and', 'or', 'not']);
 
 // Parse a lowercase HTML element `<tag>…</tag>` starting at `startIdx`
 // (which must point at `<`). Returns `{ tag, children, nextIdx }` or null
@@ -564,9 +564,9 @@ export function tokenize(source) {
         // A member may have the name (`@class`, `k.class()`), and so may an attribute
         // (`<Box class="a" />`).
         const asMember = tokens[tokens.length - 1]?.type === 'AT' || /^=["{]/.test(source.slice(i));
-        // After a name, `*`, `|`, `of` or `as !`, it's a type: `child class = …`.
+        // After a name, `*`, `|`, a type's `[` or `as !`, it's a type: `child class = …`.
         const prevTok = tokens[tokens.length - 1];
-        const asType = prevTok && (['IDENT', 'STAR', 'PIPE'].includes(prevTok.type) || (prevTok.type === 'KEYWORD' && prevTok.value === 'of')
+        const asType = prevTok && (['IDENT', 'STAR', 'PIPE'].includes(prevTok.type) || (prevTok.type === 'LBRACKET' && !prevTok.spaced && tokens[tokens.length - 2]?.type === 'IDENT')
           || (prevTok.type === 'BANG' && tokens[tokens.length - 2]?.type === 'KEYWORD' && tokens[tokens.length - 2].value === 'as'));
         if (value === 'class' && !asMember && !asType && /^[ \t]*(=(?![=>])|<-|<\||\*[ \t]*[A-Za-z]|[A-Za-z_]\w*[ \t]*(=(?![=>])|[,)]))/.test(source.slice(i))) {
           throw new Error(`'class' is reserved: it names the class of the running actor, so it can't be declared or set (line ${lineAt(i)})`);

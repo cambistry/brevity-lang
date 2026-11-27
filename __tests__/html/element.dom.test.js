@@ -22,7 +22,7 @@ import { domDocument as HTML_MANIFEST, documentDocument as DOC_MANIFEST } from '
 //
 // The compile-time tests use a TRIMMED in-test manifest covering one of
 // each typed family (Boolean / Integer / Decimal / Text / Aria /
-// Object / List of Texts) — covering the full 70-attribute surface
+// Object / List[Text]) — covering the full 70-attribute surface
 // adds nothing since the validator's discipline is the same for one
 // Boolean param as for ten.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -241,7 +241,7 @@ describe('HTML.div compile — every single-type Element attribute', () => {
     `)).not.toThrow();
   });
 
-  it('div(children: List of Texts) compiles', () => {
+  it('div(children: List[Text]) compiles', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(children: ["Hello"]) }
@@ -263,12 +263,12 @@ describe('HTML.div compile — every single-type Element attribute', () => {
 // Four Element attributes carry unions where the HTML spec admits more
 // than one value shape:
 //   :hidden          Boolean | Text          (boolean attr OR "until-found")
-//   :class           Text | List of Texts    (single string OR multi-class list)
+//   :class           Text | List[Text]    (single string OR multi-class list)
 //   :contenteditable Boolean | Text          (true/false OR "plaintext-only")
 //   :popover         Boolean | Text          (boolean attr OR "auto"/"manual")
 //
 // For each union we exercise both members on the happy path (one literal
-// per branch where literal inference covers it; for `List of Texts` we
+// per branch where literal inference covers it; for `List[Text]` we
 // bind a typed local because list literals don't infer through to
 // isAssignable), plus a sad-path arg whose type belongs to no member.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -296,7 +296,7 @@ describe('HTML.div compile — :hidden Boolean | Text', () => {
   });
 });
 
-describe('HTML.div compile — :class Text | List of Texts', () => {
+describe('HTML.div compile — :class Text | List[Text]', () => {
   it('accepts Text (single class)', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
@@ -304,11 +304,11 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
     `)).not.toThrow();
   });
 
-  it('accepts List of Texts via typed local', () => {
+  it('accepts List[Text] via typed local', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = {
-        classes List of Texts = ["header", "active"]
+        classes List[Text] = ["header", "active"]
         d = div(class: classes)
       }
     `)).not.toThrow();
@@ -318,17 +318,17 @@ describe('HTML.div compile — :class Text | List of Texts', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(class: 42) }
-    `)).toThrow(/named arg 'class'.*'Integer' is not assignable to 'Text \| List of Texts'/);
+    `)).toThrow(/named arg 'class'.*'Integer' is not assignable to 'Text \| List\[Text\]'/);
   });
 
-  it('rejects List of Integers via typed local', () => {
+  it('rejects List[Integer] via typed local', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = {
-        nums List of Integers = [1, 2]
+        nums List[Integer] = [1, 2]
         d = div(class: nums)
       }
-    `)).toThrow(/named arg 'class'.*'List of Integers' is not assignable to 'Text \| List of Texts'/);
+    `)).toThrow(/named arg 'class'.*'List\[Integer\]' is not assignable to 'Text \| List\[Text\]'/);
   });
 });
 
@@ -402,11 +402,11 @@ describe('HTML element compile — unknown attrs (sad path)', () => {
 //   - Void elements (br, hr, img, input) extend Element directly. They
 //     cannot accept :children at all — the slot doesn't exist on Element.
 //
-//   - TextElement < Element accepts `:children List of Texts` only. The
+//   - TextElement < Element accepts `:children List[Text]` only. The
 //     class rejects element references in the list at compile time.
 //     `<textarea>` is the only manifest tag in this bucket today.
 //
-//   - ParentElement < Element accepts `:children List` (List of Anything),
+//   - ParentElement < Element accepts `:children List` (List[Anything]),
 //     leaving room for the wire-token mix (texts, address strings) that
 //     children carry today. Most tags extend ParentElement.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -423,25 +423,25 @@ describe('HTML element compile — void elements reject :children', () => {
 });
 
 describe('HTML element compile — TextElement accepts text-only children', () => {
-  it('textarea(children: List of Texts) compiles', () => {
+  it('textarea(children: List[Text]) compiles', () => {
     expect(() => compileWithHTML(`
       use :textarea = HTML
       @test. = { t = textarea(children: ["initial value"]) }
     `)).not.toThrow();
   });
 
-  it('textarea(children: List of Integers) is rejected — children must be Texts', () => {
+  it('textarea(children: List[Integer]) is rejected — children must be Texts', () => {
     expect(() => compileWithHTML(`
       use :textarea = HTML
       @test. = {
-        nums List of Integers = [1, 2]
+        nums List[Integer] = [1, 2]
         t = textarea(children: nums)
       }
-    `)).toThrow(/named arg 'children'.*'List of Integers' is not assignable to 'List of Texts'/);
+    `)).toThrow(/named arg 'children'.*'List\[Integer\]' is not assignable to 'List\[Text\]'/);
   });
 });
 
-describe('HTML element compile — ParentElement accepts mixed children (List of Anything)', () => {
+describe('HTML element compile — ParentElement accepts mixed children (List[Anything])', () => {
   it('div(:children [Text]) compiles', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
@@ -449,7 +449,7 @@ describe('HTML element compile — ParentElement accepts mixed children (List of
     `)).not.toThrow();
   });
 
-  it('div(:children [Integer]) compiles — List of Anything tolerates non-Text', () => {
+  it('div(:children [Integer]) compiles — List[Anything] tolerates non-Text', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(children: [1]) }
@@ -883,7 +883,7 @@ describe('HTML element compile — geometry / scroll / focus / cloning', () => {
     `)).not.toThrow();
   });
 
-  it('div.client_rects() compiles — List of Structures', () => {
+  it('div.client_rects() compiles — List[Structures]', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(); rs = d.client_rects() }
@@ -1060,7 +1060,7 @@ describe('HTML element compile — ClassList + Dataset sub-reps', () => {
     `)).not.toThrow();
   });
 
-  it('dataset().keys() compiles — List of Texts', () => {
+  it('dataset().keys() compiles — List[Text]', () => {
     expect(() => compileWithHTML(`
       use :div = HTML
       @test. = { d = div(); ks = d.dataset().keys() }
@@ -2271,7 +2271,7 @@ describe('HTML element runtime — service side', () => {
       expect(after).toBe('');
     });
 
-    it('add! accepts a List of Texts to add multiple tokens at once', async () => {
+    it('add! accepts a List[Text] to add multiple tokens at once', async () => {
       const page = await loadPage(html);
       const { cl } = await makeWithClassList(page);
       await cl.sendAsync({ id: 'a', op: [[['a', 'b', 'c']], 'add!'] });
@@ -2689,7 +2689,7 @@ describe('HTML.div DOM render — :hidden Boolean | Text', () => {
   });
 });
 
-describe('HTML.div DOM render — :class Text | List of Texts', () => {
+describe('HTML.div DOM render — :class Text | List[Text]', () => {
   const html = `<html><head>
     <script type="module" src="/src/codegen/browser/brevity.js"></script>
     </head><body></body></html>`;
@@ -2716,7 +2716,7 @@ describe('HTML.div DOM render — :class Text | List of Texts', () => {
     });
   });
 
-  it('List of Texts ["header","active"] → class="header active"', async () => {
+  it('List[Text] ["header","active"] → class="header active"', async () => {
     const page = await loadPage(html);
     expect(await renderClassDiv(page, ['header', 'active'])).toEqual({
       value: 'header active', list: ['header', 'active'],

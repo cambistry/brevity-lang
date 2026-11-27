@@ -45,15 +45,18 @@ describe('a type is an address', () => {
 
 describe('a generic is its parameters, then a %t entry', () => {
   it('a List holds any number of its element', () => {
-    expect(enc('List of Integers')).toEqual([['Integer'], { '%t': 'List' }]);
-    expect(enc('List of Texts')).toEqual([['Text'], { '%t': 'List' }]);
+    expect(enc('List[Integer]')).toEqual([['Integer'], { '%t': 'List' }]);
+    expect(enc('List[Text]')).toEqual([['Text'], { '%t': 'List' }]);
     expect(enc('List')).toEqual([['Anything'], { '%t': 'List' }]);
-    expect(enc('List of Lists of Integers')).toEqual([[[['Integer'], { '%t': 'List' }]], { '%t': 'List' }]);
+    expect(enc('List[List[Integer]]')).toEqual([[[['Integer'], { '%t': 'List' }]], { '%t': 'List' }]);
+    expect(enc('List[Integer | null]')).toEqual([[{ '%or': ['Integer', null] }], { '%t': 'List' }]);
+    expect(enc('List[Integer] | null')).toEqual({ '%or': [[['Integer'], { '%t': 'List' }], null] });
   });
 
   it('a container of one', () => {
-    expect(enc('Signed of Point')).toEqual([':Point', { '%t': 'Signed' }]);
-    expect(enc('Signed of Integers')).toEqual([['Integer'], { '%t': 'Signed' }]);
+    expect(enc('Signed[Point]')).toEqual([':Point', { '%t': 'Signed' }]);
+    expect(enc('Signed[Integer]')).toEqual(['Integer', { '%t': 'Signed' }]);
+    expect(enc('Signed[List[Integer]]')).toEqual([[['Integer'], { '%t': 'List' }], { '%t': 'Signed' }]);
   });
 
   it('a shape is an Object, its named parameters in the %t entry', () => {
@@ -130,7 +133,7 @@ describe('entry lists', () => {
   it('an optional entry, positional or named', () => {
     expect(encodeEntries([
       { name: null, type: parseTypeTree('Boolean'), optional: true },
-      { name: 'opts', type: parseTypeTree('List of Texts'), optional: true },
+      { name: 'opts', type: parseTypeTree('List[Text]'), optional: true },
     ], scope)).toEqual([{ '%opt': 'Boolean' }, { opts: { '%opt': [['Text'], { '%t': 'List' }] } }]);
   });
 

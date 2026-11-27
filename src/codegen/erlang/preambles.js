@@ -2198,7 +2198,7 @@ match_types(Message, Pairs) ->
                     {ok, _} when TypeName =:= <<"Anything">> -> true;
                     {ok, V} when is_binary(V) -> type_member_of(V, TypeName);
                     {ok, V} when is_list(V) ->
-                        TypeName =:= <<"List">> orelse TypeName =:= <<"List of Anything">>;
+                        TypeName =:= <<"List">> orelse TypeName =:= <<"List[Anything]">>;
                     _ -> false
                 end
             end, Pairs);
@@ -2245,7 +2245,7 @@ match_pos_types(Arr, [T|Rest], I) ->
         true ->
             Actual = lists:nth(I+1, Arr),
             Ok = T =:= <<"Anything">>
-                orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List of Anything">>))
+                orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List[Anything]">>))
                 orelse (is_binary(Actual) andalso type_member_of(Actual, T)),
             case Ok of
                 true -> match_pos_types(Arr, Rest, I+1);

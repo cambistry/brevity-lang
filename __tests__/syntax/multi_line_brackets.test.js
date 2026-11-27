@@ -61,14 +61,14 @@ describe('line breaks in brackets', () => {
   it('a next line starting with - or ( is a new item; a line ending in + continues', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: [[5], 'list'], ty: [['Integer']], from: 'c' } },
-      { output: { id: '1', re: [[5, -1, 5, 6]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '1', re: [[5, -1, 5, 6]], ty: ['List[Integer]'], to: 'c' } },
     );
   });
 
   it('commas, a trailing one before the break', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'commas', from: 'c' } },
-      { output: { id: '1', re: [[1, 2]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '1', re: [[1, 2]], ty: ['List[Integer]'], to: 'c' } },
     );
   });
 

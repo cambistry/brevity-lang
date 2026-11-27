@@ -21,24 +21,24 @@ describe('Type | null — valid syntax', () => {
     expect(() => compileSource(`@test = { x Boolean | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
-  it('List of Integers | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Integers | null = null; return result: 0 }\n`)).not.toThrow();
+  it('List[Integer] | null is valid', () => {
+    expect(() => compileSource(`@test = { x List[Integer] | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
-  it('List of Texts | null is valid', () => {
-    expect(() => compileSource(`@test = { x List of Texts | null = null; return result: 0 }\n`)).not.toThrow();
+  it('List[Text] | null is valid', () => {
+    expect(() => compileSource(`@test = { x List[Text] | null = null; return result: 0 }\n`)).not.toThrow();
   });
 });
 
-describe('Type | null — plural standalone still errors', () => {
+describe('Type | null — a plural is not a type', () => {
   it('Integers | null throws', () => {
     expect(() => compileSource(`@test = { x Integers | null = null; return result: 0 }\n`))
-      .toThrow(/'Integers' is not a valid standalone type/);
+      .toThrow();
   });
 
   it('Texts | null throws', () => {
     expect(() => compileSource(`@test = { x Texts | null = null; return result: 0 }\n`))
-      .toThrow(/'Texts' is not a valid standalone type/);
+      .toThrow();
   });
 });
 
@@ -91,8 +91,8 @@ describe('General unions — valid syntax', () => {
     expect(() => compileSource(`@test = { x Integer | Text | null = null; return result: 0 }\n`)).not.toThrow();
   });
 
-  it('List of Integers | Text in actor field', () => {
-    expect(() => compileSource(`@test = { xs List of Integers | Text = "hi"; return result: 0 }\n`)).not.toThrow();
+  it('List[Integer] | Text in actor field', () => {
+    expect(() => compileSource(`@test = { xs List[Integer] | Text = "hi"; return result: 0 }\n`)).not.toThrow();
   });
 
   it('Integer | Text in lineal param block', () => {
@@ -103,9 +103,9 @@ describe('General unions — valid syntax', () => {
     expect(() => compileSource(`@pick\n  =\n  flag Boolean\n  =\n  return 1 as Integer | Text\n`)).not.toThrow();
   });
 
-  it('plural standalone in multi-member union still errors', () => {
+  it('a plural in a multi-member union', () => {
     expect(() => compileSource(`@test = { x Integers | Text = 1; return result: 0 }\n`))
-      .toThrow(/'Integers' is not a valid standalone type/);
+      .toThrow();
   });
 });
 
@@ -197,7 +197,7 @@ describe('Unions — ty is the type of the value sent', () => {
 
       @items
         =
-        xs List of Integers | null = [1, 2]
+        xs List[Integer] | null = [1, 2]
         return result: xs
   `;
 
@@ -215,10 +215,10 @@ describe('Unions — ty is the type of the value sent', () => {
     );
   });
 
-  it('a list in a List of Integers | null slot is tagged List of Integers', async () => {
+  it('a list in a List[Integer] | null slot is tagged List[Integer]', async () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'items', from: 'c' } },
-      { output: { id: '3', 'ty': [{ result: 'List of Integers' }], re: [{ result: [1, 2] }], to: 'c' } },
+      { output: { id: '3', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [1, 2] }], to: 'c' } },
     );
   });
 });

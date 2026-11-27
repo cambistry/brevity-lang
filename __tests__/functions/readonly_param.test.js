@@ -17,17 +17,17 @@ import { expectBehavior, compileSource, compileActor } from '../helpers.js';
 // ── Reads succeed ────────────────────────────────────────────────────────────
 
 describe('readonly param — &Type permits reads', () => {
-  it('&List of Integers — value flows through readonly param', async () => {
+  it('&List[Integer] — value flows through readonly param', async () => {
     await expectBehavior(`
       @run
         =
-        ns *List of Integers = [10, 20, 30]
-        echo = (xs &List of Integers) { xs }
-        result List of Integers = echo(ns)
+        ns *List[Integer] = [10, 20, 30]
+        echo = (xs &List[Integer]) { xs }
+        result List[Integer] = echo(ns)
         return :result
     `,
       { input: { id: '1', op: 'run', from: 'c' } },
-      { output: { id: '1', 'ty': [{ result: 'List of Integers' }], re: [{ result: [10, 20, 30] }], to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [10, 20, 30] }], to: 'c' } },
     );
   });
 });
@@ -194,8 +194,8 @@ describe('readonly param — &Type rejects mutation', () => {
     expect(() => compileSource(`
       @run
         =
-        ns *List of Integers = [1, 2]
-        addOne = (xs &List of Integers) { xs.append!(99) }
+        ns *List[Integer] = [1, 2]
+        addOne = (xs &List[Integer]) { xs.append!(99) }
         addOne(ns)
         return :ns
     `)).toThrow(/read-only parameter/);
@@ -205,8 +205,8 @@ describe('readonly param — &Type rejects mutation', () => {
     expect(() => compileSource(`
       @run
         =
-        ns *List of Integers = [1, 2, 3]
-        rev = (xs &List of Integers) { xs.reverse! }
+        ns *List[Integer] = [1, 2, 3]
+        rev = (xs &List[Integer]) { xs.reverse! }
         rev(ns)
         return :ns
     `)).toThrow(/read-only parameter/);

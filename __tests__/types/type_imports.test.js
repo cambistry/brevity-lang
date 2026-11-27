@@ -30,13 +30,13 @@ describe('type imports — interface parser captures `type Name(...)`', () => {
       type Game(
         ? Boolean,
         ? turn: Integer,
-        ? players: List of Texts
+        ? players: List[Text]
       )
     }`);
     expect(parsed.__typeDecls.Game.fields).toEqual([
       { type: 'TypeField', name: '0', paramType: 'Boolean', optional: true },
       { type: 'TypeField', name: 'turn', paramType: 'Integer', optional: true, named: true },
-      { type: 'TypeField', name: 'players', paramType: 'List of Texts', optional: true, named: true },
+      { type: 'TypeField', name: 'players', paramType: 'List[Text]', optional: true, named: true },
     ]);
   });
 

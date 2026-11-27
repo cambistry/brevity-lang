@@ -3,7 +3,7 @@
 // AST holds for a type.
 //
 //   { k: 'name', path: ['Svc', 'Point'] }       `Svc::Point`; `['@Pub']` for `@Pub`
-//   { k: 'of', container: 'List', arg }         `List of Integers`
+//   { k: 'of', container: 'List', arg }         `List[Integer]`
 //   { k: 'union', members: [node…] }            `A | B`, `A | null`
 //   { k: 'null' }                               the `null` of `A | null`
 //   { k: 'shape', fields: [{ name, type }] }    `(Text, n: Integer)`; name null if positional
@@ -37,7 +37,7 @@ const side = (items) => items.map(i => (i.name != null ? `${i.name}: ${renderTyp
 export function renderType(node) {
   switch (node.k) {
     case 'name': return node.path.join('::');
-    case 'of': return `${node.container} of ${renderType(node.arg)}`;
+    case 'of': return `${node.container}[${renderType(node.arg)}]`;
     case 'union': return node.members.map(renderType).join(' | ');
     case 'null': return 'null';
     case 'shape': return `(${side(node.fields)})`;

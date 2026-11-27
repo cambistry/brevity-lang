@@ -113,19 +113,13 @@ export function withInstanceTypes(set, fn) {
 export const isInstance = (t) => typeof t === 'string' && INSTANCE_TYPES.has(t);
 
 // ── Text, for a message ───────────────────────────────────────────────────────
-const PLURAL_OF = new Map([['Integer', 'Integers'], ['Text', 'Texts'], ['Float', 'Floats'], ['Boolean', 'Booleans'], ['Blob', 'Blobs'], ['Decimal', 'Decimals'], ['Actor', 'Actors']]);
 const isEntries = (v) => v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).some(k => k.startsWith('%'));
 const showName = (a) => (ownNames(a) ? ownNames(a).join('::') : a);
 const showEntries = (list, nameOf = showName, opts = {}) => list.flatMap(e => (isEntries(e)
   ? Object.entries(e).map(([k, v]) => `${k}: ${show(v, nameOf, opts)}`)
   : [show(e, nameOf, opts)])).join(', ');
-const showElement = (p, nameOf, opts) => {
-  if (!Array.isArray(p)) return show(p, nameOf, opts);
-  const [inner] = p;
-  if (typeof inner === 'string' && PLURAL_OF.has(inner)) return PLURAL_OF.get(inner);
-  if (isList(inner)) return `Lists of ${showElement(inner[0], nameOf, opts)}`;
-  return show(inner, nameOf, opts);
-};
+// A generic's param: a List's is `[element]`.
+const showElement = (p, nameOf, opts) => show(Array.isArray(p) ? p[0] : p, nameOf, opts);
 // A function type's reply, as its signature writes it after the arrow.
 export const showReply = (sig, nameOf = showName, opts = {}) => {
   if (!sig.re) return '.';
@@ -146,7 +140,7 @@ export function show(t, nameOf = showName, opts = {}) {
       return `(${showEntries([...t.slice(0, -1), ...(Object.keys(named).length ? [named] : [])], nameOf, opts)})`;
     }
     if (opts.bareList && name === 'List' && listElement(t) === 'Anything') return nameOf(name);
-    return `${nameOf(name)} of ${showElement(t[0], nameOf, opts)}`;
+    return `${nameOf(name)}[${showElement(t[0], nameOf, opts)}]`;
   }
   if (isUnion(t)) return t['%or'].map(m => show(m, nameOf, opts)).join(' | ');
   if ('%opt' in t) return show(t['%opt'], nameOf, opts);

@@ -7,7 +7,7 @@ import { extract, compile } from '../../index.js';
 // so a typo like `List.contains([1,2,3], "x")` would always return false rather
 // than telling the user it's wrong. validate.js rejects these at compile time.
 //
-// Wildcards: `List of Anything` accepts any element; `Anything` matches anything.
+// Wildcards: `List[Anything]` accepts any element; `Anything` matches anything.
 // Anything that can't be inferred at the validate stage is allowed through —
 // the rule is "reject confidently-known mismatches", not "require explicit types".
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -24,7 +24,7 @@ describe('element-position arg checks (contains / index_of / before / after)', (
     `)).not.toThrow();
   });
 
-  it('contains with Text on List of Integers — rejected', () => {
+  it('contains with Text on List[Integer] — rejected', () => {
     expect(() => compileSrc(`
       @bad = () -> result: List.contains([1, 2, 3], "x")
     `)).toThrow(/contains.*not compatible with element type Integer/);
@@ -40,7 +40,7 @@ describe('element-position arg checks (contains / index_of / before / after)', (
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3]
+        ns List[Integer] = [1, 2, 3]
         n Text = "hi"
         return result: List.before(ns, n)
     `)).toThrow(/before.*not compatible with element type Integer/);
@@ -50,13 +50,13 @@ describe('element-position arg checks (contains / index_of / before / after)', (
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Texts = ["a", "b"]
+        ns List[Text] = ["a", "b"]
         x Integer = 1
         return result: List.after(ns, x)
     `)).toThrow(/after.*not compatible with element type Text/);
   });
 
-  it('List of Anything accepts any element type', () => {
+  it('List[Anything] accepts any element type', () => {
     expect(() => compileSrc(`
       @ok
         =
@@ -103,8 +103,8 @@ describe('list-position arg checks (starts_with / ends_with / concat)', () => {
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3]
-        prefix List of Texts = ["a", "b"]
+        ns List[Integer] = [1, 2, 3]
+        prefix List[Text] = ["a", "b"]
         return result: List.starts_with(ns, prefix)
     `)).toThrow(/starts_with.*element type Text is not compatible with Integer/);
   });
@@ -113,8 +113,8 @@ describe('list-position arg checks (starts_with / ends_with / concat)', () => {
     expect(() => compileSrc(`
       @bad
         =
-        a List of Integers = [1, 2]
-        b List of Texts = ["x", "y"]
+        a List[Integer] = [1, 2]
+        b List[Text] = ["x", "y"]
         return result: List.concat(a, b)
     `)).toThrow(/concat.*element type Text is not compatible with Integer/);
   });
@@ -163,7 +163,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3]
+        ns List[Integer] = [1, 2, 3]
         idx Text = "1"
         return result: List.at(ns, idx)
     `)).toThrow(/at requires an Integer index, got Text/);
@@ -173,7 +173,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3]
+        ns List[Integer] = [1, 2, 3]
         n Text = "1"
         return result: List.take(ns, n)
     `)).toThrow(/take requires an Integer index, got Text/);
@@ -183,7 +183,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2]
+        ns List[Integer] = [1, 2]
         n Text = "3"
         return result: List.repeat(ns, n)
     `)).toThrow(/repeat requires an Integer index, got Text/);
@@ -193,7 +193,7 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3, 4, 5]
+        ns List[Integer] = [1, 2, 3, 4, 5]
         start Text = "1"
         return result: List.slice(ns, start)
     `)).toThrow(/slice requires an Integer start, got Text/);
@@ -203,27 +203,27 @@ describe('Integer-position arg checks (at / take / from / repeat / slice)', () =
     expect(() => compileSrc(`
       @bad
         =
-        ns List of Integers = [1, 2, 3, 4, 5]
+        ns List[Integer] = [1, 2, 3, 4, 5]
         stopAt Text = "4"
         return result: List.slice(ns, 1, stopAt)
     `)).toThrow(/slice requires an Integer end, got Text/);
   });
 });
 
-describe('join — restricted to List of Texts', () => {
-  it('List of Texts → OK', () => {
+describe('join — restricted to List[Text]', () => {
+  it('List[Text] → OK', () => {
     expect(() => compileSrc(`
       @ok = () -> result: List.join(["a", "b", "c"], "-")
     `)).not.toThrow();
   });
 
-  it('List of Integers — rejected', () => {
+  it('List[Integer] — rejected', () => {
     expect(() => compileSrc(`
       @bad = () -> result: List.join([1, 2, 3], "-")
-    `)).toThrow(/join is only valid on List of Texts, got List of Integers/);
+    `)).toThrow('join is only valid on List[Text], got List[Integer]');
   });
 
-  it('List of Anything — accepted (wildcard)', () => {
+  it('List[Anything] — accepted (wildcard)', () => {
     expect(() => compileSrc(`
       @ok
         =
@@ -236,27 +236,27 @@ describe('join — restricted to List of Texts', () => {
     expect(() => compileSrc(`
       @bad
         =
-        words List of Texts = ["a", "b"]
+        words List[Text] = ["a", "b"]
         sep Integer = 5
         return result: List.join(words, sep)
     `)).toThrow(/join separator must be Text, got Integer/);
   });
 });
 
-describe('flatten — restricted to List of Lists', () => {
-  it('List of Lists of Integers → OK', () => {
+describe('flatten — restricted to List[List]', () => {
+  it('List[List[Integer]] → OK', () => {
     expect(() => compileSrc(`
       @ok = () -> result: List.flatten([[1, 2], [3]])
     `)).not.toThrow();
   });
 
-  it('List of Integers — rejected', () => {
+  it('List[Integer] — rejected', () => {
     expect(() => compileSrc(`
       @bad = () -> result: List.flatten([1, 2, 3])
-    `)).toThrow(/flatten is only valid on a List of Lists, got List of Integers/);
+    `)).toThrow('flatten is only valid on a List[List], got List[Integer]');
   });
 
-  it('List of Anything — accepted', () => {
+  it('List[Anything] — accepted', () => {
     expect(() => compileSrc(`
       @ok
         =
@@ -286,7 +286,7 @@ describe('error positions across statement contexts', () => {
     expect(() => compileSrc(`
       @bad
         =
-        ns *List of Integers = [1,2,3]
+        ns *List[Integer] = [1,2,3]
         return result: ns.contains("x")
     `)).toThrow(/contains/);
   });

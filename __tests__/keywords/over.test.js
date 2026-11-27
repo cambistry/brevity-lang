@@ -31,32 +31,32 @@ describe('over — all forms', () => {
 
     @mapAddOne
       =
-      nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums) (item Integer) { item + 1 }
+      nums List[Integer] = [1, 2, 3]
+      result List[Integer] = over(nums) (item Integer) { item + 1 }
       return :result
 
     @identityText
       =
-      words List of Texts = ["hello", "world"]
-      result List of Texts = over(words) (w Text) { w }
+      words List[Text] = ["hello", "world"]
+      result List[Text] = over(words) (w Text) { w }
       return :result
 
     @untypedBody
       =
-      nums List of Integers = [10, 20]
+      nums List[Integer] = [10, 20]
       result List = over(nums) (item) { item }
       return :result
 
     @emptyList
       =
-      nums List of Integers = []
-      result List of Integers = over(nums) (item Integer) { item + 1 }
+      nums List[Integer] = []
+      result List[Integer] = over(nums) (item Integer) { item + 1 }
       return :result
 
     @fnCallInBody
       =
-      nums List of Integers = [3, 4]
-      result List of Integers = over(nums) (item Integer) {
+      nums List[Integer] = [3, 4]
+      result List[Integer] = over(nums) (item Integer) {
         result: sq Integer = square(item)
         sq
       }
@@ -66,36 +66,36 @@ describe('over — all forms', () => {
 
     @refParen
       =
-      nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums, &double)
+      nums List[Integer] = [1, 2, 3]
+      result List[Integer] = over(nums, &double)
       return :result
 
     @refNoParen
       =
-      nums List of Integers = [10, 20, 30]
-      result List of Integers = over nums, &increment
+      nums List[Integer] = [10, 20, 30]
+      result List[Integer] = over nums, &increment
       return :result
 
     @localRefParen
       =
       triple = (n Integer) ->  n * 3 as Integer
-      nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums, &triple)
+      nums List[Integer] = [1, 2, 3]
+      result List[Integer] = over(nums, &triple)
       return :result
 
     @localRefNoParen
       =
       negate = (n Integer) ->  0 - n as Integer
-      nums List of Integers = [5, 10, 15]
-      result List of Integers = over nums, &negate
+      nums List[Integer] = [5, 10, 15]
+      result List[Integer] = over nums, &negate
       return :result
 
     --- lineal trailing block ---
 
     @spaciousParen
       =
-      nums List of Integers = [1, 2, 3]
-      result List of Integers = over(nums)
+      nums List[Integer] = [1, 2, 3]
+      result List[Integer] = over(nums)
         =
         item Integer
         =
@@ -104,8 +104,8 @@ describe('over — all forms', () => {
 
     @spaciousNoParen
       =
-      nums List of Integers = [10, 20, 30]
-      result List of Integers = over nums
+      nums List[Integer] = [10, 20, 30]
+      result List[Integer] = over nums
         =
         item Integer
         =
@@ -116,14 +116,14 @@ describe('over — all forms', () => {
   it('maps integers: adds 1 to each element', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'mapAddOne', from: 'c' } },
-      { output: { id: '1', 'ty': [{ result: 'List of Integers' }], re: [{ result: [2, 3, 4] }], to: 'c' } },
+      { output: { id: '1', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [2, 3, 4] }], to: 'c' } },
     );
   });
 
   it('identity map over texts', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'identityText', from: 'c' } },
-      { output: { id: '2', 'ty': [{ result: 'List of Texts' }], re: [{ result: ['hello', 'world'] }], to: 'c' } },
+      { output: { id: '2', 'ty': [{ result: 'List[Text]' }], re: [{ result: ['hello', 'world'] }], to: 'c' } },
     );
   });
 
@@ -144,49 +144,49 @@ describe('over — all forms', () => {
   it('function call inside fn body', async () => {
     await expectBehavior(script,
       { input: { id: '5', op: 'fnCallInBody', from: 'c' } },
-      { output: { id: '5', 'ty': [{ result: 'List of Integers' }], re: [{ result: [9, 16] }], to: 'c' } },
+      { output: { id: '5', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [9, 16] }], to: 'c' } },
     );
   });
 
   it('over(list, &fn) — with parens', async () => {
     await expectBehavior(script,
       { input: { id: '6', op: 'refParen', from: 'c' } },
-      { output: { id: '6', 'ty': [{ result: 'List of Integers' }], re: [{ result: [2, 4, 6] }], to: 'c' } },
+      { output: { id: '6', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [2, 4, 6] }], to: 'c' } },
     );
   });
 
   it('over list, &fn — without parens', async () => {
     await expectBehavior(script,
       { input: { id: '7', op: 'refNoParen', from: 'c' } },
-      { output: { id: '7', 'ty': [{ result: 'List of Integers' }], re: [{ result: [11, 21, 31] }], to: 'c' } },
+      { output: { id: '7', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [11, 21, 31] }], to: 'c' } },
     );
   });
 
   it('over(list, &localFn) — local function reference', async () => {
     await expectBehavior(script,
       { input: { id: '8', op: 'localRefParen', from: 'c' } },
-      { output: { id: '8', 'ty': [{ result: 'List of Integers' }], re: [{ result: [3, 6, 9] }], to: 'c' } },
+      { output: { id: '8', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [3, 6, 9] }], to: 'c' } },
     );
   });
 
   it('over list, &localFn — local without parens', async () => {
     await expectBehavior(script,
       { input: { id: '9', op: 'localRefNoParen', from: 'c' } },
-      { output: { id: '9', 'ty': [{ result: 'List of Integers' }], re: [{ result: [-5, -10, -15] }], to: 'c' } },
+      { output: { id: '9', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [-5, -10, -15] }], to: 'c' } },
     );
   });
 
   it('over(nums) lineal trailing block — with parens', async () => {
     await expectBehavior(script,
       { input: { id: '10', op: 'spaciousParen', from: 'c' } },
-      { output: { id: '10', 'ty': [{ result: 'List of Integers' }], re: [{ result: [2, 3, 4] }], to: 'c' } },
+      { output: { id: '10', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [2, 3, 4] }], to: 'c' } },
     );
   });
 
   it('over nums lineal trailing block — without parens', async () => {
     await expectBehavior(script,
       { input: { id: '11', op: 'spaciousNoParen', from: 'c' } },
-      { output: { id: '11', 'ty': [{ result: 'List of Integers' }], re: [{ result: [20, 40, 60] }], to: 'c' } },
+      { output: { id: '11', 'ty': [{ result: 'List[Integer]' }], re: [{ result: [20, 40, 60] }], to: 'c' } },
     );
   });
 });
@@ -201,8 +201,8 @@ describe('over — compile errors', () => {
       @test
         =
         triple = (n Integer) ->  n * 3
-        nums List of Integers = [1, 2, 3]
-        result List of Integers = over(nums, triple)
+        nums List[Integer] = [1, 2, 3]
+        result List[Integer] = over(nums, triple)
         return :result
     `)).toThrow(/use &triple/);
   });
@@ -214,7 +214,7 @@ describe('over — standalone', () => {
 
     @sumAll!
       =
-      nums List of Integers = [1, 2, 3]
+      nums List[Integer] = [1, 2, 3]
       over(nums) (item Integer) { total <- total + item }
       return :total
   `;

@@ -32,13 +32,10 @@ export const actor = (name, { params = [], functions = [], stateVarDecls = [], i
 export const dependency = (name, { interface: iface = null, constructorParams = null, constructorArrow = null, path = null, destructures = null } = {}) =>
   ({ type: 'Dependency', name, interface: iface, constructorParams, ...(constructorArrow && { constructorArrow }), path, ...(destructures && { destructures }) });
 
-// Type names that never need an import. Plurals are the List-element
-// shorthands.
+// Type names that never need an import.
 export const BUILTIN_TYPE_NAMES = new Set([
   'Integer', 'Text', 'Boolean', 'Decimal', 'Float', 'Blob', 'GraphemeText', 'Anything', 'class', 'Actor',
   'Function', 'List', 'Map', 'Array', 'Object', 'Null', 'Timestamp', 'Duration',
-  'Integers', 'Texts', 'Booleans', 'Decimals', 'Floats', 'Blobs', 'Anythings',
-  'Lists', 'Maps', 'Arrays', 'Objects',
 ]);
 
 export const fileParam = (name, { type = null, positional = false, defaultValue = null, accessor = null, key = null, typeOrLocal = false } = {}) =>

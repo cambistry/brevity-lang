@@ -42,7 +42,7 @@ export function typeText(t, aliases = null) {
 
 export { dependencyAliases } from '../type_shown.js';
 
-// Whether a type is a list, or a union led by one (`List of Integers | null`): a
+// Whether a type is a list, or a union led by one (`List[Integer] | null`): a
 // value of it is generated as a list.
 export const leadsWithList = (t) => t !== undefined && isList(members(t)[0]);
 
@@ -86,7 +86,7 @@ export function paramTag(ctx, p) {
 }
 
 
-// Whether an encoded type has a generic in it (`List of Integers`, a shape).
+// Whether an encoded type has a generic in it (`List[Integer]`, a shape).
 export const hasGeneric = (t) => Array.isArray(t) || (t !== null && typeof t === 'object' && Object.values(t).some(hasGeneric));
 
 // Whether a param is declared with a type (one with no encoding, a constructor

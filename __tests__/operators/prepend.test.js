@@ -14,21 +14,21 @@ describe('>> single-value prepend', () => {
   const script = `
       @one
         =
-        ns *List of Integers = [2, 3]
+        ns *List[Integer] = [2, 3]
         1 >> ns
         return result: ns
 
       @ontoEmpty
         =
-        ns *List of Integers = []
+        ns *List[Integer] = []
         42 >> ns
         return result: ns
   `;
   it('prepends to a non-empty list', async () => {
-    await expectBehavior(script, inp('1', 'one'), out('1', 'List of Integers', [1, 2, 3]));
+    await expectBehavior(script, inp('1', 'one'), out('1', 'List[Integer]', [1, 2, 3]));
   });
   it('prepends to an empty list', async () => {
-    await expectBehavior(script, inp('2', 'ontoEmpty'), out('2', 'List of Integers', [42]));
+    await expectBehavior(script, inp('2', 'ontoEmpty'), out('2', 'List[Integer]', [42]));
   });
 });
 
@@ -36,20 +36,20 @@ describe('>> chained prepends', () => {
   const script = `
       @two
         =
-        ns *List of Integers = [3, 4]
+        ns *List[Integer] = [3, 4]
         1 >> 2 >> ns
         return result: ns
 
       @three
         =
-        ns *List of Integers = [4]
+        ns *List[Integer] = [4]
         1 >> 2 >> 3 >> ns
         return result: ns
   `;
   it('two-value chain — final order matches source order', async () => {
-    await expectBehavior(script, inp('1', 'two'), out('1', 'List of Integers', [1, 2, 3, 4]));
+    await expectBehavior(script, inp('1', 'two'), out('1', 'List[Integer]', [1, 2, 3, 4]));
   });
   it('three-value chain', async () => {
-    await expectBehavior(script, inp('2', 'three'), out('2', 'List of Integers', [1, 2, 3, 4]));
+    await expectBehavior(script, inp('2', 'three'), out('2', 'List[Integer]', [1, 2, 3, 4]));
   });
 });

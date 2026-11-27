@@ -15,8 +15,8 @@ describe('a core type\'s functions, destructured', () => {
       return v
     }
     @list = () {
-      xs List of Integers = [1, 2, 3, 4]
-      v List of Integers = take(from(xs, 1), 2)
+      xs List[Integer] = [1, 2, 3, 4]
+      v List[Integer] = take(from(xs, 1), 2)
       return v
     }
     @renamed = (t Text) {
@@ -48,7 +48,7 @@ describe('a core type\'s functions, destructured', () => {
   it('a List\'s functions, and a rename', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'list', from: 'c' } },
-      { output: { id: '1', re: [[2, 3]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '1', re: [[2, 3]], ty: ['List[Integer]'], to: 'c' } },
       { input: { id: '2', op: [['hello'], 'renamed'], ty: [['Text']], from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c' } },
     );

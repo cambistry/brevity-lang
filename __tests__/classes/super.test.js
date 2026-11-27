@@ -227,7 +227,7 @@ describe('super — in a constructor — compile errors', () => {
   });
 
   it('in a loop', () => {
-    expect(compile(`${T}U = T ^ *(n Integer) {\n  xs List of Integers = [1, 2]\n  ys List of Integers = over(xs) (x Integer) {\n    super(x)\n    x\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  xs List[Integer] = [1, 2]\n  ys List[Integer] = over(xs) (x Integer) {\n    super(x)\n    x\n  }\n}\n`))
       .toThrow("'super(…)' in 'U' runs once: it can't be in a loop or a function");
   });
 

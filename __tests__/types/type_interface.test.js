@@ -15,7 +15,7 @@ describe('type interface — the document\'s types', () => {
 
   it('optional fields', () => {
     const { interface: iface } = extract(`
-      type Game(? Boolean, ? turn: Integer, ? players: List of Texts)
+      type Game(? Boolean, ? turn: Integer, ? players: List[Text])
     `);
     expect(iface.service.types).toEqual({
       ':Game': [{ '%opt': 'Boolean' }, { turn: { '%opt': 'Integer' }, players: { '%opt': [['Text'], { '%t': 'List' }] } }],

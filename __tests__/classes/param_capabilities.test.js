@@ -83,7 +83,7 @@ describe('class params — file-level *List write-cap', () => {
     const actor = await createActor(
       `
       *
-        ns: *List of Integers
+        ns: *List[Integer]
       *
 
       @reset. = { ns <- [9, 8, 7] }
@@ -97,7 +97,7 @@ describe('class params — file-level *List write-cap', () => {
       { input: { id: '2', op: 'get', from: 'caller' } },
       { output: expect.objectContaining({
         id: '2',
-        'ty': [{ ns: 'List of Integers' }],
+        'ty': [{ ns: 'List[Integer]' }],
         re: [{ ns: [9, 8, 7] }],
         to: 'caller',
       }) },

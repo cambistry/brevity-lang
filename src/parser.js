@@ -66,14 +66,14 @@ function joinOwnCellWrites(tokensIn) {
 // Only `self::class` is supported for now; it folds to `class`.
 // See notes/class-scope-and-inheritance-2026-11-16.md.
 
-// Where `class` is a type: after a name (`x class`), `*`, `|`, `of`, or `as !`. It's
+// Where `class` is a type: after a name (`x class`), `*`, `|`, a type's `[`, or `as !`. It's
 // the class of the actor it's in, the type `Self` named (src/singleton_classes.js
 // resolves `class` in value position).
 const atTypeOfClass = (tokens, i) => {
   const prev = tokens[i - 1];
   if (!prev) return false;
   if (prev.type === 'IDENT' || prev.type === 'STAR' || prev.type === 'PIPE') return true;
-  if (prev.type === 'KEYWORD' && prev.value === 'of') return true;
+  if (prev.type === 'LBRACKET' && !prev.spaced && tokens[i - 2]?.type === 'IDENT') return true;
   return prev.type === 'BANG' && tokens[i - 2]?.type === 'KEYWORD' && tokens[i - 2].value === 'as';
 };
 
@@ -108,7 +108,7 @@ function foldSelfClass(tokens) {
 }
 
 // `text` is one type and nothing else, as a service document writes it: a type
-// (`Integer | null`, `List of Texts`, `(Integer) -> (Text)`, a constructor
+// (`Integer | null`, `List[Text]`, `(Integer) -> (Text)`, a constructor
 // profile), optionally a cell (`*Type`, `&Type`), or an interface `{ … }`.
 // Throws where it doesn't parse.
 export function parseTypeText(text) {
@@ -703,21 +703,18 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
 
   // ── Type parsing ─────────────────────────────────────────────────────────────
 
-  const BUILT_IN_SINGULAR = new Map([
-    ['Integer','Integers'],['Text','Texts'],['Float','Floats'],
-    ['Boolean','Booleans'],['List','Lists'],['Blob','Blobs'],
-  ]);
-  const PLURAL_TO_SINGULAR = new Map([...BUILT_IN_SINGULAR.entries()].map(([s,p])=>[p,s]));
-  const BUILT_IN_PLURAL = new Set(PLURAL_TO_SINGULAR.keys());
+  const BUILT_IN_TYPES = new Set(['Integer', 'Text', 'Float', 'Boolean', 'List', 'Blob']);
+  // A container's `[` follows its name, unspaced: `List[Integer]`.
+  const atTypeArg = (at) => tokens[at]?.type === 'LBRACKET' && !tokens[at].spaced;
 
   function typeLength(offset) {
     if (tokens[offset]?.type === 'AT' && tokens[offset + 1]?.type === 'IDENT') return 1 + typeLength(offset + 1);
     if (tokens[offset]?.type !== 'IDENT') return 0;
     let len = 1;
     while (tokens[offset+len]?.type === 'DCOLON' && tokens[offset+len+1]?.type === 'IDENT') len += 2;
-    if (tokens[offset+len]?.type === 'KEYWORD' && tokens[offset+len]?.value === 'of') {
+    if (atTypeArg(offset + len)) {
       const inner = typeLength(offset + len + 1);
-      if (inner > 0) len += 1 + inner;
+      if (inner > 0 && tokens[offset + len + 1 + inner]?.type === 'RBRACKET') len += 2 + inner;
     }
     // Union suffix: | Type or | null, repeatable
     while (true) {
@@ -734,11 +731,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return len;
   }
 
-  // Parse a single non-union type: a base name with optional `of <type>` or `.Member`.
+  // Parse a single non-union type: a base name with optional `[<type>]` or `::Member`.
   // The atomic form excludes union pipes; parseType wraps this with union handling.
   // The type grammar builds a type tree (src/type_tree.js); `parseType` gives its
   // text, which the AST holds for now.
-  function parseAtomicType(inOf = false) {
+  function parseAtomicType() {
     if (peek().type === 'LPAREN' || ctorProfileAhead(pos)) {
       return parseParenType();
     }
@@ -753,24 +750,14 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (tok.type !== 'IDENT')
       throw new Error(`Expected type name, got ${tok.type} '${tok.value || ''}'`);
     const typeName = tok.value;
-    if (!inOf && BUILT_IN_PLURAL.has(typeName)) {
-      const s = PLURAL_TO_SINGULAR.get(typeName);
-      throw new Error(`'${typeName}' is not a valid standalone type — use '${s}' or 'List of ${typeName}'`);
-    }
-    if (inOf && BUILT_IN_SINGULAR.has(typeName)) {
-      throw new Error(`Use plural '${BUILT_IN_SINGULAR.get(typeName)}' not '${typeName}' after 'of'`);
-    }
-    if (typeName === 'Lists' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      throw new Error(`'Lists' requires 'of <type>', e.g. 'Lists of Integers'`);
-    }
-    if (typeName === 'List' && !(peek().type === 'KEYWORD' && peek().value === 'of')) {
-      return TT.of('List', TT.name(['Anything'])); // bare List = List of Anything (mixed elements)
-    }
-    if (peek().type === 'KEYWORD' && peek().value === 'of') {
-      take(); // 'of'
+    if (atTypeArg(pos)) {
+      take(); // [
       typeNamesRead?.push(typeName);
-      return TT.of(typeName, parseAtomicType(true));
+      const arg = parseTypeNode();
+      expect('RBRACKET');
+      return TT.of(typeName, arg);
     }
+    if (typeName === 'List') return TT.of('List', TT.name(['Anything'])); // bare `List` is `List[Anything]`
     if (peek().type === 'DOT' && tokens[pos+1]?.type === 'IDENT') {
       throw new Error(`Unexpected '.' in type '${typeName}.${tokens[pos+1].value}'`);
     }
@@ -808,17 +795,15 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
 
   // The last type `parseType` read, as a tree: a param keeps it (`typeNode`).
   let lastTypeNode = null;
-  function parseType(inOf = false) {
-    const node = parseTypeNode(inOf);
+  function parseType() {
+    const node = parseTypeNode();
     lastTypeNode = node;
     return renderType(node);
   }
 
-  function parseTypeNode(inOf = false) {
-    let result = parseAtomicType(inOf);
-    // Union suffix — only at top level (not inside 'of').
-    // Greedily consumes any number of `| Type` and `| null` segments.
-    if (inOf) return result;
+  function parseTypeNode() {
+    let result = parseAtomicType();
+    // Union suffix: greedily consumes any number of `| Type` and `| null` segments.
     while (peek().type === 'PIPE') {
       const nxt = tokens[pos + 1];
       if (nxt?.type === 'KEYWORD' && nxt.value === 'null') {
@@ -3812,12 +3797,12 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       // Only kicks in when the next token is COMMA — typed RHS with a
       // single value still parses normally.
       const isBuiltinTypeName = typeof typeName === 'string' && (
-        BUILT_IN_SINGULAR.has(typeName) || BUILT_IN_PLURAL.has(typeName) ||
-        typeName === 'Anything' || typeName === 'Decimal' || typeName === 'Decimals' ||
+        BUILT_IN_TYPES.has(typeName) ||
+        typeName === 'Anything' || typeName === 'Decimal' ||
         typeName === 'null' || typeName === 'Function' || typeName === 'Object'
       );
       const looksLikeUserType = typeof typeName === 'string' &&
-        !typeName.includes(' ') &&
+        !/[ [|(]/.test(typeName) &&
         !/[-=~]>/.test(typeName) &&
         !isBuiltinTypeName;
       if (typeName === 'Object' || looksLikeUserType) {

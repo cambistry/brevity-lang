@@ -47,7 +47,7 @@ describe('unary minus', () => {
       { input: { id: '1', op: 'default', from: 'c' } },
       { output: { id: '1', re: [2], ty: ['Integer'], to: 'c' } },
       { input: { id: '2', op: 'list', from: 'c' } },
-      { output: { id: '2', re: [[-1, 2]], ty: ['List of Integers'], to: 'c' } },
+      { output: { id: '2', re: [[-1, 2]], ty: ['List[Integer]'], to: 'c' } },
     );
   });
 

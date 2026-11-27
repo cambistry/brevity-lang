@@ -1164,7 +1164,7 @@ export async function start(document, { extract, compile, compileOptions = {}, f
   // string conventions:
   //   - null / false / undefined → omit (boolean-attr false; absent slot)
   //   - true                    → present with empty value
-  //   - Array                   → space-joined string (List of Texts → class="a b")
+  //   - Array                   → space-joined string (List[Text] → class="a b")
   //   - other                   → String(value)
   function applyDomAttribute(el, name, value) {
     if (value == null || value === false) return;

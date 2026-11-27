@@ -522,7 +522,7 @@ describe('service interface — imported type address resolution', () => {
 
       @list
         =
-        return items as List of Item
+        return items as List[Item]
     `);
     expect(iface.service).toEqual({ public: { list: [{ re: [[['/models/item'], { '%t': 'List' }]], writes: false }] } });
   });

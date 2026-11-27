@@ -8,7 +8,7 @@
 // 'Element' is a placeholder meaning "the element type of the receiver list".
 // Validation in src/validate.js checks element-type compatibility for the
 // methods that take an element argument (contains, index_of, replace, etc.)
-// and restricts `join` to `List of Texts`.
+// and restricts `join` to `List[Text]`.
 
 export const LIST_METHODS = new Map([
   // Tier 1 — direct Text parallels

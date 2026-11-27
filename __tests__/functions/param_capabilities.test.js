@@ -68,7 +68,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
   });
 });
 
-// ── Collection — *List of Integers ───────────────────────────────────────────
+// ── Collection — *List[Integer] ───────────────────────────────────────────
 
 describe('param capabilities — *List write-cap on lambda', () => {
   // Whole-cell replacement (`xs <- [...]`) is the supported propagation
@@ -77,8 +77,8 @@ describe('param capabilities — *List write-cap on lambda', () => {
   const script = `
     @whole_replace!
       =
-      ns *List of Integers = [1, 2, 3]
-      reset! = (xs *List of Integers) {
+      ns *List[Integer] = [1, 2, 3]
+      reset! = (xs *List[Integer]) {
         xs <- [9, 8, 7]
       }
       reset!(*ns)
@@ -88,7 +88,7 @@ describe('param capabilities — *List write-cap on lambda', () => {
   it('whole-cell replace via *List grant propagates to caller', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'whole_replace!', from: 'c' } },
-      { output: { id: '1', 'ty': [{ ns: 'List of Integers' }], re: [{ ns: [9, 8, 7] }], to: 'c' } },
+      { output: { id: '1', 'ty': [{ ns: 'List[Integer]' }], re: [{ ns: [9, 8, 7] }], to: 'c' } },
     );
   });
 });

@@ -264,7 +264,7 @@ describe('! functions — runtime', () => {
     }
 
     @passesToOver! = {
-      r List of Integers = over([1, 2], &next!)
+      r List[Integer] = over([1, 2], &next!)
       return r, log
     }
 
@@ -599,7 +599,7 @@ describe('! functions — runtime', () => {
   it('! function — return paths — `&name!` works with `over`', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'passesToOver!', from: 'c' } },
-      { output: { id: '1', re: [[1, 2], 12], 'ty': ['List of Integers', 'Integer'], to: 'c' } },
+      { output: { id: '1', re: [[1, 2], 12], 'ty': ['List[Integer]', 'Integer'], to: 'c' } },
     );
   });
 
@@ -792,7 +792,7 @@ describe('a `!` function by name', () => {
   });
 
   it('taking a reference to a writer counts as a write', () => {
-    expect(() => compileSource('x *Integer = 0\nnext! = (i Integer) {\n  x <- i\n  return i\n}\n@go = {\n  r List of Integers = over([1], &next!)\n  return r\n}\n')).toThrow(/'@go' writes \(&next!\)/);
+    expect(() => compileSource('x *Integer = 0\nnext! = (i Integer) {\n  x <- i\n  return i\n}\n@go = {\n  r List[Integer] = over([1], &next!)\n  return r\n}\n')).toThrow(/'@go' writes \(&next!\)/);
   });
 
   it('a `!` function on a `#` name is passed the same way', () => {

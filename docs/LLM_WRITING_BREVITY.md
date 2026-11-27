@@ -173,7 +173,7 @@ Use built-in methods through type calls, receiver calls, or bang cell calls:
 
 ```brevity
 name *Text = " ada "
-items *List of Integers = [1, 2, 3]
+items *List[Integer] = [1, 2, 3]
 
 @go! = {
   upper Text = Text.upper("hello")

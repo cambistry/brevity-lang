@@ -62,7 +62,7 @@ describe('@a <- v', () => {
 
   it('writes a cell with no setter', async () => {
     await expectBehavior(`
-      @items *List of Integers = []
+      @items *List[Integer] = []
       @add! = (n Integer) { @items <- @items.append(n) }
     `,
       { input: { id: '1', op: [[5], 'add!'], 'ty': [['Integer']], from: 'c' } },

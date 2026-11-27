@@ -94,7 +94,7 @@ const fileScript = `
   }
   // A lambda passed to \`over\` and \`reduce\`.
   @overRead = {
-    xs List of Integers = over([0]) (z Integer) { z + @pc + c + k }
+    xs List[Integer] = over([0]) (z Integer) { z + @pc + c + k }
     x Integer = reduce(0, xs) (a Integer, b Integer) { a + b }
     return x
   }
@@ -103,7 +103,7 @@ const fileScript = `
     return x
   }
   @overArgs = {
-    xs List of Integers = over([0]) (z Integer) { @pg(z) + g(z) + #g(z) }
+    xs List[Integer] = over([0]) (z Integer) { @pg(z) + g(z) + #g(z) }
     x Integer = reduce(0, xs) (a Integer, b Integer) { a + b }
     return x
   }
@@ -337,7 +337,7 @@ const classScript = `
       h!()
     }
     @overRead = {
-      xs List of Integers = over([0]) (z Integer) { z + @pc + c + k }
+      xs List[Integer] = over([0]) (z Integer) { z + @pc + c + k }
       x Integer = reduce(0, xs) (a Integer, b Integer) { a + b }
       return x
     }
@@ -467,7 +467,7 @@ const blockScript = `
         return x
       }
       @overRead = {
-        xs List of Integers = over([0]) (z Integer) { z + @pc + c + k }
+        xs List[Integer] = over([0]) (z Integer) { z + @pc + c + k }
         x Integer = reduce(0, xs) (a Integer, b Integer) { a + b }
         return x
       }
@@ -551,7 +551,7 @@ const bodyScript = `
   @overRead = {
     c *Integer = 2
     k = 4
-    xs List of Integers = over([0]) (z Integer) { z + c + k }
+    xs List[Integer] = over([0]) (z Integer) { z + c + k }
     x Integer = reduce(0, xs) (a Integer, b Integer) { a + b }
     return x
   }
