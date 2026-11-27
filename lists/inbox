@@ -25,7 +25,6 @@ kanban/tickets/blob-text-grapheme-coercion-and-comparison.md
 kanban/tickets/nested-reactivity.md
 kanban/tickets/repeat.md
 kanban/tickets/a-constructor-profile-or-interface-as-a-param-s-type.md
-kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
 kanban/tickets/eliminate-need-for-the-noop-hack.md
 kanban/tickets/protected-classes-as-values-decide-what-leaves-the-actor.md
 kanban/tickets/broaden-catch-to-cover-error-handling.md
