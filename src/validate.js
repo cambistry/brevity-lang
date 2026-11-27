@@ -2983,6 +2983,16 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       checkLocalFunctionCall(node);
     }
     if (node.type === 'DotCallExpr') checkMethodCallArgs(node);
+    // `and`, `or`, `not` take Booleans: an operand of another known type is an error.
+    if (node.type === 'IfExpr' && node.boolOp) {
+      const operands = node.boolOp === 'and' ? [node.cond, node.then.expr] : node.boolOp === 'or' ? [node.cond, node.else.expr] : [node.cond];
+      for (const operand of operands) {
+        const t = argTypeOf(operand);
+        if (t !== undefined && t !== null && t !== 'Anything' && !acceptsArg(t, 'Boolean')) {
+          throw new Error(`'${node.boolOp}' takes Booleans: this operand is '${shown(t)}'`);
+        }
+      }
+    }
     for (const val of Object.values(node)) {
       if (Array.isArray(val)) {
         for (const item of val) walkForCallChecks(item);

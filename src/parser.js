@@ -2930,7 +2930,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   ]);
 
 
+  // Unary minus binds tighter than `*` and looser than `^`: `-2 ^ 2` is
+  // `-(2 ^ 2)`. On a literal it folds, so `-1` is a literal wherever one may be.
   function parseExpExpr() {
+    if (peek().type === 'MINUS') {
+      take(); // -
+      const operand = parseExpExpr();
+      if (['IntLiteral', 'FloatLiteral', 'DecimalLiteral'].includes(operand.type) && typeof operand.value === 'string') {
+        return { ...operand, value: operand.value.startsWith('-') ? operand.value.slice(1) : `-${operand.value}` };
+      }
+      return AST.binaryExpr('-', AST.intLiteral('0'), operand);
+    }
     let base = parsePrimary();
     if (peek().type === 'POWER') {
       take();
@@ -2974,15 +2984,49 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
       return { type: 'SetExpr', name, value: parseExpr(), updateOp };
     }
-    const value = parseValueExpr();
+    const value = parseOrExpr();
     if (!atWriteOp()) return value;
     if (!inWriteRhs) throw new Error("The left side of '<-' must be a cell");
     const rest = [];
     while (atWriteOp()) {
       const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
-      rest.push({ value: parseValueExpr(), updateOp });
+      rest.push({ value: parseOrExpr(), updateOp });
     }
     return { type: 'SetChain', first: value, rest };
+  }
+
+  // `and`, `or`, `not` on Booleans, loosest of all: `not` below comparison
+  // (`not a == b` is `not (a == b)`), `and` below `not`, `or` below `and`. Each is
+  // the `if` it means, so it short-circuits on every target; `boolOp` keeps the
+  // operator for the Boolean check (src/validate.js).
+  const atKw = (w) => peek().type === 'KEYWORD' && peek().value === w;
+  const boolIf = (op, cond, then, otherwise) => ({
+    ...AST.ifExpr(cond, AST.ifBranch({ expr: then }), AST.ifBranch({ expr: otherwise })),
+    boolOp: op,
+  });
+  function parseOrExpr() {
+    let left = parseAndExpr();
+    while (atKw('or')) {
+      take(); // or
+      const right = parseAndExpr();
+      left = boolIf('or', left, AST.boolLiteral(true), right);
+    }
+    return left;
+  }
+  function parseAndExpr() {
+    let left = parseNotExpr();
+    while (atKw('and')) {
+      take(); // and
+      const right = parseNotExpr();
+      left = boolIf('and', left, right, AST.boolLiteral(false));
+    }
+    return left;
+  }
+  function parseNotExpr() {
+    if (!atKw('not')) return parseValueExpr();
+    take(); // not
+    const operand = parseNotExpr();
+    return boolIf('not', operand, AST.boolLiteral(false), AST.boolLiteral(true));
   }
 
   function parseValueExpr() {

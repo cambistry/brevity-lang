@@ -182,6 +182,7 @@ function accepted(m, outcome, src) {
     if (m.kind === 'delete' && m.type === 'EQUALS' && (p === 'EQUALS' || n === 'EQUALS' || LINE.has(p) && ty(m.next) === 'EQUALS')) return '`= =` is the explicit empty params';
     if (m.kind === 'delete' && m.type === 'HASH_IDENT' && m.prev === 'KEYWORD:end') return '`end`\'s label is optional';
     if (m.kind === 'delete' && m.type === 'DOT' && /^\s*end\b/.test(src.slice(m.start + m.text.length))) return 'a lineal body ends at `.` or `end`: `.` then `end` is one end';
+    if (LINE.has(m.type) && m.kind === 'delete' && /\/\/[^\n]*$/.test(src.slice(0, m.start))) return 'a line break deleted after a comment comments out what follows, here what has no weight';
     if (m.kind === 'insert' && m.stray === ',' && (['RPAREN', 'RBRACE', 'RBRACKET', 'EQUALS'].includes(m.type) || LINE.has(m.type))) return 'a trailing comma';
     if (m.kind === 'swap' && m.type === 'COMMA' && (m.withType === 'RBRACKET' || m.withType === 'RPAREN' || m.withType === 'RBRACE')) return 'a trailing comma moved past its bracket is still a trailing comma';
     if (m.kind === 'insert' && m.stray === '->' && ['LBRACE', 'STAR'].includes(m.type)) return '`->` before a body is optional';

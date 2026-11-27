@@ -87,6 +87,9 @@ export function inferType(expr, env) {
 
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && env?.has(expr.name)) return env.get(expr.name);
 
+  // `and`, `or`, `not` (the `if`s they lower to) give a Boolean.
+  if (expr.type === 'IfExpr' && expr.boolOp) return 'Boolean';
+
   if (expr.type === 'BinaryExpr') {
     const lt = inferType(expr.left, env);
     const rt = inferType(expr.right, env);
