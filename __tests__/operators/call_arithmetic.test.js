@@ -99,3 +99,62 @@ describe('arithmetic on call results nothing types', () => {
     );
   });
 });
+
+// A message send used as an operand is its reply's value: of an operator, as an
+// arg, in interpolated text, as a condition.
+describe('a send as an operand', () => {
+  const script = `
+    K = *{ @n = () -> 10 }
+    double = (i Integer) -> i * 2
+    @bin = {
+      k = K()
+      x Integer = k.n() + 1
+      return x
+    }
+    @arg = {
+      k = K()
+      x Integer = double(k.n())
+      y List[Integer] = List.append([1], k.n())
+      z Integer = Math.max(k.n(), 3)
+      return x, y, z
+    }
+    @interp = {
+      k = K()
+      t Text = "n=#{k.n()}"
+      return t
+    }
+    @cond = {
+      k = K()
+      if (k.n() > 5) return "big"
+      return "small"
+    }
+  `;
+
+  it('of an operator', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'bin', from: 'c' } },
+      { output: { id: '1', re: [11], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('as an arg', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'arg', from: 'c' } },
+      { output: { id: '1', re: [20, [1, 10], 10], ty: ['Integer', 'List[Integer]', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('in interpolated text', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'interp', from: 'c' } },
+      { output: { id: '1', re: ['n=10'], ty: ['Text'], to: 'c' } },
+    );
+  });
+
+  it('as a condition', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'cond', from: 'c' } },
+      { output: { id: '1', re: ['big'], ty: ['Text'], to: 'c' } },
+    );
+  });
+});

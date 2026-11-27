@@ -1,3 +1,4 @@
+import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
 // The state key of each name an actor answers `$get` for, by class ("" is the
 // file) and wire token, and whether it's a public cell (open to anyone). The
@@ -3083,6 +3084,7 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
 }
 
 function codegenRust(ast, options = {}) {
+  markSendOperands(ast);
   lowerChains(ast);
   markExpectedTypes(ast);
   setCtx(createRustContext());

@@ -1,5 +1,6 @@
 import { returnShapes } from './return_shapes.js';
-import { isUnion } from './type_enc.js';
+import { isUnion, isInstance, ownNames } from './type_enc.js';
+import { markSendOperands, isSendOperand } from './codegen/send_operands.js';
 
 // The type of a call to a function of this actor, or of one enclosing it
 // (src/outer_reads.js marks those `outerFnCall`), when that function has one
@@ -26,6 +27,53 @@ export function markCallResultTypes(ast) {
     resultOf.set(key, type);
     return type;
   };
+  // A call on an actor of one of the file's classes (`k.n()`, `k` bound by `k = K()`,
+  // typed with the class, or a cell of it), as an operand, types as that class's
+  // function does. Elsewhere its reply claims no type: an unannotated bind of it
+  // takes none.
+  const classOfType = (t) => {
+    if (!isInstance(t)) return null;
+    const names = ownNames(t);
+    return names?.length === 1 ? byName.get(names[0]) ?? null : null;
+  };
+  const classOfValue = (v) => (v?.type === 'FunctionCallExpr' && v.callee?.type === 'Identifier' && byName.get(v.callee.name)?.name ? byName.get(v.callee.name) : null);
+  const actorsBound = (actor, fn) => {
+    const env = new Map();
+    for (const c of actor.stateVarDecls || []) { const k = classOfType(c.typeNameEnc); if (k) env.set(c.name, k); }
+    for (const p of fn?.params || []) { const k = classOfType(p.typeEnc); if (k) env.set(p.name, k); }
+    const scan = (n) => {
+      if (!n || typeof n !== 'object' || n.type === 'Function') return;
+      if (Array.isArray(n)) { n.forEach(scan); return; }
+      if ((n.type === 'Assign' || n.type === 'TypedAssign') && n.name) {
+        const k = classOfType(n.typeNameEnc) ?? classOfValue(n.value);
+        if (k) env.set(n.name, k);
+      }
+      for (const v of Object.values(n)) if (v && typeof v === 'object') scan(v);
+    };
+    scan(fn?.body ?? actor.constructorBody);
+    return env;
+  };
+  const markSends = (actor, fn) => {
+    const env = actorsBound(actor, fn);
+    const visit = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(visit); return; }
+      for (const v of Object.values(n)) if (v && typeof v === 'object') visit(v);
+      if (n.type !== 'DotCallExpr' || n.resultTypeEnc !== undefined || !isSendOperand(n)) return;
+      const o = n.object;
+      // An outer name (`class`, a cell of an enclosing actor) carries the actor it names.
+      const cls = (o?.type === 'Identifier' || o?.type === 'RefRead') ? env.get(o.name) ?? (o.outerTypeEnc ? byName.get(o.outerTypeEnc) : null) : null;
+      if (!cls) return;
+      const t = typeOf(cls, '@' + n.method) ?? typeOf(cls, n.method);
+      if (t !== undefined) n.resultTypeEnc = t;
+    };
+    visit(fn?.body ?? actor.constructorBody);
+  };
+  markSendOperands(ast);
+  for (const actor of ast.actors) {
+    for (const fn of actor.functions || []) markSends(actor, fn);
+    markSends(actor, null);
+  }
   for (const actor of ast.actors) {
     // Only an operand needs it: elsewhere a call's reply already says its type.
     const visit = (node, operand = false) => {

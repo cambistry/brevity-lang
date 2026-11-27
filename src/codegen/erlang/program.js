@@ -1,3 +1,4 @@
+import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
@@ -2283,6 +2284,7 @@ function createErlContext() {
 }
 
 export function codegenErlang(ast, options = {}) {
+  markSendOperands(ast);
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
   // A class with no functions of its own still has to be constructible.

@@ -1,3 +1,4 @@
+import { markSendOperands } from '../send_operands.js';
 import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
 import * as AST from '../../ast.js';
@@ -1734,6 +1735,7 @@ ${ifChain}
 }
 
 export function codegen(ast, options = {}) {
+  markSendOperands(ast);
   const ctx = createContext();
   // Wire late binding for genFunctionBodyCode
   ctx.genFunctionBodyCode = genFunctionBodyCode;

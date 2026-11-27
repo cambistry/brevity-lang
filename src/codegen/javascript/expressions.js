@@ -1,3 +1,4 @@
+import { isSendOperand } from '../send_operands.js';
 import { exitsOuterLabel } from '../label_exits.js';
 import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
@@ -399,7 +400,18 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
   return { field, discipline: fnReply(f.paramTypeEnc) === 'silent' ? 'silent' : 'callback' };
 }
 
+// The sends genExpr is wrapping as operands, so it generates each one's own code once.
+const SENDS_WRAPPING = new Set();
+
 export function genExpr(ctx, expr) {
+  // A send as an operand is its reply's one value (src/codegen/javascript/send_operands.js).
+  if (expr && isSendOperand(expr) && !SENDS_WRAPPING.has(expr)) {
+    SENDS_WRAPPING.add(expr);
+    try {
+      const code = genExpr(ctx, expr);
+      return isSendCode(code) ? awaitSendValue(code, '_') : code;
+    } finally { SENDS_WRAPPING.delete(expr); }
+  }
   // A clause list with no clause for its input (src/clause_lists.js): unhandled.
   if (expr.type === 'NoMatch') return "(() => { const e = new Error('unhandled'); e.bvEx = 'unhandled'; throw e; })()";
   if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellTypeEnc, expr.label)})()`;
@@ -581,8 +593,9 @@ export function genExpr(ctx, expr) {
         // Fold pairwise for variadic
         const allTypes = argTypes.every(t => t === 'Integer');
         const allDec = argTypes.every(t => t === 'Decimal');
-        if (allTypes) return args.reduce((acc, v) => `((${acc}) < (${v}) ? (${acc}) : (${v}))`);
-        if (allDec) return args.reduce((acc, v) => `_bv_dec_op(${acc}, '<', ${v}) ? ${acc} : ${v}`);
+        // Each arg is evaluated once: an arg may be a call or a send.
+        if (allTypes) return `[${args.join(', ')}].reduce((x, y) => (x < y ? x : y))`;
+        if (allDec) return `[${args.join(', ')}].reduce((x, y) => (_bv_dec_op(x, '<', y) ? x : y))`;
         const nums = args.map((a, i) => toNum(a, argTypes[i]));
         return `Math.min(${nums.join(', ')})`;
       }
@@ -590,8 +603,8 @@ export function genExpr(ctx, expr) {
         if (args.length === 1) return a0;
         const allTypes = argTypes.every(t => t === 'Integer');
         const allDec = argTypes.every(t => t === 'Decimal');
-        if (allTypes) return args.reduce((acc, v) => `((${acc}) > (${v}) ? (${acc}) : (${v}))`);
-        if (allDec) return args.reduce((acc, v) => `_bv_dec_op(${acc}, '>', ${v}) ? ${acc} : ${v}`);
+        if (allTypes) return `[${args.join(', ')}].reduce((x, y) => (x > y ? x : y))`;
+        if (allDec) return `[${args.join(', ')}].reduce((x, y) => (_bv_dec_op(x, '>', y) ? x : y))`;
         const nums = args.map((a, i) => toNum(a, argTypes[i]));
         return `Math.max(${nums.join(', ')})`;
       }

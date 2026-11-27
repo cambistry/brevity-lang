@@ -76,6 +76,7 @@ export function inferType(expr, env) {
     case 'ActorValue': return 'Actor';
     case 'SelfValue': return 'Actor';
     case 'FunctionCallExpr': if (known(expr.resultTypeEnc)) return expr.resultTypeEnc; break;
+    case 'DotCallExpr': if (known(expr.resultTypeEnc)) return expr.resultTypeEnc; break;
   }
 
   // A list literal holds what its first element is; mixed or empty, anything.

@@ -1,3 +1,4 @@
+import { isSendOperand } from '../send_operands.js';
 // ── Expression codegen for Erlang ────────────────────────────────────────────
 
 import { isDependencyValue } from '../dep_address.js';
@@ -204,7 +205,15 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@'
   ];
 }
 
+// The sends genExpr is wrapping as operands, so it generates each one's own code once.
+const SENDS_WRAPPING = new Set();
+
 function genExpr(ctx, expr, typeEnv, sCtx) {
+  // A send as an operand is its reply's one value (src/codegen/send_operands.js).
+  if (expr && isSendOperand(expr) && !SENDS_WRAPPING.has(expr)) {
+    SENDS_WRAPPING.add(expr);
+    try { return `bv_object_one(${genExpr(ctx, expr, typeEnv, sCtx)})`; } finally { SENDS_WRAPPING.delete(expr); }
+  }
   if (!expr) return 'null';
   // A clause list with no clause for its input (src/clause_lists.js): unhandled.
   if (expr.type === 'NoMatch') return 'erlang:error({bv_as, <<"unhandled">>})';

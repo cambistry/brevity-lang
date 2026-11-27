@@ -1,3 +1,4 @@
+import { isSendOperand } from '../send_operands.js';
 // expressions.js — Expression generation for Rust codegen
 import { isDependencyValue } from '../dep_address.js';
 import { addressToken, memberOp, selfAddress, wireLabel, actorAddress } from '../wire_labels.js';
@@ -222,7 +223,22 @@ function genRustLabelExitLoop(expr, typeEnv, eCtx) {
   return `{ let _cv = (${coll}).clone(); match _cv.as_array().cloned() { Some(_arr) => ${run}, None => Value::Null } }`;
 }
 
+// The sends genRustExpr is converting as operands, so it generates each one's own code once.
+const SENDS_CONVERTING = new Set();
+
 function genRustExpr(expr, typeEnv, eCtx) {
+  // A send as an operand gives its reply's value, as the type its function replies
+  // (src/codegen/send_operands.js, src/call_types.js).
+  if (expr && isSendOperand(expr) && !SENDS_CONVERTING.has(expr) && expr.resultTypeEnc !== undefined && rustType(expr.resultTypeEnc) !== 'Value') {
+    SENDS_CONVERTING.add(expr);
+    // Strictly, as a typed bind converts: `bv_as` takes the reply's one value.
+    const strict = G.strictConvert;
+    try {
+      const code = genRustExpr(expr, typeEnv, eCtx);
+      G.strictConvert = true;
+      return convertFromValue(code, expr.resultTypeEnc);
+    } finally { G.strictConvert = strict; SENDS_CONVERTING.delete(expr); }
+  }
   if (expr._precomputed) return expr._precomputed;
   // A clause list with no clause for its input (src/clause_lists.js): unhandled.
   if (expr.type === 'NoMatch') return 'panic!("{}", "bv_as:unhandled")'; // a String payload, as bv_panic_ex reads

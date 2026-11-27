@@ -27,9 +27,8 @@ const forms = `
         return x
       }
       @call = {
-        a Integer = class.pubFn()
-        b Integer = class::protFn()
-        return a + b
+        x Integer = class.pubFn() + class::protFn()
+        return x
       }
       @write! = {
         class.pub <- 3
@@ -63,9 +62,8 @@ const forms = `
       return x
     }
     @call = {
-      a Integer = class.pubFn()
-      b Integer = class::protFn()
-      return a + b
+      x Integer = class.pubFn() + class::protFn()
+      return x
     }
     @write! = {
       class.pub <- 3
