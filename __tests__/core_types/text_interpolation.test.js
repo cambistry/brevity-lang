@@ -446,7 +446,8 @@ describe('text interpolation — runtime', () => {
   });
 
   it('Text — escape sequences in double-quoted strings — \\\\ produces a single literal backslash', async () => {
-    await expectBehavior(script, { input: { id: '2', op: 'escBackslash', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'back\\slash' }], to: 'c' } });
+    // On the wire a literal backslash is escaped, `\\` (notes/opre-text-and-addresses-2026-11-27.md).
+    await expectBehavior(script, { input: { id: '2', op: 'escBackslash', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'back\\\\slash' }], to: 'c' } });
   });
 
   it('Text — escape sequences in double-quoted strings — \\" produces literal double quote', async () => {
@@ -494,8 +495,8 @@ describe('text interpolation — runtime', () => {
   });
 
   it('Text — single-quoted strings are raw — backslash is a literal character (no escapes)', async () => {
-    // Source is: 'a\nb' — four chars: a, backslash, n, b
-    await expectBehavior(script, { input: { id: '2', op: 'rawBackslash', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'a\\nb' }], to: 'c' } });
+    // Source is: 'a\nb' — four chars: a, backslash, n, b. The backslash is escaped on the wire.
+    await expectBehavior(script, { input: { id: '2', op: 'rawBackslash', from: 'c' } }, { output: { id: '2', 'ty': [{ result: 'Text' }], re: [{ result: 'a\\\\nb' }], to: 'c' } });
   });
 
   it('Text — single-quoted strings are raw — double quote is a literal character', async () => {

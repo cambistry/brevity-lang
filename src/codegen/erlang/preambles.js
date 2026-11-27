@@ -793,7 +793,7 @@ bv_take_line_(Ref, Data) ->
                     case unicode:characters_to_binary(string:trim(Data)) of
                         <<>> -> taken;
                         Bin_ ->
-                            Message_ = json_decode(Bin_),
+                            Message_ = bv_text_in_msg_(json_decode(Bin_)),
                             Id_ = maps:get(<<"id">>, Message_, <<>>),
                             IsReply_ = maps:is_key(<<"re">>, Message_) orelse maps:is_key(<<"ex">>, Message_),
                             case IsReply_ andalso erase({bv_line_waiter, Id_}) of
@@ -2127,6 +2127,40 @@ bv_local_tag_(M, Addr) when is_map(M) -> maps:map(fun(_, X) -> bv_local_tag_(X, 
 bv_local_tag_(T, _) -> T.
 %% An address is a reply's one value, as any other is: re: [<<"#<…>">>], ty: [T]. A
 %% self-return with no tag is the file's, which no \`new\` built: \`*\`.
+%% Text is plain in a program. On the wire a literal #< is \\#< and a literal \\ is \\\\
+%% (notes/opre-text-and-addresses-2026-11-27.md): a value tagged Text is escaped going
+%% out and unescaped coming in, walked alongside its tag.
+bv_text_esc_(B) -> binary:replace(binary:replace(B, <<"\\\\">>, <<"\\\\\\\\">>, [global]), <<"#<">>, <<"\\\\#<">>, [global]).
+bv_text_unesc_(B) -> bv_text_unesc_(B, <<>>).
+bv_text_unesc_(<<"\\\\\\\\", R/binary>>, Acc) -> bv_text_unesc_(R, <<Acc/binary, "\\\\">>);
+bv_text_unesc_(<<"\\\\#<", R/binary>>, Acc) -> bv_text_unesc_(R, <<Acc/binary, "#<">>);
+bv_text_unesc_(<<C, R/binary>>, Acc) -> bv_text_unesc_(R, <<Acc/binary, C>>);
+bv_text_unesc_(<<>>, Acc) -> Acc.
+bv_text_map_(V, <<"Text">>, F) when is_binary(V) -> F(V);
+bv_text_map_(V, <<"List[", _/binary>> = T, F) when is_list(V) ->
+    Inner = binary:part(T, 5, byte_size(T) - 6),
+    [bv_text_map_(X, Inner, F) || X <- V];
+bv_text_map_(V, [<<"%", _/binary>> | _], _) -> V;
+bv_text_map_(V, T, F) when is_list(V), is_list(T) -> bv_text_zip_(V, T, F);
+bv_text_map_(V, T, F) when is_map(V), is_map(T) ->
+    maps:map(fun(K, X) -> case maps:find(K, T) of {ok, TK} -> bv_text_map_(X, TK, F); error -> X end end, V);
+bv_text_map_(V, _, _) -> V.
+bv_text_zip_([V | Vs], [T | Ts], F) -> [bv_text_map_(V, T, F) | bv_text_zip_(Vs, Ts, F)];
+bv_text_zip_(Vs, _, _) -> Vs.
+bv_text_out_(V, null) -> V;
+bv_text_out_(V, T) -> bv_text_map_(V, T, fun bv_text_esc_/1).
+%% A message off the wire: its reply's re, and its request's args, by their ty.
+bv_text_in_msg_(M) when is_map(M) ->
+    Ty = maps:get(<<"ty">>, M, null),
+    M1 = case {maps:find(<<"re">>, M), Ty} of
+        {{ok, Re}, T} when T =/= null -> M#{<<"re">> => bv_text_map_(Re, T, fun bv_text_unesc_/1)};
+        _ -> M
+    end,
+    case {maps:find(<<"op">>, M1), Ty} of
+        {{ok, [Args | Rest]}, [TA | _]} when Rest =/= [] -> M1#{<<"op">> => [bv_text_map_(Args, TA, fun bv_text_unesc_/1) | Rest]};
+        _ -> M1
+    end;
+bv_text_in_msg_(M) -> M.
 bv_wrap_reply_(Re, Ty) when is_list(Re) -> {Re, Ty};
 bv_wrap_reply_(Re, Ty) ->
     {[Re], case Ty of
@@ -2153,7 +2187,8 @@ bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
                 %% Its relative addresses, "me" among them, go under it.
                 %% An actor of ours it names is named by us, with its type.
                 {ok, V_, Tag_} ->
-                    {W_, WTag_} = bv_wrap_reply_(V_, Tag_),
+                    {W0_, WTag_} = bv_wrap_reply_(V_, Tag_),
+                    W_ = bv_text_out_(W0_, WTag_),
                     U_ = bv_under_payload_(W_, Addr),
                     Re_ = bv_wire_own_(U_),
                     Resp_ = case bv_wire_own_ty_(U_, case WTag_ of null -> null; _ -> bv_local_tag_(WTag_, Addr) end) of
@@ -2213,6 +2248,10 @@ type_member_of(Actual, Expected) when is_binary(Expected) ->
     end;
 type_member_of(_, _) -> false.
 
+%% A function is tagged with its signature ([<<"%f">>, Sig]): the same one, or any for Function.
+bv_fn_tag_fits_([<<"%f">> | _] = Actual, Expected) -> Actual =:= Expected orelse Expected =:= <<"Function">>;
+bv_fn_tag_fits_(_, _) -> false.
+
 match_types(Message, Pairs) ->
     case maps:find(<<"ty">>, Message) of
         {ok, Ty} when is_list(Ty), length(Ty) > 0 ->
@@ -2269,6 +2308,7 @@ match_pos_types(Arr, [T|Rest], I) ->
         true ->
             Actual = lists:nth(I+1, Arr),
             Ok = T =:= <<"Anything">>
+                orelse bv_fn_tag_fits_(Actual, T)
                 orelse (is_list(Actual) andalso (T =:= <<"List">> orelse T =:= <<"List[Anything]">>))
                 orelse (is_binary(Actual) andalso type_member_of(Actual, T)),
             case Ok of

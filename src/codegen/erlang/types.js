@@ -2,7 +2,7 @@ import { nextLambdaNumber } from '../lambda_numbers.js';
 import { exitsOuterLabel } from '../label_exits.js';
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
-import { erlStateKey, erlString } from './preambles.js';
+import { erlStateKey, erlString, erlJson } from './preambles.js';
 import { wireLabel, selfAddress } from '../wire_labels.js';
 import { inferType } from '../../type_infer.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
@@ -25,7 +25,7 @@ function erlTyOf(ctx, t, valueExpr) {
 // A slot's tag: the declared type's when it is one, else the value's at runtime
 // (`valueExpr`, or no tag when there is nothing safe to read).
 function erlSlotTag(ctx, t, valueExpr) {
-  if (!isDynamicTy(t)) { const tag = erlTypeTag(ctx, t); return tag ? erlString(tag) : 'null'; }
+  if (!isDynamicTy(t)) { const tag = erlTypeTag(ctx, t); return tag ? erlJson(tag) : 'null'; }
   return valueExpr ? erlTyOf(ctx, t, valueExpr) : 'null';
 }
 

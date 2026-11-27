@@ -746,7 +746,8 @@ ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
   const t = orAny(decl?.typeNameEnc);
-  return `                ${JSON.stringify(wireLabel(n))} => Some(${JSON.stringify(rustTypeTag(t))}),`;
+  const tag = rustTypeTag(t);
+  return `                ${JSON.stringify(wireLabel(n))} => Some(${JSON.stringify(typeof tag === 'string' ? tag : JSON.stringify(tag))}),`;
 }).join('\n')}
                 _ => None,
             };
@@ -1751,6 +1752,7 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
                     let _ = self.binding.send(Value::Object(resp));
                 } else if let Some(re_val) = re {
                     let (re_val, ty_re) = bv_wrap_reply(re_val, ty_re);
+                    let re_val = bv_text_out(&re_val, &ty_re);
                     let mut resp = Map::new();
                     resp.insert("id".to_string(), json!(id));
                     resp.insert("re".to_string(), ${publishesClasses ? 'self.bv_wire_own(&re_val)' : 're_val'});
@@ -2897,6 +2899,7 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
                 // "Me" as one slot of several: the same naming, slot by slot.
                 Ok(v) => {
                     let (v, tag) = bv_wrap_reply(v, tag);
+                    let v = bv_text_out(&v, &tag);
                     // An actor of ours it names is named by us, with its type.
                     let u = bv_under_payload(&bv_swap_self(&v, &json!(child), &json!("#<:>")), &addr);
                     resp.insert("re".to_string(), ${publishesClasses ? 'self.bv_wire_own(&u)' : 'u.clone()'});
@@ -2986,6 +2989,7 @@ ${heldSingletonArms}            _ => None,
                     let line = buf.trim();
                     if line.is_empty() { continue; }
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
+                        let msg = bv_text_in_msg(msg);
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if let Some(re) = msg.get("re") {
                             if msg_id == target_id {
@@ -3028,6 +3032,7 @@ ${heldSingletonArms}            _ => None,
                     let line = buf.trim();
                     if line.is_empty() { continue; }
                     if let Ok(msg) = serde_json::from_str::<Value>(line) {
+                        let msg = bv_text_in_msg(msg);
                         let msg_id = msg.get("id").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_id == target_id {
                             // A reply whose re isn't a list is malformed.
@@ -3072,7 +3077,7 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
             Ok(_) => {
                 let line = buf.trim();
                 if line.is_empty() { continue; }
-                let message: Value = serde_json::from_str(line).unwrap();
+                let message: Value = bv_text_in_msg(serde_json::from_str(line).unwrap());
                 actor.receive(&message);
                 actor.bv_run_deferred();
             }
@@ -3088,7 +3093,7 @@ ${hasDotCallAwait ? `    let mut buf = String::new();
             Ok(_) => {
                 let line = buf.trim();
                 if line.is_empty() { continue; }
-                let message: Value = serde_json::from_str(line).unwrap();
+                let message: Value = bv_text_in_msg(serde_json::from_str(line).unwrap());
                 actor.receive(&message);
                 actor.bv_run_deferred();
             }

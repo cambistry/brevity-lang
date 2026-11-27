@@ -493,7 +493,7 @@ function genBlockInfo(actors, ctx = {}) {
   wireIns.push('bv_wire_in_(_, _, _, _, _, _) -> ok');
   // The type of a cell a block inherits, for the answer it gives for it.
   const fwdTys = extensible.flatMap(a => (a.forwardCells || []).filter(c => c.typeNameEnc !== undefined)
-    .map(c => `bv_forward_ty_(${erlString(a.name.toLowerCase())}, ${erlString(wireLabel(c.name))}) -> ${erlString(typeTag(ctx, c.typeNameEnc))}`));
+    .map(c => `bv_forward_ty_(${erlString(a.name.toLowerCase())}, ${erlString(wireLabel(c.name))}) -> ${erlJson(typeTag(ctx, c.typeNameEnc))}`));
   fwdTys.push('bv_forward_ty_(_, _) -> null');
   return `${info.join(';\n')}.\n\n${bases.join(';\n')}.\n\n${remotes.join(';\n')}.\n\n${instances.join(';\n')}.\n\n${tys.join(';\n')}.\n\n${ownTys.join(';\n')}.\n\n${owners.join(';\n')}.\n\n${wireIns.join(';\n')}.\n\n${fwdTys.join(';\n')}.`;
 }
@@ -668,8 +668,8 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
   let matchExpr = '';
   if (!skipTypeCheck) {
     if (positionalTyped.length > 0) {
-      const posTypes = positionalTyped.map(p => erlString(paramTag(ctx, p))).join(', ');
-      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(paramTag(ctx, p))}}`).join(', ');
+      const posTypes = positionalTyped.map(p => erlJson(paramTag(ctx, p))).join(', ');
+      const namedTypes = namedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlJson(paramTag(ctx, p))}}`).join(', ');
       const requiredPosTyped = positionalTyped.filter(p => !p.defaultValue).length;
       if (requiredPosTyped < positionalTyped.length) {
         // With nothing required, a call can leave out every arg, and so every tag.
@@ -680,7 +680,7 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       }
     } else if (namedTyped.length > 0) {
       const requiredNamedTyped = namedTyped.filter(p => !p.defaultValue);
-      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlString(paramTag(ctx, p))}}`).join(', ');
+      const pairs = requiredNamedTyped.map(p => `{${erlString(p.key || p.name)}, ${erlJson(paramTag(ctx, p))}}`).join(', ');
       matchExpr = `match_types(Message, [${pairs}])`;
     }
   }
@@ -1747,7 +1747,7 @@ ${putLines},
     ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlString(fnAddress(f))}`),
   ].join(';\n');
   const testTypeClauses = [
-    ...allStateNames.map(n => `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`),
+    ...allStateNames.map(n => `        ${erlOp(n)} -> ${erlJson(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`),
     ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlJson(fnSignatureForm(f))}`),
   ].join(';\n');
   // Build target routing for child actor refs
@@ -1962,7 +1962,8 @@ ${dispatchInner}
     end.
 
 handle_result({ok, Re0, TyRe0}, Id, From, _OpName) when Re0 =/= null ->
-    {Re, TyRe} = bv_wrap_reply_(Re0, TyRe0),
+    {Re1, TyRe} = bv_wrap_reply_(Re0, TyRe0),
+    Re = bv_text_out_(Re1, TyRe),
     Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Re), <<"to">> => From},
     Resp = case bv_wire_own_ty_(Re, TyRe) of
         null -> Resp0;

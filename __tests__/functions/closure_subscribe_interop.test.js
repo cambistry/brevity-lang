@@ -100,26 +100,20 @@ describe('closure-subscribe — multi-ref capture', () => {
 
 
 // ─── Section 2 ─────────────────────────────────────────────────────────────────
-// Payload-carried closure address — a handler returns the address as a string
-// literal (e.g. `"#<:@0>"`) rather than via template interpolation. The caller
-// extracts the `<<…>>` substring and posts a subscribe to the inner selector.
+// Payload-carried closure address — a handler returns a closure's address as a
+// value (`&f`, `#<:@0>`) rather than via template interpolation. The caller
+// extracts the address's selector and posts a subscribe to it.
 //
 // This is the wire-level generalization of the Phase 2→4 HTML flow: any actor
 // can hand out a closure address in a reply or payload field, and any receiver
 // can subscribe to it by parsing the delimiter. No template or HTML required.
-//
-// Note: the Brevity source spells `"#<:@0>"` as a plain string literal. The
-// compiler does not verify that `@0` refers to an actually-declared closure —
-// the author is responsible for that bookkeeping, same as any hand-written
-// wire address. For HTML-backed scenarios the compiler generates these from
-// template interpolations; here we are exercising the protocol directly.
 // ───────────────────────────────────────────────────────────────────────────────
 
 describe('closure-subscribe — payload-carried address', () => {
   const publisherWithGetAddr = `
     content *Text = "initial"
     f = { content }
-    @getAddr = () -> ref: "#<:@0>"
+    @getAddr = () -> ref: &f
     @bump. = (v: Text) { content <- v }
   `;
 
@@ -164,8 +158,8 @@ describe('closure-subscribe — payload-carried address', () => {
     meta *Text = "m-init"
     fc = { content }
     fm = { meta }
-    @getContentAddr = () -> ref: "#<:@0>"
-    @getMetaAddr = () -> ref: "#<:@1>"
+    @getContentAddr = () -> ref: &fc
+    @getMetaAddr = () -> ref: &fm
     @bumpContent. = (v: Text) { content <- v }
     @bumpMeta. = (v: Text) { meta <- v }
   `;

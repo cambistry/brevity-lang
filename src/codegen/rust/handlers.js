@@ -691,8 +691,10 @@ function rustGuardBlock(ifExpr, bI, typeEnv, makeReturnLines) {
 
 // With nothing required, a call can leave out every arg, and so every tag.
 // A param type's expected tag, as a Rust string literal (src/actor_values.js).
+// A function's tag is its signature (`['%f', sig]`): its JSON text, which tag_matches reads.
 function expectedLit(p) {
-  return JSON.stringify(paramTag(G.ctx, p));
+  const tag = paramTag(G.ctx, p);
+  return JSON.stringify(typeof tag === 'string' ? tag : JSON.stringify(tag));
 }
 
 function untaggedOk(params, message) {

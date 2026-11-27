@@ -197,13 +197,23 @@ function lowerFnRefReplies(ast) {
         for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') collect(n[k]);
       };
       collect(fn.body);
+      // One of ours as an arg to another actor is its address too, typed as a function.
+      const fnAddressNode = (e) => ({ type: 'FnAddress', name: e.name, address: fnAddressOf(e.name), typeEnc: { '%fn': [fnSignatureForm(actor.functions.find(d => d.name === e.name))[1]] }, ...(e.loc && { loc: e.loc }) });
       const walk = (n) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(walk); return; }
+        if (n.type === 'DotCallExpr' && n.object?.type === 'Identifier' && (ast.dependencies || []).some(d => d.name === n.object.name)) {
+          for (const a of n.args || []) if (a?.expr?.type === 'FnRef' && own.has(a.expr.name)) a.expr = fnAddressNode(a.expr);
+        }
         if ((n.type === 'Reply' || n.type === 'Return') && Array.isArray(n.fields)) {
           for (const f of n.fields) {
-            const e = f.expr;
-            if (e?.type === 'FnRef' && own.has(e.name)) f.expr = { type: 'FnAddress', name: e.name, address: fnAddressOf(e.name), ...(e.loc && { loc: e.loc }) };
+            // A positional field holds its value in `expr`, a named one in `value`.
+            const slot = f.value !== undefined && f.expr === undefined ? 'value' : 'expr';
+            const e = f[slot];
+            if (e?.type === 'FnRef' && own.has(e.name)) {
+              f[slot] = fnAddressNode(e);
+              f.wireTag = fnSignatureForm(actor.functions.find(d => d.name === e.name));
+            }
             else if (e?.type === 'FnRef' && lambdas.has(e.name)) {
               const l = lambdas.get(e.name);
               f.wireTag = fnSignatureForm({ ...l, name: e.name, body: l.body ?? [{ type: 'Reply', fields: [{ expr: l.expr, type: null, positional: true }] }] });

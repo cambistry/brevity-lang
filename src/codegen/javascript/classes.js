@@ -1155,6 +1155,8 @@ ${actor.spawnable ? `
 
   async #send(op, to, ty) {
     const id = String(++this.#nextId);
+    // A Text arg goes on the wire escaped (_bv_text_map).
+    if (ty !== undefined && Array.isArray(op) && op.length > 1) op = [_bv_text_map(op[0], ty[0], _bv_text_esc), ...op.slice(1)];
     // A relative address (\`#<:x>\`) is under us: a locally-held lambda, or an
     // actor we hold (one we declare, or built). It's delivered to us, \`to\` and
     // all, as a held child's handle is, and we await the reply rather than
@@ -1733,7 +1735,7 @@ ${ifChain}
       }
       const _wire = !(message._route || from === '__self');
       const _post = { id, re${publishesClasses ? `: _wire ? this.#_wireOwn(re) : re` : ''}, to: _replyTo };
-      ${publishesClasses ? 'if (_wire) _ty_re = this.#_wireOwnTy(re, _ty_re);\n      ' : ''}if (_ty_re !== undefined) _post['ty'] = _ty_re;
+      ${publishesClasses ? 'if (_wire) _ty_re = this.#_wireOwnTy(re, _ty_re);\n      ' : ''}if (_ty_re !== undefined) { _post['ty'] = _ty_re; _post.re = _bv_text_map(_post.re, _ty_re, _bv_text_esc); }
       _route(_post);
     }
   }

@@ -1,5 +1,5 @@
 import { _bv_eq } from './runtime/equality.js';
-import { _bv_to_wire, _bv_type_name, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens, _bv_new_reply_addr, _bv_reply_one } from './runtime/wire.js';
+import { _bv_to_wire, _bv_type_name, _bv_from_wire, _bv_unwire_packed, _bv_unwire_reply, _bv_sel, _bv_local_tokens, _bv_new_reply_addr, _bv_reply_one, _bv_text_esc, _bv_text_unesc, _bv_text_map } from './runtime/wire.js';
 import { OPRE_TOKENS_PREAMBLE } from '../opre_tokens.js';
 
 // Canonical structural equality. Source lives in runtime/equality.js so the
@@ -12,6 +12,9 @@ export const EQUALITY_PREAMBLE = _bv_eq.toString();
 // emitted per-program (see classes.js) and resolved here at call time. Don't
 // inline-edit — source of truth is runtime/wire.js.
 export const WIRE_PREAMBLE = [
+  _bv_text_esc.toString(),
+  _bv_text_unesc.toString(),
+  _bv_text_map.toString(),
   _bv_to_wire.toString().replace(', _bv_types)', ')'),
   _bv_type_name.toString().replace(', _bv_types)', ')'),
   _bv_from_wire.toString().replace(', _bv_types)', ')'),
@@ -757,6 +760,8 @@ function _matchTypes(types, named, positional, requiredPos) {
   const keyOf = (t) => (typeof t === 'string' && Object.hasOwn(_bv_type_keys, t) ? _bv_type_keys[t] : null);
   const memberOf = (actual, expected) => {
     if (actual === expected || expected === 'Anything') return true;
+    // A function is tagged with its signature (\`['%f', sig]\`): the same one, or any for \`Function\`.
+    if (Array.isArray(actual) && actual[0] === '%f') return expected === 'Function' || JSON.stringify(actual) === JSON.stringify(expected);
     const key = _bv_type_name(actual);
     // \`*\` expects an actor, any actor: one no \`new\` built (\`*\`), or one tagged
     // with its maker's address (\`:C\`, \`svc.bv:C\`), which isn't a type's.

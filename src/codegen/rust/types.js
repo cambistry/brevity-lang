@@ -33,7 +33,12 @@ const TYPE_MEMBER_OF_FN = `fn type_member_of(actual: &str, expected: &str) -> bo
 
 // A tag against a param's type. Anything takes any tag, including a List's.
 const TAG_MATCHES_FN = `fn tag_matches(tag: &Value, expected: &str) -> bool {
-    expected == "Anything" || tag.as_str().map(|a| type_member_of(a, expected)).unwrap_or(false)
+    if expected == "Anything" { return true; }
+    // A function is tagged with its signature (["%f", sig]): the same one, or any for Function.
+    if tag.get(0).and_then(|h| h.as_str()) == Some("%f") {
+        return expected == "Function" || serde_json::from_str::<Value>(expected).map(|e| &e == tag).unwrap_or(false);
+    }
+    tag.as_str().map(|a| type_member_of(a, expected)).unwrap_or(false)
 }`;
 
 const MATCH_TYPES_FN = `fn match_types(message: &Value, pairs: &[(&str, &str)]) -> bool {
@@ -234,7 +239,57 @@ fn bv_values_fit(s: &BvObject, pos_types: &[&str], named_types: &[(&str, &str)])
 // bv_op_key: the arm key of a received op. An intrinsic (`$set`) names its
 // target by the last token of `to`, and the key is the pair: "$set val". The
 // token is the wire name (`val`, `~val`, `#val`). Any other op is its own key.
-const RUST_WIRE_HELPERS = `#[allow(dead_code)]
+const RUST_WIRE_HELPERS = `// Text is plain in a program. On the wire a literal #< is \\#< and a literal \\ is \\\\
+// (notes/opre-text-and-addresses-2026-11-27.md): a value tagged Text is escaped going
+// out and unescaped coming in, walked alongside its tag.
+#[allow(dead_code)]
+fn bv_text_esc(s: &str) -> String { s.replace('\\\\', "\\\\\\\\").replace("#<", "\\\\#<") }
+#[allow(dead_code)]
+fn bv_text_unesc(s: &str) -> String {
+    let mut out = String::new();
+    let mut rest = s;
+    while !rest.is_empty() {
+        if let Some(r) = rest.strip_prefix("\\\\\\\\") { out.push('\\\\'); rest = r; }
+        else if let Some(r) = rest.strip_prefix("\\\\#<") { out.push_str("#<"); rest = r; }
+        else { let c = rest.chars().next().unwrap(); out.push(c); rest = &rest[c.len_utf8()..]; }
+    }
+    out
+}
+#[allow(dead_code)]
+fn bv_text_map(v: &Value, tag: &Value, f: &dyn Fn(&str) -> String) -> Value {
+    match (v, tag) {
+        (Value::String(s), Value::String(t)) if t == "Text" => Value::String(f(s)),
+        (Value::Array(a), Value::String(t)) if t.starts_with("List[") && t.ends_with(']') => {
+            let inner = Value::String(t[5..t.len() - 1].to_string());
+            Value::Array(a.iter().map(|x| bv_text_map(x, &inner, f)).collect())
+        }
+        (_, Value::Array(ts)) if ts.first().and_then(|h| h.as_str()).map(|h| h.starts_with('%')).unwrap_or(false) => v.clone(),
+        (Value::Array(a), Value::Array(ts)) => Value::Array(a.iter().enumerate().map(|(i, x)| match ts.get(i) { Some(t) => bv_text_map(x, t, f), None => x.clone() }).collect()),
+        (Value::Object(m), Value::Object(tm)) => Value::Object(m.iter().map(|(k, x)| (k.clone(), match tm.get(k) { Some(t) => bv_text_map(x, t, f), None => x.clone() })).collect()),
+        _ => v.clone(),
+    }
+}
+#[allow(dead_code)]
+fn bv_text_out(v: &Value, tag: &Option<Value>) -> Value { match tag { Some(t) => bv_text_map(v, t, &bv_text_esc), None => v.clone() } }
+// A message off the wire: its reply's re, and its request's args, by their ty.
+#[allow(dead_code)]
+fn bv_text_in_msg(mut m: Value) -> Value {
+    let ty = m.get("ty").cloned();
+    if let (Some(ty), Some(obj)) = (ty, m.as_object_mut()) {
+        if let Some(re) = obj.get("re").cloned() { obj.insert("re".to_string(), bv_text_map(&re, &ty, &bv_text_unesc)); }
+        if let Some(Value::Array(op)) = obj.get("op").cloned() {
+            if op.len() > 1 {
+                if let Some(ta) = ty.get(0) {
+                    let mut op2 = op.clone();
+                    op2[0] = bv_text_map(&op[0], ta, &bv_text_unesc);
+                    obj.insert("op".to_string(), Value::Array(op2));
+                }
+            }
+        }
+    }
+    m
+}
+#[allow(dead_code)]
 fn bv_opre_split(address: &str) -> Vec<Option<String>> {
     let mut out = Vec::new();
     let chars: Vec<char> = address.chars().collect();

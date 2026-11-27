@@ -1532,7 +1532,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   // A slot declared as a union or `Anything` is tagged from its value at runtime, so
   // it needs a name to read; an expression with no name leaves the reply untagged.
   const slotTag = (t, varName) => {
-    if (!isDynamicTy(t)) return erlString(erlTypeTag(ctx, t));
+    if (!isDynamicTy(t)) return erlJson(erlTypeTag(ctx, t));
     return varName ? erlTyOf(ctx, t, readValue(varName)) : null;
   };
 

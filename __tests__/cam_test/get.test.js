@@ -105,7 +105,7 @@ describe('test.get — a function', () => {
   it('is the address replying &f gives', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'ref', from: 't' } },
-      { output: { id: '1', re: ['#<:~f>'], to: 't' } },
+      { output: { id: '1', re: ['#<:~f>'], ty: [['%f', { args: ['Integer'], re: ['Integer'], writes: false }]], to: 't' } },
     );
   });
 });

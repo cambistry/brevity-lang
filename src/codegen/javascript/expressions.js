@@ -1552,7 +1552,8 @@ export function genTyBody(ctx, fields, typeEnv) {
     if (f.wireTag !== undefined) { posTypes.push(JSON.stringify(f.wireTag)); continue; }
     const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr, typeEnv);
     if (t === undefined) return null;
-    if (isFunctionType(t)) return null;
+    // A function is tagged with its signature (typeTag), or `Function` when it has none.
+    if (isFunctionType(t)) { posTypes.push(JSON.stringify(t === 'Function' ? 'Function' : typeTag(ctx, t))); continue; }
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
     if (tag === null) return null;
     posTypes.push(tag);
@@ -1570,7 +1571,7 @@ export function genTyBody(ctx, fields, typeEnv) {
       varName = (f.value?.type === 'Identifier' || f.value?.type === 'RefRead') ? f.value.name : null;
     }
     if (t === undefined) return null;
-    if (isFunctionType(t)) return null;
+    if (isFunctionType(t)) { namedTypes.push(`${JSON.stringify(key)}: ${JSON.stringify(t === 'Function' ? 'Function' : typeTag(ctx, t))}`); continue; }
     const tag = slotTag(t, varName);
     if (tag === null) return null;
     namedTypes.push(`${JSON.stringify(key)}: ${tag}`);

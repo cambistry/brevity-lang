@@ -2,7 +2,7 @@
 // what it is: the class it names, as the program is compiled, and the text the
 // generated code carries for it.
 
-import { ownPath, ownNames, isInstance, show, members, isList } from '../type_enc.js';
+import { ownPath, ownNames, isInstance, show, members, isList, isFn, fnSignature } from '../type_enc.js';
 import { PUBLIC_CLASS_SUFFIX } from '../subclass.js';
 import { _opre_quote as quote, _opre_split } from './opre_tokens.js';
 import { publicLabel } from '../singleton_classes.js';
@@ -52,9 +52,14 @@ export const leadsWithList = (t) => t !== undefined && isList(members(t)[0]);
 // scalar or list as Brevity writes it. `null` is tagged `null`; no type, no tag.
 // `ctx` has the program, `typeDecls` by address and `depAliases`.
 // See notes/type-authority-address-tags-2026-10-26.md.
+// A function type's tag is its signature, in the tagged form (`['%f', { args, re, writes }]`,
+// notes/functions-as-values-2026-11-27.md).
+export const fnTypeTag = (t) => ['%f', fnSignature(t)];
+
 export function typeTag(ctx, t) {
   if (t === undefined) return null;
   if (t === null) return 'null';
+  if (isFn(t)) return fnTypeTag(t);
   // Any actor (`Actor`) is tagged `*`.
   if (t === 'Actor') return '*';
   // A type's tag is its address (src/codegen/type_table.js).
@@ -79,6 +84,7 @@ export function paramTag(ctx, p) {
   // A param with no type at all (a named one, `a: b`) expects an untagged arg.
   if (t === undefined) return p.typeKind === 'ctor' ? '*' : p.typeTree ? renderType(p.typeTree) : null;
   if (t === 'Actor') return '*';
+  if (isFn(t)) return fnTypeTag(t);
   const cls = classNameOf(t);
   const node = cls && (ctx.program?.actors || []).find(a => a.name === cls && !a.singletonOf && !a.membersOf);
   if (node) return makerTag(cls);

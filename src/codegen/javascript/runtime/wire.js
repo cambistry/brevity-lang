@@ -39,7 +39,32 @@ export function _bv_type_name(tag, _bv_types) {
   return _bv_types[tag].key;
 }
 
+// Text is plain in a program. On the wire a literal `#<` is `\#<` and a literal `\` is
+// `\\` (notes/opre-text-and-addresses-2026-11-27.md): a value tagged `Text` is escaped
+// going out and unescaped coming in, walked alongside its tag (`Text`, `List[Text]`,
+// positional and named slots). A tagged form (`['%f', …]`) and any other tag pass.
+export function _bv_text_esc(s) { return s.replace(/\\/g, '\\\\').replace(/#</g, '\\#<'); }
+export function _bv_text_unesc(s) { return s.replace(/\\(\\|#<)/g, '$1'); }
+export function _bv_text_map(v, tag, f) {
+  if (tag === 'Text') return typeof v === 'string' ? f(v) : v;
+  if (typeof tag === 'string') {
+    const m = /^List\[(.+)\]$/.exec(tag);
+    return m && Array.isArray(v) ? v.map(x => _bv_text_map(x, m[1], f)) : v;
+  }
+  if (Array.isArray(tag)) {
+    if (typeof tag[0] === 'string' && tag[0].startsWith('%')) return v;
+    return Array.isArray(v) ? v.map((x, i) => _bv_text_map(x, tag[i], f)) : v;
+  }
+  if (tag && typeof tag === 'object' && v && typeof v === 'object' && !Array.isArray(v)) {
+    const out = { ...v };
+    for (const k of Object.keys(tag)) if (k in v) out[k] = _bv_text_map(v[k], tag[k], f);
+    return out;
+  }
+  return v;
+}
+
 export function _bv_from_wire(tag, payload, _bv_types) {
+  if (tag === 'Text' || (typeof tag === 'string' && tag.startsWith('List['))) return _bv_text_map(payload, tag, _bv_text_unesc);
   const key = _bv_type_name(tag, _bv_types);
   if (!key || !Array.isArray(payload)) return payload;
   const decl = _bv_types[key];

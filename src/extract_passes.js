@@ -332,7 +332,7 @@ function renameClosureCalls(ast) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(n => walk(n, shadow)); return; }
       if (node.type === 'Function' || node.type === 'FunctionDecl') shadow = new Set([...shadow, ...bound(node)]);
-      if (node.type === 'Identifier' && renames.has(node.name) && !shadow.has(node.name)) node.name = renames.get(node.name);
+      if ((node.type === 'Identifier' || node.type === 'FnRef') && renames.has(node.name) && !shadow.has(node.name)) node.name = renames.get(node.name);
       // A reply's bare positional name (`return top`) is that function's call.
       if ((node.type === 'Reply' || node.type === 'Return') && Array.isArray(node.fields)) {
         for (const f of node.fields) {

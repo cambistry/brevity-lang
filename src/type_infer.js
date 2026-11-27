@@ -63,6 +63,8 @@ export function binaryResultType(op, lt, rt) {
 export function inferType(expr, env) {
   if (!expr) return undefined;
   switch (expr.type) {
+    // A function as a value: its function type (src/validate.js lowerFnRefReplies).
+    case 'FnAddress': return expr.typeEnc;
     case 'IntLiteral': return 'Integer';
     case 'StringLiteral': return 'Text';
     case 'InterpolatedString': return 'Text';
