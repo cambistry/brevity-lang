@@ -25,6 +25,8 @@ const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file �
 const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = *(params) { … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
+// List's functions that take a function, or none: built from `over` and `reduce`.
+const LIST_FUNCTIONS = new Set(['map', 'filter', 'find', 'sum']);
 import { MATH_METHODS } from './math_methods.js';
 
 // The bang form (`*x.method!(...)`) is a distinct method name from its pure
@@ -2920,6 +2922,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = AST.blobMethodExpr(cleanMethod, args);
+      } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && LIST_FUNCTIONS.has(cleanMethod) && peek().type === 'LPAREN') {
+        result = parseListFunction(cleanMethod);
       } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && LIST_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
         const args = [parseExpr()];
@@ -3114,7 +3118,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // A name bound so calls that type's function: `after(t, "x")` is
   // `Text.after(t, "x")`. It belongs to the scope it's declared in; at file level,
   // to every actor of the file.
-  const CORE_FUNCTIONS = { Text: TEXT_METHODS, List: LIST_METHODS, Blob: BLOB_METHODS };
+  const CORE_FUNCTIONS = { Text: TEXT_METHODS, List: new Set([...LIST_METHODS.keys(), ...LIST_FUNCTIONS]), Blob: BLOB_METHODS };
   const coreAliases = new Map();
   const coreAlias = (name) => {
     const a = coreAliases.get(name);
@@ -3132,6 +3136,51 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return tokens[j]?.type === 'EQUALS' && tokens[j + 1]?.type === 'IDENT' && !!CORE_FUNCTIONS[tokens[j + 1].value]
       && !['DOT', 'LPAREN', 'DCOLON'].includes(tokens[j + 2]?.type);
   }
+  // `List.map`, `filter`, `find`, `sum`, in the shape of `over`: the list, then the
+  // function, given in the parens or as a trailing block. Each is the `over` or
+  // `reduce` it means, so every target runs it as those:
+  //   map(xs) f      over(xs) f, whose value is used (settleUnusedMaps)
+  //   filter(xs) f   List.flatten(over(xs) (x) -> if (f(x)) [x] else [])
+  //   find(xs) f     List.first(filter(xs) f): the first match, or null
+  //   sum(xs)        reduce 0, xs (a, b) -> a + b
+  function parseListFunction(name) {
+    const args = parseCallArgs();
+    if (name === 'sum') {
+      if (args.length !== 1) throw new Error(`'sum' takes a list of numbers, and no function`);
+      return AST.reduceExpr(AST.intLiteral('0'), args[0],
+        AST.functionNode([{ name: '__sum', type: null, positional: true }, { name: '__n', type: null, positional: true }], null,
+          { expr: AST.binaryExpr('+', AST.identifier('__sum'), AST.identifier('__n')) }));
+    }
+    appendTrailingBlocks(args, true);
+    if (args.length !== 2) throw new Error(`'${name}' takes a list and a function`);
+    const [list, fn] = args;
+    requireFunctionRef(fn, name);
+    if (name === 'map') return { ...AST.overExpr(list, fn), mustUse: true };
+    // The predicate, kept: `(x) -> if (test) [x] else []`, a literal's test inlined.
+    let keep;
+    const each = (x, test) => AST.ifExpr(test, AST.ifBranch({ expr: AST.listLiteral([AST.identifier(x)]) }), AST.ifBranch({ expr: AST.listLiteral([]) }));
+    if (fn.type === 'Function' && (fn.params || []).length === 1) {
+      const x = fn.params[0].name;
+      if (fn.expr) keep = AST.functionNode(fn.params, null, { expr: each(x, fn.expr) });
+      else {
+        const body = [...(fn.body || [])];
+        const tail = body.pop();
+        if (tail?.type !== 'ImplicitReturn' && tail?.type !== 'Reply') throw new Error(`'${name}''s function ends in its test`);
+        const test = tail.type === 'Reply' ? tail.fields[0].expr ?? AST.identifier(tail.fields[0].name) : tail.expr;
+        keep = AST.functionNode(fn.params, [...body, AST.implicitReturn(each(x, test))]);
+      }
+    } else {
+      // A call's value is its reply's one value, which a typed bind takes.
+      const callee = fn.type === 'FnRef' ? AST.identifier(fn.name) : fn;
+      keep = AST.functionNode([{ name: '__x', type: null, positional: true }], [
+        AST.typedAssign('__keep', 'Boolean', AST.functionCallExpr(callee, [AST.identifier('__x')])),
+        AST.implicitReturn(each('__x', AST.identifier('__keep'))),
+      ]);
+    }
+    const kept = AST.listMethodExpr('flatten', [AST.overExpr(list, keep)]);
+    return name === 'find' ? AST.listMethodExpr('first', [kept]) : kept;
+  }
+
   function bindCoreFunctions() {
     const items = [];
     for (;;) {
@@ -6809,6 +6858,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   settleSilentDecls(result);
   settleBangDecls(result);
   settleWrites(result);
+  settleUnusedMaps(result);
   settleClauseCalls(result);
   settleStatementIfs(result);
   captureReturnedCells(result);
@@ -7079,6 +7129,20 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         if ((k === 'body' || k === 'initBody') && Array.isArray(v)) settleList(v);
         if (v && typeof v === 'object') visit(v);
       }
+    };
+    visit(program.actors);
+  }
+
+  // A `map` is for its value: one whose value goes unused is an `over`, the form
+  // for effects.
+  function settleUnusedMaps(program) {
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      if (node.type === 'ExprStatement' && node.expr?.mustUse) {
+        throw new Error("A 'map' whose value is unused: 'over' is the form for effects");
+      }
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v);
     };
     visit(program.actors);
   }

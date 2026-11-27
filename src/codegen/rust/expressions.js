@@ -4,7 +4,7 @@ import { addressToken, memberOp, selfAddress, wireLabel, actorAddress } from '..
 import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_tokens.js';
 import { inferType, bindLocalType } from '../../type_infer.js';
 import { publicLabel } from '../../singleton_classes.js';
-import { isFn, fnReply, members } from '../../type_enc.js';
+import { isFn, fnReply, members, isList, listElement } from '../../type_enc.js';
 import { typeText, classNameOf, envTypeOf, leadsWithList, declaredReturn, orAny } from '../enc_names.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
@@ -1312,7 +1312,9 @@ ${subRegLines.join('\n')}
     const params = fn.params || [];
     const param = params[0];
     const paramName = param ? param.name : '_item';
-    const paramType = param && envTypeOf(param);
+    // An untyped param takes the list's element type, where the list's is known.
+    const elemType = (() => { const t = inferType(expr.collection, typeEnv); return isList(t) ? listElement(t) : undefined; })();
+    const paramType = (param && envTypeOf(param)) ?? (elemType !== 'Anything' ? elemType : undefined);
     const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
     const bodyStmts = fn.body ? fn.body.filter(s => s.type !== 'ImplicitReturn' && s.type !== 'Return') : [];
     const bodyExpr = implRet ? implRet.expr : fn.expr;
@@ -1383,8 +1385,12 @@ ${subRegLines.join('\n')}
     const itemParam = params[1];
     const accName = accParam ? accParam.name : '_acc';
     const itemName = itemParam ? itemParam.name : '_item';
-    const accType = accParam && envTypeOf(accParam);
-    const itemType = itemParam && envTypeOf(itemParam);
+    // An untyped param takes the list's element type, where the list's is known: the
+    // item's always, the accumulator's when it starts as a value of that type.
+    const elemOf = (() => { const t = inferType(expr.collection, typeEnv); const e = isList(t) ? listElement(t) : undefined; return e !== 'Anything' ? e : undefined; })();
+    const initType = expr.initial ? inferType(expr.initial, typeEnv) : elemOf;
+    const accType = (accParam && envTypeOf(accParam)) ?? (initType === elemOf ? elemOf : undefined);
+    const itemType = (itemParam && envTypeOf(itemParam)) ?? elemOf;
     const implRet = fn.body ? fn.body.find(s => s.type === 'ImplicitReturn') : null;
     const bodyExpr = implRet ? implRet.expr : fn.expr;
     if (bodyExpr) {

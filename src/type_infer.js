@@ -87,6 +87,18 @@ export function inferType(expr, env) {
 
   if ((expr.type === 'Identifier' || expr.type === 'RefRead') && env?.has(expr.name)) return env.get(expr.name);
 
+  // `over` gives a List of what its function gives, the param an element.
+  if (expr.type === 'OverExpr' && expr.fn?.type === 'Function') {
+    const t = inferType(expr.collection, env);
+    const elem = isList(t) ? listElement(t) : undefined;
+    const p = expr.fn.params?.[0];
+    const local = new Map(env || []);
+    if (p) { const pt = p.typeEnc ?? p.type ?? elem; if (known(pt)) local.set(p.name, pt); }
+    const tail = expr.fn.expr ?? expr.fn.body?.findLast(st => st.type === 'ImplicitReturn')?.expr;
+    const r = tail ? inferType(tail, local) : undefined;
+    if (known(r)) return listOf(r);
+  }
+
   // `and`, `or`, `not` (the `if`s they lower to) give a Boolean.
   if (expr.type === 'IfExpr' && expr.boolOp) return 'Boolean';
 

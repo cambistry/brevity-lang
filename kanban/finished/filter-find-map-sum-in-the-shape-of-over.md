@@ -18,3 +18,5 @@ Want:
 - `map` is `over` whose result must be used: a `map` whose value is discarded is a compile error, and `over` is the form for effects.
 - `find` returns the first match or `null`. `sum` takes a list of numbers and no function.
 - Decide whether they are words like `over`, or `List.` functions (`List.filter(xs) (x) { … }`), like `List.sort` and `List.concat` (ticket `list-concat-and-list-sort`).
+
+**Decided (2026-11-26):** `List.` functions, beside `List.sort` and `List.concat`: `List.filter(xs) (x) { … }`, `List.find`, `List.map`, `List.sum`. A file that uses them often destructures them, `:filter, :find, :map, :sum = List`, and calls `filter(xs) (x) { … }`. No new keywords.
