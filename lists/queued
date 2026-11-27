@@ -1,4 +1,5 @@
 kanban/tickets/an-unannotated-bind-infers-only-literals-and-own-calls.md
+kanban/tickets/eliminate-need-for-the-noop-hack.md
 kanban/tickets/retire-list-of-integers-and-such-feels-out-of-step-with-the.md
 kanban/tickets/fix-a-bare-element-statement-in-a-function-body-is-dropped.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
