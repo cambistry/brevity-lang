@@ -1,4 +1,3 @@
-kanban/tickets/fix-binding-an-element-projection-gives-a-self-contradicting-error.md
 kanban/tickets/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
 kanban/tickets/a-private-silent-function-that-writes-is-not-defined-at-its-calls.md
 kanban/tickets/over-and-reduce-accept-an-integer-as-the-list.md
