@@ -1,4 +1,5 @@
 kanban/tickets/boolean-operators-and-unary-minus.md
+kanban/tickets/line-breaks-separate-items-in-multi-line-brackets.md
 kanban/tickets/constructor-star-leads.md
 kanban/tickets/clause-lists-follow-up-pipe-into-a-list-of-functions.md
 kanban/tickets/a-positional-destructure-with-too-many-names-binds-null.md
