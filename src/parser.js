@@ -1879,6 +1879,24 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return body;
   }
 
+  // Bare params: `x ->`, or several, `a, b ->`, on one line. Names only: a typed
+  // param needs the parens (notes/clause-lists-2026-11-25.md, "Arrow params").
+  // A list of several is a param list only where nothing to its left owns the
+  // comma: right of `=`, or a line of its own in a multi-line list.
+  function bareParamsAhead(i = pos) {
+    for (let j = i; ; j += 2) {
+      if (tokens[j]?.type !== 'IDENT') return false;
+      if (tokens[j + 1]?.type === '->') return true;
+      if (tokens[j + 1]?.type !== 'COMMA') return false;
+    }
+  }
+  const severalBareParamsAhead = (i = pos) => tokens[i + 1]?.type === 'COMMA' && bareParamsAhead(i);
+  function takeBareParams(type = null) {
+    const params = [{ name: take().value, type, positional: true }];
+    while (peek().type === 'COMMA') { take(); params.push({ name: take().value, type, positional: true }); }
+    return params;
+  }
+
   function parseFunction() {
     const outerDecl = declCtx;
     declCtx = null;
@@ -1892,10 +1910,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     let params;
     if (peek().type === 'LPAREN') {
       params = parseFunctionParamsParen();
-    } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
-      // Bare-param form: name -> expr (single generic param, no type)
-      const name = take().value;
-      params = [{ name, type: null, positional: true }];
+    } else if (bareParamsAhead()) {
+      // Bare params: `x -> expr`, `a, b -> expr` (no types)
+      params = takeBareParams();
     } else {
       params = []; // no-arg: { body }
     }
@@ -2621,6 +2638,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (bareFuncAllowed && peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
       return parseFunction();
     }
+    // Several bare params right of `=`: `add = a, b -> a + b`.
+    if (bareFuncAllowed && tokens[pos - 1]?.type === 'EQUALS' && severalBareParamsAhead()) {
+      return parseFunction();
+    }
     if (peek().type === 'LBRACE') {
       return parseFunction(); // no-arg function
     }
@@ -2738,7 +2759,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           if (skipListBreaks()) continue;
           expectListSeparator(listOpen, 'list elements');
           if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
-          elements.push(parseExpr());
+          // A line of its own may be a function of several bare params: `a, b -> a + b`.
+          const atLineStart = ['NEWLINE', 'BLOCK_SEP'].includes(tokens[pos - 1]?.type);
+          elements.push(atLineStart && severalBareParamsAhead() ? parseFunction() : parseExpr());
         }
         expect('RBRACKET');
         result = AST.listLiteral(elements);
@@ -5182,9 +5205,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         if (peek().type === 'LPAREN' && isParenFunctionStart(undefined, true)) {
           params = parseFunctionParamsParen();
           for (const p of params) { if (p.type === null) p.type = 'Anything'; }
-        } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
-          const pName = take().value;
-          params = [{ name: pName, type: 'Anything', positional: true }];
+        } else if (bareParamsAhead()) {
+          params = takeBareParams('Anything');
           take(); // ->
           const expr = parseExpr();
           let exprType = null;
@@ -5387,7 +5409,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           // Value assignment: name = expr (not a function body)
           const _valueTok = peek().type;
           const _isParensFnStart = _valueTok === 'LPAREN' && isParenFunctionStart(undefined, true);
-          const _isBareFnStart = _valueTok === 'IDENT' && tokens[pos + 1]?.type === '->';
+          const _isBareFnStart = _valueTok === 'IDENT' && bareParamsAhead();
           const _isFnStart = _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
           if (!_isFnStart) {
             const value = parseExpr();
@@ -5420,10 +5442,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
             // Parens-delimited params: (a, b) or (a Integer, :b)
             params = parseFunctionParamsParen();
             for (const p of params) { if (p.type === null) p.type = 'Anything'; }
-          } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
-            // Bare-param form: name -> expr (single generic param)
-            const pName = take().value;
-            params = [{ name: pName, type: 'Anything', positional: true }];
+          } else if (bareParamsAhead()) {
+            // Bare params: `name -> expr`, `a, b -> expr` (generic, no types)
+            params = takeBareParams('Anything');
             take(); // ->
             // Body is a single expression to EOL — wrap as implicit return.
             const expr = parseExpr();

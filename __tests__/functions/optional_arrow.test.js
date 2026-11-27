@@ -159,3 +159,60 @@ describe('an arrow follows params', () => {
     `)).toThrow();
   });
 });
+
+// Several bare params, `a, b -> …`, untyped, where nothing to the left owns the
+// comma: right of `=`, or a line of its own in a multi-line list. Elsewhere the
+// params take parens (notes/clause-lists-2026-11-25.md, "Arrow params").
+describe('several bare params', () => {
+  const script = `
+    add = a, b -> a + b
+    @sum = (x Integer, y Integer) {
+      v Integer = add(x, y)
+      return v
+    }
+    @product = (x Integer, y Integer) {
+      times = a, b -> a * b
+      v Integer = times(x, y)
+      return v
+    }
+  `;
+
+  it('right of `=`, in a class and in a body', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2, 3], 'sum'], ty: [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', re: [5], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[2, 3], 'product'], ty: [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a line of its own in a multi-line list is one function', () => {
+    const list = (src) => JSON.stringify(extract(src).ast.actors[0].functions[0].body[0].value, (k, v) => (k === 'loc' ? undefined : v));
+    expect(list(`
+      @g = () {
+        fs = [
+          a, b -> a + b
+        ]
+        return 1
+      }
+    `)).toBe(list(`
+      @g = () {
+        fs = [(a, b) -> a + b]
+        return 1
+      }
+    `));
+  });
+
+  it('takes no types', () => {
+    expect(() => compileSource(`
+      add = a Integer, b Integer -> a + b
+    `)).toThrow();
+  });
+
+  it('in call args, the comma is the call\'s', () => {
+    expect(() => compileSource(`
+      ap = (f Function) { f }
+      @g = () -> ap(a, b -> a + b)
+    `)).toThrow();
+  });
+});
