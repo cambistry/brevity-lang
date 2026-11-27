@@ -1,3 +1,4 @@
+kanban/finished/test-get-introspects-non-scalar-types.md
 kanban/finished/a-cell-of-a-class-is-a-pointer.md
 kanban/finished/class-ancestry.md
 kanban/finished/rust-drops-an-implicit-tail-value-after-a-guard.md
