@@ -32,7 +32,6 @@ kanban/tickets/consolidate-runtime-test-fixtures-phase-2-hand-merge.md
 kanban/tickets/explore-atomic-read-modify-write-on-another-actor-s-cell.md
 kanban/tickets/explore-type-rules-for-redeclaring-an-inherited-cell.md
 kanban/tickets/private-constants-and-cells.md
-kanban/tickets/retire-list-of-integers-and-such-feels-out-of-step-with-the.md
 kanban/tickets/opre-subops-object-elements-in-op.md
 kanban/tickets/lineal-rethink.md
 kanban/tickets/used-for-accessing-nested-constants.md
