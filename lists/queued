@@ -5,3 +5,4 @@ kanban/tickets/a-positional-destructure-with-too-many-names-binds-null.md
 kanban/tickets/destructure-a-core-type-s-functions.md
 kanban/tickets/filter-find-map-sum-in-the-shape-of-over.md
 kanban/tickets/list-concat-and-list-sort.md
+kanban/tickets/publish-an-actor-of-a-class-nested-deeper-in-an-instance.md
