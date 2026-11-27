@@ -2,7 +2,6 @@ kanban/tickets/lists-of-functions-as-runtime-values.md
 kanban/tickets/spelled-out-constructor-returns-an-actor-literal.md
 kanban/tickets/a-makers-style-element-styles-the-elements-it-makes.md
 kanban/tickets/warn-on-an-unused-value-in-a-body.md
-kanban/tickets/if-arrow-branch-is-not-a-return.md
 kanban/tickets/reach-a-parent-block-cell-the-class-block-redeclares.md
 kanban/tickets/subscription-updates-name-their-sender.md
 kanban/tickets/fix-reactive-interpolation-in-a-self-as-element-clause.md
