@@ -19,7 +19,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('XML tags — compilation', () => {
   it('basic self-closing tag compiles', () => {
     expect(() => compileSource(`
-      Greeting = (msg: Text) *{
+      Greeting = *(msg: Text) {
         @get = () -> result: msg
       }
       @test = {
@@ -32,7 +32,7 @@ describe('XML tags — compilation', () => {
 
   it('expression attribute compiles', () => {
     expect(() => compileSource(`
-      Box = (value: Integer) *{
+      Box = *(value: Integer) {
         @get = () -> result: value
       }
       @test = {
@@ -45,7 +45,7 @@ describe('XML tags — compilation', () => {
 
   it('mixed string and expression attributes compile', () => {
     expect(() => compileSource(`
-      Card = (title: Text, count: Integer) *{
+      Card = *(title: Text, count: Integer) {
         @get = () -> result: title
       }
       @test = {
@@ -58,7 +58,7 @@ describe('XML tags — compilation', () => {
 
   it('single-quoted string attribute compiles', () => {
     expect(() => compileSource(`
-      Label = (text: Text) *{
+      Label = *(text: Text) {
         @get = () -> result: text
       }
       @test = {
@@ -71,7 +71,7 @@ describe('XML tags — compilation', () => {
 
   it('class with positional params is a compiler error', () => {
     expect(() => compileSource(`
-      Point = (x Integer, y Integer) *{
+      Point = *(x Integer, y Integer) {
         @get = () -> result: x
       }
       @test = {
@@ -107,7 +107,7 @@ describe('XML tags — compilation', () => {
 
   it('complex expression in attribute compiles', () => {
     expect(() => compileSource(`
-      Box = (value: Integer) *{
+      Box = *(value: Integer) {
         @get = () -> result: value
       }
       @test = {
@@ -123,15 +123,15 @@ describe('XML tags — compilation', () => {
 describe('xml tags — runtime', () => {
   const script = `
     // XML tags — runtime
-    Greeting = (msg: Text) *{
+    Greeting = *(msg: Text) {
       @get = () -> result: msg
     }
 
-    Box = (value: Integer) *{
+    Box = *(value: Integer) {
       @get = () -> result: value
     }
 
-    Card = (title: Text, count: Integer) *{
+    Card = *(title: Text, count: Integer) {
       @getTitle = () -> result: title
       @getCount = () -> result: count
     }
@@ -179,7 +179,7 @@ describe('xml tags — runtime', () => {
       return :result
 
     // XML tags — equivalence with function syntax
-    Config = (host: Text, port: Integer) *{
+    Config = *(host: Text, port: Integer) {
       @getHost = () -> result: host
       @getPort = () -> result: port
     }
@@ -209,7 +209,7 @@ describe('xml tags — runtime', () => {
       return :result
 
     // XML tags — optional params
-    Widget = (label: Text = "default", size: Integer = 10) *{
+    Widget = *(label: Text = "default", size: Integer = 10) {
       @getLabel = () -> result: label
       @getSize = () -> result: size
     }

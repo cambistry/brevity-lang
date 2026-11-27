@@ -4,7 +4,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 // Subclasses — `^` inheritance syntax
 //
 // U = T ^ *{ … }            inherit from T, and its `new`
-// U = T ^ (arg: Type) *{ super(…) … }
+// U = T ^ *(arg: Type) { super(…) … }
 //                           a constructor of its own: its own params, and the
 //                           parent's constructor run at `super` (super.test.js)
 // base.a() / base::h()      the parent layer's public `@a` / protected `h`
@@ -16,8 +16,8 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('subclasses — positional args through super — compilation', () => {
   it('subclass passes a positional arg to its parent and adds its own', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (a Integer, b Integer) *{ super(a) }
+      T = *(a Integer) {}
+      U = T ^ *(a Integer, b Integer) { super(a) }
       @test = () -> 1
     `)).not.toThrow();
   });
@@ -28,8 +28,8 @@ describe('subclasses — positional args through super — compilation', () => {
 describe('subclasses — named args through super — compilation', () => {
   it('subclass passes a named arg to its parent and adds its own', () => {
     expect(() => compileSource(`
-      T = (a: Integer) *{}
-      U = T ^ (a: Integer, b: Integer) *{ super(a: a) }
+      T = *(a: Integer) {}
+      U = T ^ *(a: Integer, b: Integer) { super(a: a) }
       @test = () -> 1
     `)).not.toThrow();
   });
@@ -40,24 +40,24 @@ describe('subclasses — named args through super — compilation', () => {
 describe('subclasses — mixed positional/named args through super — compilation', () => {
   it('positional parent param, named subclass param', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (a Integer, b: Integer) *{ super(a) }
+      T = *(a Integer) {}
+      U = T ^ *(a Integer, b: Integer) { super(a) }
       @test = () -> 1
     `)).not.toThrow();
   });
 
   it('named parent param, positional subclass param', () => {
     expect(() => compileSource(`
-      T = (a: Integer) *{}
-      U = T ^ (b Integer, a: Integer) *{ super(a: a) }
+      T = *(a: Integer) {}
+      U = T ^ *(b Integer, a: Integer) { super(a: a) }
       @test = () -> 1
     `)).not.toThrow();
   });
 
   it('multiple mixed args across levels', () => {
     expect(() => compileSource(`
-      T = (a Integer, b: Text) *{}
-      U = T ^ (a Integer, d Integer, b: Text, c: Integer) *{ super(a, b: b) }
+      T = *(a Integer, b: Text) {}
+      U = T ^ *(a Integer, d Integer, b: Text, c: Integer) { super(a, b: b) }
       @test = () -> 1
     `)).not.toThrow();
   });
@@ -68,16 +68,16 @@ describe('subclasses — mixed positional/named args through super — compilati
 describe('subclasses — super arg types — compilation', () => {
   it('an arg of the wrong type for the parent\'s param is a compiler error', () => {
     expect(() => compileSource(`
-      T = (a: Decimal) *{}
-      U = T ^ (a: Text) *{ super(a: a) }
+      T = *(a: Decimal) {}
+      U = T ^ *(a: Text) { super(a: a) }
       @test = () -> 1
     `)).toThrow();
   });
 
   it('a param of its own, under another local name, passed on', () => {
     expect(() => compileSource(`
-      T = (a: Decimal) *{}
-      V = T ^ (a: b Decimal) *{
+      T = *(a: Decimal) {}
+      V = T ^ *(a: b Decimal) {
         super(a: b)
         @c = () -> result: b
       }
@@ -91,7 +91,7 @@ describe('subclasses — super arg types — compilation', () => {
 describe('subclasses — accessor type override rejected — compilation', () => {
   it('overriding a published param with a different type is a compiler error', () => {
     expect(() => compileSource(`
-      T = (@b: Integer) *{}
+      T = *(@b: Integer) {}
       U = T ^ *{ @b = { "b" } }
       @test = () -> 1
     `)).toThrow(/cannot change type of inherited accessor '@b'/);
@@ -99,7 +99,7 @@ describe('subclasses — accessor type override rejected — compilation', () =>
 
   it('adding a handler named like an unpublished param is legal', () => {
     expect(() => compileSource(`
-      T = (a: Integer) *{}
+      T = *(a: Integer) {}
       V = T ^ *{ @a = { "a" } }
       @test = () -> 1
     `)).not.toThrow();
@@ -111,16 +111,16 @@ describe('subclasses — accessor type override rejected — compilation', () =>
 describe('subclasses — whitespace tolerance — compilation', () => {
   it('< T | > with space before superclass', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (b Integer) *{ super(b) }
+      T = *(a Integer) {}
+      U = T ^ *(b Integer) { super(b) }
       @test = () -> 1
     `)).not.toThrow();
   });
 
   it('<\\nT |\\n> with newline before superclass', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (b Integer) *{
+      T = *(a Integer) {}
+      U = T ^ *(b Integer) {
         super(b)
       }
       @test = () -> 1
@@ -151,9 +151,9 @@ describe('subclasses — whitespace tolerance — compilation', () => {
 
   it('<\\nT |\\nparams\\n> lineal with params after superclass', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (a Integer, b Integer
-        c: Text) *{
+      T = *(a Integer) {}
+      U = T ^ *(a Integer, b Integer
+        c: Text) {
         super(a)
         @sum = () -> result: (a + b)
       }
@@ -209,14 +209,14 @@ describe('subclasses — base and wrapped parents — compilation', () => {
 describe('subclasses — runtime', () => {
   const script = `
     // subclasses — args passed to the parent through super — runtime
-    T = (@a Integer) *{}
-    PosU = T ^ (a Integer, @b Integer) *{
+    T = *(@a Integer) {}
+    PosU = T ^ *(a Integer, @b Integer) {
       super(a)
       @sum = () -> result: (a + b)
     }
 
-    NT = (a: Integer) *{}
-    NamedU = NT ^ (a: Integer, b: Integer) *{
+    NT = *(a: Integer) {}
+    NamedU = NT ^ *(a: Integer, b: Integer) {
       super(a: a)
       @sum = () -> result: (a + b)
     }
@@ -246,22 +246,22 @@ describe('subclasses — runtime', () => {
       return result: b
 
     // subclasses — mixed positional/named args — runtime
-    PosT = (a Integer) *{}
-    MixedA = PosT ^ (a Integer, b: Text) *{
+    PosT = *(a Integer) {}
+    MixedA = PosT ^ *(a Integer, b: Text) {
       super(a)
       @getA = () -> result: a
       @getB = () -> result: b
     }
 
-    NamedT = (a: Text) *{}
-    MixedB = NamedT ^ (b Integer, a: Text) *{
+    NamedT = *(a: Text) {}
+    MixedB = NamedT ^ *(b Integer, a: Text) {
       super(a: a)
       @getA = () -> result: a
       @getB = () -> result: b
     }
 
-    MultiT = (a Integer, b: Text) *{}
-    MultiU = MultiT ^ (a Integer, d Integer, b: Text, c: Integer) *{
+    MultiT = *(a Integer, b: Text) {}
+    MultiU = MultiT ^ *(a Integer, d Integer, b: Text, c: Integer) {
       super(a, b: b)
       @sum = () -> result: (a + c + d)
       @text = () -> result: b
@@ -497,9 +497,9 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — args forwarded through two levels — runtime
-    T13 = (@a: Integer) *{}
-    U13 = T13 ^ (a: Integer, b: Integer) *{ super(a: a) }
-    V13 = U13 ^ (a: Integer, b: Integer, @c: Integer) *{
+    T13 = *(@a: Integer) {}
+    U13 = T13 ^ *(a: Integer, b: Integer) { super(a: a) }
+    V13 = U13 ^ *(a: Integer, b: Integer, @c: Integer) {
       super(a: a, b: b)
       @sum = () -> result: (a + b + c)
     }
@@ -558,8 +558,8 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — optional args — runtime
-    T15 = (a Integer = 0) *{}
-    U15 = T15 ^ (a Integer = 0, b Integer = 10) *{
+    T15 = *(a Integer = 0) {}
+    U15 = T15 ^ *(a Integer = 0, b Integer = 10) {
       super(a)
       @sum = () -> result: (a + b)
     }
@@ -594,7 +594,7 @@ describe('subclasses — runtime', () => {
     Same = A^
     Both = A ^ B
     Added = A ^ *{ @extra = () -> result: 3 }
-    Sized = A ^ B ^ (n Integer) *{
+    Sized = A ^ B ^ *(n Integer) {
       super[A]()
       super[B]()
       @size = () -> result: n
@@ -1049,8 +1049,8 @@ describe('subclasses — runtime', () => {
 describe('subclasses — optional args — compilation', () => {
   it('superclass with optional arg, left to its default by super()', () => {
     expect(() => compileSource(`
-      T = (a Integer = 0) *{}
-      U = T ^ (b Integer) *{
+      T = *(a Integer = 0) {}
+      U = T ^ *(b Integer) {
         super()
         @sum = () -> result: (b + 1)
       }
@@ -1060,8 +1060,8 @@ describe('subclasses — optional args — compilation', () => {
 
   it('subclass adds optional arg to inherited required', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
-      U = T ^ (a Integer, b Integer = 10) *{
+      T = *(a Integer) {}
+      U = T ^ *(a Integer, b Integer = 10) {
         super(a)
         @sum = () -> result: (a + b)
       }
@@ -1071,8 +1071,8 @@ describe('subclasses — optional args — compilation', () => {
 
   it('both levels have optional args', () => {
     expect(() => compileSource(`
-      T = (a: Integer = 1) *{}
-      U = T ^ (a: Integer = 1, b: Integer = 2) *{
+      T = *(a: Integer = 1) {}
+      U = T ^ *(a: Integer = 1, b: Integer = 2) {
         super(a: a)
         @sum = () -> result: (a + b)
       }
@@ -1103,7 +1103,7 @@ describe('subclasses — ^ forms — compilation', () => {
       A = *{}
       D = A ^ "x"
       @test = () -> 1
-    `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')");
+    `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '*(params) { … }') or a singleton ('{ … }')");
   });
 
   it('after a class, each ^ takes a layer', () => {
@@ -1112,7 +1112,7 @@ describe('subclasses — ^ forms — compilation', () => {
       B = *{}
       D = A ^ B ^ 2
       @test = () -> 1
-    `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')");
+    `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '*(params) { … }') or a singleton ('{ … }')");
   });
 
   it('++ is not an operator', () => {

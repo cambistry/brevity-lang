@@ -3,17 +3,17 @@
 LLM orientation: this directory covers actor construction — constructor headers
 and params, subclassing, the parent layer (`base`), optional args, accessors,
 actors as values, and remote actor surfaces. There are no classes, only **actors**:
-`T = (…) *{ … }` declares the actor `T`, whose `new` builds others, and those are of
+`T = *(…) { … }` declares the actor `T`, whose `new` builds others, and those are of
 class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-11-18.md).
 
 ## Current Model
 
 - An actor with a `new` defines the shape of the actors it builds.
 - `T = * { ... }` declares one whose `new` takes no args.
-- `T = (x Integer, label: Text) *{ ... }` accepts positional and named params.
+- `T = *(x Integer, label: Text) { ... }` accepts positional and named params.
 - Params can have defaults: `x Integer = 0`, `label: Text = "hi"`.
 - Constructor params are private unless published with `@name`, which adds an accessor.
-- Subclasses use `Parent ^ (own params) *{ super(…) … }`: a constructor of its own takes its own params only, and `super` runs the parent's constructor at that line (`super.test.js`). Bare `super` passes the args as received, `super()` none, `super[A](…)` one of several parents. Never calling it builds no base, legal only when the subclass defines the parent's whole public interface. Several parents join with `^`; `D = C^` is a subclass with no changes, which takes its parent's params.
+- Subclasses use `Parent ^ *(own params) { super(…) … }`: a constructor of its own takes its own params only, and `super` runs the parent's constructor at that line (`super.test.js`). Bare `super` passes the args as received, `super()` none, `super[A](…)` one of several parents. Never calling it builds no base, legal only when the subclass defines the parent's whole public interface. Several parents join with `^`; `D = C^` is a subclass with no changes, which takes its parent's params.
 - `base::h()` / `base.a()` / `base[T]::h()` reach the parent layer (`base.test.js`).
 - In a function, `super` is the parent layer's same function: `base::h(…)` in `h`, `base.h(…)` in `@h`; bare passes the args as received (`super.test.js`).
 - A subclass's own class block extends its parent's by delegation (`delegation.test.js`, `extend.test.js`): it registers with the parent block (`$extend`); a call for a function it doesn't define, `super` and `base::h()` run at the parent for it (`as`), late-bound through callbacks to its overrides and redeclared cells; `A.f()` runs as the parent; a cell it doesn't redeclare is the parent block's, read and written there (`~` ops), and forwarded for the class's actors.
@@ -29,11 +29,11 @@ Greeter = * {
   @hello = () -> greeting: "hi"
 }
 
-Point = (x Integer, y Integer) *{
+Point = *(x Integer, y Integer) {
   @sum = () -> total: (x + y)
 }
 
-Child = Point ^ (x Integer, y Integer, label: Text) *{
+Child = Point ^ *(x Integer, y Integer, label: Text) {
   super(x, y)
   @label = () -> :label
 }

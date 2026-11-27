@@ -62,7 +62,7 @@ const script = `
     return a
   }
 
-  C = (k Integer) *{
+  C = *(k Integer) {
     use M = "m.bv" as ${N}
     @get = {
       x Integer = M.n()

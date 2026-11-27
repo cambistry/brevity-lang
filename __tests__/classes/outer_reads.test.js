@@ -132,7 +132,7 @@ describe('a class reaches its file actor while the file actor is idle', () => {
   const script = `
     use Svc = "svc.bv" as {
       note. (Integer) => .
-      Log (Integer) -> *{}
+      Log *(Integer) -> {}
     }
     total *Integer = 4
     @n *Integer = 0
@@ -142,11 +142,11 @@ describe('a class reaches its file actor while the file actor is idle', () => {
       @call. = { Svc.note(total)... }
     }
 
-    Reader = (P: *Integer) *{
+    Reader = *(P: *Integer) {
       sub P, (v Integer) { log = Svc.Log(v + total) }
     }
 
-    Caller = (P: *Integer) *{
+    Caller = *(P: *Integer) {
       sub P, (v Integer) { Svc.note(v + total)... }
     }
 

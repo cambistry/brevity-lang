@@ -20,7 +20,7 @@
 // An anonymous shape `(Text, n: Integer)` is an `Object` with those parameters.
 //
 // A cell (`*T`, `&T`) encodes as its type, `T`. An interface `{ … }` and a
-// constructor profile `(p) -> *{ … }` claim a dependency's shape, after `as`; neither
+// constructor profile `*(p) -> { … }` claim a dependency's shape, after `as`; neither
 // is a type that encodes.
 
 import { TT, renderType } from './type_tree.js';

@@ -2,7 +2,7 @@ import { expectLocalAndRemote } from '../helpers.js';
 
 // A parent in another file behaves as one in the same file: each case runs both ways,
 // the child's code the same in both. Class blocks (`V = K ^ { … }`) and instance
-// layers (`U = T ^ (…) *{ super(…) … }`): overrides, a redeclared cell, `super`,
+// layers (`U = T ^ *(…) { super(…) … }`): overrides, a redeclared cell, `super`,
 // `base::`, a parent named explicitly, two parents, a parent class with a block. See
 // notes/opre-extend-and-as-2026-11-20.md ("The semantics are layers, local parents
 // included").
@@ -18,7 +18,7 @@ const parents = `
   G = *{
     g = () -> 100
   }
-  T = G ^ (@n: Integer) *{
+  T = G ^ *(@n: Integer) {
     super()
     count *Integer = n
     step = () -> 1
@@ -26,14 +26,14 @@ const parents = `
     @gee = { x Integer = g(); return x }
     @bump! = { count <- count + 1 }
   }
-  A = (a Integer) *{
+  A = *(a Integer) {
     h = () -> a
     @ha = { x Integer = h(); return x }
   }
-  B = (b Integer) *{
+  B = *(b Integer) {
     @hb = { x Integer = b * 10; return x }
   }
-  C = (@n: Integer) *{
+  C = *(@n: Integer) {
     count *Integer = n
     step = () -> 1
     @get = { x Integer = count + step(); return x }
@@ -57,27 +57,27 @@ const children = `
     h = () -> 3
     @read = { x Integer = super() + 1000; return x }
   }
-  @U = T ^ (k Integer) *{
+  @U = T ^ *(k Integer) {
     super(n: k * 2)
     step = () -> 10
     g = () -> 7
     @cnt = () -> count
     @poke! = { count <- count + 1 }
   }
-  @Bare = T ^ (n: Integer) *{
+  @Bare = T ^ *(n: Integer) {
     super
   }
-  @R = T ^ (k Integer) *{
+  @R = T ^ *(k Integer) {
     count *Integer = 100
     super(n: k)
     step = { x Integer = super() + 5; return x }
     @viaBase = { x Integer = base::step() * 100; return x }
   }
-  @Y = C ^ (k Integer) *{
+  @Y = C ^ *(k Integer) {
     super(n: k)
     step = () -> 10
   }
-  @AB = A ^ B ^ (k Integer) *{
+  @AB = A ^ B ^ *(k Integer) {
     super[A](k)
     super[B](k + 1)
     h = () -> 9
@@ -113,7 +113,7 @@ const parent = `
   @G = *{
     g = () -> 100
   }
-  @T = @G ^ (@n: Integer) *{
+  @T = @G ^ *(@n: Integer) {
     super()
     count *Integer = n
     step = () -> 1
@@ -121,14 +121,14 @@ const parent = `
     @gee = { x Integer = g(); return x }
     @bump! = { count <- count + 1 }
   }
-  @A = (a Integer) *{
+  @A = *(a Integer) {
     h = () -> a
     @ha = { x Integer = h(); return x }
   }
-  @B = (b Integer) *{
+  @B = *(b Integer) {
     @hb = { x Integer = b * 10; return x }
   }
-  @C = (@n: Integer) *{
+  @C = *(@n: Integer) {
     count *Integer = n
     step = () -> 1
     @get = { x Integer = count + step(); return x }

@@ -6,7 +6,7 @@ import { expectBehavior, createActor, expectActorBehavior, compileSource } from 
 
 describe('return in a class constructor block', () => {
   const script = `
-    @Box = (k Integer) *{
+    @Box = *(k Integer) {
       n *Integer = 0
       if (k < 0) return
       n <- k
@@ -123,7 +123,7 @@ describe('return in a constructor block — compile errors', () => {
 
   it('return with a value in a branch', () => {
     expect(() => compileSource(`
-      @Box = (k Integer) *{
+      @Box = *(k Integer) {
         if (k < 0) return 0
         @n = () -> k
       }
@@ -150,8 +150,8 @@ describe('return in a constructor block — compile errors', () => {
 
   it('a return before super leaves the base unbuilt', () => {
     expect(() => compileSource(`
-      @Base = (n Integer) *{ @n = () -> n }
-      @Sub = @Base ^ (k Integer) *{
+      @Base = *(n Integer) { @n = () -> n }
+      @Sub = @Base ^ *(k Integer) {
         if (k < 0) return
         super(k * 10)
         @k = () -> k
@@ -162,8 +162,8 @@ describe('return in a constructor block — compile errors', () => {
 
 describe('return after super in a constructor block', () => {
   const script = `
-    @Base = (n Integer) *{ @n = () -> n }
-    @Sub = @Base ^ (k Integer) *{
+    @Base = *(n Integer) { @n = () -> n }
+    @Sub = @Base ^ *(k Integer) {
       seen *Integer = 0
       if (k < 0) {
         super(0)

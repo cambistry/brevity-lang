@@ -289,7 +289,7 @@ describe('overload — runtime', () => {
       return :r
 
     // overload — method called on a class actor
-    T = (x Integer) *{
+    T = *(x Integer) {
       @put = (n Integer) -> v: n
       @put << (s Text) -> v: 0
     }

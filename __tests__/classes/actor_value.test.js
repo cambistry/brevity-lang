@@ -14,12 +14,12 @@ describe('a declared actor as a value — from the file actor', () => {
     @N = actor {
       @pub *Integer = 1
 
-      new = (seed Integer) *{
+      new = *(seed Integer) {
         @x = () -> seed
       }
     }
 
-    C = (n Integer) *{
+    C = *(n Integer) {
       @x = () -> n
     }
 
@@ -94,7 +94,7 @@ describe('a declared actor as a value — from the file actor', () => {
       return x
     }
 
-    make = (k (seed Integer) -> *{ x () -> (Integer) }) {
+    make = (k *(seed Integer) -> { x () -> (Integer) }) {
       n = k(4)
       x Integer = n.x()
       return x
@@ -237,7 +237,7 @@ describe('a declared actor as a value — from an instance', () => {
       @pub *Integer = 1
       prot *Integer = 2
 
-      new = (seed Integer) *{
+      new = *(seed Integer) {
         @x = () -> seed
         @prot = {
           k = @N
@@ -315,7 +315,7 @@ describe('a declared actor as a value — errors', () => {
   it('outside the actor that declares it, it needs a fileName', () => {
     expect(() => compileSource(`
       @N = actor {
-        new = () *{
+        new = *() {
           @named = { return @N }
         }
       }
@@ -326,7 +326,7 @@ describe('a declared actor as a value — errors', () => {
     expect(() => compileSource(`
       @N = actor {
         prot *Integer = 2
-        new = () *{ @x = () -> 1 }
+        new = *() { @x = () -> 1 }
       }
       get = (k Actor) {
         x Integer = k::prot
@@ -343,7 +343,7 @@ describe('a declared actor as a value — errors', () => {
     expect(() => compileSource(`
       @N = actor {
         prot *Integer = 2
-        new = () *{ @x = () -> 1 }
+        new = *() { @x = () -> 1 }
       }
       @get = {
         k = @N
@@ -355,7 +355,7 @@ describe('a declared actor as a value — errors', () => {
 
   it('annotated as one it built', () => {
     expect(() => compileSource(`
-      C = (n Integer) *{ @x = () -> n }
+      C = *(n Integer) { @x = () -> n }
       @get = {
         k C = C
         return k
@@ -365,7 +365,7 @@ describe('a declared actor as a value — errors', () => {
 
   it('`Class` is an ordinary type name: `C` is not an actor `Class` built', () => {
     expect(() => compileSource(`
-      C = (n Integer) *{ @x = () -> n }
+      C = *(n Integer) { @x = () -> n }
       @get = {
         k Class = C
         return k

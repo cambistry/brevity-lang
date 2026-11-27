@@ -151,7 +151,7 @@ describe('a caller\'s annotation on a value that isn\'t a call', () => {
   });
 
   it('leaves an actor to its `as` at run time', () => {
-    accepts('T = (x Integer) *{ @a = () -> v: x as Integer }\n@g = {\n  t = T(1)\n  n Integer = t\n  return 1\n}\n');
+    accepts('T = *(x Integer) { @a = () -> v: x as Integer }\n@g = {\n  t = T(1)\n  n Integer = t\n  return 1\n}\n');
   });
 
   it('checks a call inside an expression', () => {
@@ -210,7 +210,7 @@ describe('a caller\'s annotation on an overload', () => {
 });
 
 describe('a dependency instance held in a handler\'s local', () => {
-  const h = 'use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Text) }\n';
+  const h = 'use Thing = "thing.bv" as *(a: Integer) -> { get () -> (Text) }\n';
 
   it('checks its members', () => {
     expect(() => compileSource(`${h}@g = {\n  t = Thing(a: 5)\n  t.nope()\n  return 1\n}\n`)).toThrow(/'Thing' has no function 'nope'/);

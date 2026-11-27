@@ -10,7 +10,7 @@
 //   { k: 'fn', inputs, outputs, alternatives, arrow, silent, returnsSelf, orSelf }
 //                                               `(Integer) -> (Text)`; inputs and outputs
 //                                               are `[{ name?, type }]`
-//   { k: 'ctor', params, iface, arrow }         `(p: Integer) -> *{ … }`; params are
+//   { k: 'ctor', params, iface, arrow }         `*(p: Integer) -> { … }`; params are
 //                                               `[{ name, key, type, text, positional, optional, ref, readonly }]`,
 //                                               `text` the param's type as the AST holds it
 //   { k: 'cell', type, readOnly }               `*Type`, `&Type`
@@ -47,7 +47,7 @@ export function renderType(node) {
       const shapes = (node.alternatives ?? [node.outputs]).map(alt => `(${side(alt)})`).join(' | ');
       return `(${side(node.inputs)}) ${node.arrow} ${shapes}${node.orSelf ? ' | self' : ''}`;
     }
-    case 'ctor': return `(${node.params.map(p => (p.positional ? `${p.name} ${p.text}` : `${p.name}: ${p.text}`)).join(', ')}) -> *${node.iface}`;
+    case 'ctor': return `*(${node.params.map(p => (p.positional ? `${p.name} ${p.text}` : `${p.name}: ${p.text}`)).join(', ')}) -> ${node.iface}`;
     case 'cell': return `${node.readOnly ? '&' : '*'}${renderType(node.type)}`;
     case 'iface': return node.text;
     default: throw new Error(`Unknown type node '${node.k}'`);

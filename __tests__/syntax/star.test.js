@@ -4,9 +4,9 @@ import { compileSource } from '../helpers.js';
 // Class `*` constructor syntax.
 //
 // Forms covered:
-//   Delimited (the `*` marks the body; optional `->`; space allowed):
-//     Cls = (params) *{ body }   |  Cls = (params) -> *{ body }
-//     Cls = () *{ body }         |  Cls = () -> *{ body }  |  Cls = *{ body }
+//   Delimited (the `*` leads, before the params; optional `->`):
+//     Cls = *(params) { body }   |  Cls = *(params) -> { body }
+//     Cls = *() { body }         |  Cls = *() -> { body }  |  Cls = *{ body }
 //   Lineal (each `*` alone on its line; LFs are syntax):
 //     Cls =                  Cls =
 //     *                      *
@@ -19,19 +19,19 @@ import { compileSource } from '../helpers.js';
 //   Subclass forms:
 //     Sub = Base ^ params ^ *{ body }
 //     Sub = Base ^ *{ expr }      — ingest / declaration return
-//     Sub = (name Base ^ params) *{ body }
+//     Sub = *(name Base ^ params) { body }
 //   Public `@`:
-//     @Cls = (params) *{ body }
+//     @Cls = *(params) { body }
 //   Service coercion:
 //     Coerced = Thing as *(p: Type) -> { iface }
 //   File-level header:
-//     ( "/path": Alias ) *{ body }  |  *\n "/path": Alias\n *\n body
+//     *( "/path": Alias ) { body }  |  *\n "/path": Alias\n *\n body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('class (params) *{...} — delimited with-params', () => {
+describe('class *(params) {...} — delimited with-params', () => {
   it('single param', () => {
     expect(() => compileSource(`
-      Counter = (start Integer) *{
+      Counter = *(start Integer) {
         count *Integer = start
         @get = () -> value: count
       }
@@ -45,7 +45,7 @@ describe('class (params) *{...} — delimited with-params', () => {
 
   it('multiple params', () => {
     expect(() => compileSource(`
-      Pair = (a Integer, b Integer) *{
+      Pair = *(a Integer, b Integer) {
         @sum = () -> total: (a + b)
       }
       @test = {
@@ -56,9 +56,9 @@ describe('class (params) *{...} — delimited with-params', () => {
     `)).not.toThrow();
   });
 
-  it('optional arrow: (params) -> *{ body }', () => {
+  it('optional arrow: *(params) -> { body }', () => {
     expect(() => compileSource(`
-      Counter = (start Integer) -> *{
+      Counter = *(start Integer) -> {
         @get = () -> value: start
       }
       @test = () -> 1
@@ -67,7 +67,7 @@ describe('class (params) *{...} — delimited with-params', () => {
 
   it('space between `*` and `{`', () => {
     expect(() => compileSource(`
-      Counter = (start Integer) * {
+      Counter = *(start Integer) {
         @get = () -> value: start
       }
       @test = () -> 1
@@ -324,7 +324,7 @@ describe('class — lineal header with params', () => {
 describe('class — lineal overload', () => {
   it('Cls <<\\n*\\nparams\\n*\\nbody', () => {
     expect(() => compileSource(`
-      Box = (value Integer) *{
+      Box = *(value Integer) {
         @get = () -> result: value
       }
       Box <<
@@ -353,10 +353,10 @@ describe('public class — lineal header', () => {
   });
 });
 
-describe('class () *{...} — empty params via parens', () => {
-  it('() *{ body }', () => {
+describe('class *() {...} — empty params via parens', () => {
+  it('*() { body }', () => {
     expect(() => compileSource(`
-      Greeter = () *{
+      Greeter = *() {
         @hello = () -> greeting: "hi"
       }
       @test = () -> 1
@@ -365,7 +365,7 @@ describe('class () *{...} — empty params via parens', () => {
 
   it('-> *{ body } (arrow, no params)', () => {
     expect(() => compileSource(`
-      Greeter = () -> *{
+      Greeter = *() -> {
         @hello = () -> greeting: "hi"
       }
       @test = () -> 1
@@ -373,14 +373,14 @@ describe('class () *{...} — empty params via parens', () => {
   });
 });
 
-describe('class (...) *{...} — subclass forms', () => {
+describe('class *(...) {...} — subclass forms', () => {
 
-  it('Sub = Base ^ (params) *{ body }', () => {
+  it('Sub = Base ^ *(params) { body }', () => {
     expect(() => compileSource(`
-      Base = (value Integer) *{
+      Base = *(value Integer) {
         @get = () -> result: value
       }
-      Sub = Base ^ (value Integer, label Text) *{
+      Sub = Base ^ *(value Integer, label Text) {
         super(value)
         @label = () -> :label
       }
@@ -388,12 +388,12 @@ describe('class (...) *{...} — subclass forms', () => {
     `)).not.toThrow();
   });
 
-  it('Sub = Base ^ (params) *{ body } reaches the parent layer with base', () => {
+  it('Sub = Base ^ *(params) { body } reaches the parent layer with base', () => {
     expect(() => compileSource(`
-      Base = (x Integer) *{
+      Base = *(x Integer) {
         @x = () -> v: x
       }
-      Wrap = Base ^ (x Integer, y Integer) *{
+      Wrap = Base ^ *(x Integer, y Integer) {
         super(x)
         @y = () -> v: y
         @both = {
@@ -406,10 +406,10 @@ describe('class (...) *{...} — subclass forms', () => {
   });
 });
 
-describe('public class @Cls = (...) *{...}', () => {
-  it('@Cls = (params) *{ body }', () => {
+describe('public class @Cls = *(...) {...}', () => {
+  it('@Cls = *(params) { body }', () => {
     expect(() => compileSource(`
-      @Counter = (start Integer) *{
+      @Counter = *(start Integer) {
         count *Integer = start
         @get = () -> value: count
       }
@@ -428,11 +428,11 @@ describe('public class @Cls = (...) *{...}', () => {
 });
 
 describe('service coercion — `as *(...)`', () => {
-  it('Coerced = Alias as (p: Type) -> *{ iface }', () => {
+  it('Coerced = Alias as *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
 
-      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+      Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
       @test = () -> 1
     `)).not.toThrow();
   });
@@ -460,9 +460,9 @@ describe('file-level header — lineal', () => {
     `)).not.toThrow();
   });
 
-  it('inline manifest class: (Alias) (p: Type) -> *{ iface }', () => {
+  it('inline manifest class: (Alias) *(p: Type) -> { iface }', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
       use start Integer = start
 
       t = Thing(a: start)
@@ -470,9 +470,9 @@ describe('file-level header — lineal', () => {
     `)).not.toThrow();
   });
 
-  it('delimited: ( deps ) *{ body }', () => {
+  it('delimited: *( deps ) { body }', () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{
+      *( value: Integer ) {
         @get = () -> :value
       }
     `)).not.toThrow();
@@ -502,5 +502,48 @@ describe('hard error — old `<...>` syntax', () => {
     // literal old-syntax fixture.
     const oldAsClause = 'as ' + '<' + ':a Integer' + '>';
     expect(() => compileSource(`*\n  "thing.bv": Thing #\n*\n\nCoerced = Thing ${oldAsClause} -> { get: () -> (value: Integer) }\n@test = () -> 1\n`)).toThrow();
+  });
+});
+
+// The star leads: a star after the params opens nothing, and fails as any stray
+// token does.
+describe('the star after the params', () => {
+  it('a class', () => {
+    expect(() => compileSource(`
+      C = (n Integer) *{ @n = () -> n }
+    `)).toThrow();
+  });
+
+  it('a class, with the arrow', () => {
+    expect(() => compileSource(`
+      C = (n Integer) -> *{ @n = () -> n }
+    `)).toThrow();
+  });
+
+  it('an overload clause', () => {
+    expect(() => compileSource(`
+      C = *(n Integer) { @n = () -> n }
+      C << (t Text) *{ @n = () -> 0 }
+    `)).toThrow();
+  });
+
+  it('a layer', () => {
+    expect(() => compileSource(`
+      T = *(n Integer) { @n = () -> n }
+      D = T ^ (n Integer) *{ super(n) }
+    `)).toThrow();
+  });
+
+  it('a constructor profile', () => {
+    expect(() => compileSource(`
+      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      @go = () -> 1
+    `)).toThrow();
+  });
+
+  it('a file header', () => {
+    expect(() => compileSource(`
+      ( value: Integer ) *{ @get = () -> value }
+    `)).toThrow();
   });
 });

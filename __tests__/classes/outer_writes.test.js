@@ -37,7 +37,7 @@ const script = `
     @seen = { return seen }
   }
 
-  @Defaulted = (a Integer, b Integer = helper(a)) *{
+  @Defaulted = *(a Integer, b Integer = helper(a)) {
     @b = { return b }
   }
 

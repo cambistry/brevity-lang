@@ -10,7 +10,7 @@ file params and the service document.
 Publish a param with `@`:
 
 ```brevity
-Box = (@value Integer, @label: Text, secret: Text) *{
+Box = *(@value Integer, @label: Text, secret: Text) {
   @double = () -> result: (value * 2)
 }
 
@@ -26,7 +26,7 @@ Box = (@value Integer, @label: Text, secret: Text) *{
 Defaults work as usual:
 
 ```brevity
-T = (@a Integer, @b Integer = 99) *{
+T = *(@a Integer, @b Integer = 99) {
   @sum = () -> result: (a + b)
 }
 ```
@@ -34,7 +34,7 @@ T = (@a Integer, @b Integer = 99) *{
 Publish a named param under its label while binding a different local:
 
 ```brevity
-Named = (@label: l Text) *{
+Named = *(@label: l Text) {
   @shout = () -> result: l
 }
 ```
@@ -42,7 +42,7 @@ Named = (@label: l Text) *{
 A different public name is an explicit handler:
 
 ```brevity
-Renamed = (a Integer) *{
+Renamed = *(a Integer) {
   @b = { a }
 }
 ```

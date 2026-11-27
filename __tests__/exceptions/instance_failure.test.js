@@ -302,7 +302,7 @@ describe('a failed as in the file', () => {
 
 describe('a failed as in a constructor block', () => {
   const script = `
-    @Box = (v Anything) *{
+    @Box = *(v Anything) {
       mixed = (b Boolean) {
         if b { return 1 }
         return "x"
@@ -312,7 +312,7 @@ describe('a failed as in a constructor block', () => {
       @get = { return n }
     }
 
-    @Good = (v Anything) *{
+    @Good = *(v Anything) {
       one = { return 1 }
       n Integer = v as Integer
       m = one() as Integer
@@ -322,13 +322,13 @@ describe('a failed as in a constructor block', () => {
       @get = { return n: n, m: m, k: k, t: t }
     }
 
-    @Untyped = (v Anything) *{
+    @Untyped = *(v Anything) {
       n = v as Integer
 
       @get = { return n }
     }
 
-    @Inner = (v Anything) *{
+    @Inner = *(v Anything) {
       mixed = (b Boolean) {
         if b { return 1 }
         return "x"

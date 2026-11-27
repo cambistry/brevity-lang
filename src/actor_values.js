@@ -52,12 +52,12 @@ export function expectedTag(t, actors) {
 // reduces; in the file actor, which no `new` built and no parent translates, `*`.
 export const selfSlotTag = (actor) => (actor && actor.name ? ':*' : '*');
 
-// A constructor profile, `(…) -> *{ … }`: the type of an actor with a `new`.
-export const isCtorProfile = (t) => typeof t === 'string' && /^\(.*\)\s*->\s*\*\{/s.test(t);
+// A constructor profile, `*(…) -> { … }`: the type of an actor with a `new`.
+export const isCtorProfile = (t) => typeof t === 'string' && /^\*\(.*\)\s*->\s*\{/s.test(t);
 
 // A reference to an actor whose `new` may be asked for: `Actor`, a constructor
 // profile, either held in a cell (`*Actor`).
-export const isActorRefType = (t) => typeof t === 'string' && (t.replace(/^[*&]/, '') === ACTOR_TYPE || isCtorProfile(t.replace(/^[*&]/, '')));
+export const isActorRefType = (t) => typeof t === 'string' && (t.replace(/^[*&]/, '') === ACTOR_TYPE || isCtorProfile(t) || isCtorProfile(t.replace(/^[*&]/, '')));
 
 // A type written where an actor's value is bound: `Actor`, an interface, or a
 // constructor profile all take it. Any other name is one that actor built.

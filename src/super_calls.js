@@ -1,6 +1,6 @@
 // `super` in a constructor: builds the base (notes/super-2026-11-19.md).
 //
-//   U = T ^ (label Text, n Integer) *{
+//   U = T ^ *(label Text, n Integer) {
 //     super(n * 2)     // T's constructor runs here, on the base
 //   }
 //
@@ -293,7 +293,7 @@ export function lowerSuperCalls(actors, chain) {
   const where = (a) => a.membersOf ? `the class block of '${a.membersOf}'` : a.singletonOf ? 'a singleton'
     : a.name ? `'${a.name}'` : 'this file';
 
-  // A constructor overload clause (`Sub << Base ^ (…) *{ … }`) is a class of its own.
+  // A constructor overload clause (`Sub << Base ^ *(…) { … }`) is a class of its own.
   const clauses = actors.flatMap(a => (a.functions || []).filter(f => f.actorDef && f.name)
     .map(f => ('name' in f.actorDef ? f.actorDef : Object.defineProperty(f.actorDef, 'name', { value: f.name, configurable: true }))));
   for (const U of [...actors, ...clauses]) {

@@ -58,7 +58,7 @@ describe('a name that is not a type', () => {
   });
 
   it('in a constructor profile', () => {
-    expect(() => compileSource('use Svc = "svc.bv" as (n: Nope) -> *{ get () -> (Integer) }\n@f = () -> 1\n')).toThrow("'Nope' is not a type");
+    expect(() => compileSource('use Svc = "svc.bv" as *(n: Nope) -> { get () -> (Integer) }\n@f = () -> 1\n')).toThrow("'Nope' is not a type");
   });
 
   it('in a document written here', () => {
@@ -81,5 +81,5 @@ describe('a type is', () => {
   it('a type a dependency\'s document declares, through it', () => compiles('use Svc = "svc.bv"\n@f = (p Svc::Point) -> p.x\n', remotes));
   it('a class a dependency\'s document declares, bare', () => compiles('use Svc = "svc.bv"\nread = (w Counter) { return w.get() }\n@f = () -> 1\n', remotes));
   it('a type a document written here declares', () => compiles('use Svc = "svc.bv" as { type Point(x: Integer)\n  n () -> (Point) }\n@f = (p Svc::Point) -> 1\n'));
-  it('in a constructor profile', () => compiles('use Svc = "svc.bv" as (n: Integer) -> *{ get () -> (Integer) }\n@f = () -> 1\n'));
+  it('in a constructor profile', () => compiles('use Svc = "svc.bv" as *(n: Integer) -> { get () -> (Integer) }\n@f = () -> 1\n'));
 });

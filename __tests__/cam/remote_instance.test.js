@@ -17,7 +17,7 @@ import { createActor, expectActorBehavior, compileSource } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const singleViewSource = `
-  use WebView = "WebView" as (path: Text) -> *{
+  use WebView = "WebView" as *(path: Text) -> {
     open. () => .
     getTitle () -> (title: Text)
     close. () => .
@@ -170,7 +170,7 @@ describe('remote actor — a reply nobody is waiting for', () => {
 describe('remote actor — multiple actors', () => {
   it('two refs at init produce independent addresses', async () => {
     const actor = await createActor(`
-      use WebView = "WebView" as (path: Text) -> *{
+      use WebView = "WebView" as *(path: Text) -> {
         open () -> (ok: Text)
       }
 
@@ -212,7 +212,7 @@ describe('remote actor — multiple actors', () => {
 describe('remote actor — named class args', () => {
   it('named class args appear in `new` and routed calls reach the actor', async () => {
     const actor = await createActor(`
-      use Database = "Database" as (host: Text, port: Integer) -> *{
+      use Database = "Database" as *(host: Text, port: Integer) -> {
         ping () -> (ok: Text)
       }
 

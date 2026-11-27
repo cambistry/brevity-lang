@@ -10,7 +10,7 @@ const script = `
   total *Integer = 1
   label *Text = "file"
 
-  @Outer = (n Integer) *{
+  @Outer = *(n Integer) {
     count *Integer = n
     label *Text = "outer"
 
@@ -132,7 +132,7 @@ describe('a class reaches only the actors it is declared in', () => {
 
   it('its own inherited function wins over a sibling\'s name', () => {
     expect(() => compileSource(`
-      A = (a Integer) *{}
+      A = *(a Integer) {}
 
       T = *{ a = { 1 } }
       U = T ^ *{

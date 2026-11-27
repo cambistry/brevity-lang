@@ -20,7 +20,7 @@ and then compile with the resolved context.
 - `constructor_interface.test.js`: public class signatures and the actor
   method surfaces they produce.
 - `subclass_interface.test.js`: subclass class surfaces, parent spreads,
-  multi-parent rendering (`C A ^ B ^ (c: Integer) -> *{ … }`).
+  multi-parent rendering (`C A ^ B ^ *(c: Integer) -> { … }`).
 - `dependency_injection.test.js`: file-level dependency declarations and
   outgoing CAM messages.
 - `interface_notation.test.js`: service-document entry forms, invalid forms,
@@ -38,10 +38,10 @@ definition: no entry colon, no `=` on types.
   clone () -> (Node)                      overloads: one line each,
   clone (deep: Boolean) -> (Node)         repeating the name
   log! (Text) => .                        silent
-  Counter (start: Integer) -> *{          constructor; body always written
+  Counter *(start: Integer) -> {          constructor; body always written
     get () -> (value: Integer)
   }
-  Text Node ^ -> *{}                     supertype, no members of its own
+  Text Node ^ *{}                     supertype, no members of its own
   set label (Text)                        write-only cell ($set only)
   count *Integer                          writable cell ($get, $set, $sub)
   seen &Integer                           read-only cell ($get, $sub)
@@ -63,14 +63,14 @@ named params and fields.
 The same constructor profile appears in source:
 
 ```brevity
-use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
-Coerced = Other as (a: Integer) -> *{ get () -> (value: Integer) }
+use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
+Coerced = Other as *(a: Integer) -> { get () -> (value: Integer) }
 ```
 
 ## LLM Rules
 
 - Public service documents omit `@` from handler names.
-- Entries have no colon: `name (params) -> (returns)`, `Name (params) -> *{ … }`.
+- Entries have no colon: `name (params) -> (returns)`, `Name *(params) -> { … }`.
 - Silent handlers render with their dot: `notify. (Text) => .`.
 - Optional args render with `?`.
 - Private `#name` and bare helper functions do not appear in service docs.

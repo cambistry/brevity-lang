@@ -154,7 +154,7 @@ describe('use — the manifest', () => {
       dep('Svc', { path: 'svc.bv', interface: '{\n  n () -> (Integer)\n}', interfaceDoc: expect.any(Object) }),
     ]);
     expect(deps('use Svc = "svc.bv" as {\n  n () -> (Integer)\n}')).toEqual(deps('use Svc = "svc.bv" as { n () -> (Integer) }'));
-    expect(deps('use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }')).toEqual([
+    expect(deps('use Thing = "thing.bv" as *(a: Integer) -> { get () -> (Integer) }')).toEqual([
       dep('Thing', { path: 'thing.bv', interface: '{\n  get () -> (Integer)\n}', interfaceDoc: expect.any(Object), constructorParams: [{ name: 'a', typeEnc: 'Integer', positional: false }], constructorArrow: '->' }),
     ]);
   });
@@ -201,7 +201,7 @@ describe('use — in inner scopes, the entry is the file\'s', () => {
 
   it('in a class body', () => {
     expect(manifest(`
-      C = (n Integer) *{
+      C = *(n Integer) {
         use document
         @get = () -> n
       }

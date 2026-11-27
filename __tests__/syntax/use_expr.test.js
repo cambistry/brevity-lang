@@ -69,7 +69,7 @@ describe('use("…") — calls reach the dependency', () => {
 describe('use("…") — in a constructor block', () => {
   it('constructs through an alias bound in the file actor', async () => {
     const actor = await createActor(`
-      Thing = use("thing.bv") as (a: Integer) -> *{ get () -> (value: Integer) }
+      Thing = use("thing.bv") as *(a: Integer) -> { get () -> (value: Integer) }
       t = Thing(a: 5)
       @go = { :value Integer = t.get(); return :value }
     `, {

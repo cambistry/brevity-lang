@@ -17,7 +17,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with params and braced body', () => {
     expect(() => compileSource(`
-      Counter = (start Integer) *{
+      Counter = *(start Integer) {
         count *Integer = start
         @get = () -> value: count
       }
@@ -31,7 +31,7 @@ describe('constructor delimited form — compilation', () => {
 
   it('constructor with multiple params', () => {
     expect(() => compileSource(`
-      Pair = (a Integer, b Integer) *{
+      Pair = *(a Integer, b Integer) {
         @sum = () -> total: (a + b)
       }
       @test
@@ -49,12 +49,12 @@ describe('constructor delimited form — runtime', () => {
       @hello = () -> greeting: "hi"
     }
 
-    Counter = (start Integer) *{
+    Counter = *(start Integer) {
       count *Integer = start
       @get = () -> value: count
     }
 
-    Pair = (a Integer, b Integer) *{
+    Pair = *(a Integer, b Integer) {
       @sum = () -> total: (a + b)
     }
 
@@ -106,7 +106,7 @@ describe('constructor delimited form — runtime', () => {
 describe('constructor delimited form — optional args — compilation', () => {
   it('positional default compiles', () => {
     expect(() => compileSource(`
-      C = (a Integer, b Integer = 0) *{
+      C = *(a Integer, b Integer = 0) {
         @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -115,7 +115,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('inferred positional default compiles', () => {
     expect(() => compileSource(`
-      C = (a Integer, b=0) *{
+      C = *(a Integer, b=0) {
         @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -124,7 +124,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = (a Integer, b: Integer = 5) *{
+      C = *(a Integer, b: Integer = 5) {
         @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
@@ -133,7 +133,7 @@ describe('constructor delimited form — optional args — compilation', () => {
 
   it('default feeds into ref state', () => {
     expect(() => compileSource(`
-      C = (start Integer = 0) *{
+      C = *(start Integer = 0) {
         count *Integer = start
         @get = () -> value: count
       }
@@ -144,19 +144,19 @@ describe('constructor delimited form — optional args — compilation', () => {
 
 describe('constructor delimited form — optional args — runtime', () => {
   const script = `
-    Pair = (a Integer, b Integer = 0) *{
+    Pair = *(a Integer, b Integer = 0) {
       @sum = () -> total: (a + b)
     }
 
-    Defaults = (x=10, y=20) *{
+    Defaults = *(x=10, y=20) {
       @sum = () -> total: (x + y)
     }
 
-    Below = (a Integer, b Integer = -2) *{
+    Below = *(a Integer, b Integer = -2) {
       @sum = () -> total: (a + b)
     }
 
-    Offset = (a Integer, b: Integer = -1) *{
+    Offset = *(a Integer, b: Integer = -1) {
       @sum = () -> total: (a + b)
     }
 
@@ -254,8 +254,8 @@ describe('constructor delimited form — optional args — runtime', () => {
 
   it('a negative default renders as optional', () => {
     expect(extract(`
-      @Offset = (a Integer, b: Integer = -1) *{}
-      @Below = (b Integer = -2) *{}
+      @Offset = *(a Integer, b: Integer = -1) {}
+      @Below = *(b Integer = -2) {}
     `).interface.service).toEqual({
       ':Offset': {
         public: {
@@ -290,9 +290,9 @@ describe('constructor delimited form — invalid forms', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('constructor delimited form — empty body', () => {
-  it('Cls = (params) *{} (empty braced body) compiles', () => {
+  it('Cls = *(params) {} (empty braced body) compiles', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{}
+      T = *(a Integer) {}
       @test = { t = T(1); return ok: "ok" }
     `)).not.toThrow();
   });
@@ -311,19 +311,19 @@ describe('constructor delimited form — expression defaults', () => {
   const script = `
     limit Integer = 7
 
-    Sum = (a Integer, b Integer = 1 + 2) *{
+    Sum = *(a Integer, b Integer = 1 + 2) {
       @sum = () -> total: (a + b)
     }
-    Later = (a Integer = b + 1, b: Integer = 10) *{
+    Later = *(a Integer = b + 1, b: Integer = 10) {
       @sum = () -> total: (a + b)
     }
-    FromFile = (a Integer, b Integer = limit + a) *{
+    FromFile = *(a Integer, b Integer = limit + a) {
       @sum = () -> total: (a + b)
     }
     Base = *{
       @base = () -> v: 1
     }
-    Sub = Base ^ (n Integer = 1 + 2) *{
+    Sub = Base ^ *(n Integer = 1 + 2) {
       super()
       @sum = () -> total: n
     }
@@ -379,8 +379,8 @@ describe('constructor delimited form — expression defaults', () => {
   it('renders as optional', () => {
     expect(extract(`
       @A = *{}
-      @Sum = (a Integer, b Integer = 1 + 2) *{}
-      @Sub = @A ^ (n Integer = 1 + 2) *{ super() }
+      @Sum = *(a Integer, b Integer = 1 + 2) {}
+      @Sub = @A ^ *(n Integer = 1 + 2) { super() }
     `).interface.service).toEqual({
       ':A': { public: { $new: [{ re: [':A'], writes: false }] }, instance: {} },
       ':Sum': {
@@ -396,10 +396,10 @@ describe('constructor delimited form — expression defaults', () => {
   });
 
   it('an untyped param with an expression default is an error', () => {
-    expect(() => compileSource('C = (a Integer, b = a + 1) *{}\n@go = () -> 1')).toThrow(/Param 'b': a default that isn't a literal needs a type/);
+    expect(() => compileSource('C = *(a Integer, b = a + 1) {}\n@go = () -> 1')).toThrow(/Param 'b': a default that isn't a literal needs a type/);
   });
 
   it('defaults that name each other are an error', () => {
-    expect(() => compileSource('C = (a Integer = b, b Integer = a) *{}\n@go = () -> 1')).toThrow(/Param defaults form a cycle: a → b → a/);
+    expect(() => compileSource('C = *(a Integer = b, b Integer = a) {}\n@go = () -> 1')).toThrow(/Param defaults form a cycle: a → b → a/);
   });
 });

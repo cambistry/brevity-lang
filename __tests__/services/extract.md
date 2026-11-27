@@ -23,7 +23,7 @@ The file actor's construction-time inputs render in declaration order, inside
 types only.
 
 - `"/db": { … }`: service dependency with an inline interface.
-- `"thing.bv": ( … ) -> *{ … }`: class dependency with an inline profile.
+- `"thing.bv": *( … ) -> { … }`: class dependency with an inline profile.
 - `"thing.bv": #`: class dependency; the profile comes from the remote.
 - `"/db":`: dependency; its type comes from the remote.
 - `"name": Type`: named scalar param (a renamed param shows its key).

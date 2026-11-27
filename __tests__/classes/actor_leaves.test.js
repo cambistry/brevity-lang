@@ -132,7 +132,7 @@ describe('an actor of a class declared in a class leaves the file', () => {
       }
     }
 
-    Outer = (k Integer) *{
+    Outer = *(k Integer) {
       Inner = *{ @get = () -> k }
       @make = () -> Inner()
     }

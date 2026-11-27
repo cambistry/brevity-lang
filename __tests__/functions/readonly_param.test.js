@@ -44,16 +44,16 @@ describe('readonly param — &Type is live', () => {
     }
     @n *Integer = 0
 
-    Watcher = (n &Integer) *{
+    Watcher = *(n &Integer) {
       sub n, (v Integer) { Svc.note(v)... }
     }
-    NamedWatcher = (n: &Integer) *{
+    NamedWatcher = *(n: &Integer) {
       sub n, (v Integer) { Svc.note(v)... }
     }
-    StarWatcher = (n *Integer) *{
+    StarWatcher = *(n *Integer) {
       sub n, (v Integer) { Svc.note(v)... }
     }
-    Reader = (n &Integer) *{
+    Reader = *(n &Integer) {
       @get = {
         r Integer = n
         return r

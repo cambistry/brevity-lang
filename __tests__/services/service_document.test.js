@@ -20,10 +20,10 @@ describe('the service document', () => {
       untracked @note. = (m Text) { @log <- @log + m }
       @size = (t Text) -> 1
       @size = (n Integer) -> 2
-      @G = () *{
+      @G = *() {
         step = () -> 1
       }
-      @T = @G ^ (name Text) *{
+      @T = @G ^ *(name Text) {
         @get = () -> step()
       } ^ {
         @made = () -> 1
@@ -88,7 +88,7 @@ describe('the service document', () => {
 
   it('a subclass with no constructor of its own takes its parent\'s params', () => {
     const { interface: iface } = extract(`
-      @G = (n Integer) *{
+      @G = *(n Integer) {
       }
       @U = @G ^ *{
         @more = () -> 2
@@ -117,7 +117,7 @@ describe('the service document', () => {
 
   it('a type declared in a class is the class\'s, named bare inside it', () => {
     const { interface: iface } = extract(`
-      @W = () *{
+      @W = *() {
         type X(Integer)
         @x = (p X) -> p
       }
@@ -167,7 +167,7 @@ describe('the service document', () => {
   });
 
   it('a constructor profile in a published signature is a compile error', () => {
-    expect(() => extract('@build = (make: (start: Integer) -> *{ get () -> (Integer) }) -> 1\n'))
-      .toThrow("A constructor profile can't be a type here: '(start: Integer) -> *{ get () -> (Integer) }'");
+    expect(() => extract('@build = (make: *(start: Integer) -> { get () -> (Integer) }) -> 1\n'))
+      .toThrow("A constructor profile can't be a type here: '*(start: Integer) -> { get () -> (Integer) }'");
   });
 });

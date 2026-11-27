@@ -17,3 +17,12 @@ The spelled-out form needs an actor literal as a value (after `->`, returned fro
 Today: both `(p) -> actor { … }` and `(p) { actor { … } }` are parse errors.
 
 Open (in the note): the file header, a body returning a literal on only some paths, overload clauses.
+
+**Decided (2026-11-26):**
+
+- **This ticket is the lead star:** `*(p) { … }`, `*(p) -> { … }`, `*{ … }`, the `^` layers (`T ^ *(n) { … }`), overload clauses (`C << *(p) { … }`), and the type profile `*(…) -> { … }` in source types, `use` entries and service documents.
+- **The old forms go** (`(p) *{ … }`, `(p) -> *{ … }`, the type `(…) -> *{ … }`), failing as ordinary parse errors.
+- **The file header leads with its star too:** `*( deps ) { … }`, as the lineal header does. `( entries ) actor { … }` stays.
+- **Constructor overload clauses lead with the star too:** `C << *(p) { … }`.
+- **The spelled-out form** `(p) -> actor { … }` is `spelled-out-constructor-returns-an-actor-literal`.
+- **Migration:** a mechanical rewrite moving the star before the params, across tests, docs, `.bv` files and Brevity in `src`; `notes/` stays as history.

@@ -687,7 +687,7 @@ ${subRegLines.join('\n')}
         Value::Null
     }`;
   }
-  // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
+  // An actor held as a value (`k Actor`, `k *(…) -> { … }`, a cell): `k(args)` is
   // `$new` to it, answered with the new actor's address.
   if (expr.type === 'FunctionCallExpr' && (expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
       && typeEnv?.get(expr.callee.name) === 'Actor') {

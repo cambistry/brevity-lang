@@ -108,7 +108,7 @@ function validateProgram(ast, options = {}) {
     if (d.constructorParams) factoryDecls[d.name] = d.constructorParams;
   }
   // Collect dep names whose manifest is provided inline by a constructor
-  // coercion (`Coerced = Dep as (ctor params) -> *{ iface }`). These are exempt from
+  // coercion (`Coerced = Dep as *(ctor params) -> { iface }`). These are exempt from
   // the bare-* / # interface check below.
   const coercedDeps = new Set();
   for (const actor of ast.actors) {
@@ -617,7 +617,7 @@ function validateProgram(ast, options = {}) {
       const mode = actor.overloadMode || 'create';
       if (mode === 'create') {
         if (ctorCreated.has(actor.name)) {
-          throw new Error(`Duplicate definition of '${actor.name}' — use '<< (params) *{ body }' to add an overload clause`);
+          throw new Error(`Duplicate definition of '${actor.name}' — use '<< *(params) { body }' to add an overload clause`);
         }
         ctorCreated.add(actor.name);
       } else {
@@ -694,7 +694,7 @@ function validateProgram(ast, options = {}) {
   const actorByName = new Map(ast.actors.filter(a => a.name).map(a => [a.name, a]));
 
   // ── Manifest-declared classes: synthesise actor-shaped nodes ───────────────
-  // `parseInterface` collects `Name ([Sup |] params) -> *{ body }` entries
+  // `parseInterface` collects `Name *([Sup |] params) -> { body }` entries
   // under `parsed.__types`. We materialise them as actor-shaped records so
   // resolveSuperclassChain / isAssignable can walk cross-service inheritance
   // (e.g. HTML.Div → HTML.Element) without special-casing remote types.
@@ -795,7 +795,7 @@ function validateProgram(ast, options = {}) {
     for (const n of actor.forwardFns || []) if (n.startsWith('@')) flat.add(n);
     actorMethodsFlat.set(actor.name, flat);
   }
-  // Fold in methods and accessors from overload clauses (`Name << (..) *{}` / `Name >> (..) *{}`).
+  // Fold in methods and accessors from overload clauses (`Name << *(..) {}` / `Name >> *(..) {}`).
   // Each clause lives as a FunctionDecl with an actorDef attached; its methods are
   // reachable at runtime via dispatch, so union them into the base type's method set.
   for (const actor of ast.actors) {
@@ -813,7 +813,7 @@ function validateProgram(ast, options = {}) {
   // ── Constructor clause signatures per actor ──────────────────────────
   // Each actor has one "base" clause (its declared initParams merged with
   // inherited params via the superclass chain) plus zero or more overload
-  // clauses (`Name << (..) *{}` / `Name >> (..) *{}`). A call matches the type if it
+  // clauses (`Name << *(..) {}` / `Name >> *(..) {}`). A call matches the type if it
   // fits AT LEAST ONE clause's required-params and positional arity.
   const mergeInheritedParams = (actor) => {
     const own = actor.initParams || [];
@@ -827,9 +827,9 @@ function validateProgram(ast, options = {}) {
     actorConstructorSigs.set(actor.name, [{ params: mergeInheritedParams(actor) }]);
   }
   // Overload clauses (Name << *(..)) — append to the base entry. If no named
-  // actor exists (Function() pattern: `Name = Function(); Name << (..) *{}`),
+  // actor exists (Function() pattern: `Name = Function(); Name << *(..) {}`),
   // start the entry fresh so the name still resolves as a constructor.
-  // An overload clause may itself inherit: `Sub << Base ^ (...) *{}`, so its params
+  // An overload clause may itself inherit: `Sub << Base ^ *(...) {}`, so its params
   // also need merging with its own superclass chain.
   for (const actor of ast.actors) {
     for (const fn of (actor.functions || [])) {
@@ -2155,8 +2155,8 @@ function validateActor(actor, actorInfo, dependencyNames, remotesParsed, factory
       } else {
         throw new Error(
           `Cannot construct '${depName}' — its dependency declaration has no constructor signature. ` +
-          `Use '( "path": ${depName} # ) *{ ... }' with a manifest in options.remotes, ` +
-          `or '( "path": ${depName} (param: Type) -> *{ ... } ) *{ ... }' inline.`,
+          `Use '*( "path": ${depName} # ) { ... }' with a manifest in options.remotes, ` +
+          `or '*( "path": ${depName} *(param: Type) -> { ... } ) { ... }' inline.`,
         );
       }
     }

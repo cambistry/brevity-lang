@@ -57,7 +57,7 @@ const layers = `
 
   A = *{ h = () -> 1 }
   B = *{ h = () -> 2 }
-  @C = A ^ B ^ (k Integer) *{
+  @C = A ^ B ^ *(k Integer) {
     super[A]()
     super[B]()
     h = () -> 0

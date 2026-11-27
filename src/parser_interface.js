@@ -45,9 +45,9 @@ export function parseFieldList(str) {
 //   type Point(Integer, y: Integer)       type declaration
 //   my_func (Type) -> (Type)              function; one line per overload
 //   log! (Text) => .                      silent function
-//   Counter (start: Integer) -> *{ … }    constructor; body always written
-//   Text Node ^ -> *{}                    constructor with a supertype
-//   C A ^ B ^ (c: Integer) -> *{ … }      two supertypes, then params
+//   Counter *(start: Integer) -> { … }    constructor; body always written
+//   Text Node ^ *{}                       constructor with a supertype, its `new`
+//   C A ^ B ^ *(c: Integer) -> { … }      two supertypes, then params
 //   set name (Type)                       settable field
 //   cell *Type                            ref cell (readable and settable)
 //   name Type                             read-only field
@@ -97,8 +97,8 @@ function splitTopLevel(str, sep) {
 }
 
 // A constructor entry's parents come before its params, outside the parens
-// (notes/caret-composition-2026-11-19.md): `C A ^ B ^ (c: Integer) -> *{ … }`,
-// `Text Node ^ -> *{}`. Returns the parents and what follows them, or null.
+// (notes/caret-composition-2026-11-19.md): `C A ^ B ^ *(c: Integer) -> { … }`,
+// `Text Node ^ *{}`. Returns the parents and what follows them, or null.
 const PARENTS_RE = /^((?:@?[A-Za-z_][A-Za-z0-9_]*!?\s*\^\s*)+)/;
 function splitLeadingParents(rest) {
   const m = rest.match(PARENTS_RE);
@@ -150,8 +150,45 @@ function parseTypeDeclFields(valueText) {
 // A name may end in `?`, `!`, or the silent `.` (`notify. (Text) => .`).
 const ENTRY_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.(?=[\s(]|$)|\??!?)/;
 
-// Parses `(params) [->] ret` where ret is `(fields)`, `.`, or `*{ members }`. A
-// class with members of its own has them after: `*{ … } ^ { members }`.
+// A constructor: `*(params) [->] { body }`, or `*{ body }` with no params of its
+// own. A class with members of its own has them after: `… { … } ^ { members }`.
+// Null when `text` isn't one (`*(Integer | Text)` is a cell's grouped type).
+function parseConstructorSignature(name, text) {
+  if (!text.startsWith('*')) return null;
+  let rest = text.slice(1).trim();
+  let paramsInner = '';
+  let effect = 'read';
+  if (rest.startsWith('(')) {
+    const pEnd = groupEnd(rest, 0);
+    if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
+    const after = rest.slice(pEnd).trim();
+    const arrow = /^[-=~]>/.exec(after)?.[0];
+    const body = arrow ? after.slice(2).trim() : after;
+    if (!body.startsWith('{')) return null;
+    paramsInner = rest.slice(1, pEnd - 1).trim();
+    if (arrow) effect = { '->': 'read', '=>': 'write', '~>': 'purported' }[arrow];
+    rest = body;
+  } else if (!rest.startsWith('{')) {
+    return null;
+  }
+  const bEnd = groupEnd(rest, 0);
+  if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
+  const after = rest.slice(bEnd).trim();
+  let membersInner = null;
+  const block = /^\^\s*\{/.exec(after);
+  if (block) {
+    const open = block[0].length - 1;
+    const mEnd = groupEnd(after, open);
+    if (mEnd === -1) throw new Error(`Interface entry '${name}': unbalanced class members`);
+    if (after.slice(mEnd).trim()) throw new Error(`Interface entry '${name}': unexpected text after class members: '${after.slice(mEnd).trim()}'`);
+    membersInner = after.slice(open + 1, mEnd - 1);
+  } else if (after) {
+    throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${after}'`);
+  }
+  return { kind: 'constructor', effect, paramsInner, bodyInner: rest.slice(1, bEnd - 1), membersInner };
+}
+
+// Parses `(params) [->] ret` where ret is `(fields)`, `.` or `self`.
 function parseSignature(name, text) {
   const pEnd = groupEnd(text, 0);
   if (pEnd === -1) throw new Error(`Interface entry '${name}': unbalanced parameter list`);
@@ -162,23 +199,6 @@ function parseSignature(name, text) {
   const arrow = hasArrow ? rest.slice(0, 2) : (rest === '.' ? '=>' : '->');
   if (hasArrow) rest = rest.slice(2).trim();
   const effect = { '->': 'read', '=>': 'write', '~>': 'purported' }[arrow];
-  if (rest.startsWith('*{')) {
-    const bEnd = groupEnd(rest, 1);
-    if (bEnd === -1) throw new Error(`Interface entry '${name}': unbalanced constructor body`);
-    const after = rest.slice(bEnd).trim();
-    let membersInner = null;
-    const block = /^\^\s*\{/.exec(after);
-    if (block) {
-      const open = block[0].length - 1;
-      const mEnd = groupEnd(after, open);
-      if (mEnd === -1) throw new Error(`Interface entry '${name}': unbalanced class members`);
-      if (after.slice(mEnd).trim()) throw new Error(`Interface entry '${name}': unexpected text after class members: '${after.slice(mEnd).trim()}'`);
-      membersInner = after.slice(open + 1, mEnd - 1);
-    } else if (after) {
-      throw new Error(`Interface entry '${name}': unexpected text after constructor body: '${after}'`);
-    }
-    return { kind: 'constructor', effect, paramsInner, bodyInner: rest.slice(2, bEnd - 1), membersInner };
-  }
   const params = paramsInner ? parseFieldList(paramsInner) : [];
   // A trailing `.` on the name means silent. A foreign function can be silent
   // without one, since its name is never interpreted.
@@ -221,8 +241,8 @@ function parseSignature(name, text) {
   }
   if (!rest) {
     throw new Error(
-      `Interface entry '${name}': missing return — write '-> (Type)', '=> .', '=> self', or '-> *{ … }' ` +
-      `(a constructor with no members of its own is '-> *{}')`,
+      `Interface entry '${name}': missing return — write '-> (Type)', '=> .' or '=> self' ` +
+      `(a constructor is '*(params) -> { … }')`,
     );
   }
   throw new Error(`Interface entry '${name}': unexpected '${rest}'`);
@@ -313,22 +333,23 @@ function parseEntry(text) {
   }
   const parents = splitLeadingParents(rest);
   if (parents) {
-    // `C A ^ (params) -> *{ … }`, or with no params `C A ^ -> *{ … }`.
-    const sig = parseSignature(name, parents.after.startsWith('(') ? parents.after : `() ${parents.after}`);
-    if (sig.kind !== 'constructor') throw new Error(`Interface entry '${name}': unexpected '${parents.after}'`);
+    // `C A ^ *(params) -> { … }`, or with no params of its own `C A ^ *{ … }`.
+    const sig = parseConstructorSignature(name, parents.after);
+    if (!sig) throw new Error(`Interface entry '${name}': unexpected '${parents.after}'`);
     const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
     // Parens after the parents: a constructor of its own, which takes those params
     // only (notes/super-2026-11-19.md). None: the parents' `new`.
-    const ownNew = parents.after.startsWith('(');
+    const ownNew = parents.after.startsWith('*(');
     return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, parents.supertypes, sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}), ...(ownNew && { ownNew }) };
+  }
+  const ctor = parseConstructorSignature(name, rest);
+  if (ctor) {
+    // A class's own members read as a service document of their own.
+    const members = ctor.membersInner === null ? null : parseInterface(`{${ctor.membersInner}}`);
+    return { kind: 'constructor', name, effect: ctor.effect, ...parseConstructor(name, [], ctor.paramsInner, ctor.bodyInner), ...(members ? { members } : {}) };
   }
   if (rest.startsWith('(')) {
     const sig = parseSignature(name, rest);
-    if (sig.kind === 'constructor') {
-      // A class's own members read as a service document of their own.
-      const members = sig.membersInner === null ? null : parseInterface(`{${sig.membersInner}}`);
-      return { kind: 'constructor', name, effect: sig.effect, ...parseConstructor(name, [], sig.paramsInner, sig.bodyInner), ...(members ? { members } : {}) };
-    }
     return { kind: 'function', name, effect: sig.effect, params: sig.params, returns: sig.returns, ...(sig.returnsSelf ? { returnsSelf: true } : {}), ...(sig.returnAlternatives ? { returnAlternatives: sig.returnAlternatives } : {}), ...(sig.silent ? { silent: true } : {}), ...(sig.noReply ? { noReply: true } : {}) };
   }
   if (!rest) throw new Error(`Interface entry '${name}' has no definition`);
@@ -428,7 +449,8 @@ export function parseParamsDocument(params) {
     const named = entry.match(/^("[^"]*"|\w+):\s*([\s\S]*)$/);
     if (!named) { result.push({ name: null, type: entry }); continue; }
     const type = named[2].trim();
-    if (!type || /^[#{(]/.test(type)) continue;
+    // A dependency's shape (`#`, `{ … }`, a constructor profile `*(…) -> { … }`) isn't a param.
+    if (!type || /^[#{(]/.test(type) || /^\*\([\s\S]*\)\s*([-=~]>\s*)?\{/.test(type)) continue;
     const key = named[1].startsWith('"') ? JSON.parse(named[1]) : named[1];
     result.push({ name: key, key, type });
   }

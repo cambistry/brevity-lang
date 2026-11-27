@@ -17,7 +17,7 @@ describe('named destructure — rejected when the callee returns no such name', 
 
   it('post-colon form (same as the colon prefix)', () => {
     expect(() => compileSource(`
-      Box = (v Integer) *{ @get = () -> r: v }
+      Box = *(v Integer) { @get = () -> r: v }
       @h = { b = Box(1); x: Integer = b.get(); return result: x }
     `)).toThrow(/Cannot destructure 'x' from 'b.get\(\)'/);
   });

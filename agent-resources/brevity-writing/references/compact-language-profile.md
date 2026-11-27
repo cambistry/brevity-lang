@@ -60,7 +60,7 @@ Then call through the alias:
 Construct a remote-declared class with `*Alias(...)`.
 
 ```brevity
-use "WebView": WebView (path: Text) -> *{
+use "WebView": WebView *(path: Text) -> {
   open. () => .
   close. () => .
 }

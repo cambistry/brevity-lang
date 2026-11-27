@@ -4,8 +4,8 @@ import { extract } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // Optional `->` before a delimited body. In any delimited function or class
 // definition, `(params) -> { body }` is the same as `(params) { body }` (and
-// `() -> { body }` the same as `{ body }`); for classes, `(params) -> *{ body }`
-// is the same as `(params) *{ body }`. An arrow follows params: a function of none
+// `() -> { body }` the same as `{ body }`); for classes, `*(params) -> { body }`
+// is the same as `*(params) { body }`. An arrow follows params: a function of none
 // writes `()` (notes/clause-lists-2026-11-25.md, "Arrow params").
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -38,15 +38,15 @@ describe('optional arrow — same AST as the arrowless form', () => {
   });
 
   it('class with params', () => {
-    expect(ast('C = (a Integer) -> *{ @get = () -> a }\n')).toBe(ast('C = (a Integer) *{ @get = () -> a }\n'));
+    expect(ast('C = *(a Integer) -> { @get = () -> a }\n')).toBe(ast('C = *(a Integer) { @get = () -> a }\n'));
   });
 
   it('class without params', () => {
-    expect(ast('C = () -> *{ @get = () -> 1 }\n')).toBe(ast('C = *{ @get = () -> 1 }\n'));
+    expect(ast('C = *() -> { @get = () -> 1 }\n')).toBe(ast('C = *{ @get = () -> 1 }\n'));
   });
 
   it('public class', () => {
-    expect(ast('@C = (a Integer) -> *{ @get = () -> a }\n')).toBe(ast('@C = (a Integer) *{ @get = () -> a }\n'));
+    expect(ast('@C = *(a Integer) -> { @get = () -> a }\n')).toBe(ast('@C = *(a Integer) { @get = () -> a }\n'));
   });
 });
 
@@ -75,7 +75,7 @@ describe('optional arrow — compiles and runs', () => {
 
   it('class with arrow-brace body constructs', async () => {
     await expectBehavior(`
-      Box = (value Integer) -> *{
+      Box = *(value Integer) -> {
         @get = () -> result: value
       }
       @test = { b = Box(7); :result = b.get(); return :result as Integer }

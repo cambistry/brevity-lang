@@ -14,7 +14,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 
 describe('replies that carry an address', () => {
   const script = `
-    @Box = (n Integer) *{
+    @Box = *(n Integer) {
       count *Integer = n
       @bump! = { count <- count + 1 }
       @get = { return count }
@@ -52,7 +52,7 @@ describe('replies that carry an address', () => {
 
 describe('a dependency\'s reply to `$new`', () => {
   const script = `
-    use Thing = "thing.bv" as (tag: Text) -> *{
+    use Thing = "thing.bv" as *(tag: Text) -> {
       ping () -> (ok: Text)
     }
 

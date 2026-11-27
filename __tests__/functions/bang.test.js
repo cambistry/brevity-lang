@@ -827,7 +827,7 @@ describe('a `!` function by name', () => {
     });
 
     it('rejects one in a doc param', () => {
-      expect(() => compileSource(`use Svc = "svc.bv" as () -> *{ run (f: () -> ()) -> (n: Integer) }\n${FILE}@go! = {\n  s = Svc()\n  :n Integer = s.run(f: &bump!)\n  return :n\n}\n`)).toThrow(rejected);
+      expect(() => compileSource(`use Svc = "svc.bv" as *() -> { run (f: () -> ()) -> (n: Integer) }\n${FILE}@go! = {\n  s = Svc()\n  :n Integer = s.run(f: &bump!)\n  return :n\n}\n`)).toThrow(rejected);
     });
 
     it('accepts a read-only function', () => {
@@ -966,7 +966,7 @@ describe('effect arrows in signatures', () => {
 
   it('a claim spreads: a function reading a `~>` gets `~>` in its own doc', () => {
     const { interface: doc } = compileSource(`
-      use Svc = "svc.bv" as () -> *{ guess () ~> (n: Integer) }
+      use Svc = "svc.bv" as *() -> { guess () ~> (n: Integer) }
       s = Svc()
       helper = {
         :n Integer = s.guess()
@@ -1057,7 +1057,7 @@ describe('effect enforcement', () => {
     });
 
     it('a class param', () => {
-      expect(() => compileSource(`${CLASSES}\nD = (c C) *{\n  @go = {\n    c.g()\n    return 1\n  }\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
+      expect(() => compileSource(`${CLASSES}\nD = *(c C) {\n  @go = {\n    c.g()\n    return 1\n  }\n}\n`)).toThrow(/The value of '\.g\(\)' is discarded/);
     });
 
     it('a member inherited by the param\'s class', () => {
@@ -1144,7 +1144,7 @@ describe('effect enforcement', () => {
   });
 
   describe('calling a `~>`', () => {
-    const SVC = 'use Svc = "svc.bv" as () -> *{ guess () ~> (n: Integer) }\ns = Svc()\n';
+    const SVC = 'use Svc = "svc.bv" as *() -> { guess () ~> (n: Integer) }\ns = Svc()\n';
     const reads = '  :n Integer = s.guess()\n  x Integer = n\n';
 
     it('a `!` function may rest on it alone', () => {
@@ -1161,7 +1161,7 @@ describe('effect enforcement', () => {
 
     it('a claim crosses classes and locals, until nothing changes', () => {
       const { interface: doc } = compileSource(`
-        use Svc = "svc.bv" as () -> *{
+        use Svc = "svc.bv" as *() -> {
           guess () ~> (n: Integer)
           sure () -> (n: Integer)
         }
@@ -1290,7 +1290,7 @@ describe('effect enforcement', () => {
     const CLASSES = `
       type R(f: () -> (), g!: () => ())
       a *Integer = 0
-      C = (f: () -> ()) *{
+      C = *(f: () -> ()) {
         @take = (f () -> ()) { return 1 }
         @give! = (f () => ()) { f() }
       }
@@ -1298,7 +1298,7 @@ describe('effect enforcement', () => {
     `;
     const body = (lines) => `${CLASSES}\n@go! = (c C) {\n  a <- 0\n  ${lines}\n}\n`;
     const service = '{ take (f: () -> ()) -> (n: Integer)\n pos (() -> ()) -> (n: Integer)\n give (f: () => ()) => self }';
-    const remote = (lines) => `use Svc = "svc.bv" as () -> * ${service}\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
+    const remote = (lines) => `use Svc = "svc.bv" as *() -> ${service}\na *Integer = 0\n@go! = {\n  a <- 0\n  s = Svc()\n  ${lines}\n}\n`;
 
     it.each([
       ['a type field', `r = R(f: ${WRITER}, g!: () -> { a <- 2 })`],
@@ -1388,13 +1388,13 @@ describe('effect enforcement', () => {
   });
 
   it('a file constructor\'s alias and arrow must agree', () => {
-    expect(() => compileSource('use Widget = "w.bv" as (a: Integer) => *{ get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/alias must be 'Widget!'/);
-    expect(() => compileSource('use Widget! = "w.bv" as (a: Integer) -> *{ get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/can't carry '!'/);
+    expect(() => compileSource('use Widget = "w.bv" as *(a: Integer) => { get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/alias must be 'Widget!'/);
+    expect(() => compileSource('use Widget! = "w.bv" as *(a: Integer) -> { get () -> (n: Integer) }\n@go = { return 1 }\n')).toThrow(/can't carry '!'/);
   });
 });
 
 describe('a fresh actor writes only itself — validation', () => {
-  const SVC = 'use Svc = "svc.bv" as {\n  ping! () => self\n  Thing () -> *{ poke! () => self }\n}\n';
+  const SVC = 'use Svc = "svc.bv" as {\n  ping! () => self\n  Thing *() -> { poke! () => self }\n}\n';
   const W = (body) => `${SVC}W = *{\n  n *Integer = 0\n  @hit! = { ${body} }\n}\n`;
 
   it('a call that writes only the fresh actor isn\'t a write', () => {
@@ -1722,7 +1722,7 @@ describe('chained calls', () => {
 
 describe('chained calls through a remote', () => {
   const source = `
-    use Thing = "thing.bv" as (a: Integer) -> *{
+    use Thing = "thing.bv" as *(a: Integer) -> {
       inc! (Integer) => self
       total () -> (value: Integer)
     }

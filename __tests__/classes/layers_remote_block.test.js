@@ -1,7 +1,7 @@
 import { createActor, expectActorBehavior, runActors } from '../helpers.js';
 import { extract } from '../../index.js';
 
-// A parent class in another file with a class block of its own (`T = (…) *{ … } ^ { … }`).
+// A parent class in another file with a class block of its own (`T = *(…) { … } ^ { … }`).
 // The child class has a class block too, empty if it writes none, whose base is the
 // parent's block: its `$extend` there speaks for the class, carrying the `instance`
 // section, and the parent class builds a layer only for an actor under a block it
@@ -37,7 +37,7 @@ const DOC = {
 
 const child = `
   use :T = "svc"
-  @U = T ^ (k Integer) *{
+  @U = T ^ *(k Integer) {
     super(n: k)
     step = () -> 10
   }
@@ -72,7 +72,7 @@ describe('the child of a parent class with a block, in another file', () => {
 });
 
 const parent = `
-  @T = (@n: Integer) *{
+  @T = *(@n: Integer) {
     count *Integer = n
     step = () -> 1
     @get = { x Integer = count + step(); return x }

@@ -45,7 +45,7 @@ function renderParamsKey(key) {
 function dependencyTypeText(dep, aliases) {
   if (dep.constructorParams) {
     const params = dep.constructorParams.map(p => formatParam(p, aliases)).join(', ');
-    return `(${params}) -> *${dep.interface || '{}'}`;
+    return `*(${params}) -> ${dep.interface || '{}'}`;
   }
   return dep.interface || null;
 }

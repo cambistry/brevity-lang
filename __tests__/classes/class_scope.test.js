@@ -27,7 +27,7 @@ const script = `
     @pubFn = () -> 10
     protFn = () -> 20
 
-    new = (seed Integer) *{
+    new = *(seed Integer) {
       built Integer = @Nested.pub + seed
       @built = { return built }
       @rPub = { return @Nested.pub }
@@ -57,7 +57,7 @@ const script = `
     }
   }
 
-  @Trailing = (seed Integer) *{
+  @Trailing = *(seed Integer) {
     built Integer = @Trailing.pub + seed
     @built = { return built }
     @rPub = { return @Trailing.pub }
@@ -82,7 +82,7 @@ const script = `
     protFn = () -> 20
   }
 
-  @Setter! = (seed Integer) *{
+  @Setter! = *(seed Integer) {
     @Setter.pub <- seed
   } ^ {
     @pub *Integer = 0
@@ -236,7 +236,7 @@ describe('class scope — a public cell written through the class, and every act
 
   it('from the constructor block, without the `!`, is an error', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         C.pub <- seed
       } ^ { @pub *Integer = 0 }
       @go = () -> 1
@@ -298,21 +298,21 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare public cell, from a method', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return @pub } } ^ { @pub *Integer = 1 }
+      C = *(seed Integer) { @r = { return @pub } } ^ { @pub *Integer = 1 }
       @go = () -> 1
     `)).toThrow(/'@pub' is a member of the class 'C', and a trailing constructor doesn't close over its class block: reach it as 'C\.pub'/);
   });
 
   it('a bare protected cell, from a method', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return prot } } ^ { prot *Integer = 1 }
+      C = *(seed Integer) { @r = { return prot } } ^ { prot *Integer = 1 }
       @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
   it('a bare public function', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         x Integer = @pubFn()
         return x
       } } ^ { @pubFn = () -> 10 }
@@ -322,7 +322,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare protected function', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         x Integer = protFn()
         return x
       } } ^ { protFn = () -> 20 }
@@ -332,7 +332,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare private function', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         x Integer = #priv()
         return x
       } } ^ { #priv = () -> 3 }
@@ -342,14 +342,14 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare write, from a method', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @w! = { prot <- 2 } } ^ { prot *Integer = 1 }
+      C = *(seed Integer) { @w! = { prot <- 2 } } ^ { prot *Integer = 1 }
       @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
   it('a bare name in a closure in a method', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         f = () -> prot
         x Integer = f()
         return x
@@ -360,7 +360,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare read in the constructor block', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         n Integer = prot + seed
       } ^ { prot *Integer = 1 }
       @go = () -> 1
@@ -369,7 +369,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare write of a protected cell in the constructor block', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         prot <- seed
       } ^ { prot *Integer = 1 }
       @go = () -> 1
@@ -378,7 +378,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a bare write of a public cell in the constructor block', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         @pub <- seed
       } ^ { @pub *Integer = 1 }
       @go = () -> 1
@@ -387,7 +387,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 
   it('a write in the constructor block to a name nobody declares is still the usual error', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         nope <- seed
       }
       @go = () -> 1
@@ -398,7 +398,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
 describe('class scope — only public members after a dot', () => {
   it('a protected cell', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return C.prot } } ^ { prot *Integer = 1 }
+      C = *(seed Integer) { @r = { return C.prot } } ^ { prot *Integer = 1 }
     `)).toThrow(/^No public member 'prot' in 'C'$/);
   });
 
@@ -406,20 +406,20 @@ describe('class scope — only public members after a dot', () => {
     expect(() => compileSource(`
       C = actor {
         prot *Integer = 1
-        new = (seed Integer) *{ @r = { return C.prot } }
+        new = *(seed Integer) { @r = { return C.prot } }
       }
     `)).toThrow(/^No public member 'prot' in 'C'$/);
   });
 
   it('a write to a protected cell', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @w! = { C.prot <- 1 } } ^ { prot *Integer = 1 }
+      C = *(seed Integer) { @w! = { C.prot <- 1 } } ^ { prot *Integer = 1 }
     `)).toThrow(/^No public member 'prot' in 'C'$/);
   });
 
   it('a protected function', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         x Integer = C.protFn()
         return x
       } } ^ { protFn = () -> 20 }
@@ -428,7 +428,7 @@ describe('class scope — only public members after a dot', () => {
 
   it('a private function, named without its sigil', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = {
+      C = *(seed Integer) { @r = {
         x Integer = C.priv()
         return x
       } } ^ { #priv = () -> 3 }
@@ -437,13 +437,13 @@ describe('class scope — only public members after a dot', () => {
 
   it('a member the class doesn\'t declare', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return C.nope } } ^ { @pub *Integer = 1 }
+      C = *(seed Integer) { @r = { return C.nope } } ^ { @pub *Integer = 1 }
     `)).toThrow(/^No public member 'nope' in 'C'$/);
   });
 
   it('a write to a member the class doesn\'t declare', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @w! = { C.nope <- 1 } } ^ { @pub *Integer = 1 }
+      C = *(seed Integer) { @w! = { C.nope <- 1 } } ^ { @pub *Integer = 1 }
     `)).toThrow(/^No public member 'nope' in 'C'$/);
   });
 });
@@ -451,7 +451,7 @@ describe('class scope — only public members after a dot', () => {
 describe('class scope — sigils after a dot', () => {
   it('`~` is a syntax error', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ @r = { return C.~prot } } ^ { prot *Integer = 1 }
+      C = *(seed Integer) { @r = { return C.~prot } } ^ { prot *Integer = 1 }
     `)).toThrow(/^Unexpected '~' \(line 2\)$/);
   });
 

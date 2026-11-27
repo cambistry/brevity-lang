@@ -65,7 +65,7 @@ count *Integer = 0
 `Box` is an actor whose `new` builds actors; the ones it builds are of class `Box`.
 
 ```brevity
-Box = (seed Integer) *{
+Box = *(seed Integer) {
   value *Integer = seed
 
   @get = () -> value: value
@@ -85,18 +85,18 @@ tagged `*` on the wire; one a `new` built is tagged with its maker (`:Box`).
   return j
 }
 echo = (k Actor) -> k
-make = (k (seed Integer) -> *{ get () -> (value: Integer) }) -> k(1)  // its constructor profile
+make = (k *(seed Integer) -> { get () -> (value: Integer) }) -> k(1)  // its constructor profile
 ```
 
 ## Composition (`^`)
 
 ```brevity
-Tagged = Box ^ (value Integer, tag: Text) *{         // parent, then its own params
+Tagged = Box ^ *(value Integer, tag: Text) {         // parent, then its own params
   super(value)                                       // Box's constructor runs here
   @tag = () -> tag: tag
 }
-Same = Box ^ (value Integer) *{ super }              // the args as received; super() passes none
-Both = A ^ B ^ (n Integer) *{ super[A](); super[B]() }  // several parents; later wins
+Same = Box ^ *(value Integer) { super }              // the args as received; super() passes none
+Both = A ^ B ^ *(n Integer) { super[A](); super[B]() }  // several parents; later wins
 Plain = Box^                                         // a new actor with a `new`, no changes
 Mixed = A ^ B                                        // two parents, no changes
 Extra = Box ^ *{ @more = () -> 1 }                      // body, no params
@@ -105,7 +105,7 @@ Again = Box ^ *{ h = (n Integer) -> super * 10 }     // in h, super is base::h(n
 Blocked = Box ^ { @f = { x Integer = super + 1; return x } }  // a block extends the parent's block: super is its f
 Up = Box ^ *{ @g = () -> class::base::h() }              // the running class's parent's class-block h
 Pick = A ^ B ^ *{ @get = () -> base[A].get() }          // parent A's public @get
-Counted = (n Integer) *{} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
+Counted = *(n Integer) {} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
 Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor` only begins a definition
 ```
 
@@ -176,7 +176,7 @@ use Log = "/services/log" as {
 ## Remote Actor
 
 ```brevity
-use WebView = "WebView" as (path: Text) -> *{
+use WebView = "WebView" as *(path: Text) -> {
   open. () => .
 }
 

@@ -183,7 +183,7 @@ describe('ref — runtime', () => {
         return result: v as Integer
 
     // ref — public refs initialized from class param
-      C7 = (x: Integer) *{ @x *Integer = x }
+      C7 = *(x: Integer) { @x *Integer = x }
 
       @fromParam
         =

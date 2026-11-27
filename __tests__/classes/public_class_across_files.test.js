@@ -13,7 +13,7 @@ const SVC = `
 
   type Point(x: Integer)
 
-  @Counter = (start Integer, step: Integer) *{
+  @Counter = *(start Integer, step: Integer) {
     n *Integer = start
     @get = { return n }
     @inc! = { n <- n + step }
@@ -302,7 +302,7 @@ describe('a new actor used in place', () => {
 describe('constructing and messaging a dependency', () => {
   it('a declared constructor can be constructed', () => {
     expect(() => compileSource(`
-      use Svc = "svc.bv" as () -> *{ get () -> (Integer) }
+      use Svc = "svc.bv" as *() -> { get () -> (Integer) }
       @go = {
         s = Svc()
         v Integer = s.get()
@@ -635,7 +635,7 @@ describe('end to end: type values cross to and from a class in another file', ()
       @pair = { return (p: Point(1, y: 2), n: 1) }
     }
 
-    @Holder = (p Point) *{
+    @Holder = *(p Point) {
       @y = { return p.y }
     }
   `;

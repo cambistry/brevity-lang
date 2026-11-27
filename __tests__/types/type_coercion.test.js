@@ -8,7 +8,7 @@ describe('type coercion — runtime', () => {
     use Store = "/services/store" as {
       ping. () => .
     } | Integer | Text
-    use Service = "service.bv" as () -> *{
+    use Service = "service.bv" as *() -> {
       ping. () => .
     } | Integer | Text
     use Svc = "/s" as {
@@ -55,7 +55,7 @@ describe('type coercion — runtime', () => {
       @ping = () -> pong: "ok"
     }
 
-    Liar = (v Anything) *{
+    Liar = *(v Anything) {
       self as Integer = () -> v
     }
 
@@ -669,7 +669,7 @@ describe('type coercion — documents supplied through options.remotes', () => {
 describe('type coercion — class ref constructed at the top level', () => {
   it('declared in the header', async () => {
     const actor = await createActor(`
-      use Service = "service.bv" as () -> *{
+      use Service = "service.bv" as *() -> {
         ping. () => .
       } | Integer
 
@@ -738,7 +738,7 @@ describe('type coercion — compile errors when the document lacks the as type',
 
   it('class ref, declared in the header', () => {
     expect(() => compileSource(`
-      use Service = "service.bv" as () -> *{
+      use Service = "service.bv" as *() -> {
         ping. () => .
       }
       ${service}
@@ -780,7 +780,7 @@ describe('as — provably wrong is a compile error', () => {
   });
 
   it.each([
-    ['a path as a constructor profile', 'Thing = "thing.bv" as (a: Integer) -> *{ get () -> (Integer) }', 'Text'],
+    ['a path as a constructor profile', 'Thing = "thing.bv" as *(a: Integer) -> { get () -> (Integer) }', 'Text'],
     ['a number as an interface', 'Thing = 5 as { get () -> (Integer) }', 'Integer'],
     ['a list as an interface', 'Thing = [1] as { get () -> (Integer) }', 'List of Integers'],
     ['a Type as an interface', 'Thing = Point(x: 1, y: 2) as { get () -> (Integer) }', 'Point'],

@@ -45,7 +45,7 @@ describe('a read before its declaration — validation', () => {
   });
 
   it("a cell passed to a child's constructor", () => {
-    expect(() => compileSource('Child = (t Integer) *{\n  @seen = () -> t\n}\nkid = Child(total)\ntotal *Integer = 0\n@v = () -> 1\n'))
+    expect(() => compileSource('Child = *(t Integer) {\n  @seen = () -> t\n}\nkid = Child(total)\ntotal *Integer = 0\n@v = () -> 1\n'))
       .toThrow(/'total' is read before its declaration \(by 'kid'\)/);
   });
 
@@ -100,7 +100,7 @@ describe('a class constructed before a cell its construction reads — validatio
   });
 
   it("its arguments are read on the spot", () => {
-    expect(() => compileSource('W = (n Integer) *{\n  s Integer = total + n\n  @s = () -> s\n}\nkid = W(late)\ntotal *Integer = 4\nlate *Integer = 1\n@v = () -> 1\n'))
+    expect(() => compileSource('W = *(n Integer) {\n  s Integer = total + n\n  @s = () -> s\n}\nkid = W(late)\ntotal *Integer = 4\nlate *Integer = 1\n@v = () -> 1\n'))
       .toThrow(/'late' is read before its declaration \(by 'kid'\)/);
   });
 });

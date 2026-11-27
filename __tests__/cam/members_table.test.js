@@ -104,7 +104,7 @@ describe('a function', () => {
 
 describe('a prop', () => {
   const script = `
-    @Box = (@start Integer) *{}
+    @Box = *(@start Integer) {}
   `;
 
   const made = [

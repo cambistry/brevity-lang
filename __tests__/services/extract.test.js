@@ -22,7 +22,7 @@ describe('extract — basic', () => {
 // in declaration order, as `( … )`: the caller-facing side of the header.
 //
 //   "path": { iface }              — service dependency, inline interface
-//   "path": (…) -> *{ iface }      — class dependency, inline profile
+//   "path": *(…) -> { iface }      — class dependency, inline profile
 //   "path": #                      — class dependency, profile from the remote
 //   "path":                        — dependency, type from the remote
 //   "name": Type                   — named scalar param
@@ -55,13 +55,13 @@ describe('extract — params rendering', () => {
 
   it('class DI with an inline profile renders the profile', () => {
     const { interface: iface } = extract(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
 
       t = Thing(a: 5)
 
       @go = { :value Integer = t.get(); return :value }
     `);
-    expect(iface.params).toBe('(\n  "thing.bv": (a: Integer) -> *{\n    get () -> (value: Integer)\n  }\n)');
+    expect(iface.params).toBe('(\n  "thing.bv": *(a: Integer) -> {\n    get () -> (value: Integer)\n  }\n)');
   });
 
   it('an unclaimed dependency renders with no type — its type is its document', () => {
@@ -177,7 +177,7 @@ describe('extract — basic (continued)', () => {
 
   it('class appears in interface', () => {
     const { interface: iface } = extract(`
-      @Box = (value: Integer) *{
+      @Box = *(value: Integer) {
         @get = () -> value
       }
     `);
@@ -294,7 +294,7 @@ describe('extract + compile — optional args round-trip', () => {
 
   it('class with optional param in interface', () => {
     const { interface: ifaceA } = extract(`
-      @Counter = (start Integer = 0) *{
+      @Counter = *(start Integer = 0) {
         @get = () -> value: start
       }
     `);
@@ -331,13 +331,13 @@ describe('params document — read back as constructor params', () => {
   it('reads past multi-line dependency entries', () => {
     const typed = extract(`
       use DB = "/db" as { get (key: Text) -> (value: Text) }
-      use Lib = "lib.bv" as (a: Integer, b: Text) -> *{ ping. () => . }
+      use Lib = "lib.bv" as *(a: Integer, b: Text) -> { ping. () => . }
       use lim Integer = limit
       @noop. = {}
     `).interface;
     expect(typed.params).toBe(
       '(\n  "/db": {\n    get (key: Text) -> (value: Text)\n  }\n' +
-      '  "lib.bv": (a: Integer, b: Text) -> *{\n    ping. () => .\n  }\n  "limit": Integer\n)',
+      '  "lib.bv": *(a: Integer, b: Text) -> {\n    ping. () => .\n  }\n  "limit": Integer\n)',
     );
     const typedRemotes = [{ path: 'svc.bv', params: typed.params, service: typed.service }];
     expect(() => compile(consumer('Svc(limit: 3)'), { remotes: typedRemotes })).not.toThrow();

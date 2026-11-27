@@ -21,7 +21,7 @@ const isActorKw = (t) => t?.type === 'IDENT' && t.value === 'actor';
 // DI is declared with `use` (notes/use-di-2026-11-17.md).
 const USE_INNER_MSG = "'use' is a statement on a line of its own — in an expression, write 'use(\"…\")'";
 const WHOLE_FILE_ACTOR_MSG = "a whole-file 'actor { … }' must open the file — an inline singleton is named: 'name = actor { … }'";
-const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = (params) *{ … }' makes it a class";
+const NEW_RESERVED_MSG = "'new' is reserved: in a singleton, 'new = *(params) { … }' makes it a class";
 import { TEXT_METHODS, BLOB_METHODS, GRAPHEME_TEXT_METHODS } from './text_methods.js';
 import { LIST_METHODS } from './list_methods.js';
 import { MATH_METHODS } from './math_methods.js';
@@ -186,7 +186,7 @@ function parseProgram(tokensIn, options) {
   }
   // After a class, `^` takes a layer.
   const bad = seen.find(c => c.notLayer && classes.has(bare(c.head)));
-  if (bad) throw new Error(`In '${bad.name.replace(/^@/, '')}', '${bare(bad.head)}' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')`);
+  if (bad) throw new Error(`In '${bad.name.replace(/^@/, '')}', '${bare(bad.head)}' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '*(params) { … }') or a singleton ('{ … }')`);
   if (!seen.some(c => !c.notLayer)) return first;
   return parseOnce(tokensIn, { ...options, nameChains: { compose } });
 }
@@ -576,7 +576,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // A layer of a `^` chain at token `i` (notes/caret-composition-2026-11-19.md), and
   // the index past it, or null:
   //   parent       `T`, `@T`
-  //   constructor  `*{ … }`, `(params) *{ … }`, `-> *{ … }`
+  //   constructor  `*{ … }`, `*(params) { … }`, `*(params) -> { … }`
   //   singleton    `{ … }`
   //   head         `actor { … }`, a singleton as the first layer only
   const layerAt = (i) => {
@@ -586,12 +586,16 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const t = tokens[i]?.type;
     if (t === 'LBRACE') { const end = braceGroupEnd(i); return end < 0 ? null : { kind: 'singleton', end }; }
     if ((t === 'STAR' && tokens[i + 1]?.type === 'LBRACE') || isDelimitedClassStart(i)) {
-      let j = i;
-      while (j < tokens.length && !(tokens[j].type === 'STAR' && tokens[j + 1]?.type === 'LBRACE')) {
-        if (tokens[j].type === 'LPAREN') { let depth = 0; for (; j < tokens.length; j++) { if (tokens[j].type === 'LPAREN') depth++; else if (tokens[j].type === 'RPAREN' && --depth === 0) break; } }
-        j++;
+      // `*{ … }`, or `*( … ) [->] { … }`: the body's `{` follows the params.
+      let j = i + 1;
+      if (tokens[j]?.type === 'LPAREN') {
+        for (let depth = 0; j < tokens.length; j++) {
+          if (tokens[j].type === 'LPAREN') depth++;
+          else if (tokens[j].type === 'RPAREN' && --depth === 0) { j++; break; }
+        }
+        if (tokens[j]?.type === '->') j++;
       }
-      const end = braceGroupEnd(j + 1);
+      const end = braceGroupEnd(j);
       return end < 0 ? null : { kind: 'constructor', end };
     }
     return null;
@@ -646,8 +650,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // most one singleton, the class's members block.
   //   A ^ B                       parents only — a new class, no changes
   //   C^                          one parent
-  //   C ^ (params) *{ body }      parents, then a constructor
-  //   (params) *{ body } ^ { … }  a constructor, then its singleton
+  //   C ^ *(params) { body }      parents, then a constructor
+  //   *(params) { body } ^ { … }  a constructor, then its singleton
   //   actor { … } ^ *{ body }     a singleton head, then a constructor
   function parseComposition(op) {
     const at = pos;
@@ -665,7 +669,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         supertypes.push({ supertype: sigil + expect('IDENT').value });
       } else if (layer.kind === 'constructor') {
         if (nested) throw new Error(`In '${op}', a class has one constructor layer`);
-        if (peek().type === 'STAR') {
+        if (peek().type === 'STAR' && tokens[pos + 1]?.type === 'LBRACE') {
           take(); // *
           nested = parseConstructorBody(op, false);
         } else {
@@ -737,7 +741,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // The type grammar builds a type tree (src/type_tree.js); `parseType` gives its
   // text, which the AST holds for now.
   function parseAtomicType(inOf = false) {
-    if (peek().type === 'LPAREN') {
+    if (peek().type === 'LPAREN' || ctorProfileAhead(pos)) {
       return parseParenType();
     }
     // A public class is `@Name` as a type too.
@@ -837,7 +841,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   }
 
   function parseParenType() {
-    // A constructor profile, `(params) -> *{ iface }`: the type of an actor with a
+    // A constructor profile, `*(params) -> { iface }`: the type of an actor with a
     // `new` (notes/actors-not-classes-2026-11-18.md).
     if (ctorProfileAhead(pos)) {
       const savedArrow = ctorArrow;
@@ -1324,14 +1328,14 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
 
   // Constructor profile in a coercion or file-header dependency:
   //   (params) [->] *{ iface }
-  // `ctorProfileAhead` checks (without consuming) that the LPAREN at `p` opens
-  // one: its matching RPAREN is followed, across newlines, by an optional
-  // `->` and then `*{`. `parseCtorProfileParams` consumes `(params) [->] *`
-  // and leaves the parser at the `{`.
+  // `ctorProfileAhead` checks (without consuming) that the `*` at `p` opens one:
+  // `*(`, its matching `)`, then, across newlines, an optional `->` and `{`.
+  // `parseCtorProfileParams` consumes `*(params) [->]` and leaves the parser at
+  // the `{`.
   function ctorProfileAhead(p) {
-    if (tokens[p]?.type !== 'LPAREN') return false;
+    if (tokens[p]?.type !== 'STAR' || tokens[p + 1]?.type !== 'LPAREN') return false;
     let depth = 0;
-    let i = p;
+    let i = p + 1;
     for (; i < tokens.length; i++) {
       const t = tokens[i].type;
       if (t === 'LPAREN') depth++;
@@ -1341,9 +1345,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     i++;
     while (tokens[i]?.type === 'NEWLINE') i++;
     if (tokens[i]?.type === '->') { i++; while (tokens[i]?.type === 'NEWLINE') i++; }
-    return tokens[i]?.type === 'STAR' && tokens[i + 1]?.type === 'LBRACE';
+    return tokens[i]?.type === 'LBRACE';
   }
   function parseCtorProfileParams(where) {
+    expect('STAR');
     expect('LPAREN');
     skipNewlines();
     const ctorParams = [];
@@ -1359,10 +1364,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     expect('RPAREN');
     skipNewlines();
     if (peek().type === '->') { inSignature++; ctorArrow = take().value; inSignature--; skipNewlines(); }
-    if (peek().type !== 'STAR' || tokens[pos + 1]?.type !== 'LBRACE') {
-      throw new Error(`Expected '*{ ... }' service interface after constructor params ${where}`);
+    if (peek().type !== 'LBRACE') {
+      throw new Error(`Expected '{ ... }' service interface after constructor params ${where}`);
     }
-    take(); // *
     return ctorParams;
   }
 
@@ -3761,6 +3765,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // after parsing: see resolveLoneNames)
         return withDefault({ name: first, type: take().value, typeOrLocal: true }, tryParseDefault());
       }
+      if (ctorProfileAhead(pos)) {
+        // name: *(params) -> { iface } — typed by a constructor profile, not a cell
+        return withDefault({ name: first, type: parseType() }, tryParseDefault());
+      }
       if (peek().type === 'STAR' && tokens[pos + 1]?.type !== 'IDENT') {
         // name: * — named ref param (wildcard, no explicit type)
         take();
@@ -3788,6 +3796,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       return withDefault({ name: first, type }, tryParseDefault());
     } else if (peek().type === 'IDENT') {
       const name = take().value;
+      // *(params) -> { iface } — typed by a constructor profile, not a cell
+      if (ctorProfileAhead(pos)) {
+        return withDefault({ name, type: parseType(), positional: true }, tryParseDefault());
+      }
       // *Type — positional ref param with explicit type; * alone — any type
       if (peek().type === 'STAR') {
         take(); // *
@@ -4395,7 +4407,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         return AST.functionDecl('@' + op, cParams, [], { overloadMode, actorDef: actorNode });
       }
       const classNode = AST.actor('@' + op, { ...actorNode, overloadMode });
-      // Its singleton layer: `@C = (params) *{ … } ^ { members }`.
+      // Its singleton layer: `@C = *(params) { … } ^ { members }`.
       if (members) {
         classNode.membersClass = members.actor.name;
         if (constructorBody) constructorBody.push(AST.typedAssign(members.cell, null, AST.functionCallExpr(AST.identifier(members.actor.name), [])));
@@ -4627,7 +4639,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return constraint;
   }
 
-  // ── Constructor `(params) *{...}` form helpers ─────────────────────────────
+  // ── Constructor `*(params) {...}` form helpers ─────────────────────────────
   // Parse a constructor's `(params)`; caller has consumed `(`. Consumes through `)`.
   // A constructor's params are a function's, and a param may also be an
   // actor reference given its interface: `name { @method: … }`.
@@ -4801,41 +4813,34 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return { actor, cell: `${base}__class` };
   }
 
-  // `(params) [->] *{` or `[->] *{` at token index `i` — a delimited class
-  // header. Spaces are allowed around `*`; `*` directly before `{` after a
-  // param list is never multiplication.
+  // `*(params) [->] {` at token index `i` — a delimited class header. After `=`,
+  // `^` or `<<`, a `*` can't be multiplication.
   function isDelimitedClassStart(i = pos) {
-    let j = i;
-    if (tokens[j]?.type === 'LPAREN') {
-      let depth = 0;
-      for (; j < tokens.length; j++) {
-        const t = tokens[j].type;
-        if (t === 'LPAREN') depth++;
-        else if (t === 'RPAREN' && --depth === 0) { j++; break; }
-        else if (t === 'EOF') return false;
-      }
-    } else if (tokens[j]?.type !== '->') {
-      return false;
+    if (tokens[i]?.type !== 'STAR' || tokens[i + 1]?.type !== 'LPAREN') return false;
+    let j = i + 1;
+    let depth = 0;
+    for (; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LPAREN') depth++;
+      else if (t === 'RPAREN' && --depth === 0) { j++; break; }
+      else if (t === 'EOF') return false;
     }
     if (tokens[j]?.type === '->') j++;
-    return tokens[j]?.type === 'STAR' && tokens[j + 1]?.type === 'LBRACE';
+    return tokens[j]?.type === 'LBRACE';
   }
 
-  // Parse `(params) [->] *{ body }` / `[->] *{ body }` (see isDelimitedClassStart).
+  // Parse `*(params) [->] { body }` (see isDelimitedClassStart).
   function parseDelimitedClass(op) {
-    let params = [];
-    if (peek().type === 'LPAREN') {
-      take();
-      params = parseConstructorParenParams();
-      if (peek().type === '->') take(); // the optional arrow after params
-    }
     expect('STAR');
+    expect('LPAREN');
+    const params = parseConstructorParenParams();
+    if (peek().type === '->') take(); // the optional arrow after params
     const nested = parseConstructorBody(op, false);
     return { params, supertypes: [], nested };
   }
 
   // Dispatch after a `*` that opens a constructor. Caller has consumed `*`.
-  // (`(params) *{ body }` goes through parseDelimitedClass instead.)
+  // (`*(params) { body }` goes through parseDelimitedClass instead.)
   //   * { body }                                  — no params, delimited body
   //   *\n params\n *\n body                       — lineal header
   //   *\n body                                     — lineal, no params
@@ -4911,7 +4916,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         else parseUse();
         continue;
       }
-      // `new = (params) *{ … }` in a singleton makes it a class; `new` is reserved
+      // `new = *(params) { … }` in a singleton makes it a class; `new` is reserved
       // for that (src/singleton_classes.js).
       if (peek().type === 'KEYWORD' && peek().value === 'new') {
         let k = pos + 1;
@@ -5293,7 +5298,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           // Enter when we see `*` reachable from `Name` via the optional `=` and
           // newlines, AND either (a) there was a newline along the way, or
           // (b) we're entering the no-`=` shorthand `Name *...` directly.
-          const canEnter = tokens[li]?.type === 'STAR' && (hasNewlineBeforeOpener || (!hasOpenEquals && li === pos));
+          const canEnter = tokens[li]?.type === 'STAR' && !isDelimitedClassStart(li) && (hasNewlineBeforeOpener || (!hasOpenEquals && li === pos));
           if (canEnter) {
             if (_identOverloadMode === 'create' && !hasOpenEquals) {
               throw new Error(`Constructor '${op}' requires '=' before '*' — write '${op} =', then '*' alone on the next line`);
@@ -5316,7 +5321,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // (newline means lineal form, handled in the else branch below)
         if (peek().type === 'EQUALS' || (_identOverloadMode !== 'create' && peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP')) {
           if (peek().type === 'EQUALS') take(); // eat the = (already consumed << or >> for overloads)
-          // Allow `= \n *...` / `= \n (params) *{` — the constructor may
+          // Allow `= \n *...` / `= \n *(params) {` — the constructor may
           // start on the line after the `=`.
           if (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') {
             let _li = pos;
@@ -5349,7 +5354,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           }
           // Constructor: name = (params) [->] *{ body } | name = [->] *{ body }
           //              name =\n*\n params\n*\n body (lineal)
-          // Composed:    name = T ^ (params) *{ ... } | name = A ^ B ^ (params) *{ ... }
+          // Composed:    name = T ^ *(params) { ... } | name = A ^ B ^ *(params) { ... }
           //              name = A ^ B | name = C^ | name = C ^ *{ ... } | ... ^ { members }
           const _isDelimitedClass = !_composes && isDelimitedClassStart();
           if (_composes || _isDelimitedClass || peek().type === 'STAR') {
@@ -5370,7 +5375,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
             } else {
               nestedActors.push(AST.actor(op, { ...actorNode2, overloadMode: _identOverloadMode }));
               if (_chain?.namesOnly) Object.defineProperty(nestedActors[nestedActors.length - 1], 'nameChainAt', { value: _at });
-              // Its singleton layer: `C = (params) *{ … } ^ { members }`.
+              // Its singleton layer: `C = *(params) { … } ^ { members }`.
               if (members) {
                 nestedActors.push(members.actor);
                 nestedActors[nestedActors.length - 2].membersClass = members.actor.name;
@@ -5744,7 +5749,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     let shape = null;
     const n = tokens[pos + 1];
     if (peek().type === 'KEYWORD' && peek().value === 'as' &&
-        (n?.type === 'HASH' || n?.type === 'LBRACE' || (n?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN') || (n?.type === 'LPAREN' && isCtorProfileAt(pos + 1)))) {
+        (n?.type === 'HASH' || n?.type === 'LBRACE' || (n?.type === 'STAR' && tokens[pos + 2]?.type === 'LPAREN'))) {
       shape = parseUseShape();
     }
     const node = { type: 'UseExpr', source, ...(shape && { shape }) };
@@ -5779,7 +5784,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         dependencies.push(dep);
         hidden.set(u.source, dep);
       }
-      if (u.shape?.valueType) throw new Error(`'${shown(u)} as ${u.shape.valueType}': a 'use(…)' is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
+      if (u.shape?.valueType) throw new Error(`'${shown(u)} as ${u.shape.valueType}': a 'use(…)' is an actor, claimed with '{ … }' or '*(…) -> { … }'`);
       const claim = claimOf(u.shape);
       if (Object.keys(claim).length > 0) {
         const has = dep.interface || dep.constructorParams;
@@ -5831,13 +5836,13 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
   }
 
-  // `as` on a source claims its shape: `#`, `{ iface }`, `(params) -> *{ iface }`,
+  // `as` on a source claims its shape: `#`, `{ iface }`, `*(params) -> { iface }`,
   // or a value's type.
   function parseUseShape() {
     if (!(peek().type === 'KEYWORD' && peek().value === 'as')) return null;
     take(); // as
     if (peek().type === 'LBRACE') return { interface: parseAsTypeSuffix(parseInlineIface()) };
-    if (peek().type === 'LPAREN' && isCtorProfileAt(pos)) {
+    if (ctorProfileAhead(pos)) {
       ctorArrow = '->';
       const constructorParams = parseCtorProfileParams(`in 'use'`);
       const iface = parseAsTypeSuffix(parseInlineIface());
@@ -5846,20 +5851,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return { valueType: parseUseType() };
   }
 
-  // `(params) [->] *{` — a constructor profile, not a function type.
-  function isCtorProfileAt(k) {
-    let depth = 0;
-    for (; k < tokens.length; k++) {
-      const t = tokens[k].type;
-      if (t === 'LPAREN') depth++;
-      else if (t === 'RPAREN' && --depth === 0) break;
-      else if (t === 'EOF') return false;
-    }
-    let j = k + 1;
-    while (tokens[j]?.type === 'NEWLINE') j++;
-    if (tokens[j]?.type === '->') { j++; while (tokens[j]?.type === 'NEWLINE') j++; }
-    return tokens[j]?.type === 'STAR';
-  }
   // A value's type: `Integer`, `*Integer`, `&Integer` (a cell's capability is
   // the host's to grant; the binding keeps the type).
   function parseUseType() {
@@ -5897,7 +5888,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const name = take().value;
     if (pos === eq) return { kind: 'name', name };
     if (peek().type === 'LBRACE' || peek().type === 'LPAREN') {
-      throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '(…) -> *{ … }'}'`);
+      throw new Error(`In '${shown()}', a shape is claimed on the source: 'use ${name} = … as ${peek().type === 'LBRACE' ? '{ … }' : '*(…) -> { … }'}'`);
     }
     const type = parseUseType();
     if (pos !== eq) throw new Error(`Unexpected ${peek().type} before '=' in '${shown()}'`);
@@ -5944,7 +5935,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const [head, member] = segs;
     if (target.kind === 'destructure') {
       if (member !== undefined) throw new Error(`'${shown}': a destructure from '${showSource(segs)}' isn't supported yet — destructure '${showSeg(head)}': 'use :${isBvName(member) ? member : nameFor(member)}, … = ${showSeg(head)}'`);
-      if (shape?.valueType) throw new Error(`'${shown}': a destructure's source is an actor, claimed with '{ … }' or '(…) -> *{ … }'`);
+      if (shape?.valueType) throw new Error(`'${shown}': a destructure's source is an actor, claimed with '{ … }' or '*(…) -> { … }'`);
       return { kind: 'destructure', head, entries: target.entries, shape };
     }
     if (target.type && shape) {
@@ -6123,7 +6114,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   }
 
   // ── File-level header entries ──────────────────────────────────────────
-  // Shared by the delimited `( ... ) *{` header and the lineal `*\n ... \n*`
+  // Shared by the delimited `*( ... ) {` header and the lineal `*\n ... \n*`
   // header. Parses entries until `isEnd()`, pushing service/constructor
   // dependencies and scalar file-params onto `dependencies`.
   const tokText = (tok) => {
@@ -6332,8 +6323,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         continue;
       }
       skipNewlines(); // # or { must be on the same line; skip remaining whitespace
-      // Alias (p: Type, ...) [->] *{ iface } — explicit constructor + service
-      if (peek().type === 'LPAREN') {
+      // Alias *(p: Type, ...) [->] { iface } — explicit constructor + service
+      if (ctorProfileAhead(pos)) {
         ctorArrow = '->';
         const ctorParams = parseCtorProfileParams(`for dependency '${alias}'`);
         let iface = parseInlineIface();
@@ -6348,7 +6339,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         dependencies.push(AST.dependency(alias, { interface: iface, path, destructures }));
         continue;
       }
-      throw new Error(`File-level dependency '${alias}' requires #, { iface }, or (ctor params) -> *{ iface }`);
+      throw new Error(`File-level dependency '${alias}' requires #, { iface }, or *(ctor params) -> { iface }`);
     }
   }
 
@@ -6397,12 +6388,13 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       return;
     }
     if (linealHeader) return; // lineal body: parsed by subsequent iterations
-    throw new Error(`file-level class header requires a body — use '( ... ) *{ ... }' or a lineal header`);
+    throw new Error(`file-level class header requires a body — use '*( ... ) { ... }' or a lineal header`);
   }
 
   if (typeOnly) {
     skipNewlines();
-    const star = peek().type === 'STAR' ? !!take() : false;
+    // A leading `*` marks a cell, unless it opens a constructor profile.
+    const star = peek().type === 'STAR' && !ctorProfileAhead(pos) ? !!take() : false;
     const node = peek().type === 'LBRACE' ? TT.iface(parseInlineIface())
       : peek().type === 'AMPERSAND_IDENT' ? TT.cell(consumeAmpersandTypeNode(), true)
       : star ? TT.cell(parseTypeNode())
@@ -6438,31 +6430,29 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
 
     // ── File-level constructor header — delimited ─────────────────────────
-    //   ( "/path": Alias ) *{ body }                  — service ref, fetched externally
-    //   ( "/path": Alias { iface } ) *{ body }        — service ref, inline interface
-    //   ( "/path": Alias (p: Type) -> *{ iface } ) *{ body } — inline manifest
-    //   ( name: Type ) -> *{ body }                     — optional arrow
-    // Told apart from a body statement that starts with `(` by looking ahead
-    // past the matching `)` for `[->] *{`.
-    if (peek().type === 'LPAREN' && isDelimitedClassStart()) {
+    //   *( "/path": Alias ) { body }                  — service ref, fetched externally
+    //   *( "/path": Alias { iface } ) { body }        — service ref, inline interface
+    //   *( "/path": Alias *(p: Type) -> { iface } ) { body } — inline manifest
+    //   *( name: Type ) -> { body }                     — optional arrow
+    if (isDelimitedClassStart()) {
       if (headerSeen) {
-        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single ( ... ) *{ ... } header`);
+        throw new Error(`Multiple constructor headers are not allowed — combine all dependencies into a single *( ... ) { ... } header`);
       }
       headerSeen = true;
       fileKind = 'factory';
+      take(); // *
       consume(); // (
       skipNewlines();
       parseFileHeaderEntries(() => peek().type === 'RPAREN');
       expect('RPAREN');
       if (peek().type === '->') take();
-      expect('STAR');
       parseFileHeaderBody(false);
       continue;
     }
 
     // ── File-level class header — lineal form ──────────────────────────────
     //   *\n entries\n *\n body        — entries one per line (same entry
-    //   *\n entries\n * { body }        grammar as `( ... ) *{`); body is the
+    //   *\n entries\n * { body }        grammar as `*( ... ) {`); body is the
     //   *\n body                        rest of the file, `{ ... }`, or the
     //   *\n { body }                    a body at `return`/`->`. Each `*` alone on its line
     //                                   (closing `*` may be followed by `{`).

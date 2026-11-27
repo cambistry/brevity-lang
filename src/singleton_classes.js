@@ -7,8 +7,8 @@ import { wireLabel as wireLabelOf } from './codegen/wire_labels.js';
 import { lowerActorValues } from './actor_values.js';
 // Class singletons: a class whose class block holds members of its own.
 //
-//   Nested:   C = actor { count *Integer = 0; new = (seed Integer) *{ … } }
-//   Layered:  C = (seed Integer) *{ … } ^ { count *Integer = 0 }
+//   Nested:   C = actor { count *Integer = 0; new = *(seed Integer) { … } }
+//   Layered:  C = *(seed Integer) { … } ^ { count *Integer = 0 }
 //
 // Either way the members are a singleton, kept in the declaring actor's cell
 // `C__class`, and `C` is an ordinary class of the declaring actor: `C()` builds
@@ -47,7 +47,7 @@ export function publicLabel(actor) {
   return actor?.publishedAs ? '@' + actor.publishedAs : null;
 }
 
-const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = (params) *{ … } }'";
+const NOT_IN_SINGLETON ="'new' makes a singleton a class, so it goes inside one: 'C = actor { … new = *(params) { … } }'";
 
 // An empty class block for \`a\`, as the parser makes one for \`^ { }\`: an actor, its
 // singleton, and the cell holding it in the actor \`a\` is declared in, built just
@@ -120,7 +120,7 @@ export function lowerSingletonClasses(actors, types = [], { fileKind = 'singleto
     return found[0] ?? null;
   };
   // A class with no class block of its own has an empty one, as if it wrote `^ { }`
-  // (`C = () *{}` makes an empty class singleton): notional, no actor, unless a parent
+  // (`C = *() {}` makes an empty class singleton): notional, no actor, unless a parent
   // has a block, which is then its base, here or in another file
   // (notes/implicit-class-block-2026-11-21.md).
   for (const a of actors.filter(a => a.name && (a.supertypes || []).length && !a.membersClass && !a.membersOf && !a.singletonOf && !a.remoteStub)) {

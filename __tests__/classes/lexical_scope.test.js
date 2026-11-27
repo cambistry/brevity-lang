@@ -178,12 +178,12 @@ const fileScript = `
     @s = () -> s
     @t = () -> t
   }
-  @P = (v Integer = @pg(0) + g(0) + #g(0)) *{
+  @P = *(v Integer = @pg(0) + g(0) + #g(0)) {
     @v = () -> v
   }
   // A class block's nested \`new\`: its constructor block, methods and closures.
   @B = actor {
-    new = () *{
+    new = *() {
       s Integer = @pc + c + k
       @s = () -> s
       @call = { x Integer = @pf() + f() + #f(); return x }
@@ -376,7 +376,7 @@ const classScript = `
       s Integer = @pc + c + k
       @s = () -> s
     }
-    P = (v Integer = @pg(0) + g(0) + #g(0)) *{
+    P = *(v Integer = @pg(0) + g(0) + #g(0)) {
       @value = () -> v
     }
     @viaRead = { d = D(); x Integer = d.read(); return x }
@@ -456,7 +456,7 @@ const blockScript = `
 
     @readC = { return c }
 
-    new = () *{
+    new = *() {
       s Integer = @pc + c + k
       @s = () -> s
       @read = () -> @pc + c + k
@@ -611,7 +611,7 @@ describe('a function body contains it', () => {
 describe('boundaries', () => {
   it('a trailing constructor doesn\'t close over its class block', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{
+      C = *(seed Integer) {
         @get = { return count }
       } ^ {
         count *Integer = 0
@@ -623,9 +623,9 @@ describe('boundaries', () => {
     expect(() => compileSource(`
       C = actor {
         count *Integer = 0
-        new = (seed Integer) *{ @x = () -> 1 }
+        new = *(seed Integer) { @x = () -> 1 }
       }
-      D = C ^ (n Integer) *{
+      D = C ^ *(n Integer) {
         super(n)
         @get = { return count }
       }
@@ -689,7 +689,7 @@ describe('boundaries — a name reused where it may be', () => {
     n Integer = 1
     m *Integer = 10
 
-    @C = (n Integer) *{
+    @C = *(n Integer) {
       @get = { return n }
     }
 

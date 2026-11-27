@@ -4,7 +4,7 @@ import { compileSource, createActor, expectActorBehavior } from "../helpers.js";
 // File-level scalar params
 //
 // Every Brevity file with a `*` header is a constructor. Its header can
-// declare plain scalar params (lineal `*` … `*`, or delimited `( ... ) *{ }`).
+// declare plain scalar params (lineal `*` … `*`, or delimited `*( ... ) { }`).
 // These are parameters the parent actor supplies at construction time (not DI
 // in the service/ctor sense). A file that also takes DI is a singleton: it
 // declares named params with `use name Type = name` beside its dependencies.
@@ -92,7 +92,7 @@ describe("file scalar params — compilation", () => {
   it("scalar params mixed with constructor DI in same header compile", () => {
     expect(() =>
       compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
       use start Integer = start
 
       t = Thing(a: start)

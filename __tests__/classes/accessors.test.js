@@ -14,28 +14,28 @@ import { expectBehavior, compileSource, createActor, expectActorBehavior } from 
 describe('published params — compilation', () => {
   it('positional and named params publish', () => {
     expect(() => compileSource(`
-      T = (@a Integer, @label: Text) *{ @x = () -> 1 }
+      T = *(@a Integer, @label: Text) { @x = () -> 1 }
       @test = { t = T(1, label: "x"); a Integer = t.a(); l Text = t.label(); return result: a }
     `)).not.toThrow();
   });
 
   it('an unpublished param has no accessor', () => {
     expect(() => compileSource(`
-      T = (a Integer) *{ @x = () -> 1 }
+      T = *(a Integer) { @x = () -> 1 }
       @test = { t = T(1); a Integer = t.a(); return result: a }
     `)).toThrow(/'T' has no method 'a'/);
   });
 
   it('an accessor reply is positional, not named', () => {
     expect(() => compileSource(`
-      T = (@a Integer) *{ @x = () -> 1 }
+      T = *(@a Integer) { @x = () -> 1 }
       @test = { t = T(1); :a Integer = t.a(); return result: a }
     `)).toThrow(/Cannot destructure 'a' from 't.a\(\)'.*write 'a Integer = t.a\(\)'/);
   });
 
   it('a published param and a handler cannot share a name', () => {
     expect(() => compileSource(`
-      T = (@val Integer) *{ @val = () -> result: 999 }
+      T = *(@val Integer) { @val = () -> result: 999 }
       @test = () -> 1
     `)).toThrow(/'@val' is both a published param and a handler of 'T'/);
   });
@@ -57,7 +57,7 @@ describe('published params — compilation', () => {
 describe('published params — service document', () => {
   it('lists published params as read-only fields', () => {
     const { interface: iface } = compileSource(`
-      @T = (@a Integer, @label: l Text, quiet: Text) *{ @x = () -> 1 }
+      @T = *(@a Integer, @label: l Text, quiet: Text) { @x = () -> 1 }
       @test = () -> 1
     `);
     expect(iface.service[':T']).toEqual({
@@ -93,15 +93,15 @@ describe('published params — service document', () => {
 
 describe('published params — runtime', () => {
   const script = `
-    T = (@a Integer, @b Integer = 99) *{
+    T = *(@a Integer, @b Integer = 99) {
       @sum = () -> result: (a + b)
     }
 
-    Named = (@label: l Text, quiet: Text) *{
+    Named = *(@label: l Text, quiet: Text) {
       @both = () -> result: l + quiet
     }
 
-    Renamed = (a Integer) *{
+    Renamed = *(a Integer) {
       @b = { a }
     }
 

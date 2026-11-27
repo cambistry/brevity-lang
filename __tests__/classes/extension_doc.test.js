@@ -12,7 +12,7 @@ import { documentShape } from '../../src/service_doc.js';
 describe('the extension section', () => {
   it("lists a block's protected functions and cells, never its private ones", () => {
     expect(extract(`
-      @A = (n Integer) *{
+      @A = *(n Integer) {
         @n = () -> n
       } ^ {
         count *Integer = 10
@@ -94,7 +94,7 @@ describe('the extension section', () => {
 
   it("lists a class's instances' protected functions and cells, never private ones", () => {
     expect(extract(`
-      @T = (@n: Integer) *{
+      @T = *(@n: Integer) {
         count *Integer = 0
         step = () -> 1
         @f = () -> 2
@@ -121,11 +121,11 @@ describe('the extension section', () => {
 
   it('a class that extends another presents the composite', () => {
     expect(extract(`
-      @T = (@n: Integer) *{
+      @T = *(@n: Integer) {
         count *Integer = 0
         step = () -> 1
       }
-      @U = @T ^ (k Integer) *{
+      @U = @T ^ *(k Integer) {
         super(n: k)
         j = () -> 5
       }

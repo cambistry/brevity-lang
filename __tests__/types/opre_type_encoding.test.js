@@ -115,7 +115,7 @@ describe('cells, interfaces and constructor profiles', () => {
   });
 
   it('nor is a constructor profile', () => {
-    expect(() => enc('(start: Integer) -> *{ get () -> (Integer) }')).toThrow("A constructor profile can't be a type here: '(start: Integer) -> *{ get () -> (Integer) }'");
+    expect(() => enc('*(start: Integer) -> { get () -> (Integer) }')).toThrow("A constructor profile can't be a type here: '*(start: Integer) -> { get () -> (Integer) }'");
   });
 });
 
@@ -135,17 +135,17 @@ describe('entry lists', () => {
   });
 
   it('params: positional by position, named by key, defaults optional', () => {
-    expect(params('(a Integer, b: Text, c: Boolean = true) -> *{}')).toEqual(['Integer', { b: 'Text', c: { '%opt': 'Boolean' } }]);
+    expect(params('*(a Integer, b: Text, c: Boolean = true) -> {}')).toEqual(['Integer', { b: 'Text', c: { '%opt': 'Boolean' } }]);
   });
 
   it('function-typed params', () => {
-    expect(params('(f (Integer) -> (Text), on: (Point) => .) -> *{}')).toEqual([
+    expect(params('*(f (Integer) -> (Text), on: (Point) => .) -> {}')).toEqual([
       { '%fn': [{ args: ['Integer'], re: ['Text'], writes: false }] },
       { on: { '%fn': [{ args: [':Point'], writes: true }] } },
     ]);
   });
 
   it('actor-typed params: a class, a service\'s class, a cell, a read-only cell', () => {
-    expect(params('(t T, c: Svc::C, n *Integer, r: &Text) -> *{}')).toEqual([':T', 'Integer', { c: 'svc.bv:C', r: 'Text' }]);
+    expect(params('*(t T, c: Svc::C, n *Integer, r: &Text) -> {}')).toEqual([':T', 'Integer', { c: 'svc.bv:C', r: 'Text' }]);
   });
 });

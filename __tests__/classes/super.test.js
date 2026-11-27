@@ -10,31 +10,31 @@ import { compileSource, expectBehavior } from '../helpers.js';
 //   super[A](…)   one of several parents (`super[@A]` for a public one)
 
 const constructors = `
-  @T = (n Integer = 7) *{
+  @T = *(n Integer = 7) {
     seen Integer = n
     @seen = { return seen }
   }
-  @Same = @T ^ (n Integer) *{ super(n) }
-  @Doubled = @T ^ (label Text, n Integer) *{
+  @Same = @T ^ *(n Integer) { super(n) }
+  @Doubled = @T ^ *(label Text, n Integer) {
     super(n * 2)
     @label = { return label }
     @own = { return n }
   }
-  @Bare = @T ^ (n Integer) *{ super }
-  @Defaulted = @T ^ (n Integer) *{ super() }
+  @Bare = @T ^ *(n Integer) { super }
+  @Defaulted = @T ^ *(n Integer) { super() }
 
-  @N = (a: Integer, b: Integer = 100) *{
+  @N = *(a: Integer, b: Integer = 100) {
     @sum = { return a + b }
   }
-  @NamedBare = @N ^ (a: Integer, b: Integer) *{ super }
-  @NamedSome = @N ^ (a: Integer) *{ super(a: a + 1) }
+  @NamedBare = @N ^ *(a: Integer, b: Integer) { super }
+  @NamedSome = @N ^ *(a: Integer) { super(a: a + 1) }
 
   @O = *{
     got Integer = probe()
     probe = () -> 0
     @got = { return got }
   }
-  @Ordered = @O ^ (k Integer) *{
+  @Ordered = @O ^ *(k Integer) {
     marker Integer = k
     super()
     after Integer = got + 1
@@ -42,9 +42,9 @@ const constructors = `
     @after = { return after }
   }
 
-  @A = (x Integer) *{ @x = { return x } }
-  @B = (y Integer) *{ @y = { return y } }
-  @AB = @A ^ @B ^ (n Integer) *{
+  @A = *(x Integer) { @x = { return x } }
+  @B = *(y Integer) { @y = { return y } }
+  @AB = @A ^ @B ^ *(n Integer) {
     super[@A](n)
     super[@B](n * 10)
   }
@@ -126,11 +126,11 @@ describe('super — in a constructor', () => {
 // built on the branch taken, at the call, so what follows it there reads the base.
 describe('super — in a constructor, on the branches of an if', () => {
   const script = `
-    @T = (n Integer) *{
+    @T = *(n Integer) {
       seen *Integer = n
       @n = () -> n
     }
-    @U = @T ^ (k Integer) *{
+    @U = @T ^ *(k Integer) {
       x Integer = if k > 0 {
         super(k * 10)
         seen + 1
@@ -140,7 +140,7 @@ describe('super — in a constructor, on the branches of an if', () => {
       }
       @x = () -> x
     }
-    @V = @T ^ (k Integer) *{
+    @V = @T ^ *(k Integer) {
       y *Integer = 0
       if k > 0 {
         super(k)
@@ -189,99 +189,99 @@ describe('super — in a constructor, on the branches of an if', () => {
 });
 
 describe('super — in a constructor — compile errors', () => {
-  const T = 'T = (n Integer = 7) *{\n  seen Integer = n\n  h = () -> n\n  @seen = { return seen }\n}\n';
+  const T = 'T = *(n Integer = 7) {\n  seen Integer = n\n  h = () -> n\n  @seen = { return seen }\n}\n';
   const AB = 'A = *{}\nB = *{}\n';
   const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it("a base name read before the super line", () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = seen + 1\n  super(n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = seen + 1\n  super(n)\n}\n`))
       .toThrow("'seen' in 'U' is the base's, read before 'super': the base is built at that line");
   });
 
   it("a base function called before the super line, or in its args", () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = h()\n  super(n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = h()\n  super(n)\n}\n`))
       .toThrow("'h' in 'U' is the base's, read before 'super'");
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(seen)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(seen)\n}\n`))
       .toThrow("'seen' in 'U' is the base's, read before 'super'");
   });
 
   it('called on one branch of an if', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    super(n)\n    1\n  } else {\n    2\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = if n > 0 {\n    super(n)\n    1\n  } else {\n    2\n  }\n}\n`))
       .toThrow("'super(…)' in 'U' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too");
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer | null = if n > 0 {\n    super(n)\n    1\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer | null = if n > 0 {\n    super(n)\n    1\n  }\n}\n`))
       .toThrow("needs an 'else' that calls it too");
   });
 
   it('on a branch, more than once or not as a statement of it', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    super(n)\n    super(n)\n    1\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = if n > 0 {\n    super(n)\n    super(n)\n    1\n  } else {\n    super(0)\n    2\n  }\n}\n`))
       .toThrow("'super(…)' in 'U': in an 'if', each branch calls 'super' once, as a statement of the branch");
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    y Integer = if n > 1 {\n      super(n)\n      1\n    } else {\n      super(1)\n      2\n    }\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = if n > 0 {\n    y Integer = if n > 1 {\n      super(n)\n      1\n    } else {\n      super(1)\n      2\n    }\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
       .toThrow("in an 'if', each branch calls 'super' once, as a statement of the branch");
   });
 
   it('a base name read on a branch above its super, or in the if\'s condition', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = if n > 0 {\n    y Integer = seen\n    super(n)\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  x Integer = if n > 0 {\n    y Integer = seen\n    super(n)\n    y\n  } else {\n    super(0)\n    2\n  }\n}\n`))
       .toThrow("'seen' in 'U' is the base's, read before 'super'");
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  if seen > 0 {\n    super(n)\n  } else {\n    super(0)\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  if seen > 0 {\n    super(n)\n  } else {\n    super(0)\n  }\n}\n`))
       .toThrow("'seen' in 'U' is the base's, read before 'super'");
   });
 
   it('in a loop', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  xs List of Integers = [1, 2]\n  ys List of Integers = over(xs) (x Integer) {\n    super(x)\n    x\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  xs List of Integers = [1, 2]\n  ys List of Integers = over(xs) (x Integer) {\n    super(x)\n    x\n  }\n}\n`))
       .toThrow("'super(…)' in 'U' runs once: it can't be in a loop or a function");
   });
 
   it('twice', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  super(n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(n)\n  super(n)\n}\n`))
       .toThrow("'super' in 'U' is called twice: the base is built once");
   });
 
   it("never, in a constructor of its own that doesn't define the parent's interface", () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  @x = () -> 1\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  @x = () -> 1\n}\n`))
       .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@seen' (0 args)");
   });
 
   it('bare super with two parents', () => {
-    expect(compile(`${AB}C = A ^ B ^ (n Integer) *{\n  super\n}\n`))
+    expect(compile(`${AB}C = A ^ B ^ *(n Integer) {\n  super\n}\n`))
       .toThrow("'super' in 'C' is ambiguous: 'C' has parents 'A' and 'B' — write 'super[A](…)' and 'super[B](…)'");
-    expect(compile(`${AB}C = A ^ B ^ (n Integer) *{\n  super()\n}\n`))
+    expect(compile(`${AB}C = A ^ B ^ *(n Integer) {\n  super()\n}\n`))
       .toThrow("'super(…)' in 'C' is ambiguous");
   });
 
   it('one of two parents never built, with no interface to define, is no base for it', () => {
-    expect(compile(`${AB}C = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n`)).not.toThrow();
+    expect(compile(`${AB}C = A ^ B ^ *(n Integer) {\n  super[A]()\n}\n`)).not.toThrow();
   });
 
   it('super[X] for a class that is not a parent', () => {
-    expect(compile(`${T}V = *{}\nU = T ^ (n Integer) *{\n  super[V](n)\n}\n`))
+    expect(compile(`${T}V = *{}\nU = T ^ *(n Integer) {\n  super[V](n)\n}\n`))
       .toThrow("'super[V](…)' in 'U': 'V' isn't a parent of 'U'");
   });
 
   it('in a class with no parent', () => {
-    expect(compile('V = (n Integer) *{\n  super(n)\n}\n'))
+    expect(compile('V = *(n Integer) {\n  super(n)\n}\n'))
       .toThrow("'super(…)' in 'V': 'super' builds the base, and 'V' has no parent");
   });
 
   it("args that don't fit the parent's params", () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n, n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(n, n)\n}\n`))
       .toThrow("'super(…)' in 'U': 'T' takes 1 positional arg, got 2");
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(m: n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(m: n)\n}\n`))
       .toThrow("'super(…)' in 'U': 'T' has no param 'm'");
-    expect(compile('S = (a Integer) *{}\nU = S ^ (n Integer) *{\n  super()\n}\n'))
+    expect(compile('S = *(a Integer) {}\nU = S ^ *(n Integer) {\n  super()\n}\n'))
       .toThrow("'super(…)' in 'U': 'S' takes 'a', which isn't passed");
-    expect(compile(`${T}U = T ^ (label Text, n Integer) *{\n  super\n}\n`))
+    expect(compile(`${T}U = T ^ *(label Text, n Integer) {\n  super\n}\n`))
       .toThrow("'super' in 'U' (its args as received): 'T' takes 1 positional arg, got 2");
   });
 
   it("an arg of the wrong type for the parent's param", () => {
-    expect(compile(`${T}U = T ^ (n Text) *{\n  super(n)\n}\n`))
+    expect(compile(`${T}U = T ^ *(n Text) {\n  super(n)\n}\n`))
       .toThrow("Cannot bind 'n Integer' to 'n', which is Text");
   });
 
   it('super stays reserved', () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super = 1\n}\n`)).toThrow('Unexpected token in expression: EQUALS');
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = () -> super.seen()\n}\n`)).toThrow('Unexpected token in expression: DOT');
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = () -> super::h()\n}\n`)).toThrow('Unexpected token in expression: DCOLON');
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super = 1\n}\n`)).toThrow('Unexpected token in expression: EQUALS');
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(n)\n  @x = () -> super.seen()\n}\n`)).toThrow('Unexpected token in expression: DOT');
+    expect(compile(`${T}U = T ^ *(n Integer) {\n  super(n)\n  @x = () -> super::h()\n}\n`)).toThrow('Unexpected token in expression: DCOLON');
   });
 });
 
@@ -427,7 +427,7 @@ describe('super — in a function — compile errors', () => {
 // there and its constructor doesn't run. It's legal only when the subclass defines
 // the parent's whole public interface, by name and arity.
 const noBase = `
-  @T = (n Integer) *{
+  @T = *(n Integer) {
     k Integer = 10 / n
     @total *Integer = 0
     @get = { return k }
@@ -435,7 +435,7 @@ const noBase = `
   } ^ {
     prot *Integer = 2
   }
-  @U = @T ^ (m Integer) *{
+  @U = @T ^ *(m Integer) {
     @total *Integer = m
     @get = { return m }
     @add = (x Integer) { y Integer = x + m; return y }
@@ -475,51 +475,51 @@ describe('super — never called: no base', () => {
 });
 
 describe('super — never called: no base — compile errors', () => {
-  const T = 'T = (n Integer) *{\n  count *Integer = n\n  @total *Integer = 0\n  h = () -> n + 1\n  @get = { return count }\n  @add = (x Integer) -> x + 1\n}\n';
+  const T = 'T = *(n Integer) {\n  count *Integer = n\n  @total *Integer = 0\n  h = () -> n + 1\n  @get = { return count }\n  @add = (x Integer) -> x + 1\n}\n';
   const full = '  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n';
   const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it('the whole public interface, defined, compiles', () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}}\n`)).not.toThrow();
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}}\n`)).not.toThrow();
   });
 
   it('a public function missing, or with another arity', () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n  @total *Integer = 5\n  @get = { return 1 }\n}\n`))
       .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@add' (1 arg)");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = () -> 2\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = () -> 2\n}\n`))
       .toThrow("missing: '@add' (1 arg)");
   });
 
   it('a public cell missing', () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n}\n`))
       .toThrow("missing: '@total' (a cell)");
   });
 
   it('per parent, when there are several', () => {
-    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n'))
+    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ *(n Integer) {\n  super[A]()\n}\n'))
       .toThrow("'C' never calls 'super[B](…)', so it has no base for 'B', and must define the whole public interface of 'B'; missing: '@b' (0 args)");
-    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n  @b = () -> 3\n}\n')).not.toThrow();
+    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ *(n Integer) {\n  super[A]()\n  @b = () -> 3\n}\n')).not.toThrow();
   });
 
   it("a protected name of the parent's that the subclass doesn't define", () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @p = { x Integer = h(); return x }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  @p = { x Integer = h(); return x }\n}\n`))
       .toThrow("'h' isn't in scope — it's 'T''s, and 'U' has no base for 'T' (it never calls 'super'): define it in 'U'");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @p = { return count }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  @p = { return count }\n}\n`))
       .toThrow("'count' isn't in scope — it's 'T''s");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  h = () -> 9\n  @p = { x Integer = h(); return x }\n}\n`)).not.toThrow();
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  h = () -> 9\n  @p = { x Integer = h(); return x }\n}\n`)).not.toThrow();
   });
 
   it('super, base:: and base. in its functions', () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) { y Integer = super(x); return y }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) { y Integer = super(x); return y }\n}\n`))
       .toThrow("'super(…)' in '@add' of 'U': 'U' has no base for 'T' (it never calls 'super(…)')");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @q = { x Integer = base::h(); return x }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  @q = { x Integer = base::h(); return x }\n}\n`))
       .toThrow("'base::h' in 'U': 'U' has no base for 'T'");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @q = { x Integer = base.get(); return x }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  @q = { x Integer = base.get(); return x }\n}\n`))
       .toThrow("'base.get' in 'U': 'U' has no base for 'T'");
   });
 
   it('super on some paths but not all is still an error', () => {
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  x Integer = if m > 0 {\n    super(m)\n    1\n  } else {\n    2\n  }\n}\n`))
+    expect(compile(`${T}U = T ^ *(m Integer) {\n${full}  x Integer = if m > 0 {\n    super(m)\n    1\n  } else {\n    2\n  }\n}\n`))
       .toThrow("needs an 'else' that calls it too");
   });
 });
@@ -612,7 +612,7 @@ const classBase = `
     @f = () -> 20
   }
   @U = @T ^ *{}
-  @N = @T ^ (m Integer) *{
+  @N = @T ^ *(m Integer) {
     @kind = () -> 3
     @who = { x Integer = class::base::h() + m; return x }
     @whoPub = () -> 0

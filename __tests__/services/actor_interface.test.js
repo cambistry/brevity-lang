@@ -24,7 +24,7 @@ describe('class interface — basic', () => {
 
   it('single named param', () => {
     const { interface: iface } = extract(`
-      @Document = (content: Text) *{
+      @Document = *(content: Text) {
         @body = () -> content as Text
       }
     `);
@@ -40,7 +40,7 @@ describe('class interface — basic', () => {
 
   it('single positional param', () => {
     const { interface: iface } = extract(`
-      @Wrapper = (n Integer) *{
+      @Wrapper = *(n Integer) {
         @get = () -> value: n as Integer
       }
     `);
@@ -56,7 +56,7 @@ describe('class interface — basic', () => {
 
   it('multiple params', () => {
     const { interface: iface } = extract(`
-      @Pair = (a Integer, b Integer) *{
+      @Pair = *(a Integer, b Integer) {
         @sum = () -> total: (a + b) as Integer
       }
     `);
@@ -76,7 +76,7 @@ describe('class interface — basic', () => {
 describe('class interface — actor methods', () => {
   it('method with args', () => {
     const { interface: iface } = extract(`
-      @Search = (corpus: Text) *{
+      @Search = *(corpus: Text) {
         @find = (query: Text) -> result: "found"
       }
     `);
@@ -110,7 +110,7 @@ describe('class interface — actor methods', () => {
 
   it('multiple methods in order', () => {
     const { interface: iface } = extract(`
-      @Document = (content: Text) *{
+      @Document = *(content: Text) {
         @title = () -> "untitled"
         @body = () -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
@@ -134,7 +134,7 @@ describe('class interface — actor methods', () => {
 
   it('no-arg method returning inferred type from class param', () => {
     const { interface: iface } = extract(`
-      @Box = (value: Integer) *{
+      @Box = *(value: Integer) {
         @get = () -> value as Integer
       }
     `);
@@ -154,7 +154,7 @@ describe('class interface — actor methods', () => {
 describe('class interface — private methods excluded', () => {
   it('private method does not appear in actor interface', () => {
     const { interface: iface } = extract(`
-      @Document = (content: Text) *{
+      @Document = *(content: Text) {
         #helper = (t Text) -> r: t as Text
         @title = () -> #helper(content) as Text
       }
@@ -175,7 +175,7 @@ describe('class interface — private methods excluded', () => {
 describe('class interface — mixed with public functions', () => {
   it('class and public function in same file', () => {
     const { interface: iface } = extract(`
-      @Document = (content: Text) *{
+      @Document = *(content: Text) {
         @title = () -> "untitled"
         @body = () -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
@@ -202,7 +202,7 @@ describe('class interface — mixed with public functions', () => {
   it('public function before class', () => {
     const { interface: iface } = extract(`
       @ping = () -> 1
-      @Counter = (start Integer) *{
+      @Counter = *(start Integer) {
         @get = () -> value: start as Integer
       }
     `);
@@ -219,10 +219,10 @@ describe('class interface — mixed with public functions', () => {
 
   it('multiple classes', () => {
     const { interface: iface } = extract(`
-      @Point = (x Integer, y Integer) *{
+      @Point = *(x Integer, y Integer) {
         @sum = () -> total: (x + y) as Integer
       }
-      @Label = (text: Text) *{
+      @Label = *(text: Text) {
         @get = () -> text as Text
       }
     `);
@@ -245,7 +245,7 @@ describe('class interface — mixed with public functions', () => {
 
 describe('class interface — private classes excluded', () => {
   const { interface: iface } = extract(`
-    Helper = (n Integer) *{
+    Helper = *(n Integer) {
       @get = () -> value: n as Integer
       @use = () -> value: "shadowed"
       @count *Integer = 0
@@ -278,7 +278,7 @@ describe('class interface — private classes excluded', () => {
 describe('class interface — optional params', () => {
   it('positional optional shows ? Type', () => {
     const { interface: iface } = extract(`
-      @Counter = (start Integer = 0) *{
+      @Counter = *(start Integer = 0) {
         @get = () -> value: start as Integer
       }
     `);
@@ -294,7 +294,7 @@ describe('class interface — optional params', () => {
 
   it('named optional shows ? name: Type', () => {
     const { interface: iface } = extract(`
-      @Config = (label: Text = "default") *{
+      @Config = *(label: Text = "default") {
         @get = () -> label as Text
       }
     `);
@@ -310,7 +310,7 @@ describe('class interface — optional params', () => {
 
   it('mixed required and optional params', () => {
     const { interface: iface } = extract(`
-      @Pair = (a Integer, b Integer = 0) *{
+      @Pair = *(a Integer, b Integer = 0) {
         @sum = () -> total: (a + b) as Integer
       }
     `);
@@ -326,7 +326,7 @@ describe('class interface — optional params', () => {
 
   it('inferred type from default shows in interface', () => {
     const { interface: iface } = extract(`
-      @Box = (value=42) *{
+      @Box = *(value=42) {
         @get = () -> value as Integer
       }
     `);
@@ -368,7 +368,7 @@ describe('class interface — optional params', () => {
 
   it('all-optional class params', () => {
     const { interface: iface } = extract(`
-      @Defaults = (x=10, y=20) *{
+      @Defaults = *(x=10, y=20) {
         @sum = () -> total: (x + y) as Integer
       }
     `);
@@ -398,7 +398,7 @@ describe('class interface — imported type address resolution', () => {
     const { interface: iface } = extract(`
       use Item = "/models/item"
 
-      @Wrapper = (item: Item) *{
+      @Wrapper = *(item: Item) {
         @get = () -> item as Item
       }
     `);

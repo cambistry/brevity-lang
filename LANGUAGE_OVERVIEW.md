@@ -19,7 +19,7 @@ For source generation patterns, use
 - `#name` defines a private function.
 - `use` declares the file singleton's DI (dependencies and load-time params);
   `use("source")` is the same in value position, scoped where it's bound.
-- `Name = (...) *{ ... }` declares an actor with a `new`, which builds actors.
+- `Name = *(...) { ... }` declares an actor with a `new`, which builds actors.
 - `type Name(...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
 - `*Name(...)` asks the named actor's `new` for an actor.
@@ -42,7 +42,7 @@ built (`Box` itself, a singleton, the file) is tagged `*`. See
 
 The prefix `*` sigil promotes a value to an actor. `Point(1, 2)` is a value;
 `*Point(1, 2)` is an actor. `Integer` is a value type; `*Integer` is an actor
-cell. The same sigil marks a constructor block (`(params) *{ ... }`) as
+cell. The same sigil marks a constructor block (`*(params) { ... }`) as
 actor-producing rather than value-producing.
 
 For the full vocabulary and runtime axis, see
@@ -198,11 +198,11 @@ untracked hits *Integer = 0
 
 ## Actors with a `new`, and Dependency Context
 
-`Box = (params) *{ … }` declares the actor `Box`, whose `new` builds actors. The
+`Box = *(params) { … }` declares the actor `Box`, whose `new` builds actors. The
 constructor block is marked with `*`:
 
 ```brevity
-Box = (value Integer) *{
+Box = *(value Integer) {
   @get = () -> value
 }
 ```
@@ -223,11 +223,11 @@ its base with `super`: the parent's constructor runs at that line, with the args
 it passes. A base name read above the line is an error.
 
 ```brevity
-Tagged = Box ^ (tag Text, value Integer) *{
+Tagged = Box ^ *(tag Text, value Integer) {
   super(value * 2)      // Box's constructor runs here
   @tag = () -> tag
 }
-Same = Box ^ (value Integer) *{ super }   // the args as received
+Same = Box ^ *(value Integer) { super }   // the args as received
 ```
 
 Bare `super` passes the constructor's args as received, `super()` none, and
@@ -249,7 +249,7 @@ child, a cell of a parent built below it.
 
 ```brevity
 T = *{ got Integer = probe(); probe = () -> 0 }
-U = T ^ (k Integer) *{
+U = T ^ *(k Integer) {
   super()
   marker Integer = k     // error: T's body calls probe at the super line
   probe = () -> marker      // fix: declare marker above super
@@ -271,7 +271,7 @@ Over = Box ^ *{
 With several parents, write `super[A](…)`. `super` can't be declared or set, and
 `super.x` / `super::x` aren't forms: those are `base.x` / `base::x`.
 
-A class's members block (`C = (…) *{ … } ^ { members }`) is its class block. A
+A class's members block (`C = *(…) { … } ^ { members }`) is its class block. A
 subclass with a block of its own extends its parent's block by delegation: the two
 are separate actors, and the parent's functions aren't copied. As it's built, the
 block registers with the parent block (`$extend`, with the parent's names it
@@ -365,7 +365,7 @@ A remote actor binding uses `*Name(...)`. Construction asks the remote actor's
 the actor's address:
 
 ```brevity
-use WebView = "WebView" as (path: Text) -> *{
+use WebView = "WebView" as *(path: Text) -> {
   open. () => .
 }
 

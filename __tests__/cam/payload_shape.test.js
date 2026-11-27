@@ -10,7 +10,7 @@ import { createActor, expectActorBehavior } from '../helpers.js';
 //   mixed        → [p1, p2, {k: v}]
 
 const source = `
-  use Thing = "thing.bv" as (a: Integer) -> *{
+  use Thing = "thing.bv" as *(a: Integer) -> {
   put (k: Integer) -> (value: Integer)
   ping. (k: Integer) => .
   mix. (Integer, k: Integer) => .

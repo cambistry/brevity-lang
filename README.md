@@ -46,7 +46,7 @@ The language keeps a small center of gravity:
 
 - `@name` defines a public message handler
 - `use` declares the file singleton's DI: its dependencies and load-time params
-- `Name = (...) *{ ... }` declares an actor with a `new` (which builds actors)
+- `Name = *(...) { ... }` declares an actor with a `new` (which builds actors)
 - `type Name(...)` declares a type (constructs values)
 - `*Type` marks a mutable cell or actor-shaped binding
 - `*Name(...)` asks the named actor's `new` for an actor

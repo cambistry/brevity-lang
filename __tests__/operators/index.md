@@ -49,7 +49,7 @@ See [Ref Cells](ref.md) for full ref-cell behavior.
 `<-` can also dispatch to an actor's `set` handler:
 
 ```brevity
-Box = (seed Integer) *{
+Box = *(seed Integer) {
   value *Integer = seed
 
   set = (n Integer) { value <- n }

@@ -15,7 +15,7 @@ describe('construction order across layers — compile errors', () => {
         probe = () -> 0
         @got = { return got }
       }
-      @U = @T ^ (k Integer) *{
+      @U = @T ^ *(k Integer) {
         super()
         marker Integer = k
         probe = () -> marker
@@ -32,7 +32,7 @@ describe('construction order across layers — compile errors', () => {
         probe = () -> 0
         @got = { return got }
       }
-      @D = @C ^ (k Integer) *{
+      @D = @C ^ *(k Integer) {
         super()
         marker Integer = k
         probe = () -> marker
@@ -49,7 +49,7 @@ describe('construction order across layers — compile errors', () => {
         probe = () -> 0
         @got = { return got }
       }
-      @AT = @A ^ @T ^ (k Integer) *{
+      @AT = @A ^ @T ^ *(k Integer) {
         super[@A]()
         super[@T]()
         marker Integer = k
@@ -132,7 +132,7 @@ const fine = `
     probe = () -> 0
     @got = { return got }
   }
-  @U = @T ^ (k Integer) *{
+  @U = @T ^ *(k Integer) {
     marker Integer = k
     super()
     probe = () -> marker

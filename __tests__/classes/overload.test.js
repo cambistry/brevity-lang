@@ -16,7 +16,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('constructor overload — compilation', () => {
   it('single clause with = compiles', () => {
     expect(() => compileSource(`
-      Pair = (a Integer, b Integer) *{
+      Pair = *(a Integer, b Integer) {
         @sum = () -> total: (a + b)
       }
       @test = { p = Pair(1, 2); :total = p.sum(); return :total as Integer }
@@ -25,10 +25,10 @@ describe('constructor overload — compilation', () => {
 
   it('<< appends constructor clause — compiles', () => {
     expect(() => compileSource(`
-      Box = (value Integer) *{
+      Box = *(value Integer) {
         @get = () -> result: value
       }
-      Box << (label Text) *{
+      Box << *(label Text) {
         @get = () -> result: 0
       }
       @test = { b = Box(42); :result = b.get(); return :result as Integer }
@@ -37,10 +37,10 @@ describe('constructor overload — compilation', () => {
 
   it('duplicate = on same constructor name is a redefinition error', () => {
     expect(() => compileSource(`
-      Box = (value Integer) *{
+      Box = *(value Integer) {
         @get = () -> result: value
       }
-      Box = (label Text) *{
+      Box = *(label Text) {
         @get = () -> result: 0
       }
       @test = () -> 1
@@ -49,7 +49,7 @@ describe('constructor overload — compilation', () => {
 
   it('<< without prior = is an error', () => {
     expect(() => compileSource(`
-      Box << (value Integer) *{
+      Box << *(value Integer) {
         @get = () -> result: value
       }
       @test = () -> 1
@@ -104,11 +104,11 @@ describe('constructor overload — lineal form — compilation', () => {
 describe('class overload — runtime', () => {
   const script = `
     // constructor overload — << append — runtime
-    Wrapper = (value Integer) *{
+    Wrapper = *(value Integer) {
       @get = () -> result: value
       @kind = () -> result: "integer"
     }
-    Wrapper << (label Text) *{
+    Wrapper << *(label Text) {
       @get = () -> result: 0
       @kind = () -> result: "text"
     }
@@ -126,13 +126,13 @@ describe('class overload — runtime', () => {
       return :result as Text
 
     // constructor overload — arity dispatch — runtime
-    Point = (x Integer) *{
+    Point = *(x Integer) {
       @coords = () -> result: x
     }
-    Point << (x Integer, y Integer) *{
+    Point << *(x Integer, y Integer) {
       @coords = () -> result: (x + y)
     }
-    Point << (x Integer, y Integer, z Integer) *{
+    Point << *(x Integer, y Integer, z Integer) {
       @coords = () -> result: (x + y + z)
     }
 
@@ -183,15 +183,15 @@ describe('class overload — runtime', () => {
       return :result as Text
 
     // constructor overload — subclasses — runtime
-    Base = (a Integer) *{
+    Base = *(a Integer) {
       @get = () -> result: a
     }
 
-    Sub = Base ^ (a Integer, b Integer) *{
+    Sub = Base ^ *(a Integer, b Integer) {
       super(a)
       @sum = () -> result: (a + b)
     }
-    Sub << Base ^ (a Integer, b Text) *{
+    Sub << Base ^ *(a Integer, b Text) {
       super(a)
       @sum = () -> result: a
     }
@@ -211,19 +211,19 @@ describe('class overload — runtime', () => {
     // constructor optional args — delimited form
     --- typed positional default ---
 
-    Pair = (a Integer, b Integer = 0) *{
+    Pair = *(a Integer, b Integer = 0) {
       @sum = () -> total: (a + b)
     }
 
     --- inferred positional default ---
 
-    Offset = (a Integer, b=10) *{
+    Offset = *(a Integer, b=10) {
       @sum = () -> total: (a + b)
     }
 
     --- named default ---
 
-    Labeled = (label: Text = "unnamed") *{
+    Labeled = *(label: Text = "unnamed") {
       @get = () -> label: label
     }
 
@@ -264,7 +264,7 @@ describe('class overload — runtime', () => {
       return :label as Text
 
     // constructor optional args — mixed
-    Config = (a Text, b=15, c: Text, d: = 20) *{
+    Config = *(a Text, b=15, c: Text, d: = 20) {
       @info = () -> result: (b + d)
       @label = () -> result: (a + " " + c)
     }
@@ -317,11 +317,11 @@ describe('class overload — runtime', () => {
 
     // Function() — empty overload — runtime
     Shape = Function()
-    Shape << (side Integer) *{
+    Shape << *(side Integer) {
       @area = () -> result: (side * side)
       @kind = () -> result: "square"
     }
-    Shape << (width Integer, height Integer) *{
+    Shape << *(width Integer, height Integer) {
       @area = () -> result: (width * height)
       @kind = () -> result: "rect"
     }
@@ -550,7 +550,7 @@ describe('class overload — runtime', () => {
 describe('constructor optional args — compilation', () => {
   it('positional default after required compiles', () => {
     expect(() => compileSource(`
-      C = (a Integer, b Integer = 0) *{
+      C = *(a Integer, b Integer = 0) {
         @get = () -> result: a
       }
       @test = { c = C(1); :result = c.get(); return :result as Integer }
@@ -559,7 +559,7 @@ describe('constructor optional args — compilation', () => {
 
   it('inferred type from default compiles', () => {
     expect(() => compileSource(`
-      C = (a Integer, b=0) *{
+      C = *(a Integer, b=0) {
         @get = () -> result: a
       }
       @test = { c = C(1); :result = c.get(); return :result as Integer }
@@ -568,7 +568,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named default compiles', () => {
     expect(() => compileSource(`
-      C = (label: Text = "hi") *{
+      C = *(label: Text = "hi") {
         @get = () -> result: label
       }
       @test = { c = C(); :result = c.get(); return :result as Text }
@@ -577,7 +577,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named shorthand literal default compiles', () => {
     expect(() => compileSource(`
-      C = (label: "hi") *{
+      C = *(label: "hi") {
         @get = () -> result: label
       }
       @test = { c = C(); :result = c.get(); return :result as Text }
@@ -586,7 +586,7 @@ describe('constructor optional args — compilation', () => {
 
   it('named := default compiles', () => {
     expect(() => compileSource(`
-      C = (label: = "hi") *{
+      C = *(label: = "hi") {
         @get = () -> result: label
       }
       @test = { c = C(); :result = c.get(); return :result as Text }
@@ -605,7 +605,7 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() compiles', () => {
     expect(() => compileSource(`
       Box = Function()
-      Box << (value Integer) *{
+      Box << *(value Integer) {
         @get = () -> result: value
       }
       @test = { b = Box(42); :result = b.get(); return :result as Integer }
@@ -615,10 +615,10 @@ describe('Function() — empty overload — compilation', () => {
   it('Function() with multiple << clauses compiles', () => {
     expect(() => compileSource(`
       Box = Function()
-      Box << (value Integer) *{
+      Box << *(value Integer) {
         @get = () -> result: value
       }
-      Box << (label Text) *{
+      Box << *(label Text) {
         @get = () -> result: 0
       }
       @test = { b = Box(42); :result = b.get(); return :result as Integer }

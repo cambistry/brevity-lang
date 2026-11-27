@@ -23,7 +23,7 @@ describe('public class in its own file', () => {
 
   it('takes constructor args', async () => {
     await expectBehavior(`
-      @Pub = (n Integer) *{
+      @Pub = *(n Integer) {
         @get = { return n }
       }
 
@@ -99,7 +99,7 @@ describe('Box and @Box are different classes', () => {
       @who = { return "private" }
     }
 
-    @Arg = (n Integer) *{
+    @Arg = *(n Integer) {
       @get = { return n }
     }
 

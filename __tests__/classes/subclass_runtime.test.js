@@ -11,10 +11,10 @@ import { expectBehavior } from '../helpers.js';
 
 describe('subclass runtime — inherited method on subclass value', () => {
   const script = `
-    T = (x Integer) *{
+    T = *(x Integer) {
       @a = () -> result: x as Integer
     }
-    U = T ^ (x Integer, y Integer) *{
+    U = T ^ *(x Integer, y Integer) {
       super(x)
       @b = () -> result: y as Integer
     }
@@ -284,7 +284,7 @@ describe('subclass runtime — inherited state', () => {
 
   it('a state param of the parent still seeds the copy', async () => {
     await expectBehavior(`
-      Counter = (n Integer) *{
+      Counter = *(n Integer) {
         a *Integer = n
         @get = { return a }
       }

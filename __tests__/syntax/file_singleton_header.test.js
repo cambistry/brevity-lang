@@ -71,7 +71,7 @@ describe('factory header — no DI', () => {
   const entries = {
     'a service': '"svc.bv": Svc { get () -> (Integer) }',
     'a bare path': '"svc.bv": Svc',
-    'a declared constructor': '"svc.bv": Svc (a: Integer) -> *{ get () -> (Integer) }',
+    'a declared constructor': '"svc.bv": Svc *(a: Integer) -> { get () -> (Integer) }',
     'a destructure': 'HTML: (:div)',
     'a path shorthand': ':document',
     'an untyped key': 'HTML: Html',
@@ -84,7 +84,7 @@ describe('factory header — no DI', () => {
   }
 
   it('refuses DI in a delimited header', () => {
-    expect(() => extract('( "svc.bv": Svc, n Integer ) *{\n  @get = () -> n\n}\n')).toThrow(refused);
+    expect(() => extract('*( "svc.bv": Svc, n Integer ) {\n  @get = () -> n\n}\n')).toThrow(refused);
   });
 
   it('names the entry and points to `use`', () => {
@@ -109,7 +109,7 @@ describe('factory header — no DI', () => {
     const bindings = [
       'Svc = "svc.bv" as { get () -> (Integer) }',
       'Svc = "svc.bv"',
-      'Svc = "svc.bv" as (a: Integer) -> *{ get () -> (Integer) }',
+      'Svc = "svc.bv" as *(a: Integer) -> { get () -> (Integer) }',
       ':div = HTML',
       'document',
       'Html = HTML',
@@ -227,10 +227,10 @@ describe('file with `new =`', () => {
     );
   });
 
-  it('delimited: `new = (params) *{ … }`', async () => {
+  it('delimited: `new = *(params) { … }`', async () => {
     await expectBehavior(`
       count *Integer = 10
-      new = (seed Integer) *{
+      new = *(seed Integer) {
         @n = () -> count + seed
 
         @seed = () -> seed
@@ -247,7 +247,7 @@ describe('file with `new =`', () => {
   });
 
   it('a file declares `new` once', () => {
-    expect(() => extract('new = (a Integer) *{\n  @a = () -> a\n}\nnew = (b Integer) *{\n  @b = () -> b\n}\n'))
+    expect(() => extract('new = *(a Integer) {\n  @a = () -> a\n}\nnew = *(b Integer) {\n  @b = () -> b\n}\n'))
       .toThrow("A file declares 'new' once");
   });
 });
@@ -256,8 +256,8 @@ describe('factory files are unchanged', () => {
   const forms = {
     'lineal `*` header': '*\n  n Integer\n*\n@get = () -> n\n',
     '`*{ … }`': '*{\n  @get = () -> 1\n}\n',
-    '`( params ) *{ … }`': '( n Integer ) *{\n  @get = () -> n\n}\n',
-    '`( params ) -> *{ … }`': '( n Integer ) -> *{\n  @get = () -> n\n}\n',
+    '`*( params ) { … }`': '*( n Integer ) {\n  @get = () -> n\n}\n',
+    '`*( params ) -> { … }`': '*( n Integer ) -> {\n  @get = () -> n\n}\n',
   };
   for (const [label, src] of Object.entries(forms)) {
     it(`${label} is a factory`, () => {

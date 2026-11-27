@@ -125,7 +125,7 @@ export function genSubscribeCall(ctx, expr) {
           ${handle}.host.receive({ id: _sub_id, op: ${opExpr}, to: (':' + ${handle}.cell), from: '__parent', _route: (msg) => this.receive(msg)${tyField} });
         }`;
   }
-  // Remote dep (declared via `( "Alias": Alias { ... } ) *{ }`): post through
+  // Remote dep (declared via `*( "Alias": Alias { ... } ) { }`): post through
   // binding addressed to the dependency's source and the member: `svc.bv:member`.
   if (ctx.dependencyNames?.has(objectName) && !ctx.stateVarNames?.has(objectName)) {
     const toExpr = JSON.stringify(joinAddress([ctx.depSource(objectName), toSelector]));

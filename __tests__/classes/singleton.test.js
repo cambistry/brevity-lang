@@ -33,7 +33,7 @@ const script = `
     return x
   }
 
-  @Box = (seed Integer) *{
+  @Box = *(seed Integer) {
     tally = actor {
       n *Integer = 0
       @bump! = { n <- n + 1 }
@@ -48,7 +48,7 @@ const script = `
     }
   }
 
-  @Shelf = (seed Integer) *{
+  @Shelf = *(seed Integer) {
     Item = *{
       @get = { return seed }
     }
@@ -132,7 +132,7 @@ const published = `
     return x
   }
 
-  @Box = (seed Integer) *{
+  @Box = *(seed Integer) {
     @tally = actor {
       n *Integer = 0
       @get = { return n + seed }
@@ -224,7 +224,7 @@ describe('a public singleton in the service document', () => {
 
   it('is a sub-service inside a class', () => {
     expect(extract(`
-      @Box = (seed Integer) *{
+      @Box = *(seed Integer) {
         @tally = actor {
           @get = () -> 1
         }
@@ -251,7 +251,7 @@ describe('a public singleton in the service document', () => {
   });
 
   it('reads back as a document of its own', () => {
-    const doc = parseInterface('{\n  s {\n    get () -> (Integer)\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  Box (Integer) -> *{\n    tally {\n      get () -> (Integer)\n    }\n  }\n}');
+    const doc = parseInterface('{\n  s {\n    get () -> (Integer)\n    inner {\n      ping () -> (Integer)\n    }\n  }\n  Box *(Integer) -> {\n    tally {\n      get () -> (Integer)\n    }\n  }\n}');
     expect(doc.__services.s.get).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }], effect: 'read' }]);
     expect(doc.__services.s.__services.inner.ping).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }], effect: 'read' }]);
     expect(doc.__types.Box.services.tally.get).toEqual([{ params: [], returns: [{ name: null, type: 'Integer', positional: true }], effect: 'read' }]);
@@ -290,7 +290,7 @@ const ordered = `
     return x
   }
 
-  @Box = (seed Integer) *{
+  @Box = *(seed Integer) {
     start *Integer = seed * 2
     tally = actor {
       t Integer = start + seed
@@ -349,7 +349,7 @@ describe('a singleton reading a cell declared below it — validation', () => {
   });
 
   it('in a class', () => {
-    expect(() => compileSource('Box = (seed Integer) *{\n  tally = actor {\n    t Integer = late + seed\n    @get = { return t }\n  }\n  late *Integer = 1\n  @get = { return 1 }\n}\n@go = { return 1 }\n'))
+    expect(() => compileSource('Box = *(seed Integer) {\n  tally = actor {\n    t Integer = late + seed\n    @get = { return t }\n  }\n  late *Integer = 1\n  @get = { return 1 }\n}\n@go = { return 1 }\n'))
       .toThrow(/'late' is read before its declaration \(by 'tally'\)/);
   });
 

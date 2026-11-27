@@ -30,7 +30,7 @@ describe('class as a value — compilation', () => {
 
   it('@class = { class } compiles in a named class body', () => {
     expect(() => compileSource(`
-      C = () *{
+      C = *() {
         @class = { class }
       }
       @ping = () -> ok: "pong" as Text

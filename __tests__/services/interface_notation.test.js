@@ -7,7 +7,7 @@ import { documentShape } from '../../src/service_doc.js';
 //
 //   type Point(Integer, Integer)        type declaration
 //   my_func (Type) -> (Type)              function
-//   Counter (k: Type) -> *{ … }           constructor (body always written)
+//   Counter *(k: Type) -> { … }           constructor (body always written)
 //   set name (Type)                       settable field
 //   cell *Type                            ref cell
 //   name Type                             read-only field
@@ -44,9 +44,9 @@ describe('service document — entry forms', () => {
     expect(p.clone[1].params).toEqual([{ name: 'deep', type: 'Boolean', positional: false }]);
   });
 
-  it('constructor: Name (params) -> *{ members }', () => {
+  it('constructor: Name *(params) -> { members }', () => {
     const p = parseInterface(`{
-      Counter (start: Integer) -> *{
+      Counter *(start: Integer) -> {
         inc! () => .
         get () -> (value: Integer)
       }
@@ -56,12 +56,12 @@ describe('service document — entry forms', () => {
   });
 
   it('constructor: the -> before *{ is optional on input', () => {
-    const p = parseInterface('{ Box (Integer) *{ get () -> (Integer) } }');
+    const p = parseInterface('{ Box *(Integer) { get () -> (Integer) } }');
     expect(p.__types.Box.functions.map(f => f.name)).toEqual(['get']);
   });
 
   it('constructor with no members of its own: -> *{}', () => {
-    const p = parseInterface('{ Text Node ^ -> *{} }');
+    const p = parseInterface('{ Text Node ^ *{} }');
     expect(p.__types.Text).toEqual({ effect: 'read', supertypes: [{ supertype: 'Node' }], initParams: [], functions: [], setters: [] });
   });
 
@@ -110,7 +110,7 @@ describe('service document — entry forms', () => {
   });
 
   it('fields inside a constructor: getter, plus setter for a * cell', () => {
-    const p = parseInterface('{ Box () -> *{\n  total Integer\n  seen &Integer\n  slot *Integer\n  set label (Text)\n} }');
+    const p = parseInterface('{ Box *() -> {\n  total Integer\n  seen &Integer\n  slot *Integer\n  set label (Text)\n} }');
     expect(p.__types.Box.functions.map(f => f.name)).toEqual(['total', 'seen', 'slot']);
     expect(p.__types.Box.setters).toEqual([{ name: 'slot', type: 'Integer' }, { name: 'label', type: 'Text' }]);
     expect(p.__types.Box.fields).toEqual({
@@ -134,7 +134,7 @@ describe('service document — entry forms', () => {
   });
 
   it('...Parent spread markers are ignored', () => {
-    const p = parseInterface('{ U T ^ -> *{\n  ...T\n  b () -> (Integer)\n} }');
+    const p = parseInterface('{ U T ^ *{\n  ...T\n  b () -> (Integer)\n} }');
     expect(p.__types.U.functions.map(f => f.name)).toEqual(['b']);
   });
 
@@ -149,11 +149,11 @@ describe('service document — invalid forms are rejected', () => {
   });
 
   it('constructor without a body', () => {
-    expect(() => parseInterface('{ Text (Node) }')).toThrow(/missing return.*'-> \*\{\}'/);
+    expect(() => parseInterface('{ Text (Node) }')).toThrow(/missing return.*'\*\(params\) -> \{ … \}'/);
   });
 
   it('duplicate constructor', () => {
-    expect(() => parseInterface('{ A () -> *{}\n  A (Integer) -> *{} }')).toThrow(/more than once/);
+    expect(() => parseInterface('{ A *() -> {}\n  A *(Integer) -> {} }')).toThrow(/more than once/);
   });
 
   it('a return that is no return form', () => {
@@ -167,7 +167,7 @@ describe('service document — invalid forms are rejected', () => {
 
 describe('service document — emitted form', () => {
   it('constructor with no members emits -> *{}', () => {
-    const { interface: iface } = extract('@Empty = (x: Integer) *{}\n');
+    const { interface: iface } = extract('@Empty = *(x: Integer) {}\n');
     expect(iface.service).toEqual({
       ':Empty': {
         public: { $new: [{ args: [{ x: 'Integer' }], re: [':Empty'], writes: false }] },
@@ -193,7 +193,7 @@ describe('service document — emitted form', () => {
     const { interface: iface } = extract(`
       type Point(Integer, Integer)
       @val *Integer = 0
-      @Counter = (start: Integer) *{
+      @Counter = *(start: Integer) {
         @get = () -> value: start as Integer
       }
       @add = (a: Integer, b: Integer) -> sum: (a + b) as Integer
@@ -228,7 +228,7 @@ describe('service document — emitted form', () => {
 
   it('a class\'s public cells emit as cells, and its published params as props', () => {
     const { interface: iface } = extract(`
-      @Box = (@start Integer) *{
+      @Box = *(@start Integer) {
         @slot *Integer = 0
         @names *List of Texts = []
         @get = () -> value: start as Integer
@@ -336,9 +336,9 @@ describe('props and cells — validation', () => {
 });
 
 describe('constructor profiles in source', () => {
-  it('header dependency: (Alias) (params) -> *{ iface }, arrow optional', () => {
+  it('header dependency: (Alias) *(params) -> { iface }, arrow optional', () => {
     for (const arrow of ['-> ', '']) {
-      const { ast } = extract(`use Thing = "thing.bv" as (a: Integer) ${arrow} *{ get () -> (value: Integer) }\n@go = () -> 1\n`);
+      const { ast } = extract(`use Thing = "thing.bv" as *(a: Integer) ${arrow}{ get () -> (value: Integer) }\n@go = () -> 1\n`);
       const dep = ast.dependencies[0];
       expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', typeEnc: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
@@ -347,7 +347,7 @@ describe('constructor profiles in source', () => {
 
   it('header dependency in a whole-file actor { … }', () => {
     expect(() => compileSrc(`actor {
-  use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+  use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
   t = Thing(a: 1)
   @go = { :value Integer = t.get(); return :value }
 }
@@ -357,7 +357,7 @@ describe('constructor profiles in source', () => {
   it('header dependency: multi-line iface with a nested constructor body', () => {
     const { ast } = extract(`use Lib = "lib.bv" as {
   type Point(Integer, Integer)
-  Counter (start: Integer) -> *{
+  Counter *(start: Integer) -> {
     get () -> (value: Integer)
     slot *Integer
   }
@@ -371,9 +371,9 @@ describe('constructor profiles in source', () => {
     expect(p['ping.']).toHaveLength(1);
   });
 
-  it('coercion: x = Dep as (params) -> *{ iface }', () => {
+  it('coercion: x = Dep as *(params) -> { iface }', () => {
     expect(() => compileSrc(`use Thing = "thing.bv"
-Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
 @go = () -> 1
 `)).not.toThrow();
   });

@@ -6,7 +6,7 @@ import { extract } from '../../index.js';
 //
 // A file-class header is the same as any class header without the `Name =`
 // prefix:
-//   ( deps ) *{ body }  |  ( deps ) -> *{ body }       — delimited header
+//   *( deps ) { body }  |  *( deps ) -> { body }       — delimited header
 //   *\n entries\n *\n body                            — lineal header
 //   *\n body                                         — lineal, no entries
 // In the lineal forms each `*` is alone on its line (the closing `*` may be
@@ -19,34 +19,34 @@ import { extract } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('file-class header — delimited', () => {
-  it("( deps ) *{ body } (delimited body)", () => {
+  it("*( deps ) { body } (delimited body)", () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{
+      *( value: Integer ) {
         @get = () -> value
       }
     `)).not.toThrow();
   });
 
-  it("( deps ) -> *{ body } (optional arrow)", () => {
+  it("*( deps ) -> { body } (optional arrow)", () => {
     expect(() => compileSource(`
-      ( value: Integer ) -> *{
+      *( value: Integer ) -> {
         @get = () -> value
       }
     `)).not.toThrow();
   });
 
-  it("( deps ) *{ body }", () => {
+  it("*( deps ) { body }", () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{ @get = () -> value }
+      *( value: Integer ) { @get = () -> value }
     `)).not.toThrow();
   });
 
   it('multi-line entries', () => {
     expect(() => compileSource(`
-      (
+      *(
         name: Text
         count: Integer
-      ) *{
+      ) {
         @get = () -> name
       }
     `)).not.toThrow();
@@ -54,9 +54,9 @@ describe('file-class header — delimited', () => {
 });
 
 describe('file-class header — delimited, rejected forms', () => {
-  it('( deps ) *{body} followed by extra content after `}` is a parse error', () => {
+  it('*( deps ) {body} followed by extra content after `}` is a parse error', () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{
+      *( value: Integer ) {
         @get = () -> value
       }
       @stray = () -> 1
@@ -200,7 +200,7 @@ describe('file-class header — lineal params land as file params', () => {
       @get = () -> name
     `);
     const delimited = extract(`
-      ( name: Text, n Integer ) *{
+      *( name: Text, n Integer ) {
         @get = () -> name
       }
     `);

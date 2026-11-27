@@ -6,7 +6,7 @@ import { extract, compile } from '../../index.js';
 // `::` path the host resolves, its shape claimed with `as`. A lone source binds
 // its last segment. See notes/use-as-binding-2026-11-18.md.
 //
-// An inline definition (`as { … }` or `as ( … ) -> *{ … }`) is the file's
+// An inline definition (`as { … }` or `as *( … ) -> { … }`) is the file's
 // statement of what it needs: the compiler checks calls against it and never
 // consults the remote's document. A mismatch with the real service fails at runtime.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -23,7 +23,7 @@ describe('use bindings — forms', () => {
   it('Name = "path" as { iface }, and as a constructor profile', () => {
     expect(deps('DB = "/db" as { get (key: Text) -> (value: Text) }')[0])
       .toEqual(expect.objectContaining({ name: 'DB', iface: '{\n  get (key: Text) -> (value: Text)\n}' }));
-    expect(deps('Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }')[0])
+    expect(deps('Lib = "lib.bv" as *(a: Integer) -> { ping. () => . }')[0])
       .toEqual(expect.objectContaining({ name: 'Lib', constructorParams: [{ name: 'a', typeEnc: 'Integer', positional: false }] }));
   });
 
@@ -85,7 +85,7 @@ describe('inline definition wins over the remote document', () => {
   });
 
   it('an inline constructor profile wins too', () => {
-    const src = 'use Lib = "lib.bv" as (a: Integer) -> *{ ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
+    const src = 'use Lib = "lib.bv" as *(a: Integer) -> { ping. () => . }\nl = Lib(a: 1)\n@go. = { l.ping... }\n';
     const libRemotes = [{ path: 'lib.bv', params: '(\n  Text\n)', service: { public: { 'pong.': [{ writes: true }] } } }];
     expect(() => compile(extract(src).ast, { remotes: libRemotes })).not.toThrow();
   });

@@ -73,7 +73,7 @@ function checkRenderable(t, s, expr, typeDecls) {
   }
 }
 
-// `x as { iface }` and `x as (params) -> *{ iface }` render x as an actor: a
+// `x as { iface }` and `x as *(params) -> { iface }` render x as an actor: a
 // value (a scalar, a list, a Type) has no such rendering.
 function checkActorRenderable(s, typeDecls) {
   const t = inferType(s.ref, new Map());

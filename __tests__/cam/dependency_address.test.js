@@ -87,7 +87,7 @@ describe('dependency addresses', () => {
 describe('dependency addresses — construction', () => {
   it('`$new` goes to the source, and calls to the address in the reply', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
       t = Thing(a: 5)
       @go = { :value Integer = t.get(); return :value }
     `, {
@@ -108,7 +108,7 @@ describe('dependency addresses — construction', () => {
 describe('dependency addresses — tags', () => {
   it('an actor of a dependency\'s class is tagged with the class\'s address', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
       use Peer = "peer.bv" as { take. (Anything) => . }
       t = Thing(a: 5)
       @give. = { Peer.take(t)... }

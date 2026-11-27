@@ -48,7 +48,7 @@ Use this when you want to show application logic layered over a dependency call.
 ## 4. Remote Instance at File Init
 
 ```brevity
-use "WebView": WebView (path: Text) -> *{
+use "WebView": WebView *(path: Text) -> {
   open. () => .
   getTitle () -> (title: Text)
   close. () => .

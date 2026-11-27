@@ -1,4 +1,4 @@
-// Public classes across files. A doc's constructor entry (`W () -> *{ … }`) is
+// Public classes across files. A doc's constructor entry (`W *() -> { … }`) is
 // reached three ways, all sending `$new` with the class as the last token of `to`:
 //
 //   "svc.bv": (:W)    W()        to: `svc.bv:W`

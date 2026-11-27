@@ -11,7 +11,7 @@ prefer the test-backed notes in [`__tests__/`](../__tests__/README.md).
 - Plain local functions are implementation helpers.
 - `#name` is an explicitly private function.
 - `use` declares the file singleton's DI (dependencies and load-time params).
-- `Name = (...) *{ ... }` declares an actor with a `new` (which builds actors). An actor is a
+- `Name = *(...) { ... }` declares an actor with a `new` (which builds actors). An actor is a
   value: `k = Name` holds its address, typed `Actor`; there is no `Class` type.
 - `type Name(...)` declares a type (constructs values).
 - `*Type` marks a mutable cell or actor-shaped binding.
@@ -133,7 +133,7 @@ trailing `...` (fire-and-forget). Replying methods bind their named reply fields
 `*Name(...)` constructs a remote actor, where `Name` is the local alias for a remote actor with a `new`:
 
 ```brevity
-use WebView = "WebView" as (path: Text) -> *{
+use WebView = "WebView" as *(path: Text) -> {
   open. () => .
   close. () => .
 }
@@ -211,7 +211,7 @@ For browser examples, start with the tested browser and HTML/XML notes:
 - Name a function that writes with `!` (`save!`), and a silent one with a glued `.` (`save.`), typed `=> .` and called with `...`. A trailing `.` in a body is an error.
 - In a `!` function, end with the write, or `return` the value; never a bare tail value.
 - Reach a parent's definition with `base::h()` (protected) or `base.a()` (public), not `super.a()`. Don't name a cell, local, param or `use` binding `base`.
-- A subclass with params of its own builds its base with `super(…)` in the constructor block, once, passing what the parent needs: `U = T ^ (label Text, n Integer) *{ super(n) … }`. Bare `super` passes the args as received; `super()` none; `super[A](…)` per parent when there are several. Don't read a parent's cell above the `super` line. Leave `super` out only to re-implement the parent's whole public interface without its state.
+- A subclass with params of its own builds its base with `super(…)` in the constructor block, once, passing what the parent needs: `U = T ^ *(label Text, n Integer) { super(n) … }`. Bare `super` passes the args as received; `super()` none; `super[A](…)` per parent when there are several. Don't read a parent's cell above the `super` line. Leave `super` out only to re-implement the parent's whole public interface without its state.
 - In an override, `super` calls the parent's same function: bare `super` with the args as received, `super(…)` with others, `super()` with none. With several parents, `super[A](…)`. In a class block that extends its parent's, `super` is the parent block's same function.
 - `class::base` is the running class's parent: `class::base::h()`, `class::base.f()`, `class::base(…)`. With several parents, name the parent instead.
 - Use explicit local variables when reply typing matters.

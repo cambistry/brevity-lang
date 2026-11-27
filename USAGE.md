@@ -50,7 +50,7 @@ A lone source binds its last segment: `use HTML` is `use HTML = HTML`, and
 - **Inline constraint**: `use Alias = "/path" as { method sig, ... }` — the
   service interface is claimed inline. The compiler checks calls against it and
   never consults `options.remotes` for that path; a mismatch with the real
-  service fails at runtime. `as (params) -> *{ … }` claims a constructor
+  service fails at runtime. `as *(params) -> { … }` claims a constructor
   profile.
 - **Bare dependency**: `use Alias = "/path"` — no claim, so it is resolved by
   its source: the interface must be supplied at compile time via

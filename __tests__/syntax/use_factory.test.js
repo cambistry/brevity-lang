@@ -4,7 +4,7 @@ import { extract } from '../../index.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 // `use` in a `*` factory file
 //
-// A factory file (the lineal `*` header, `*{ … }`, `( params ) *{ … }`) may
+// A factory file (the lineal `*` header, `*{ … }`, `*( params ) { … }`) may
 // declare `use` in its constructor body, as a singleton does: hoisted into the
 // file's manifest, one entry per binding, granted at load. Each instance is its
 // own actor, so a call its code makes goes out from that instance (the host
@@ -49,9 +49,9 @@ use Svc = "svc.bv" as ${N}
     await expectActorBehavior(actor, ...call(0, 3));
   });
 
-  it('`( params ) *{ … }`', async () => {
+  it('`*( params ) { … }`', async () => {
     const actor = await createActor(`
-( k Integer ) *{
+*( k Integer ) {
   use Svc = "svc.bv" as ${N}
   @get = {
     x Integer = Svc.n()
@@ -116,7 +116,7 @@ describe('use in a factory file — the manifest', () => {
   });
 
   it('the same entry twice is one', () => {
-    const src = `( k Integer ) *{\n  use Svc = "svc.bv" as ${N}\n  use Svc = "svc.bv" as ${N}\n  @get = () -> k\n}\n`;
+    const src = `*( k Integer ) {\n  use Svc = "svc.bv" as ${N}\n  use Svc = "svc.bv" as ${N}\n  @get = () -> k\n}\n`;
     expect(deps(src).filter(d => d.type === 'Dependency')).toHaveLength(1);
   });
 
@@ -128,7 +128,7 @@ describe('use in a factory file — the manifest', () => {
   it('a dependency entry in the factory\'s params is an error that points to `use`', () => {
     expect(() => extract('*\n  k Integer\n  "svc.bv": Svc\n*\n@get = () -> k\n'))
       .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
-    expect(() => extract('( "svc.bv": Svc, k Integer ) *{\n  @get = () -> k\n}\n'))
+    expect(() => extract('*( "svc.bv": Svc, k Integer ) {\n  @get = () -> k\n}\n'))
       .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 });

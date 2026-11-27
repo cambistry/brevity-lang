@@ -195,7 +195,7 @@ describe('a class using an actor it got from a dependency', () => {
   const script = `
     use Svc = "svc.bv" as {
       ping! () => self
-      Thing () -> *{ poke! () => self }
+      Thing *() -> { poke! () => self }
     }
     W = *{
       @go! = {
@@ -234,7 +234,7 @@ describe('a class using an actor it got from a dependency', () => {
 // function body's does: in a class, and in the file.
 describe('an if statement in a constructor block', () => {
   const script = `
-    @C = (k Integer) *{
+    @C = *(k Integer) {
       n *Integer = 0
       if k > 0 {
         n <- k * 2

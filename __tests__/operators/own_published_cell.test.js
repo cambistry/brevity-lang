@@ -181,7 +181,7 @@ describe('checks', () => {
   it('a local or param of that name is fine', () => {
     expect(() => compileSource('@a *Integer = 3\n@f = (a Integer) { return a }\n')).not.toThrow();
     expect(() => compileSource('@a *Integer = 3\n@f = {\n  a Integer = 1\n  return a\n}\n')).not.toThrow();
-    expect(() => compileSource('C = (a: Integer) *{\n  @a *Integer = a\n  @b = { return a }\n}\n')).not.toThrow();
+    expect(() => compileSource('C = *(a: Integer) {\n  @a *Integer = a\n  @b = { return a }\n}\n')).not.toThrow();
   });
 
   it('only a published cell can be written', () => {

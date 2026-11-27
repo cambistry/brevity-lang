@@ -84,7 +84,7 @@ describe('named param — rename', () => {
 
   it('a keyed ref param renames', () => {
     expect(() => compileSource(`
-      Wrapper = (child: inner *) *{ @x = () -> 1 }
+      Wrapper = *(child: inner *) { @x = () -> 1 }
       @test = () -> 1
     `)).not.toThrow();
   });

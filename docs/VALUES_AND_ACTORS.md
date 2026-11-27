@@ -40,7 +40,7 @@ addressless. Passing `p` to another function passes its content.
 An **actor with a `new`** builds actors:
 
 ```brevity
-Counter = (start Integer) *{
+Counter = *(start Integer) {
   count *Integer = start
 
   @inc! = {
@@ -63,12 +63,12 @@ another function passes its address, not a copy.
 holds its address, typed `Actor`. On the wire an actor a `new` built is tagged
 with its maker (`:Counter`); a declared actor, which no `new` built (`Counter`,
 a singleton, the file), is tagged `*`. The type of an actor with a `new` is its
-constructor profile, `(start Integer) -> *{ … }`.
+constructor profile, `*(start Integer) -> { … }`.
 
 The two declaration forms are distinguished by their prefix:
 
 - `type Name(...)` is a type declaration. No `*`.
-- `Name = (params) *{ ... }` declares an actor with a `new`. The `*` on the body
+- `Name = *(params) { ... }` declares an actor with a `new`. The `*` on the body
   marks the form as actor-producing.
 
 ## The `*` Prefix Sigil
@@ -79,7 +79,7 @@ actor-side one. It appears in several positions, all consistent:
 **On a constructor block**, marking the form as actor-producing:
 
 ```brevity
-Counter = (start Integer) *{
+Counter = *(start Integer) {
   ...
 }
 ```

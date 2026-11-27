@@ -8,7 +8,7 @@ import { compileSource, createActor, expectActorBehavior, expectBehavior } from 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const THING = `
-  use Thing = "thing.bv" as (a: Integer) -> *{
+  use Thing = "thing.bv" as *(a: Integer) -> {
     get () -> (Integer)
     pair () -> (x: Integer)
   }

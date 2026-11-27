@@ -13,22 +13,12 @@ import { _opre_split as split, _opre_join as join, _opre_quote as quote, _opre_i
 
 const documentDI = 'use document\n';
 // A file that declares its own DI or shape: a constructor form (delimited
-// `( ... ) [->] *{`, `*{`, a lineal `*` alone on the first line), a whole-file
+// `*( ... ) [->] {`, `*{`, a lineal `*` alone on the first line), a whole-file
 // `actor {`, or a `use` statement.
 const hasHeader = (source) => {
   const s = source.trim();
-  if (/^(\*\s*\{|actor\s*\{|\*[ \t]*(\n|$))/.test(s)) return true;
-  if (/^[ \t]*use\b/m.test(s)) return true;
-  if (s[0] !== '(') return false;
-  let depth = 0, quote = null;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
-    if (c === '"') quote = c;
-    else if (c === '(') depth++;
-    else if (c === ')' && --depth === 0) return /^\s*([-=~]>\s*)?\*\s*\{/.test(s.slice(i + 1));
-  }
-  return false;
+  if (/^(\*\s*[{(]|actor\s*\{|\*[ \t]*(\n|$))/.test(s)) return true;
+  return /^[ \t]*use\b/m.test(s);
 };
 
 export async function boot(document, { extract, compile, compileOptions = {}, implicitDI = false, fetch = globalThis.fetch }) {

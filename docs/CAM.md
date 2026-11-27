@@ -44,14 +44,14 @@ The split shows up in source as two different constructor shapes:
 
 - **Types** construct values. `type Point(Integer, Integer)` declares a
   type; `Point(1, 2)` constructs a value.
-- **Actors with a `new`** build actors. `Counter = (start Integer) *{ ... }`
+- **Actors with a `new`** build actors. `Counter = *(start Integer) { ... }`
   declares the actor `Counter`; `Counter(0)` asks its `new` for one. The actors
   it builds are of its class: that relationship is all "class" means.
 
 The prefix `*` sigil promotes a value to an actor at any position where the
 distinction is meaningful: `*Integer(0)` is an Integer-shaped actor cell,
 `*Point(1, 2)` is a Point-shaped actor. The same sigil marks a
-constructor block (`(params) *{ ... }`), where it marks the whole form as
+constructor block (`*(params) { ... }`), where it marks the whole form as
 producing an actor rather than a value.
 
 This is the more accurate axis than "actors are not objects." An actor is never

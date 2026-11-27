@@ -952,7 +952,7 @@ export function genExpr(ctx, expr) {
       if (arg.type === 'Function') return genLambdaArgLabel(ctx, arg);
       return CALL_LIKE.has(arg.type) ? `BvObject.one(${genExpr(ctx, arg)}, '_')` : genExpr(ctx, arg);
     };
-    // An actor held as a value (`k Actor`, `k (…) -> *{ … }`, a cell): `k(args)` is
+    // An actor held as a value (`k Actor`, `k *(…) -> { … }`, a cell): `k(args)` is
     // `$new` to it, answered with the new actor's address.
     if ((expr.callee?.type === 'Identifier' || expr.callee?.type === 'RefRead')
         && ctx.currentTypeEnv?.get(expr.callee.name) === 'Actor') {

@@ -5,8 +5,8 @@ import { parseInterface } from '../../src/parser_interface.js';
 // A class can have members of its own: a singleton, built once where the class is
 // declared, that every actor of the class shares.
 //
-//   Nested:   C = actor { members … new = (params) *{ constructor } }
-//   Trailing: C = (params) *{ constructor } ^ { members }
+//   Nested:   C = actor { members … new = *(params) { constructor } }
+//   Trailing: C = *(params) { constructor } ^ { members }
 //
 // In the nested form the constructor is inside the singleton, so it closes over it,
 // private cells included. In the trailing form it isn't, so it reaches the members
@@ -22,7 +22,7 @@ const script = `
     count *Integer = 10
     @total *Integer = 0
 
-    new = (seed Integer) *{
+    new = *(seed Integer) {
       n Integer = count + seed
       @n = { return n }
       @count = { return count }
@@ -39,7 +39,7 @@ const script = `
       n Integer = count + seed
       @n = { return n }
 
-  @Trailing = (seed Integer) *{
+  @Trailing = *(seed Integer) {
     n Integer = @Trailing.count
     @n = { return n + seed }
     @bump! = { @Trailing.bump!() }
@@ -51,7 +51,7 @@ const script = `
 
   @Headed = actor {
     @count *Integer = 7
-  } ^ (seed Integer) *{
+  } ^ *(seed Integer) {
     n Integer = @Headed.count
     @n = { return n + seed }
   }
@@ -86,7 +86,7 @@ const script = `
     return x
   }
 
-  Counter = (step Integer) *{ @tick! = { Counter.add!(step) } } ^ { @total *Integer = 0; @add! = (n Integer) { @total <- @total + n } }
+  Counter = *(step Integer) { @tick! = { Counter.add!(step) } } ^ { @total *Integer = 0; @add! = (n Integer) { @total <- @total + n } }
 
   @counted! = {
     a = Counter(2)
@@ -98,8 +98,8 @@ const script = `
     return x
   }
 
-  @Shelf = (seed Integer) *{
-    Slot = (k Integer) *{
+  @Shelf = *(seed Integer) {
+    Slot = *(k Integer) {
       v Integer = Slot.base
       @v = { return v + k }
     } ^ {
@@ -186,7 +186,7 @@ describe('trailing class members', () => {
 
   it('a protected cell isn\'t reached through the class', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = C.hidden } ^ { hidden *Integer = 40 }
+      C = *(seed Integer) { n Integer = C.hidden } ^ { hidden *Integer = 40 }
     `)).toThrow(/^No public member 'hidden' in 'C'$/);
   });
 });
@@ -330,7 +330,7 @@ describe('class members — lineal scope', () => {
 describe('class members — scope errors', () => {
   it('a trailing constructor can\'t name a member bare', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = count } ^ { count *Integer = 3 }
+      C = *(seed Integer) { n Integer = count } ^ { count *Integer = 3 }
       @go = () -> 1
     `)).toThrow(/^'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
@@ -342,7 +342,7 @@ describe('class members — ordering', () => {
       C = actor {
         origin = new(0)
         count *Integer = 0
-        new = (seed Integer) *{ n Integer = count + seed }
+        new = *(seed Integer) { n Integer = count + seed }
       }
     `)).toThrow(/'C' is built in its class block \(by 'origin'\) above 'count', which its constructor reads/);
   });
@@ -352,14 +352,14 @@ describe('class members — ordering', () => {
       C = actor {
         count *Integer = 0
         origin = new(0)
-        new = (seed Integer) *{ n Integer = count + seed }
+        new = *(seed Integer) { n Integer = count + seed }
       }
     `)).not.toThrow();
   });
 
   it('trailing: built in the class block when its constructor reaches the class is an error', () => {
     expect(() => compileSource(`
-      C = (seed Integer) *{ n Integer = C.count } ^ {
+      C = *(seed Integer) { n Integer = C.count } ^ {
         @count *Integer = 0
         origin = C(1)
       }
@@ -371,7 +371,7 @@ describe('class members — ordering', () => {
       c = C(1)
       C = actor {
         count *Integer = 0
-        new = (seed Integer) *{ n Integer = count + seed }
+        new = *(seed Integer) { n Integer = count + seed }
       }
     `)).toThrow(/'C' is built \(by 'c'\) above its class block/);
   });
@@ -395,7 +395,7 @@ describe('`new` is reserved', () => {
   it('can\'t be a class outside a singleton', () => {
     expect(() => compileSource(`
       A = *{
-        new = (seed Integer) *{ }
+        new = *(seed Integer) { }
       }
     `)).toThrow(/'new' makes a singleton a class/);
   });
@@ -421,7 +421,7 @@ describe('class members in the service document', () => {
     expect(extract(`
       @C = actor {
         @count *Integer = 0
-        new = (seed Integer) *{
+        new = *(seed Integer) {
           @n = () -> 1
         }
       }
@@ -443,7 +443,7 @@ describe('class members in the service document', () => {
   });
 
   it('read back as a document of their own', () => {
-    const doc = parseInterface('{\n  C (Integer) -> *{\n    n () -> (Integer)\n  } ^ {\n    count *Integer\n  }\n}');
+    const doc = parseInterface('{\n  C *(Integer) -> {\n    n () -> (Integer)\n  } ^ {\n    count *Integer\n  }\n}');
     expect(doc.__types.C.functions).toEqual([{ name: 'n', effect: 'read', params: [], returns: [{ name: null, type: 'Integer', positional: true }] }]);
     expect(doc.__types.C.members.__fields.count).toEqual({ type: 'Integer', cell: true, readOnly: false });
   });

@@ -169,7 +169,7 @@ describe('a call through a sub-service is checked against the document', () => {
 // sub-service is too.
 describe('a call through a sub-service from a class', () => {
   const classScript = `${header}
-@Box = (seed Integer) *{
+@Box = *(seed Integer) {
   @get = {
     v Integer = Svc.s.get()
     return v + seed

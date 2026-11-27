@@ -19,9 +19,9 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 //
 // Three declaration shapes are supported:
 //
-//   use Alias = "…" as (ctor) -> *{ iface }   a claimed constructor (compile-time check)
+//   use Alias = "…" as *(ctor) -> { iface }   a claimed constructor (compile-time check)
 //   use Alias = "…"                           unclaimed: its document is its type
-//   Coerced = Alias as (ctor) -> *{ iface }   coercion of a dep to a typed class
+//   Coerced = Alias as *(ctor) -> { iface }   coercion of a dep to a typed class
 //
 // This file replaces the older `constructs` keyword.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -31,7 +31,7 @@ import { compileSource, createActor, expectActorBehavior, compileActor } from '.
 describe('explicit form — compilation', () => {
   it('single dependency with explicit class header compiles', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{
+      use Thing = "thing.bv" as *(a: Integer) -> {
         get () -> (value: Integer)
       }
 
@@ -43,7 +43,7 @@ describe('explicit form — compilation', () => {
 
   it('empty class params *() compiles', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as () -> *{ ping. () => . }
+      use Thing = "thing.bv" as *() -> { ping. () => . }
 
       t = Thing()
 
@@ -53,8 +53,8 @@ describe('explicit form — compilation', () => {
 
   it('multiple dependencies with class headers compile', () => {
     expect(() => compileSource(`
-      use DB = "db.bv" as (host: Text) -> *{ lookup (key: Text) -> (value: Text) }
-      use Cache = "cache.bv" as (size: Integer) -> *{ get (key: Text) -> (value: Text) }
+      use DB = "db.bv" as *(host: Text) -> { lookup (key: Text) -> (value: Text) }
+      use Cache = "cache.bv" as *(size: Integer) -> { get (key: Text) -> (value: Text) }
 
       db = DB(host: "localhost")
       cache = Cache(size: 100)
@@ -78,7 +78,7 @@ describe('explicit form — compilation', () => {
 
 describe('explicit form — actor routing', () => {
   const source = `
-    use Thing = "thing.bv" as (a: Integer) -> *{
+    use Thing = "thing.bv" as *(a: Integer) -> {
     get () -> (value: Integer)
     ping. () => .
   }
@@ -127,7 +127,7 @@ describe('explicit form — actor routing', () => {
 describe('explicit form — multiple actors', () => {
   it('two actors of the same dep route to independent addresses', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as (tag: Text) -> *{
+      use Thing = "thing.bv" as *(tag: Text) -> {
       ping () -> (ok: Text)
     }
 
@@ -169,7 +169,7 @@ describe('explicit form — multiple actors', () => {
 describe('explicit form — full roundtrip', () => {
   it('construct, call method with arg, mock reply, return to caller', async () => {
     const actor = await createActor(`
-      use Math = "math.bv" as (base: Integer) -> *{
+      use Math = "math.bv" as *(base: Integer) -> {
       double (n: Integer) -> (result: Integer)
     }
 
@@ -199,7 +199,7 @@ describe('explicit form — full roundtrip', () => {
 describe('explicit form — deferred (function-body) construction', () => {
   it('construction inside a handler emits `new` lazily', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ ping. () => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { ping. () => . }
 
       @spawn. = {
         t = Thing(a: 5)
@@ -214,7 +214,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 
   it('construction + method call inside one handler', async () => {
     const actor = await createActor(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ get () -> (value: Integer) }
+      use Thing = "thing.bv" as *(a: Integer) -> { get () -> (value: Integer) }
 
       @go
         =
@@ -236,7 +236,7 @@ describe('explicit form — deferred (function-body) construction', () => {
 describe('explicit form — class arg validation', () => {
   it('rejects wrong class arg type', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ ping. () => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { ping. () => . }
 
       t = Thing(a: "not-an-int")
 
@@ -246,7 +246,7 @@ describe('explicit form — class arg validation', () => {
 
   it('rejects extra class args', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ ping. () => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { ping. () => . }
 
       t = Thing(a: 5, b: 99)
 
@@ -256,7 +256,7 @@ describe('explicit form — class arg validation', () => {
 
   it('rejects missing class args', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer, b: Text) -> *{ ping. () => . }
+      use Thing = "thing.bv" as *(a: Integer, b: Text) -> { ping. () => . }
 
       t = Thing(a: 5)
 
@@ -279,7 +279,7 @@ describe('explicit form — class arg validation', () => {
 describe('explicit form — method call validation', () => {
   it('rejects undefined method on inline interface', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ ping. () => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { ping. () => . }
 
       t = Thing(a: 5)
 
@@ -289,7 +289,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects wrong arg type at method call site', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ call. (msg: Text) => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { call. (msg: Text) => . }
 
       t = Thing(a: 5)
 
@@ -299,7 +299,7 @@ describe('explicit form — method call validation', () => {
 
   it('rejects returning silent method call', () => {
     expect(() => compileSource(`
-      use Thing = "thing.bv" as (a: Integer) -> *{ fire. () => . }
+      use Thing = "thing.bv" as *(a: Integer) -> { fire. () => . }
 
       t = Thing(a: 5)
 
@@ -344,7 +344,7 @@ describe('constructor block — calls are checked as in a handler body', () => {
 
   it('a method a local class lacks → compile error', () => {
     expect(() => compileSource(`
-      T = (x Integer) *{ @a = () -> v: x as Integer }
+      T = *(x Integer) { @a = () -> v: x as Integer }
       t = T(1)
       y = t.zz()
     `)).toThrow(/'T' has no method 'zz'/);
@@ -442,7 +442,7 @@ describe('coercion to typed class — compilation', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
 
-      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+      Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 
@@ -454,7 +454,7 @@ describe('coercion to typed class — compilation', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
 
-      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+      Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
 
       thing = Coerced(a: "not-an-int")
 
@@ -466,7 +466,7 @@ describe('coercion to typed class — compilation', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
 
-      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+      Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 
@@ -483,7 +483,7 @@ describe('coercion to typed class — runtime', () => {
     const actor = await createActor(`
       use Thing = "thing.bv"
 
-      Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
+      Coerced = Thing as *(a: Integer) -> { get () -> (value: Integer) }
 
       thing = Coerced(a: 5)
 

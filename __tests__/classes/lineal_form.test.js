@@ -49,7 +49,7 @@ describe('lineal class grammar — accepted forms', () => {
 
   it('Cls <<\\n*\\nparams\\n*\\nbody . (overload form)', () => {
     expect(() => compileSource(`
-      Box = (value Integer) *{
+      Box = *(value Integer) {
         @get = () -> result: value
       }
 
