@@ -106,10 +106,10 @@ describe('subclasses — accessor type override rejected — compilation', () =>
   });
 });
 
-// ── Compilation: whitespace tolerance in <T |> syntax ───────────────────────
+// ── Compilation: whitespace tolerance around ^ ──────────────────────────────
 
 describe('subclasses — whitespace tolerance — compilation', () => {
-  it('< T | > with space before superclass', () => {
+  it('T ^ *(…) with spaces around ^', () => {
     expect(() => compileSource(`
       T = *(a Integer) {}
       U = T ^ *(b Integer) { super(b) }
@@ -117,7 +117,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
     `)).not.toThrow();
   });
 
-  it('<\\nT |\\n> with newline before superclass', () => {
+  it('a constructor body spanning lines after T ^', () => {
     expect(() => compileSource(`
       T = *(a Integer) {}
       U = T ^ *(b Integer) {

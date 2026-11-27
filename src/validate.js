@@ -4215,7 +4215,7 @@ function validateRemoteCall(expr, remotesParsed, typeEnv, actorByName) {
     // Every clause of an overloaded method: a call matches if any one does.
     let fns = typeActor?.functions?.filter(f => f.name === '@' + methodName) || [];
     // Walk the superclass chain for inherited methods. Lets a typed remote
-    // singleton (e.g. `document: <Document |>`, `Document: <Node |>`) pick
+    // singleton (e.g. `document`, a Document, whose parent is Node) pick
     // up methods declared on its ancestors — even when those ancestors live
     // in a different remote service, since actorByName is shared.
     if (fns.length === 0 && typeActor) {

@@ -56,7 +56,7 @@ describe('HTML tag smoke — no-arg construction', () => {
 // Sampling :id Text on every tag is enough — the inheritance machinery is
 // the same for all Element fields, and we already exhaustively test those
 // fields in element.dom.test.js. A single representative call per tag
-// confirms `<Element |>` actually pulls the parent's surface in.
+// confirms `Element ^` actually pulls the parent's surface in.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('HTML tag smoke — inherits Element attributes', () => {

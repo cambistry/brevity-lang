@@ -63,7 +63,7 @@ const compileWithHTML = (src) =>
   compileSource(src, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] });
 
 // Some compile tests need `<:document>` to resolve — the document service
-// declares `document: <Document |>` whose Document superclass is in HTML.
+// declares `document` as a Document, whose parent Node is in HTML.
 // Both manifests must be registered together for cross-service inheritance
 // to walk Node's accessor surface up from the singleton.
 const compileWithDocAndHTML = (src) =>
