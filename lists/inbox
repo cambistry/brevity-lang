@@ -1,3 +1,6 @@
+kanban/tickets/arrow-functions-take-bare-comma-params.md
+kanban/tickets/clause-lists-callable-lists-with-pattern-heads.md
+kanban/tickets/zero-param-arrow-functions-take-parens.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/warn-on-an-unused-value-in-a-body.md
 kanban/tickets/if-arrow-branch-is-not-a-return.md
