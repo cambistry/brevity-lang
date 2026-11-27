@@ -1,4 +1,4 @@
-import { inspectableFunctions, fnSignatureForm, fnAddress } from '../fn_signature.js';
+import { inspectableFunctions, fnSignatureForm, fnAddress, fnKey } from '../fn_signature.js';
 import { markSendOperands } from '../send_operands.js';
 import { dependencyAddressing } from '../dep_address.js';
 import { buildTypeTable, registryEntries } from '../type_table.js';
@@ -1311,9 +1311,9 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       return;
     }
     if ('get' in t) {
-      const _vals = {${[...[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnAddress(f))}: ${JSON.stringify(fnAddress(f))}`)].join(',')} };
+      const _vals = {${[...[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnKey(f))}: ${JSON.stringify(fnAddress(f))}`)].join(',')} };
       const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeNameEnc === undefined ? undefined : typeText(v.typeNameEnc, ctx.depAliases))}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(typeText(orAny(envTypeOf(p)), ctx.depAliases))}`)].join(',')} };
-      const _tyOf = {${[...[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnAddress(f))}: () => (${JSON.stringify(fnSignatureForm(f))})`)].join(',')} };
+      const _tyOf = {${[...[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnKey(f))}: () => (${JSON.stringify(fnSignatureForm(f))})`)].join(',')} };
       let _v = t.get in _vals ? _vals[t.get] : null;
       if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
         const _hasPos = _v.positional.length > 0;

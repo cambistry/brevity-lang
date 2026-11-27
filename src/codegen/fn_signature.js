@@ -3,7 +3,7 @@
 // (notes/opre-tagged-forms-2026-11-24.md): `["%f", { args, re, writes }]`.
 import { returnShapes } from '../return_shapes.js';
 import { entryList } from '../service_doc.js';
-import { wireLabel } from './wire_labels.js';
+import { wireLabel, selfAddress } from './wire_labels.js';
 
 const enc = (t) => (t === undefined ? 'Anything' : t);
 
@@ -27,4 +27,8 @@ export function fnSignatureForm(fn) {
   return ['%f', sig];
 }
 
-export const fnAddress = (fn) => wireLabel(fn.name);
+// A function as a value: its address, relative to its actor (`#<:~f>`), as `#<:C>`
+// is for a class the actor declares. `get` names it by its label, `~f` (fnKey).
+export const fnAddressOf = (name) => '#<' + selfAddress(name) + '>';
+export const fnAddress = (fn) => fnAddressOf(fn.name);
+export const fnKey = (fn) => wireLabel(fn.name);

@@ -1215,6 +1215,8 @@ export function genExpr(ctx, expr) {
   }
   if (expr.type === 'SelfValue') return '"#<:>"';
   if (expr.type === 'ActorValue') return JSON.stringify(actorAddress(ctx.fileName, expr));
+  // One of the actor's own functions as a value (src/validate.js lowerFnRefReplies).
+  if (expr.type === 'FnAddress') return JSON.stringify(expr.address);
   if (expr.type === 'DotAccessExpr') {
     // A sub-service (`Svc.s`) is its address (src/opre.js).
     if (expr.opreAddress) return JSON.stringify(expr.opreAddress.wire);
@@ -1610,7 +1612,6 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = undefined, 
   const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const posVal = f => {
     // A function of ours (`&f`) leaves as its address, as on every target.
-    if (f.expr?.type === 'FnRef' && ctx.actorFnNames.has(f.expr.name)) return JSON.stringify(wireLabel(f.expr.name));
     let raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     // A send to an actor (`return b.get()`) replies with what it answers.

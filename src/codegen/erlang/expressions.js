@@ -959,6 +959,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
 
   if (expr.type === 'SelfValue') return '<<"#<:>"/utf8>>';
   if (expr.type === 'ActorValue') return erlString(actorAddress(ctx.fileName, expr));
+  // One of the actor's own functions as a value (src/validate.js lowerFnRefReplies).
+  if (expr.type === 'FnAddress') return erlString(expr.address);
   throw new Error(`Unsupported Erlang expression: ${expr.type}`);
 }
 

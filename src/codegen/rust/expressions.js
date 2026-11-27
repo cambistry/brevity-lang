@@ -1570,6 +1570,8 @@ ${subRegLines.join('\n')}
   }
   if (expr.type === 'SelfValue') return 'json!("#<:>")';
   if (expr.type === 'ActorValue') return `json!(${JSON.stringify(actorAddress(G.ctx.fileName, expr))})`;
+  // One of the actor's own functions as a value (src/validate.js lowerFnRefReplies).
+  if (expr.type === 'FnAddress') return `json!(${JSON.stringify(expr.address)})`;
   throw new Error(`Unsupported Rust expression: ${expr.type}`);
 }
 

@@ -1,4 +1,4 @@
-import { inspectableFunctions, fnSignatureForm, fnAddress } from '../fn_signature.js';
+import { inspectableFunctions, fnSignatureForm, fnAddress, fnKey } from '../fn_signature.js';
 import { isInstance } from '../../type_enc.js';
 import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
@@ -1722,11 +1722,11 @@ ${putLines},
     : Array.isArray(v) ? `[${v.map(erlJson).join(', ')}]` : `#{${Object.entries(v).map(([k, x]) => `${erlString(k)} => ${erlJson(x)}`).join(', ')}}`);
   const testGetClauses = [
     ...allStateNames.map(n => `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`),
-    ...fnsSeen.map(f => `        ${erlString(fnAddress(f))} -> ${erlString(fnAddress(f))}`),
+    ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlString(fnAddress(f))}`),
   ].join(';\n');
   const testTypeClauses = [
     ...allStateNames.map(n => `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`),
-    ...fnsSeen.map(f => `        ${erlString(fnAddress(f))} -> ${erlJson(fnSignatureForm(f))}`),
+    ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlJson(fnSignatureForm(f))}`),
   ].join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];

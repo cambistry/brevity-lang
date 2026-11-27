@@ -1,4 +1,4 @@
-import { inspectableFunctions, fnSignatureForm, fnAddress } from '../fn_signature.js';
+import { inspectableFunctions, fnSignatureForm, fnAddress, fnKey } from '../fn_signature.js';
 import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
 // The state key of each name an actor answers `$get` for, by class ("" is the
@@ -727,7 +727,7 @@ ${targetClauses}
 })()}
 ${inspectableFunctions(actor).length ? `        // A function reads as its address, typed with its signature (src/codegen/fn_signature.js).
         if let Some((addr, sig)) = match test.get("get").and_then(|v| v.as_str()).unwrap_or("") {
-${inspectableFunctions(actor).map(f => `            ${JSON.stringify(fnAddress(f))} => Some((${JSON.stringify(fnAddress(f))}, json!(${JSON.stringify(fnSignatureForm(f))}))),`).join('\n')}
+${inspectableFunctions(actor).map(f => `            ${JSON.stringify(fnKey(f))} => Some((${JSON.stringify(fnAddress(f))}, json!(${JSON.stringify(fnSignatureForm(f))}))),`).join('\n')}
             _ => None,
         } {
             let mut resp = Map::new();

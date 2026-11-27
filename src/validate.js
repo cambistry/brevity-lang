@@ -5,6 +5,7 @@ import { hasInterface } from './actor_interface.js';
 import { checkEffects } from './effects.js';
 import { readDocument } from './service_doc.js';
 import { readParamsDocument } from './parser_types.js';
+import { fnAddressOf } from './codegen/fn_signature.js';
 import { isFn, fnReply, fnSignature, isList, listElement, listOf, show, members as encMembers, isUnion, isInstance, ownPath, ownNames, addressesIn } from './type_enc.js';
 import { _opre_split as splitAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { inferType, typesCompatible as typesCompatibleEnc, binaryResultType as binaryResultTypeEnc, ANY_LIST } from './type_infer.js';
@@ -144,6 +145,26 @@ function lowerCellMemberReads(ast) {
     return { type: 'DotCallExpr', object: n.object, method: n.property, args: [], ...(n.loc && { loc: n.loc }) };
   };
   walk(ast.actors);
+}
+
+// A reply of one of the actor's own functions (`-> &f`) is its address, a value like
+// any other: `#<:~f>`, relative to the replying actor, as `#<:C>` is for a class it
+// declares (src/codegen/fn_signature.js fnAddress).
+function lowerFnRefReplies(ast) {
+  for (const actor of ast.actors || []) {
+    const own = new Set((actor.functions || []).map(f => f.name));
+    const walk = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(walk); return; }
+      if ((n.type === 'Reply' || n.type === 'Return') && Array.isArray(n.fields)) {
+        for (const f of n.fields) {
+          if (f.expr?.type === 'FnRef' && own.has(f.expr.name)) f.expr = { type: 'FnAddress', name: f.expr.name, address: fnAddressOf(f.expr.name), ...(f.expr.loc && { loc: f.expr.loc }) };
+        }
+      }
+      for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
+    };
+    walk(actor.functions);
+  }
 }
 
 // A cell holding an actor of a class here is a pointer (notes/actor-pointers-2026-11-27.md).
@@ -354,6 +375,7 @@ function validateProgram(ast, options = {}) {
   lowerTailIfValues(ast);
   lowerCellMemberReads(ast);
   lowerPointerWrites(ast);
+  lowerFnRefReplies(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
