@@ -3,3 +3,4 @@ kanban/tickets/a-bind-in-an-if-value-branch-is-checked.md
 kanban/tickets/text-function-args-and-operands-are-type-checked.md
 kanban/tickets/a-lambda-as-a-value-is-its-address.md
 kanban/tickets/a-call-through-a-name-that-may-be-null-is-guarded.md
+kanban/tickets/use-v-type.md
