@@ -1674,3 +1674,140 @@ describe('if — parens around the condition', () => {
     );
   });
 });
+
+// An early return is `if (c) return v`. `-> v` after an `if` is not a form on any
+// path, so it never leaves the function.
+describe('if — `-> v` is not a return', () => {
+  it('in a handler body', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        if (a > 10) -> "big"
+        return "small"
+      }
+    `)).toThrow();
+  });
+
+  it('after else', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        if (a > 10) return "big" else -> "small"
+        return "x"
+      }
+    `)).toThrow();
+  });
+
+  it('in a lineal body', () => {
+    expect(() => compileSource(`
+      @f
+        =
+        a Integer
+        =
+        if (a > 10) -> "big"
+        return "small"
+    `)).toThrow();
+  });
+
+  it('in a while body', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        n *Integer = 0
+        repeat while n < 3 {
+          n <- n + 1
+          if (a > 10) -> "big"
+        }
+        return "small"
+      }
+    `)).toThrow();
+  });
+
+  it('in a constructor block', () => {
+    expect(() => compileSource(`
+      C = *(a Integer) {
+        if (a > 10) -> "big"
+        @get = () -> a
+      }
+      @f = () -> C(1).get()
+    `)).toThrow();
+  });
+
+  it('in an if used as a value', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        x Text = if (a > 10) -> "big" else "small"
+        return x
+      }
+    `)).toThrow();
+  });
+
+  it('before a write', () => {
+    expect(() => compileSource(`
+      n *Integer = 0
+      @f! = (a Integer) {
+        if (a > 10) -> n <- 1
+        return n
+      }
+    `)).toThrow();
+  });
+
+  it('in a clause body', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        r Text = a |> [
+          (x Integer) {
+            if (x > 10) -> "big"
+            "small"
+          }
+        ]
+        return r
+      }
+    `)).toThrow();
+  });
+});
+
+// An `if` used as a value gives a value from each branch; leaving the function is
+// the statement `if (c) return v`.
+describe('if — a return in an if used as a value', () => {
+  it('is an error', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        x Text = if (a > 10) return "big" else "small"
+        return x
+      }
+    `)).toThrow("A branch of an 'if' used as a value can't return: write 'if (c) return v' as its own statement");
+  });
+
+  it('is an error beside a write', () => {
+    expect(() => compileSource(`
+      n *Integer = 0
+      @g! = (a Integer) {
+        x Integer = if (a > 10) return 7 else (n <- 2)
+        return x
+      }
+    `)).toThrow("A branch of an 'if' used as a value can't return");
+  });
+
+  it('is an error nested in a braced branch', () => {
+    expect(() => compileSource(`
+      @f = (a Integer, b Boolean) {
+        x Integer = if (a > 10) {
+          if (b) return 1
+          2
+        } else 3
+        return x
+      }
+    `)).toThrow("A branch of an 'if' used as a value can't return");
+  });
+
+  it('a statement if, an else-if chain and a nested function may return', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        if (a > 10) return "big" else if (a > 5) return "mid"
+        g = (k Integer) {
+          y Integer = if (k > 0) k else 0
+          return y
+        }
+        return "small"
+      }
+    `)).not.toThrow();
+  });
+});

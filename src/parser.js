@@ -7080,11 +7080,9 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       // Every one-line branch then takes that form, since an `if` gives a value when
       // its branches agree.
       if (node.type === 'IfExpr' && node !== statementIf) {
-        const lone = (branch) => {
-          if (branch?.expr) return branch.expr;
-          const only = branch?.body?.length === 1 ? branch.body[0] : null;
-          return only?.type === 'Return' && only.fields?.length === 1 ? only.fields[0].expr : null;
-        };
+        // A one-line branch's value. A `return` branch is not a value (validate
+        // rejects it in an `if` used as a value).
+        const lone = (branch) => branch?.expr ?? null;
         const branches = [];
         for (let b = node; b; b = b.else?.type === 'IfExpr' ? b.else : null) branches.push(b.then, ...(b.else?.type === 'IfExpr' ? [] : [b.else]));
         if (branches.some(b => hasWrite(lone(b)))) {

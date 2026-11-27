@@ -80,8 +80,41 @@ export function validate(ast, options = {}) {
   }
 }
 
+// An `if` used as a value gives a value from each branch, so a branch can't
+// `return`: leaving the function is the statement `if (c) return v`. An `if` that is
+// a whole statement, and the `else if`s of its chain, aren't values; a nested
+// function's `return` is its own.
+function checkValueIfReturns(ast) {
+  const walk = (n, inValue) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(x => walk(x, inValue)); return; }
+    if (n.type === 'Function') { walk(n.body ?? n.expr, false); return; }
+    if (n.type === 'Return' && inValue) {
+      throw new Error("A branch of an 'if' used as a value can't return: write 'if (c) return v' as its own statement");
+    }
+    const statementIf = (n.type === 'ExprStatement' || n.type === 'ImplicitReturn') && n.expr?.type === 'IfExpr';
+    if (statementIf) {
+      for (let b = n.expr; b; b = b.else?.type === 'IfExpr' ? b.else : null) {
+        walk(b.cond, inValue);
+        walk(b.then, inValue);
+        if (b.else?.type !== 'IfExpr') walk(b.else, inValue);
+      }
+      return;
+    }
+    if (n.type === 'IfExpr') {
+      walk(n.cond, inValue);
+      walk(n.then, true);
+      walk(n.else, true);
+      return;
+    }
+    for (const k in n) if (k !== 'type') walk(n[k], inValue);
+  };
+  walk(ast.actors, false);
+}
+
 function validateProgram(ast, options = {}) {
   run.ast = ast;
+  checkValueIfReturns(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);

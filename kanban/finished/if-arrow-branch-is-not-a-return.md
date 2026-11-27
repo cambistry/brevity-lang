@@ -16,3 +16,5 @@ The reverse also needs checking. In an `if` used as a value (`x = if (c) return 
 the parser's `settleWrites` (`lone` in src/parser.js) still reads a lone `return` branch as
 the branch's value, as it read the old `->` branch. A `return` there should leave the
 function, or be an error, never become the `if`'s value.
+
+**Decided (2026-11-27):** in an `if` used as a value, a `return` branch is a compile error. Leaving the function is the early-return statement, `if (c) return v`.
