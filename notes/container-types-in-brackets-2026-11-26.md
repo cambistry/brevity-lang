@@ -18,7 +18,7 @@ maybe List[Integer | null] = [1, null]
 - The `[` follows the name unspaced. `List [Integer]` is not a type.
 - Bare `List` is `List[Anything]`.
 - The brackets hold a whole type, so a union inside is unambiguous: `List[Integer | null]` is a list of maybe-Integers; `List[Integer] | null` is a maybe-list.
-- Errors and service documents print the same spelling.
+- Errors and service documents print the same spelling, and so does a list value's `ty` tag on the wire, which is the type's text: `ty: ['List[Integer]']`.
 
 ## Reasons
 
@@ -27,4 +27,4 @@ maybe List[Integer | null] = [1, null]
 
 ## Encoding
 
-Unchanged for lists: `List[Integer]` is `[['Integer'], {'%t': 'List'}]`. A container is `[param, {'%t': X}]` with `param` its element's type, wrapped `[…]` only for `List` (a list holds any number of its element). So `Signed[Integer]` is `['Integer', {'%t': 'Signed'}]`, and the old "many" reading, `Signed of Integers`, is written `Signed[List[Integer]]`: `[[['Integer'], {'%t': 'List'}], {'%t': 'Signed'}]`.
+The Opre encoding is unchanged for lists: `List[Integer]` is `[['Integer'], {'%t': 'List'}]`. A container is `[param, {'%t': X}]` with `param` its element's type, wrapped `[…]` only for `List` (a list holds any number of its element). So `Signed[Integer]` is `['Integer', {'%t': 'Signed'}]`, and the old "many" reading, `Signed of Integers`, is written `Signed[List[Integer]]`: `[[['Integer'], {'%t': 'List'}], {'%t': 'Signed'}]`.

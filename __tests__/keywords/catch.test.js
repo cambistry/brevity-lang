@@ -337,6 +337,91 @@ describe('catch — runtime', () => {
   });
 });
 
+// `over` and `reduce` run their body as a function, so a label inside it exits
+// across that boundary to its `catch`.
+describe('catch — exiting through over and reduce', () => {
+  const script = `
+    @overBare = () {
+      n *Integer = 0
+      xs List[Integer] = [1, 2, 3, 4, 5]
+      catch #done {
+        seen List[Integer] = over(xs) (x Integer) {
+          n <- n + 1
+          if (x == 3) #done
+          x
+        }
+      }
+      return n
+    }
+    @overValue = (limit Integer) {
+      xs List[Integer] = [1, 2, 3, 4]
+      r Integer = catch #found {
+        seen List[Integer] = over(xs) (x Integer) {
+          if (x > limit) #found(x * 10)
+          x
+        }
+        0
+      }
+      return r
+    }
+    @reduceValue = (limit Integer) {
+      xs List[Integer] = [1, 2, 3, 4]
+      r Integer = catch #big {
+        reduce(0, xs) (acc Integer, x Integer) {
+          if (acc + x > limit) #big(acc)
+          acc + x
+        }
+      }
+      return r
+    }
+    @nested = () {
+      xss List[List[Integer]] = [[1, 2], [3, 4, 5]]
+      r Integer = catch #found {
+        seen List[List[Integer]] = over(xss) (xs List[Integer]) {
+          over(xs) (x Integer) {
+            if (x == 4) #found(reduce(0, xs) (acc Integer, y Integer) { acc + y })
+            x
+          }
+        }
+        0
+      }
+      return r
+    }
+  `;
+
+  it('a bare exit from over', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'overBare', from: 'c' } },
+      { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a value exit from over, and falling through it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2], 'overValue'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: [30], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[9], 'overValue'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [0], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a value exit from reduce, and falling through it', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[5], 'reduceValue'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: [3], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[99], 'reduceValue'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [10], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a value exit from over nested in over, carrying a reduce', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'nested', from: 'c' } },
+      { output: { id: '1', re: [12], ty: ['Integer'], to: 'c' } },
+    );
+  });
+});
+
 describe('catch — compile errors', () => {
   it('rejects shadowing an active label', () => {
     const src = `

@@ -1,3 +1,4 @@
+import { exitsOuterLabel } from '../label_exits.js';
 import { isDependencyValue } from '../dep_address.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
@@ -221,6 +222,8 @@ export function wrapWithCapture(ctx, code, funcNode, selfName) {
 // Check if a lambda references outer refs (read or write) — these can't be lifted to dispatch handlers
 // because refs need live cell access (for mutation visibility)
 export function lambdaUsesOuterRefs(ctx, funcNode) {
+  // One that exits an enclosing `catch` runs inline, where its label is.
+  if (exitsOuterLabel(funcNode)) return true;
   collectFreeVars(ctx, funcNode);
   // Check if any free vars are ref-declared in outer scope
   // We detect this by checking if the AST uses RefRead/SetStatement on free vars
@@ -1015,7 +1018,11 @@ export function genExpr(ctx, expr) {
     if (lambdaUsesOuterRefs(ctx, expr)) {
       const destr = genDestructure(ctx, expr.params, '  ');
       if (expr.body) {
-        return wrapWithCapture(ctx, ctx.genFunctionBodyCode(ctx, expr.params, expr.body, null, expr.returnType, expr.returnTypeEnc), expr);
+        // A label exit inside it crosses this function (genLabelExit).
+        ctx.fnDepth = (ctx.fnDepth || 0) + 1;
+        try {
+          return wrapWithCapture(ctx, ctx.genFunctionBodyCode(ctx, expr.params, expr.body, null, expr.returnType, expr.returnTypeEnc), expr);
+        } finally { ctx.fnDepth--; }
       }
       if (expr.returnType === '.') {
         return wrapWithCapture(ctx, `async (_s) => {${destr}\n  ${genExpr(ctx, expr.expr)};\n}`, expr);

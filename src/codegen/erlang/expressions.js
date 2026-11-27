@@ -1434,6 +1434,23 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
       return `case is_truthy(${cond}) of true -> ${thenCode}; false -> ${elseCode} end`;
     }
     if (e.type === 'Function') return genFunctionLiteral(ctx, e, typeEnv, ctx, undefined, innerRenames);
+    // `over` and `reduce` of a function in here: it closes over this fun's names too.
+    if ((e.type === 'OverExpr' || e.type === 'ReduceExpr') && e.fn?.type === 'Function') {
+      const list = genInnerExpr(e.collection);
+      const send = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
+      const inline = erlLambdaUsesOuterRefs(ctx, e.fn);
+      const fn = inline ? genFunctionLiteral(ctx, e.fn, typeEnv, sCtx, undefined, new Map([...(outerRenames || []), ...innerRenames])) : null;
+      const label = inline ? null : erlGenLambdaArgLabel(ctx, e.fn, typeEnv, sCtx);
+      if (e.type === 'OverExpr') return `brevity_map(${list}, ${fn ?? `fun(Item_) -> bv_object_one(${send}(${label}, [Item_])) end`})`;
+      const step = fn ? `fun(Item_, Acc_) -> (${fn})(Acc_, Item_) end` : `fun(Item_, Acc_) -> bv_object_one(${send}(${label}, [Acc_, Item_])) end`;
+      return e.initial ? `brevity_foldl(${list}, ${genInnerExpr(e.initial)}, ${step})` : `brevity_foldl1(${step}, ${list})`;
+    }
+    // An exit to a `catch` around this fun: its tagged throw (genErlCatchStatement).
+    if (e.type === 'LabelInvoke') {
+      const entry = (ctx.catchLabelStack || []).slice().reverse().find(c => c.brevityName === e.label);
+      if (!entry) throw new Error(`Label ${e.label} is not in scope`);
+      return e.valueExpr ? `throw({'${entry.tag}', ${genInnerExpr(e.valueExpr)}})` : `throw('${entry.tag}')`;
+    }
     if (e.type === 'FunctionCallExpr' && e.outerFnCall) {
       const args = e.args.filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
       return `outer_self_send(${e.outerLevel}, ${erlOp(e.callee.name)}, [${args.join(', ')}], ${e.callee.name.endsWith('.') || !!e.launched})`;
@@ -1459,8 +1476,10 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
           const renamed = prefix + erlVarName(s.name);
           innerRenames.set(s.name, renamed);
           parts.push(`${renamed} = ${genInnerExpr(s.value)}`);
-        } else if (s.type === 'ImplicitReturn') {
+        } else if (s.type === 'ImplicitReturn' || s.type === 'ExprStatement') {
           parts.push(genInnerExpr(s.expr));
+        } else {
+          throw new Error(`Erlang: a function's if-branch can't hold a ${s.type} here`);
         }
       }
       return parts.join(', ');
@@ -1470,8 +1489,11 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
 
   let bodyExpr;
   if (expr.body && expr.body.length > 0) {
-    const implRet = expr.body.find(s => s.type === 'ImplicitReturn');
-    const bodyStmts = expr.body.filter(s => s.type !== 'ImplicitReturn');
+    // Only the last statement is the tail; an earlier value runs for its effect.
+    const tail = expr.body[expr.body.length - 1];
+    const implRet = tail.type === 'ImplicitReturn' ? tail : undefined;
+    const bodyStmts = (implRet ? expr.body.slice(0, -1) : expr.body)
+      .map(st => (st.type === 'ImplicitReturn' ? { ...st, type: 'ExprStatement' } : st));
 
     if (bodyStmts.length > 0 || implRet) {
       const lines = [];
@@ -1722,7 +1744,8 @@ function genReduceExpr(ctx, expr, typeEnv, sCtx) {
     const label = erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx);
     fn = `fun(Item_, Acc_) -> bv_object_one(${ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send'}(${label}, [Acc_, Item_])) end`;
   } else {
-    fn = genExpr(ctx, expr.fn, typeEnv, sCtx);
+    // lists:foldl calls its fun (Item, Acc); a reduce's function takes (acc, item).
+    fn = `fun(Item_, Acc_) -> (${genExpr(ctx, expr.fn, typeEnv, sCtx)})(Acc_, Item_) end`;
   }
   if (expr.initial) {
     const init = genExpr(ctx, expr.initial, typeEnv, sCtx);

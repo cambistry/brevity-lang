@@ -650,6 +650,8 @@ function _bvAsTry(v, d) {
   if (v === null || typeof v !== 'object' || v instanceof BvDecimal) return _BV_AS_NO;
   return _bvAsFields(v, d);
 }
+// A label's exit from inside a function (an over or reduce body), thrown to its catch.
+class _BvLabelExit { constructor(label, value) { this.label = label; this.value = value; } }
 // A destructure's positional slot: the value has one there, or the destructure fails.
 function _bvPositional(v, i) {
   if (!v || !Array.isArray(v.positional) || v.positional.length <= i) throw new Error('destructure: no positional value ' + i);

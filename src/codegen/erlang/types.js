@@ -1,3 +1,4 @@
+import { exitsOuterLabel } from '../label_exits.js';
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
 import { erlStateKey, erlString } from './preambles.js';
@@ -275,6 +276,8 @@ function erlCollectFreeVars(ctx, funcNode) {
 
 // Check if a lambda references outer refs — these can't be lifted to dispatch handlers
 function erlLambdaUsesOuterRefs(ctx, funcNode) {
+  // One that exits an enclosing `catch` runs inline, where its label is.
+  if (exitsOuterLabel(funcNode)) return true;
   const body = funcNode.body || [];
   const localRefs = new Set();
   for (const s of body) {

@@ -17,7 +17,8 @@ import {
 } from './types.js';
 import { intLiteral, intFromValue, intToValue, intFromI64, intArithOp, intPow, intToUsize, valueArray } from './int_repr.js';
 import { decLiteral, decFromValue, decArithOp, decPow } from './dec_repr.js';
-import { genRustLiftedLambda, genRustLocals, genRustValueCatchExpr } from './statements.js';
+import { genRustLiftedLambda, genRustLocals, genRustValueCatchExpr, genRustCatchBodyStmt } from './statements.js';
+import { exitsOuterLabel } from '../label_exits.js';
 import { RUST_BLOB_METHODS, RUST_TEXT_METHODS, RUST_GRAPHEME_METHODS, RUST_LIST_METHODS, dispatchMethod } from './method_tables.js';
 
 // Classify the source numeric type of an operand for coercion
@@ -184,6 +185,41 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null, label = 
     '}',
   );
   return lines;
+}
+
+// `over` or `reduce` of a function that exits a `catch` around it: a loop, not an
+// iterator closure, so its `break 'label` reaches the catch's labeled block. The
+// list is cloned first, so the body may write the actor's state.
+function genRustLabelExitLoop(expr, typeEnv, eCtx) {
+  const fn = expr.fn;
+  const coll = genRustExpr(expr.collection, typeEnv, eCtx);
+  const elemOf = (() => { const t = inferType(expr.collection, typeEnv); const e = isList(t) ? listElement(t) : undefined; return e !== 'Anything' ? e : undefined; })();
+  const bind = (param, from, fallback) => {
+    if (!param) return '';
+    const t = envTypeOf(param) ?? fallback;
+    if (t === undefined) return `let ${rustIdent(param.name)} = ${from}.clone();`;
+    typeEnv.set(param.name, t);
+    return `let ${rustIdent(param.name)}: ${rustType(t)} = ${convertFromValue(`${from}.clone()`, t)};`;
+  };
+  const [first, second] = fn.params || [];
+  const initType = expr.initial ? inferType(expr.initial, typeEnv) : elemOf;
+  // The params are bound before the body is generated, so it reads them typed.
+  const head = expr.type === 'OverExpr'
+    ? bind(first, '_el', elemOf)
+    : `${bind(first, '_a', initType === elemOf ? elemOf : undefined)} ${bind(second, '_el', elemOf)}`;
+  const body = fn.body ?? [{ type: 'ImplicitReturn', expr: fn.expr }];
+  const last = body[body.length - 1];
+  const hasTail = last?.type === 'ImplicitReturn' && last.expr?.type !== 'LabelInvoke' && last.expr?.type !== 'IfExpr';
+  const stmts = (hasTail ? body.slice(0, -1) : body).map(st => genRustCatchBodyStmt(st, typeEnv, '')).join(' ');
+  const value = hasTail ? forceJsonWrap(toJsonValue(genRustExpr(last.expr, typeEnv, eCtx), declaredReturn(fn))) : 'Value::Null';
+  if (expr.type === 'OverExpr') {
+    return `{ let _cv = (${coll}).clone(); match _cv.as_array().cloned() { Some(_arr) => { let mut _out: Vec<Value> = Vec::new(); for _el in _arr { ${head} ${stmts} _out.push(${value}); } Value::Array(_out) } None => Value::Null } }`;
+  }
+  const loop = (rest) => `for _el in ${rest}.iter().cloned() { ${head} ${stmts} _a = ${value}; } _a`;
+  const run = expr.initial
+    ? `{ let mut _a: Value = ${forceJsonWrap(toJsonValue(genRustExpr(expr.initial, typeEnv, eCtx), initType))}; ${loop('_arr[..]')} }`
+    : `if _arr.is_empty() { Value::Null } else { let mut _a: Value = _arr[0].clone(); ${loop('_arr[1..]')} }`;
+  return `{ let _cv = (${coll}).clone(); match _cv.as_array().cloned() { Some(_arr) => ${run}, None => Value::Null } }`;
 }
 
 function genRustExpr(expr, typeEnv, eCtx) {
@@ -1273,6 +1309,9 @@ ${subRegLines.join('\n')}
       return `{ let mut _keyed: Vec<(Value, Value)> = Vec::new(); for _x in ${coll}.as_array().cloned().unwrap_or_default() { ${binds.join(' ')} let _k: Value = ${value}; _keyed.push((_k, _x)); } _keyed.sort_by(|p, q| bv_cmp(&p.0, &q.0)); Value::Array(_keyed.into_iter().map(|p| p.1).collect()) }`;
     }
     return `{ let mut _out: Vec<Value> = Vec::new(); for _el in ${coll}.as_array().cloned().unwrap_or_default() { let mut _i = _out.len(); while _i > 0 { let _a = _el.clone(); let _b = _out[_i - 1].clone(); ${binds.join(' ')} let _before: bool = ${value}; if _before { _i -= 1; } else { break; } } _out.insert(_i, _el); } Value::Array(_out) }`;
+  }
+  if ((expr.type === 'OverExpr' || expr.type === 'ReduceExpr') && expr.fn?.type === 'Function' && exitsOuterLabel(expr.fn)) {
+    return genRustLabelExitLoop(expr, typeEnv, eCtx);
   }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);

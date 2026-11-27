@@ -3034,7 +3034,7 @@ function genRustCatchStatement(catchExpr, typeEnv, I) {
   return lines.join('\n');
 }
 
-function genRustCatchBodyStmt(s, typeEnv, I) {
+export function genRustCatchBodyStmt(s, typeEnv, I) {
   if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
     const entry = (G.ctx.catchLabelStack || []).slice().reverse().find(e => e.brevityName === s.expr.label);
     if (!entry) throw new Error(`Label ${s.expr.label} is not in scope`);
@@ -3136,7 +3136,9 @@ function coerceToCatchType(rawExpr, exprNode, typeEnv, targetType) {
   if (rustType(targetType) === 'Value') return rawExpr;
   // RefRead and StateVar emit Value-typed expressions; route through the
   // standard convertFromValue helper.
-  if (exprNode?.type === 'RefRead' || exprNode?.type === 'StateVar' || exprNode?.type === 'Identifier') {
+  if (exprNode?.type === 'Identifier' && typeEnv?.get(exprNode.name) === targetType) return rawExpr;
+  if (exprNode?.type === 'RefRead' || exprNode?.type === 'StateVar' || exprNode?.type === 'Identifier'
+      || exprNode?.type === 'OverExpr' || exprNode?.type === 'ReduceExpr') {
     return convertFromValue(rawExpr, targetType);
   }
   return rawExpr;

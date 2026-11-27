@@ -1113,6 +1113,17 @@ function genLiftedLambdaBind(ctx, s, emitBinding) {
 // reaches genExpr. Dispatch is exposed via tryGenCatchOrLabelStmt(ctx, s, …)
 // which returns a JS string for catch-related statements or null otherwise.
 
+// A label's exit: `break` within the catch's own function; from a function inside
+// it (an `over` body), a thrown _BvLabelExit the catch takes.
+function genLabelExit(ctx, entry, valueExpr, indent) {
+  const value = valueExpr && entry.resultVar ? genExpr(ctx, valueExpr) : null;
+  if ((ctx.fnDepth || 0) > entry.fnDepth) {
+    entry.crossed = true;
+    return `\n${indent}throw new _BvLabelExit(${JSON.stringify(entry.jsName)}, ${value ?? 'null'});`;
+  }
+  return (value !== null ? `\n${indent}${entry.resultVar} = ${value};` : '') + `\n${indent}break ${entry.jsName};`;
+}
+
 function lookupCatchEntry(ctx, brevityName) {
   for (let i = ctx.catchLabelStack.length - 1; i >= 0; i--) {
     if (ctx.catchLabelStack[i].brevityName === brevityName) return ctx.catchLabelStack[i];
@@ -1153,11 +1164,7 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   const isLast = !!opts.isLast;
   // Statement-level label invocation → break (with optional value assignment).
   if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'LabelInvoke') {
-    const entry = lookupCatchEntry(ctx, s.expr.label);
-    if (s.expr.valueExpr && entry.resultVar) {
-      return `\n${indent}${entry.resultVar} = ${genExpr(ctx, s.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
-    }
-    return `\n${indent}break ${entry.jsName};`;
+    return genLabelExit(ctx, lookupCatchEntry(ctx, s.expr.label), s.expr.valueExpr, indent);
   }
   // if-cond with label-exit branch → emit as control-flow if-statement
   if ((s.type === 'ExprStatement' || s.type === 'ImplicitReturn') && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)) {
@@ -1241,11 +1248,7 @@ function genBranchAsStmts(ctx, branch, indent, outerEnv, counters) {
   }
   if (branch.expr) {
     if (branch.expr.type === 'LabelInvoke') {
-      const entry = lookupCatchEntry(ctx, branch.expr.label);
-      if (branch.expr.valueExpr && entry.resultVar) {
-        return `\n${indent}${entry.resultVar} = ${genExpr(ctx, branch.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
-      }
-      return `\n${indent}break ${entry.jsName};`;
+      return genLabelExit(ctx, lookupCatchEntry(ctx, branch.expr.label), branch.expr.valueExpr, indent);
     }
     return `\n${indent}${genExpr(ctx, branch.expr)};`;
   }
@@ -1260,15 +1263,18 @@ export function genCatchStatement(ctx, catchExpr, indent, outerEnv, counters, re
   const idx = ctx.catchLabelCounter++;
   const safeName = catchExpr.label.replace(/[^a-zA-Z0-9]/g, '');
   const jsName = `_lbl_${safeName}_${idx}`;
-  ctx.catchLabelStack.push({ brevityName: catchExpr.label, jsName, resultVar });
-  let code = `\n${indent}${jsName}: {`;
+  const entry = { brevityName: catchExpr.label, jsName, resultVar, fnDepth: ctx.fnDepth || 0 };
+  ctx.catchLabelStack.push(entry);
+  let body = '';
   const last = catchExpr.body.length - 1;
   for (let i = 0; i < catchExpr.body.length; i++) {
-    code += genCatchBodyStmt(ctx, catchExpr.body[i], indent + '  ', outerEnv, counters, { isLast: i === last });
+    body += genCatchBodyStmt(ctx, catchExpr.body[i], indent + '    ', outerEnv, counters, { isLast: i === last });
   }
-  code += `\n${indent}}`;
   ctx.catchLabelStack.pop();
-  return code;
+  if (!entry.crossed) return `\n${indent}${jsName}: {${body.replace(/\n {2}/g, '\n')}\n${indent}}`;
+  // An exit from a function inside the body arrives thrown.
+  const take = resultVar ? `${resultVar} = _e.value; ` : '';
+  return `\n${indent}${jsName}: {\n${indent}  try {${body}\n${indent}  } catch (_e) {\n${indent}    if (_e instanceof _BvLabelExit && _e.label === ${JSON.stringify(jsName)}) { ${take}break ${jsName}; }\n${indent}    throw _e;\n${indent}  }\n${indent}}`;
 }
 
 // Returns a JS-statement string if `s` is a catch-related statement that
@@ -1286,11 +1292,7 @@ export function tryGenCatchOrLabelStmt(ctx, s, indent, outerEnv, counters) {
       return genCatchStatement(ctx, s.expr, indent, outerEnv, counters);
     }
     if (s.expr?.type === 'LabelInvoke') {
-      const entry = lookupCatchEntry(ctx, s.expr.label);
-      if (s.expr.valueExpr && entry.resultVar) {
-        return `\n${indent}${entry.resultVar} = ${genExpr(ctx, s.expr.valueExpr)};\n${indent}break ${entry.jsName};`;
-      }
-      return `\n${indent}break ${entry.jsName};`;
+      return genLabelExit(ctx, lookupCatchEntry(ctx, s.expr.label), s.expr.valueExpr, indent);
     }
     if (s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)) {
       return genIfStmtWithLabelExit(ctx, s.expr, indent, outerEnv, counters);
