@@ -58,6 +58,16 @@ describe('silent functions — runtime', () => {
       =
       return last: last
 
+    --- a protected silent function that writes, launched by its name ---
+
+    bumps *Integer = 0
+    bump. = { bumps <- bumps + 1 }
+    @bumpTwice. = {
+      bump...
+      bump()...
+    }
+    @bumps = () -> bumps
+
     --- lambdas: four syntactic forms ---
 
     @lambdaInline!
@@ -121,6 +131,14 @@ describe('silent functions — runtime', () => {
     await expectBehavior(script,
       { input: { id: '3', op: 'launchTest!', from: 'c' } },
       { output: { id: '3', 'ty': [{ answer: 'Text' }], re: [{ answer: 'ok' }], to: 'c' } },
+    );
+  });
+
+  it('a protected silent function that writes runs when launched', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'bumpTwice.', from: 'c' } },
+      { input: { id: '2', op: 'bumps', from: 'c' } },
+      { output: { id: '2', ty: ['Integer'], re: [2], to: 'c' } },
     );
   });
 

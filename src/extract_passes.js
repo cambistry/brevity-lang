@@ -305,6 +305,7 @@ export function assignClosureAddresses(ast) {
       if (fn.name.startsWith('@') || fn.name.startsWith('#')) continue;
       if (fn.name === 'set' || fn.name === 'update' || fn.name.startsWith('set@') || fn.name.startsWith('set.')) continue;
       if (fn.name.endsWith('!')) continue; // a function that writes has nothing to subscribe to
+      if (fn.name.endsWith('.')) continue; // nor does a silent one, which replies nothing
       if (fn.params && fn.params.length > 0) continue;
       if (!hasRefRead(fn.body)) continue;
       fn.sourceName = fn.name;
