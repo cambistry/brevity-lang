@@ -206,6 +206,8 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@'
 
 function genExpr(ctx, expr, typeEnv, sCtx) {
   if (!expr) return 'null';
+  // A clause list with no clause for its input (src/clause_lists.js): unhandled.
+  if (expr.type === 'NoMatch') return 'erlang:error({bv_as, <<"unhandled">>})';
   if (expr.type === 'CellNotify') {
     const lines = erlCellNotifyLines(ctx, expr.cell, expr.cellTypeEnc, '    ', `N${ctx.ephCounter++}`, expr.label ?? '@' + expr.cell);
     return `begin\n${lines.join('\n')}\n    ok\nend`;

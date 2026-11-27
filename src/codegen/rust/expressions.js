@@ -188,6 +188,8 @@ export function rustCellNotifyLines(cell, cellType, childPrefix = null, label = 
 
 function genRustExpr(expr, typeEnv, eCtx) {
   if (expr._precomputed) return expr._precomputed;
+  // A clause list with no clause for its input (src/clause_lists.js): unhandled.
+  if (expr.type === 'NoMatch') return 'panic!("{}", "bv_as:unhandled")'; // a String payload, as bv_panic_ex reads
   if (expr.type === 'CellNotify') {
     const child = G.ctx.childStatePrefix ? G.ctx.childStatePrefix : null;
     return `{ ${rustCellNotifyLines(expr.cell, expr.cellTypeEnc, child, expr.label ?? '@' + expr.cell).join(' ')} Value::Null }`;

@@ -2975,12 +2975,31 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
     throw errors[0];
   };
+  // The names this body binds to a List.
+  const listLocals = new Set((Array.isArray(body) ? body : []).filter(st => (st?.type === 'Assign' || st?.type === 'TypedAssign')
+    && (st.value?.type === 'ListLiteral' || /^List\b/.test(typeof st.typeNameEnc === 'string' ? st.typeNameEnc : ''))).map(st => st.name));
   const walkForCallChecks = (node) => {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'Function') return;
     if (node.type === 'FunctionCallExpr') {
       checkConstructorCall(node);
       checkLocalFunctionCall(node);
+      // A List isn't a function: only a clause list (or `Function()`) is called.
+      if (node.callee?.type === 'Identifier') {
+        const t = argTypeOf(node.callee);
+        if (listLocals.has(node.callee.name) || (typeof t === 'string' && /^List\b/.test(t))) throw new Error(`'${node.callee.name}' is a List, which isn't called: a clause list is written 'head -> value' per entry`);
+      }
+      // A clause list with a pattern clause matches its input; under a Boolean every
+      // Boolean head would be a condition, so the clauses wouldn't mean what they say.
+      const matches = node.matchesInput || (node.callee?.type === 'Identifier' && localFunctionSigs.get(node.callee.name)?.some(s => s.fn.matchesInput));
+      if (matches) {
+        for (const a of node.args.filter(x => x.type !== 'NamedArgsBag')) {
+          const t = argTypeOf(a);
+          if (t === 'Boolean' || (typeof t === 'string' && t.split('|').some(m => m.trim() === 'Boolean'))) {
+            throw new Error('A Boolean is matched with if/else, not a clause list');
+          }
+        }
+      }
     }
     if (node.type === 'DotCallExpr') checkMethodCallArgs(node);
     // `and`, `or`, `not` take Booleans: an operand of another known type is an error.

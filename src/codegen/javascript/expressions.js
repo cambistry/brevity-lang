@@ -397,6 +397,8 @@ export function refFieldInvocation(ctx, objExpr, rawName) {
 }
 
 export function genExpr(ctx, expr) {
+  // A clause list with no clause for its input (src/clause_lists.js): unhandled.
+  if (expr.type === 'NoMatch') return "(() => { const e = new Error('unhandled'); e.bvEx = 'unhandled'; throw e; })()";
   if (expr.type === 'CellNotify') return `(() => ${genCellNotify(ctx, expr.cell, expr.cellTypeEnc, expr.label)})()`;
   if (expr.type === 'LabelInvoke') {
     throw new Error(`Label ${expr.label} is a control-flow exit, not a value — it can only appear at statement position or as a single-expression if-branch.`);

@@ -12,6 +12,7 @@ import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, 
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
 import { settleInitExits } from './init_exits.js';
+import { lowerClauseList, isPatternClause } from './clause_lists.js';
 import { resolveSuperclassChain } from './subclass.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
@@ -1906,6 +1907,75 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return params;
   }
 
+  // ── Clause lists (src/clause_lists.js) ──────────────────────────────────────
+  // An entry is a clause when an `->` follows at its depth before it ends: at the
+  // end of its line, or, in a one-line list, at its comma. `else` starts one too.
+  function clauseAhead(lineMode) {
+    if (atKw('else')) return true;
+    for (let j = pos, depth = 0; j < tokens.length; j++) {
+      const t = tokens[j].type;
+      if (t === 'LPAREN' || t === 'LBRACKET' || t === 'LBRACE') depth++;
+      else if (t === 'RPAREN' || t === 'RBRACKET' || t === 'RBRACE') { if (--depth < 0) return false; }
+      else if (depth === 0 && t === '->') return j > pos;
+      else if (depth === 0 && (t === 'NEWLINE' || t === 'BLOCK_SEP' || t === 'EOF' || (!lineMode && t === 'COMMA'))) return false;
+    }
+    return false;
+  }
+  const LITERAL_START = () => ['NUMBER', 'STRING'].includes(peek().type) || (peek().type === 'MINUS' && tokens[pos + 1]?.type === 'NUMBER')
+    || (peek().type === 'KEYWORD' && ['true', 'false', 'null'].includes(peek().value));
+  // `head[, head…] -> value` or `-> { block }`; `else -> value` or `else { block }`.
+  function parseClause(lineMode) {
+    if (atKw('else')) {
+      take(); // else
+      if (peek().type === '->') take();
+      return { isElse: true, heads: [], condition: null, body: parseClauseBody() };
+    }
+    const heads = [];
+    let condition = null;
+    for (;;) {
+      if (LITERAL_START()) {
+        const values = [parseDefaultLiteral()];
+        while (peek().type === 'PIPE') { take(); values.push(parseDefaultLiteral()); }
+        heads.push({ kind: 'lit', values });
+      } else if (peek().type === 'IDENT' && ['COMMA', '->'].includes(tokens[pos + 1]?.type)) {
+        heads.push({ kind: 'bind', name: take().value, type: null });
+      } else if (peek().type === 'LPAREN') {
+        // `(n Integer)`: typed params; any other `( … )`, a condition.
+        const save = pos;
+        let params = null;
+        try { params = parseFunctionParamsParen(); } catch { /* not params: a condition */ }
+        if (params && params.length && (peek().type === '->' || peek().type === 'COMMA')) {
+          heads.push(...params.map(p => ({ kind: 'bind', name: p.name, type: p.type ?? null })));
+        } else {
+          pos = save;
+          if (condition) throw new Error('A clause has one condition: join them with `and`');
+          take(); // (
+          condition = parseExpr();
+          expect('RPAREN');
+        }
+      } else {
+        throw new Error(`Unexpected token in a clause's head: ${peek().type} '${peek().value || ''}'`);
+      }
+      if (peek().type === 'COMMA' && lineMode) { take(); continue; }
+      break;
+    }
+    expect('->');
+    return { heads, condition, isElse: false, body: parseClauseBody() };
+  }
+  function parseClauseBody() {
+    if (peek().type !== 'LBRACE') return { expr: parseExpr() };
+    take(); // {
+    skipNewlines();
+    const stmts = parseFunctionBody();
+    expect('RBRACE');
+    return { stmts };
+  }
+  // A clause with no pattern is a function: in a list of functions, it stays one.
+  function clauseFunction(c) {
+    const params = c.heads.map(h => ({ name: h.name, type: h.type, positional: true }));
+    return c.body.stmts ? AST.functionNode(params, c.body.stmts) : AST.functionNode(params, null, { expr: c.body.expr });
+  }
+
   function parseFunction() {
     const outerDecl = declCtx;
     declCtx = null;
@@ -2765,6 +2835,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         result = buildInterpolatedString(tok.parts);
       } else if (tok.type === 'LBRACKET') {
         const elements = [];
+        const clauses = [];
         const listOpen = pos;
         while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
           if (skipListBreaks()) continue;
@@ -2772,10 +2843,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
           // A line of its own may be a function of several bare params: `a, b -> a + b`.
           const atLineStart = ['NEWLINE', 'BLOCK_SEP'].includes(tokens[pos - 1]?.type);
+          if (clauseAhead(atLineStart)) { clauses.push(parseClause(atLineStart)); elements.push(null); continue; }
           elements.push(atLineStart && severalBareParamsAhead() ? parseFunction() : parseExpr());
         }
         expect('RBRACKET');
-        result = AST.listLiteral(elements);
+        if (clauses.some(isPatternClause)) {
+          if (elements.some(e => e !== null)) throw new Error("Every entry of a clause list is a clause: 'head -> value'");
+          result = lowerClauseList(clauses);
+        } else {
+          let c = 0;
+          result = AST.listLiteral(elements.map(e => e ?? clauseFunction(clauses[c++])));
+        }
       } else if (tok.type === 'REGEX') {
         result = AST.regexLiteral(tok.pattern, tok.flags);
       } else if (tok.type === 'KEYWORD' && tok.value === 'null') {
@@ -3103,6 +3181,13 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     while (atPipe()) {
       while (peek().type === 'NEWLINE') take();
       takeOp(); // |>
+      // Into a clause list: the list is called with the value (settleClauseCalls).
+      if (peek().type === 'LBRACKET') {
+        const list = parsePrimary();
+        if (list.type !== 'Function') throw new Error("The right of '|>' is a call or a function: a list piped into is a clause list, 'head -> value' per entry");
+        left = { ...AST.functionCallExpr(list, [left]), ...(list.matchesInput && { matchesInput: true }) };
+        continue;
+      }
       if (!splicePipedValue(left)) throw new Error("The right of '|>' is a call or a function: 'v |> f(a)' or 'v |> f'");
       left = parsePrimary();
     }
@@ -3605,7 +3690,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return AST.objectLiteral(args);
   }
 
-  function parseTypedAssign(body) {
+  function parseTypedAssign(body, { onEmptyClauses = null } = {}) {
     // name Type = expr   — typed assignment (whitespace between name and type)
     // name *Type = expr  — ref declaration (prefix `*` is the cell sigil)
     const nameTok = take();
@@ -3619,6 +3704,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     take(); // EQUALS
     declareLocal(name);
     if (isRefDecl) addRef(name, typeName);
+    // `f (Integer) -> (Text) = []` (or `= Function()`): the empty clause list, typed
+    // by its declaration, which `f << …` appends to.
+    const emptyList = peek().type === 'LBRACKET' && tokens[pos + 1]?.type === 'RBRACKET';
+    const emptyFunction = peek().type === 'IDENT' && peek().value === 'Function' && tokens[pos + 1]?.type === 'LPAREN' && tokens[pos + 2]?.type === 'RPAREN';
+    if (!isRefDecl && typeof typeName === 'string' && /[-=~]>/.test(typeName) && (emptyList || emptyFunction)) {
+      take(); take(); if (emptyFunction) take();
+      functionNames.add(name);
+      if (onEmptyClauses) onEmptyClauses(name);
+      else body.push(AST.assign(name, Object.assign(AST.functionNode([], []), { emptyOverload: true })));
+      return;
+    }
     let value;
     // For Object type, check if RHS starts with sigil
     if (typeName === 'Object' && peek().type === 'SIGIL') {
@@ -4378,6 +4474,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         (t === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'));
       if (isLiteral || isCtorCall) {
         const value = parseExpr();
+        // A clause list bound to a public name is that function (src/clause_lists.js).
+        if (value.type === 'Function' && value.clauseList) {
+          return Object.assign(AST.functionDecl('@' + op, value.params.map(p => ({ ...p, type: p.type ?? 'Anything' })), value.body), value.matchesInput ? { matchesInput: true } : {});
+        }
         const inferLitType = (v) => {
           if (!v) return null;
           if (v.type === 'IntLiteral') return 'Integer';
@@ -5239,7 +5339,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         }
       } else if (isTypedAssignStart()) {
         // Top-level typed assignment: name : Type = expr
-        parseTypedAssign(constructorBody);
+        parseTypedAssign(constructorBody, { onEmptyClauses: (name) => functions.push(AST.functionDecl(name, [], [], { emptyOverload: true })) });
       } else if (isBareTypeDeclStart()) {
         // Top-level bare type declaration: name Type
         const name = take().value;
@@ -5480,6 +5580,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           const _isFnStart = _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
           if (!_isFnStart) {
             const value = parseExpr();
+            // A clause list bound to a name is that function (src/clause_lists.js).
+            if (value.type === 'Function' && value.clauseList) {
+              functions.push(Object.assign(AST.functionDecl(op, value.params.map(p => ({ ...p, type: p.type ?? 'Anything' })), value.body, { overloadMode: _identOverloadMode }), value.matchesInput ? { matchesInput: true } : {}));
+              continue;
+            }
             // Service coercion: name = ref as { @method: ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LBRACE') {
               take(); // as
@@ -6676,6 +6781,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   settleSilentDecls(result);
   settleBangDecls(result);
   settleWrites(result);
+  settleClauseCalls(result);
   settleStatementIfs(result);
   captureReturnedCells(result);
   settleFireAndForget(result);
@@ -6947,6 +7053,70 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       }
     };
     visit(program.actors);
+  }
+
+  // A clause list called where it's written (`v |> [ … ]`) is a function of the
+  // actor it's in, `__clausesN`, called in its place. The names of the enclosing
+  // function it reads (params, locals) go along as arguments after its own. It's
+  // named with `!` when it writes, so the function calling it writes too: an
+  // anonymous function's writes are its definer's.
+  function settleClauseCalls(program) {
+    let n = 0;
+    const WRITE_NODES = new Set(['SetStatement', 'SetExpr', 'SetChain', 'StateAssign']);
+    const writes = (node) => !!node && typeof node === 'object' && (Array.isArray(node) ? node.some(writes)
+      : WRITE_NODES.has(node.type) || (['FunctionCallExpr', 'DotCallExpr'].includes(node.type) && /!$/.test(node.callee?.name ?? node.method ?? ''))
+        || Object.entries(node).some(([k, v]) => k !== 'loc' && v && typeof v === 'object' && writes(v)));
+    const namesIn = (node, out = new Set()) => {
+      if (!node || typeof node !== 'object') return out;
+      if (Array.isArray(node)) { node.forEach(x => namesIn(x, out)); return out; }
+      if ((node.type === 'Identifier' || node.type === 'RefRead') && node.name) out.add(node.name);
+      if (node.sigil) out.add(node.sigil);
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') namesIn(v, out);
+      return out;
+    };
+    for (const actor of program.actors || []) {
+      for (const fn of [...(actor.functions || [])]) {
+        if (!Array.isArray(fn.body)) continue;
+        // What the enclosing function binds, with its type where it has one.
+        const bound = new Map((fn.params || []).filter(p => p.name).map(p => [p.name, p.typeEnc ?? 'Anything']));
+        const bindIn = (list) => {
+          for (const st of list || []) {
+            if ((st.type === 'TypedAssign' || st.type === 'Assign') && st.name && !bound.has(st.name)) bound.set(st.name, st.typeNameEnc ?? 'Anything');
+          }
+        };
+        bindIn(fn.body);
+        // A node is copied only when something under it is lifted: the rest (encoded
+        // types among them, which compare by identity) stay as they are.
+        const lift = (node) => {
+          if (!node || typeof node !== 'object') return node;
+          if (Array.isArray(node)) {
+            const out = node.map(lift);
+            return out.some((x, i) => x !== node[i]) ? out : node;
+          }
+          if (node.type === 'Function') return node;
+          if (node.type === 'FunctionCallExpr' && node.callee?.type === 'Function' && node.callee.clauseList) {
+            const list = node.callee;
+            const own = new Set(list.params.map(p => p.name));
+            const free = [...namesIn(list.body)].filter(x => !own.has(x) && bound.has(x));
+            const name = `__clauses${n++}${writes(list.body) ? '!' : ''}`;
+            const params = [
+              ...list.params.map(p => ({ ...p, typeEnc: p.typeEnc ?? 'Anything' })),
+              ...free.map(x => ({ name: x, positional: true, typeEnc: bound.get(x) })),
+            ];
+            actor.functions.push(Object.assign(AST.functionDecl(name, params, list.body), list.matchesInput ? { matchesInput: true } : {}));
+            return { ...node, callee: AST.identifier(name), args: [...lift(node.args), ...free.map(x => AST.identifier(x))] };
+          }
+          let out = node;
+          for (const [k, v] of Object.entries(node)) {
+            if (k === 'loc' || !v || typeof v !== 'object') continue;
+            const lifted = lift(v);
+            if (lifted !== v) { if (out === node) out = { ...node }; out[k] = lifted; }
+          }
+          return out;
+        };
+        fn.body = lift(fn.body);
+      }
+    }
   }
 
   // An `if` with statements after it, whose branches never leave (no `return`, label

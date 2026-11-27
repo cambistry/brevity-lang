@@ -54,7 +54,7 @@ export const buildsBase = (actor) => !!actor?.ownNew || hasSuperInit(actor?.init
 
 // Every use of the param `from` in `node`, as `to`. A function whose own params
 // include `from` shadows it.
-function renameIn(node, from, to) {
+export function renameIn(node, from, to) {
   if (Array.isArray(node)) { node.forEach(n => renameIn(n, from, to)); return; }
   if (!node || typeof node !== 'object') return;
   if (node.type === 'Actor' && Array.isArray(node.functions)) return;
