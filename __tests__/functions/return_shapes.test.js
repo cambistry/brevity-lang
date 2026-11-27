@@ -429,3 +429,52 @@ describe('an unannotated bind of a call', () => {
     expect(actor.posts.filter(p => p.to === 'c')).toEqual([{ id: '1', re: [5], 'ty': ['Integer'], to: 'c' }]);
   });
 });
+
+// An unannotated bind of a value the checker can type takes that type, as one of a
+// call does: arithmetic, a comparison, interpolated text, a core function, and an
+// `if` whose branches agree.
+describe('an unannotated bind of a computed value', () => {
+  const script = `
+    @sizes = () {
+      a = Text.size("ab")
+      b = List.size([1, 2, 3])
+      return a, b
+    }
+    @arith = (k Integer) {
+      n = k * 2 + 1
+      big = k > 2
+      return n, big
+    }
+    @choice = (ok Boolean) {
+      n = if (ok) 1 else 2
+      return n
+    }
+    @text = (k Integer) {
+      t = "k=#{k}"
+      return t
+    }
+  `;
+
+  it('a core function\'s', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'sizes', from: 'c' } },
+      { output: { id: '1', re: [2, 3], ty: ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('arithmetic and a comparison', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[4], 'arith'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: [9, true], ty: ['Integer', 'Boolean'], to: 'c' } },
+    );
+  });
+
+  it('an if whose branches agree, and interpolated text', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'choice'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [2], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[3], 'text'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: ['k=3'], ty: ['Text'], to: 'c' } },
+    );
+  });
+});

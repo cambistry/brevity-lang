@@ -3194,11 +3194,31 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       || [...dependencyNames].some(n => classEnc(n) === enc)) return null;
     return enc;
   };
+  // An unannotated bind of a value whose type is known (arithmetic, a comparison,
+  // interpolated text, a core function, an `if` whose branches agree) takes it.
+  const COMPUTED = new Set(['BinaryExpr', 'InterpolatedString', 'TextMethodExpr', 'ListMethodExpr', 'BlobMethodExpr', 'GraphemeTextMethodExpr', 'SizeExpr', 'MathMethodExpr', 'IfExpr']);
+  const boundType = (e) => {
+    if (!e) return undefined;
+    if (e.type === 'IfExpr') {
+      if (!e.else) return undefined;
+      const tail = (b) => b?.type === 'IfExpr' ? b : (b?.expr ?? b?.body?.findLast(st => st.type === 'ImplicitReturn')?.expr);
+      const types = [tail(e.then), tail(e.else)].map(x => boundType(x) ?? inferType(x, typeEnv));
+      return types[0] !== undefined && types.every(t => t === types[0]) ? types[0] : undefined;
+    }
+    if (e.type === 'BinaryExpr') return valueType(e)?.type ?? inferType(e, typeEnv);
+    return inferType(e, typeEnv);
+  };
+  const computedType = (e) => {
+    if (!COMPUTED.has(e?.type)) return null;
+    const enc = boundType(e);
+    if (enc === undefined || enc === null || mentionsAnythingEnc(enc) || isUnion(enc) || enc === 'Object' || isFn(enc)) return null;
+    return enc;
+  };
   if (inferOnly) {
     let inferred = 0;
     for (const s of body) {
-      if (s.type !== 'Assign' || !isCall(s.value)) continue;
-      const type = singleReturnType(s.value);
+      if (s.type !== 'Assign') continue;
+      const type = isCall(s.value) ? singleReturnType(s.value) : computedType(s.value);
       if (!type) continue;
       s.type = 'TypedAssign';
       s.typeNameEnc = type;
