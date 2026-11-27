@@ -1,15 +1,27 @@
 # Constructor tail values and `ingest` are retired — 2026-11-26
 
 Decided in discussion. Extends `constructor-return-as-retired-2026-11-23.md`, which covered
-only `return expr` / `-> expr` at a constructor tail. Findings in the ticket
+only `return expr` / `-> expr` at a constructor tail, and supersedes its rule section
+(`return self` / `return ()` staying). Findings in the ticket
 `retire-constructor-return-as-findings`.
+
+## Return in a constructor block
+
+- **A constructor block returns no value.** Its result is always `self`, so it has nothing
+  to return.
+- **A bare `return` is an early exit.** It ends construction there; the result is still
+  `self`.
+- **`return` with any operand is an error,** `return self` and `return ()` included. It's a
+  real form misused, so it gets a specific diagnostic stating the rule.
+- **`->` is not a return.** In a body, `-> x` is a zero-arg lambda value
+  (`return-keyword-and-arrow-2026-10-26.md`); a constructor block gives it no other meaning.
 
 ## Decisions
 
-- **The bare tail value goes.** A literal, `( … )`, `[ … ]`, an HTML literal or a lone name
-  at a constructor's tail sets the same declaration return as `return expr`, so it goes too.
-  A tail `self` stays (`return self` semantics). Any other bare tail value fails as an
-  ordinary error.
+- **A constructor has no tail value.** A literal, `( … )`, `[ … ]`, an HTML literal or a lone
+  name at the end of a constructor block sets no declaration return; the end of the block is
+  not a tail. Such an expression is an ordinary expression statement. Whether an unused value
+  deserves a warning is a separate question, for any body.
 - **The file opener `-> expr` / `return expr` goes.** It is the file-as-class form of the
   same declaration return. A file projects with `self as`, as a class does.
 - **`ingest` goes:** the keyword, `IngestExpr` and `inheritedIngests`. Its only supplier
