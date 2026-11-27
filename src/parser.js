@@ -6390,7 +6390,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (tok.type === 'AMPERSAND_IDENT') return '&' + tok.value;
     if (tok.value != null) return String(tok.value);
     const map = {
-      COLON: ':', LPAREN: '(', RPAREN: ')', LBRACE: '{', RBRACE: '}', DOT: '.', COMMA: ',', PIPE: '|',
+      COLON: ':', LPAREN: '(', RPAREN: ')', LBRACE: '{', RBRACE: '}', LBRACKET: '[', RBRACKET: ']', DOT: '.', COMMA: ',', PIPE: '|',
       '->': '->', AT: '@', BANG: '!', STAR: '*', DCOLON: '::', QUESTION: '?', HASH: '#', ELLIPSIS: '...',
     };
     return map[tok.type] || tok.type;
@@ -6418,8 +6418,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       line = '';
       prev = null;
     };
-    const glued = new Set(['STAR', 'DCOLON', 'ELLIPSIS', 'LPAREN']);
-    const gluedBefore = new Set(['COLON', 'COMMA', 'RPAREN', 'BANG', 'DCOLON']);
+    const glued = new Set(['STAR', 'DCOLON', 'ELLIPSIS', 'LPAREN', 'LBRACKET']);
+    const gluedBefore = new Set(['COLON', 'COMMA', 'RPAREN', 'RBRACKET', 'BANG', 'DCOLON']);
     while (peek().type !== 'EOF' && !(peek().type === 'RBRACE' && depth === 0)) {
       const tok = take();
       if (tok.type === 'NEWLINE' || tok.type === 'BLOCK_SEP') {
@@ -6427,9 +6427,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         else { line += '\n'; prev = null; }
         continue;
       }
-      if (tok.type === 'LPAREN' || tok.type === 'LBRACE') depth++;
-      else if (tok.type === 'RPAREN' || tok.type === 'RBRACE') depth--;
-      if (prev && !glued.has(prev.type) && !gluedBefore.has(tok.type) && !line.endsWith('\n')) line += ' ';
+      if (tok.type === 'LPAREN' || tok.type === 'LBRACE' || tok.type === 'LBRACKET') depth++;
+      else if (tok.type === 'RPAREN' || tok.type === 'RBRACE' || tok.type === 'RBRACKET') depth--;
+      // A type's `[` stays glued to its name, as written (`List[Integer]`).
+      const gluedType = tok.type === 'LBRACKET' && !tok.spaced;
+      if (prev && !glued.has(prev.type) && !gluedBefore.has(tok.type) && !gluedType && !line.endsWith('\n')) line += ' ';
       line += tokText(tok);
       prev = tok;
     }

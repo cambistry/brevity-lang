@@ -788,3 +788,57 @@ describe('as — provably wrong is a compile error', () => {
     expect(() => compileSource(`type Point(x: Integer, y: Integer)\n${decl}\n@go = () -> 1\n`)).toThrow(`Cannot render ${type} as an actor — no such rendering, so this 'as' can only fail`);
   });
 });
+// A List from another actor is checked as it arrives, where null and [] differ:
+// a null isn't a List, [] is, and a List that may be null takes either.
+describe('a List from a remote', () => {
+  const script = `
+    use Svc = "svc.bv" as {
+      get () -> (List[Integer])
+      maybe () -> (List[Integer] | null)
+    }
+    @list = {
+      xs List[Integer] = Svc.get()
+      return List.size(xs)
+    }
+    @maybe = {
+      xs List[Integer] | null = Svc.maybe()
+      return 1
+    }
+  `;
+  it('a null fails as a List', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '99', op: 'list', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'get', to: 'svc.bv' }) },
+      { input: { id: '1', re: [null], ty: ['List[Integer]'] } },
+      { output: { id: '99', ex: { list: 'as List[Integer]: got null' }, to: 'caller' } },
+    );
+  });
+
+  it('[] is a List', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '99', op: 'list', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'get', to: 'svc.bv' }) },
+      { input: { id: '1', re: [[]], ty: ['List[Integer]'] } },
+      { output: { id: '99', re: [0], ty: ['Integer'], to: 'caller' } },
+    );
+  });
+
+  it('a List that may be null takes null and []', async () => {
+    const actor = await createActor(script);
+    await expectActorBehavior(actor,
+      { input: { id: '99', op: 'maybe', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'maybe', to: 'svc.bv' }) },
+      { input: { id: '1', re: [null], ty: ['List[Integer] | null'] } },
+      { output: { id: '99', re: [1], ty: ['Integer'], to: 'caller' } },
+    );
+    const other = await createActor(script);
+    await expectActorBehavior(other,
+      { input: { id: '98', op: 'maybe', from: 'caller' } },
+      { output: expect.objectContaining({ op: 'maybe', to: 'svc.bv' }) },
+      { input: { id: '1', re: [[]], ty: ['List[Integer] | null'] } },
+      { output: { id: '98', re: [1], ty: ['Integer'], to: 'caller' } },
+    );
+  });
+});

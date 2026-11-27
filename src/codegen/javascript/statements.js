@@ -2,7 +2,7 @@ import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../type_infer.js';
 import { isDynamicTy } from '../ty_tags.js';
-import { isFn } from '../../type_enc.js';
+import { isFn, isList as isListEnc } from '../../type_enc.js';
 import { typeText, classNameOf, leadsWithList } from '../enc_names.js';
 import { wireLabel, addressToken, selfAddress, memberOp } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
@@ -754,7 +754,10 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
     // ran _List.toArray on its outbound). Convert back to a cons cell here so
     // the bound local can be passed straight into _bv_list_* helpers.
     if (leadsWithList(s.typeNameEnc)) {
-      valExpr = `(v => Array.isArray(v) ? _List.from(v) : v)(${valExpr})`;
+      // Checked on its wire form, where null and [] differ: a List that can't be
+      // null fails a null.
+      const nullable = !isListEnc(s.typeNameEnc);
+      valExpr = `_bvWireList(${valExpr}, ${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, ${nullable})`;
     }
     return prefix + emitBinding(s.name, valExpr);
   }

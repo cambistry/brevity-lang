@@ -12,3 +12,5 @@ created: 2026-11-02
 - A remote null fails as List and as List of T on all three targets.
 - A remote [] passes on all three.
 - as List | null passes for both.
+
+**Decided (2026-11-27):** JS checks a value arriving from another actor on its wire form, where null and [] differ: null fails `List` and `List[T]`, [] passes, `List | null` takes either. The internal empty list stays null.

@@ -670,6 +670,17 @@ function _bvPositional(v, i) {
   if (!v || !Array.isArray(v.positional) || v.positional.length <= i) throw new Error('destructure: no positional value ' + i);
   return v.positional[i];
 }
+// A List arriving on the wire, as JSON: an array becomes a list; null isn't one
+// (the wire tells null from [], which a list here, ending in null, can't).
+function _bvWireList(v, name, nullable) {
+  if (Array.isArray(v)) return _List.from(v);
+  if (v === null && !nullable) {
+    const e = new Error('as ' + name + ': got null');
+    e.bvEx = e.message;
+    throw e;
+  }
+  return v;
+}
 function _bvAs(v0, d, name) {
   const sole = v0 !== null && typeof v0 === 'object' && Array.isArray(v0.positional) && 'named' in v0
     && v0.positional.length === 1 && Object.keys(v0.named).length === 0;

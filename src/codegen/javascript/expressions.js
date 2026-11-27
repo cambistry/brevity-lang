@@ -1288,9 +1288,10 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
   // Array→cons conversion for list-typed pattern items: a list-typed reply
   // arrives as a JS array (the sender ran _List.toArray on outbound). Convert
   // back so the bound local can flow into _bv_list_* helpers.
+  // Checked on its wire form, where null and [] differ (_bvWireList).
   const wrapList = (raw, t) =>
     leadsWithList(t)
-      ? `(v => Array.isArray(v) ? _List.from(v) : v)(${raw})`
+      ? `_bvWireList(${raw}, ${JSON.stringify(typeText(t, ctx.depAliases))}, ${!isListEnc(t)})`
       : raw;
   // Named/key reads take the named field only. A sole positional does not
   // bind into a named pattern item (validate.js rejects `:x = f()` when f's
