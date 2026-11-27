@@ -38,7 +38,6 @@ kanban/tickets/on-a-class-typed-declaration.md
 kanban/tickets/error-replies-don-t-say-which-member-an-intrinsic-op-failed.md
 kanban/tickets/opre-call-context-decide-the-mechanism-behind-call-scoped.md
 kanban/tickets/for-reactive-text-interpolation-beyond-element-content.md
-kanban/tickets/overloaded-clauses-that-differ-only-by-class-or-type-params.md
 kanban/tickets/docs-on-github.md
 kanban/tickets/non-dom-browser-capabilities.md
 kanban/tickets/take-eval-off-document-make-arbitrary-js-an-explicit-grant.md
