@@ -2152,7 +2152,7 @@ bv_held_addr_(A_) -> A_.
     // the address an actor of it built here has as it first leaves (src/codegen/class_sites.js).
     ...[...classSites(ctx.program)].filter(([name]) => ctx.actorInfo?.has(name)).map(([name, site]) => (site.path
       ? `bv_class_site(${erlString(name.toLowerCase())}) -> {path, [${site.path.map(erlString).join(', ')}]};`
-      : `bv_class_site(${erlString(name.toLowerCase())}) -> {in_instance, ${erlString(site.token)}};`)),
+      : `bv_class_site(${erlString(name.toLowerCase())}) -> {in_instance, [${site.tokens.map(erlString).join(', ')}]};`)),
     'bv_class_site(_) -> undefined.',
     ...[...ctx.typeTable.entries()].map(([name, e]) => `bv_source_key(${erlString(name)}) -> ${erlString(e.key)};`),
     'bv_source_key(_) -> undefined.',

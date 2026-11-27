@@ -958,25 +958,28 @@ bv_wire_own_(M) when is_map(M) -> maps:map(fun(_, X) -> bv_wire_own_(X) end, M);
 bv_wire_own_(V) -> V.
 %% An actor of a class of ours built here (not by \`$new\`) is published as it
 %% first leaves, where its class is declared, whoever built it: the class's path,
-%% or for a class an instance body declares, that instance's address (published
-%% first) and the class's token. Its process says which class it is, and its
-%% chain's head is the actor it is declared in.
+%% or for a class declared in an instance, the address of the nearest actor in its
+%% chain (the actors it's declared in, innermost first) that has one, published
+%% first, then the path down to it. Its process says which class it is.
 bv_wire_built_(P) ->
     case (bv_mod_()):bv_class_site(bv_ask_(P, bv_self_class_)) of
         {path, Tokens_} -> bv_publish_built_(Tokens_, P);
-        {in_instance, Token_} ->
-            case bv_ask_(P, bv_chain_) of
-                [{_, Encl_} | _] when is_pid(Encl_) ->
-                    case bv_wire_own_(Encl_) of
-                        <<"#<:", _/binary>> = At_ ->
-                            [self | Toks_] = bv_opre_split_(bv_to_addr_(At_)),
-                            bv_publish_built_(Toks_ ++ [Token_], P);
-                        _ -> P
-                    end;
-                _ -> P
+        {in_instance, Path_} ->
+            case bv_first_addr_(bv_ask_(P, bv_chain_)) of
+                none -> P;
+                At_ ->
+                    [self | Toks_] = bv_opre_split_(bv_to_addr_(At_)),
+                    bv_publish_built_(Toks_ ++ Path_, P)
             end;
         _ -> P
     end.
+bv_first_addr_([{_, E_} | Rest_]) when is_pid(E_) ->
+    case bv_wire_own_(E_) of
+        <<"#<:", _/binary>> = A_ -> A_;
+        _ -> bv_first_addr_(Rest_)
+    end;
+bv_first_addr_([_ | Rest_]) -> bv_first_addr_(Rest_);
+bv_first_addr_(_) -> none.
 bv_ask_(P, Key) ->
     Ref_ = make_ref(),
     P ! {bv_get, self(), Key, Ref_},

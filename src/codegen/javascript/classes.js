@@ -1481,16 +1481,22 @@ ${homeExt ? homeExt.methods : ''}${publishesClasses ? `  // An actor made by \`#
   }
 
   // An actor built here, published as it first leaves, under the address its class's
-  // declaration fixes: the class's path, or for a class an instance body declares,
-  // that instance's address (published first) and the class's token.
+  // declaration fixes: the class's path, or for a class declared in an instance, the
+  // address of the nearest actor it's declared in that has one (published first),
+  // then the path down to it.
   #_publishBuilt(v) {
     const site = this.#_classes.get(v.constructor);
     let tokens = site.path;
     if (!tokens) {
-      const encl = v._enclosing?.();
-      const at = encl ? this.#_wireOwn(encl) : undefined;
+      let encl = v._enclosing?.();
+      let at;
+      while (encl) {
+        at = this.#_wireOwn(encl);
+        if (typeof at === 'string' && at.startsWith('#<:')) break;
+        encl = encl._enclosing?.();
+      }
       if (typeof at !== 'string' || !at.startsWith('#<:')) return undefined;
-      tokens = [..._opre_split(_opre_unbracket(at).slice(1)), site.token];
+      tokens = [..._opre_split(_opre_unbracket(at).slice(1)), ...site.tokens];
     }
     const key = _opre_join(tokens);
     const n = (this.#_instanceSeq.get(key) || 0) + 1;

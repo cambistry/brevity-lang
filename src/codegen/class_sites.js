@@ -4,9 +4,11 @@
 //
 // A site is `{ path }`, the class's address tokens relative to the file, when that
 // is fixed: a class of the file (`Box`, `~C`), one in a class block (`~A:~B`), one
-// in a singleton (`~s:~C`). A class an instance body declares is under that
-// instance, so its site is `{ token, inInstance }`: the instance's address, then
-// its token (`Outer:1:~Inner`). Null for a class nested deeper inside an instance.
+// in a singleton (`~s:~C`). A class declared in an instance, directly or deeper
+// (in the class block of a class the instance body declares), is under that
+// instance, so its site is `{ token, inInstance }`: the address of the nearest
+// actor it's declared in that has one, then the path down to it (`Outer:1:~Inner`,
+// `Outer:1:~Mid:~Deep`).
 import { homeOf } from '../outer_reads.js';
 
 export const classToken = (a) =>
@@ -29,13 +31,23 @@ export function classSites(program) {
     const above = pathOf(encl, seen);
     return above && [...above, classToken(node)];
   };
+  // The path from the instance it's declared in down to it, or null.
+  const underInstance = (node, seen = new Set()) => {
+    if (!node || seen.has(node)) return null;
+    seen.add(node);
+    const encl = byName.get(homeOf(node));
+    if (!encl) return null;
+    if (!encl.singletonOf && !encl.membersOf) return [classToken(node)];
+    const above = underInstance(encl.membersOf ? byName.get(encl.membersOf) : encl, seen);
+    return above && [...above, classToken(node)];
+  };
   const sites = new Map();
   for (const a of actors) {
     if (!a.name || a.singletonOf || a.membersOf) continue;
     const path = pathOf(a);
     if (path) { sites.set(a.name, { path }); continue; }
-    const encl = byName.get(homeOf(a));
-    if (encl && !encl.singletonOf && !encl.membersOf) sites.set(a.name, { token: classToken(a), inInstance: true });
+    const tokens = underInstance(a);
+    if (tokens) sites.set(a.name, { token: tokens.join(':'), tokens, inInstance: true });
   }
   return sites;
 }

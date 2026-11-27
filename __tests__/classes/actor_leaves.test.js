@@ -135,6 +135,11 @@ describe('an actor of a class declared in a class leaves the file', () => {
     Outer = *(k Integer) {
       Inner = *{ @get = () -> k }
       @make = () -> Inner()
+      Mid = *{} ^ {
+        Deep = *{ @get = () -> k * 2 }
+        @make = () -> Deep()
+      }
+      @makeDeep = () -> Mid.make()
     }
 
     @inBlock = {
@@ -148,6 +153,10 @@ describe('an actor of a class declared in a class leaves the file', () => {
     @inInstance = {
       o = Outer(5)
       return o.make()
+    }
+    @deeper = {
+      o = Outer(5)
+      return o.makeDeep()
     }
     @twoInstances = {
       o = Outer(1)
@@ -187,6 +196,15 @@ describe('an actor of a class declared in a class leaves the file', () => {
       { output: { id: '1', re: ['#<:~Outer:1:~Inner:1>'], ty: [':~Outer:1:~Inner'], to: 'c' } },
       { input: { id: '2', op: 'get', to: ':~Outer:1:~Inner:1', from: 'c' } },
       { output: { id: '2', re: [5], ty: ['Integer'], to: 'c', from: ':~Outer:1:~Inner:1' } },
+    );
+  });
+
+  it('deeper in an instance: under that instance, then the path down', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'deeper', from: 'c' } },
+      { output: { id: '1', re: ['#<:~Outer:1:~Mid:~Deep:1>'], ty: [':~Outer:1:~Mid:~Deep'], to: 'c' } },
+      { input: { id: '2', op: 'get', to: ':~Outer:1:~Mid:~Deep:1', from: 'c' } },
+      { output: { id: '2', re: [10], ty: ['Integer'], to: 'c', from: ':~Outer:1:~Mid:~Deep:1' } },
     );
   });
 

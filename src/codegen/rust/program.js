@@ -1042,13 +1042,17 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
             Value::String(s) => {
                 ${hasPublicSingletons ? 'if let Some(a) = self.addr_of.get(s) { return json!(format!("#<:{}>", a)); }\n                ' : ''}if let Some(a) = self.lift_of.get(s) { return json!(format!("#<:{}>", a)); }
                 let lc = s.split_once('/').map(|(lc, _)| lc).unwrap_or("");
-                // Its class's path; or, declared in an instance body, under that instance.
+                // Its class's path; or, declared in an instance, under the nearest actor
+                // it's declared in that has an address, then the path down to it.
                 let addr = if let Some(path) = bv_class_path(lc) {
                     format!("{}:{}", path, bv_inst_id(v))
                 } else if let Some(token) = bv_class_in_instance(lc) {
-                    let encl = match self.bv_encl_of(s) { Some(e) => e, None => return v.clone() };
-                    let at = self.bv_wire_own(&json!(encl));
-                    let at = match at.as_str().and_then(|a| a.strip_prefix("#<:")).and_then(|a| a.strip_suffix('>')) { Some(a) => a.to_string(), None => return v.clone() };
+                    let mut at = None;
+                    for encl in self.bv_outers_of(s) {
+                        let w = self.bv_wire_own(&json!(encl));
+                        if let Some(a) = w.as_str().and_then(|a| a.strip_prefix("#<:")).and_then(|a| a.strip_suffix('>')) { at = Some(a.to_string()); break; }
+                    }
+                    let at = match at { Some(a) => a, None => return v.clone() };
                     let key = format!("{}:{}", at, token);
                     let n = self.built_seq.get(&key).copied().unwrap_or(0) + 1;
                     self.built_seq.insert(key.clone(), n);
@@ -1070,6 +1074,16 @@ ${G.ctx.publicSingletons ? `    // A public singleton was just built by the acto
     // The actor a class an instance body declares was declared in: the first of the
     // actors it's declared in, recorded as it was built.
     #[allow(dead_code)]
+    // The actors an instance is declared in, innermost first.
+    fn bv_outers_of(&self, child: &str) -> Vec<String> {
+        let Some((lc, id)) = child.split_once('/') else { return Vec::new() };
+        let Ok(id) = id.parse::<u32>() else { return Vec::new() };
+        let st: Option<&std::collections::HashMap<String, Value>> = match lc {
+${inInstanceClasses.map(lc => `            ${JSON.stringify(lc)} => self.${lc}_instances.get(&id),`).join('\n')}
+            _ => None,
+        };
+        st.and_then(|st| st.get("__outers")).and_then(|o| o.as_array()).map(|o| o.iter().filter_map(|e| e.as_str().map(|e| e.to_string())).collect()).unwrap_or_default()
+    }
     fn bv_encl_of(&self, child: &str) -> Option<String> {
         let (lc, id) = child.split_once('/')?;
         let id: u32 = id.parse().ok()?;
