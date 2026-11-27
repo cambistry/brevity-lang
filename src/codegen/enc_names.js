@@ -56,6 +56,12 @@ export const leadsWithList = (t) => t !== undefined && isList(members(t)[0]);
 // notes/functions-as-values-2026-11-27.md).
 export const fnTypeTag = (t) => ['%f', fnSignature(t)];
 
+// The class a type names, through a union with null (`T | null` names `T`).
+export function classOfNullable(t) {
+  const present = members(t).filter(m => m !== null);
+  return present.length === 1 ? classNameOf(present[0]) : classNameOf(t);
+}
+
 export function typeTag(ctx, t) {
   if (t === undefined) return null;
   if (t === null) return 'null';

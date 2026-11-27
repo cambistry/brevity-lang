@@ -73,8 +73,6 @@ It's consistent, but at each use it doesn't separate the pointer from the actor.
 ## Open
 
 - A call-site grant (`f(*p)`) reaches only a local function, for any cell.
-- The null rule covers pointers only. A plain local typed `T | null` still compiles a call through
-  it unguarded.
 
 ## What changes
 

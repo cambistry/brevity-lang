@@ -41,7 +41,10 @@ a subscription has nothing to wait for. The error says so: `Cannot subscribe to 
 declares: each write to it happens while '@f' runs, so act on the value where it's written`. The
 same goes for a pointer the function declares and for a lambda in the function.
 
-## Open
+## A call through a name that may be null is guarded
 
-- The null rule (narrow before a call) covers pointers only:
-  `a-call-through-a-name-that-may-be-null-is-guarded`.
+A call or a member read through a name whose type includes null (a param, a local, a cell, a
+pointer) is an error unless a guard has narrowed it: inside `if (t) { … }` or `if (t != null)`; in
+the `else` of `if (not t)` or `if (t == null)`; after an early exit, `if (not t) { return … }`, for
+the rest of the body; and `t ?? d`, which is never null. `not` takes a value that may be null, as a
+test of whether it's absent. Prefix `!` as negation is to come (`prefix-bang-negates`).

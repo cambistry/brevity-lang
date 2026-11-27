@@ -228,6 +228,67 @@ function lowerFnRefReplies(ast) {
   }
 }
 
+// A call or a member read through a name whose type includes null is guarded: a
+// value that may be null has nothing to call. A guard narrows the name:
+// - inside `if (t) { … }` or `if (t != null) { … }`, and in the `else` of
+//   `if (not t)` or `if (t == null)`;
+// - after an early exit, `if (not t) { return … }`, for the rest of the body;
+// - `t ?? d` is never null, so it's no call through `t`.
+function checkNullGuards(ast) {
+  const named = (e) => ((e?.type === 'Identifier' || e?.type === 'RefRead') ? e.name : null);
+  const isNull = (e) => e?.type === 'NullLiteral';
+  // The name a condition proves present, and the one it proves absent.
+  const present = (c) => named(c) ?? (c?.type === 'BinaryExpr' && c.op === '!==' ? (isNull(c.right) ? named(c.left) : isNull(c.left) ? named(c.right) : null) : null);
+  const absent = (c) => (c?.type === 'IfExpr' && c.boolOp === 'not' ? named(c.cond)
+    : c?.type === 'BinaryExpr' && c.op === '===' ? (isNull(c.right) ? named(c.left) : isNull(c.left) ? named(c.right) : null) : null);
+  const exits = (b) => Array.isArray(b?.body) && ['Return', 'Reply', 'SilentTerminator'].includes(b.body.at(-1)?.type);
+  for (const actor of ast.actors || []) {
+    const cells = new Map((actor.stateVarDecls || []).filter(v => v.typeNameEnc !== undefined).map(v => [v.name, v.typeNameEnc]));
+    for (const fn of actor.functions || []) {
+      const types = new Map(cells);
+      for (const p of fn.params || []) if (p.name) types.set(p.name, p.typeEnc);
+      const collect = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(collect); return; }
+        if ((n.type === 'TypedAssign' || n.type === 'RefDecl') && n.name && n.typeNameEnc !== undefined) types.set(n.name, n.typeNameEnc);
+        if (n.type === 'Function') for (const p of n.params || []) if (p.name) types.set(p.name, p.typeEnc);
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') collect(n[k]);
+      };
+      collect(fn.body);
+      const nullable = (name) => name !== null && types.get(name) !== undefined && encMembers(types.get(name)).includes(null);
+      const walk = (n, narrowed) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) {
+          // A statement list: an early exit narrows the statements after it.
+          let scope = narrowed;
+          for (const s of n) {
+            walk(s, scope);
+            const e = (s?.type === 'ExprStatement' || s?.type === 'ImplicitReturn') ? s.expr : null;
+            const gone = e?.type === 'IfExpr' && !e.else && exits(e.then) ? absent(e.cond) : null;
+            if (nullable(gone)) scope = new Set([...scope, gone]);
+          }
+          return;
+        }
+        if (n.type === 'DotCallExpr' || n.type === 'DotAccessExpr') {
+          const name = named(n.object);
+          if (nullable(name) && !narrowed.has(name)) {
+            throw new Error(`'${name}' may be null, so a call through it is guarded: 'if (${name}) { … }'`);
+          }
+        }
+        if (n.type === 'IfExpr' && n.boolOp !== 'not') {
+          walk(n.cond, narrowed);
+          const yes = present(n.cond), no = absent(n.cond);
+          walk(n.then, nullable(yes) ? new Set([...narrowed, yes]) : narrowed);
+          walk(n.else, nullable(no) ? new Set([...narrowed, no]) : narrowed);
+          return;
+        }
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k], narrowed);
+      };
+      walk(fn.body, new Set());
+    }
+  }
+}
+
 // A cell holding an actor of a class here is a pointer (notes/actor-pointers-2026-11-27.md).
 // Its bare name is the actor, and `*name` the cell:
 // - `*p <- v` repoints it: a SetStatement marked `cell`, which stores.
@@ -318,27 +379,9 @@ function lowerPointerWrites(ast) {
       }
       return s;
     };
-    // A pointer that may be null is narrowed before a call through it: inside
-    // `if (p) { … }`. `narrowed` holds the names tested so far.
-    const nullable = (name) => pointers.has(name) && encMembers(nullableTypes.get(name)).includes(null);
-    const named = (e) => ((e?.type === 'Identifier' || e?.type === 'RefRead') ? e.name : null);
-    const checkUse = (n, narrowed) => {
-      if (n.type !== 'DotCallExpr' && n.type !== 'DotAccessExpr') return;
-      const name = named(n.object);
-      if (name && nullable(name) && !narrowed.has(name)) {
-        throw new Error(`'${name}' may be null, so a call through it is guarded: 'if (${name}) { … }'`);
-      }
-    };
     const walk = (n, narrowed) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach((x, i) => { n[i] = lower(x); walk(n[i], narrowed); }); return; }
-      checkUse(n, narrowed);
-      if (n.type === 'IfExpr' && nullable(named(n.cond))) {
-        walk(n.cond, narrowed);
-        walk(n.then, new Set([...narrowed, named(n.cond)]));
-        walk(n.else, narrowed);
-        return;
-      }
       for (const k in n) {
         if (k === 'loc' || !n[k] || typeof n[k] !== 'object') continue;
         if (!Array.isArray(n[k])) n[k] = lower(n[k]);
@@ -436,6 +479,7 @@ function validateProgram(ast, options = {}) {
   lowerTailIfValues(ast);
   lowerCellMemberReads(ast);
   lowerPointerWrites(ast);
+  checkNullGuards(ast);
   lowerFnRefReplies(ast);
   checkOwnCellSubscriptions(ast);
   run.classEncByName = new Map();
@@ -3501,6 +3545,9 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       const operands = node.boolOp === 'and' ? [node.cond, node.then.expr] : node.boolOp === 'or' ? [node.cond, node.else.expr] : [node.cond];
       for (const operand of operands) {
         const t = argTypeOf(operand);
+        // `not t` of a value that may be null asks whether it's absent, as `if (t)` asks
+        // whether it's present (a null guard, checkNullGuards).
+        if (node.boolOp === 'not' && t !== undefined && t !== null && encMembers(t).includes(null)) continue;
         if (t !== undefined && t !== null && t !== 'Anything' && !acceptsArg(t, 'Boolean')) {
           throw new Error(`'${node.boolOp}' takes Booleans: this operand is '${shown(t)}'`);
         }

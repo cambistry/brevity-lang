@@ -2,7 +2,7 @@
 import { nextLambdaNumber } from '../lambda_numbers.js';
 import { selfSlotTag } from '../../actor_values.js';
 import { isFn, isUnion } from '../../type_enc.js';
-import { typeText, classNameOf, hasType, envTypeOf, orAny } from '../enc_names.js';
+import { typeText, classNameOf, hasType, envTypeOf, orAny, classOfNullable } from '../enc_names.js';
 import { addressToken, memberOp, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { returnsOnlySelf } from '../../chains.js';
@@ -875,7 +875,7 @@ function isStateChildCall(expr) {
   // A cell typed with a class of this file, its own or one of an actor it's
   // declared in: genRustExpr dispatches to that actor's per-instance handler
   // and yields the reply Value.
-  const t = classNameOf(o.outer ? o.outerTypeEnc
+  const t = classOfNullable(o.outer ? o.outerTypeEnc
     : (G.ctx.stateVarNames?.has(o.name) ? G.ctx.stateVarDecls?.find(d => d.name === o.name)?.typeNameEnc : undefined));
   return G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor);
 }

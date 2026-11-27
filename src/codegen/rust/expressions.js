@@ -7,7 +7,7 @@ import { _opre_join as joinAddress, _opre_quote as quoteToken } from '../opre_to
 import { inferType, bindLocalType } from '../../type_infer.js';
 import { publicLabel } from '../../singleton_classes.js';
 import { isFn, fnReply, members, isList, listElement } from '../../type_enc.js';
-import { typeText, classNameOf, envTypeOf, leadsWithList, declaredReturn, orAny } from '../enc_names.js';
+import { typeText, classNameOf, envTypeOf, leadsWithList, declaredReturn, orAny, classOfNullable } from '../enc_names.js';
 import { argForParam } from '../../call_args.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
 import {
@@ -928,7 +928,7 @@ ${subRegLines.join('\n')}
     if (dotObjName && !eCtx?.selfSpawnedRefs?.has(dotObjName)) {
       // A local pointer holds an instance's address too (src/validate.js lowerPointerWrites).
       const pointer = !expr.object.outer && !G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.pointerLocals?.get(dotObjName) : undefined;
-      const t = pointer ?? classNameOf(expr.object.outer ? expr.object.outerTypeEnc
+      const t = pointer ?? classOfNullable(expr.object.outer ? expr.object.outerTypeEnc
         : (G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeNameEnc : undefined));
       if (G.ctx.actorInfo?.has(t) && (pointer || classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor))) {
         const cell = expr.object.outer
