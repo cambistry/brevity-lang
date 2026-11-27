@@ -206,6 +206,43 @@ describe('over — compile errors', () => {
         return :result
     `)).toThrow(/use &triple/);
   });
+
+  // `over`, `reduce` and `List.sort(xs) fn` go through a List.
+  it('over a value known not to be a List', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        r List[Integer] = over(n) (i Integer) { i }
+        return r
+      }
+    `)).toThrow("'over' goes through a List, got Integer");
+  });
+
+  it('reduce of a value known not to be a List', () => {
+    expect(() => compileSource(`
+      @g = (n Integer) {
+        r List[Integer] = reduce([], n) (acc List[Integer], i Integer) { List.append(acc, i) }
+        return r
+      }
+    `)).toThrow("'reduce' goes through a List, got Integer");
+  });
+
+  it('List.sort of a value known not to be a List', () => {
+    expect(() => compileSource(`
+      @h = (t Text) {
+        r List[Text] = List.sort(t) (a Text) { a }
+        return r
+      }
+    `)).toThrow("'List.sort' goes through a List, got Text");
+  });
+
+  it('a List that may be null is a List', () => {
+    expect(() => compileSource(`
+      @ok = (xs List[Integer] | null) {
+        r List[Integer] | null = over(xs) (i Integer) { i }
+        return r
+      }
+    `)).not.toThrow();
+  });
 });
 
 describe('over — standalone', () => {

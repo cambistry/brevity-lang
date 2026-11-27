@@ -2101,11 +2101,23 @@ function checkListMethodArgs(ast) {
     }
   }
 
+  // `over`, `reduce` and `List.sort(xs) fn` go through a List. A value known to be
+  // something else (`over(n)` of an Integer) is an error where it's met.
+  function checkIterated(expr, typeEnv) {
+    const coll = expr.type === 'SortByExpr' ? expr.list : expr.collection;
+    const t = inferType(coll, typeEnv);
+    if (t === undefined || t === null || t === 'Anything' || isList(t)) return;
+    if (isUnion(t) && t['%or'].some(m => m === null || m === 'Anything' || isList(m))) return;
+    const what = expr.type === 'OverExpr' ? 'over' : expr.type === 'ReduceExpr' ? 'reduce' : 'List.sort';
+    throw new Error(`'${what}' goes through a List, got ${show(t)}`);
+  }
+
   function walkBody(body, typeEnv) {
     const walk = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(walk); return; }
       if (node.type === 'ListMethodExpr') checkOne(node, typeEnv);
+      if (node.type === 'OverExpr' || node.type === 'ReduceExpr' || node.type === 'SortByExpr') checkIterated(node, typeEnv);
       for (const k of Object.keys(node)) {
         if (k === 'type') continue;
         walk(node[k]);
