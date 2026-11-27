@@ -400,7 +400,7 @@ ${sourceArms}
     childActor._paramSubscriptions = paramSubInfo;
     G.ctx.actorInfo.set(a.name, { ...G.ctx.actorInfo.get(a.name), actor: childActor });
   }
-  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || [], actor.declarationReturn);
+  const matchArms = genRustDispatch(publicFns, privateFns, _preInitLambdas, constructorParams, actor.asClauses || []);
   // Skip fn method generation for fns with function-type params or function returns (inlined at call sites)
   // Also skip overloaded private functions (they're dispatched via arity-guarded match arms)
   const isFunctionType = t => t === 'Function' || isFn(t);
@@ -633,15 +633,6 @@ ${sourceArms}
         }
       }
     }
-  }
-  // Memoized return-as value for main actor
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const raTypeEnv = new Map([...(actor.stateVarDecls || []).map(d => [d.name, d.typeNameEnc])]);
-    for (const p of (actor.initParams || [])) raTypeEnv.set(p.name, envTypeOf(p));
-    let val = genRustExpr(actor.declarationReturn.expr, raTypeEnv);
-    val = val.replace(/\bself\./g, 'actor.');
-    const t = actor.declarationReturn.typeNameEnc;
-    stateInitLines.push(`    actor.state.insert("${stateKey('__returnAs')}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
   }
   const initMethod = '';
 
@@ -2841,6 +2832,8 @@ ${publishesClasses ? `            if let Some(addr) = &_inst_addr { resp.insert(
             let (class, inst) = addr.split_once(':').unwrap_or(("", ""));
             let class = class.trim_end_matches('!').to_lowercase();
             // Only a public class is published, and its identifier has this suffix.
+            // To the actor itself, a \`$\` op names no cell: \`$as\`, not \`$as 1\`.
+            let op_name = if message.get("to").and_then(|v| v.as_str()).map(|t| bv_local_tokens(t).len()) == Some(addr.split(':').count()) { bv_wire_op(&op_name).to_string() } else { op_name };
             let child = match self.built_at.get(&addr) { Some(c) => c.clone(), None => ${hasPublicSingletons ? `match self.singleton_at.get(&addr) { Some(c) => c.clone(), None => format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst) }` : `format!("{}${PUBLIC_CLASS_SUFFIX}/{}", class, inst)`} };
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
@@ -3083,7 +3076,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   // A class with no functions of its own still has to be constructible.
-  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || (a.declarationReturn?.typeNameEnc !== undefined));
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   // A public singleton is published under the actor that builds it, which needs
@@ -3174,11 +3167,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.childCounter = 0;
   for (const a of active) {
     if (a.name) {
-      const asClauses = [...(a.asClauses || [])];
-      if (a.declarationReturn?.typeNameEnc !== undefined) {
-        asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
-      }
-      G.ctx.actorInfo.set(a.name, { actor: a, asClauses });
+      G.ctx.actorInfo.set(a.name, { actor: a, asClauses: [...(a.asClauses || [])] });
     }
     a.functions.filter(f => f.name && !_isPublic(f) && !f.actorDef && !f.emptyOverload).forEach(f => G.ctx.actorFnNames.add(f.name));
   }
@@ -3231,8 +3220,8 @@ function codegenRust(ast, options = {}) {
   // Pre-merge superclass inheritance into actorInfo so main actor codegen sees merged params
   for (const a of active) {
     if (!a.name || !(a.supertypes?.length > 0)) continue;
-    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, a);
-    if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedIngests.length === 0 && inheritedState.length === 0 && inheritedInit.length === 0) continue;
+    const { inheritedParams, inheritedFunctions, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, a);
+    if (inheritedParams.length === 0 && inheritedFunctions.length === 0 && inheritedState.length === 0 && inheritedInit.length === 0) continue;
     const ownParamNames = new Set((a.initParams || []).map(p => p.name));
     const mergedParams = [
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
@@ -3244,21 +3233,8 @@ function codegenRust(ast, options = {}) {
       ...a,
       initParams: mergedParams,
       functions: mergedFunctions,
-      _inheritedIngests: inheritedIngests,
     };
     Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, G.ctx.actorNodes));
-    // Merge inherited ingest state var decls into the subclass
-    if (inheritedIngests.length > 0) {
-      const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
-      for (const ingest of inheritedIngests) {
-        if (!ownStateNames.has(ingest.name)) {
-          mergedActor.stateVarDecls = [
-            ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
-          ];
-        }
-      }
-    }
     const info = G.ctx.actorInfo.get(a.name);
     G.ctx.actorInfo.set(a.name, { ...info, actor: mergedActor });
   }

@@ -1097,7 +1097,7 @@ function genChildDotCallAwait(ctx, expr, typeEnv, sCtx) {
     } else {
       // No args — only call init if the actor has constructor params (for defaults) or init body
       const childActor = ctx.actorInfo.get(actorName)?.actor;
-      if (childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0 || childActor?._inheritedIngests?.length > 0) {
+      if (childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0) {
         initCall = `${prefix_eph}_init(#{}),\n        `;
       }
     }
@@ -1871,6 +1871,12 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       lastAssignVar = null;
       continue;
     }
+    if (s.type === 'ExprStatement') {
+      // Run for its effect: a call, or a nested `if`.
+      lines.push(genInner(s.expr));
+      lastAssignVar = null;
+      continue;
+    }
   }
 
   // If body had no ImplicitReturn, use last assigned var
@@ -1878,7 +1884,8 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
     lines.push(lastAssignVar);
   }
 
-  return lines.join(', ');
+  // An empty branch is the value null, as a missing `else` is.
+  return lines.length ? lines.join(', ') : 'null';
 }
 
 // Generate return expression for function Return nodes

@@ -2108,10 +2108,11 @@ bv_wrap_reply_(Re, Ty) ->
         T_ when is_list(T_) -> T_;
         T_ -> [T_]
     end}.
-%% A call from outside: its tags are checked, and its reply keeps its tag.
+%% A call from outside: its tags are checked, and its reply keeps its tag. Args (a
+%% non-empty list or map) need their tags, as at the file's own dispatch.
 bv_forward_(Pid, Addr, Op, Message, Payload, Id, From) ->
     Base_ = #{<<"id">> => Id, <<"to">> => From, <<"from">> => <<":", Addr/binary>>},
-    case Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) andalso bv_wire_op_(Op) =/= <<"$extend">> andalso not maps:is_key(<<"as">>, Message) of
+    case (is_map(Payload) orelse is_list(Payload)) andalso Payload =/= #{} andalso Payload =/= [] andalso not maps:is_key(<<"ty">>, Message) andalso bv_wire_op_(Op) =/= <<"$extend">> andalso not maps:is_key(<<"as">>, Message) of
         true -> io:put_chars([json_encode(Base_#{<<"ex">> => #{bv_ex_key_(Op) => <<"schema_required">>}}), $\n]);
         false ->
             Pid ! {bv_dispatch_wire, self(), Op, Message, Payload, Id},

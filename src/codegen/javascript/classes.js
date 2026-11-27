@@ -636,10 +636,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   ctx.lambdaVarNames = new Set();
   ctx.lambdaCaptureFields = [];
 
-  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
-
   // ── Resolve superclass inheritance ──────────────────────────────────────
-  const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
+  const { inheritedParams, inheritedFunctions, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
   // Merge inherited params (prepend) — skip any that the subclass redefines
   const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -663,19 +661,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   };
 
   Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, ctx.actorNodes));
-
-  // Merge inherited ingest state var decls into the subclass
-  if (inheritedIngests.length > 0) {
-    const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
-    for (const ingest of inheritedIngests) {
-      if (!ownStateNames.has(ingest.name)) {
-        mergedActor.stateVarDecls = [
-          ...(mergedActor.stateVarDecls || []),
-          { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
-        ];
-      }
-    }
-  }
 
   const name = mergedActor.name ? ` ${mergedActor.name}` : '';
 
@@ -864,20 +849,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     }
     return `    this.#${stateKey(s.name)} = ${isAsyncSend ? 'await ' : ''}${expr};`;
   }
-  let ownIngestInfo = null;
-  const preIngestBodyLines = [];
-  const postIngestBodyLines = [];
-  {
-    let pastIngest = false;
-    for (const s of initBody) {
-      if (s.value?.type === 'IngestExpr') {
-        ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
-        pastIngest = true;
-        continue;
-      }
-      (pastIngest ? postIngestBodyLines : preIngestBodyLines).push(genOneInitLine(s));
-    }
-  }
+  const bodyLines = initBody.map(genOneInitLine);
   const coercionInitLines = serviceCoercions.map(s => {
     const refName = s.ref?.name || s.ref;
     return `    this.#${stateKey(s.name)} = ${ctx.stateVarNames.has(refName) ? `this.#${stateKey(refName)}` : genExpr(ctx, s.ref)};`;
@@ -986,13 +958,6 @@ function genClass(ctx, actor, exportKw, remotes = null) {
       block: `\n        re = [${val}];\n        _ty_re = [${tag}];\n        _handled = true;`,
     };
   });
-  if (hasReturnAs) {
-    const returnAsType = actor.declarationReturn.typeNameEnc;
-    asClauseParts.push({
-      condition: `opName === "$as" && typeof _rawPayload === "string" && _rawPayload === ${JSON.stringify(typeText(returnAsType, ctx.depAliases))}`,
-      block: `\n        re = [this.#${stateKey('__returnAs')}];\n        _ty_re = [${isDynamicTy(returnAsType) ? jsTyOf(ctx, returnAsType, 're[0]') : '_rawPayload'}];\n        _handled = true;`,
-    });
-  }
 
   const allParts = [...publicFnParts, ...lambdaParts, ...accessorParts, ...asClauseParts];
   const ifChain = allParts.length > 0
@@ -1054,59 +1019,18 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     ...constructorParams.map(p => p.name),
     ...serviceCoercions.map(s => s.name),
   ]);
-  if (hasReturnAs) allFieldNames.add('__returnAs');
   const stateFields = [...allFieldNames].map(n => `  #${stateKey(n)}`).join('\n');
   const captureFields = ctx.lambdaCaptureFields.map(n => `  #${n}`).join('\n');
   const fieldSection = [stateFields, captureFields].filter(Boolean).join('\n');
 
-  // Init body codegen + ingest splitting were hoisted earlier so init-body
-  // lambdas register before the dispatch-arm loop runs. Re-use the computed
-  // ctorParamExprs / preIngestBodyLines / postIngestBodyLines / coercionInitLines
-  // here.
+  // Init body codegen was hoisted earlier so init-body lambdas register before the
+  // dispatch-arm loop runs. Re-use the computed ctorParamExprs / bodyLines /
+  // coercionInitLines here.
   const allInitLines = [
     ...(hasDeferred ? [`    this.#_pendingCells = new Map(${JSON.stringify(pendingCells.map(wireLabel))}.map(n => [n, []]));`] : []),
-    ...paramInitLines, ...preIngestBodyLines,
+    ...paramInitLines, ...bodyLines,
   ];
 
-  // Handle ingest: inject the ingest value between pre and post phases
-  if (ownIngestInfo) {
-    if (ownIngestInfo.defaultValue) {
-      // Default: use _ingest param with default value
-      allInitLines.push(`    this.#${stateKey(ownIngestInfo.name)} = _ingest_${ownIngestInfo.name} !== undefined ? _ingest_${ownIngestInfo.name} : ${genExpr(ctx, ownIngestInfo.defaultValue)};`);
-    } else {
-      allInitLines.push(`    this.#${stateKey(ownIngestInfo.name)} = _ingest_${ownIngestInfo.name};`);
-    }
-    allInitLines.push(...postIngestBodyLines);
-  } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
-    // This subclass provides a value for its superclass's ingest
-    // Evaluate the declaration return and assign to the inherited ingest var
-    const ingest = inheritedIngests[0]; // primary ingest from direct superclass
-    allInitLines.push(`    this.#${stateKey(ingest.name)} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
-  } else if (inheritedIngests.length > 0) {
-    // Subclass doesn't provide a return — use superclass's default if available
-    for (const ingest of inheritedIngests) {
-      if (ingest.defaultValue) {
-        allInitLines.push(`    this.#${stateKey(ingest.name)} = ${genExpr(ctx, ingest.defaultValue)};`);
-      }
-    }
-  }
-
-  if (hasReturnAs) {
-    allInitLines.push(`    this.#${stateKey('__returnAs')} = ${genExpr(ctx, actor.declarationReturn.expr)};`);
-  }
-  // Public `_tail` mirror: surfaces the value-tail projection so the runtime
-  // can unwrap a wrapper instance to its inner address (or scalar) at
-  // boundaries that consume wire tokens — e.g. `body.append!(peer_button("x"))`.
-  // See notes/tail-return-wire-2026-04-15.md, Shape 1.
-  if (actor.declarationReturn) {
-    if (hasReturnAs) {
-      allInitLines.push(`    this._tail = this.#${stateKey('__returnAs')};`);
-    } else if (inheritedIngests.length > 0) {
-      allInitLines.push(`    this._tail = this.#${stateKey(inheritedIngests[0].name)};`);
-    } else {
-      allInitLines.push(`    this._tail = ${genExpr(ctx, actor.declarationReturn.expr)};`);
-    }
-  }
   allInitLines.push(...coercionInitLines);
   const publishesNew = (actor.functions || []).some(f => f.name?.startsWith('new@') || f.name === 'new');
   // Public singletons declared directly in this actor (`@s = actor { … }`). Each is
@@ -1148,7 +1072,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
 
   // A class's construction is a call its caller receives the failure of, so a
   // failed `as` keeps its message only on the handler it happened in.
-  const initCall = `await instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')});`;
+  const initCall = `await instance.#init(${[...ctorParamNames].join(', ')});`;
   const initCallLine = actor.name
     ? `try { ${initCall} } catch (err) { delete err.bvEx; throw err; }`
     : initCall;
@@ -1162,7 +1086,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   // reading it (src/outer_reads.js). A prop isn't an address: from outside, `$get`
   // to it is unhandled. See notes/at-sigil-internal-and-quoted-names-2026-11-12.md.
   const ownNames = !actor.name ? [...fileOuterNames({ actors: [actor] }).keys()]
-    : [...allFieldNames].filter(n => n !== '__returnAs');
+    : [...allFieldNames];
   const isPublicCell = (n) => n.startsWith('@') && mergedActor.functions.some(f => f.name === n && f.cellGetter);
   const readable = ownNames.filter(n => typeof n === 'string')
     .map(n => `${JSON.stringify(wireLabel(n))}: { read: () => this.#${stateKey(n)}, open: ${isPublicCell(n)} }`).join(', ');
@@ -1192,9 +1116,9 @@ ${actor.name ? `  // The actor this one's class is declared in, for its address 
 
 ` : ''}  _adoptBinding(binding) { const old = this.#binding; this.#binding = binding; this.#_lift = binding.lift ?? null; return old; }
 
-  async #init(${[...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {${finalInitBody}}
+  async #init(${[...ctorParamExprs].join(', ')}) {${finalInitBody}}
 
-  static async create(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
+  static async create(${['binding', ...ctorParamExprs].join(', ')}) {
     const instance = new this(binding);
     ${ext && !ext.isBlock ? `// Published as it's made, its address its own: a layer's callbacks reach it while
     // it's built.
@@ -1207,10 +1131,10 @@ ${actor.spawnable ? `
   // Construction its parent doesn't wait for: its block reads cells of the parent
   // declared below the line that makes it. It has its handle at once; what's sent to
   // it waits until it's constructed, and \`_ready\` settles then.
-  static spawn(${['binding', ...ctorParamExprs, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')}) {
+  static spawn(${['binding', ...ctorParamExprs].join(', ')}) {
     const instance = new this(binding);
     if (binding.created) binding.created(instance);
-    const ready = instance.#init(${[...ctorParamNames, ...(ownIngestInfo ? [`_ingest_${ownIngestInfo.name}`] : [])].join(', ')})
+    const ready = instance.#init(${[...ctorParamNames].join(', ')})
       .catch((err) => { delete err.bvEx; throw err; })
       .finally(() => { instance.#_starting = null; });
     ready.catch(() => {});
@@ -1970,25 +1894,7 @@ export function codegen(ast, options = {}) {
       ...inheritedParams.filter(p => !ownParamNames.has(p.name)),
       ...(a.initParams || []),
     ];
-    // Pure value-tail wrapper: a class whose only contribution is a tail
-    // expression (no handlers, no state, no asClauses, no inheritance, no
-    // initBody). Calls to such a class are inline-expanded at the call site
-    // so the tail evaluates in the caller's binding — necessary because an
-    // instance's #init can't post outbound sends (e.g. `<button>…</button>`)
-    // through the parent's binding without dedicated routing setup. See
-    // notes/tail-return-wire-2026-04-15.md, Shape 1.
-    const inlineExpandable = !!(a.declarationReturn
-      && a.declarationReturn.typeNameEnc === undefined
-      && !(a.functions || []).length
-      && !(a.stateVarDecls || []).length
-      && !(a.asClauses || []).length
-      && !(a.supertypes || []).length
-      && !(a.initBody || []).length);
-    const asClauses = [...(a.asClauses || [])];
-    if (a.declarationReturn && a.declarationReturn.typeNameEnc !== undefined) {
-      asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
-    }
-    return [a.name, { asClauses, initParams: mergedParams, inlineExpandable, subscribedParams: subscribedParams(a) }];
+    return [a.name, { asClauses: [...(a.asClauses || [])], initParams: mergedParams, subscribedParams: subscribedParams(a) }];
   }));
   ctx.dependencyNames = new Set((ast.dependencies || []).map(d => d.name));
   ctx.depWireTargets = (ast.dependencies || []).filter(d => d.wireTarget).map(d => [d.name, d.wireTarget]);

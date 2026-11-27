@@ -654,13 +654,6 @@ export function genTypedAssignStmt(ctx, s, emitBinding, outerEnv, indent, counte
   if (s.value.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorNames.has(s.value.callee.name)) {
     const clause = findAsClauseMatch(ctx, s.typeNameEnc, s.value.callee.name);
     if (clause) {
-      if (clause.memoized) {
-        const tmpRef = `_ref_${s.name}`;
-        const createExpr = genExpr(ctx, s.value);
-        const newLine = `const ${tmpRef} = ${createExpr};`;
-        const asLine = emitBinding(s.name, `(await this.#childSend(${tmpRef}, [${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"]))[0]`);
-        return `\n        ${newLine}${asLine}`;
-      }
       return emitBinding(s.name, genExpr(ctx, clause.expr));
     }
   }

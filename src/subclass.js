@@ -16,7 +16,6 @@ export function buildActorMap(ast) {
  * Walk an actor's superclass chain and return its flattened inheritance:
  *   - inheritedParams:    initParams from each ancestor (deduped by name)
  *   - inheritedFunctions: own functions from each ancestor (overrides win)
- *   - inheritedIngests:   stateVarDecls flagged `ingest` from each ancestor
  *   - inheritedSetters:   manifest `set <name>: (Type)` entries from ancestors
  *
  * Order: grandparent material is collected before direct-parent material at
@@ -29,12 +28,11 @@ export function buildActorMap(ast) {
 export function resolveSuperclassChain(actorByName, actor) {
   const supertypes = actor.supertypes || [];
   if (supertypes.length === 0) {
-    return { inheritedParams: [], inheritedFunctions: [], inheritedIngests: [], inheritedSetters: [], inheritedState: [], inheritedInit: [] };
+    return { inheritedParams: [], inheritedFunctions: [], inheritedSetters: [], inheritedState: [], inheritedInit: [] };
   }
 
   const inheritedParams = [];
   const inheritedFunctions = [];
-  const inheritedIngests = [];
   const inheritedSetters = [];
   const inheritedState = [];
   const inheritedInit = [];
@@ -86,20 +84,13 @@ export function resolveSuperclassChain(actorByName, actor) {
       addLayer(superActor.functions);
     }
 
-    for (const sv of [...parentChain.inheritedState, ...(superActor.stateVarDecls || []).filter(v => !v.ingest), ...(view?.cells || [])]) {
+    for (const sv of [...parentChain.inheritedState, ...(superActor.stateVarDecls || []), ...(view?.cells || [])]) {
       const idx = inheritedState.findIndex(es => es.name === sv.name);
       if (idx >= 0) inheritedState[idx] = sv;
       else inheritedState.push(sv);
     }
-    // An ingest slot is filled by the subclass's own tail. A class that builds its
-    // base runs the parent's body at its `super` line instead.
-    if (!built) inheritedInit.push(...effectiveInit(actorByName, superActor, resolveSuperclassChain).filter(s => s.value?.type !== 'IngestExpr'));
-
-    for (const sv of (superActor.stateVarDecls || [])) {
-      if (sv.ingest) {
-        inheritedIngests.push({ name: sv.name, typeNameEnc: sv.typeNameEnc, defaultValue: sv.ingestDefault, fromSupertype: st.supertype });
-      }
-    }
+    // A class that builds its base runs the parent's body at its `super` line instead.
+    if (!built) inheritedInit.push(...effectiveInit(actorByName, superActor, resolveSuperclassChain));
 
     for (const s of parentChain.inheritedSetters) {
       const idx = inheritedSetters.findIndex(es => es.name === s.name);
@@ -113,7 +104,7 @@ export function resolveSuperclassChain(actorByName, actor) {
     }
   }
 
-  return { inheritedParams, inheritedFunctions, inheritedIngests, inheritedSetters, inheritedState, inheritedInit };
+  return { inheritedParams, inheritedFunctions, inheritedSetters, inheritedState, inheritedInit };
 }
 
 // A subclass actor has its own copy of the state its inherited methods use, and runs

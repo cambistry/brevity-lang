@@ -66,7 +66,7 @@ function addImplicitBlock(actors, byName, a, parentBlock) {
   };
   place(declarer.initBody, { type: 'StateAssign', name: cell, value: make() });
   place(declarer.constructorBody, { type: 'TypedAssign', name: cell, typeName: null, value: make() });
-  const block = { type: 'Actor', name: blockName, params: [], functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], asClauses: [], supertypes: [], declarationReturn: null, singletonOf: cell, membersOf: a.name, ...(a.enclosing !== undefined && { enclosing: a.enclosing }) };
+  const block = { type: 'Actor', name: blockName, params: [], functions: [], stateVarDecls: [], initBody: [], constructorBody: [], initParams: [], asClauses: [], supertypes: [], singletonOf: cell, membersOf: a.name, ...(a.enclosing !== undefined && { enclosing: a.enclosing }) };
   Object.defineProperty(block, 'implicitBlock', { value: true, configurable: true, enumerable: false });
   actors.push(block);
   byName.set(blockName, block);
@@ -345,7 +345,7 @@ export function lowerInheritedBlockCells(actors) {
       for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v, bound);
     };
     for (const f of block.functions || []) visit(f, new Set());
-    for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) visit(b, new Set());
+    for (const b of [block.initBody, block.constructorBody]) visit(b, new Set());
     for (const p of block.initParams || []) if (p.defaultValue) visit(p.defaultValue, new Set());
   }
 }
@@ -597,7 +597,7 @@ export function lowerBlockDelegation(actors) {
       }
       for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') calls(v);
     };
-    for (const b of [block.initBody, block.constructorBody, block.declarationReturn]) calls(b);
+    for (const b of [block.initBody, block.constructorBody]) calls(b);
   }
 }
 
@@ -612,7 +612,7 @@ export function lowerBlockDelegation(actors) {
 export function lowerClassBase(actors, byName, extendsClass) {
   const isClass = (a) => a.name && !a.singletonOf && !a.membersOf;
   const isBase = (o) => o?.type === 'Identifier' && o.name === CLASS_BASE;
-  const bodiesOf = (a) => [a.functions, a.initBody, a.constructorBody, a.declarationReturn];
+  const bodiesOf = (a) => [a.functions, a.initBody, a.constructorBody];
   let site = 0;
   const parentOf = (C, user) => {
     const parents = (C.supertypes || []).map(st => st.supertype);
@@ -731,7 +731,7 @@ const walk = (node, visit) => {
   visit(node);
   for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') walk(v, visit);
 };
-const bodies = (a) => [a.functions, a.initBody, a.constructorBody, a.initParams, a.declarationReturn];
+const bodies = (a) => [a.functions, a.initBody, a.constructorBody, a.initParams];
 
 function renameCalls(actor, from, to) {
   for (const b of bodies(actor)) walk(b, (n) => {

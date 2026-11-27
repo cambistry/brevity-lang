@@ -1074,8 +1074,8 @@ ${subRegLines.join('\n')}
   }
   if (expr.type === 'SizeExpr') {
     const arg = genRustExpr(expr.arg, typeEnv, eCtx);
-    // RefRead and state vars resolve to Value — extract &str first
-    if (expr.arg.type === 'RefRead' || expr.arg.type === 'StateVar') {
+    // RefRead and state vars resolve to Value, as any cell read does — extract &str first
+    if (expr.arg.type === 'RefRead' || expr.arg.type === 'StateVar' || /\.unwrap_or\(Value::Null\)$/.test(arg)) {
       return intFromI64(`(${arg}.as_str().map_or(0, |s| s.chars().count()) as i64)`);
     }
     return intFromI64(`(${arg}.chars().count() as i64)`);

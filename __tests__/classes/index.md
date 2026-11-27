@@ -1,7 +1,7 @@
 # Actors with a `new`
 
 LLM orientation: this directory covers actor construction — constructor headers
-and params, subclassing, the parent layer (`base`), optional args, accessors, ingest,
+and params, subclassing, the parent layer (`base`), optional args, accessors,
 actors as values, and remote actor surfaces. There are no classes, only **actors**:
 `T = (…) *{ … }` declares the actor `T`, whose `new` builds others, and those are of
 class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-11-18.md).
@@ -49,7 +49,7 @@ projections live.
 - File-level class params.
 - Optional class args and defaults.
 - Published params (`@name`) and their accessors.
-- Ingest from subclass constructor blocks.
+- A constructor block's `return`: an early exit, never a value.
 - Subclass constructors: `super` forwarding, its every-path rule, and method override.
 - Protected/private function access across subclasses.
 - Wrapped superclass actors.
@@ -69,5 +69,4 @@ projections live.
 ## Documents
 
 - [Published Constructor Params](accessors.md)
-- [Class Ingest](ingest.md)
 - [File-Level Dependency Injection](../services/dependency_injection.md)

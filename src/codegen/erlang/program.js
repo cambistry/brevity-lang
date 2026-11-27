@@ -597,17 +597,12 @@ function genDispatch(ctx, publicFns, actor = null) {
   // As-clause dispatch arms for self-as type coercion
   const asClauses = ctx.asClauses || [];
   for (const clause of asClauses) {
-    const val = genExpr(ctx, clause.expr, {}, {});
+    const val = genExpr(ctx, clause.expr, new Map(ctx.stateVarTypeEnv || []), {});
     if (clause.negated) {
       clauses.push(`handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))} ->\n    {ok, [${val}], [Payload]}`);
     } else {
       clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}, _Id, _From) ->\n    {ok, [${val}], [${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}]}`);
     }
-  }
-  // Memoized return-as dispatch arm
-  if (ctx.mainActorReturnAs !== undefined) {
-    const t = typeText(ctx.mainActorReturnAs, ctx.depAliases);
-    clauses.push(`handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
   // Catch-all clause
@@ -922,11 +917,6 @@ function genCamInit(ctx, actor) {
   lines.push(...localLines);
   if (pendingCells.length) lines.push(`${I}bv_join_all_(),`);
 
-  // Memoized return-as value for main actor
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
-    lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
-  }
 
   lines.push(`${I}put(bv_initialized_, true),`);
   lines.push(`${I}Resp = #{<<"id">> => Id, <<"re">> => [<<"init">>], <<"to">> => From},`);
@@ -1047,17 +1037,12 @@ function genChildHandleOp(ctx, actor) {
 
   // As-clause dispatch arms for child actor self-as type coercion
   for (const clause of (actor.asClauses || [])) {
-    const val = genExpr(ctx, clause.expr, {}, {});
+    const val = genExpr(ctx, clause.expr, new Map(ctx.stateVarTypeEnv || []), {});
     if (clause.negated) {
       clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, Payload, _Id, _From) when is_binary(Payload) andalso Payload =/= ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))} ->\n    {ok, [${val}], [Payload]}`);
     } else {
       clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}, _Id, _From) ->\n    {ok, [${val}], [${erlString(typeText(clause.targetTypeEnc, ctx.depAliases))}]}`);
     }
-  }
-  // Memoized return-as dispatch arm for child actor
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const t = typeText(actor.declarationReturn.typeNameEnc, ctx.depAliases);
-    clauses.push(`${prefix}_handle_op(<<"$as">>, _Message, ${erlString(t)}, _Id, _From) ->\n    {ok, [get(${erlStateKey(ctx, '__returnAs')})], [${erlString(t)}]}`);
   }
 
   // Catch-all clause
@@ -1077,10 +1062,7 @@ function genChildInit(ctx, actor) {
   // Cells a class constructed here waits on (src/init_order.js).
   const pendingCells = actor.pendingCells || [];
   const initBody = withCellReady(actor.initBody || [], pendingCells);
-  const inheritedIngests = actor._inheritedIngests || [];
-
-  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
-  if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
+  if (constructorParams.length === 0 && initBody.length === 0) return '';
 
   const I = '    ';
   const lines = [];
@@ -1094,60 +1076,9 @@ function genChildInit(ctx, actor) {
   lines.push(...paramLines);
   if (pendingCells.length) lines.push(`${I}bv_pending_cells_([${pendingCells.map(n => erlString(wireLabel(n))).join(', ')}]),`);
 
-  // Split init body into pre-ingest, ingest, and post-ingest phases
-  let ownIngestInfo = null;
-  const preIngestBody = [];
-  const postIngestBody = [];
-  let pastIngest = false;
-  for (const s of initBody) {
-    if (s.value?.type === 'IngestExpr') {
-      ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
-      pastIngest = true;
-      continue;
-    }
-    (pastIngest ? postIngestBody : preIngestBody).push(s);
-  }
-
-  // Pre-ingest body statements
-  const typeEnv = buildTypeEnv(constructorParams, initBody.filter(s => s.value?.type !== 'IngestExpr'), ctx.typeDecls);
-  const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(preIngestBody) };
-  const preLines = genLocals(ctx, preIngestBody, typeEnv, sCtx, I);
-  lines.push(...preLines);
-
-  // Handle ingest value assignment
-  if (ownIngestInfo) {
-    if (ownIngestInfo.defaultValue) {
-      // Ingest with default — use default value (subclasses override via their own init)
-      const defaultVal = genExpr(ctx, ownIngestInfo.defaultValue, typeEnv, sCtx);
-      lines.push(`${I}put(${erlStateKey(ctx, ownIngestInfo.name)}, ${defaultVal}),`);
-    } else {
-      // No default — value must be provided by subclass (no-op here, subclass writes state directly)
-      lines.push(`${I}put(${erlStateKey(ctx, ownIngestInfo.name)}, null),`);
-    }
-    // Post-ingest body statements
-    const postSCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(postIngestBody) };
-    const postLines = genLocals(ctx, postIngestBody, typeEnv, postSCtx, I);
-    lines.push(...postLines);
-  } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
-    // Subclass provides a value for its superclass's ingest — assign directly to the inherited state var
-    const ingest = inheritedIngests[0];
-    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
-    lines.push(`${I}put(${erlStateKey(ctx, ingest.name)}, ${val}),`);
-  } else if (inheritedIngests.length > 0) {
-    // Subclass doesn't provide a return — use superclass's default if available
-    for (const ingest of inheritedIngests) {
-      if (ingest.defaultValue) {
-        const defaultVal = genExpr(ctx, ingest.defaultValue, typeEnv, sCtx);
-        lines.push(`${I}put(${erlStateKey(ctx, ingest.name)}, ${defaultVal}),`);
-      }
-    }
-  }
-
-  // Memoized return-as value
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const val = genExpr(ctx, actor.declarationReturn.expr, typeEnv, sCtx);
-    lines.push(`${I}put(${erlStateKey(ctx, '__returnAs')}, ${val}),`);
-  }
+  const typeEnv = buildTypeEnv(constructorParams, initBody, ctx.typeDecls);
+  const sCtx = { restVars: new Set(), refVars: new Set(), ssaEnv: buildSSAEnv(initBody) };
+  lines.push(...genLocals(ctx, initBody, typeEnv, sCtx, I));
 
   // Service coercion aliases — copy ref state to alias.
   // Constructor coercions have no runtime presence (compile-time aliases only).
@@ -1176,7 +1107,7 @@ function genChildActorCode(ctx, actors) {
     if (!actor) continue;
 
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, inheritedState, inheritedInit } = resolveSuperclassChain(ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1237,24 +1168,10 @@ function genChildActorCode(ctx, actors) {
       functions: mergedFunctions,
       constructorBody: transformedConstructorBody,
       initBody: transformedInitBody,
-      _inheritedIngests: inheritedIngests,
       _paramSubscriptions: paramSubInfo,
     };
 
     Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, ctx.actorNodes));
-
-    // Merge inherited ingest state var decls into the subclass
-    if (inheritedIngests.length > 0) {
-      const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
-      for (const ingest of inheritedIngests) {
-        if (!ownStateNames.has(ingest.name)) {
-          mergedActor.stateVarDecls = [
-            ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
-          ];
-        }
-      }
-    }
 
     // Update actorInfo so statement codegen sees merged params when generating init calls
     const savedActorInfo = ctx.actorInfo.get(name);
@@ -1579,11 +1496,6 @@ function genProgram(ctx, actor, allActors, options = {}) {
     ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);
 
-  // Set main actor return-as type before dispatch generation
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    ctx.mainActorReturnAs = actor.declarationReturn.typeNameEnc;
-  }
-
   // Generate child actor code
   const childActorSection = genChildActorCode(ctx, allActors);
 
@@ -1770,16 +1682,6 @@ ${putLines},
   }
   // The params come first, so a cell can be set from one.
   stateInitLines.push(...blockLines);
-
-  // Memoized return-as value for main actor
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const raTypeEnv = new Map([
-      ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
-      ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
-    ]);
-    const val = genExpr(ctx, actor.declarationReturn.expr, raTypeEnv, {});
-    stateInitLines.push(`    put(${erlStateKey(ctx, '__returnAs')}, ${val})`);
-  }
 
   // Capture function — serializes actor state, each cell by its wire label (`.val`, `@pub`)
   const captureFields = allStateNames.map(n => `${erlOp(n)} => get(${erlStateKey(ctx, n)})`).join(', ');
@@ -2050,7 +1952,7 @@ handle_result(_, _Id, _From, _OpName) ->
     ? stateInitLines.join(',\n') + ',\n'
     : '';
   // Build start/1 init section: same as stateInitSection but with direct args
-  // Replace the BREVITY_ARGS block in-place (preserving ordering with returnAs etc.)
+  // Replace the BREVITY_ARGS block in-place (preserving ordering)
   const startInitLines = stateInitLines.map(l =>
     l.includes('os:getenv') && argsApplyLines.length > 0 ? argsApplyLines.join(',\n') : l,
   ).filter(l => !(l.includes('os:getenv') && argsApplyLines.length === 0));
@@ -2383,7 +2285,7 @@ export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
   // A class with no functions of its own still has to be constructible.
-  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || (a.declarationReturn?.typeNameEnc !== undefined);
+  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update'));
   const active = ast.actors.filter(isActive);
   if (active.length === 0) return '';
 
@@ -2438,11 +2340,7 @@ export function codegenErlang(ast, options = {}) {
 
   for (const a of active) {
     if (a.name) {
-      const asClauses = [...(a.asClauses || [])];
-      if (a.declarationReturn?.typeNameEnc !== undefined) {
-        asClauses.push({ targetTypeEnc: a.declarationReturn.typeNameEnc, negated: false, expr: a.declarationReturn.expr, memoized: true });
-      }
-      ctx.actorInfo.set(a.name, { actor: a, asClauses });
+      ctx.actorInfo.set(a.name, { actor: a, asClauses: [...(a.asClauses || [])] });
     }
   }
 

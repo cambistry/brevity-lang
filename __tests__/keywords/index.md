@@ -9,7 +9,6 @@ before generating keyword examples.
 - `catch`: labeled non-local exits, value-carrying exits, nested labels, block
   labels, and compile errors for label misuse.
 - `if`: conditional expressions and blocks.
-- `ingest`: superclass receives subclass construction value.
 - `over`: list mapping.
 - `reduce`: list folding.
 - `repeat while` / `repeat until`: loop forms.
@@ -24,7 +23,6 @@ before generating keyword examples.
 
 ## Documents
 
-- [`ingest`](ingest.md)
 - [`over`](over.md)
 - [`reduce`](reduce.md)
 - [`self as`](self_as.md)

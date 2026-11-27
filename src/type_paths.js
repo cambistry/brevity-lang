@@ -243,7 +243,7 @@ export function resolveTypePaths(ast, remotesParsed = {}, dependencyNames = new 
   };
   for (const a of ast.actors || []) {
     const scope = scopeOf(a);
-    visit([a.stateVarDecls, a.initParams, a.initBody, a.constructorBody, a.functions, a.asClauses, a.declarationReturn], scope, envOf.get(scope.join(' ')) || new Map());
+    visit([a.stateVarDecls, a.initParams, a.initBody, a.constructorBody, a.functions, a.asClauses], scope, envOf.get(scope.join(' ')) || new Map());
   }
   // A type's own fields are written where the type is declared.
   for (const t of localTypes) {

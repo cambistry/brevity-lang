@@ -271,6 +271,5 @@ export function resolveNames(program) {
     visit(actor.initBody || [], scope);
     for (const p of actor.initParams || []) if (p.defaultValue) visit(p.defaultValue, scope);
     for (const c of actor.asClauses || []) visit(c.expr, scope);
-    if (actor.declarationReturn?.expr) visit(actor.declarationReturn.expr, scope);
   }
 }

@@ -150,7 +150,7 @@ export function lowerActorValues(actors, byName) {
         if (av) node[k] = av; else lowerValues(v, shadowed);
       }
     };
-    const roots = [actor.functions, actor.initBody, actor.constructorBody, actor.declarationReturn];
+    const roots = [actor.functions, actor.initBody, actor.constructorBody];
     roots.forEach(r => lowerValues(r, new Set()));
     for (const d of actor.stateVarDecls || []) {
       const v = asValue(d.value, new Set());

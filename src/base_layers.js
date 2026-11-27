@@ -23,7 +23,7 @@ const walk = (node, visit, parent = null, key = null) => {
   visit(node, parent, key);
   for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') walk(v, visit, node, k);
 };
-const bodies = (a) => [a.functions, a.initBody, a.constructorBody, a.initParams, a.declarationReturn, a.stateVarDecls];
+const bodies = (a) => [a.functions, a.initBody, a.constructorBody, a.initParams, a.stateVarDecls];
 
 // A hidden name for layer `L`'s definition of `name`. `@` and a trailing `!`/`.` are
 // moved so the result is still a plain identifier with the same suffix.
@@ -156,7 +156,6 @@ export function lowerBaseLayers(actors) {
       }
       if (!(U.stateVarDecls || []).some(d => d.name === hidden)) {
         const h = { ...decl, name: hidden };
-        delete h.ingest;
         Object.defineProperty(h, 'baseOf', { value: name });
         Object.defineProperty(h, 'baseLayer', { value: L.name });
         Object.defineProperty(h, 'baseInit', { value: (L.initBody || []).find(s => s.type === 'StateAssign' && s.name === name) ?? null });

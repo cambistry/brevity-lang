@@ -25,11 +25,9 @@ export const typeConstruction = (typeName, args) =>
 export const presenceCheck = (expr) =>
   ({ type: 'PresenceCheck', expr });
 
-export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], declarationReturn = null, overloadMode = 'create' } = {}) =>
-  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, declarationReturn, ...(overloadMode !== 'create' && { overloadMode }) });
+export const actor = (name, { params = [], functions = [], stateVarDecls = [], initBody = [], initParams = [], constructorBody = [], asClauses = [], supertypes = [], overloadMode = 'create' } = {}) =>
+  ({ type: 'Actor', name, params, functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, supertypes, ...(overloadMode !== 'create' && { overloadMode }) });
 
-export const ingestExpr = (defaultValue = null) =>
-  ({ type: 'IngestExpr', defaultValue });
 
 export const dependency = (name, { interface: iface = null, constructorParams = null, constructorArrow = null, path = null, destructures = null } = {}) =>
   ({ type: 'Dependency', name, interface: iface, constructorParams, ...(constructorArrow && { constructorArrow }), path, ...(destructures && { destructures }) });

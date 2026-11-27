@@ -388,17 +388,6 @@ describe('class (...) *{...} — subclass forms', () => {
     `)).not.toThrow();
   });
 
-  it('Sub = Base ^ *{ expr }  (declaration return)', () => {
-    expect(() => compileSource(`
-      Base = * {
-        label Text = ingest
-        @label = -> :label
-      }
-      Greeting = Base ^ *{ "hello" }
-      @test = -> 1
-    `)).not.toThrow();
-  });
-
   it('Sub = Base ^ (params) *{ body } reaches the parent layer with base', () => {
     expect(() => compileSource(`
       Base = (x Integer) *{

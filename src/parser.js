@@ -11,6 +11,7 @@ import { encodeAstTypes } from './parser_types.js';
 import { lowerSingletonClasses, lowerInheritedBlockCells, lowerBlockDelegation, addRemoteParents, dropRemoteParents, CLASS_SELF, CLASS_BASE } from './singleton_classes.js';
 import { lowerBaseLayers } from './base_layers.js';
 import { lowerSuperCalls, lowerFunctionSupers } from './super_calls.js';
+import { settleInitExits } from './init_exits.js';
 import { resolveSuperclassChain } from './subclass.js';
 
 // The cells a setter is synthesized for: values, and references to Self.
@@ -3465,16 +3466,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (isRefDecl) addRef(name, typeName);
     let value;
     // For Object type, check if RHS starts with sigil
-    if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
-      take(); // ingest
-      let defaultValue = null;
-      if (peek().type === 'LPAREN') {
-        consume(); // (
-        defaultValue = parseExpr();
-        expect('RPAREN');
-      }
-      value = AST.ingestExpr(defaultValue);
-    } else if (typeName === 'Object' && peek().type === 'SIGIL') {
+    if (typeName === 'Object' && peek().type === 'SIGIL') {
       value = parseRHSObjectLiteral(null);
     } else {
       value = parseExpr();
@@ -4155,7 +4147,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       take(); // =
       const cls = `${op}_singleton`;
       const nested = parseSingletonMembers(cls);
-      const classNode = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
+      const classNode = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], overloadMode: 'create' });
       classNode.singletonOf = '@' + op;
       declareLocal('@' + op);
       addRef('@' + op, cls);
@@ -4638,7 +4630,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // Parse the body that follows constructor params. `linealHeader` is true when
   // the header was lineal (`*\n [params\n *]`): the body is then delimited
   // (`{`) or lineal (terminated by `.`/`end`). After a delimited header the
-  // body must be opened by `{` or be the tail form (`->`/`return`). An empty
+  // body is opened by `{`, or starts at `->`/`return` and reads as any body. An empty
   // body is legal (e.g. `{}`).
   // A lineal class body ends with `.`, or `end` with an optional `#Name` that
   // names the class it closes: `end#Box`.
@@ -4663,7 +4655,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       skipNewlines();
       expect('RBRACE');
     } else if (linealHeader || peek().type === '->' || isReturnKw()) {
-      // Lineal body or tail form (`return`/`->` consumed by parseActorBody).
+      // Lineal body, or one starting at `return`/`->` (read by parseActorBody).
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -4730,7 +4722,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const base = className.replace(/^[@#]/, '').replace(/[!.]$/, '');
     const cls = `${base}_singleton`;
     const nested = peek().type === 'LBRACE' ? parseConstructorBody(cls, false) : parseSingletonMembers(cls);
-    const actor = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' });
+    const actor = AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], overloadMode: 'create' });
     actor.singletonOf = `${base}__class`;
     actor.membersOf = className;
     return { actor, cell: `${base}__class` };
@@ -4805,15 +4797,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const constructorBody = [];
     // `name` then, after a line break, `=`: a lineal declaration's opener.
     const linealEqualsAhead = () => tokens[pos]?.type === 'NEWLINE' && tokens[pos + 1]?.type === 'EQUALS';
-    // A value the block emits: its declaration return.
-    const pushValueEmitter = () => {
-      const expr = parseExpr();
-      if (expr.type === 'Function' || expr.type === 'Lambda') {
-        throw new Error('Service block return-as value must not be a function');
-      }
-      let typeName = null;
-      if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-      constructorBody.push(AST.implicitReturn(expr, typeName));
+    // A value in a constructor block is an expression statement: the block has no
+    // tail value.
+    const pushValueStatement = () => {
+      constructorBody.push(AST.exprStatement(parseExpr()));
     };
     const outerDecl = declCtx;
     refVarScopes.push(new Map()); // actor-level ref scope
@@ -4879,29 +4866,15 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         untrackedDecls.add(sigil + nameTok.value);
         continue;
       }
-      // Constructor-block tail: `return self` / `-> self` terminates an actor
-      // body (becomes-self); `return expr` / `-> expr` is a declaration return
-      // (return-as); `return ()` / `-> ()` is a no-op. `->` persists here as the
-      // becomes arrow; `return` is the value-return spelling.
-      if (peek().type === '->' || isReturnKw()) {
-        const arrow = take(); // -> or return
-        if (arrow.type === '->' && (peek().type === 'RBRACE' || peek().type === 'EOF' || peek().type === 'DOT')) {
-          throw new Error(`'->' at the end of a constructor block has nothing after it`);
+      // A constructor block returns no value: a bare `return` ends construction there
+      // (src/init_exits.js), and `return` takes no operand.
+      if (isReturnKw()) {
+        take(); // return
+        if (!['NEWLINE', 'BLOCK_SEP', 'RBRACE', 'EOF', 'DOT'].includes(peek().type)) {
+          throw new Error("A constructor block returns no value: 'return' here stands alone");
         }
-        if (peek().type === 'KEYWORD' && peek().value === 'self') {
-          take(); // self
-        } else if (peek().type === 'LPAREN' && tokens[pos + 1]?.type === 'RPAREN') {
-          // `-> ()` is a literal of no value in a constructor block — ignored.
-          // The class constructs an actor, not a value.
-          take(); take();
-        } else if (peek().type !== 'EOF' && peek().type !== 'RBRACE' && peek().type !== 'DOT') {
-          // Declaration return: -> expr (value for superclass ingest)
-          const expr = parseExpr();
-          let typeName = null;
-          if (isTypeAttestation()) { typeName = consumeTypeAttestation(); }
-          constructorBody.push(AST.implicitReturn(expr, typeName));
-        }
-        break;
+        constructorBody.push(AST.returnNode([]));
+        continue;
       }
       if (isTypeKw()) {
         const decl = parseTypeDecl();
@@ -5255,7 +5228,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
             while (pos < li) take(); // skip newlines and optional `=`
             take(); // *
             const { params, supertypes, nested } = parseConstructorAfterStar(op);
-            const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
+            const actorNode = { params, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: params, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
             if (_identOverloadMode !== 'create') {
               functions.push(AST.functionDecl(op, params, [], { overloadMode: _identOverloadMode, actorDef: actorNode }));
             } else {
@@ -5296,7 +5269,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
             if (_identOverloadMode !== 'create') throw new Error(`Singleton '${op}' can't be an overload clause — write '${op} = actor { … }'`);
             const cls = `${op.replace(/^[@#]/, '')}_singleton`;
             const nested = parseSingletonMembers(cls);
-            nestedActors.push(AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], declarationReturn: nested.declarationReturn, overloadMode: 'create' }));
+            nestedActors.push(AST.actor(cls, { params: [], functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: [], constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes: [], overloadMode: 'create' }));
             nestedActors[nestedActors.length - 1].singletonOf = op;
             constructorBody.push(AST.typedAssign(op, null, AST.functionCallExpr(AST.identifier(cls), [])));
             continue;
@@ -5317,7 +5290,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
               take(); // *
               ({ params: cParams, supertypes, nested } = parseConstructorAfterStar(op));
             }
-            const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes, declarationReturn: nested.declarationReturn };
+            const actorNode2 = { params: cParams, functions: nested.functions, stateVarDecls: nested.stateVarDecls, initBody: nested.initBody, initParams: cParams, constructorBody: nested.constructorBody, asClauses: nested.asClauses, supertypes };
             if (_identOverloadMode !== 'create') {
               if (members) throw new Error(`'${op}' is an overload clause, which takes no singleton layer`);
               functions.push(AST.functionDecl(op, cParams, [], { overloadMode: _identOverloadMode, actorDef: actorNode2 }));
@@ -5339,20 +5312,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           const _isBareFnStart = _valueTok === 'IDENT' && tokens[pos + 1]?.type === '->';
           const _isFnStart = _valueTok === '->' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
           if (!_isFnStart) {
-            // ingest or ingest(default) — superclass receives subclass declaration return
-            if (peek().type === 'KEYWORD' && peek().value === 'ingest') {
-              take(); // ingest
-              let defaultValue = null;
-              if (peek().type === 'LPAREN') {
-                consume(); // (
-                defaultValue = parseExpr();
-                expect('RPAREN');
-              }
-              let typeName = null;
-              if (isTypeAttestation()) typeName = consumeTypeAttestation();
-              constructorBody.push(AST.typedAssign(op, typeName, AST.ingestExpr(defaultValue)));
-              continue;
-            }
             const value = parseExpr();
             // Service coercion: name = ref as { @method: ... }
             if (peek().type === 'KEYWORD' && peek().value === 'as' && tokens[pos + 1]?.type === 'LBRACE') {
@@ -5431,7 +5390,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         } else if (!linealEqualsAhead()) {
           if (_identOverloadMode !== 'create') throw new Error(`Expected '=' after '${op} <<'`);
           pos--;
-          pushValueEmitter();
+          pushValueStatement();
 
         // ── Lineal form: name [<<]\n=\n params\n=\n body ───────────────────
         } else {
@@ -5460,10 +5419,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // Bare `()` in constructor block is a literal of no value — ignored.
         take(); take();
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
-                 peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
+                 peek().type === 'LPAREN' || peek().type === 'LBRACKET' || peek().type === '->' ||
                  peek().type === 'HTML_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
-        pushValueEmitter();
+        pushValueStatement();
       } else {
         if (isActorKw(peek()) && tokens[pos + 1]?.type === 'LBRACE') throw new Error(WHOLE_FILE_ACTOR_MSG);
         throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);
@@ -5509,20 +5468,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       depRefNames.has(value.callee.name);
     const stateVarDecls = [];
     const initBody = [];
-    let declarationReturn = null;
     for (const stmt of constructorBody) {
-      if (stmt.type === 'ImplicitReturn') {
-        if (!stmt.typeName) {
-          const inferred = inferType(stmt.expr);
-          if (inferred) stmt.typeName = inferred;
-          if (inferred && isCall(stmt.expr)) stmt.typeFromCallee = true;
-        }
-        if (declarationReturn) throw new Error('A block emits one value: this one has two');
-        declarationReturn = stmt;
-      } else if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement' || stmt.type === 'ActorFieldSet') {
+      if (stmt.type === 'ExprStatement' || stmt.type === 'SetStatement' || stmt.type === 'ActorFieldSet' || stmt.type === 'Return') {
         initBody.push(stmt);
       } else if (stmt.type === 'TypedAssign' || stmt.type === 'RefDecl') {
-        const isIngest = stmt.value?.type === 'IngestExpr';
         const isRef = stmt.type === 'RefDecl' || isDepConstructorCall(stmt.value);
         const fromCallee = !stmt.typeName && !stmt.rhsType && isCall(stmt.value);
         stateVarDecls.push({
@@ -5530,7 +5479,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           typeName: stmt.typeName || stmt.rhsType || inferType(stmt.value) || 'Anything',
           ...(fromCallee && { typeFromCallee: true }),
           isRef,
-          ...(isIngest && { ingest: true, ingestDefault: stmt.value.defaultValue }),
         });
         initBody.push(AST.stateAssign(stmt.name, stmt.value, { isRef }));
       }
@@ -5552,7 +5500,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     for (const decl of [...functions, ...stateVarDecls]) {
       if (untrackedDecls.has(decl.name)) decl.untracked = true;
     }
-    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, declarationReturn, types: ownTypes };
+    return { functions, nestedActors, stateVarDecls, initBody, initParams: [], constructorBody, asClauses, types: ownTypes };
   }
 
   const actors = [];
@@ -6333,8 +6281,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
 
   // Body after a file-level header. A lineal header (`*\n entries\n *`) may be
   // followed by a lineal body — the rest of the file, parsed by subsequent
-  // iterations — or a delimited `{ ... }` body. Both header forms accept the
-  // tail form (`return`/`->`). Returns true when the body was consumed here.
+  // iterations — or a delimited `{ ... }` body. Either header form takes a body
+  // starting at `return`/`->`. Returns true when the body was consumed here.
   function parseFileHeaderBody(linealHeader) {
     const fileOpenerTok = peek().type;
     if (fileOpenerTok === 'LBRACE') {
@@ -6349,7 +6297,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         initParams: nested.initParams,
         constructorBody: nested.constructorBody,
         asClauses: nested.asClauses,
-        declarationReturn: nested.declarationReturn,
       }));
       actors.push(...nested.nestedActors);
       skipBlanks();
@@ -6359,7 +6306,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       return;
     }
     if (fileOpenerTok === '->' || isReturnKw()) {
-      // Leave `return`/`->` for parseActorBody to consume as a declaration return.
+      // The body starts at `return` or `->`: parseActorBody reads it as any body's.
       const nested = parseActorBody(() => false);
       actors.push(AST.actor(null, {
         functions: nested.functions,
@@ -6368,7 +6315,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         initParams: nested.initParams,
         constructorBody: nested.constructorBody,
         asClauses: nested.asClauses,
-        declarationReturn: nested.declarationReturn,
       }));
       actors.push(...nested.nestedActors);
       skipBlanks();
@@ -6445,7 +6391,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     //   *\n entries\n *\n body        — entries one per line (same entry
     //   *\n entries\n * { body }        grammar as `( ... ) *{`); body is the
     //   *\n body                        rest of the file, `{ ... }`, or the
-    //   *\n { body }                    tail form. Each `*` alone on its line
+    //   *\n { body }                    a body at `return`/`->`. Each `*` alone on its line
     //                                   (closing `*` may be followed by `{`).
     if (peek().type === 'STAR' && peek().alone) {
       if (headerSeen) {
@@ -6491,7 +6437,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         initParams: params,
         constructorBody: nested.constructorBody,
         asClauses: nested.asClauses,
-        declarationReturn: nested.declarationReturn,
       }));
       actors.push(...nested.nestedActors);
       skipBlanks();
@@ -6507,10 +6452,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
                peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                (peek().type === 'KEYWORD' && (peek().value === 'untracked' || peek().value === 'self' || peek().value === 'true' || peek().value === 'false' || peek().value === 'new' || peek().value === 'use'))) {
       // anonymous actor — collect functions and nested actor definitions
-      const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn } = parseActorBody(
+      const { functions, nestedActors, stateVarDecls, initBody, initParams, constructorBody, asClauses } = parseActorBody(
         () => false,
       );
-      actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses, declarationReturn }));
+      actors.push(AST.actor(null, { functions, stateVarDecls, initBody, initParams, constructorBody, asClauses }));
       // Promote nested actor definitions to top-level actors
       actors.push(...nestedActors);
     } else {
@@ -6559,6 +6504,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   withInstanceTypes(result.instanceTypes, () => {
     lowerFunctionSupers(actors);
     lowerBaseLayers(actors);
+    settleInitExits(actors);
     lowerSuperCalls(actors, resolveSuperclassChain);
     lowerInheritedBlockCells(actors);
     lowerBlockDelegation(actors);

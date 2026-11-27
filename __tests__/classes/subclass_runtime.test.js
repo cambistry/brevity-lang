@@ -221,23 +221,26 @@ describe('subclass runtime — inherited state', () => {
     );
   });
 
-  it('an ingest slot and ordinary state coexist', async () => {
+  it('a child supplies a parent\'s value by redeclaring it above super()', async () => {
     await expectBehavior(`
       Base = *{
-        label Integer = ingest
-        n *Integer = 3
-        @sum = { return label + n }
+        label Text = "base"
+        size Integer = Text.size(label)
+        @size = -> size
       }
-      Sub = Base ^ *{ 40 }
+      Sub = Base ^ *{
+        label = "hello!"
+        super()
+      }
 
       @go = {
         s = Sub()
-        v Integer = s.sum()
+        v Integer = s.size()
         return v
       }
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
-      { output: { id: '1', re: [43], 'ty': ['Integer'], to: 'c' } },
+      { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
     );
   });
 

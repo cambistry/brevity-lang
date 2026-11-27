@@ -19,14 +19,12 @@ notes themselves to stay explanatory rather than test-oriented.
 
 - [Overview](__tests__/classes/index.md)
 - [Published Constructor Params](__tests__/classes/accessors.md)
-- [Ingest](__tests__/classes/ingest.md)
 - [Actors as Values](__tests__/classes/actor_value.test.js)
 - [File-Level Dependency Injection](__tests__/services/dependency_injection.md)
 
 ## Keywords
 
 - [Keywords Overview](__tests__/keywords/index.md)
-- [`ingest`](__tests__/keywords/ingest.md)
 - [`over`](__tests__/keywords/over.md)
 - [`reduce`](__tests__/keywords/reduce.md)
 - [`self as`](__tests__/keywords/self_as.md)

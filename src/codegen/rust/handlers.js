@@ -587,7 +587,13 @@ function genRustLambdaArms(start, privateFns) {
   return arms;
 }
 
-function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = [], declarationReturn = null) {
+// What a `self as` clause reads: the actor's cells and constructor params.
+const asClauseEnv = (decls, params) => new Map([
+  ...(decls || []).map(d => [d.name, d.typeNameEnc]),
+  ...(params || []).map(p => [p.name, envTypeOf(p)]),
+]);
+
+function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructorParams = [], asClauses = []) {
   // Reset lambda state for this dispatch
   G.ctx.lambdaCounter = 0;
   G.ctx.lambdaHandlers = [];
@@ -627,21 +633,16 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   }
 
   // As-clause dispatch arms for self-as type coercion
+  const asEnv = asClauseEnv(G.ctx.stateVarDecls, constructorParams);
   for (const clause of asClauses) {
-    const val = genRustExpr(clause.expr, {});
-    const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
+    const val = genRustExpr(clause.expr, asEnv);
+    const jsonVal = toJsonValue(val, inferType(clause.expr, asEnv) ?? inferLiteralType(clause.expr));
     if (clause.negated) {
       arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
     } else {
       arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${typeText(clause.targetTypeEnc, G.ctx.depAliases)}"]));\n                handled = true;\n            }`);
     }
   }
-  // Memoized return-as dispatch arm
-  if (declarationReturn?.typeNameEnc !== undefined) {
-    const t = typeText(declarationReturn.typeNameEnc, G.ctx.depAliases);
-    arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${stateKey('__returnAs')}").cloned().unwrap_or(Value::Null)]));\n                ty_re = Some(json!(["${t}"]));\n                handled = true;\n            }`);
-  }
-
   arms.push('            _ => {}');
   return arms.join('\n');
 }
@@ -918,22 +919,17 @@ function genRustChildDispatch(actor) {
     arms.push(`            ${JSON.stringify(wireLabel("@" + accessorName))} => {\n                re = Some(Value::Array(vec![self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
   }
   // As-clause dispatch arms for child actor self-as type coercion
+  const asEnv = asClauseEnv(actor.stateVarDecls, childConstructorParams);
   for (const clause of (actor.asClauses || [])) {
-    const val = genRustExpr(clause.expr, {});
-    const jsonVal = toJsonValue(val, inferLiteralType(clause.expr));
-    if (clause.negated) {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
-    } else {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n            }`);
-    }
+    const val = genRustExpr(clause.expr, asEnv);
+    const jsonVal = toJsonValue(val, inferType(clause.expr, asEnv) ?? inferLiteralType(clause.expr));
+    // The target type: the payload itself in process, the one arg from the wire.
+    const target = 'payload.as_str().or_else(|| payload.get(0).and_then(|v| v.as_str()))';
+    const t = typeText(clause.targetTypeEnc, G.ctx.depAliases);
+    const guard = clause.negated ? `matches!(${target}, Some(t) if t != "${t}")` : `${target} == Some("${t}")`;
+    const tag = clause.negated ? `json!([${target}.unwrap_or("")])` : `json!(["${t}"])`;
+    arms.push(`            "$as" if ${guard} => {\n                re = Some(json!([${jsonVal}]));\n                if bv_from_wire_caller(from) { self.wire_tag = Some(${tag}); }\n            }`);
   }
-  // Memoized return-as dispatch arm for child actor
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const t = typeText(actor.declarationReturn.typeNameEnc, G.ctx.depAliases);
-    const sk = stateKey('__returnAs');
-    arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${t}" => {\n                re = Some(json!([self.state.get("${sk}").cloned().unwrap_or(Value::Null)]));\n            }`);
-  }
-
   // Each in handle_op's shape (`re`, `ty_re`, `handled`), run as a closure here.
   const lambdaArms = genRustLambdaArms(lambdaStart, privateFns).map((arm) => {
     const m = /^(\s*"[^"]*"(?: if [^\n]*?)?) => \{\n([\s\S]*)\n\s*\}$/.exec(arm);
@@ -1062,9 +1058,7 @@ function genRunDeferred(e, recv) {
 function genRustChildInit(actor) {
   const constructorParams = actor.initParams || [];
   const initBody = withDeferredRuns(actor.initBody || [], actor);
-  const inheritedIngests = actor._inheritedIngests || [];
-  const hasReturnAs = actor.declarationReturn?.typeNameEnc !== undefined;
-  if (constructorParams.length === 0 && initBody.length === 0 && inheritedIngests.length === 0 && !hasReturnAs) return '';
+  if (constructorParams.length === 0 && initBody.length === 0) return '';
 
   const name = actor.name.toLowerCase();
   const lines = [];
@@ -1084,7 +1078,7 @@ function genRustChildInit(actor) {
     lines.push(`        self.state.insert("${stateKey(p.name)}".to_string(), ${storeVal});`);
   }
 
-  // Service block statements — split around IngestExpr
+  // Constructor block statements
   const initTypeEnv = new Map();
   for (const d of actor.stateVarDecls || []) {
     initTypeEnv.set(d.name, d.typeNameEnc);
@@ -1094,23 +1088,9 @@ function genRustChildInit(actor) {
   }
   for (const [n, t] of outerTypesOf(actor)) if (t !== undefined && !initTypeEnv.has(n)) initTypeEnv.set(n, t);
 
-  let ownIngestInfo = null;
-  const preIngestBody = [];
-  const postIngestBody = [];
-  let pastIngest = false;
-  for (const s of initBody) {
-    if (s.value?.type === 'IngestExpr') {
-      ownIngestInfo = { name: s.name, defaultValue: s.value.defaultValue };
-      pastIngest = true;
-      continue;
-    }
-    (pastIngest ? postIngestBody : preIngestBody).push(s);
-  }
-
   const isInstanceCall = (e) => e?.type === 'DotCallExpr' && e.object?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(e.object.callee?.name);
 
-  // Pre-ingest body statements
-  for (const s of preIngestBody) {
+  for (const s of initBody) {
     if (s.type === 'ExprStatement' && s.expr?.type === 'RunDeferred') {
       lines.push(`    ${genRunDeferred(s.expr, 'self')}`);
     } else if (isOwnCallStatement(s)) {
@@ -1163,51 +1143,6 @@ function genRustChildInit(actor) {
     }
   }
 
-  // Handle ingest value assignment
-  if (ownIngestInfo) {
-    if (ownIngestInfo.defaultValue) {
-      const val = genRustExpr(ownIngestInfo.defaultValue, initTypeEnv);
-      const t = initTypeEnv.get(ownIngestInfo.name);
-      lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(ownIngestInfo.name)}".to_string(), _v); }`);
-    } else {
-      lines.push(`        self.state.insert("${stateKey(ownIngestInfo.name)}".to_string(), Value::Null);`);
-    }
-    // Post-ingest body statements
-    for (const s of postIngestBody) {
-      if (isOwnCallStatement(s)) {
-        lines.push(`        let _ = ${genRustFnCallExpr(s.expr, initTypeEnv)};`);
-      } else if (s.type === 'SetStatement' || (s.type === 'ExprStatement' && (s.expr?.type === 'DotCallExpr' || s.expr?.type === 'OuterSet' || s.expr?.type === 'RemoteNew' || s.expr?.type === 'IfExpr'))) {
-        // A write or a call in the constructor block, generated as in a function body.
-        lines.push(`        {\n${genRustLocals([s], initTypeEnv, { fnDefs: new Map(), skipSet: new Set(), capturePoints: new Map() }, new Set(), '            ', new Map())}\n        }`);
-      } else if (s.type === 'StateAssign') {
-        const val = genRustExpr(s.value, initTypeEnv);
-        const t = initTypeEnv.get(s.name);
-        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(s.name)}".to_string(), _v); }`);
-      }
-    }
-  } else if (inheritedIngests.length > 0 && actor.declarationReturn) {
-    // Subclass provides a value for its superclass's ingest — assign directly to the inherited state var
-    const ingest = inheritedIngests[0];
-    const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
-    const t = ingest.typeNameEnc;
-    lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
-  } else if (inheritedIngests.length > 0) {
-    // Subclass doesn't provide a return — use superclass's default if available
-    for (const ingest of inheritedIngests) {
-      if (ingest.defaultValue) {
-        const val = genRustExpr(ingest.defaultValue, initTypeEnv);
-        lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, ingest.typeNameEnc))}; self.state.insert("${stateKey(ingest.name)}".to_string(), _v); }`);
-      }
-    }
-  }
-
-  // Memoized return-as value
-  if (actor.declarationReturn?.typeNameEnc !== undefined) {
-    const val = genRustExpr(actor.declarationReturn.expr, initTypeEnv);
-    const t = actor.declarationReturn.typeNameEnc;
-    lines.push(`        { let _v = ${forceJsonWrap(toJsonValue(val, t))}; self.state.insert("${stateKey('__returnAs')}".to_string(), _v); }`);
-  }
-
   // Service coercion aliases — copy ref state to alias.
   // Constructor coercions have no runtime presence (they're compile-time
   // aliases handled by ctx.constructorCoercions during `new` emission).
@@ -1234,7 +1169,7 @@ function genRustChildMethods(allActors) {
   const parts = [];
   for (const actor of childActors) {
     // ── Resolve superclass inheritance ──────────────────────────────────
-    const { inheritedParams, inheritedFunctions, inheritedIngests, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, actor);
+    const { inheritedParams, inheritedFunctions, inheritedState, inheritedInit } = resolveSuperclassChain(G.ctx.actorNodes, actor);
 
     // Merge inherited params (prepend) — skip any that the subclass redefines
     const ownParamNames = new Set((actor.initParams || []).map(p => p.name));
@@ -1259,23 +1194,9 @@ function genRustChildMethods(allActors) {
       ...actor,
       initParams: mergedParams,
       functions: mergedFunctions,
-      _inheritedIngests: inheritedIngests,
     };
 
     Object.assign(mergedActor, withInheritedState(mergedActor, { inheritedState, inheritedInit }, G.ctx.actorNodes));
-
-    // Merge inherited ingest state var decls into the subclass
-    if (inheritedIngests.length > 0) {
-      const ownStateNames = new Set((mergedActor.stateVarDecls || []).map(v => v.name));
-      for (const ingest of inheritedIngests) {
-        if (!ownStateNames.has(ingest.name)) {
-          mergedActor.stateVarDecls = [
-            ...(mergedActor.stateVarDecls || []),
-            { name: ingest.name, typeNameEnc: ingest.typeNameEnc, ingest: true, ingestDefault: ingest.defaultValue },
-          ];
-        }
-      }
-    }
 
     // Update actorInfo so statement codegen sees merged params when generating init calls
     const savedActorInfo = G.ctx.actorInfo.get(actor.name);

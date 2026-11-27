@@ -55,24 +55,6 @@ function genRustAsSend(varName, typeName, targetExpr, I, lines) {
 function handleTypedAssign_AsClause(s, typeEnv, I, lines) {
   const asClause = findRsAsClauseMatch(s.typeNameEnc, s.value.callee.name);
   if (!asClause) return false;
-  if (asClause.memoized) {
-    const actorName = s.value.callee.name;
-    const childActor = G.ctx.actorInfo.get(actorName)?.actor;
-    const hasReturnAs = childActor?.declarationReturn?.typeNameEnc !== undefined;
-    const hasInitNeeded = s.value.args.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || hasReturnAs;
-    if (hasInitNeeded) {
-      const positionalArgs = s.value.args.filter(a => a.type !== 'NamedArgsBag');
-      if (s.value.args.length > 0) {
-        const initArgExprs = positionalArgs.map(a => genRustExpr(a, typeEnv));
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${valueArray(initArgExprs)});`);
-      } else {
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&json!({}));`);
-      }
-    }
-    const childCall = `self.child_${actorName.toLowerCase()}_dispatch("$as", &json!("${typeText(s.typeNameEnc, G.ctx.depAliases)}"), "", "__parent")`;
-    lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${convertFromValue(`${childCall}.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)`, s.typeNameEnc)};`);
-    return true;
-  }
   let val = genRustExpr(asClause.expr, typeEnv);
   if ((s.typeNameEnc === 'Text' || s.typeNameEnc === 'Blob') && asClause.expr.type === 'StringLiteral') val += '.to_string()';
   lines.push(`${I}let ${mintRustSsa(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`);
@@ -248,7 +230,7 @@ function handleTypedAssign_ActorInstantiation(s, typeEnv, sCtx, I, lines) {
 
   // Flattened path: existing behavior — single-instance, prefix-keyed state.
   sCtx.childActorRefs.set(s.name, actorName);
-  const hasInitNeeded = s.value.args.length > 0 || childActor?._inheritedIngests?.length > 0 || childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0;
+  const hasInitNeeded = s.value.args.length > 0 || childActor?.initParams?.length > 0 || childActor?.initBody?.length > 0;
   if (hasInitNeeded) {
     lines.push(`${I}self.child_${actorName.toLowerCase()}_init(&${initArgsExpr});`);
   }
@@ -1426,7 +1408,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           }
           if (expr.object.type === 'FunctionCallExpr') {
             const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-            const hasInit = expr.object.args.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+            const hasInit = expr.object.args.length > 0 || childActorObj?.initParams?.length > 0;
             if (hasInit) {
               if (expr.object.args.length > 0) {
                 const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');
@@ -1749,7 +1731,7 @@ function genRustAssignChildDotCall(s, typeEnv, sCtx, I, lines) {
         actorName = expr.object.callee.name;
         {
           const childActorObj = G.ctx.actorInfo.get(actorName)?.actor;
-          const hasInit = expr.object.args.length > 0 || childActorObj?._inheritedIngests?.length > 0 || childActorObj?.initParams?.length > 0;
+          const hasInit = expr.object.args.length > 0 || childActorObj?.initParams?.length > 0;
           if (hasInit) {
             if (expr.object.args.length > 0) {
               const initArgs = expr.object.args.map(a => genRustExpr(a, typeEnv)).join(', ');

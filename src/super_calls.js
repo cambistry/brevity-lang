@@ -224,7 +224,7 @@ export function expandSuperInits(actorByName, A, init, chain) {
     const P = actorByName?.get(s.layer);
     // A backend leaves out a class with nothing in it.
     if (s.none || !P) return [];
-    const body = parentView(actorByName, P, chain).init.filter(t => t.value?.type !== 'IngestExpr');
+    const body = parentView(actorByName, P, chain).init;
     return body.flatMap((t) => {
       if (t.type !== 'StateAssign' || !own.has(t.name)) return [t];
       // `base::name` keeps the parent's initial value in a cell of its own.
@@ -300,7 +300,7 @@ export function lowerSuperCalls(actors, chain) {
     const parents = (U.supertypes || []).map(st => st.supertype);
     const calls = [];
     walk(U.initBody, (n, path) => { if (n.type === 'SuperCall') calls.push({ n, path }); });
-    walk([U.declarationReturn, U.stateVarDecls], (n) => {
+    walk([U.stateVarDecls], (n) => {
       if (n.type === 'SuperCall') throw new Error(`'${shown(n)}' in ${where(U)} isn't a value: it's a statement of the constructor block`);
     });
     if (!calls.length && !(parents.length && isClass(U) && (U.initParams || []).length)) continue;

@@ -35,9 +35,9 @@ describe('file-class header — delimited', () => {
     `)).not.toThrow();
   });
 
-  it("( deps ) *{ return expr } (tail form)", () => {
+  it("( deps ) *{ body }", () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{ return value }
+      ( value: Integer ) *{ @get = -> value }
     `)).not.toThrow();
   });
 
@@ -137,12 +137,12 @@ describe('file-class header — lineal forms', () => {
     `)).not.toThrow();
   });
 
-  it('*\\n params\\n *\\n return expr (lineal header + tail form)', () => {
+  it('*\\n params\\n *\\n body (lineal header)', () => {
     expect(() => compileSource(`
       *
         value Integer
       *
-      return value
+      @get = -> value
     `)).not.toThrow();
   });
 
