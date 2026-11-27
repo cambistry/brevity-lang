@@ -87,7 +87,7 @@ describe('use("…") — in a constructor block', () => {
   });
 });
 
-const deps = (src) => extract(`${src}\n@get = -> 1\n`).ast.dependencies;
+const deps = (src) => extract(`${src}\n@get = () -> 1\n`).ast.dependencies;
 const hidden = (name, path, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path, hidden: true, ...fields });
 
 describe('use("…") — the manifest', () => {
@@ -106,7 +106,7 @@ describe('use("…") — the manifest', () => {
   });
 
   it('an entry is hidden: it binds no name of its own', () => {
-    expect(deps('@a = -> use("svc.bv")')).toEqual([hidden('__use_svcBv', 'svc.bv')]);
+    expect(deps('@a = () -> use("svc.bv")')).toEqual([hidden('__use_svcBv', 'svc.bv')]);
   });
 
   it('`as` on the expression claims the entry\'s shape', () => {
@@ -116,12 +116,12 @@ describe('use("…") — the manifest', () => {
   });
 
   it('two `use("HTML")` are one entry', () => {
-    expect(deps('@a = -> use("HTML")\n@b = -> use("HTML")')).toEqual([hidden('__use_HTML', 'HTML')]);
+    expect(deps('@a = () -> use("HTML")\n@b = () -> use("HTML")')).toEqual([hidden('__use_HTML', 'HTML')]);
   });
 
   it('with a `use` statement for the same source, before or after, one entry: the statement\'s', () => {
-    expect(deps('use HTML\n@a = -> use("HTML")').map(d => d.name)).toEqual(['HTML']);
-    expect(deps('@a = -> use("HTML")\nuse HTML').map(d => d.name)).toEqual(['HTML']);
+    expect(deps('use HTML\n@a = () -> use("HTML")').map(d => d.name)).toEqual(['HTML']);
+    expect(deps('@a = () -> use("HTML")\nuse HTML').map(d => d.name)).toEqual(['HTML']);
   });
 });
 
@@ -231,12 +231,12 @@ describe('use("…") — the claimed interface', () => {
 
 describe('use("…") — errors', () => {
   it.each([
-    ['a bare name', '@a = -> use(HTML)', `a 'use' source in an expression is a string: 'use("HTML")'`],
-    ['a `::` path', '@a = -> use(HTML::div)', `'use(HTML::div)' reaches a member: write ':div = use("HTML")'`],
-    ['a member reach on the result', '@a = -> use("HTML")::div', `'use("HTML")::div' isn't supported: write ':div = use("HTML")'`],
-    ['interpolation', 'x = 1\n@a = -> use("/svc/#{x}")', `A 'use' source is static: it takes no interpolation`],
-    ['no argument', '@a = -> use()', `'use(…)' takes one source, a string: 'use("HTML")'`],
-    ['more than one', '@a = -> use("a", "b")', `'use(…)' takes one source, a string: 'use("HTML")'`],
+    ['a bare name', '@a = () -> use(HTML)', `a 'use' source in an expression is a string: 'use("HTML")'`],
+    ['a `::` path', '@a = () -> use(HTML::div)', `'use(HTML::div)' reaches a member: write ':div = use("HTML")'`],
+    ['a member reach on the result', '@a = () -> use("HTML")::div', `'use("HTML")::div' isn't supported: write ':div = use("HTML")'`],
+    ['interpolation', 'x = 1\n@a = () -> use("/svc/#{x}")', `A 'use' source is static: it takes no interpolation`],
+    ['no argument', '@a = () -> use()', `'use(…)' takes one source, a string: 'use("HTML")'`],
+    ['more than one', '@a = () -> use("a", "b")', `'use(…)' takes one source, a string: 'use("HTML")'`],
     ['no parens, in value position', '@a = {\n  x = use "svc.bv"\n  return x\n}', `'use' in an expression takes its source in parens: write 'use("svc.bv")'`],
   ])('%s', (_, src, message) => {
     expect(() => extract(src)).toThrow(message);

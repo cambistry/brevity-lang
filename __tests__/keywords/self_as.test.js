@@ -4,40 +4,40 @@ describe('self-as clauses', () => {
   const script = `
     One =
       *
-      self as Integer = -> 1
-      self as Text = -> "one"
-      self as Boolean = -> true
-      @ping = -> pong: "ok" as Text
+      self as Integer = () -> 1
+      self as Text = () -> "one"
+      self as Boolean = () -> true
+      @ping = () -> pong: "ok" as Text
       .
     end#One
 
     Multi =
       *
-      self as Integer = -> 42
-      self as Text = -> "forty-two"
-      self as Boolean = -> false
-      @ping = -> pong: "ok" as Text
+      self as Integer = () -> 42
+      self as Text = () -> "forty-two"
+      self as Boolean = () -> false
+      @ping = () -> pong: "ok" as Text
       .
     end#Multi
 
     Greeter =
       *
-      self as Integer = -> 99
-      @hello = -> answer: "world" as Text
+      self as Integer = () -> 99
+      @hello = () -> answer: "world" as Text
       .
     end#Greeter
 
     Wrapper =
       *
-      self as !Wrapper = -> 0
-      @ping = -> pong: "ok" as Text
+      self as !Wrapper = () -> 0
+      @ping = () -> pong: "ok" as Text
       .
     end#Wrapper
 
     WrapperText =
       *
-      self as !WrapperText = -> "default"
-      @ping = -> pong: "ok" as Text
+      self as !WrapperText = () -> "default"
+      @ping = () -> pong: "ok" as Text
       .
     end#WrapperText
 
@@ -45,15 +45,15 @@ describe('self-as clauses', () => {
       *
       self as Integer
         =
-        -> 1
-      @ping = -> pong: "ok" as Text
+        return 1
+      @ping = () -> pong: "ok" as Text
       .
     end#OneTwoLine
 
     Dual =
       *
-      self as Integer = -> 7
-      @greet = -> msg: "hi" as Text
+      self as Integer = () -> 7
+      @greet = () -> msg: "hi" as Text
       .
     end#Dual
 
@@ -149,8 +149,8 @@ describe('self-as clauses', () => {
 
 describe('self as — CAM message (file-level actor)', () => {
   const script = `
-    self as Integer = -> 42
-    @ping = -> pong: "ok" as Text
+    self as Integer = () -> 42
+    @ping = () -> pong: "ok" as Text
   `;
 
   it('as Integer — file-level actor responds to [Integer, as] op', async () => {
@@ -170,10 +170,10 @@ describe('self as — CAM message (file-level actor)', () => {
 
 describe('self as — CAM message (file-level, multiple clauses)', () => {
   const script = `
-    self as Integer = -> 42
-    self as Text = -> "forty-two"
-    self as Boolean = -> false
-    @ping = -> pong: "ok" as Text
+    self as Integer = () -> 42
+    self as Text = () -> "forty-two"
+    self as Boolean = () -> false
+    @ping = () -> pong: "ok" as Text
   `;
 
   it('as Integer', async () => {
@@ -200,8 +200,8 @@ describe('self as — CAM message (file-level, multiple clauses)', () => {
 
 describe('self as — CAM message (file-level, negated catch-all)', () => {
   const script = `
-    self as !class = -> 0
-    @ping = -> pong: "ok" as Text
+    self as !class = () -> 0
+    @ping = () -> pong: "ok" as Text
   `;
 
   it('negated catch-all responds to any type', async () => {
@@ -222,9 +222,9 @@ describe('self as — CAM message (file-level, negated catch-all)', () => {
 describe('self as — CAM message (two-step: ref then typed assign)', () => {
   const script = `
     C = * {
-      self as Integer = -> 42
-      self as Text = -> "forty-two"
-      @ping = -> pong: "ok" as Text
+      self as Integer = () -> 42
+      self as Text = () -> "forty-two"
+      @ping = () -> pong: "ok" as Text
     }
 
     @asInt
@@ -260,9 +260,9 @@ describe('self as — compile errors', () => {
     expect(() => compileSource(`
       One =
         *
-        self as Integer = -> 1
-        self as Text = -> "one"
-        @ping = -> pong: "ok" as Text
+        self as Integer = () -> 1
+        self as Text = () -> "one"
+        @ping = () -> pong: "ok" as Text
         .
 
       @test

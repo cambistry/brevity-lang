@@ -41,7 +41,7 @@ describe('Q1: reactive element wire encoding', () => {
   it('reactive attr sends closure ref', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>click me</div>
+      @create = () -> <div @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -55,7 +55,7 @@ describe('Q1: reactive element wire encoding', () => {
   it('static text attr alongside reactive attr', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div class="btn" @color *Text = "black" style={ 'color: ' + @color }>click me</div>
+      @create = () -> <div class="btn" @color *Text = "black" style={ 'color: ' + @color }>click me</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -69,7 +69,7 @@ describe('Q1: reactive element wire encoding', () => {
   it('no reactive attrs — element without @decl is a plain DomConstructor', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div class="plain">hello</div>
+      @create = () -> <div class="plain">hello</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -83,7 +83,7 @@ describe('Q1: reactive element wire encoding', () => {
   it('element with only @decl — no static attrs', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div @color *Text = "red" style={ 'color: ' + @color }></div>
+      @create = () -> <div @color *Text = "red" style={ 'color: ' + @color }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -97,7 +97,7 @@ describe('Q1: reactive element wire encoding', () => {
   it('@decl creates a public ref on the parent actor', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div @color *Text = "black" style={ 'color: ' + @color }>text</div>
+      @create = () -> <div @color *Text = "black" style={ 'color: ' + @color }>text</div>
     `;
     const compiled = await compileActor(script, {
       compileOptions: {

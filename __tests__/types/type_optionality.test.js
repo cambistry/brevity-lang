@@ -68,7 +68,7 @@ describe('type optionality — operators', () => {
   it('?? returns the value when present', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: (Game(true, turn: 5).turn ?? 0)
+      @go = () -> result: (Game(true, turn: 5).turn ?? 0)
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 5 }], to: 'c' } },
@@ -78,7 +78,7 @@ describe('type optionality — operators', () => {
   it('?? falls back when the field was omitted', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: (Game(true).turn ?? 99)
+      @go = () -> result: (Game(true).turn ?? 99)
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 99 }], to: 'c' } },
@@ -88,7 +88,7 @@ describe('type optionality — operators', () => {
   it('(expr)? is true when present', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: (Game(true, turn: 5).turn)?
+      @go = () -> result: (Game(true, turn: 5).turn)?
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Boolean' }], re: [{ result: true }], to: 'c' } },
@@ -98,7 +98,7 @@ describe('type optionality — operators', () => {
   it('(expr)? is false when absent', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: (Game(true).turn)?
+      @go = () -> result: (Game(true).turn)?
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Boolean' }], re: [{ result: false }], to: 'c' } },

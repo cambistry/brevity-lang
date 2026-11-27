@@ -9,7 +9,7 @@ import { parseInterface } from '../../src/parser_interface.js';
 const remoteIface = extract(`
   type Point(Integer, Integer)
   type Pair(Integer, Integer)
-  @get_origin = -> coords: Point(0, 0)
+  @get_origin = () -> coords: Point(0, 0)
 `).interface.service;
 
 describe('type imports — interface parser captures `type Name(...)`', () => {
@@ -59,7 +59,7 @@ describe('type imports — destructured type binding', () => {
   it('imports a type via :sigil destructure and constructs locally', () => {
     const { ast } = extract(`
       use :Point = "geometry.bv"
-      @origin = -> p: Point(0, 0)
+      @origin = () -> p: Point(0, 0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
     expect(ast.importedTypes?.Point).toMatchObject({ remote: 'Point', sourceAlias: 'geometry.bv' });
@@ -68,7 +68,7 @@ describe('type imports — destructured type binding', () => {
   it('aliased import: P(0, 0) becomes a TypeConstruction with canonical name Point', () => {
     const { ast } = extract(`
       use Point: P = "geometry.bv"
-      @origin = -> p: P(0, 0)
+      @origin = () -> p: P(0, 0)
     `);
     compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(ast.importedTypes?.P?.remote).toBe('Point');
@@ -81,7 +81,7 @@ describe('type imports — destructured type binding', () => {
     const { ast } = extract(`
       use :Point = "geometry.bv"
       type Point(Integer, Integer)
-      @noop = -> ok: 1
+      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/collides with local 'Point'/);
@@ -90,8 +90,8 @@ describe('type imports — destructured type binding', () => {
   it('multiple imports in one destructure list bind together', () => {
     const { ast } = extract(`
       use :Point, :Pair = "geometry.bv"
-      @make = -> p: Point(0, 0)
-      @make2 = -> q: Pair(1, 2)
+      @make = () -> p: Point(0, 0)
+      @make2 = () -> q: Pair(1, 2)
     `);
     compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(Object.keys(ast.importedTypes).sort()).toEqual(['Pair', 'Point']);
@@ -100,7 +100,7 @@ describe('type imports — destructured type binding', () => {
   it('imported type construction validates against remote field count', () => {
     const { ast } = extract(`
       use :Point = "geometry.bv"
-      @bad = -> p: Point(0)
+      @bad = () -> p: Point(0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/expects 2 positional arguments, got 1/);
@@ -109,7 +109,7 @@ describe('type imports — destructured type binding', () => {
   it('a type the source does not export is a compile error, not an actor construction', () => {
     const { ast } = extract(`
       use :Pont = "geometry.bv"
-      @make = -> p: Pont(0, 0)
+      @make = () -> p: Pont(0, 0)
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/'Pont' is not exported by 'geometry.bv'/);
@@ -121,7 +121,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
       type User(Geom::Point)
-      @noop = -> ok: 1
+      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
   });
@@ -130,7 +130,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
       type User(Geom::NoSuch)
-      @noop = -> ok: 1
+      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/'NoSuch' is not exported by 'Geom'/);
@@ -139,7 +139,7 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('rejects Alias::Name when Alias is not a declared dependency', () => {
     const { ast } = extract(`
       type User(NoSuch::Point)
-      @noop = -> ok: 1
+      @noop = () -> ok: 1
     `);
     expect(() => compile(ast)).toThrow(/unknown dependency alias 'NoSuch'/);
   });
@@ -157,7 +157,7 @@ describe('type imports — wire registry includes imported types', () => {
   it('emits canonical (remote) name even when imported under an alias', () => {
     const { ast } = extract(`
       use Point: P = "geometry.bv"
-      @origin = -> p: P(0, 0)
+      @origin = () -> p: P(0, 0)
     `);
     const code = compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] });
     expect(code).toMatch(/_bv_types\s*=\s*\{[^}]*"geometry\.bv:Point":\s*\{\s*key:\s*"geometry\.bv:Point",\s*fields:\s*\["0",\s*"1"\]/);

@@ -14,7 +14,7 @@ describe('null literal', () => {
 
       @nullDirect
         =
-        -> result: null
+        return result: null
   `;
 
   it('null assigned to Integer | null var → result is null', async () => {

@@ -3,77 +3,77 @@ import { expectBehavior } from '../helpers.js';
 describe('Text methods', () => {
   const script = `
       // Text.upper / Text.lower
-      @upper = -> result: Text.upper("hello")
-      @lower = -> result: Text.lower("HELLO")
+      @upper = () -> result: Text.upper("hello")
+      @lower = () -> result: Text.lower("HELLO")
       @upperRef = { t *Text = "hello"; return result: t.upper }
       @lowerRef = { t *Text = "HELLO"; return result: t.lower }
       @upperConst = { t Text = "world"; return result: upper(t) }
 
       // Text.trim / trim_start / trim_end
-      @trim = -> result: Text.trim("  hi  ")
-      @trimStart = -> result: Text.trim_start("  hi  ")
-      @trimEnd = -> result: Text.trim_end("  hi  ")
+      @trim = () -> result: Text.trim("  hi  ")
+      @trimStart = () -> result: Text.trim_start("  hi  ")
+      @trimEnd = () -> result: Text.trim_end("  hi  ")
       @trimRef = { t *Text = "  ok  "; return result: t.trim }
 
       // Text.first / Text.last
-      @first = -> result: Text.first("hello")
-      @last = -> result: Text.last("hello")
-      @firstEmpty = -> result: Text.first("")
-      @firstEmoji = -> result: Text.first("\u{1F600}abc")
+      @first = () -> result: Text.first("hello")
+      @last = () -> result: Text.last("hello")
+      @firstEmpty = () -> result: Text.first("")
+      @firstEmoji = () -> result: Text.first("\u{1F600}abc")
       @lastRef = { t *Text = "world"; return result: t.last }
 
       // Text.repeat
-      @repeat = -> result: Text.repeat("ab", 3)
+      @repeat = () -> result: Text.repeat("ab", 3)
       @repeatRef = { t *Text = "x"; return result: t.repeat(4) }
-      @repeatZero = -> result: Text.repeat("abc", 0)
+      @repeatZero = () -> result: Text.repeat("abc", 0)
 
       // Text.empty?
-      @emptyTrue = -> result: Text.empty?("")
-      @emptyFalse = -> result: Text.empty?("x")
+      @emptyTrue = () -> result: Text.empty?("")
+      @emptyFalse = () -> result: Text.empty?("x")
       @emptyRef = { t *Text = ""; return result: t.empty? }
 
       // Text.slice
-      @sliceFrom = -> result: Text.slice("hello", 1)
-      @sliceRange = -> result: Text.slice("hello", 1, 3)
+      @sliceFrom = () -> result: Text.slice("hello", 1)
+      @sliceRange = () -> result: Text.slice("hello", 1, 3)
       @sliceRef = { t *Text = "abcde"; return result: t.slice(0, 2) }
-      @sliceEmoji = -> result: Text.slice("a\u{1F600}b", 1, 2)
+      @sliceEmoji = () -> result: Text.slice("a\u{1F600}b", 1, 2)
 
       // Text.contains / starts_with / ends_with
-      @containsYes = -> result: Text.contains("hello world", "world")
-      @containsNo = -> result: Text.contains("hello", "xyz")
-      @startsWith = -> result: Text.starts_with("hello", "hel")
-      @startsNo = -> result: Text.starts_with("hello", "ell")
-      @endsWith = -> result: Text.ends_with("hello", "llo")
-      @endsNo = -> result: Text.ends_with("hello", "hel")
+      @containsYes = () -> result: Text.contains("hello world", "world")
+      @containsNo = () -> result: Text.contains("hello", "xyz")
+      @startsWith = () -> result: Text.starts_with("hello", "hel")
+      @startsNo = () -> result: Text.starts_with("hello", "ell")
+      @endsWith = () -> result: Text.ends_with("hello", "llo")
+      @endsNo = () -> result: Text.ends_with("hello", "hel")
       @containsRef = { t *Text = "foobar"; return result: t.contains("bar") }
 
       // Text.index_of
-      @found = -> result: Text.index_of("hello world", "world")
-      @notFound = -> result: Text.index_of("hello", "xyz")
+      @found = () -> result: Text.index_of("hello world", "world")
+      @notFound = () -> result: Text.index_of("hello", "xyz")
       @indexRef = { t *Text = "abcde"; return result: t.index_of("cd") }
 
       // Text.before / Text.after
-      @before = -> result: Text.before("hello-world", "-")
-      @after = -> result: Text.after("hello-world", "-")
-      @beforeMiss = -> result: Text.before("hello", "x")
-      @afterMiss = -> result: Text.after("hello", "x")
+      @before = () -> result: Text.before("hello-world", "-")
+      @after = () -> result: Text.after("hello-world", "-")
+      @beforeMiss = () -> result: Text.before("hello", "x")
+      @afterMiss = () -> result: Text.after("hello", "x")
       @beforeRef = { t *Text = "foo:bar"; return result: t.before(":") }
 
       // Text.replace / Text.replace_first
-      @replaceAll = -> result: Text.replace("aabaa", "a", "x")
-      @replaceFirst = -> result: Text.replace_first("aabaa", "a", "x")
+      @replaceAll = () -> result: Text.replace("aabaa", "a", "x")
+      @replaceFirst = () -> result: Text.replace_first("aabaa", "a", "x")
       @replaceRef = { t *Text = "hello world"; return result: t.replace("o", "0") }
 
       // Regex arguments
-      @containsRe = -> result: Text.contains("hello 123 world", /\\d+/)
-      @containsReNo = -> result: Text.contains("hello world", /\\d+/)
-      @indexRe = -> result: Text.index_of("abc 42 def", /\\d+/)
-      @replaceRe = -> result: Text.replace("a1b2c3", /\\d/, "x")
-      @replaceFirstRe = -> result: Text.replace_first("a1b2c3", /\\d/, "x")
-      @startsRe = -> result: Text.starts_with("123abc", /\\d+/)
-      @endsRe = -> result: Text.ends_with("abc123", /\\d+/)
-      @beforeRe = -> result: Text.before("hello 42 world", /\\d+/)
-      @afterRe = -> result: Text.after("hello 42 world", /\\d+/)
+      @containsRe = () -> result: Text.contains("hello 123 world", /\\d+/)
+      @containsReNo = () -> result: Text.contains("hello world", /\\d+/)
+      @indexRe = () -> result: Text.index_of("abc 42 def", /\\d+/)
+      @replaceRe = () -> result: Text.replace("a1b2c3", /\\d/, "x")
+      @replaceFirstRe = () -> result: Text.replace_first("a1b2c3", /\\d/, "x")
+      @startsRe = () -> result: Text.starts_with("123abc", /\\d+/)
+      @endsRe = () -> result: Text.ends_with("abc123", /\\d+/)
+      @beforeRe = () -> result: Text.before("hello 42 world", /\\d+/)
+      @afterRe = () -> result: Text.after("hello 42 world", /\\d+/)
 
       // Bang methods — mutation
       @bangUpper
@@ -107,10 +107,10 @@ describe('Text methods', () => {
         return result: t
 
       // Text.reverse
-      @rev = -> result: Text.reverse("hello")
+      @rev = () -> result: Text.reverse("hello")
       @revRef = { t *Text = "abcde"; return result: t.reverse }
-      @revEmoji = -> result: Text.reverse("a\u{1F600}b")
-      @revEmpty = -> result: Text.reverse("")
+      @revEmoji = () -> result: Text.reverse("a\u{1F600}b")
+      @revEmpty = () -> result: Text.reverse("")
       @revBare = { t Text = "xyz"; return result: reverse(t) }
 
       // Bang methods — additional
@@ -151,7 +151,7 @@ describe('Text methods', () => {
         return result: t
 
       // Text.concat
-      @concatFunc = -> result: Text.concat("hello", " world")
+      @concatFunc = () -> result: Text.concat("hello", " world")
       @concatRef = { t *Text = "hello"; return result: t.concat(" world") }
 
       // Text.append!
@@ -162,9 +162,9 @@ describe('Text methods', () => {
         return result: t
 
       // Text.at
-      @atFunc = -> result: Text.at("hello", 1)
+      @atFunc = () -> result: Text.at("hello", 1)
       @atRef = { t *Text = "hello"; return result: t.at(0) }
-      @atEmoji = -> result: Text.at("a\u{1F600}b", 1)
+      @atEmoji = () -> result: Text.at("a\u{1F600}b", 1)
 
       // Text bang forms — same-type-returning mutators
       @upperBang   = { t *Text = "hi";        t.upper!; return result: t }

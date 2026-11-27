@@ -11,7 +11,7 @@ import { extract, compile } from '../../index.js';
 // consults the remote's document. A mismatch with the real service fails at runtime.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const deps = (entry) => extract(`use ${entry}\n@go = -> 1\n`).ast.dependencies
+const deps = (entry) => extract(`use ${entry}\n@go = () -> 1\n`).ast.dependencies
   .map(({ name, path, destructures, constructorParams, interface: iface }) =>
     ({ name, path, destructures, constructorParams, iface }));
 
@@ -38,7 +38,7 @@ describe('use bindings — forms', () => {
   });
 
   it('a typed binding is a value supplied at construction', () => {
-    const { ast } = extract('use limit Integer = limit\nuse n Integer = size\n@go = -> limit\n');
+    const { ast } = extract('use limit Integer = limit\nuse n Integer = size\n@go = () -> limit\n');
     expect(ast.dependencies).toEqual([
       expect.objectContaining({ type: 'FileParam', name: 'limit', paramTypeEnc: 'Integer' }),
       expect.objectContaining({ type: 'FileParam', key: 'size', name: 'n', paramTypeEnc: 'Integer' }),
@@ -55,7 +55,7 @@ describe('use bindings — forms', () => {
   });
 
   it('an untyped binding with no remote document is a compile error', () => {
-    expect(() => compile(extract('use Html = HTML\n@go = -> 1\n').ast))
+    expect(() => compile(extract('use Html = HTML\n@go = () -> 1\n').ast))
       .toThrow(/'HTML' \(bound as 'Html'\) has no type/);
   });
 

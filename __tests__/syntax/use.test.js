@@ -78,7 +78,7 @@ describe('use', () => {
   });
 });
 
-const deps = (src) => extract(`${src}\n@get = -> 1\n`).ast.dependencies;
+const deps = (src) => extract(`${src}\n@get = () -> 1\n`).ast.dependencies;
 const dep = (name, fields = {}) => ({ type: 'Dependency', name, interface: null, constructorParams: null, path: name, ...fields });
 const member = (local, remote = local) => ({ local, remote });
 
@@ -89,12 +89,12 @@ describe('use — the manifest', () => {
 
   it('a file with no header is an actor', () => {
     expect(extract(script).ast.fileKind).toBe('class');
-    expect(extract('@get = -> 1\n').ast.fileKind).toBe('singleton');
-    expect(extract('use document\n@get = -> 1\n').ast.fileKind).toBe('singleton');
+    expect(extract('@get = () -> 1\n').ast.fileKind).toBe('singleton');
+    expect(extract('use document\n@get = () -> 1\n').ast.fileKind).toBe('singleton');
   });
 
   it('a file with no header and no `use` has no dependencies', () => {
-    expect(extract('@get = -> 1\n').ast.dependencies).toEqual([]);
+    expect(extract('@get = () -> 1\n').ast.dependencies).toEqual([]);
   });
 
   it.each([
@@ -168,7 +168,7 @@ describe('use — the manifest', () => {
   });
 
   it('`use` in a whole-file actor { … }', () => {
-    const wrapped = extract('actor {\n  use document\n  use Svc = "svc.bv"\n  @get = -> 1\n}\n');
+    const wrapped = extract('actor {\n  use document\n  use Svc = "svc.bv"\n  @get = () -> 1\n}\n');
     expect(wrapped.ast.fileKind).toBe('singleton');
     expect(wrapped.ast.dependencies).toEqual(deps('use document\nuse Svc = "svc.bv"'));
   });
@@ -178,7 +178,7 @@ describe('use — a value', () => {
   it('a typed binding is a value the host supplies at load', async () => {
     const actor = await createActor(`
       use n Integer = limit
-      @get = -> n + 1
+      @get = () -> n + 1
     `, { constructorArgs: { limit: 41 } });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'get', from: 'c' } },
@@ -194,7 +194,7 @@ describe('use — in inner scopes, the entry is the file\'s', () => {
     expect(manifest(`
       inner = actor {
         use document
-        @get = -> 1
+        @get = () -> 1
       }
     `)).toEqual(['document']);
   });
@@ -203,7 +203,7 @@ describe('use — in inner scopes, the entry is the file\'s', () => {
     expect(manifest(`
       C = (n Integer) *{
         use document
-        @get = -> n
+        @get = () -> n
       }
     `)).toEqual(['document']);
   });
@@ -235,7 +235,7 @@ describe('use — in inner scopes, the entry is the file\'s', () => {
         seed Integer
       *
       use document
-      @n = -> seed
+      @n = () -> seed
     `)).toEqual(['document']);
   });
 });
@@ -244,37 +244,37 @@ describe('use — errors', () => {
   it('with nothing after it', () => {
     expect(() => compileSource(`
       use
-      @get = -> 1
+      @get = () -> 1
     `)).toThrow(`'use' takes a binding or names: 'use HTML', 'use Svc = "svc.bv"'`);
   });
 
   it('a shorthand whose last segment is quoted', () => {
-    expect(() => compileSource(`use HTML::"my-el"\n@get = -> 1\n`))
+    expect(() => compileSource(`use HTML::"my-el"\n@get = () -> 1\n`))
       .toThrow(`'use HTML::"my-el"' has nothing to bind: its last segment isn't a name — write 'use myEl = HTML::"my-el"'`);
   });
 
   it('shorthands and a binding in one statement', () => {
     const both = "a statement is either names ('use HTML, document') or one binding ('use … = source')";
-    expect(() => compileSource(`use HTML, d = x\n@get = -> 1\n`)).toThrow(`'use HTML, d = x': ${both}`);
-    expect(() => compileSource(`use :div = HTML, span\n@get = -> 1\n`)).toThrow(`'use :div = HTML, span': ${both}, not both`);
+    expect(() => compileSource(`use HTML, d = x\n@get = () -> 1\n`)).toThrow(`'use HTML, d = x': ${both}`);
+    expect(() => compileSource(`use :div = HTML, span\n@get = () -> 1\n`)).toThrow(`'use :div = HTML, span': ${both}, not both`);
   });
 
   it('a destructure by position', () => {
-    expect(() => compileSource(`use a, b = X\n@get = -> 1\n`)).toThrow("a 'use' destructure is by name");
+    expect(() => compileSource(`use a, b = X\n@get = () -> 1\n`)).toThrow("a 'use' destructure is by name");
   });
 
   it('a shape claimed twice', () => {
-    expect(() => compileSource(`use Lib Thing = "lib.bv" as { n () -> (Integer) }\n@get = -> 1\n`))
+    expect(() => compileSource(`use Lib Thing = "lib.bv" as { n () -> (Integer) }\n@get = () -> 1\n`))
       .toThrow(`'use Lib Thing = "lib.bv" as { n () -> (Integer) }' claims its shape twice`);
   });
 
   it('a source of three segments', () => {
-    expect(() => compileSource(`use x = a::b::c\n@get = -> 1\n`))
+    expect(() => compileSource(`use x = a::b::c\n@get = () -> 1\n`))
       .toThrow("'use x = a::b::c': a source of more than two segments isn't supported yet");
   });
 
   it('a value from a quoted source', () => {
-    expect(() => compileSource(`use n Integer = "a.bv"\n@get = -> n\n`))
+    expect(() => compileSource(`use n Integer = "a.bv"\n@get = () -> n\n`))
       .toThrow(`'use n Integer = "a.bv"': a value's source is a name, not '"a.bv"'`);
   });
 
@@ -282,7 +282,7 @@ describe('use — errors', () => {
     expect(() => compileSource(`
       use document
       actor {
-        @get = -> 1
+        @get = () -> 1
       }
     `)).toThrow(/a whole-file 'actor \{ … \}' must open the file/);
   });
@@ -293,7 +293,7 @@ describe('use — errors', () => {
         n Integer
         "svc.bv": Svc
       *
-      @get = -> n
+      @get = () -> n
     `)).toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 });

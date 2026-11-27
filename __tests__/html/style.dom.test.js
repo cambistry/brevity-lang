@@ -17,7 +17,7 @@ describe('<style> compile', () => {
   it('CSS reaches the style element as one text child, unchanged', () => {
     const { output } = compileWithHTML(`
       use :style = HTML
-      @t = -> <style>/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: "}"; } } p:hover{color:#f00}</style>
+      @t = () -> <style>/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: "}"; } } p:hover{color:#f00}</style>
     `);
     expect(output).toContain(
       `[{children: ["/* c */ h2 { margin: 0; } @media (min-width: 1px) { .a::before { content: \\"}\\"; } } p:hover{color:#f00}"]}], "$new"], "HTML:style")`,
@@ -27,21 +27,21 @@ describe('<style> compile', () => {
   it('the media attribute compiles', () => {
     expect(() => compileWithHTML(`
       use :style = HTML
-      @t = -> <style media="print">p { color: red; }</style>
+      @t = () -> <style media="print">p { color: red; }</style>
     `)).not.toThrow();
   });
 
   it('an element child of <style> is rejected', () => {
     expect(() => compileWithHTML(`
       use :style, :p = HTML
-      @t = -> <style><p>x</p></style>
+      @t = () -> <style><p>x</p></style>
     `)).toThrow(/<style> takes text only — <p> can't be its child/);
   });
 
   it('an element child of <textarea> is rejected', () => {
     expect(() => compileWithHTML(`
       use :textarea, :p = HTML
-      @t = -> <textarea>a<p>x</p></textarea>
+      @t = () -> <textarea>a<p>x</p></textarea>
     `)).toThrow(/<textarea> takes text only — <p> can't be its child/);
   });
 });

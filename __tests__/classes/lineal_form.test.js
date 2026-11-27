@@ -14,7 +14,7 @@ describe('lineal class grammar — accepted forms', () => {
         *
         value Integer
         *
-        @get = -> result: value
+        @get = () -> result: value
         .
 
       @test = { b = Box(7); :result = b.get(); return :result as Integer }
@@ -28,7 +28,7 @@ describe('lineal class grammar — accepted forms', () => {
         *
         value Integer
         *
-        @get = -> result: value
+        @get = () -> result: value
 
       @test = { b = Box(7); :result = b.get(); return :result as Integer }
     `)).not.toThrow();
@@ -40,7 +40,7 @@ describe('lineal class grammar — accepted forms', () => {
         *
         value Integer
         * {
-          @get = -> result: value
+          @get = () -> result: value
         }
 
       @test = { b = Box(7); :result = b.get(); return :result as Integer }
@@ -50,14 +50,14 @@ describe('lineal class grammar — accepted forms', () => {
   it('Cls <<\\n*\\nparams\\n*\\nbody . (overload form)', () => {
     expect(() => compileSource(`
       Box = (value Integer) *{
-        @get = -> result: value
+        @get = () -> result: value
       }
 
       Box <<
         *
         label Text
         *
-        @get = -> result: 0
+        @get = () -> result: 0
         .
     `)).not.toThrow();
   });
@@ -68,7 +68,7 @@ describe('lineal class grammar — accepted forms', () => {
         *
         value Integer
         *
-        @get = -> result: value
+        @get = () -> result: value
         .
 
       @test = { b = Box(99); :result = b.get(); return :result as Integer }
@@ -82,7 +82,7 @@ describe('lineal class grammar — accepted forms', () => {
     await expectBehavior(`
       Box =
         *
-        @get = -> result: 5
+        @get = () -> result: 5
         .
 
       @test = { b = Box(); :result = b.get(); return :result as Integer }
@@ -100,7 +100,7 @@ describe('lineal class grammar — rejected forms', () => {
         *
         value Integer
         *
-        @get = -> result: value
+        @get = () -> result: value
     `)).toThrow(/requires '=' before '\*'/);
   });
 

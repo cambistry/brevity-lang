@@ -67,7 +67,7 @@ count *Integer = 0
   return value: count
 }
 
-@get = -> value: count
+@get = () -> value: count
 ```
 
 The file hosts one actor. `@inc!` and `@get` are public messages. `count` is

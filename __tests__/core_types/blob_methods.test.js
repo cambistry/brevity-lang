@@ -3,70 +3,70 @@ import { expectBehavior } from '../helpers.js';
 describe('Blob methods', () => {
   const script = `
       // Blob.empty?
-      @emptyYes = -> result: Blob.empty?("")
-      @emptyNo = -> result: Blob.empty?("x")
+      @emptyYes = () -> result: Blob.empty?("")
+      @emptyNo = () -> result: Blob.empty?("x")
       @emptyRef = { b *Blob = ""; return result: b.empty? }
 
       // Blob.slice
-      @sliceFrom = -> result: Blob.slice("hello", 1)
-      @sliceRange = -> result: Blob.slice("hello", 1, 3)
+      @sliceFrom = () -> result: Blob.slice("hello", 1)
+      @sliceRange = () -> result: Blob.slice("hello", 1, 3)
       @sliceRef = { b *Blob = "abcde"; return result: b.slice(0, 2) }
 
       // Blob.first / Blob.last
-      @first = -> result: Blob.first("hello")
-      @last = -> result: Blob.last("hello")
-      @firstEmpty = -> result: Blob.first("")
+      @first = () -> result: Blob.first("hello")
+      @last = () -> result: Blob.last("hello")
+      @firstEmpty = () -> result: Blob.first("")
       @lastRef = { b *Blob = "world"; return result: b.last }
 
       // Blob.repeat / Blob.reverse
-      @repeat = -> result: Blob.repeat("ab", 3)
-      @reverse = -> result: Blob.reverse("abc")
+      @repeat = () -> result: Blob.repeat("ab", 3)
+      @reverse = () -> result: Blob.reverse("abc")
       @reverseRef = { b *Blob = "xyz"; return result: b.reverse }
 
       // Blob.trim / trim_start / trim_end
-      @trim = -> result: Blob.trim("  hi  ")
-      @trimStart = -> result: Blob.trim_start("  hi  ")
-      @trimEnd = -> result: Blob.trim_end("  hi  ")
+      @trim = () -> result: Blob.trim("  hi  ")
+      @trimStart = () -> result: Blob.trim_start("  hi  ")
+      @trimEnd = () -> result: Blob.trim_end("  hi  ")
 
       // Blob.contains / starts_with / ends_with
-      @containsYes = -> result: Blob.contains("hello world", "world")
-      @containsNo = -> result: Blob.contains("hello", "xyz")
-      @startsWith = -> result: Blob.starts_with("hello", "hel")
-      @endsWith = -> result: Blob.ends_with("hello", "llo")
+      @containsYes = () -> result: Blob.contains("hello world", "world")
+      @containsNo = () -> result: Blob.contains("hello", "xyz")
+      @startsWith = () -> result: Blob.starts_with("hello", "hel")
+      @endsWith = () -> result: Blob.ends_with("hello", "llo")
       @containsRef = { b *Blob = "foobar"; return result: b.contains("bar") }
 
       // Blob.index_of
-      @found = -> result: Blob.index_of("hello world", "world")
-      @notFound = -> result: Blob.index_of("hello", "xyz")
+      @found = () -> result: Blob.index_of("hello world", "world")
+      @notFound = () -> result: Blob.index_of("hello", "xyz")
       @indexRef = { b *Blob = "abcde"; return result: b.index_of("cd") }
 
       // Blob.before / Blob.after
-      @before = -> result: Blob.before("hello-world", "-")
-      @after = -> result: Blob.after("hello-world", "-")
-      @beforeMiss = -> result: Blob.before("hello", "x")
-      @afterMiss = -> result: Blob.after("hello", "x")
+      @before = () -> result: Blob.before("hello-world", "-")
+      @after = () -> result: Blob.after("hello-world", "-")
+      @beforeMiss = () -> result: Blob.before("hello", "x")
+      @afterMiss = () -> result: Blob.after("hello", "x")
 
       // Blob.replace / Blob.replace_first
-      @replaceAll = -> result: Blob.replace("aabaa", "a", "x")
-      @replaceFirst = -> result: Blob.replace_first("aabaa", "a", "x")
+      @replaceAll = () -> result: Blob.replace("aabaa", "a", "x")
+      @replaceFirst = () -> result: Blob.replace_first("aabaa", "a", "x")
       @replaceRef = { b *Blob = "hello"; return result: b.replace("l", "r") }
 
       // Blob vs Text — byte vs scalar size
       @blobSizeAccented
         =
-        -> result: Blob.size("\u{00E9}")
+        return result: Blob.size("\u{00E9}")
 
       @textSizeAccented
         =
-        -> result: Text.size("\u{00E9}")
+        return result: Text.size("\u{00E9}")
 
       @blobSizeEmoji
         =
-        -> result: Blob.size("\u{1F600}")
+        return result: Blob.size("\u{1F600}")
 
       @textSizeEmoji
         =
-        -> result: size("\u{1F600}")
+        return result: size("\u{1F600}")
 
       // Blob bang methods
       @bangReverse
@@ -94,19 +94,19 @@ describe('Blob methods', () => {
         return result: b
 
       // Blob regex — pattern matching
-      @containsRe = -> result: Blob.contains("hello 123 world", /\\d+/)
-      @containsReNo = -> result: Blob.contains("hello world", /\\d+/)
-      @startsRe = -> result: Blob.starts_with("123abc", /\\d+/)
-      @startsReNo = -> result: Blob.starts_with("abc123", /\\d+/)
-      @endsRe = -> result: Blob.ends_with("abc123", /\\d+/)
-      @indexRe = -> result: Blob.index_of("abc 42 def", /\\d+/)
-      @beforeRe = -> result: Blob.before("hello 42 world", /\\d+/)
-      @afterRe = -> result: Blob.after("hello 42 world", /\\d+/)
-      @replaceRe = -> result: Blob.replace("a1b2c3", /\\d/, "x")
-      @replaceFirstRe = -> result: Blob.replace_first("a1b2c3", /\\d/, "x")
+      @containsRe = () -> result: Blob.contains("hello 123 world", /\\d+/)
+      @containsReNo = () -> result: Blob.contains("hello world", /\\d+/)
+      @startsRe = () -> result: Blob.starts_with("123abc", /\\d+/)
+      @startsReNo = () -> result: Blob.starts_with("abc123", /\\d+/)
+      @endsRe = () -> result: Blob.ends_with("abc123", /\\d+/)
+      @indexRe = () -> result: Blob.index_of("abc 42 def", /\\d+/)
+      @beforeRe = () -> result: Blob.before("hello 42 world", /\\d+/)
+      @afterRe = () -> result: Blob.after("hello 42 world", /\\d+/)
+      @replaceRe = () -> result: Blob.replace("a1b2c3", /\\d/, "x")
+      @replaceFirstRe = () -> result: Blob.replace_first("a1b2c3", /\\d/, "x")
 
       // Blob.concat
-      @concatFunc = -> result: Blob.concat("hello", " world")
+      @concatFunc = () -> result: Blob.concat("hello", " world")
       @concatRef = { b *Blob = "hello"; return result: b.concat(" world") }
 
       // Blob.append!
@@ -117,31 +117,31 @@ describe('Blob methods', () => {
         return result: b
 
       // Blob.at
-      @atFunc = -> result: Blob.at("hello", 0)
+      @atFunc = () -> result: Blob.at("hello", 0)
       @atRef = { b *Blob = "ABC"; return result: b.at(1) }
 
       // Blob.zeros
-      @zeros = -> result: Blob.size(Blob.zeros(5))
+      @zeros = () -> result: Blob.size(Blob.zeros(5))
 
       // Blob.from_hex / Blob.to_hex
-      @toHex = -> result: Blob.to_hex("hello")
-      @roundtrip = -> result: Blob.from_hex("68656c6c6f")
+      @toHex = () -> result: Blob.to_hex("hello")
+      @roundtrip = () -> result: Blob.from_hex("68656c6c6f")
 
       // Blob.from_base64 / Blob.to_base64
-      @toB64 = -> result: Blob.to_base64("hello")
-      @fromB64 = -> result: Blob.from_base64("aGVsbG8=")
+      @toB64 = () -> result: Blob.to_base64("hello")
+      @fromB64 = () -> result: Blob.from_base64("aGVsbG8=")
 
       // Blob.from_utf8 / Blob.to_utf8
-      @toUtf8 = -> result: Blob.to_utf8("hello")
-      @fromUtf8 = -> result: Blob.from_utf8("hello")
+      @toUtf8 = () -> result: Blob.to_utf8("hello")
+      @fromUtf8 = () -> result: Blob.from_utf8("hello")
 
       // Blob.xor
-      @xorSelf = -> result: Blob.to_hex(Blob.xor("hello", "hello"))
+      @xorSelf = () -> result: Blob.to_hex(Blob.xor("hello", "hello"))
 
       // Blob.constant_time_equals
-      @eqYes = -> result: Blob.constant_time_equals("hello", "hello")
-      @eqNo = -> result: Blob.constant_time_equals("hello", "world")
-      @eqLen = -> result: Blob.constant_time_equals("hi", "hello")
+      @eqYes = () -> result: Blob.constant_time_equals("hello", "hello")
+      @eqNo = () -> result: Blob.constant_time_equals("hello", "world")
+      @eqLen = () -> result: Blob.constant_time_equals("hi", "hello")
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════

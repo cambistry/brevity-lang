@@ -15,7 +15,7 @@ describe('type actorization — *Point state cell', () => {
 
     coords *Point = Point(0, 0)
 
-    @get = -> coords: coords
+    @get = () -> coords: coords
 
     @shift! = (x Integer, y Integer) {
       (cx, cy) = coords

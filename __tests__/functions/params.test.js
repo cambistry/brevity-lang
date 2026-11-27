@@ -174,11 +174,11 @@ describe('function params — `:name` rejected, trailing colon accepted', () => 
   });
 
   it('a constructor param', () => {
-    expect(() => compileSource('C = (:a Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
+    expect(() => compileSource('C = (:a Integer) *{ @x = () -> a }\n@go = () -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
   });
 
   it('a constructor ref param', () => {
-    expect(() => compileSource('C = (:a *Integer) *{ @x = -> a }\n@go = -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
+    expect(() => compileSource('C = (:a *Integer) *{ @x = () -> a }\n@go = () -> 1\n')).toThrow("Expected RPAREN, got SIGIL 'a'");
   });
 
   it('(:a, :b) ->  prefix sigil fails', () => {

@@ -17,7 +17,7 @@ describe('named destructure — rejected when the callee returns no such name', 
 
   it('post-colon form (same as the colon prefix)', () => {
     expect(() => compileSource(`
-      Box = (v Integer) *{ @get = -> r: v }
+      Box = (v Integer) *{ @get = () -> r: v }
       @h = { b = Box(1); x: Integer = b.get(); return result: x }
     `)).toThrow(/Cannot destructure 'x' from 'b.get\(\)'/);
   });
@@ -65,14 +65,14 @@ describe('positional bind — rejected when the callee returns only named fields
 
   it('class method', () => {
     expect(() => compileSource(`
-      C = *{ @get = -> value: 7 }
+      C = *{ @get = () -> value: 7 }
       @run = { a = C(); value Integer = a.get(); return a1: value }
     `)).toThrow(/Cannot bind 'value' to 'a.get\(\)'/);
   });
 
   it('class method on a typed construction, different local name', () => {
     expect(() => compileSource(`
-      C = *{ @get = -> value: 7 }
+      C = *{ @get = () -> value: 7 }
       @run = { a C = C(); v Integer = a.get(); return a1: v }
     `)).toThrow(/destructure instead: 'value: v Integer = a.get\(\)'/);
   });
@@ -88,7 +88,7 @@ describe('named destructure — accepted', () => {
 
   it('class method returns the name', () => {
     expect(() => compileSource(`
-      C = *{ @get = -> value: 1 }
+      C = *{ @get = () -> value: 1 }
       @run = { a = C(); :value Integer = a.get(); return :value }
     `)).not.toThrow();
   });
@@ -168,7 +168,7 @@ describe('positional result of a class method — bind by position', () => {
     await run(`
       C = *{
         n *Integer = 7
-        @get = -> value: n
+        @get = () -> value: n
       }
       @run = { a C = C(); :value Integer = a.get(); return a1: value }
     `, 7);
@@ -181,7 +181,7 @@ describe('positional result of a class method — bind by position', () => {
 describe('return shape — inherited methods', () => {
   it('positional bind of an inherited named-only result is rejected', () => {
     expect(() => compileSource(`
-      Base = *{ @get = -> value: 1 }
+      Base = *{ @get = () -> value: 1 }
       Box = Base ^ *{}
       @run = { b = Box(); n Integer = b.get(); return a1: n }
     `)).toThrow(/Cannot bind 'n' to 'b.get\(\)' — it returns only named fields \(value\)/);
@@ -197,7 +197,7 @@ describe('return shape — inherited methods', () => {
 
   it('a grandparent method is checked', () => {
     expect(() => compileSource(`
-      A = *{ @get = -> value: 1 }
+      A = *{ @get = () -> value: 1 }
       B = A ^ *{}
       C = B ^ *{}
       @run = { c = C(); n Integer = c.get(); return a1: n }
@@ -206,7 +206,7 @@ describe('return shape — inherited methods', () => {
 
   it('a subclass override wins over the parent', () => {
     expect(() => compileSource(`
-      Base = *{ @get = -> value: 1 }
+      Base = *{ @get = () -> value: 1 }
       Box = Base ^ *{ @get = { 2 } }
       @run = { b = Box(); n Integer = b.get(); return a1: n }
     `)).not.toThrow();
@@ -214,7 +214,7 @@ describe('return shape — inherited methods', () => {
 
   it('with two parents, the later one wins', () => {
     const src = (bind) => `
-      A = *{ @get = -> value: 1 }
+      A = *{ @get = () -> value: 1 }
       B = *{ @get = { 2 } }
       C = A ^ B ^ *{}
       @run = { c = C(); ${bind}; return a1: n }
@@ -229,7 +229,7 @@ describe('return shape — inherited methods', () => {
     expect(() => compileSource(`
       Base = *{
         v Integer = 3
-        @get = -> v
+        @get = () -> v
       }
       Box = Base ^ *{}
       @run = { b = Box(); :x Integer = b.get(); return a1: x }
@@ -238,7 +238,7 @@ describe('return shape — inherited methods', () => {
 
   it('an inherited named result destructures and runs', async () => {
     await expectBehavior(`
-      Base = *{ @get = -> value: 7 }
+      Base = *{ @get = () -> value: 7 }
       Box = Base ^ *{}
       @run = { b = Box(); :value Integer = b.get(); return a1: value }
     `,

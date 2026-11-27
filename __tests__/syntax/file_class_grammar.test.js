@@ -22,7 +22,7 @@ describe('file-class header — delimited', () => {
   it("( deps ) *{ body } (delimited body)", () => {
     expect(() => compileSource(`
       ( value: Integer ) *{
-        @get = -> value
+        @get = () -> value
       }
     `)).not.toThrow();
   });
@@ -30,14 +30,14 @@ describe('file-class header — delimited', () => {
   it("( deps ) -> *{ body } (optional arrow)", () => {
     expect(() => compileSource(`
       ( value: Integer ) -> *{
-        @get = -> value
+        @get = () -> value
       }
     `)).not.toThrow();
   });
 
   it("( deps ) *{ body }", () => {
     expect(() => compileSource(`
-      ( value: Integer ) *{ @get = -> value }
+      ( value: Integer ) *{ @get = () -> value }
     `)).not.toThrow();
   });
 
@@ -47,7 +47,7 @@ describe('file-class header — delimited', () => {
         name: Text
         count: Integer
       ) *{
-        @get = -> name
+        @get = () -> name
       }
     `)).not.toThrow();
   });
@@ -57,9 +57,9 @@ describe('file-class header — delimited, rejected forms', () => {
   it('( deps ) *{body} followed by extra content after `}` is a parse error', () => {
     expect(() => compileSource(`
       ( value: Integer ) *{
-        @get = -> value
+        @get = () -> value
       }
-      @stray = -> 1
+      @stray = () -> 1
     `)).toThrow();
   });
 });
@@ -67,7 +67,7 @@ describe('file-class header — delimited, rejected forms', () => {
 describe('headerless file-class — accepted forms', () => {
   it('headerless file with handlers compiles', () => {
     expect(() => compileSource(`
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -76,7 +76,7 @@ describe('file-class header — no-paren delimited forms', () => {
   it('* { body } (no params, delimited body)', () => {
     expect(() => compileSource(`
       * {
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
       }
     `)).not.toThrow();
   });
@@ -90,7 +90,7 @@ describe('file-class header — no-paren delimited forms', () => {
   it('* = body . (star not alone on its line) is a parse error', () => {
     expect(() => compileSource(`
       * =
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
         .
     `)).toThrow();
   });
@@ -112,7 +112,7 @@ describe('file-class header — lineal forms', () => {
       *
         value Integer
       *
-        @get = -> value
+        @get = () -> value
     `)).not.toThrow();
   });
 
@@ -121,7 +121,7 @@ describe('file-class header — lineal forms', () => {
       *
         value Integer
       * {
-        @get = -> value
+        @get = () -> value
       }
     `)).not.toThrow();
   });
@@ -132,7 +132,7 @@ describe('file-class header — lineal forms', () => {
         value Integer
       *
       {
-        @get = -> value
+        @get = () -> value
       }
     `)).not.toThrow();
   });
@@ -142,7 +142,7 @@ describe('file-class header — lineal forms', () => {
       *
         value Integer
       *
-      @get = -> value
+      @get = () -> value
     `)).not.toThrow();
   });
 
@@ -152,14 +152,14 @@ describe('file-class header — lineal forms', () => {
         name: Text
         count: Integer
       *
-        @label = -> line: name
+        @label = () -> line: name
     `)).not.toThrow();
   });
 
   it('*\\n body (no entries)', () => {
     expect(() => compileSource(`
       *
-      @hello = -> greeting: "hi"
+      @hello = () -> greeting: "hi"
     `)).not.toThrow();
   });
 
@@ -167,7 +167,7 @@ describe('file-class header — lineal forms', () => {
     expect(() => compileSource(`
       *
       {
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
       }
     `)).not.toThrow();
   });
@@ -197,11 +197,11 @@ describe('file-class header — lineal params land as file params', () => {
         n Integer
       *
 
-      @get = -> name
+      @get = () -> name
     `);
     const delimited = extract(`
       ( name: Text, n Integer ) *{
-        @get = -> name
+        @get = () -> name
       }
     `);
     expect(lineal.ast.dependencies).toEqual(delimited.ast.dependencies);
@@ -224,7 +224,7 @@ describe('file-class header — lineal forms, rejected variants', () => {
       *
         value Integer
       =
-        @get = -> value
+        @get = () -> value
     `)).toThrow();
   });
 

@@ -5,19 +5,19 @@ describe('size — runtime', () => {
     // size — literals
       @ascii
         =
-        -> result: size("hello")
+        return result: size("hello")
 
       @empty
         =
-        -> result: size("")
+        return result: size("")
 
       @singleChar
         =
-        -> result: size("x")
+        return result: size("x")
 
       @spaces
         =
-        -> result: size("a b c")
+        return result: size("a b c")
 
     // size — constants and refs
       @fromConst
@@ -39,7 +39,7 @@ describe('size — runtime', () => {
     // size — Text.size() form
       @dotLiteral
         =
-        -> result: Text.size("world")
+        return result: Text.size("world")
 
       @dotConst
         =
@@ -54,54 +54,54 @@ describe('size — runtime', () => {
     // size — BMP scalars
       @cjk
         =
-        -> result: size("\u{4F60}\u{597D}")
+        return result: size("\u{4F60}\u{597D}")
 
       @precomposedAccent
         =
-        -> result: size("\u{00E9}")
+        return result: size("\u{00E9}")
 
       @currencySymbol
         =
-        -> result: size("\u{20AC}")
+        return result: size("\u{20AC}")
 
     // size — supplementary plane (astral) scalars
       @singleEmoji
         =
-        -> result: size("\u{1F600}")
+        return result: size("\u{1F600}")
 
       @musicalSymbol
         =
-        -> result: size("\u{1D11E}")
+        return result: size("\u{1D11E}")
 
       @mixedAsciiEmoji
         =
-        -> result: size("hi\u{1F600}")
+        return result: size("hi\u{1F600}")
 
     // size — combining sequences (scalar != grapheme)
       @combiningAcute
         =
-        -> result: size("e\u{0301}")
+        return result: size("e\u{0301}")
 
       @doubleCombining
         =
-        -> result: size("a\u{0308}\u{0301}")
+        return result: size("a\u{0308}\u{0301}")
 
       @hangulJamo
         =
-        -> result: size("\u{1100}\u{1161}\u{11A8}")
+        return result: size("\u{1100}\u{1161}\u{11A8}")
 
     // size — multi-scalar emoji sequences
       @flag
         =
-        -> result: size("\u{1F1FA}\u{1F1F8}")
+        return result: size("\u{1F1FA}\u{1F1F8}")
 
       @familyEmoji
         =
-        -> result: size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")
+        return result: size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")
 
       @skinTone
         =
-        -> result: size("\u{1F44B}\u{1F3FD}")
+        return result: size("\u{1F44B}\u{1F3FD}")
 
     // size — concatenation result
       @concatSize
@@ -112,7 +112,7 @@ describe('size — runtime', () => {
 
       @concatLiteralSize
         =
-        -> result: size("ab" + "cd")
+        return result: size("ab" + "cd")
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════

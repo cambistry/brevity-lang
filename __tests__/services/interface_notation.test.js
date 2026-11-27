@@ -194,7 +194,7 @@ describe('service document — emitted form', () => {
       type Point(Integer, Integer)
       @val *Integer = 0
       @Counter = (start: Integer) *{
-        @get = -> value: start as Integer
+        @get = () -> value: start as Integer
       }
       @add = (a: Integer, b: Integer) -> sum: (a + b) as Integer
     `);
@@ -231,7 +231,7 @@ describe('service document — emitted form', () => {
       @Box = (@start Integer) *{
         @slot *Integer = 0
         @names *List of Texts = []
-        @get = -> value: start as Integer
+        @get = () -> value: start as Integer
       }
     `);
     expect(iface.service).toEqual({
@@ -338,7 +338,7 @@ describe('props and cells — validation', () => {
 describe('constructor profiles in source', () => {
   it('header dependency: (Alias) (params) -> *{ iface }, arrow optional', () => {
     for (const arrow of ['-> ', '']) {
-      const { ast } = extract(`use Thing = "thing.bv" as (a: Integer) ${arrow} *{ get () -> (value: Integer) }\n@go = -> 1\n`);
+      const { ast } = extract(`use Thing = "thing.bv" as (a: Integer) ${arrow} *{ get () -> (value: Integer) }\n@go = () -> 1\n`);
       const dep = ast.dependencies[0];
       expect(dep.constructorParams).toEqual([expect.objectContaining({ name: 'a', typeEnc: 'Integer' })]);
       expect(parseInterface(dep.interface).get).toHaveLength(1);
@@ -363,7 +363,7 @@ describe('constructor profiles in source', () => {
   }
   ping. () => .
 }
-@go = -> 1
+@go = () -> 1
 `);
     const p = parseInterface(ast.dependencies[0].interface);
     expect(Object.keys(p.__typeDecls)).toEqual(['Point']);
@@ -374,16 +374,16 @@ describe('constructor profiles in source', () => {
   it('coercion: x = Dep as (params) -> *{ iface }', () => {
     expect(() => compileSrc(`use Thing = "thing.bv"
 Coerced = Thing as (a: Integer) -> *{ get () -> (value: Integer) }
-@go = -> 1
+@go = () -> 1
 `)).not.toThrow();
   });
 
   it('::Name (…) in source is unrecognized syntax', () => {
-    expect(() => extract('::Point (x Integer, y Integer)\n@go = -> 1\n')).toThrow(/^Unexpected '::'$/);
+    expect(() => extract('::Point (x Integer, y Integer)\n@go = () -> 1\n')).toThrow(/^Unexpected '::'$/);
   });
 
   it('lineal type declaration: type Name then fields', () => {
-    const { ast } = extract('type Point\n  Integer\n  y: Integer\n\n@go = -> 1\n');
+    const { ast } = extract('type Point\n  Integer\n  y: Integer\n\n@go = () -> 1\n');
     expect(ast.types[0].fields.map(f => f.name)).toEqual(['0', 'y']);
   });
 });

@@ -53,7 +53,7 @@ For the full vocabulary and runtime axis, see
 Handlers are the public message surface of the actor.
 
 ```brevity
-@ping = -> status: "ok"
+@ping = () -> status: "ok"
 
 @add = (a: Integer, b: Integer) -> sum: (a + b)
 ```
@@ -153,10 +153,10 @@ C = *{
     acc <- 0
     return v
   }
-  @total = -> acc
+  @total = () -> acc
 }
 
-@go = -> C().inc!(5).inc!(2).total
+@go = () -> C().inc!(5).inc!(2).total
 ```
 
 A final value in a `!` function is an error, because it would be discarded. So is a
@@ -203,7 +203,7 @@ constructor block is marked with `*`:
 
 ```brevity
 Box = (value Integer) *{
-  @get = -> value
+  @get = () -> value
 }
 ```
 
@@ -225,7 +225,7 @@ it passes. A base name read above the line is an error.
 ```brevity
 Tagged = Box ^ (tag Text, value Integer) *{
   super(value * 2)      // Box's constructor runs here
-  @tag = -> tag
+  @tag = () -> tag
 }
 Same = Box ^ (value Integer) *{ super }   // the args as received
 ```
@@ -248,11 +248,11 @@ calls and overrides, and across parents: one parent's body can't reach, through 
 child, a cell of a parent built below it.
 
 ```brevity
-T = *{ got Integer = probe(); probe = -> 0 }
+T = *{ got Integer = probe(); probe = () -> 0 }
 U = T ^ (k Integer) *{
   super()
   marker Integer = k     // error: T's body calls probe at the super line
-  probe = -> marker      // fix: declare marker above super
+  probe = () -> marker      // fix: declare marker above super
 }
 ```
 
@@ -264,7 +264,7 @@ overrides. In a lambda inside `h`, `super` is `h`'s.
 ```brevity
 Over = Box ^ *{
   h = (n Integer) -> super * 10        // Box's h with n
-  @get = -> super() + 1                // Box's @get, with no args
+  @get = () -> super() + 1                // Box's @get, with no args
 }
 ```
 
@@ -291,7 +291,7 @@ separate actor of the parent class. With several parents, write the parent's nam
 `class.base` is still a public member `@base`.
 
 ```brevity
-A = *{} ^ { count *Integer = 10; @f = -> count }
+A = *{} ^ { count *Integer = 10; @f = () -> count }
 B = A ^ { count *Integer = 20; @f = { x Integer = super + 1; return x } }   // B.f() is 21
 ```
 
@@ -388,7 +388,7 @@ type Pair(x: Integer, y: Integer)
   (a, b) = Point(1, 2)
   return result: a
 }
-@x = -> result: Pair(x: 1, y: 2).x
+@x = () -> result: Pair(x: 1, y: 2).x
 ```
 
 A positional field is a bare type, read by positional destructuring; a named

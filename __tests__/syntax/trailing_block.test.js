@@ -9,7 +9,7 @@ describe('trailing block', () => {
       n Integer
       f (Integer) -> (Integer)
       =
-      -> f(n)
+      return f(n)
 
     test
       =
@@ -17,21 +17,21 @@ describe('trailing block', () => {
       label: Text
       c (Integer) -> (Integer)
       =
-      -> c(x)
+      return c(x)
 
     both
       =
       f (Integer) -> (Integer)
       g (Integer) -> (Integer)
       =
-      -> f(g(1))
+      return f(g(1))
 
     both2
       =
       f (Integer) -> (Integer)
       g (Integer) -> (Integer)
       =
-      -> f(g(2))
+      return f(g(2))
 
     --- public functions ---
 
@@ -71,7 +71,7 @@ describe('trailing block', () => {
         =
         x Integer
         =
-        -> x * 2
+        return x * 2
       return :result
 
     @spaciousArgs
@@ -80,7 +80,7 @@ describe('trailing block', () => {
         =
         n Integer
         =
-        -> n + 1
+        return n + 1
       return :result
 
     @spaciousTwo
@@ -89,11 +89,11 @@ describe('trailing block', () => {
         =
         x Integer
         =
-        -> x + 5
+        return x + 5
         =
         x Integer
         =
-        -> x * 3
+        return x * 3
       return :result
   `;
 

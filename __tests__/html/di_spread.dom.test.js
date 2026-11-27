@@ -27,7 +27,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
   it('`(...)` spreads the full manifest — any manifest tag compiles', () => {
     const source = `
       use ... = HTML
-      @create = -> <div><h1>Title</h1><p>body</p><span>x</span></div>
+      @create = () -> <div><h1>Title</h1><p>body</p><span>x</span></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
   });
@@ -37,7 +37,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // define remain a compile error.
     const source = `
       use ... = HTML
-      @create = -> <marquee>nope</marquee>
+      @create = () -> <marquee>nope</marquee>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<marquee>.*:marquee.*HTML/);
   });
@@ -48,7 +48,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // alias (D). This is existing behavior for explicit destructures.
     const source = `
       use div: D, ... = HTML
-      @create = -> <div><p>body</p></div>
+      @create = () -> <div><p>body</p></div>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
   });
@@ -58,7 +58,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // check should reject `<div>`.
     const source = `
       use div: _, ... = HTML
-      @create = -> <div>nope</div>
+      @create = () -> <div>nope</div>
     `;
     expect(() => compileWithHTML(source)).toThrow(/<div>.*:div.*HTML/);
   });
@@ -66,7 +66,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
   it('`name: _` discards but other tags from spread still work', () => {
     const source = `
       use div: _, ... = HTML
-      @create = -> <p>ok</p>
+      @create = () -> <p>ok</p>
     `;
     expect(() => compileWithHTML(source)).not.toThrow();
   });
@@ -77,7 +77,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
     // same outcome: compile fails naming the dependency.
     const source = `
       use ... = HTML
-      @create = -> <div>x</div>
+      @create = () -> <div>x</div>
     `;
     const { ast } = extract(source);
     expect(() => compile(ast, {})).toThrow(/HTML.*has no type|spread.*HTML.*manifest/i);
@@ -107,7 +107,7 @@ describe('DI spread operator — <HTML: (...)>', () => {
     const source = `
       use ... = HTML
       use ... = "OTHER"
-      @create = -> <div>x</div>
+      @create = () -> <div>x</div>
     `;
     const { ast } = extract(source);
     expect(() => compile(ast, {

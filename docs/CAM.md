@@ -91,7 +91,7 @@ same: send a typed message to an actor that the context made available.
 In Brevity, `@` marks public handlers:
 
 ```brevity
-@ping = -> status: "ok"
+@ping = () -> status: "ok"
 ```
 
 That handler is not merely a method. It is a message the actor accepts. This is

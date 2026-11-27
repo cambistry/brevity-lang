@@ -11,7 +11,7 @@ describe('type field access — value.field', () => {
   it('reads a field directly from a TypeConstruction', async () => {
     await expectBehavior(`
       type Point(x: Integer, y: Integer)
-      @get_x = -> result: Point(x: 7, y: 8).x as Integer
+      @get_x = () -> result: Point(x: 7, y: 8).x as Integer
     `,
       { input: { id: '1', op: 'get_x', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 7 }], to: 'c' } },
@@ -34,7 +34,7 @@ describe('type field access — value.field', () => {
   it('reads a named field after a positional one', async () => {
     await expectBehavior(`
       type Mixed(Text, count: Integer, ok: Boolean)
-      @sum = -> result: Mixed("hi", count: 3, ok: true).count as Integer
+      @sum = () -> result: Mixed("hi", count: 3, ok: true).count as Integer
     `,
       { input: { id: '3', op: 'sum', from: 'c' } },
       { output: { id: '3', 'ty': [{ result: 'Integer' }], re: [{ result: 3 }], to: 'c' } },
@@ -54,7 +54,7 @@ describe('type field access — value.field', () => {
   it('rejects access to an undeclared field on a TypeConstruction', () => {
     expect(() => compileSource(`
       type Point(Integer, Integer)
-      @go = -> result: Point(1, 2).bogus as Integer
+      @go = () -> result: Point(1, 2).bogus as Integer
     `)).toThrow(/Type 'Point' has no field 'bogus'/);
   });
 
@@ -73,7 +73,7 @@ describe('type field access — value.field', () => {
     // pass through this validator without throwing.
     expect(() => compileSource(`
       type Point(Integer, Integer)
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 });

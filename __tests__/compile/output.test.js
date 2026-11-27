@@ -26,7 +26,7 @@ describe('extract', () => {
         a Text
         b: Integer
         =
-        ->(output: value as Boolean)
+        return (output: value as Boolean)
     `;
 
     const { interface: iface } = extract(source);

@@ -11,7 +11,7 @@ Publish a param with `@`:
 
 ```brevity
 Box = (@value Integer, @label: Text, secret: Text) *{
-  @double = -> result: (value * 2)
+  @double = () -> result: (value * 2)
 }
 
 @read = {
@@ -27,7 +27,7 @@ Defaults work as usual:
 
 ```brevity
 T = (@a Integer, @b Integer = 99) *{
-  @sum = -> result: (a + b)
+  @sum = () -> result: (a + b)
 }
 ```
 
@@ -35,7 +35,7 @@ Publish a named param under its label while binding a different local:
 
 ```brevity
 Named = (@label: l Text) *{
-  @shout = -> result: l
+  @shout = () -> result: l
 }
 ```
 

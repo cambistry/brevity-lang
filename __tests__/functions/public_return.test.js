@@ -12,27 +12,27 @@ describe('public function return — same-line + delimited', () => {
       =
       n: Integer
       =
-      -> n
+      return n
     @twoBarePos
       =
       x: Integer
       y: Integer
       =
-      -> x, y
+      return x, y
 
     @sigilReturn
       =
       a: Integer
       b: Integer
       =
-      -> :a, :b
+      return :a, :b
 
     @keyValueReturn
       =
       a: Integer
       b: Integer
       =
-      -> result: (a + b)
+      return result: (a + b)
 
     --- delimited paren form ---
 
@@ -47,13 +47,13 @@ describe('public function return — same-line + delimited', () => {
 
     --- literal returns ---
 
-    @stringLiteral = -> "Hello from Brevity!"
+    @stringLiteral = () -> "Hello from Brevity!"
 
-    @numLiteral = -> 42
+    @numLiteral = () -> 42
 
-    @boolLiteral = -> true
+    @boolLiteral = () -> true
 
-    @stringKeyVal = -> msg: "hello"
+    @stringKeyVal = () -> msg: "hello"
   `;
 
   it('-> n : Integer — typed positional', async () => {
@@ -146,7 +146,7 @@ describe('public function return — lineal form', () => {
       =
       a: Integer
       =
-      ->
+      return
       :a
 
     --- two named fields, blank-line terminated ---
@@ -156,7 +156,7 @@ describe('public function return — lineal form', () => {
       a: Integer
       b: Integer
       =
-      ->
+      return
       :a
       :b
 
@@ -169,7 +169,7 @@ describe('public function return — lineal form', () => {
 
     part
       =
-      ->
+      return
         result: 99
 
     --- terminated by -- comment ---
@@ -178,7 +178,7 @@ describe('public function return — lineal form', () => {
       =
       a: Integer
       =
-      ->
+      return
       :a
       --
 
@@ -186,10 +186,10 @@ describe('public function return — lineal form', () => {
 
     @emptyParens
       =
-      ->()
+      return ()
     @afterEmpty
       =
-      -> answer: "pong"
+      return answer: "pong"
 
     --- -- terminator allows next function to follow ---
 
@@ -201,18 +201,18 @@ describe('public function return — lineal form', () => {
       --
     val
       =
-      -> result: 5
+      return result: 5
 
     --- whitespace-only blank line terminates ---
 
     @greet
       =
-      ->
+      return
       msg: "hello"
     ${'  '}
     @ping
       =
-      -> status: "ok"
+      return status: "ok"
   `;
 
   it('-> \\n :a — single named field on next line', async () => {
@@ -284,7 +284,7 @@ describe('public function return — compile errors', () => {
         a: Integer
         b: Integer
         =
-        -> :a
+        return :a
         :b
     `)).toThrow();
   });
@@ -298,7 +298,7 @@ describe('public function return — compile errors', () => {
         :x
       val
         =
-        -> result: 5
+        return result: 5
     `)).toThrow();
   });
 });

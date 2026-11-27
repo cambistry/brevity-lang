@@ -248,7 +248,7 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
       expect(() => compileWithHTML(`
         use :div = HTML
         name *Text = "x"
-        @create = -> <div>#{ name }</div>
+        @create = () -> <div>#{ name }</div>
       `)).not.toThrow();
     });
 
@@ -257,21 +257,21 @@ describe('XML text interpolation — lex + parse + AST shape', () => {
         use :div = HTML
         a *Text = "a"
         b *Text = "b"
-        @create = -> <div>pre #{ a } mid {{ b }} end</div>
+        @create = () -> <div>pre #{ a } mid {{ b }} end</div>
       `)).not.toThrow();
     });
 
     it('valid escapes compile', () => {
       expect(() => compileWithHTML(`
         use :div = HTML
-        @create = -> <div>\\\\ \\{ \\#{ literal</div>
+        @create = () -> <div>\\\\ \\{ \\#{ literal</div>
       `)).not.toThrow();
     });
 
     it('invalid escape throws before reaching codegen', () => {
       expect(() => compileWithHTML(`
         use :div = HTML
-        @create = -> <div>oops \\q here</div>
+        @create = () -> <div>oops \\q here</div>
       `)).toThrow(/Invalid escape/);
     });
   });
@@ -304,7 +304,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ name }` where name is a non-reactive Text binding becomes strinterp', () => {
       const ast = extractAst(`
         name Text = "Chris"
-        @create = -> <div>{{ name }}</div>
+        @create = () -> <div>{{ name }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children).toHaveLength(1);
@@ -314,7 +314,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ count }` where count is a non-reactive Integer stays closure_ref — not Text, type conflict for validation', () => {
       const ast = extractAst(`
         count Integer = 42
-        @create = -> <div>{{ count }}</div>
+        @create = () -> <div>{{ count }}</div>
       `);
       const dom = findDomConstructor(ast);
       // Integer is not a valid HTML text child. The synthesis preserves closure_ref
@@ -325,7 +325,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
     it('`{ name }` where name is a reactive Text ref stays as closure_ref', () => {
       const ast = extractAst(`
         name *Text = "Chris"
-        @create = -> <div>{{ name }}</div>
+        @create = () -> <div>{{ name }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children[0].type).toBe('closure_ref');
@@ -333,10 +333,10 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
   });
 
   describe('pure thunk referencing a DomConstructor is inlined', () => {
-    it('`{ para }` where para = -> <p>…</p> inlines the DomConstructor', () => {
+    it('`{ para }` where para = () -> <p>…</p> inlines the DomConstructor', () => {
       const ast = extractAst(`
-        para = -> <p>Inner</p>
-        @create = -> <div>{{ para }}</div>
+        para = () -> <p>Inner</p>
+        @create = () -> <div>{{ para }}</div>
       `);
       // Find the <div> specifically — findDomConstructor may find <p> first
       // since para's own function body is traversed before @create's body.
@@ -353,7 +353,7 @@ describe('non-reactive { expr } collapse — post-extract AST', () => {
       const ast = extractAst(`
         reactive *Text = "r"
         constant Text = "c"
-        @create = -> <div>{{ reactive }}{{ constant }}</div>
+        @create = () -> <div>{{ reactive }}{{ constant }}</div>
       `);
       const dom = findDomConstructor(ast);
       expect(dom.children[0].type).toBe('closure_ref');

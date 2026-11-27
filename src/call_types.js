@@ -3,7 +3,7 @@ import { isUnion } from './type_enc.js';
 
 // The type of a call to a function of this actor, or of one enclosing it
 // (src/outer_reads.js marks those `outerFnCall`), when that function has one
-// return of one value with a known type: `f()` of `f = -> 16` is an Integer.
+// return of one value with a known type: `f()` of `f = () -> 16` is an Integer.
 // Kept on a call that is an operand (`resultTypeEnc`, encoded) for inference
 // (src/type_infer.js), so `x Integer = f() + #f()`
 // is Integer arithmetic on every target.

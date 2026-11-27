@@ -23,12 +23,12 @@ describe('actors', () => {
 
     User =
       *
-      @hello = -> answer: "world" as Text
+      @hello = () -> answer: "world" as Text
       .
 
     Greeter =
       *
-      @hello = -> answer: "world" as Text
+      @hello = () -> answer: "world" as Text
       .
 
     Echo =
@@ -81,7 +81,7 @@ describe('actors — optional constructor args', () => {
       *
         greeting Text = "world"
       *
-      @hello = -> answer: greeting as Text
+      @hello = () -> answer: greeting as Text
       .
   `;
 

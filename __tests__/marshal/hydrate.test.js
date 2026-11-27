@@ -8,7 +8,7 @@ describe('hydrate — integer state', () => {
   it('acks and state reflects hydrated value', async () => {
     const script = `
       x *Integer = 0
-      @get = -> :x
+      @get = () -> :x
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: [{ '~x': 42 }, 'hydrate'], from: 'parent' } },
@@ -28,9 +28,9 @@ describe('hydrate — multiple types', () => {
       name *Text = ""
       flag *Boolean = false
 
-      @getCount = -> :count
-      @getName  = -> :name
-      @getFlag  = -> :flag
+      @getCount = () -> :count
+      @getName  = () -> :name
+      @getFlag  = () -> :flag
     `);
     await expectActorBehavior(actor,
       { input: { id: '1', cam: [{ '~count': 99, '~name': 'restored', '~flag': true }, 'hydrate'], from: 'p' } },
@@ -58,8 +58,8 @@ describe('hydrate — decimal and float', () => {
     actor = await createActor(`
       price *Decimal = 0
       ratio *Float = 0.0
-      @getPrice = -> :price
-      @getRatio = -> :ratio
+      @getPrice = () -> :price
+      @getRatio = () -> :ratio
     `);
     await expectActorBehavior(actor,
       { input: { id: '1', cam: [{ '~price': 9.99, '~ratio': 3.14 }, 'hydrate'], from: 'p' } },
@@ -81,7 +81,7 @@ describe('hydrate — overwrites init values', () => {
     const script = `
       x *Integer = 999
       y *Text = "original"
-      @get = -> :x, :y
+      @get = () -> :x, :y
     `;
     await expectBehavior(script,
       { input: { id: '1', cam: [{ '~x': 1, '~y': 'hydrated' }, 'hydrate'], from: 'p' } },
@@ -97,7 +97,7 @@ describe('hydrate — mutate after hydrate', () => {
     const script = `
       x *Integer = 0
       @inc! = { x <- x + 1; return :x }
-      @get = -> :x
+      @get = () -> :x
     `;
   await expectBehavior(script,
       { input: { id: '1', cam: [{ '~x': 10 }, 'hydrate'], from: 'p' } },
@@ -115,7 +115,7 @@ describe('hydrate — mutate after hydrate', () => {
 describe('hydrate — keys are wire labels', () => {
   const script = `
     x *Integer = 0
-    @get = -> :x
+    @get = () -> :x
   `;
 
   it('a bare key is not the cell\'s label', async () => {

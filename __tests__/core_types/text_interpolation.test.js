@@ -5,7 +5,7 @@ describe('text interpolation — runtime', () => {
     // Text interpolation — Text values
       @literalInside
         =
-        -> result: "hello #{"world"}"
+        return result: "hello #{"world"}"
 
       @fromConst
         =
@@ -67,7 +67,7 @@ describe('text interpolation — runtime', () => {
     // Text interpolation — Integer values
       @intLit
         =
-        -> result: "count=#{42}"
+        return result: "count=#{42}"
 
       @intConst
         =
@@ -76,7 +76,7 @@ describe('text interpolation — runtime', () => {
 
       @intZero
         =
-        -> result: "#{0}"
+        return result: "#{0}"
 
       @intLarge
         =
@@ -108,8 +108,8 @@ describe('text interpolation — runtime', () => {
       @fltWithText = (f Float) -> result: "v=#{f}"
 
     // Text interpolation — Boolean values
-      @tLit = -> result: "#{true}"
-      @fLit = -> result: "#{false}"
+      @tLit = () -> result: "#{true}"
+      @fLit = () -> result: "#{false}"
       @tConst
         =
         b Boolean = true
@@ -156,35 +156,35 @@ describe('text interpolation — runtime', () => {
 
       @escBackslash
         =
-        -> result: "back\\\\slash"
+        return result: "back\\\\slash"
 
       @escQuote
         =
-        -> result: "say \\"hi\\""
+        return result: "say \\"hi\\""
 
       @escApostropheCourtesy
         =
-        -> result: "it\\'s fine"
+        return result: "it\\'s fine"
 
       @escNewline
         =
-        -> result: "line1\\nline2"
+        return result: "line1\\nline2"
 
       @escTab
         =
-        -> result: "a\\tb"
+        return result: "a\\tb"
 
       @escCR
         =
-        -> result: "a\\rb"
+        return result: "a\\rb"
 
       @escUnicode
         =
-        -> result: "smile \\u{1F600}!"
+        return result: "smile \\u{1F600}!"
 
       @escHex
         =
-        -> result: "byte=\\x41"
+        return result: "byte=\\x41"
 
       @escMixed
         =
@@ -194,31 +194,31 @@ describe('text interpolation — runtime', () => {
     // Text — single-quoted strings are raw
       @rawHash
         =
-        -> result: 'hello #{name}'
+        return result: 'hello #{name}'
 
       @rawBackslash
         =
-        -> result: 'a\\nb'
+        return result: 'a\\nb'
 
       @rawDoubleQuote
         =
-        -> result: 'say "hi"'
+        return result: 'say "hi"'
 
       @doubledQuote
         =
-        -> result: 'How''s that?'
+        return result: 'How''s that?'
 
       @emptySingle
         =
-        -> result: ''
+        return result: ''
 
       @tripleAtEdges
         =
-        -> result: '''wrapped'''
+        return result: '''wrapped'''
 
       @rawBraces
         =
-        -> result: '{not a closure}'
+        return result: '{not a closure}'
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════

@@ -25,7 +25,7 @@ type Pair(x: Integer, y: Integer)
   (a, b) = Point(7, 8)
   return result: a
 }
-@get_x = -> result: Pair(x: 7, y: 8).x
+@get_x = () -> result: Pair(x: 7, y: 8).x
 ```
 
 Use unions:

@@ -257,7 +257,7 @@ const publicHandlers = `
     @bracedMixed = { x Integer = 1; y Integer = 2; z Integer = 3; x, :y, alias: z }
     @bracedExpr = { "hello" }
 
-    p = -> "yes"
+    p = () -> "yes"
     @bracedFnCall = { p() }
 
     @linealSigil
@@ -379,7 +379,7 @@ const spreadFixture = `
       a Integer
       b Integer
       =
-      -> (x: a as Integer, y: b as Integer)
+      return (x: a as Integer, y: b as Integer)
 
     @spreadNoParens
       =

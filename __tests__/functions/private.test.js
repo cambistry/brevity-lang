@@ -12,14 +12,14 @@ describe('private functions — compilation', () => {
   it('file-level private function compiles', () => {
     expect(() => compileSource(`
       #secret = { 42 }
-      @test = -> result: #secret()
+      @test = () -> result: #secret()
     `)).not.toThrow();
   });
 
   it('private function inside named class compiles', () => {
     expect(() => compileSource(`
-      T = * { #x = { 1 }; @a = -> result: #x() }
-      @test = -> 1
+      T = * { #x = { 1 }; @a = () -> result: #x() }
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -36,8 +36,8 @@ describe('private functions — compilation', () => {
 describe('private functions — runtime', () => {
   const script = `
     // private functions — file-level actor — runtime
-    #secret = -> result: 42
-    #greeting = -> result: "hello"
+    #secret = () -> result: 42
+    #greeting = () -> result: "hello"
 
     @testSecret = {
       result: Integer = #secret()
@@ -58,7 +58,7 @@ describe('private functions — runtime', () => {
     T = * {
       #x = { 10 }
       #y = { 20 }
-      @sum = -> result: (#x() + #y()) as Integer
+      @sum = () -> result: (#x() + #y()) as Integer
     }
 
     @test
@@ -134,7 +134,7 @@ describe('private functions — runtime', () => {
 describe('private functions — forward references', () => {
   it('handler before private function definition compiles', () => {
     expect(() => compileSource(`
-      @test = -> result: #helper()
+      @test = () -> result: #helper()
       #helper = { 42 }
     `)).not.toThrow();
   });
@@ -145,7 +145,7 @@ describe('private functions — forward references', () => {
       return :result
     }
 
-    #helper = -> result: 42
+    #helper = () -> result: 42
 
     @testChained = {
       result: Integer = #step1()
@@ -157,7 +157,7 @@ describe('private functions — forward references', () => {
       return result: (result + 1)
     }
 
-    #step2 = -> result: 6
+    #step2 = () -> result: 6
   `;
 
   it('public handler calls #fn defined after it', async () => {
@@ -181,7 +181,7 @@ describe('private functions — lineal forms', () => {
     await expectBehavior(`
       #answer
         =
-        -> result: 42
+        return result: 42
 
       @test
         =
@@ -199,7 +199,7 @@ describe('private functions — lineal forms', () => {
         =
         n Integer
         =
-        -> result: (n * 2)
+        return result: (n * 2)
 
       @test
         =
@@ -213,17 +213,17 @@ describe('private functions — lineal forms', () => {
 
   it('#fn = body (same-line) still works', () => {
     expect(() => compileSource(`
-      #answer = -> result: 42
-      @test = -> result: #answer()
+      #answer = () -> result: 42
+      @test = () -> result: #answer()
     `)).not.toThrow();
   });
 
   it('#fn\\n<...> (private class) is a parse error', () => {
     expect(() => compileSource(`
       #thing = <value Integer> {
-        @get = -> :value
+        @get = () -> :value
       }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/private functions cannot be constructors/);
   });
 });

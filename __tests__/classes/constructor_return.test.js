@@ -16,8 +16,8 @@ describe('return in a class constructor block', () => {
       }
       n <- n + 1
       "a value here is a statement"
-      @n = -> n
-      self as Integer = -> k * 3
+      @n = () -> n
+      self as Integer = () -> k * 3
     }
   `;
 
@@ -68,8 +68,8 @@ describe('return in a file constructor block', () => {
     m *Integer = 0
     if (factor < 0) return
     m <- factor
-    @m = -> m
-    self as Integer = -> factor * 3
+    @m = () -> m
+    self as Integer = () -> factor * 3
   `;
 
   it('runs to the end with no return taken; a projection reads the param', async () => {
@@ -106,7 +106,7 @@ describe('return in a constructor block — compile errors', () => {
   it('return self', () => {
     expect(() => compileSource(`
       @Box = *{
-        @n = -> 1
+        @n = () -> 1
         return self
       }
     `)).toThrow(rule);
@@ -115,7 +115,7 @@ describe('return in a constructor block — compile errors', () => {
   it('return ()', () => {
     expect(() => compileSource(`
       @Box = *{
-        @n = -> 1
+        @n = () -> 1
         return ()
       }
     `)).toThrow(rule);
@@ -125,7 +125,7 @@ describe('return in a constructor block — compile errors', () => {
     expect(() => compileSource(`
       @Box = (k Integer) *{
         if (k < 0) return 0
-        @n = -> k
+        @n = () -> k
       }
     `)).toThrow(rule);
   });
@@ -143,18 +143,18 @@ describe('return in a constructor block — compile errors', () => {
     expect(() => compileSource(`
       @Base = *{
         label Text = ingest
-        @label = -> label
+        @label = () -> label
       }
     `)).toThrow();
   });
 
   it('a return before super leaves the base unbuilt', () => {
     expect(() => compileSource(`
-      @Base = (n Integer) *{ @n = -> n }
+      @Base = (n Integer) *{ @n = () -> n }
       @Sub = @Base ^ (k Integer) *{
         if (k < 0) return
         super(k * 10)
-        @k = -> k
+        @k = () -> k
       }
     `)).toThrow("'return' in '@Sub' leaves before 'super' builds the base");
   });
@@ -162,7 +162,7 @@ describe('return in a constructor block — compile errors', () => {
 
 describe('return after super in a constructor block', () => {
   const script = `
-    @Base = (n Integer) *{ @n = -> n }
+    @Base = (n Integer) *{ @n = () -> n }
     @Sub = @Base ^ (k Integer) *{
       seen *Integer = 0
       if (k < 0) {
@@ -171,7 +171,7 @@ describe('return after super in a constructor block', () => {
       }
       super(k * 10)
       seen <- 1
-      @seen = -> seen
+      @seen = () -> seen
     }
   `;
 

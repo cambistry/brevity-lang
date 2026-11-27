@@ -6,7 +6,7 @@ LLM orientation: this document summarizes methods tested in
 ## Forms
 
 ```brevity
-@slice = -> result: Blob.slice("hello", 1, 3)
+@slice = () -> result: Blob.slice("hello", 1, 3)
 
 @sliceRef = {
   b *Blob = "abcde"

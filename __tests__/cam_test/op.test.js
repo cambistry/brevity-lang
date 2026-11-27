@@ -10,14 +10,14 @@ describe('test.op — runtime', () => {
       x <- x + 1
       return :x
 
-    @get = -> :x
+    @get = () -> :x
 
     // test.op — private function
     double
       =
       n Integer
       =
-      -> n * 2
+      return n * 2
 
     @call
       =

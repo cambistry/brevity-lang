@@ -32,7 +32,7 @@ describe("file scalar params — compilation", () => {
         value: Integer
       *
 
-      @get = -> value
+      @get = () -> value
     `),
     ).not.toThrow();
   });
@@ -45,7 +45,7 @@ describe("file scalar params — compilation", () => {
         count: Integer
       *
 
-      @label = -> line: name
+      @label = () -> line: name
     `),
     ).not.toThrow();
   });
@@ -57,7 +57,7 @@ describe("file scalar params — compilation", () => {
         t Text
       *
 
-      @echo = -> t
+      @echo = () -> t
     `),
     ).not.toThrow();
   });
@@ -70,7 +70,7 @@ describe("file scalar params — compilation", () => {
         limit: Integer
       *
 
-      @first = -> t
+      @first = () -> t
     `),
     ).not.toThrow();
   });
@@ -121,7 +121,7 @@ describe("file scalar params — runtime (named)", () => {
         value: Integer
       *
 
-      @get = -> :value
+      @get = () -> :value
     `,
       {
         constructorArgs: { value: 42 },
@@ -149,8 +149,8 @@ describe("file scalar params — runtime (named)", () => {
         count: Integer
       *
 
-      @get_name = -> label: name
-      @get_count = -> n: count
+      @get_name = () -> label: name
+      @get_count = () -> n: count
     `,
       {
         constructorArgs: { name: "widget", count: 3 },
@@ -187,7 +187,7 @@ describe("file scalar params — runtime (positional)", () => {
         t Text
       *
 
-      @echo = -> got: t
+      @echo = () -> got: t
     `,
       {
         constructorArgs: ["hello"],
@@ -215,8 +215,8 @@ describe("file scalar params — runtime (positional)", () => {
         n Integer
       *
 
-      @first = -> got: t
-      @second = -> num: n
+      @first = () -> got: t
+      @second = () -> num: n
     `,
       {
         constructorArgs: ["a", 7],

@@ -84,7 +84,7 @@ describe('locals — runtime', () => {
         =
         n: Integer
         =
-        -> :n
+        return :n
 
       @doubleArg
         =
@@ -106,7 +106,7 @@ describe('locals — runtime', () => {
         a: Integer
         b: Integer
         =
-        -> sum: a + b
+        return sum: a + b
 
     // locals — nested lambda with header arg
       @argNested
@@ -254,8 +254,8 @@ describe('locals — @ identifiers accept literal constants', () => {
     expect(() => compileSource('@x = true\n')).not.toThrow();
   });
 
-  it('@x = -> 42 is a valid public function', () => {
-    expect(() => compileSource('@x = -> 42\n')).not.toThrow();
+  it('@x = () -> 42 is a valid public function', () => {
+    expect(() => compileSource('@x = () -> 42\n')).not.toThrow();
   });
 
   it('@x = { 42 } is a valid public function', () => {

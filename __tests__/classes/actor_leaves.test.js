@@ -9,13 +9,13 @@ describe('an actor of a file class leaves the file', () => {
   const script = `
     @Box = *{
       n *Integer = 7
-      @get = -> n
+      @get = () -> n
       @bump! = { n <- n + 1 }
     }
-    C = *{ @get = -> 8 }
+    C = *{ @get = () -> 8 }
 
     @W = *{
-      @make = -> @Box()
+      @make = () -> @Box()
     }
 
     @one = {
@@ -124,17 +124,17 @@ describe('an actor of a file class leaves the file', () => {
 describe('an actor of a class declared in a class leaves the file', () => {
   const script = `
     A = *{
-      @make = -> B()
+      @make = () -> B()
     } ^ {
       B = *{
         n *Integer = 7
-        @get = -> n
+        @get = () -> n
       }
     }
 
     Outer = (k Integer) *{
-      Inner = *{ @get = -> k }
-      @make = -> Inner()
+      Inner = *{ @get = () -> k }
+      @make = () -> Inner()
     }
 
     @inBlock = {
@@ -201,7 +201,7 @@ describe('an actor of a class declared in a class leaves the file', () => {
 describe('an actor of ours leaves as an arg', () => {
   const script = `
     use Sink = "Sink" as { take (b: Actor) -> () }
-    @Box = *{ @get = -> 7 }
+    @Box = *{ @get = () -> 7 }
     @W = *{
       @hand = {
         b = @Box()

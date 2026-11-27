@@ -10,7 +10,7 @@ describe('update operator (<|)', () => {
 
       @get
         =
-        -> name: name
+        return name: name
 
       .
 
@@ -29,11 +29,11 @@ describe('update operator (<|)', () => {
 
       @pos
         =
-        -> value: p
+        return value: p
 
       @named
         =
-        -> value: label
+        return value: label
 
       .
 

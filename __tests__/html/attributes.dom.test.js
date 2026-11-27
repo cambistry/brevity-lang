@@ -80,7 +80,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
   it('literal string attr="value" encodes in wire attrs as bare string', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div class="basic"></div>
+      @create = () -> <div class="basic"></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -94,7 +94,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
   it('multiple literal attrs encode as a flat attrs object', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div id="main" class="card"></div>
+      @create = () -> <div id="main" class="card"></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -108,7 +108,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
   it('literal attr with static children', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div class="static">hello</div>
+      @create = () -> <div class="static">hello</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -122,7 +122,7 @@ describe('Q2: non-reactive attr wire encoding', () => {
   it('element without attrs omits the attrs field', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div>hello</div>
+      @create = () -> <div>hello</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -141,7 +141,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     const script = `
       use :div = HTML
       cls *Text = "active"
-      @create = -> <div class={ cls }></div>
+      @create = () -> <div class={ cls }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -156,7 +156,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
     const script = `
       use :div = HTML
       cls *Text = "active"
-      @create = -> <div id="root" class={ cls }></div>
+      @create = () -> <div id="root" class={ cls }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -174,7 +174,7 @@ describe('Q3: reactive attr wire encoding as closure address', () => {
       use :div = HTML
       label *Text = "hello"
       cls *Text = "active"
-      @create = -> <div class={ cls }>{{ label }}</div>
+      @create = () -> <div class={ cls }>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -196,7 +196,7 @@ describe('Q4: reactive attr closure subscription', () => {
     const script = `
       use :div = HTML
       cls *Text = "active"
-      @create = -> <div class={ cls }></div>
+      @create = () -> <div class={ cls }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -214,7 +214,7 @@ describe('Q4: reactive attr closure subscription', () => {
       use :div = HTML
       cls *Text = "active"
       @bump. = (v: Text) { cls <- v }
-      @create = -> <div class={ cls }></div>
+      @create = () -> <div class={ cls }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -234,7 +234,7 @@ describe('Q4: reactive attr closure subscription', () => {
       use :div = HTML
       cls *Text = "a"
       @bump. = (v: Text) { cls <- v }
-      @create = -> <div class={ cls }></div>
+      @create = () -> <div class={ cls }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },

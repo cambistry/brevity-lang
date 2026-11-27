@@ -172,7 +172,7 @@ describe('actor ref in a lambda — call in tail position', () => {
 
   it('a reply carrying only a field named after the method is not a single value', async () => {
     await expectBehavior(`
-      C = *{ @seven = -> seven: 7 }
+      C = *{ @seven = () -> seven: 7 }
       @run = { cs List = [C()]; xs List = over(cs) (c) { c.seven() }; return a1: xs }
     `,
       { input: { id: '1', op: 'run', from: 'c' } },

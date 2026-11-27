@@ -38,7 +38,7 @@ describe('type declaration — parser', () => {
     const { ast } = extract(`
       type Point(Integer, Integer)
 
-      @ping = -> ok: 1
+      @ping = () -> ok: 1
     `);
     expect(ast.types).toHaveLength(1);
     expect(ast.types[0].name).toBe('Point');
@@ -67,12 +67,12 @@ describe('type declaration — parser', () => {
   });
 
   it('a field name without its colon is a parse error', () => {
-    expect(() => extract('type Point(x Integer)\n@go = -> 1\n')).toThrow();
+    expect(() => extract('type Point(x Integer)\n@go = () -> 1\n')).toThrow();
   });
 
   it('lineal: the fields start on the line below the name', () => {
-    expect(extract('type Point\n  Integer\n  y: Integer\n\n@go = -> 1\n').ast.types[0].fields.map(f => f.name)).toEqual(['0', 'y']);
-    expect(() => extract('type Point  Integer\n  Integer\n\n@go = -> 1\n'))
+    expect(extract('type Point\n  Integer\n  y: Integer\n\n@go = () -> 1\n').ast.types[0].fields.map(f => f.name)).toEqual(['0', 'y']);
+    expect(() => extract('type Point  Integer\n  Integer\n\n@go = () -> 1\n'))
       .toThrow("'type Point': its fields go on the lines below it, or in parens: 'type Point(…)' (line 1)");
   });
 });
@@ -84,26 +84,26 @@ describe('type declaration — registry validation', () => {
   it('accepts a well-formed declaration alongside an actor', () => {
     expect(() => compileSource(`
       type Point(Integer, Integer)
-      @ping = -> result: 1
+      @ping = () -> result: 1
     `)).not.toThrow();
   });
 
   it('accepts a lowercase type name — capitalization is convention', () => {
-    expect(() => compileSource('type point(Integer)\n@ping = -> ok: 1\n')).not.toThrow();
+    expect(() => compileSource('type point(Integer)\n@ping = () -> ok: 1\n')).not.toThrow();
   });
 
   it('rejects two declarations of the same type name', () => {
     expect(() => compileSource(`
       type Point(Integer, Integer)
       type Point(Integer, Integer)
-      @ping = -> ok: 1
+      @ping = () -> ok: 1
     `)).toThrow(/Duplicate type declaration: 'Point'/);
   });
 
   it('rejects duplicate field names within a type', () => {
     expect(() => compileSource(`
       type Point(x: Integer, x: Integer)
-      @ping = -> ok: 1
+      @ping = () -> ok: 1
     `)).toThrow(/Duplicate field 'x' in 'Point'/);
   });
 });

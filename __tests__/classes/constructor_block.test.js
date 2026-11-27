@@ -241,14 +241,14 @@ describe('an if statement in a constructor block', () => {
       } else {
         n <- 1
       }
-      @n = -> n
+      @n = () -> n
     }
     flag *Boolean = true
     m *Integer = 0
     if flag {
       m <- 7
     }
-    @m = -> m
+    @m = () -> m
   `;
 
   it('runs the branch its condition picks', async () => {

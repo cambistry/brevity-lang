@@ -12,11 +12,11 @@ import { expectBehavior } from '../helpers.js';
 describe('subclass runtime — inherited method on subclass value', () => {
   const script = `
     T = (x Integer) *{
-      @a = -> result: x as Integer
+      @a = () -> result: x as Integer
     }
     U = T ^ (x Integer, y Integer) *{
       super(x)
-      @b = -> result: y as Integer
+      @b = () -> result: y as Integer
     }
 
     @callInherited
@@ -58,10 +58,10 @@ describe('subclass runtime — override fires on the subclass actor', () => {
   // even though @a is also defined on the superclass.
   const script = `
     T = * {
-      @a = -> result: 1
+      @a = () -> result: 1
     }
     U = T ^ *{
-      @a = -> result: 2
+      @a = () -> result: 2
     }
 
     @superCall
@@ -226,7 +226,7 @@ describe('subclass runtime — inherited state', () => {
       Base = *{
         label Text = "base"
         size Integer = Text.size(label)
-        @size = -> size
+        @size = () -> size
       }
       Sub = Base ^ *{
         label = "hello!"

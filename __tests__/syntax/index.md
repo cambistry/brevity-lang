@@ -53,7 +53,7 @@ result Integer = double(5)
   =
   x Integer
   =
-  -> x * 2
+  return x * 2
 ```
 
 ## Names

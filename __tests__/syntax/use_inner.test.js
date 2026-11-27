@@ -196,7 +196,7 @@ describe('use in inner scopes — visibility', () => {
     expect(() => compileSource(`
       inner = actor {
         use Nn = "n.bv" as ${N}
-        @get = -> 1
+        @get = () -> 1
       }
       @outside = {
         x Integer = Nn.n()

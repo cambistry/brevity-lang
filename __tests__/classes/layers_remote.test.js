@@ -57,9 +57,9 @@ const child = `
   use :B = "svc"
   @U = T ^ (k Integer) *{
     super(n: k * 2)
-    step = -> 10
-    g = -> 7
-    @cnt = -> count
+    step = () -> 10
+    g = () -> 7
+    @cnt = () -> count
     @poke! = { count <- count + 1 }
   }
   @Bare = T ^ (n: Integer) *{
@@ -74,7 +74,7 @@ const child = `
   @AB = A ^ B ^ (k Integer) *{
     super[A](k)
     super[B](k + 1)
-    h = -> 9
+    h = () -> 9
   }
   @get = { u = @U(5); x Integer = u.get(); return x }
   @cells = { u = @U(5); u.poke!(); u.bump!(); a Integer = u.cnt(); b Integer = u.get(); return a * 100 + b }
@@ -312,18 +312,18 @@ describe('the child of a parent class in another file', () => {
 
 const parent = `
   @G = *{
-    g = -> 100
+    g = () -> 100
   }
   @T = @G ^ (@n: Integer) *{
     super()
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
     @gee = { x Integer = g(); return x }
     @bump! = { count <- count + 1 }
   }
   @A = (a Integer) *{
-    h = -> a
+    h = () -> a
     @ha = { x Integer = h(); return x }
   }
   @B = (b Integer) *{
@@ -419,7 +419,7 @@ describe('instance layers in another file — compile errors', () => {
         super[P]()
         super[Q]()
       }
-      @go = -> 1
+      @go = () -> 1
     `, {
       remotes: [{ path: 'lib', service: {
         ':S': {

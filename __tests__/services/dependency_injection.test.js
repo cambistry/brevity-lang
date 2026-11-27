@@ -243,7 +243,7 @@ describe('file-level DI — inline constraint checks', () => {
     expect(() => compileSource(`
       use Remote = "/services/remote" as { fire. (Text) => . }
 
-      @go = -> Remote.fire.("hi")
+      @go = () -> Remote.fire.("hi")
     `)).toThrow(/silent/);
   });
 
@@ -272,7 +272,7 @@ describe('file-level DI — dependency extraction', () => {
   it('extract surfaces inline-constraint dep in iface.params', () => {
     const { interface: iface } = extract(`
       use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
-      @test = -> 1
+      @test = () -> 1
     `);
     expect(iface.params).toBe('(\n  "/services/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n)');
   });
@@ -280,7 +280,7 @@ describe('file-level DI — dependency extraction', () => {
   it('extract surfaces bare dep in iface.params', () => {
     const { interface: iface } = extract(`
       use DB = "/services/db"
-      @test = -> 1
+      @test = () -> 1
     `);
     expect(iface.params).toBe('(\n  "/services/db":\n)');
   });
@@ -289,7 +289,7 @@ describe('file-level DI — dependency extraction', () => {
     const { interface: iface } = extract(`
       use DB = "/services/db" as { lookup (key: Text) -> (value: Text) }
       use Cache = "/services/cache"
-      @test = -> 1
+      @test = () -> 1
     `);
     expect(iface.params).toBe('(\n  "/services/db": {\n    lookup (key: Text) -> (value: Text)\n  }\n  "/services/cache":\n)');
   });
@@ -342,7 +342,7 @@ describe('file-level DI — options.remotes injection', () => {
   it('options.remotes catches returning silent call', () => {
     const { ast } = extract(`
       use DB = "/services/db" as { ping. () => . }
-      @go = -> DB.ping.()
+      @go = () -> DB.ping.()
     `);
     expect(() => compile(ast, {
       remotes: [{ path: '/services/db', service: { public: { 'ping.': [{ writes: true }] } } }],

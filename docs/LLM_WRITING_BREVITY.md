@@ -24,7 +24,7 @@ For the runtime distinction between values and actors, see
 ## Handler Patterns
 
 ```brevity
-@status = -> ok: "ready"
+@status = () -> ok: "ready"
 
 @echo = (text: Text) -> :text
 
@@ -80,7 +80,7 @@ A name says whether its function writes, and the compiler checks it:
 ```brevity
 n *Integer = 0
 
-@total = -> n
+@total = () -> n
 @inc! = (i Integer) { n <- n + i }
 @take! = {
   v Integer = n
@@ -152,13 +152,13 @@ show a positional form.
 type Point(Integer, Integer)
 type Pair(x: Integer, y: Integer)
 
-@make = -> point: Point(1, 2)
+@make = () -> point: Point(1, 2)
 
 @first = {
   (a, b) = Point(3, 4)
   return result: a
 }
-@x = -> result: Pair(x: 3, y: 4).x
+@x = () -> result: Pair(x: 3, y: 4).x
 ```
 
 A positional field is a bare type, read only by positional destructuring. A

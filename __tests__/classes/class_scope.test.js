@@ -23,9 +23,9 @@ const script = `
     @pub *Integer = 1
     prot *Integer = 2
     total *Integer = 50
-    #priv = -> 3
-    @pubFn = -> 10
-    protFn = -> 20
+    #priv = () -> 3
+    @pubFn = () -> 10
+    protFn = () -> 20
 
     new = (seed Integer) *{
       built Integer = @Nested.pub + seed
@@ -77,9 +77,9 @@ const script = `
     @pub *Integer = 1
     prot *Integer = 2
     total *Integer = 50
-    #priv = -> 3
-    @pubFn = -> 10
-    protFn = -> 20
+    #priv = () -> 3
+    @pubFn = () -> 10
+    protFn = () -> 20
   }
 
   @Setter! = (seed Integer) *{
@@ -239,7 +239,7 @@ describe('class scope — a public cell written through the class, and every act
       C = (seed Integer) *{
         C.pub <- seed
       } ^ { @pub *Integer = 0 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/Class 'C' writes \(@pub <- …\) while constructing, so it must be named 'C!'/);
   });
 });
@@ -299,14 +299,14 @@ describe('class scope — closure: the trailing constructor skips the class bloc
   it('a bare public cell, from a method', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ @r = { return @pub } } ^ { @pub *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/'@pub' is a member of the class 'C', and a trailing constructor doesn't close over its class block: reach it as 'C\.pub'/);
   });
 
   it('a bare protected cell, from a method', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ @r = { return prot } } ^ { prot *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -315,8 +315,8 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{ @r = {
         x Integer = @pubFn()
         return x
-      } } ^ { @pubFn = -> 10 }
-      @go = -> 1
+      } } ^ { @pubFn = () -> 10 }
+      @go = () -> 1
     `)).toThrow(/'@pubFn' is a member of the class 'C', and a trailing constructor doesn't close over its class block: reach it as 'C\.pubFn'/);
   });
 
@@ -325,8 +325,8 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{ @r = {
         x Integer = protFn()
         return x
-      } } ^ { protFn = -> 20 }
-      @go = -> 1
+      } } ^ { protFn = () -> 20 }
+      @go = () -> 1
     `)).toThrow(/^'protFn' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -335,15 +335,15 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{ @r = {
         x Integer = #priv()
         return x
-      } } ^ { #priv = -> 3 }
-      @go = -> 1
+      } } ^ { #priv = () -> 3 }
+      @go = () -> 1
     `)).toThrow(/'#priv' is private to the class block of 'C', and a trailing constructor doesn't close over it/);
   });
 
   it('a bare write, from a method', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ @w! = { prot <- 2 } } ^ { prot *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -354,7 +354,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
         x Integer = f()
         return x
       } } ^ { prot *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -363,7 +363,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{
         n Integer = prot + seed
       } ^ { prot *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -372,7 +372,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{
         prot <- seed
       } ^ { prot *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'prot' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 
@@ -381,7 +381,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{
         @pub <- seed
       } ^ { @pub *Integer = 1 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/'@pub' is a member of the class 'C', and a trailing constructor doesn't close over its class block: reach it as 'C\.pub'/);
   });
 
@@ -390,7 +390,7 @@ describe('class scope — closure: the trailing constructor skips the class bloc
       C = (seed Integer) *{
         nope <- seed
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/Cannot set 'nope' — only '\*Type' variables support '<-'/);
   });
 });
@@ -422,7 +422,7 @@ describe('class scope — only public members after a dot', () => {
       C = (seed Integer) *{ @r = {
         x Integer = C.protFn()
         return x
-      } } ^ { protFn = -> 20 }
+      } } ^ { protFn = () -> 20 }
     `)).toThrow(/^No public member 'protFn' in 'C'$/);
   });
 
@@ -431,7 +431,7 @@ describe('class scope — only public members after a dot', () => {
       C = (seed Integer) *{ @r = {
         x Integer = C.priv()
         return x
-      } } ^ { #priv = -> 3 }
+      } } ^ { #priv = () -> 3 }
     `)).toThrow(/^No public member 'priv' in 'C'$/);
   });
 
@@ -469,7 +469,7 @@ describe('class scope — sigils after a dot', () => {
 // declared in, as the class's own methods do.
 const closures = `
   total *Integer = 7
-  #pz = -> 3
+  #pz = () -> 3
   helper = (n Integer) -> n + 1
 
   @W = *{

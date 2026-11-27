@@ -10,7 +10,7 @@ describe('type dependency — interface extraction', () => {
         =
         url: Text
         =
-        -> response: "hello" as Text
+        return response: "hello" as Text
     `);
     expect(iface.service).toEqual({ public: { get: [{ args: [{ url: 'Text' }], re: [{ response: 'Text' }], writes: false }] } });
   });
@@ -21,7 +21,7 @@ describe('type dependency — interface extraction', () => {
         =
         key: Text
         =
-        -> value: "v" as Text
+        return value: "v" as Text
 
       @write. = (key: Text, value: Text) {}
     `);
@@ -50,7 +50,7 @@ describe('type dependency — grounded -> types', () => {
         =
         url: Text
         =
-        -> response: "hello" as Text
+        return response: "hello" as Text
     `;
     await expectBehavior(script,
       { input: { id: 'R1', op: [[{ url: 'http://example.com' }], 'get'], from: 'Caller', 'ty': [[{ url: 'Text' }]] } },
@@ -85,7 +85,7 @@ describe('type dependency — grounded -> types', () => {
         =
         n: Integer
         =
-        -> result: n * 2
+        return result: n * 2
     `;
     await expectBehavior(script,
       { input: { id: 'M1', op: [[{ n: 5 }], 'double'], from: 'Caller', 'ty': [[{ n: 'Integer' }]] } },
@@ -122,7 +122,7 @@ describe('type dependency — ungrounded -> types', () => {
         =
         url: Text
         =
-        -> response: "hello" as Text
+        return response: "hello" as Text
     `).interface.service;
 
     const { ast } = extract(`
@@ -144,7 +144,7 @@ describe('type dependency — ungrounded -> types', () => {
         =
         url: Text
         =
-        -> data: "hello" as Text
+        return data: "hello" as Text
     `).interface.service;
 
     const { ast } = extract(`
@@ -169,7 +169,7 @@ describe('type dependency — remote interface inference', () => {
       =
       url: Text
       =
-      -> response: "hello" as Text
+      return response: "hello" as Text
   `).interface.service;
 
   it('caller compiles and runs with remote interface inference', async () => {
@@ -204,7 +204,7 @@ describe('type dependency — remote interface inference', () => {
 
       @get_start
         =
-        -> start: 10 as Integer
+        return start: 10 as Integer
     `;
     const sourceB = `
       use A = "A" as {

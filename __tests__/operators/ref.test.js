@@ -201,13 +201,13 @@ describe('ref — runtime', () => {
     // ref — bare and @ namespaces are independent
     val8 *Integer = 11
     @val8 *Integer = 22
-    @both = -> p: val8, q: @val8
+    @both = () -> p: val8, q: @val8
     @bumpBare. = { val8 <- val8 + 100 }
 
     // ref — bare idents starting with __ are usable
     __foo *Integer = 42
     __bar *Text = "hi"
-    @get = -> :__foo as Integer, :__bar as Text
+    @get = () -> :__foo as Integer, :__bar as Text
     @setFoo. = (n: Integer) { __foo <- n }
   `;
 

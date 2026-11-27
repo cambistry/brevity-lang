@@ -2,7 +2,7 @@ import { expectBehavior } from '../helpers.js';
 
 describe('unhandled op', () => {
   const script = `
-    @hello = -> answer: "world"
+    @hello = () -> answer: "world"
     @inc = (x: Integer) -> bigger: x + 1
   `;
 

@@ -12,13 +12,13 @@ const blocks = `
     count *Integer = 10
     limit *Integer = 1
     @bump! = { count <- count + 1 }
-    @read = -> count
-    @lim = -> limit
+    @read = () -> count
+    @lim = () -> limit
   }
   @B = @A ^ {
     limit *Integer = 50
     @inc! = { count <- count + 5 }
-    @mine = -> count
+    @mine = () -> count
   }
   @C = @B ^ {
     @inc! = { count <- count + 100 }
@@ -31,10 +31,10 @@ const blocks = `
     @seen = { x Integer = class::count; return x }
     @poke! = { class::count <- class::count + 7 }
   } ^ {
-    @k = -> 1
+    @k = () -> 1
   }
   @I = *{
-    step = -> 1
+    step = () -> 1
   } ^ {
     c *Integer = 0
   }

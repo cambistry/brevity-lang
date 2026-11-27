@@ -67,19 +67,19 @@ describe('Blob — size (byte count)', () => {
   const script = `
       @ascii
         =
-        -> result: Blob.size("hello")
+        return result: Blob.size("hello")
 
       @multibyte
         =
-        -> result: Blob.size("\u{00E9}")
+        return result: Blob.size("\u{00E9}")
 
       @emoji
         =
-        -> result: Blob.size("\u{1F600}")
+        return result: Blob.size("\u{1F600}")
 
       @empty
         =
-        -> result: Blob.size("")
+        return result: Blob.size("")
 
       @refSize
         =

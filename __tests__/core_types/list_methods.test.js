@@ -3,76 +3,76 @@ import { expectBehavior } from '../helpers.js';
 describe('List methods', () => {
   const script = `
       // List.size / List.empty?
-      @sizeFunc  = -> result: List.size([1, 2, 3])
+      @sizeFunc  = () -> result: List.size([1, 2, 3])
       @sizeRef   = { ns *List of Integers = [1,2,3]; return result: ns.size }
       @sizeEmpty = { empty List of Integers = []; return result: List.size(empty) }
       @emptyTrue = { empty List of Integers = []; return result: List.empty?(empty) }
-      @emptyFalse = -> result: List.empty?([1])
+      @emptyFalse = () -> result: List.empty?([1])
 
       // List.first / List.last / List.at
-      @firstFunc = -> result: List.first([10, 20, 30])
-      @lastFunc  = -> result: List.last([10, 20, 30])
-      @atFunc    = -> result: List.at([10, 20, 30], 1)
-      @atOver    = -> result: List.at([10, 20, 30], 99)
+      @firstFunc = () -> result: List.first([10, 20, 30])
+      @lastFunc  = () -> result: List.last([10, 20, 30])
+      @atFunc    = () -> result: List.at([10, 20, 30], 1)
+      @atOver    = () -> result: List.at([10, 20, 30], 99)
       @firstRef  = { ns *List of Integers = [42]; return result: ns.first }
 
       // List.slice / List.take / List.from
-      @sliceMid  = -> result: List.slice([1,2,3,4,5], 1, 4)
-      @sliceEnd  = -> result: List.slice([1,2,3,4,5], 2)
-      @takeFirst = -> result: List.take([1,2,3,4,5], 3)
-      @takeOver  = -> result: List.take([1,2], 99)
-      @takeZero  = -> result: List.take([1,2,3], 0)
-      @fromMid   = -> result: List.from([1,2,3,4,5], 2)
-      @fromOver  = -> result: List.from([1,2], 99)
-      @fromZero  = -> result: List.from([1,2,3], 0)
+      @sliceMid  = () -> result: List.slice([1,2,3,4,5], 1, 4)
+      @sliceEnd  = () -> result: List.slice([1,2,3,4,5], 2)
+      @takeFirst = () -> result: List.take([1,2,3,4,5], 3)
+      @takeOver  = () -> result: List.take([1,2], 99)
+      @takeZero  = () -> result: List.take([1,2,3], 0)
+      @fromMid   = () -> result: List.from([1,2,3,4,5], 2)
+      @fromOver  = () -> result: List.from([1,2], 99)
+      @fromZero  = () -> result: List.from([1,2,3], 0)
       @sliceBang = { ns *List of Integers = [1,2,3,4,5]; ns.slice!(1, 4); return result: ns }
       @takeBang  = { ns *List of Integers = [1,2,3,4,5]; ns.take!(2); return result: ns }
       @fromBang  = { ns *List of Integers = [1,2,3,4,5]; ns.from!(3); return result: ns }
 
       // List.contains / List.index_of
-      @contTrue  = -> result: List.contains([1,2,3], 2)
-      @contFalse = -> result: List.contains([1,2,3], 99)
-      @indexHit  = -> result: List.index_of([10,20,30], 30)
-      @indexMiss = -> result: List.index_of([10,20,30], 99)
+      @contTrue  = () -> result: List.contains([1,2,3], 2)
+      @contFalse = () -> result: List.contains([1,2,3], 99)
+      @indexHit  = () -> result: List.index_of([10,20,30], 30)
+      @indexMiss = () -> result: List.index_of([10,20,30], 99)
       @containsRef = { ns *List of Integers = [1,2,3]; return result: ns.contains(2) }
 
       // List.starts_with / List.ends_with
-      @swYes = -> result: List.starts_with([1,2,3,4], [1,2])
-      @swNo  = -> result: List.starts_with([1,2,3,4], [2,3])
-      @ewYes = -> result: List.ends_with([1,2,3,4], [3,4])
-      @ewNo  = -> result: List.ends_with([1,2,3,4], [3,5])
+      @swYes = () -> result: List.starts_with([1,2,3,4], [1,2])
+      @swNo  = () -> result: List.starts_with([1,2,3,4], [2,3])
+      @ewYes = () -> result: List.ends_with([1,2,3,4], [3,4])
+      @ewNo  = () -> result: List.ends_with([1,2,3,4], [3,5])
       @swEmpty = { empty List of Integers = []; return result: List.starts_with([1,2], empty) }
 
       // List.before / List.after
-      @beforeHit = -> result: List.before([1,2,3,4,5], 3)
-      @afterHit  = -> result: List.after([1,2,3,4,5], 3)
-      @beforeMiss = -> result: List.before([1,2,3], 99)
-      @afterMiss  = -> result: List.after([1,2,3], 99)
+      @beforeHit = () -> result: List.before([1,2,3,4,5], 3)
+      @afterHit  = () -> result: List.after([1,2,3,4,5], 3)
+      @beforeMiss = () -> result: List.before([1,2,3], 99)
+      @afterMiss  = () -> result: List.after([1,2,3], 99)
 
       // List.reverse / List.repeat
-      @rev      = -> result: List.reverse([1,2,3])
-      @repeat3  = -> result: List.repeat([1,2], 3)
-      @repeat0  = -> result: List.repeat([1,2], 0)
+      @rev      = () -> result: List.reverse([1,2,3])
+      @repeat3  = () -> result: List.repeat([1,2], 3)
+      @repeat0  = () -> result: List.repeat([1,2], 0)
       @revBang  = { ns *List of Integers = [1,2,3]; ns.reverse!; return result: ns }
       @repeatBang = { ns *List of Integers = [1,2]; ns.repeat!(2); return result: ns }
 
       // List.replace / List.replace_first
-      @replaceAll = -> result: List.replace([1,2,1,2,1], 1, 9)
-      @replaceFirst = -> result: List.replace_first([1,2,1,2,1], 1, 9)
-      @replaceMiss = -> result: List.replace([1,2,3], 99, 0)
+      @replaceAll = () -> result: List.replace([1,2,1,2,1], 1, 9)
+      @replaceFirst = () -> result: List.replace_first([1,2,1,2,1], 1, 9)
+      @replaceMiss = () -> result: List.replace([1,2,3], 99, 0)
       @replaceBang = { ns *List of Integers = [1,2,1]; ns.replace!(1, 9); return result: ns }
 
       // List.concat / List.append / List.prepend
-      @concat  = -> result: List.concat([1,2], [3,4])
-      @append  = -> result: List.append([1,2], 3)
-      @prepend = -> result: List.prepend([2,3], 1)
+      @concat  = () -> result: List.concat([1,2], [3,4])
+      @append  = () -> result: List.append([1,2], 3)
+      @prepend = () -> result: List.prepend([2,3], 1)
       @concatBang  = { ns *List of Integers = [1,2]; ns.concat!([3,4]); return result: ns }
       @appendBang  = { ns *List of Integers = [1,2]; ns.append!(3); return result: ns }
       @prependBang = { ns *List of Integers = [2,3]; ns.prepend!(1); return result: ns }
 
       // List.concat — variadic
-      @three = -> result: List.concat([1,2], [3,4], [5,6])
-      @four  = -> result: List.concat([1], [2], [3], [4])
+      @three = () -> result: List.concat([1,2], [3,4], [5,6])
+      @four  = () -> result: List.concat([1], [2], [3], [4])
       @withEmpty
         =
         empty List of Integers = []
@@ -84,25 +84,25 @@ describe('List methods', () => {
         return result: ns
 
       // + operator on Lists
-      @plus = -> result: [1,2] + [3,4]
+      @plus = () -> result: [1,2] + [3,4]
       @plusRef
         =
         a List of Integers = [1, 2]
         b List of Integers = [3, 4]
         return result: a + b
-      @plusChain = -> result: [1] + [2] + [3]
+      @plusChain = () -> result: [1] + [2] + [3]
 
       // List.flatten / List.unique / List.sort
-      @flatten = -> result: List.flatten([[1,2],[3],[4,5]])
+      @flatten = () -> result: List.flatten([[1,2],[3],[4,5]])
       @flattenEmpty = { empty List of Lists of Integers = []; return result: List.flatten(empty) }
-      @unique  = -> result: List.unique([1,2,2,3,3,3,4])
-      @sort    = -> result: List.sort([3,1,4,1,5,9,2,6])
+      @unique  = () -> result: List.unique([1,2,2,3,3,3,4])
+      @sort    = () -> result: List.sort([3,1,4,1,5,9,2,6])
       @sortBang = { ns *List of Integers = [3,1,2]; ns.sort!; return result: ns }
 
       // List.join (List of Texts → Text)
-      @join = -> result: List.join(["a","b","c"], "-")
+      @join = () -> result: List.join(["a","b","c"], "-")
       @joinEmpty = { empty List of Texts = []; return result: List.join(empty, ",") }
-      @joinSingle = -> result: List.join(["only"], "-")
+      @joinSingle = () -> result: List.join(["only"], "-")
 
       // List equality semantics — _bv_eq
       @containsDecimal

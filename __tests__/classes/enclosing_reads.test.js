@@ -136,7 +136,7 @@ describe('a class reaches only the actors it is declared in', () => {
 
       T = *{ a = { 1 } }
       U = T ^ *{
-        @c = -> result: a() as Integer
+        @c = () -> result: a() as Integer
       }
     `)).not.toThrow();
   });

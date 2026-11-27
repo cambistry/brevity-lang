@@ -6,7 +6,7 @@ describe('test.update — single named param via update handler', () => {
 
       update = (name: n Text) ->  name <- n
 
-      @get = -> :name
+      @get = () -> :name
   `;
 
   it('updates value through `update` dispatch', async () => {
@@ -40,8 +40,8 @@ describe('test.update — mixed positional + named args', () => {
         p <- val
         label <- l
 
-      @getP = -> :p
-      @getLabel = -> :label
+      @getP = () -> :p
+      @getLabel = () -> :label
   `;
 
   it('updates with positional + named args', async () => {
@@ -66,7 +66,7 @@ describe('test.update — then mutate with public function', () => {
         return :count
       }
 
-      @get = -> :count
+      @get = () -> :count
   `;
 
   it('update state then increment', async () => {
@@ -87,7 +87,7 @@ describe('test.update — child actor via normal dispatch', () => {
         *
         name *Text = "anonymous"
         update = (name: n Text) ->  name <- n
-        @get = -> name: name
+        @get = () -> name: name
         .
       end#Person
 

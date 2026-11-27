@@ -17,7 +17,7 @@ add
   =
   a Integer
   =
-  -> result: a
+  return result: a
 
 add <<
   =

@@ -9,7 +9,7 @@ describe('class interface — basic', () => {
   it('no-param class with one method', () => {
     const { interface: iface } = extract(`
       @Greeter = * {
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
       }
     `);
     expect(iface.service).toEqual(
@@ -25,7 +25,7 @@ describe('class interface — basic', () => {
   it('single named param', () => {
     const { interface: iface } = extract(`
       @Document = (content: Text) *{
-        @body = -> content as Text
+        @body = () -> content as Text
       }
     `);
     expect(iface.service).toEqual(
@@ -41,7 +41,7 @@ describe('class interface — basic', () => {
   it('single positional param', () => {
     const { interface: iface } = extract(`
       @Wrapper = (n Integer) *{
-        @get = -> value: n as Integer
+        @get = () -> value: n as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -57,7 +57,7 @@ describe('class interface — basic', () => {
   it('multiple params', () => {
     const { interface: iface } = extract(`
       @Pair = (a Integer, b Integer) *{
-        @sum = -> total: (a + b) as Integer
+        @sum = () -> total: (a + b) as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -111,8 +111,8 @@ describe('class interface — actor methods', () => {
   it('multiple methods in order', () => {
     const { interface: iface } = extract(`
       @Document = (content: Text) *{
-        @title = -> "untitled"
-        @body = -> content as Text
+        @title = () -> "untitled"
+        @body = () -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
       }
     `);
@@ -135,7 +135,7 @@ describe('class interface — actor methods', () => {
   it('no-arg method returning inferred type from class param', () => {
     const { interface: iface } = extract(`
       @Box = (value: Integer) *{
-        @get = -> value as Integer
+        @get = () -> value as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -156,7 +156,7 @@ describe('class interface — private methods excluded', () => {
     const { interface: iface } = extract(`
       @Document = (content: Text) *{
         #helper = (t Text) -> r: t as Text
-        @title = -> #helper(content) as Text
+        @title = () -> #helper(content) as Text
       }
     `);
     expect(iface.service).toEqual(
@@ -176,8 +176,8 @@ describe('class interface — mixed with public functions', () => {
   it('class and public function in same file', () => {
     const { interface: iface } = extract(`
       @Document = (content: Text) *{
-        @title = -> "untitled"
-        @body = -> content as Text
+        @title = () -> "untitled"
+        @body = () -> content as Text
         @index_of = (match: Text) -> pos: 0 as Integer
       }
       @publish. = (doc: @Document) {}
@@ -201,9 +201,9 @@ describe('class interface — mixed with public functions', () => {
 
   it('public function before class', () => {
     const { interface: iface } = extract(`
-      @ping = -> 1
+      @ping = () -> 1
       @Counter = (start Integer) *{
-        @get = -> value: start as Integer
+        @get = () -> value: start as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -220,10 +220,10 @@ describe('class interface — mixed with public functions', () => {
   it('multiple classes', () => {
     const { interface: iface } = extract(`
       @Point = (x Integer, y Integer) *{
-        @sum = -> total: (x + y) as Integer
+        @sum = () -> total: (x + y) as Integer
       }
       @Label = (text: Text) *{
-        @get = -> text as Text
+        @get = () -> text as Text
       }
     `);
     expect(iface.service).toEqual(
@@ -246,12 +246,12 @@ describe('class interface — mixed with public functions', () => {
 describe('class interface — private classes excluded', () => {
   const { interface: iface } = extract(`
     Helper = (n Integer) *{
-      @get = -> value: n as Integer
-      @use = -> value: "shadowed"
+      @get = () -> value: n as Integer
+      @use = () -> value: "shadowed"
       @count *Integer = 0
     }
     @Shown = *{
-      @show = -> value: 1 as Integer
+      @show = () -> value: 1 as Integer
     }
     @use
       =
@@ -279,7 +279,7 @@ describe('class interface — optional params', () => {
   it('positional optional shows ? Type', () => {
     const { interface: iface } = extract(`
       @Counter = (start Integer = 0) *{
-        @get = -> value: start as Integer
+        @get = () -> value: start as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -295,7 +295,7 @@ describe('class interface — optional params', () => {
   it('named optional shows ? name: Type', () => {
     const { interface: iface } = extract(`
       @Config = (label: Text = "default") *{
-        @get = -> label as Text
+        @get = () -> label as Text
       }
     `);
     expect(iface.service).toEqual(
@@ -311,7 +311,7 @@ describe('class interface — optional params', () => {
   it('mixed required and optional params', () => {
     const { interface: iface } = extract(`
       @Pair = (a Integer, b Integer = 0) *{
-        @sum = -> total: (a + b) as Integer
+        @sum = () -> total: (a + b) as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -327,7 +327,7 @@ describe('class interface — optional params', () => {
   it('inferred type from default shows in interface', () => {
     const { interface: iface } = extract(`
       @Box = (value=42) *{
-        @get = -> value as Integer
+        @get = () -> value as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -369,7 +369,7 @@ describe('class interface — optional params', () => {
   it('all-optional class params', () => {
     const { interface: iface } = extract(`
       @Defaults = (x=10, y=20) *{
-        @sum = -> total: (x + y) as Integer
+        @sum = () -> total: (x + y) as Integer
       }
     `);
     expect(iface.service).toEqual(
@@ -399,7 +399,7 @@ describe('class interface — imported type address resolution', () => {
       use Item = "/models/item"
 
       @Wrapper = (item: Item) *{
-        @get = -> item as Item
+        @get = () -> item as Item
       }
     `);
     expect(iface.service).toEqual(
@@ -417,7 +417,7 @@ describe('class interface — imported type address resolution', () => {
       use Pair = "/models/pair"
 
       @Factory = * {
-        @make = -> Pair(key: "a", value: "b") as Pair
+        @make = () -> Pair(key: "a", value: "b") as Pair
       }
     `);
     expect(iface.service).toEqual(

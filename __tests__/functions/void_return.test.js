@@ -40,13 +40,13 @@ describe('void return — runtime', () => {
 
     @linealExplicit
       =
-      -> ()
+      return ()
 
     --- lineal body, ->() tight ---
 
     @linealTight
       =
-      ->()
+      return ()
 
     // void return — private functions, empty body {}
     @callEmptyLambda
@@ -172,11 +172,11 @@ describe('void return — private functions, () as tail value', () => {
 
     voidExplicit
       =
-      -> ()
+      return ()
 
     voidTight
       =
-      ->()
+      return ()
 
     @callLinealImplicit
       =
@@ -333,7 +333,7 @@ describe('void return — `()` literal is non-assignable', () => {
     expect(() => compileSource(`
       @test
         =
-        -> result: ()
+        return result: ()
     `)).toThrow(/unexpected.*expression|unassignable|\(\)/i);
   });
 });

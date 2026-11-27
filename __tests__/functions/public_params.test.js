@@ -26,7 +26,7 @@ describe('public params — runtime', () => {
 
     @noParams
       =
-      -> answer: "world"
+      return answer: "world"
 
     --- single param ---
 
@@ -34,7 +34,7 @@ describe('public params — runtime', () => {
       =
       n: Integer
       =
-      -> :n
+      return :n
 
     --- two params ---
 
@@ -43,7 +43,7 @@ describe('public params — runtime', () => {
       a: Integer
       b: Integer
       =
-      -> sum: (a + b)
+      return sum: (a + b)
 
     --- key-mapped ---
 
@@ -51,7 +51,7 @@ describe('public params — runtime', () => {
       =
       a: x Integer
       =
-      -> x
+      return x
     --- mixed positional + named ---
 
     @mixedOpen
@@ -59,7 +59,7 @@ describe('public params — runtime', () => {
       n Integer
       m: Integer
       =
-      -> sum: (n + m)
+      return sum: (n + m)
 
     --- multiple functions don't bleed ---
 
@@ -67,13 +67,13 @@ describe('public params — runtime', () => {
       =
       x: Integer
       =
-      -> :x
+      return :x
 
     @bar
       =
       y: Integer
       =
-      -> :y
+      return :y
 
     // @params — optional args — delimited (pipe)
     @posOpt = (a Integer, b Integer = 0) -> sum: (a + b)
@@ -88,14 +88,14 @@ describe('public params — runtime', () => {
       a Integer
       b Integer = 0
       =
-      -> sum: (a + b)
+      return sum: (a + b)
 
     @namedOptOpen
       =
       a: Integer
       b: Integer = 99
       =
-      -> sum: (a + b)
+      return sum: (a + b)
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -289,7 +289,7 @@ describe('@params — compile errors', () => {
         n: Integer
         // end params
         =
-        -> :n
+        return :n
     `)).not.toThrow();
   });
 
@@ -300,7 +300,7 @@ describe('@params — compile errors', () => {
         n: Integer
         -- end params
         =
-        -> :n
+        return :n
     `)).not.toThrow();
   });
 });

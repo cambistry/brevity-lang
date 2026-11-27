@@ -2459,7 +2459,7 @@ describe('HTML element runtime — actor side', () => {
     </head><body></body></html>`;
 
   const testerSource = `use :div = HTML
-@createDiv = -> <div>Hello</div>
+@createDiv = () -> <div>Hello</div>
 `;
 
   it('actor sends CAM new to HTML div and returns element address', async () => {

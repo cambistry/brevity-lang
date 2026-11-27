@@ -24,7 +24,7 @@ describe('class as a value — compilation', () => {
     expect(() => compileSource(`
       *
       @class = { class }
-      @ping = -> ok: "pong" as Text
+      @ping = () -> ok: "pong" as Text
     `, { fileName: 'c.bv' })).not.toThrow();
   });
 
@@ -33,7 +33,7 @@ describe('class as a value — compilation', () => {
       C = () *{
         @class = { class }
       }
-      @ping = -> ok: "pong" as Text
+      @ping = () -> ok: "pong" as Text
     `, { fileName: 'host.bv' })).not.toThrow();
   });
 

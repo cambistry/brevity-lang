@@ -35,28 +35,28 @@ describe('reference fields — grammar', () => {
   it('a silent reference field `() => .` parses as a type field', () => {
     expect(() => compileSource(`
       type Sink(push.: () => .)
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 
   it('a void-callback field `(x) -> ()` parses as a type field', () => {
     expect(() => compileSource(`
       type Adder(add: (value: Integer) -> ())
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 
   it('a valued-callback field `() -> (n: Integer)` parses as a type field', () => {
     expect(() => compileSource(`
       type Reader(get: () -> (n: Integer))
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 
   it('mixes value fields and reference fields in one type', () => {
     expect(() => compileSource(`
       type Mixed(seed: Integer, push.: () => ., check: (x: Integer) -> (ok: Boolean))
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 
@@ -64,7 +64,7 @@ describe('reference fields — grammar', () => {
     // The nested comma must not split the surrounding field list.
     expect(() => compileSource(`
       type Handler(run: (a: Integer, b: Integer) -> ())
-      @go = -> result: 1
+      @go = () -> result: 1
     `)).not.toThrow();
   });
 });
@@ -89,7 +89,7 @@ describe('reference fields — captured in the type declaration', () => {
   it('records a silent reference field with its `() => .` signature', () => {
     const { ast } = extract(`
       type Sink(push.: () => .)
-      @go = -> result: 1
+      @go = () -> result: 1
     `);
     const decl = typeDeclNamed(ast, 'Sink');
     expect(decl).toBeTruthy();

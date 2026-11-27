@@ -496,7 +496,7 @@ describe('end to end', () => {
         p Svc::Point = Svc.origin()
         return p.x
       }
-      @lineal = -> Svc.Counter(5, step: 2).get()
+      @lineal = () -> Svc.Counter(5, step: 2).get()
       @branch = {
         if 1 > 0 { return Svc.Counter(5, step: 2).get() }
         return 0

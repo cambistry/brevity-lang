@@ -20,7 +20,7 @@ describe('XML tags — compilation', () => {
   it('basic self-closing tag compiles', () => {
     expect(() => compileSource(`
       Greeting = (msg: Text) *{
-        @get = -> result: msg
+        @get = () -> result: msg
       }
       @test = {
         g = <Greeting msg="hello" />
@@ -33,7 +33,7 @@ describe('XML tags — compilation', () => {
   it('expression attribute compiles', () => {
     expect(() => compileSource(`
       Box = (value: Integer) *{
-        @get = -> result: value
+        @get = () -> result: value
       }
       @test = {
         b = <Box value={42} />
@@ -46,7 +46,7 @@ describe('XML tags — compilation', () => {
   it('mixed string and expression attributes compile', () => {
     expect(() => compileSource(`
       Card = (title: Text, count: Integer) *{
-        @get = -> result: title
+        @get = () -> result: title
       }
       @test = {
         c = <Card title="hello" count={5} />
@@ -59,7 +59,7 @@ describe('XML tags — compilation', () => {
   it('single-quoted string attribute compiles', () => {
     expect(() => compileSource(`
       Label = (text: Text) *{
-        @get = -> result: text
+        @get = () -> result: text
       }
       @test = {
         l = <Label text='world' />
@@ -72,7 +72,7 @@ describe('XML tags — compilation', () => {
   it('class with positional params is a compiler error', () => {
     expect(() => compileSource(`
       Point = (x Integer, y Integer) *{
-        @get = -> result: x
+        @get = () -> result: x
       }
       @test = {
         p = <Point x={1} y={2} />
@@ -95,7 +95,7 @@ describe('XML tags — compilation', () => {
   it('no attributes compiles', () => {
     expect(() => compileSource(`
       Empty = * {
-        @ping = -> result: 1
+        @ping = () -> result: 1
       }
       @test = {
         e = <Empty />
@@ -108,7 +108,7 @@ describe('XML tags — compilation', () => {
   it('complex expression in attribute compiles', () => {
     expect(() => compileSource(`
       Box = (value: Integer) *{
-        @get = -> result: value
+        @get = () -> result: value
       }
       @test = {
         x Integer = 10
@@ -124,16 +124,16 @@ describe('xml tags — runtime', () => {
   const script = `
     // XML tags — runtime
     Greeting = (msg: Text) *{
-      @get = -> result: msg
+      @get = () -> result: msg
     }
 
     Box = (value: Integer) *{
-      @get = -> result: value
+      @get = () -> result: value
     }
 
     Card = (title: Text, count: Integer) *{
-      @getTitle = -> result: title
-      @getCount = -> result: count
+      @getTitle = () -> result: title
+      @getCount = () -> result: count
     }
 
     @testString
@@ -169,7 +169,7 @@ describe('xml tags — runtime', () => {
 
     // XML tags — no attributes
     Empty = * {
-      @ping = -> result: 1
+      @ping = () -> result: 1
     }
 
     @test
@@ -180,8 +180,8 @@ describe('xml tags — runtime', () => {
 
     // XML tags — equivalence with function syntax
     Config = (host: Text, port: Integer) *{
-      @getHost = -> result: host
-      @getPort = -> result: port
+      @getHost = () -> result: host
+      @getPort = () -> result: port
     }
 
     @testXml
@@ -210,8 +210,8 @@ describe('xml tags — runtime', () => {
 
     // XML tags — optional params
     Widget = (label: Text = "default", size: Integer = 10) *{
-      @getLabel = -> result: label
-      @getSize = -> result: size
+      @getLabel = () -> result: label
+      @getSize = () -> result: size
     }
 
     @testAllProvided

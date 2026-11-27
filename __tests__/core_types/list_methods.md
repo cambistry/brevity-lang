@@ -7,7 +7,7 @@ list shapes where the result is still a list.
 ## Forms
 
 ```brevity
-@size = -> result: List.size([1, 2, 3])
+@size = () -> result: List.size([1, 2, 3])
 
 @firstRef = {
   ns *List of Integers = [42]

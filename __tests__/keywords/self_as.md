@@ -8,9 +8,9 @@ with public handlers.
 ```brevity
 One =
   *
-  self as Integer = -> 1
-  self as Text = -> "one"
-  @ping = -> pong: "ok" as Text
+  self as Integer = () -> 1
+  self as Text = () -> "one"
+  @ping = () -> pong: "ok" as Text
   .
 end#One
 ```
@@ -40,7 +40,7 @@ The reply is positional with the projected value:
 
 - Multiple `self as` clauses can coexist.
 - Target type selects the projection.
-- Negated catch-all form `self as !class = -> ...` is tested.
+- Negated catch-all form `self as !class = () -> ...` is tested.
 - Two-line clause syntax is tested.
 - Public handlers still work alongside projections.
 - Untyped actor references such as `g = *Greeter()` still call handlers
@@ -48,7 +48,7 @@ The reply is positional with the projected value:
 
 ## LLM Rules
 
-- Use `self as Type = -> value` for actor-to-value projection.
+- Use `self as Type = () -> value` for actor-to-value projection.
 - Do not describe `self as` as just another public handler.
 - Use `*Name()` when the actor should stay messageable instead of being
   immediately projected to a scalar target type.

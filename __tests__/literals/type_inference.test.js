@@ -12,11 +12,11 @@ describe('literal type inference — runtime', () => {
       @nullLit = { x = null; return :x }
 
     // literal type inference — reply fields
-      @intPos    = -> 99
-      @strNamed  = -> msg: "hi"
-      @boolNamed = -> ok: true
-      @decNamed  = -> pi: 3.14
-      @nullNamed = -> value: null
+      @intPos    = () -> 99
+      @strNamed  = () -> msg: "hi"
+      @boolNamed = () -> ok: true
+      @decNamed  = () -> pi: 3.14
+      @nullNamed = () -> value: null
 
     // literal type inference — function arguments
       @intArg

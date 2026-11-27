@@ -28,12 +28,12 @@ describe('silent name — definition', () => {
 
         @get
           =
-          -> value: value
+          return value: value
 
         .
       end#Box
 
-      @go = -> 1
+      @go = () -> 1
     `)).not.toThrow();
   });
 });
@@ -141,7 +141,7 @@ describe('silent name — on the wire', () => {
 
     @put. = (n Integer) { x <- n }
 
-    @get = -> x
+    @get = () -> x
   `;
 
   it('a silent public handler is addressed with its dot and sends no reply', async () => {

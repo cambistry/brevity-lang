@@ -10,7 +10,7 @@ import { expectBehavior } from '../helpers.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const script = `
-  @get = -> 1
+  @get = () -> 1
   @take = (n Integer) -> n
 `;
 

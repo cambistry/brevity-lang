@@ -2598,10 +2598,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (bareFuncAllowed && peek().type === 'IDENT' && tokens[pos + 1]?.type === '->') {
       return parseFunction();
     }
-    // No-param arrow: -> expr
-    if (bareFuncAllowed && peek().type === '->') {
-      return parseFunction();
-    }
     if (peek().type === 'LBRACE') {
       return parseFunction(); // no-arg function
     }
@@ -3837,10 +3833,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         break;
       }
 
-      // A leading `->` in a *lineal* body (no stopToken, nothing parsed yet) is the
-      // arrow one-liner / body-opener (`@get = -> x`): the single tail is the
-      // implicit return.
-      if (peek().type === '->' && !stopToken && body.length === 0) {
+      // A function's arrow right after its params (`@get = () -> x`, `x -> x + 1`)
+      // opens a one-line body: the single tail is the implicit return. With no
+      // params before it, `->` opens nothing.
+      if (peek().type === '->' && !stopToken && body.length === 0 && ['RPAREN', 'IDENT'].includes(tokens[pos - 1]?.type)) {
         take();
         if (peek().type === 'DOT') {
           if (declCtx) throw trailingDotError();
@@ -4286,10 +4282,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (isReturnKw()) {
         // `@op = return expr` — `return` is not a value and no function body
         // has been opened here, so it cannot be the RHS of `=`.
-        throw new Error(`'return' cannot be the right-hand side of '=' — no function body has been opened. Use '@${op} = -> expr' or '@${op} = { return expr }'.`);
+        throw new Error(`'return' cannot be the right-hand side of '=' — no function body has been opened. Use '@${op} = () -> expr' or '@${op} = { return expr }'.`);
       }
-      if (_t !== 'STAR' && _t !== '->' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN' && !scanChain()) {
-        throw new Error(`'@${op}' is public — only functions can be public. Use '->', '{', or '(params)' to define a function body, or remove the '@' for a private value.`);
+      if (_t !== 'STAR' && _t !== 'LBRACE' && _t !== 'DOT' && _t !== 'NEWLINE' && _t !== 'BLOCK_SEP' && _t !== 'LPAREN' && !scanChain()) {
+        throw new Error(`'@${op}' is public — only functions can be public. Use '{', '() ->' or '(params) ->' to define a function body, or remove the '@' for a private value.`);
       }
       // Allow `= \n *...` — body-opener `=` may sit on its own line
       // before the constructor `*`.
@@ -4407,7 +4403,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       } else {
         params = [];
       }
-    } else if (peek().type === '->' || peek().type === 'LBRACE' || peek().type === 'DOT') {
+    } else if (peek().type === 'LBRACE' || peek().type === 'DOT') {
       params = []; // no params — body follows directly
     } else {
       throw new Error(`Unexpected token after '@${op}'. Use '@${op} = (params) -> body' (delimited) or '@${op}\\n  =\\n  params\\n  =\\n  body' (lineal)`);
@@ -4439,18 +4435,28 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       negated = true;
     }
     const targetType = parseType();
+    let lineal = false;
     if (peek().type === 'EQUALS') {
       take(); // '='
     } else if (peek().type === 'NEWLINE') {
       skipNewlines();
       if (peek().type !== 'EQUALS') throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
       take(); // '='
+      lineal = true;
     } else {
       throw new Error(`Expected '=' after 'self as ${negated ? '!' : ''}${targetType}'`);
     }
     skipNewlines();
-    if (peek().type !== '->') throw new Error(`Expected '->' in 'self as' clause body`);
-    take(); // '->'
+    // The clause is a function of no params: `self as T = () -> expr`, or, lineal,
+    // a body that returns the value (`=` on its own line, then `return expr`).
+    if (lineal) {
+      if (!isReturnKw()) throw new Error(`Expected 'return' in a lineal 'self as' clause body`);
+      take(); // return
+    } else {
+      expect('LPAREN');
+      expect('RPAREN');
+      expect('->');
+    }
     const expr = parseExpr();
     return AST.asClause(targetType, negated, expr);
   }
@@ -4654,8 +4660,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       stopAtBlankLine = savedStop;
       skipNewlines();
       expect('RBRACE');
-    } else if (linealHeader || peek().type === '->' || isReturnKw()) {
-      // Lineal body, or one starting at `return`/`->` (read by parseActorBody).
+    } else if (linealHeader || isReturnKw()) {
+      // Lineal body, or one starting at `return` (read by parseActorBody).
       nested = parseActorBody(() =>
         (peek().type === 'DOT') ||
         (peek().type === 'KEYWORD' && peek().value === 'end'),
@@ -4754,8 +4760,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (peek().type === 'LPAREN') {
       take();
       params = parseConstructorParenParams();
+      if (peek().type === '->') take(); // the optional arrow after params
     }
-    if (peek().type === '->') take();
     expect('STAR');
     const nested = parseConstructorBody(op, false);
     return { params, supertypes: [], nested };
@@ -5310,7 +5316,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           const _valueTok = peek().type;
           const _isParensFnStart = _valueTok === 'LPAREN' && isParenFunctionStart(undefined, true);
           const _isBareFnStart = _valueTok === 'IDENT' && tokens[pos + 1]?.type === '->';
-          const _isFnStart = _valueTok === '->' || _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
+          const _isFnStart = _valueTok === 'LBRACE' || _valueTok === 'NEWLINE' || _valueTok === 'BLOCK_SEP' || _isParensFnStart || _isBareFnStart;
           if (!_isFnStart) {
             const value = parseExpr();
             // Service coercion: name = ref as { @method: ... }
@@ -5419,7 +5425,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // Bare `()` in constructor block is a literal of no value — ignored.
         take(); take();
       } else if (peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
-                 peek().type === 'LPAREN' || peek().type === 'LBRACKET' || peek().type === '->' ||
+                 peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                  peek().type === 'HTML_CONSTRUCTOR' ||
                  (peek().type === 'KEYWORD' && (peek().value === 'true' || peek().value === 'false'))) {
         pushValueStatement();
@@ -6305,8 +6311,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       }
       return;
     }
-    if (fileOpenerTok === '->' || isReturnKw()) {
-      // The body starts at `return` or `->`: parseActorBody reads it as any body's.
+    if (isReturnKw()) {
+      // The body starts at `return`: parseActorBody reads it as any body's.
       const nested = parseActorBody(() => false);
       actors.push(AST.actor(null, {
         functions: nested.functions,

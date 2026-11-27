@@ -122,7 +122,7 @@ describe('subscribe — call-site syntax', () => {
 
     @setVal. = (n: Integer) { c.val <- n }
 
-    @readLast = -> :last as Integer
+    @readLast = () -> :last as Integer
   `;
 
   it('handler captures initial value after subscribe', async () => {
@@ -176,7 +176,7 @@ describe('sub — its forms', () => {
 
     @setVal. = (n: Integer) { c.val <- n }
 
-    @read = -> a: a, b: b, pings: pings, viaRef: viaRef
+    @read = () -> a: a, b: b, pings: pings, viaRef: viaRef
   `;
 
   it('each form subscribes, and each handler runs on the first delivery and each write', async () => {
@@ -212,7 +212,7 @@ describe('sub — compile errors', () => {
   });
 
   it('`subscribe` is an ordinary name', () => {
-    expect(() => compileSource('@subscribe = -> 1\nsubscribe = -> 2\n@go = -> subscribe()\n')).not.toThrow();
+    expect(() => compileSource('@subscribe = () -> 1\nsubscribe = () -> 2\n@go = () -> subscribe()\n')).not.toThrow();
   });
 });
 
@@ -231,7 +231,7 @@ describe('subscribe — remote (unit test with stubbed publisher)', () => {
 
     @doSubscribe. = { sub Remote.val, (v) { last <- v } }
 
-    @readLast = -> :last as Integer
+    @readLast = () -> :last as Integer
   `;
 
   it('subscribe@val message is posted to the remote alias', async () => {
@@ -307,7 +307,7 @@ describe('subscribe — interop (two actors, manually shepherded)', () => {
 
       @doSubscribe. = { sub pub.val, (v) { last <- v } }
       @setPub. = (n: Integer) { pub.val <- n }
-      @readLast = -> :last as Integer
+      @readLast = () -> :last as Integer
     `;
 
     const pub = await createActor(publisher);

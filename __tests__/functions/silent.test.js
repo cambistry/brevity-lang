@@ -38,7 +38,7 @@ describe('silent functions — runtime', () => {
 
     get
       =
-      -> 10
+      return 10
 
     // stateful silent functions + lambdas
     last *Text = ""
@@ -56,7 +56,7 @@ describe('silent functions — runtime', () => {
 
     @check
       =
-      -> last: last
+      return last: last
 
     --- lambdas: four syntactic forms ---
 
@@ -96,7 +96,7 @@ describe('silent functions — runtime', () => {
     fireEmpty.
       =
 
-    @after = -> 1
+    @after = () -> 1
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -287,7 +287,7 @@ describe('silent function — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        -> fire.()
+        return fire.()
 
       fire. = {}
     `)).toThrow(/Silent function 'fire\.' cannot be used as a return value/);

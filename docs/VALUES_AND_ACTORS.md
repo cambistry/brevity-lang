@@ -48,7 +48,7 @@ Counter = (start Integer) *{
     return value: count
   }
 
-  @get = -> value: count
+  @get = () -> value: count
 }
 
 c = Counter(0)

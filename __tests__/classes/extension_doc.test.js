@@ -13,16 +13,16 @@ describe('the extension section', () => {
   it("lists a block's protected functions and cells, never its private ones", () => {
     expect(extract(`
       @A = (n Integer) *{
-        @n = -> n
+        @n = () -> n
       } ^ {
         count *Integer = 10
         limit Integer = 3
         @total *Integer = 0
         h = (x Integer) -> x
-        @f = -> 1
-        #p = -> 2
+        @f = () -> 1
+        #p = () -> 2
       }
-      @go = -> 1
+      @go = () -> 1
     `).interface.service).toEqual({
       public: { go: [{ re: ['Integer'], writes: false }] },
       ':A': {
@@ -61,13 +61,13 @@ describe('the extension section', () => {
         limit Integer = 3
         @total *Integer = 0
         h = (x Integer) -> x
-        @f = -> 1
+        @f = () -> 1
       }
       @B = @A ^ {
         count *Integer = 20
-        k = -> 5
+        k = () -> 5
       }
-      @go = -> 1
+      @go = () -> 1
     `).interface.service[':B']).toEqual({
       extends: [':A'],
       public: {
@@ -96,11 +96,11 @@ describe('the extension section', () => {
     expect(extract(`
       @T = (@n: Integer) *{
         count *Integer = 0
-        step = -> 1
-        @f = -> 2
-        #p = -> 3
+        step = () -> 1
+        @f = () -> 2
+        #p = () -> 3
       }
-      @go = -> 1
+      @go = () -> 1
     `).interface.service[':T']).toEqual({
       public: { $new: [{ args: [{ n: 'Integer' }], re: [':T'], writes: false }] },
       instance: {
@@ -123,13 +123,13 @@ describe('the extension section', () => {
     expect(extract(`
       @T = (@n: Integer) *{
         count *Integer = 0
-        step = -> 1
+        step = () -> 1
       }
       @U = @T ^ (k Integer) *{
         super(n: k)
-        j = -> 5
+        j = () -> 5
       }
-      @go = -> 1
+      @go = () -> 1
     `).interface.service[':U']).toEqual({
       extends: [':T'],
       public: { $new: [{ args: ['Integer'], re: [':U'], writes: false }] },
@@ -212,11 +212,11 @@ const child = `
     count *Integer = 20
     @total *Integer = 5
     h = (x Integer) -> x + 1
-    @f = -> 3
+    @f = () -> 3
     @g = { x Integer = h(count) + k(); return x }
   }
   @C = @B ^ {
-    k = -> 9
+    k = () -> 9
   }
 `;
 
@@ -259,7 +259,7 @@ describe('the override table — compile errors', () => {
       B = A ^ {
         h = (x Integer, y Integer) -> x + y
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'h' in the class block of 'B' takes 2 args, and in the class block of 'A', which it extends, 1");
   });
 
@@ -271,19 +271,19 @@ describe('the override table — compile errors', () => {
       B = A ^ {
         h = (x Text) -> 1
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'h' in the class block of 'B': its arg 1 is a Text, and in the class block of 'A', which it extends, a Integer");
   });
 
   it('another reply type', () => {
     expect(() => compileSource(`
       A = *{} ^ {
-        @f = -> 1
+        @f = () -> 1
       }
       B = A ^ {
-        @f = -> "one"
+        @f = () -> "one"
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'@f' in the class block of 'B' replies (Text), and in the class block of 'A', which it extends, (Integer)");
   });
 
@@ -293,9 +293,9 @@ describe('the override table — compile errors', () => {
         count *Integer = 10
       }
       B = A ^ {
-        count = -> 1
+        count = () -> 1
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'count' in the class block of 'B' is a function, and in the class block of 'A', which it extends, 'count' is a cell");
   });
 
@@ -307,7 +307,7 @@ describe('the override table — compile errors', () => {
       B = A ^ {
         h *Integer = 1
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'h' in the class block of 'B' is a cell, and in the class block of 'A', which it extends, 'h' is a function");
   });
 
@@ -319,7 +319,7 @@ describe('the override table — compile errors', () => {
       B = A ^ {
         count *Text = "x"
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'count' in the class block of 'B' is a Text, and in the class block of 'A', which it extends, a Integer");
   });
 
@@ -332,7 +332,7 @@ describe('the override table — compile errors', () => {
         super()
         step = (x Integer, y Integer) -> x
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'step' in 'U' takes 2 args, and in 'T', which it extends, 1");
   });
 
@@ -345,7 +345,7 @@ describe('the override table — compile errors', () => {
         super()
         step = (x Text) -> 1
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'step' in 'U': its arg 1 is a Text, and in 'T', which it extends, a Integer");
   });
 
@@ -356,9 +356,9 @@ describe('the override table — compile errors', () => {
       }
       U = T ^ *{
         super()
-        count = -> 1
+        count = () -> 1
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'count' in 'U' is a function, and in 'T', which it extends, 'count' is a cell");
   });
 
@@ -371,7 +371,7 @@ describe('the override table — compile errors', () => {
         super()
         count *Text = "x"
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'count' in 'U' is a Text, and in 'T', which it extends, a Integer");
   });
 });
@@ -382,9 +382,9 @@ describe('an empty base — compile errors', () => {
     expect(() => compileSource(`
       T = *{}
       U = T ^ *{} ^ {
-        @f = -> super
+        @f = () -> super
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'super' in '@f' of the class block of 'U': the class block of 'T' has no public 'f' — 'T' has no class block");
   });
 
@@ -392,21 +392,21 @@ describe('an empty base — compile errors', () => {
     expect(() => compileSource(`
       T = *{}
       U = T ^ *{} ^ {
-        @f = -> base::k
+        @f = () -> base::k
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'base::k' in the class block of 'U': the class block of 'T' has no protected 'k' — 'T' has no class block");
   });
 
   it("as super in a block that doesn't define the name", () => {
     expect(() => compileSource(`
       A = *{} ^ {
-        @f = -> 1
+        @f = () -> 1
       }
       B = A ^ {
-        @g = -> super
+        @g = () -> super
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'super' in '@g' of the class block of 'B': the class block of 'A' has no public 'g'");
   });
 });

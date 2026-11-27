@@ -31,14 +31,14 @@ const constructors = `
 
   @O = *{
     got Integer = probe()
-    probe = -> 0
+    probe = () -> 0
     @got = { return got }
   }
   @Ordered = @O ^ (k Integer) *{
     marker Integer = k
     super()
     after Integer = got + 1
-    probe = -> marker
+    probe = () -> marker
     @after = { return after }
   }
 
@@ -128,7 +128,7 @@ describe('super — in a constructor, on the branches of an if', () => {
   const script = `
     @T = (n Integer) *{
       seen *Integer = n
-      @n = -> n
+      @n = () -> n
     }
     @U = @T ^ (k Integer) *{
       x Integer = if k > 0 {
@@ -138,7 +138,7 @@ describe('super — in a constructor, on the branches of an if', () => {
         super(0)
         2
       }
-      @x = -> x
+      @x = () -> x
     }
     @V = @T ^ (k Integer) *{
       y *Integer = 0
@@ -148,7 +148,7 @@ describe('super — in a constructor, on the branches of an if', () => {
       } else {
         super(5)
       }
-      @y = -> y
+      @y = () -> y
     }
   `;
 
@@ -189,9 +189,9 @@ describe('super — in a constructor, on the branches of an if', () => {
 });
 
 describe('super — in a constructor — compile errors', () => {
-  const T = 'T = (n Integer = 7) *{\n  seen Integer = n\n  h = -> n\n  @seen = { return seen }\n}\n';
+  const T = 'T = (n Integer = 7) *{\n  seen Integer = n\n  h = () -> n\n  @seen = { return seen }\n}\n';
   const AB = 'A = *{}\nB = *{}\n';
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+  const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it("a base name read before the super line", () => {
     expect(compile(`${T}U = T ^ (n Integer) *{\n  x Integer = seen + 1\n  super(n)\n}\n`))
@@ -237,7 +237,7 @@ describe('super — in a constructor — compile errors', () => {
   });
 
   it("never, in a constructor of its own that doesn't define the parent's interface", () => {
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  @x = -> 1\n}\n`))
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  @x = () -> 1\n}\n`))
       .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@seen' (0 args)");
   });
 
@@ -280,8 +280,8 @@ describe('super — in a constructor — compile errors', () => {
 
   it('super stays reserved', () => {
     expect(compile(`${T}U = T ^ (n Integer) *{\n  super = 1\n}\n`)).toThrow('Unexpected token in expression: EQUALS');
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = -> super.seen()\n}\n`)).toThrow('Unexpected token in expression: DOT');
-    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = -> super::h()\n}\n`)).toThrow('Unexpected token in expression: DCOLON');
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = () -> super.seen()\n}\n`)).toThrow('Unexpected token in expression: DOT');
+    expect(compile(`${T}U = T ^ (n Integer) *{\n  super(n)\n  @x = () -> super::h()\n}\n`)).toThrow('Unexpected token in expression: DCOLON');
   });
 });
 
@@ -390,31 +390,31 @@ describe('super — in a function', () => {
 
 describe('super — in a function — compile errors', () => {
   const T = 'T = *{\n  h = (n Integer) -> n + 1\n  @a = (x Integer) -> x * 2\n}\n';
-  const AB = 'A = *{ @f = -> 1 }\nB = *{ @f = -> 2 }\n';
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+  const AB = 'A = *{ @f = () -> 1 }\nB = *{ @f = () -> 2 }\n';
+  const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it('in a function no parent defines', () => {
-    expect(compile(`${T}U = T ^ *{\n  @z = -> super\n}\n`)).toThrow("'super' in '@z' of 'U': 'T' has no public 'z'");
-    expect(compile(`${T}U = T ^ *{\n  k = -> super()\n}\n`)).toThrow("'super(…)' in 'k' of 'U': 'T' has no protected 'k'");
+    expect(compile(`${T}U = T ^ *{\n  @z = () -> super\n}\n`)).toThrow("'super' in '@z' of 'U': 'T' has no public 'z'");
+    expect(compile(`${T}U = T ^ *{\n  k = () -> super()\n}\n`)).toThrow("'super(…)' in 'k' of 'U': 'T' has no protected 'k'");
   });
 
   it('in a class with no parent, or the file', () => {
-    expect(compile('V = *{\n  @f = -> super\n}\n')).toThrow("'super' in '@f' of 'V': 'super' calls '@f' one layer up, and 'V' has no parent");
-    expect(compile('@f = -> super\n')).toThrow("'super' in '@f' of this file: 'super' calls '@f' one layer up, and it has none");
+    expect(compile('V = *{\n  @f = () -> super\n}\n')).toThrow("'super' in '@f' of 'V': 'super' calls '@f' one layer up, and 'V' has no parent");
+    expect(compile('@f = () -> super\n')).toThrow("'super' in '@f' of this file: 'super' calls '@f' one layer up, and it has none");
   });
 
   it('bare super, or super(…), with two parents', () => {
-    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = -> super\n}\n`)).toThrow("'super' in '@f' of 'C' is ambiguous: 'C' has parents 'A' and 'B' — write 'super[A](…)' or 'super[B](…)'");
-    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = -> super()\n}\n`)).toThrow("'super(…)' in '@f' of 'C' is ambiguous");
+    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = () -> super\n}\n`)).toThrow("'super' in '@f' of 'C' is ambiguous: 'C' has parents 'A' and 'B' — write 'super[A](…)' or 'super[B](…)'");
+    expect(compile(`${AB}C = A ^ B ^ *{\n  @f = () -> super()\n}\n`)).toThrow("'super(…)' in '@f' of 'C' is ambiguous");
   });
 
   it('super[A](…) picks a direct parent, and only a direct one', () => {
     expect(compile(`${AB}C = A ^ B ^ *{\n  @f = { x Integer = super[A]() + super[B](); return x }\n}\n`)).not.toThrow();
-    expect(compile('A = *{ @f = -> 1 }\nB = A ^ *{}\nC = B ^ *{\n  @f = -> super[A]()\n}\n')).toThrow("'super[A](…)' in 'C': 'A' isn't a direct parent of 'C'");
+    expect(compile('A = *{ @f = () -> 1 }\nB = A ^ *{}\nC = B ^ *{\n  @f = () -> super[A]()\n}\n')).toThrow("'super[A](…)' in 'C': 'A' isn't a direct parent of 'C'");
   });
 
   it('in a private function', () => {
-    expect(compile(`${T}U = T ^ *{\n  #h = -> super\n}\n`)).toThrow("'super' in '#h' of 'U': a private function has no parent layer");
+    expect(compile(`${T}U = T ^ *{\n  #h = () -> super\n}\n`)).toThrow("'super' in '#h' of 'U': a private function has no parent layer");
   });
 
   it("bare super in a lambda whose param hides the function's", () => {
@@ -475,9 +475,9 @@ describe('super — never called: no base', () => {
 });
 
 describe('super — never called: no base — compile errors', () => {
-  const T = 'T = (n Integer) *{\n  count *Integer = n\n  @total *Integer = 0\n  h = -> n + 1\n  @get = { return count }\n  @add = (x Integer) -> x + 1\n}\n';
+  const T = 'T = (n Integer) *{\n  count *Integer = n\n  @total *Integer = 0\n  h = () -> n + 1\n  @get = { return count }\n  @add = (x Integer) -> x + 1\n}\n';
   const full = '  @total *Integer = 5\n  @get = { return 1 }\n  @add = (x Integer) -> x + 2\n';
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+  const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it('the whole public interface, defined, compiles', () => {
     expect(compile(`${T}U = T ^ (m Integer) *{\n${full}}\n`)).not.toThrow();
@@ -486,7 +486,7 @@ describe('super — never called: no base — compile errors', () => {
   it('a public function missing, or with another arity', () => {
     expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n}\n`))
       .toThrow("'U' never calls 'super(…)', so it has no base for 'T', and must define the whole public interface of 'T'; missing: '@add' (1 arg)");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = -> 2\n}\n`))
+    expect(compile(`${T}U = T ^ (m Integer) *{\n  @total *Integer = 5\n  @get = { return 1 }\n  @add = () -> 2\n}\n`))
       .toThrow("missing: '@add' (1 arg)");
   });
 
@@ -496,9 +496,9 @@ describe('super — never called: no base — compile errors', () => {
   });
 
   it('per parent, when there are several', () => {
-    expect(compile('A = *{ @a = -> 1 }\nB = *{ @b = -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n'))
+    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n}\n'))
       .toThrow("'C' never calls 'super[B](…)', so it has no base for 'B', and must define the whole public interface of 'B'; missing: '@b' (0 args)");
-    expect(compile('A = *{ @a = -> 1 }\nB = *{ @b = -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n  @b = -> 3\n}\n')).not.toThrow();
+    expect(compile('A = *{ @a = () -> 1 }\nB = *{ @b = () -> 2 }\nC = A ^ B ^ (n Integer) *{\n  super[A]()\n  @b = () -> 3\n}\n')).not.toThrow();
   });
 
   it("a protected name of the parent's that the subclass doesn't define", () => {
@@ -506,7 +506,7 @@ describe('super — never called: no base — compile errors', () => {
       .toThrow("'h' isn't in scope — it's 'T''s, and 'U' has no base for 'T' (it never calls 'super'): define it in 'U'");
     expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  @p = { return count }\n}\n`))
       .toThrow("'count' isn't in scope — it's 'T''s");
-    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  h = -> 9\n  @p = { x Integer = h(); return x }\n}\n`)).not.toThrow();
+    expect(compile(`${T}U = T ^ (m Integer) *{\n${full}  h = () -> 9\n  @p = { x Integer = h(); return x }\n}\n`)).not.toThrow();
   });
 
   it('super, base:: and base. in its functions', () => {
@@ -581,14 +581,14 @@ describe('super — in a class block', () => {
 });
 
 describe('super — in a class block — compile errors', () => {
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+  const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it('in a block with no parent block', () => {
-    expect(compile('A = *{} ^ {\n  @f = -> super\n}\n')).toThrow("'super' in '@f' of the class block of 'A': 'super' calls '@f' one layer up, and it has none");
+    expect(compile('A = *{} ^ {\n  @f = () -> super\n}\n')).toThrow("'super' in '@f' of the class block of 'A': 'super' calls '@f' one layer up, and it has none");
   });
 
   it("a function the parent block doesn't define", () => {
-    expect(compile('A = *{} ^ {\n  @f = -> 1\n}\nB = A ^ {\n  @g = -> super\n}\n')).toThrow("'super' in '@g' of");
+    expect(compile('A = *{} ^ {\n  @f = () -> 1\n}\nB = A ^ {\n  @g = () -> super\n}\n')).toThrow("'super' in '@g' of");
   });
 });
 
@@ -597,26 +597,26 @@ describe('super — in a class block — compile errors', () => {
 // `@f`, `class::base(…)` a new actor of the parent class.
 const classBase = `
   @G = *{
-    @kind = -> 1
+    @kind = () -> 1
   } ^ {
-    h = -> 1
-    @f = -> 2
+    h = () -> 1
+    @f = () -> 2
   }
   @T = @G ^ *{
-    @kind = -> 2
+    @kind = () -> 2
     @who = { x Integer = class::base::h(); return x }
     @whoPub = { x Integer = class::base.f(); return x }
     @make = { p = class::base(); x Integer = p.kind(); return x }
   } ^ {
-    h = -> 10
-    @f = -> 20
+    h = () -> 10
+    @f = () -> 20
   }
   @U = @T ^ *{}
   @N = @T ^ (m Integer) *{
-    @kind = -> 3
+    @kind = () -> 3
     @who = { x Integer = class::base::h() + m; return x }
-    @whoPub = -> 0
-    @make = -> 0
+    @whoPub = () -> 0
+    @make = () -> 0
   }
 `;
 
@@ -698,7 +698,7 @@ describe('class::base — a write', () => {
 });
 
 describe('class::base — compile errors', () => {
-  const compile = (source) => () => compileSource(`${source}@go = -> 1\n`);
+  const compile = (source) => () => compileSource(`${source}@go = () -> 1\n`);
 
   it("a write to a cell the class's own block redeclares", () => {
     expect(compile('G = *{} ^ { count *Integer = 3 }\nT = G ^ *{\n  @r! = { class::base::count <- 0 }\n} ^ { count *Integer = 5 }\n'))
@@ -711,7 +711,7 @@ describe('class::base — compile errors', () => {
   });
 
   it('with two parents: write the parent\'s name', () => {
-    expect(compile('A = *{} ^ { h = -> 1 }\nB = *{}\nC = A ^ B ^ *{\n  @a = { x Integer = class::base::h(); return x }\n}\n'))
+    expect(compile('A = *{} ^ { h = () -> 1 }\nB = *{}\nC = A ^ B ^ *{\n  @a = { x Integer = class::base::h(); return x }\n}\n'))
       .toThrow("'class::base' in 'C': 'C' has parents 'A' and 'B' — write the parent's name");
   });
 
@@ -721,6 +721,6 @@ describe('class::base — compile errors', () => {
   });
 
   it('class.base is still a public member', () => {
-    expect(compile('T = *{} ^ { @base = -> 7 }\nU = T ^ *{\n  @a = { x Integer = class.base(); return x }\n}\n')).not.toThrow();
+    expect(compile('T = *{} ^ { @base = () -> 7 }\nU = T ^ *{\n  @a = { x Integer = class.base(); return x }\n}\n')).not.toThrow();
   });
 });

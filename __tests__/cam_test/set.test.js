@@ -10,7 +10,7 @@ describe('test.set — single positional via set handler', () => {
         =
         value <- n
 
-      @get = -> :value
+      @get = () -> :value
   `;
 
   it('sets value through `set` dispatch', async () => {
@@ -44,8 +44,8 @@ describe('test.set — mixed positional + named args', () => {
         p <- val
         label <- l
 
-      @getP = -> :p
-      @getLabel = -> :label
+      @getP = () -> :p
+      @getLabel = () -> :label
   `;
 
   it('sets with positional + named args', async () => {
@@ -74,7 +74,7 @@ describe('test.set — then mutate with public function', () => {
         return :count
       }
 
-      @get = -> :count
+      @get = () -> :count
   `;
 
   it('set state then increment', async () => {
@@ -103,7 +103,7 @@ describe('test.set — child actor via normal dispatch', () => {
           =
           value <- n
 
-        @get = -> value: value
+        @get = () -> value: value
         .
       end#Box
 
@@ -137,12 +137,12 @@ describe('test.set — target child actor', () => {
           =
           value <- n
 
-        @get = -> value: value
+        @get = () -> value: value
         .
       end#Box
 
       b = *Box(0)
-      @noop = -> 1
+      @noop = () -> 1
   `;
 
   it('sets child state via target then reads via target', async () => {
@@ -160,17 +160,17 @@ describe('test.set — nested target', () => {
         *
         val *Integer = 0
         set = (n Integer) ->  val <- n
-        @get = -> val: val
+        @get = () -> val: val
         .
 
       Outer =
         *
         inner = *Inner()
-        @get = -> ok: "ok"
+        @get = () -> ok: "ok"
         .
 
       o = *Outer()
-      @noop = -> 1
+      @noop = () -> 1
   `;
 
   it('sets grandchild state via dotted target', async () => {
@@ -189,11 +189,11 @@ describe('test.get — target child actor', () => {
           seed Integer
         *
         value *Integer = seed
-        @get = -> value: value
+        @get = () -> value: value
         .
 
       b = *Box(42)
-      @noop = -> 1
+      @noop = () -> 1
   `;
 
   it('reads child state via target', async () => {

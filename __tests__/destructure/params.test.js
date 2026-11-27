@@ -62,7 +62,7 @@ describe('destructure params — single constant', () => {
     expect(() => compileSource(`
       use :MAGIC = "config.bv"
 
-      @go = -> value: MAGIC as Text
+      @go = () -> value: MAGIC as Text
     `, { remotes: [{ path: 'config.bv', service: manifest }] })).not.toThrow();
   });
 });
@@ -155,7 +155,7 @@ describe('destructure params — aliasing', () => {
     expect(() => compileSource(`
       use CONFIG: cfg Text = "service.bv"
 
-      @go = -> value: cfg
+      @go = () -> value: cfg
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -192,7 +192,7 @@ describe('destructure params — unclaimed source', () => {
     expect(() => compileSource(`
       use :greet = "service.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `, { remotes: [{ path: 'service.bv', service: manifest }] })).not.toThrow();
   });
 
@@ -200,7 +200,7 @@ describe('destructure params — unclaimed source', () => {
     expect(() => compileSource(`
       use :Point = "geometry.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/has no type/);
   });
 });
@@ -223,7 +223,7 @@ describe('destructure params — requires interface', () => {
     expect(() => compileSource(`
       use :greet, :VERSION = "service.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/has no type/);
   });
 
@@ -231,7 +231,7 @@ describe('destructure params — requires interface', () => {
     expect(() => compileSource(`
       use Func: fn = "service.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/has no type/);
   });
 });
@@ -388,14 +388,14 @@ describe('destructure params — validation', () => {
       use :foo = "a.bv"
       use :foo = "b.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow();
   });
 
   it('bare * without remotes rejects even with destructures', () => {
     expect(() => compileSource(`
       use :greet = "service.bv"
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/has no type/);
   });
 });

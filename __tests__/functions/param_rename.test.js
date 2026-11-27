@@ -61,7 +61,7 @@ describe('named param — rename', () => {
       *
         @label: l Text
       *
-      @get = -> l
+      @get = () -> l
     `, { constructorArgs: { label: 'hi' } });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'label', from: 'c' } },
@@ -74,7 +74,7 @@ describe('named param — rename', () => {
       *
         limit: n Integer
       *
-      @get = -> n
+      @get = () -> n
     `, { constructorArgs: { limit: 7 } });
     await expectActorBehavior(actor,
       { input: { id: '1', op: 'get', from: 'c' } },
@@ -84,8 +84,8 @@ describe('named param — rename', () => {
 
   it('a keyed ref param renames', () => {
     expect(() => compileSource(`
-      Wrapper = (child: inner *) *{ @x = -> 1 }
-      @test = -> 1
+      Wrapper = (child: inner *) *{ @x = () -> 1 }
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -94,7 +94,7 @@ describe('named param — a misspelt type', () => {
   it('reads as a rename; using the key says so', () => {
     expect(() => compileSource(`
       f = (limit: Intger) { limit + 1 }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/'Intger' is not declared or imported, so 'limit: Intger' names the param's local 'Intger' and leaves 'limit' unbound/);
   });
 });
@@ -103,31 +103,31 @@ describe('type names are reserved', () => {
   it.each([
     ['a built-in', 'f = (Integer Integer) { 1 }'],
     ['a :: type', 'type Point(Integer)\nf = (Point Integer) { 1 }'],
-    ['a class', 'Box = *{ @x = -> 1 }\nf = (Box Integer) { 1 }'],
+    ['a class', 'Box = *{ @x = () -> 1 }\nf = (Box Integer) { 1 }'],
     ['a named param', 'type Point(Integer)\nf = (Point: Integer) { 1 }'],
     ['a rename local', 'type Point(Integer)\nf = (p: Point Integer) { 1 }'],
   ])('a param may not share the name of %s', (_label, src) => {
-    expect(() => compileSource(`${src}\n@test = -> 1\n`)).toThrow(/has the name of a type in scope/);
+    expect(() => compileSource(`${src}\n@test = () -> 1\n`)).toThrow(/has the name of a type in scope/);
   });
 
   it('a header binding is a type in scope', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
       f = (Thing Integer) { 1 }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/Param 'Thing' has the name of a type in scope/);
   });
 });
 
 describe('single name in parens', () => {
   it('alone, it is the type: `key: (k)` is a named param typed `(k)`', () => {
-    expect(() => compileSource('f = (key: (k)) { key }\n@test = -> 1\n')).toThrow("'k' is not a type");
+    expect(() => compileSource('f = (key: (k)) { key }\n@test = () -> 1\n')).toThrow("'k' is not a type");
   });
 
   it('a function-typed param keeps its parens', () => {
     expect(() => compileSource(`
       f = (cb: (Integer) -> (Integer)) { cb(1) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });

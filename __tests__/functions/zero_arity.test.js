@@ -14,8 +14,8 @@ describe('zero-arity calls without parens', () => {
       @a *Integer = 4
       @inc! = { n <- n + 1 }
       @add. = (i Integer) { n <- n + i }
-      @total = -> n
-      @seven = -> 7
+      @total = () -> n
+      @seven = () -> 7
     }
 
     x *Integer = 0
@@ -24,14 +24,14 @@ describe('zero-arity calls without parens', () => {
 
     bump! = { x <- x + 1 }
 
-    @pub = -> 3
+    @pub = () -> 3
 
     @local = {
       v Integer = get
       return v
     }
 
-    @tail = -> get
+    @tail = () -> get
 
     @ownPublic = {
       v Integer = @pub

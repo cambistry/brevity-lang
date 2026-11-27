@@ -41,7 +41,7 @@ describe('factory end-to-end', () => {
     use :div = HTML
     content *Text = "initial"
     @bump. = (v: Text) { content <- v }
-    @create = -> <div>{{ content }}</div>
+    @create = () -> <div>{{ content }}</div>
   `;
 
   const html = `<html><head>

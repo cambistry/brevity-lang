@@ -33,14 +33,14 @@ const fnBodyScript = `
     a <- 1;
 `;
 
-const inlineParamScript = `@add; =; n: Integer; m: Integer\n =\n  -> sum: n + m\n`;
+const inlineParamScript = `@add; =; n: Integer; m: Integer\n =\n  return sum: n + m\n`;
 
 const refDeclScript = `
   p *Integer = 1; q *Integer = 2
 
   @refDecl
     =
-    -> p: p, q: q
+    return p: p, q: q
 `;
 
 const mixedScript = `

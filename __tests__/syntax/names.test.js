@@ -8,15 +8,15 @@ const compiles = (src) => expect(() => compileSource(src)).not.toThrow();
 
 describe('an unbound name', () => {
   it('is not defined', () => {
-    expect(() => compileSource('@f = -> Thnig\n')).toThrow("'Thnig' is not defined (line 1)");
+    expect(() => compileSource('@f = () -> Thnig\n')).toThrow("'Thnig' is not defined (line 1)");
   });
 
   it('is not the host\'s', () => {
-    expect(() => compileSource('@f = -> globalThis\n')).toThrow("'globalThis' is not defined (line 1)");
+    expect(() => compileSource('@f = () -> globalThis\n')).toThrow("'globalThis' is not defined (line 1)");
   });
 
   it('says where it is', () => {
-    expect(() => compileSource('@g = -> 1\n\n@f = {\n  x Integer = 1\n  return x + nope\n}\n')).toThrow("'nope' is not defined (line 5)");
+    expect(() => compileSource('@g = () -> 1\n\n@f = {\n  x Integer = 1\n  return x + nope\n}\n')).toThrow("'nope' is not defined (line 5)");
   });
 
   it('in a call', () => {
@@ -28,7 +28,7 @@ describe('an unbound name', () => {
   });
 
   it('in a class', () => {
-    expect(() => compileSource('W = *{ @g = -> zz }\n@f = -> 1\n')).toThrow("'zz' is not defined");
+    expect(() => compileSource('W = *{ @g = () -> zz }\n@f = () -> 1\n')).toThrow("'zz' is not defined");
   });
 
   it('a local read before its line', () => {
@@ -36,7 +36,7 @@ describe('an unbound name', () => {
   });
 
   it('an actor a local holds, messaged before its line', () => {
-    expect(() => compileSource('C = *{ @ping = -> 1 }\n@f = {\n  r Integer = c.ping()\n  c = C()\n  return r\n}\n')).toThrow("'c' is not defined (line 3)");
+    expect(() => compileSource('C = *{ @ping = () -> 1 }\n@f = {\n  r Integer = c.ping()\n  c = C()\n  return r\n}\n')).toThrow("'c' is not defined (line 3)");
   });
 
   it('a lambda param outside the lambda', () => {
@@ -50,11 +50,11 @@ describe('an unbound name whose other form is bound', () => {
   });
 
   it('the public function', () => {
-    expect(() => compileSource('@h = -> 1\n@f = { return h() }\n')).toThrow("'h' isn't in scope — the public function is '@h'");
+    expect(() => compileSource('@h = () -> 1\n@f = { return h() }\n')).toThrow("'h' isn't in scope — the public function is '@h'");
   });
 
   it('the private function', () => {
-    expect(() => compileSource('#h = -> 1\n@f = { return h() }\n')).toThrow("'h' isn't in scope — the function is '#h'");
+    expect(() => compileSource('#h = () -> 1\n@f = { return h() }\n')).toThrow("'h' isn't in scope — the function is '#h'");
   });
 
   it('the silent function', () => {
@@ -69,20 +69,20 @@ describe('a name is bound by', () => {
   it('a lambda param', () => compiles('@f = {\n  g = (z Integer) -> z + 1\n  return g(1)\n}\n'));
   it('a local function, in itself', () => compiles('@f = {\n  g = (n Integer) {\n    if n == 0 { return 0 }\n    return g(n - 1)\n  }\n  return g(3)\n}\n'));
   it('a destructure', () => compiles('@f = (args Object) {\n  a Integer, b Integer = args\n  return a + b\n}\n'));
-  it('a cell of the actor', () => compiles('total *Integer = 4\n@f = -> total\n'));
-  it('a constant of the actor', () => compiles('limit = 4\n@f = -> limit\n'));
-  it('a function of the actor, declared below', () => compiles('@f = -> h()\nh = -> 1\n'));
-  it('a class', () => compiles('C = *{ @ping = -> 1 }\n@f = {\n  c = C()\n  return c.ping()\n}\n'));
-  it('a type', () => compiles('type Point(Integer, Integer)\n@f = -> Point(1, 2)\n'));
-  it('a `use` later in the file', () => compiles('@f = -> Svc.n()\nuse Svc = "svc.bv" as { n () -> (Integer) }\n'));
-  it('a dependency destructure', () => compiles('use :n = "svc.bv" as { n () -> (Integer) }\n@f = -> n()\n'));
-  it('an enclosing actor\'s cell, from a nested class', () => compiles('total *Integer = 4\nW = *{ @get = { return total } }\n@f = -> 1\n'));
-  it('an enclosing class\'s cell, from a class inside it', () => compiles('O = *{\n  n *Integer = 1\n  I = *{ @get = { return n } }\n  @f = -> 1\n}\n@g = -> 1\n'));
+  it('a cell of the actor', () => compiles('total *Integer = 4\n@f = () -> total\n'));
+  it('a constant of the actor', () => compiles('limit = 4\n@f = () -> limit\n'));
+  it('a function of the actor, declared below', () => compiles('@f = () -> h()\nh = () -> 1\n'));
+  it('a class', () => compiles('C = *{ @ping = () -> 1 }\n@f = {\n  c = C()\n  return c.ping()\n}\n'));
+  it('a type', () => compiles('type Point(Integer, Integer)\n@f = () -> Point(1, 2)\n'));
+  it('a `use` later in the file', () => compiles('@f = () -> Svc.n()\nuse Svc = "svc.bv" as { n () -> (Integer) }\n'));
+  it('a dependency destructure', () => compiles('use :n = "svc.bv" as { n () -> (Integer) }\n@f = () -> n()\n'));
+  it('an enclosing actor\'s cell, from a nested class', () => compiles('total *Integer = 4\nW = *{ @get = { return total } }\n@f = () -> 1\n'));
+  it('an enclosing class\'s cell, from a class inside it', () => compiles('O = *{\n  n *Integer = 1\n  I = *{ @get = { return n } }\n  @f = () -> 1\n}\n@g = () -> 1\n'));
   it('a builtin namespace', () => compiles('@f = (t Text) -> Text.upper(t)\n'));
   it('a param that shadows a builtin namespace', () => compiles('@f = (Math Integer) -> Math + 1\n'));
-  it('`self`', () => compiles('@f = -> self\n'));
-  it('`class`', () => compiles('C = *{ @twin = -> class() }\n@f = -> 1\n'));
-  it('`base`', () => compiles('T = *{ h = -> 1 }\nU = T ^ *{ @g = -> base::h() }\n@f = -> 1\n'));
+  it('`self`', () => compiles('@f = () -> self\n'));
+  it('`class`', () => compiles('C = *{ @twin = () -> class() }\n@f = () -> 1\n'));
+  it('`base`', () => compiles('T = *{ h = () -> 1 }\nU = T ^ *{ @g = () -> base::h() }\n@f = () -> 1\n'));
 });
 
 describe('a cell is bound before its line', () => {

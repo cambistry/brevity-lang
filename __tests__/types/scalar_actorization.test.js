@@ -16,7 +16,7 @@ describe('scalar actorization — *Integer state cell', () => {
   const script = `
     n *Integer = 0
 
-    @get = -> n: n
+    @get = () -> n: n
 
     @inc! = (delta Integer) {
       n <- n + delta
@@ -78,7 +78,7 @@ describe('scalar actorization — *Text state cell', () => {
   const script = `
     label *Text = "ready"
 
-    @get = -> label: label
+    @get = () -> label: label
 
     @set_label! = (s Text) {
       label <- s
@@ -112,7 +112,7 @@ describe('scalar actorization — *Boolean state cell', () => {
   const script = `
     flag *Boolean = false
 
-    @get = -> flag: flag
+    @get = () -> flag: flag
 
     @set_flag! = (b Boolean) {
       flag <- b

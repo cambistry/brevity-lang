@@ -12,15 +12,15 @@ describe('construction order across layers — compile errors', () => {
     expect(() => compileSource(`
       @T = *{
         got Integer = probe()
-        probe = -> 0
+        probe = () -> 0
         @got = { return got }
       }
       @U = @T ^ (k Integer) *{
         super()
         marker Integer = k
-        probe = -> marker
+        probe = () -> marker
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'marker' in 'U' is read before its declaration (by the body of 'T', run at 'super', through 'probe') — declare 'marker' above that line");
   });
 
@@ -28,34 +28,34 @@ describe('construction order across layers — compile errors', () => {
     expect(() => compileSource(`
       @C = *{
         got Integer = step()
-        step = -> probe()
-        probe = -> 0
+        step = () -> probe()
+        probe = () -> 0
         @got = { return got }
       }
       @D = @C ^ (k Integer) *{
         super()
         marker Integer = k
-        probe = -> marker
+        probe = () -> marker
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'marker' in 'D' is read before its declaration (by the body of 'C', run at 'super', through 'step' → 'probe')");
   });
 
   it('with two parents, each built at its own line', () => {
     expect(() => compileSource(`
-      @A = *{ @a = -> 1 }
+      @A = *{ @a = () -> 1 }
       @T = *{
         got Integer = probe()
-        probe = -> 0
+        probe = () -> 0
         @got = { return got }
       }
       @AT = @A ^ @T ^ (k Integer) *{
         super[@A]()
         super[@T]()
         marker Integer = k
-        probe = -> marker
+        probe = () -> marker
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'marker' in 'AT' is read before its declaration (by the body of 'T', run at 'super[T]', through 'probe')");
   });
 
@@ -63,18 +63,18 @@ describe('construction order across layers — compile errors', () => {
     expect(() => compileSource(`
       @A = *{
         got Integer = h()
-        h = -> 0
+        h = () -> 0
         @got = { return got }
       }
       @B = *{
         b Integer = 7
-        h = -> b
+        h = () -> b
       }
       @AB = @A ^ @B ^ *{
         super[@A]()
         super[@B]()
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'b' in 'AB' is read before its declaration (by the body of 'A', run at 'super[A]', through 'h')");
   });
 
@@ -83,14 +83,14 @@ describe('construction order across layers — compile errors', () => {
       @S = *{
         got Integer = probe()
         late Integer = 3
-        probe = -> 0
+        probe = () -> 0
         @got = { return got }
       }
       @V = @S ^ *{
         super()
-        probe = -> late
+        probe = () -> late
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'late' in 'V' is read before its declaration (by the body of 'S', run at 'super', through 'probe')");
   });
 
@@ -98,29 +98,29 @@ describe('construction order across layers — compile errors', () => {
     expect(() => compileSource(`
       @T = *{
         got Integer = probe()
-        probe = -> 0
+        probe = () -> 0
         @got = { return got }
       }
       @U = @T ^ *{
         marker Integer = 5
-        probe = -> marker
+        probe = () -> marker
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'marker' in 'U' is read before its declaration (by the body of a parent of 'U', run first, through 'probe')");
   });
 
   it('a class block whose initializer calls an inherited function that reaches a later cell', () => {
     expect(() => compileSource(`
       @P = *{} ^ {
-        f = -> late
+        f = () -> late
         late *Integer = 1
       }
       @Q = @P ^ *{} ^ {
         x Integer = f()
         late *Integer = 2
-        @x = -> x
+        @x = () -> x
       }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow("'late' is read before its declaration (by 'x', through 'f')");
   });
 });
@@ -129,35 +129,35 @@ describe('construction order across layers — compile errors', () => {
 const fine = `
   @T = *{
     got Integer = probe()
-    probe = -> 0
+    probe = () -> 0
     @got = { return got }
   }
   @U = @T ^ (k Integer) *{
     marker Integer = k
     super()
-    probe = -> marker
+    probe = () -> marker
   }
   @A = *{
     got Integer = h()
-    h = -> 0
+    h = () -> 0
     @got = { return got }
   }
   @B = *{
     b Integer = 7
-    h = -> b
+    h = () -> b
   }
   @BA = @A ^ @B ^ *{
     super[@B]()
     super[@A]()
   }
   @P = *{} ^ {
-    f = -> late
+    f = () -> late
     late *Integer = 1
   }
   @Q = @P ^ *{} ^ {
     late *Integer = 2
     x Integer = f()
-    @x = -> x
+    @x = () -> x
   }
   @u = { u = @U(5); x Integer = u.got(); return x }
   @ba = { u = @BA(); x Integer = u.got(); return x }

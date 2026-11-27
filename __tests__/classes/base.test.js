@@ -13,7 +13,7 @@ import { compileSource, expectBehavior } from '../helpers.js';
 const layers = `
   @T = *{
     total *Integer = 5
-    h = -> 1
+    h = () -> 1
     add = (n Integer) -> n + 1
     @a = {
       x Integer = h() + 100
@@ -25,7 +25,7 @@ const layers = `
 
   @U = @T ^ *{
     total *Integer = base::total + 6
-    h = -> base::h() + 10
+    h = () -> base::h() + 10
     @pub = {
       x Integer = base.pub()
       return x + 1
@@ -52,15 +52,15 @@ const layers = `
   }
 
   @W = @U ^ *{
-    h = -> base::h() + 100
+    h = () -> base::h() + 100
   }
 
-  A = *{ h = -> 1 }
-  B = *{ h = -> 2 }
+  A = *{ h = () -> 1 }
+  B = *{ h = () -> 2 }
   @C = A ^ B ^ (k Integer) *{
     super[A]()
     super[B]()
-    h = -> 0
+    h = () -> 0
     @both = {
       x Integer = base[A]::h() * 10 + base[B]::h() + k
       return x
@@ -154,16 +154,16 @@ describe('base — layers', () => {
 describe('base — errors', () => {
   const T = `
     T = *{
-      h = -> 1
+      h = () -> 1
       @a = { return 1 }
-      #c = -> 2
+      #c = () -> 2
     }
   `;
 
   it('two parents defining the name need base[T]', () => {
     expect(() => compileSource(`
-      A = *{ h = -> 1 }
-      B = *{ h = -> 2 }
+      A = *{ h = () -> 1 }
+      B = *{ h = () -> 2 }
       C = A ^ B ^ *{ @x = { return base::h() } }
     `)).toThrow("'base::h' in 'C' is ambiguous: 'A' and 'B' both define 'h' — write 'base[A]::h()' or 'base[B]::h()'");
   });
@@ -199,7 +199,7 @@ describe('base — reserved', () => {
   const reserved = (line) => new RegExp(`^'base' is reserved: it names the parent layer, so it can't be declared or set \\(line ${line}\\)$`);
 
   it('a cell named base', () => {
-    expect(() => compileSource('base *Integer = 1\n@f = -> 1\n')).toThrow(reserved(1));
+    expect(() => compileSource('base *Integer = 1\n@f = () -> 1\n')).toThrow(reserved(1));
   });
 
   it('a local named base', () => {
@@ -219,7 +219,7 @@ describe('base — reserved', () => {
   });
 
   it('a use binding named base', () => {
-    expect(() => compileSource('use base = "x.bv" as { n () -> (Integer) }\n@f = -> 1\n')).toThrow(reserved(1));
+    expect(() => compileSource('use base = "x.bv" as { n () -> (Integer) }\n@f = () -> 1\n')).toThrow(reserved(1));
   });
 });
 
@@ -233,7 +233,7 @@ describe('base — as a member or key', () => {
       n Integer = c.base()
       return n
     }
-    @asKey = -> (base: 10)
+    @asKey = () -> (base: 10)
   `;
 
   it('@base is a public function, and c.base() calls it', async () => {
@@ -252,14 +252,14 @@ describe('base — as a member or key', () => {
 });
 
 describe('super — reserved: not a receiver, not settable', () => {
-  const T = 'T = *{\n  h = -> 1\n  @a = { return 1 }\n}\n';
+  const T = 'T = *{\n  h = () -> 1\n  @a = { return 1 }\n}\n';
 
   it('super.x', () => {
-    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super.a() }\n`)).toThrow("Unexpected token in expression: DOT");
+    expect(() => compileSource(`${T}U = T ^ *{ @x = () -> super.a() }\n`)).toThrow("Unexpected token in expression: DOT");
   });
 
   it('super::x', () => {
-    expect(() => compileSource(`${T}U = T ^ *{ @x = -> super::h() }\n`)).toThrow("Unexpected token in expression: DCOLON");
+    expect(() => compileSource(`${T}U = T ^ *{ @x = () -> super::h() }\n`)).toThrow("Unexpected token in expression: DCOLON");
   });
 
   it('super = …', () => {

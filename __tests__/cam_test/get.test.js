@@ -5,7 +5,7 @@ describe('test.get — read state vars', () => {
     x *Integer = 42
     name *Text = "hello"
     flag *Boolean = true
-    @noop = -> x
+    @noop = () -> x
   `;
 
   it('reads integer state var with type', async () => {
@@ -34,7 +34,7 @@ describe('test.get — after mutation', () => {
   const script = `
     x *Integer = 0
     @inc! = { x <- x + 1; return :x }
-    @noop = -> x
+    @noop = () -> x
   `;
 
   it('reads initial value', async () => {
@@ -61,7 +61,7 @@ describe('test.get — by wire label', () => {
   const script = `
     a *Integer = 1
     @a *Integer = 2
-    @noop = -> a
+    @noop = () -> a
   `;
 
   it('reads each cell by its own label', async () => {

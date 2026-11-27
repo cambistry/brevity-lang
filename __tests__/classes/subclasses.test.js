@@ -18,7 +18,7 @@ describe('subclasses — positional args through super — compilation', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
       U = T ^ (a Integer, b Integer) *{ super(a) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -30,7 +30,7 @@ describe('subclasses — named args through super — compilation', () => {
     expect(() => compileSource(`
       T = (a: Integer) *{}
       U = T ^ (a: Integer, b: Integer) *{ super(a: a) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -42,7 +42,7 @@ describe('subclasses — mixed positional/named args through super — compilati
     expect(() => compileSource(`
       T = (a Integer) *{}
       U = T ^ (a Integer, b: Integer) *{ super(a) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -50,7 +50,7 @@ describe('subclasses — mixed positional/named args through super — compilati
     expect(() => compileSource(`
       T = (a: Integer) *{}
       U = T ^ (b Integer, a: Integer) *{ super(a: a) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -58,7 +58,7 @@ describe('subclasses — mixed positional/named args through super — compilati
     expect(() => compileSource(`
       T = (a Integer, b: Text) *{}
       U = T ^ (a Integer, d Integer, b: Text, c: Integer) *{ super(a, b: b) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -70,7 +70,7 @@ describe('subclasses — super arg types — compilation', () => {
     expect(() => compileSource(`
       T = (a: Decimal) *{}
       U = T ^ (a: Text) *{ super(a: a) }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 
@@ -79,9 +79,9 @@ describe('subclasses — super arg types — compilation', () => {
       T = (a: Decimal) *{}
       V = T ^ (a: b Decimal) *{
         super(a: b)
-        @c = -> result: b
+        @c = () -> result: b
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -93,7 +93,7 @@ describe('subclasses — accessor type override rejected — compilation', () =>
     expect(() => compileSource(`
       T = (@b: Integer) *{}
       U = T ^ *{ @b = { "b" } }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/cannot change type of inherited accessor '@b'/);
   });
 
@@ -101,7 +101,7 @@ describe('subclasses — accessor type override rejected — compilation', () =>
     expect(() => compileSource(`
       T = (a: Integer) *{}
       V = T ^ *{ @a = { "a" } }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -113,7 +113,7 @@ describe('subclasses — whitespace tolerance — compilation', () => {
     expect(() => compileSource(`
       T = (a Integer) *{}
       U = T ^ (b Integer) *{ super(b) }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -123,29 +123,29 @@ describe('subclasses — whitespace tolerance — compilation', () => {
       U = T ^ (b Integer) *{
         super(b)
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
   it('the parent layer reached through base.', () => {
     expect(() => compileSource(`
-      T = * { @a = -> result: 1 }
+      T = * { @a = () -> result: 1 }
       U = T ^ *{
-        @a = -> result: 2
+        @a = () -> result: 2
         @b = { :result = base.a(); return :result as Integer }
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
   it('the parent layer named with base[T]', () => {
     expect(() => compileSource(`
-      T = * { @a = -> result: 1 }
+      T = * { @a = () -> result: 1 }
       U = T ^ *{
-        @a = -> result: 2
+        @a = () -> result: 2
         @b = { :result = base[T].a(); return :result as Integer }
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -155,9 +155,9 @@ describe('subclasses — whitespace tolerance — compilation', () => {
       U = T ^ (a Integer, b Integer
         c: Text) *{
         super(a)
-        @sum = -> result: (a + b)
+        @sum = () -> result: (a + b)
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -169,7 +169,7 @@ describe('subclasses — public function type override rejected — compilation'
     expect(() => compileSource(`
       T = * { @a = { 1 } }
       U = T ^ *{ @a = { "one" } }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 });
@@ -180,7 +180,7 @@ describe('subclasses — private function access — compilation', () => {
   it('superclass private function is accessible within superclass', () => {
     expect(() => compileSource(`
       T = * { #x = { 1 }; @a = { #x() } }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -188,7 +188,7 @@ describe('subclasses — private function access — compilation', () => {
     expect(() => compileSource(`
       T = * { #x = { 1 }; @a = { #x() } }
       U = T ^ *{ @b = { #x() } }
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 });
@@ -200,7 +200,7 @@ describe('subclasses — base and wrapped parents — compilation', () => {
     expect(() => compileSource(`
       T = * { @a = { 1 } }
       U = T ^ *{ @a = { 2 }; @b = { base.a } }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -212,13 +212,13 @@ describe('subclasses — runtime', () => {
     T = (@a Integer) *{}
     PosU = T ^ (a Integer, @b Integer) *{
       super(a)
-      @sum = -> result: (a + b)
+      @sum = () -> result: (a + b)
     }
 
     NT = (a: Integer) *{}
     NamedU = NT ^ (a: Integer, b: Integer) *{
       super(a: a)
-      @sum = -> result: (a + b)
+      @sum = () -> result: (a + b)
     }
 
     @testPos
@@ -249,22 +249,22 @@ describe('subclasses — runtime', () => {
     PosT = (a Integer) *{}
     MixedA = PosT ^ (a Integer, b: Text) *{
       super(a)
-      @getA = -> result: a
-      @getB = -> result: b
+      @getA = () -> result: a
+      @getB = () -> result: b
     }
 
     NamedT = (a: Text) *{}
     MixedB = NamedT ^ (b Integer, a: Text) *{
       super(a: a)
-      @getA = -> result: a
-      @getB = -> result: b
+      @getA = () -> result: a
+      @getB = () -> result: b
     }
 
     MultiT = (a Integer, b: Text) *{}
     MultiU = MultiT ^ (a Integer, d Integer, b: Text, c: Integer) *{
       super(a, b: b)
-      @sum = -> result: (a + c + d)
-      @text = -> result: b
+      @sum = () -> result: (a + c + d)
+      @text = () -> result: b
     }
 
     @testMixedA_a
@@ -304,8 +304,8 @@ describe('subclasses — runtime', () => {
       return :result as Text
 
     // subclasses — inherit/extend public functions — runtime
-    T3 = * { @a = -> result: "a" }
-    U = T3 ^ *{ @b = -> result: "b" }
+    T3 = * { @a = () -> result: "a" }
+    U = T3 ^ *{ @b = () -> result: "b" }
 
     @testInheritedA
       =
@@ -320,8 +320,8 @@ describe('subclasses — runtime', () => {
       return :result as Text
 
     // subclasses — override public functions — runtime
-    T4 = * { @a = -> result: 1 }
-    U4 = T4 ^ *{ @a = -> result: 2 }
+    T4 = * { @a = () -> result: 1 }
+    U4 = T4 ^ *{ @a = () -> result: 2 }
 
     @testSuper
       =
@@ -338,7 +338,7 @@ describe('subclasses — runtime', () => {
     // subclasses — invoke inherited functions — runtime
     T5 = * { a = { 1 }; b = { 2 } }
     U5 = T5 ^ *{
-      @c = -> result: (a() + b()) as Integer
+      @c = () -> result: (a() + b()) as Integer
     }
 
     @testInvokeInherited
@@ -348,8 +348,8 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — inherit protected functions — runtime
-    T6 = * { x = { "x" }; @a = -> result: (x() + "") as Text }
-    U6 = T6 ^ *{ @b = -> result: (x() + "") as Text }
+    T6 = * { x = { "x" }; @a = () -> result: (x() + "") as Text }
+    U6 = T6 ^ *{ @b = () -> result: (x() + "") as Text }
 
     @testSuperProtected
       =
@@ -364,7 +364,7 @@ describe('subclasses — runtime', () => {
       return :result as Text
 
     // subclasses — override protected functions — runtime
-    T7 = * { x = { 1 }; @a = -> result: (x() + 0) as Integer }
+    T7 = * { x = { 1 }; @a = () -> result: (x() + 0) as Integer }
     U7 = T7 ^ *{ x = { 2 } }
 
     @testSuperProtected7
@@ -380,9 +380,9 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — the parent layer through base. — runtime
-    T8 = * { @a = -> result: 1 }
+    T8 = * { @a = () -> result: 1 }
     U8 = T8 ^ *{
-      @a = -> result: 2
+      @a = () -> result: 2
       @b = {
         :result = base.a()
         return :result as Integer
@@ -402,9 +402,9 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — the parent layer named with base[T] — runtime
-    T9 = * { @a = -> result: 1 }
+    T9 = * { @a = () -> result: 1 }
     U9 = T9 ^ *{
-      @a = -> result: 2
+      @a = () -> result: 2
       @b = {
         :result = base[T9].a()
         return :result as Integer
@@ -424,12 +424,12 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — multi-level inheritance — runtime
-    T10 = * { @a = -> result: 1 }
+    T10 = * { @a = () -> result: 1 }
     U10 = T10 ^ *{
-      @b = -> result: 2
+      @b = () -> result: 2
     }
     V = U10 ^ *{
-      @c = -> result: 3
+      @c = () -> result: 3
     }
 
     @testInheritedFromT
@@ -451,9 +451,9 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — multi-level override — runtime
-    T11 = * { @a = -> result: 1 }
-    U11 = T11 ^ *{ @a = -> result: 2 }
-    V11 = U11 ^ *{ @a = -> result: 3 }
+    T11 = * { @a = () -> result: 1 }
+    U11 = T11 ^ *{ @a = () -> result: 2 }
+    V11 = U11 ^ *{ @a = () -> result: 3 }
 
     @testT
       =
@@ -474,7 +474,7 @@ describe('subclasses — runtime', () => {
       return :result as Integer
 
     // subclasses — multi-level protected override — runtime
-    T12 = * { x = { 10 }; @a = -> result: (x() + 0) as Integer }
+    T12 = * { x = { 10 }; @a = () -> result: (x() + 0) as Integer }
     U12 = T12 ^ *{ x = { 20 } }
     V12 = U12 ^ *{ x = { 30 } }
 
@@ -501,7 +501,7 @@ describe('subclasses — runtime', () => {
     U13 = T13 ^ (a: Integer, b: Integer) *{ super(a: a) }
     V13 = U13 ^ (a: Integer, b: Integer, @c: Integer) *{
       super(a: a, b: b)
-      @sum = -> result: (a + b + c)
+      @sum = () -> result: (a + b + c)
     }
 
     @testSum
@@ -523,16 +523,16 @@ describe('subclasses — runtime', () => {
       return result: c
 
     // subclasses — multi-level parent layers — runtime
-    T14 = * { @a = -> result: 1 }
+    T14 = * { @a = () -> result: 1 }
     U14 = T14 ^ *{
-      @a = -> result: 2
+      @a = () -> result: 2
       @fromT = {
         :result = base.a()
         return :result as Integer
       }
     }
     V14 = U14 ^ *{
-      @a = -> result: 3
+      @a = () -> result: 3
       @fromU = {
         :result = base.a()
         return :result as Integer
@@ -561,7 +561,7 @@ describe('subclasses — runtime', () => {
     T15 = (a Integer = 0) *{}
     U15 = T15 ^ (a Integer = 0, b Integer = 10) *{
       super(a)
-      @sum = -> result: (a + b)
+      @sum = () -> result: (a + b)
     }
 
     @testBothProvided
@@ -584,24 +584,24 @@ describe('subclasses — runtime', () => {
 
     // subclasses — ^ bare forms and two parents — runtime
     A = *{
-      @get = -> result: 1
-      @onlyA = -> result: 10
+      @get = () -> result: 1
+      @onlyA = () -> result: 10
     }
     B = *{
-      @get = -> result: 2
-      @onlyB = -> result: 20
+      @get = () -> result: 2
+      @onlyB = () -> result: 20
     }
     Same = A^
     Both = A ^ B
-    Added = A ^ *{ @extra = -> result: 3 }
+    Added = A ^ *{ @extra = () -> result: 3 }
     Sized = A ^ B ^ (n Integer) *{
       super[A]()
       super[B]()
-      @size = -> result: n
+      @size = () -> result: n
     }
     Again = Both ^ A
     Ahead = Later ^ B
-    Later = *{ @five = -> result: 5 }
+    Later = *{ @five = () -> result: 5 }
     side Integer = 3
     two Integer = 2
     squared = side ^ two
@@ -618,7 +618,7 @@ describe('subclasses — runtime', () => {
       :result = a.five()
       return :result as Integer
 
-    @testSquared = -> result: squared
+    @testSquared = () -> result: squared
 
     @testSame
       =
@@ -1052,9 +1052,9 @@ describe('subclasses — optional args — compilation', () => {
       T = (a Integer = 0) *{}
       U = T ^ (b Integer) *{
         super()
-        @sum = -> result: (b + 1)
+        @sum = () -> result: (b + 1)
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -1063,9 +1063,9 @@ describe('subclasses — optional args — compilation', () => {
       T = (a Integer) *{}
       U = T ^ (a Integer, b Integer = 10) *{
         super(a)
-        @sum = -> result: (a + b)
+        @sum = () -> result: (a + b)
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -1074,9 +1074,9 @@ describe('subclasses — optional args — compilation', () => {
       T = (a: Integer = 1) *{}
       U = T ^ (a: Integer = 1, b: Integer = 2) *{
         super(a: a)
-        @sum = -> result: (a + b)
+        @sum = () -> result: (a + b)
       }
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -1087,14 +1087,14 @@ describe('subclasses — ^ forms — compilation', () => {
     expect(() => compileSource(`
       type Point(Integer, Integer)
       U = Point ^ *{}
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/In 'U', 'Point' is a type, not a class/);
   });
 
   it('an unknown parent is an error', () => {
     expect(() => compileSource(`
       U = Nope ^ *{}
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow(/In 'U', 'Nope' is not a class in scope/);
   });
 
@@ -1102,7 +1102,7 @@ describe('subclasses — ^ forms — compilation', () => {
     expect(() => compileSource(`
       A = *{}
       D = A ^ "x"
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')");
   });
 
@@ -1111,7 +1111,7 @@ describe('subclasses — ^ forms — compilation', () => {
       A = *{}
       B = *{}
       D = A ^ B ^ 2
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow("In 'D', 'A' is a class, so each '^' after it takes a layer: a parent class, a constructor ('*{ … }', '(params) *{ … }') or a singleton ('{ … }')");
   });
 
@@ -1119,7 +1119,7 @@ describe('subclasses — ^ forms — compilation', () => {
     expect(() => compileSource(`
       A = *{}
       D = A ++ *{}
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 
@@ -1127,15 +1127,15 @@ describe('subclasses — ^ forms — compilation', () => {
   it.skip('a chain of names whose head is not a class, or a value, is an error', () => {
     expect(() => compileSource(`
       D = Nope ^ Other
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 
   it('a public class extends with ^', () => {
     expect(() => compileSource(`
-      @T = *{ @a = -> 1 }
+      @T = *{ @a = () -> 1 }
       @U = @T^
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });

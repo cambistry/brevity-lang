@@ -9,11 +9,11 @@ describe('type equality — Name(args) ==', () => {
     type Point(Integer, Integer)
     type Pair  (Integer, Integer)
 
-    @same       = -> result: (Point(1, 2) == Point(1, 2))
-    @diff_field = -> result: (Point(1, 2) == Point(3, 4))
-    @diff_tag   = -> result: (Point(0, 0) == Pair(0, 0))
-    @neq_same   = -> result: (Point(1, 2) != Point(1, 2))
-    @neq_diff   = -> result: (Point(1, 2) != Point(3, 4))
+    @same       = () -> result: (Point(1, 2) == Point(1, 2))
+    @diff_field = () -> result: (Point(1, 2) == Point(3, 4))
+    @diff_tag   = () -> result: (Point(0, 0) == Pair(0, 0))
+    @neq_same   = () -> result: (Point(1, 2) != Point(1, 2))
+    @neq_diff   = () -> result: (Point(1, 2) != Point(3, 4))
   `;
 
   it('Point(1, 2) == Point(1, 2) is true', async () => {

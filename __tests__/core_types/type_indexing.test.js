@@ -6,26 +6,26 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 describe('type indexing — runtime', () => {
   const script = `
     // size — Blob vs Text
-      @blobSize = -> result: Blob.size("caf\u{00E9}")
-      @textSize = -> result: Text.size("caf\u{00E9}")
+      @blobSize = () -> result: Blob.size("caf\u{00E9}")
+      @textSize = () -> result: Text.size("caf\u{00E9}")
 
     // size — Blob vs Text with combining chars
-      @blobSize2 = -> result: Blob.size("e\u{0301}")
-      @textSize2 = -> result: Text.size("e\u{0301}")
+      @blobSize2 = () -> result: Blob.size("e\u{0301}")
+      @textSize2 = () -> result: Text.size("e\u{0301}")
 
     // index_of — Blob vs Text
-      @blobIdx = -> result: Blob.index_of("e\u{0301}x", "x")
-      @textIdx = -> result: Text.index_of("e\u{0301}x", "x")
+      @blobIdx = () -> result: Blob.index_of("e\u{0301}x", "x")
+      @textIdx = () -> result: Text.index_of("e\u{0301}x", "x")
 
     // slice — Blob vs Text
-      @textSlice = -> result: Text.slice("e\u{0301}xyz", 0, 1)
+      @textSlice = () -> result: Text.slice("e\u{0301}xyz", 0, 1)
 
     // first/last — Text
-      @textFirst = -> result: Text.first("e\u{0301}x")
-      @textLast = -> result: Text.last("xe\u{0301}")
+      @textFirst = () -> result: Text.first("e\u{0301}x")
+      @textLast = () -> result: Text.last("xe\u{0301}")
 
     // reverse — Text
-      @textReverse = -> result: Text.reverse("ae\u{0301}b")
+      @textReverse = () -> result: Text.reverse("ae\u{0301}b")
 
     // Casting — Blob ↔ Text
       @blobToText
@@ -41,17 +41,17 @@ describe('type indexing — runtime', () => {
         return result: Blob.size(b)
 
     // Regex edge cases
-      @reContainsDigits = -> result: Text.contains("abc 123 def", /\\d+/)
-      @reContainsNoMatch = -> result: Text.contains("no digits here", /\\d+/)
-      @reReplaceAll = -> result: Text.replace("abc 123 def 456", /\\d+/, "NUM")
-      @reReplaceFirst = -> result: Text.replace_first("abc 123 def 456", /\\d+/, "NUM")
-      @reCaseInsensitive = -> result: Text.contains("Hello World", /hello/i)
-      @reStartsWithDigits = -> result: Text.starts_with("123abc", /\\d+/)
-      @reStartsWithNoMatch = -> result: Text.starts_with("abc123", /\\d+/)
-      @reEndsWithDigits = -> result: Text.ends_with("abc123", /\\d+/)
-      @reBeforePattern = -> result: Text.before("price: $42.00", /\\d/)
-      @reAfterPattern = -> result: Text.after("price: $42.00", /\\$/)
-      @reIndexOfPattern = -> result: Text.index_of("abc 42 def", /\\d+/)
+      @reContainsDigits = () -> result: Text.contains("abc 123 def", /\\d+/)
+      @reContainsNoMatch = () -> result: Text.contains("no digits here", /\\d+/)
+      @reReplaceAll = () -> result: Text.replace("abc 123 def 456", /\\d+/, "NUM")
+      @reReplaceFirst = () -> result: Text.replace_first("abc 123 def 456", /\\d+/, "NUM")
+      @reCaseInsensitive = () -> result: Text.contains("Hello World", /hello/i)
+      @reStartsWithDigits = () -> result: Text.starts_with("123abc", /\\d+/)
+      @reStartsWithNoMatch = () -> result: Text.starts_with("abc123", /\\d+/)
+      @reEndsWithDigits = () -> result: Text.ends_with("abc123", /\\d+/)
+      @reBeforePattern = () -> result: Text.before("price: $42.00", /\\d/)
+      @reAfterPattern = () -> result: Text.after("price: $42.00", /\\$/)
+      @reIndexOfPattern = () -> result: Text.index_of("abc 42 def", /\\d+/)
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════

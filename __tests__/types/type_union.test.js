@@ -96,11 +96,11 @@ describe('General unions — valid syntax', () => {
   });
 
   it('Integer | Text in lineal param block', () => {
-    expect(() => compileSource(`@id\n  =\n  x Integer | Text\n  =\n  -> result: x\n`)).not.toThrow();
+    expect(() => compileSource(`@id\n  =\n  x Integer | Text\n  =\n  return result: x\n`)).not.toThrow();
   });
 
   it('Integer | Text in return as-clause', () => {
-    expect(() => compileSource(`@pick\n  =\n  flag Boolean\n  =\n  -> 1 as Integer | Text\n`)).not.toThrow();
+    expect(() => compileSource(`@pick\n  =\n  flag Boolean\n  =\n  return 1 as Integer | Text\n`)).not.toThrow();
   });
 
   it('plural standalone in multi-member union still errors', () => {
@@ -149,7 +149,7 @@ describe('General unions — runtime behaviour', () => {
         =
         x Integer | Text
         =
-        -> result: x
+        return result: x
   `;
 
   it('Integer | Text slot holding an Integer replies correctly', async () => {

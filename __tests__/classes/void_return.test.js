@@ -11,7 +11,7 @@ describe('class — trailing () in constructor block is ignored', () => {
     --- delimited constructor block, trailing () ---
 
     Box = (value Integer) *{
-      @get = -> result: value
+      @get = () -> result: value
       ()
     }
 
@@ -21,7 +21,7 @@ describe('class — trailing () in constructor block is ignored', () => {
       *
         value Integer
       *
-      @get = -> result: value
+      @get = () -> result: value
       ()
       .
 

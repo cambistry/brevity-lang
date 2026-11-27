@@ -289,9 +289,9 @@ describe('a call on an instance inside a branch', () => {
 });
 describe('an actor a protected function builds and returns', () => {
   const script = `
-    @G = *{ @kind = -> 1 }
+    @G = *{ @kind = () -> 1 }
     @U = *{
-      mk = -> @G()
+      mk = () -> @G()
       @make = { p = mk(); x Integer = p.kind(); return x }
     }
   `;

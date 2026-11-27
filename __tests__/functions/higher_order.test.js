@@ -12,13 +12,13 @@ describe('higher-order functions', () => {
       =
       n Integer
       =
-      ->(n * 2)
+      return (n * 2)
 
     triple
       =
       n Integer
       =
-      ->(n * 3)
+      return (n * 3)
 
     constant
       =
@@ -163,7 +163,7 @@ describe('higher-order functions — & enforcement', () => {
         n Integer
         f Function
         =
-        -> f(n) as Integer
+        return f(n) as Integer
 
       @go
         =

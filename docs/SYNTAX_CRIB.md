@@ -7,13 +7,13 @@ LLM orientation: compact current syntax patterns for generating Brevity.
 ```brevity
 state *Text = "ready"
 
-@status = -> value: state
+@status = () -> value: state
 ```
 
 ## Public Handler
 
 ```brevity
-@ping = -> ok: true
+@ping = () -> ok: true
 
 @echo = (text: Text) -> :text
 ```
@@ -68,7 +68,7 @@ count *Integer = 0
 Box = (seed Integer) *{
   value *Integer = seed
 
-  @get = -> value: value
+  @get = () -> value: value
 }
 ```
 
@@ -93,18 +93,18 @@ make = (k (seed Integer) -> *{ get () -> (value: Integer) }) -> k(1)  // its con
 ```brevity
 Tagged = Box ^ (value Integer, tag: Text) *{         // parent, then its own params
   super(value)                                       // Box's constructor runs here
-  @tag = -> tag: tag
+  @tag = () -> tag: tag
 }
 Same = Box ^ (value Integer) *{ super }              // the args as received; super() passes none
 Both = A ^ B ^ (n Integer) *{ super[A](); super[B]() }  // several parents; later wins
 Plain = Box^                                         // a new actor with a `new`, no changes
 Mixed = A ^ B                                        // two parents, no changes
-Extra = Box ^ *{ @more = -> 1 }                      // body, no params
-Over = Box ^ *{ h = -> base::h() + 1 }               // the parent layer's protected h
+Extra = Box ^ *{ @more = () -> 1 }                      // body, no params
+Over = Box ^ *{ h = () -> base::h() + 1 }               // the parent layer's protected h
 Again = Box ^ *{ h = (n Integer) -> super * 10 }     // in h, super is base::h(n); in @h, base.h(…)
 Blocked = Box ^ { @f = { x Integer = super + 1; return x } }  // a block extends the parent's block: super is its f
-Up = Box ^ *{ @g = -> class::base::h() }              // the running class's parent's class-block h
-Pick = A ^ B ^ *{ @get = -> base[A].get() }          // parent A's public @get
+Up = Box ^ *{ @g = () -> class::base::h() }              // the running class's parent's class-block h
+Pick = A ^ B ^ *{ @get = () -> base[A].get() }          // parent A's public @get
 Counted = (n Integer) *{} ^ { @total *Integer = 0 }  // a constructor, then its singleton (class members)
 Headed = actor { @total *Integer = 0 } ^ *{}         // a singleton head; `actor` only begins a definition
 ```
@@ -192,8 +192,8 @@ declared beside the others, and a call reaches only the one it spells. Outside, 
 exposed: it's `@a` on the wire, and `.a` in the Brevity that calls it.
 
 ```brevity
-@Box = *{ @who = -> "public" }
-Box = *{ @who = -> "private" }
+@Box = *{ @who = () -> "public" }
+Box = *{ @who = () -> "private" }
 @Sub = @Box ^ *{}               // superclasses and types use the same name
 
 @go = {
@@ -203,8 +203,8 @@ Box = *{ @who = -> "private" }
   return 1
 }
 
-@status = -> "public"
-status = -> "private"
+@status = () -> "public"
+status = () -> "private"
 @check = { return @status() }    // @status; `status()` would be the private one
 ```
 
@@ -237,11 +237,11 @@ type Pair(x: Integer, y: Integer)  // named fields
   (a, b) = Point(1, 2)            // positional fields by destructuring
   return result: a
 }
-@x = -> result: Pair(x: 1, y: 2).x  // named fields by name
+@x = () -> result: Pair(x: 1, y: 2).x  // named fields by name
 
 W = *{
   type X(Integer)              // W's type: bare inside W
-  @make = -> X(1)
+  @make = () -> X(1)
 }
 
 @y = {
@@ -253,7 +253,7 @@ W = *{
   return result: n
 }
 
-@z = -> result: Svc::Point(1, 2)  // a service's type, without importing it
+@z = () -> result: Svc::Point(1, 2)  // a service's type, without importing it
 ```
 
 ## Core Methods
@@ -319,7 +319,7 @@ that.
 ```brevity
 n *Integer = 0
 
-@total = -> n                            // no mark: read-only, tail return
+@total = () -> n                            // no mark: read-only, tail return
 @inc! = (i Integer) { n <- n + i }       // `!` writes; falling off the end returns self
 @take! = {                               // `return v` returns v
   v Integer = n
@@ -449,7 +449,7 @@ Counter = *{
     n <- 0
     return v
   }
-  @total = -> n
+  @total = () -> n
 }
 
 @go = {                                  // writes only an actor it made: read-only
@@ -463,7 +463,7 @@ Counter = *{
 ```brevity
 n *Integer = 0
 @inc! = (i Integer) { n <- n + i }
-@total = -> n
+@total = () -> n
 
 @go! = {
   @inc!(1).inc!(2)                       // on this actor: the whole statement

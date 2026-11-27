@@ -14,8 +14,8 @@ const forms = `
   @N = actor {
     @pub *Integer = 1
     prot *Integer = 2
-    @pubFn = -> 10
-    protFn = -> 20
+    @pubFn = () -> 10
+    protFn = () -> 20
 
     new = (seed Integer) *{
       built Integer = class.pub + class::prot + class::protFn() + seed
@@ -89,8 +89,8 @@ const forms = `
   } ^ {
     @pub *Integer = 1
     prot *Integer = 2
-    @pubFn = -> 10
-    protFn = -> 20
+    @pubFn = () -> 10
+    protFn = () -> 20
   }
 
   @W! = (seed Integer) *{
@@ -252,7 +252,7 @@ const subclass = `
   } ^ {
     @pub *Integer = 1
     prot *Integer = 2
-    protFn = -> 20
+    protFn = () -> 20
   }
 
   @U = @T ^ (seed Integer, u Integer) *{
@@ -358,7 +358,7 @@ describe('class and :: — what comes after `::`', () => {
       C = (s Integer) *{ @r = {
         x Integer = C::pubFn()
         return x
-      } } ^ { @pubFn = -> 1 }
+      } } ^ { @pubFn = () -> 1 }
     `)).toThrow(/^'pubFn' is public: write 'C\.pubFn\(\)'$/);
   });
 
@@ -370,7 +370,7 @@ describe('class and :: — what comes after `::`', () => {
 
   it('a function, not called', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = { return C::h } } ^ { h = -> 1 }
+      C = (s Integer) *{ @r = { return C::h } } ^ { h = () -> 1 }
     `)).toThrow(/^'C::h' is a function: call it, 'C::h\(\)'$/);
   });
 
@@ -392,7 +392,7 @@ describe('class and :: — what comes after `::`', () => {
     expect(() => compileSource(`
       C = *{
         type P(Integer)
-        @r = -> 1
+        @r = () -> 1
       }
       @go = { return C::P }
     `)).toThrow(/^'C::P' is a type, not a value$/);
@@ -402,21 +402,21 @@ describe('class and :: — what comes after `::`', () => {
 describe('class and :: — only within the class\'s family', () => {
   it('a read from the file', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
+      C = (s Integer) *{ @r = () -> 1 } ^ { prot *Integer = 1 }
       @go = { return C::prot }
     `)).toThrow(/^'C::prot' — a protected member of 'C' is reached only from its family: its actors and its subclasses' actors$/);
   });
 
   it('a read from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
+      C = (s Integer) *{ @r = () -> 1 } ^ { prot *Integer = 1 }
       D = *{ @r = { return C::prot } }
     `)).toThrow(/^'C::prot' — a protected member of 'C' is reached only from its family/);
   });
 
   it('a call from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ^ { h = -> 1 }
+      C = (s Integer) *{ @r = () -> 1 } ^ { h = () -> 1 }
       D = *{ @r = {
         x Integer = C::h()
         return x
@@ -426,21 +426,21 @@ describe('class and :: — only within the class\'s family', () => {
 
   it('a write from another class', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
+      C = (s Integer) *{ @r = () -> 1 } ^ { prot *Integer = 1 }
       D = *{ @w! = { C::prot <- 2 } }
     `)).toThrow(/^'C::prot <- …' — a protected member of 'C' is reached only from its family/);
   });
 
   it('a class with no class block', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 }
+      C = (s Integer) *{ @r = () -> 1 }
       D = *{ @r = { return C::prot } }
     `)).toThrow(/^'C::prot' — 'C' has no class block, so it has no protected members to reach$/);
   });
 
   it("a subclass with a class block of its own, which extends the parent's, reaches the parent's protected members", () => {
     expect(() => compileSource(`
-      T = (s Integer) *{ @r = -> 1 } ^ { prot *Integer = 1 }
+      T = (s Integer) *{ @r = () -> 1 } ^ { prot *Integer = 1 }
       U = T ^ (u Integer) *{ super(u); @r2 = { return T::prot } } ^ { other *Integer = 1 }
     `)).not.toThrow();
   });
@@ -449,7 +449,7 @@ describe('class and :: — only within the class\'s family', () => {
 describe('class — where it names a class', () => {
   it('in a class block', () => {
     expect(() => compileSource(`
-      C = (s Integer) *{ @r = -> 1 } ^ {
+      C = (s Integer) *{ @r = () -> 1 } ^ {
         prot *Integer = 1
         @x = { return class::prot }
       }

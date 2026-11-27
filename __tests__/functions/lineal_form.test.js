@@ -40,44 +40,44 @@ describe('lineal function — runtime', () => {
 
     getFortyTwo
       =
-      -> result: 42
+      return result: 42
 
     getFortyTwoExplicit
       =
       =
-      -> result: 42
+      return result: 42
 
     double
       =
       n Integer
       =
-      -> result: (n * 2)
+      return result: (n * 2)
 
     add
       =
       a Integer
       b Integer
       =
-      -> result: (a + b)
+      return result: (a + b)
 
     greet
       =
       name: Text
       =
-      -> result: name
+      return result: name
 
     mix
       =
       n Integer
       label: Text
       =
-      -> result: n
+      return result: n
 
     extract
       =
       tag: t Text
       =
-      -> result: t
+      return result: t
 
     // lineal function — body and return forms
     @multiStmt
@@ -158,7 +158,7 @@ describe('lineal function — runtime', () => {
       =
       n Integer
       =
-      -> result: (n * 3)
+      return result: (n * 3)
 
     quad
       =
@@ -171,7 +171,7 @@ describe('lineal function — runtime', () => {
       =
       n Integer
       =
-      -> result: (n * n)
+      return result: (n * n)
 
     // lineal function — optional params
     @testTypedBoth
@@ -209,21 +209,21 @@ describe('lineal function — runtime', () => {
       a Integer
       b Integer = 0
       =
-      -> result: (a + b)
+      return result: (a + b)
 
     addInferred
       =
       a Integer
       b=1000
       =
-      -> result: (a + b)
+      return result: (a + b)
 
     addNamed
       =
       a: Integer
       b: Integer = 50
       =
-      -> result: (a + b)
+      return result: (a + b)
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -349,13 +349,13 @@ describe('lineal function — compile errors', () => {
     expect(() => compileSource(`
       @square
         =
-        -> result: 0
+        return result: 0
 
       square
         =
         num Integer
         =
-        ->(result: num)
+        return (result: num)
     `)).not.toThrow();
   });
 
@@ -380,7 +380,7 @@ describe('lineal function — compile errors', () => {
       double
         n Integer
         =
-        -> result: (n * 2)
+        return result: (n * 2)
     `)).toThrow(/Unexpected token at top level: EQUALS/);
   });
 });
@@ -424,7 +424,7 @@ const edgeCaseScript = `
 
   getOne
     =
-    -> 42
+    return 42
 
   @testTooMany
     =
@@ -433,7 +433,7 @@ const edgeCaseScript = `
 
   getTwo
     =
-    ->(1, 2)
+    return (1, 2)
 `;
 
 describe('lineal function — silent (. stop)', () => {

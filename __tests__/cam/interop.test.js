@@ -9,7 +9,7 @@ describe('interop — two-actor request-reply', () => {
         =
         url: Text
         =
-        -> response: "hello from remote"
+        return response: "hello from remote"
     `;
     await expectBehavior(script,
       { input: { id: 'R1', op: [[{ url: 'http://example.com' }], 'get'], from: 'Primary', 'ty': [[{ url: 'Text' }]] } },
@@ -70,7 +70,7 @@ describe('interop — cross-call to silent public function', () => {
 
       @check
         =
-        -> last: last
+        return last: last
     `;
     await expectBehavior(script,
       { input: { id: 'N1', op: [[{ msg: 'hello' }], 'notify.'], from: 'Caller', 'ty': [[{ msg: 'Text' }]] } },
@@ -89,7 +89,7 @@ describe('interop — three-actor chain', () => {
         =
         n: Integer
         =
-        -> result: (n * 2)
+        return result: (n * 2)
     `;
     await expectBehavior(script,
       { input: { id: 'B1', op: [[{ n: 5 }], 'compute'], from: 'Middle', 'ty': [[{ n: 'Integer' }]] } },
@@ -169,7 +169,7 @@ describe('interop — callback', () => {
 
       @get_secret
         =
-        -> secret: "s3cret"
+        return secret: "s3cret"
     `);
     await actor.sendAsync({ id: 'B1', op: 'start', from: 'Tester' });
     await actor.sendAsync({ id: 'W1', op: 'get_secret', from: 'Worker' });

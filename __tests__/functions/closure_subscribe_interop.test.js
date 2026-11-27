@@ -119,7 +119,7 @@ describe('closure-subscribe — payload-carried address', () => {
   const publisherWithGetAddr = `
     content *Text = "initial"
     f = { content }
-    @getAddr = -> ref: "#<:@0>"
+    @getAddr = () -> ref: "#<:@0>"
     @bump. = (v: Text) { content <- v }
   `;
 
@@ -164,8 +164,8 @@ describe('closure-subscribe — payload-carried address', () => {
     meta *Text = "m-init"
     fc = { content }
     fm = { meta }
-    @getContentAddr = -> ref: "#<:@0>"
-    @getMetaAddr = -> ref: "#<:@1>"
+    @getContentAddr = () -> ref: "#<:@0>"
+    @getMetaAddr = () -> ref: "#<:@1>"
     @bumpContent. = (v: Text) { content <- v }
     @bumpMeta. = (v: Text) { meta <- v }
   `;
@@ -221,7 +221,7 @@ describe('closure-subscribe — inter-actor shepherded', () => {
   const subscriber = `
     received *Text = ""
     @routedRe. = (v: Text) { received <- v }
-    @readReceived = -> :received as Text
+    @readReceived = () -> :received as Text
   `;
 
   // Route any re message addressed to 'sub' from the publisher into the

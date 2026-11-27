@@ -61,7 +61,7 @@ describe('template emission — structured children wire shape', () => {
     it('<div>hello</div> emits children: ["hello"]', async () => {
       const script = `
         use :div = HTML
-        @create = -> <div>hello</div>
+        @create = () -> <div>hello</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -79,7 +79,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         use :div = HTML
         content *Text = "initial"
-        @create = -> <div>{{ content }}</div>
+        @create = () -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -97,7 +97,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         use :div = HTML
         content *Text = "middle"
-        @create = -> <div>pre {{ content }} post</div>
+        @create = () -> <div>pre {{ content }} post</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -116,7 +116,7 @@ describe('template emission — structured children wire shape', () => {
         use :div = HTML
         a *Text = "x"
         b *Text = "y"
-        @create = -> <div>{{ a }}{{ b }}</div>
+        @create = () -> <div>{{ a }}{{ b }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -132,7 +132,7 @@ describe('template emission — structured children wire shape', () => {
         use :div = HTML
         first *Text = "A"
         last *Text = "Z"
-        @create = -> <div>{{ first }} middle {{ last }}</div>
+        @create = () -> <div>{{ first }} middle {{ last }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -157,7 +157,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         use :div, :h1, :p = HTML
         content *Text = "body"
-        @create = -> <div><h1>Title</h1><p>{{ content }}</p></div>
+        @create = () -> <div><h1>Title</h1><p>{{ content }}</p></div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -181,7 +181,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         use :div = HTML
         content *Text = "x"
-        @create = -> <div>{{ content }}</div>
+        @create = () -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -211,7 +211,7 @@ describe('template emission — structured children wire shape', () => {
       const script = `
         use :div = HTML
         content *Text = "hello"
-        @create = -> <div>{{ content }}</div>
+        @create = () -> <div>{{ content }}</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },

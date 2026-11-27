@@ -16,7 +16,7 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('overload — compilation', () => {
   it('single clause with = compiles', () => {
     expect(() => compileSource(`
-      @ping = -> answer: 1
+      @ping = () -> answer: 1
     `)).not.toThrow();
   });
 
@@ -50,7 +50,7 @@ describe('overload — lineal form — compilation', () => {
         =
         a Integer
         =
-        -> result: a
+        return result: a
 
       add <<
         =
@@ -68,7 +68,7 @@ describe('overload — lineal form — compilation', () => {
         =
         a Integer
         =
-        -> result: a
+        return result: a
 
       add
         =
@@ -124,7 +124,7 @@ describe('overload — runtime', () => {
       =
       a Integer
       =
-      -> result: a
+      return result: a
 
     add <<
       =
@@ -191,7 +191,7 @@ describe('overload — runtime', () => {
       =
       a Integer
       =
-      ->(result: a)
+      return (result: a)
 
     @calc8 <<
       =
@@ -234,7 +234,7 @@ describe('overload — runtime', () => {
       name: Text
       greeting: Text = "hello"
       =
-      -> result: (greeting + " " + name)
+      return result: (greeting + " " + name)
 
     @greet <<
       =
@@ -242,7 +242,7 @@ describe('overload — runtime', () => {
       greeting: Text
       punctuation: Text
       =
-      -> result: (greeting + " " + name + punctuation)
+      return result: (greeting + " " + name + punctuation)
 
     // overload — lambda with optional args
     @testBothProvided
@@ -627,7 +627,7 @@ describe('Function() — empty overload — compilation', () => {
   it('bare Function() with no clauses compiles', () => {
     expect(() => compileSource(`
       fn = Function()
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });

@@ -5,19 +5,19 @@ describe('Text — runtime', () => {
     // Text concatenation — literals
       @concatTwo
         =
-        -> result: "hello" + " world"
+        return result: "hello" + " world"
 
       @concatThree
         =
-        -> result: "a" + "b" + "c"
+        return result: "a" + "b" + "c"
 
       @concatEmpty
         =
-        -> result: "" + "hello"
+        return result: "" + "hello"
 
       @concatBothEmpty
         =
-        -> result: "" + ""
+        return result: "" + ""
 
     // Text concatenation — constants
       @concatConsts

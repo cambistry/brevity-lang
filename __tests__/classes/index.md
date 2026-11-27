@@ -26,16 +26,16 @@ class `T`. "Class" names only that relationship (notes/actors-not-classes-2026-1
 
 ```brevity
 Greeter = * {
-  @hello = -> greeting: "hi"
+  @hello = () -> greeting: "hi"
 }
 
 Point = (x Integer, y Integer) *{
-  @sum = -> total: (x + y)
+  @sum = () -> total: (x + y)
 }
 
 Child = Point ^ (x Integer, y Integer, label: Text) *{
   super(x, y)
-  @label = -> :label
+  @label = () -> :label
 }
 ```
 

@@ -34,7 +34,7 @@ describe('! function — tail errors', () => {
   });
 
   it('a value in an arrow body is a tail value', () => {
-    expect(() => compileSource('@m! = -> 1\n')).toThrow(/Did you mean 'return'/);
+    expect(() => compileSource('@m! = () -> 1\n')).toThrow(/Did you mean 'return'/);
   });
 
   it('a tail value in an else branch is an error', () => {

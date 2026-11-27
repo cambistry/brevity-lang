@@ -130,7 +130,7 @@ describe('Math.ceil', () => {
 
   it('ceil(Integer) is a compile error', () => {
     expect(() => compileSource(`
-      @test = -> result: Math.ceil(5)
+      @test = () -> result: Math.ceil(5)
     `)).toThrow();
   });
 });
@@ -531,8 +531,8 @@ describe('Math.pow', () => {
 // ─── Constants ──────────────────────────────────────────────────────────
 
 const constScript = `
-    @getPi = -> result: Math.pi
-    @getE  = -> result: Math.e
+    @getPi = () -> result: Math.pi
+    @getE  = () -> result: Math.e
     @usePi = (x Float) -> result: Math.sin(Math.pi / x)
 `;
 
@@ -674,8 +674,8 @@ describe('Math.divide', () => {
 // ─── Literal syntax: Math.method(literal) in source ─────────────────────
 
 const literalScript = `
-    @litSqrt = -> result: Math.sqrt(4.0e0)
-    @litLog  = -> result: Math.log(1.0e0)
+    @litSqrt = () -> result: Math.sqrt(4.0e0)
+    @litLog  = () -> result: Math.log(1.0e0)
 `;
 
 describe('Math with literals in source', () => {

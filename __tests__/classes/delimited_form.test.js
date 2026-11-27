@@ -5,7 +5,7 @@ describe('constructor delimited form — compilation', () => {
   it('no-param constructor with braced body', () => {
     expect(() => compileSource(`
       Greeter = * {
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
       }
       @test
         =
@@ -19,7 +19,7 @@ describe('constructor delimited form — compilation', () => {
     expect(() => compileSource(`
       Counter = (start Integer) *{
         count *Integer = start
-        @get = -> value: count
+        @get = () -> value: count
       }
       @test
         =
@@ -32,7 +32,7 @@ describe('constructor delimited form — compilation', () => {
   it('constructor with multiple params', () => {
     expect(() => compileSource(`
       Pair = (a Integer, b Integer) *{
-        @sum = -> total: (a + b)
+        @sum = () -> total: (a + b)
       }
       @test
         =
@@ -46,16 +46,16 @@ describe('constructor delimited form — compilation', () => {
 describe('constructor delimited form — runtime', () => {
   const script = `
     Greeter = * {
-      @hello = -> greeting: "hi"
+      @hello = () -> greeting: "hi"
     }
 
     Counter = (start Integer) *{
       count *Integer = start
-      @get = -> value: count
+      @get = () -> value: count
     }
 
     Pair = (a Integer, b Integer) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
 
     @testGreeter
@@ -107,7 +107,7 @@ describe('constructor delimited form — optional args — compilation', () => {
   it('positional default compiles', () => {
     expect(() => compileSource(`
       C = (a Integer, b Integer = 0) *{
-        @get = -> result: (a + b)
+        @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
@@ -116,7 +116,7 @@ describe('constructor delimited form — optional args — compilation', () => {
   it('inferred positional default compiles', () => {
     expect(() => compileSource(`
       C = (a Integer, b=0) *{
-        @get = -> result: (a + b)
+        @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
@@ -125,7 +125,7 @@ describe('constructor delimited form — optional args — compilation', () => {
   it('named default compiles', () => {
     expect(() => compileSource(`
       C = (a Integer, b: Integer = 5) *{
-        @get = -> result: (a + b)
+        @get = () -> result: (a + b)
       }
       @test = { c = C(1); :result Integer = c.get(); return :result }
     `)).not.toThrow();
@@ -135,7 +135,7 @@ describe('constructor delimited form — optional args — compilation', () => {
     expect(() => compileSource(`
       C = (start Integer = 0) *{
         count *Integer = start
-        @get = -> value: count
+        @get = () -> value: count
       }
       @test = { c = C(); :value Integer = c.get(); return :value }
     `)).not.toThrow();
@@ -145,19 +145,19 @@ describe('constructor delimited form — optional args — compilation', () => {
 describe('constructor delimited form — optional args — runtime', () => {
   const script = `
     Pair = (a Integer, b Integer = 0) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
 
     Defaults = (x=10, y=20) *{
-      @sum = -> total: (x + y)
+      @sum = () -> total: (x + y)
     }
 
     Below = (a Integer, b Integer = -2) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
 
     Offset = (a Integer, b: Integer = -1) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
 
     @testBelowDefault
@@ -279,7 +279,7 @@ describe('constructor delimited form — invalid forms', () => {
   it('Cls = * with no body opener (no params, no body) is a parse error', () => {
     expect(() => compileSource(`
       T = *
-      @test = -> 1
+      @test = () -> 1
     `)).toThrow();
   });
 
@@ -312,20 +312,20 @@ describe('constructor delimited form — expression defaults', () => {
     limit Integer = 7
 
     Sum = (a Integer, b Integer = 1 + 2) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
     Later = (a Integer = b + 1, b: Integer = 10) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
     FromFile = (a Integer, b Integer = limit + a) *{
-      @sum = -> total: (a + b)
+      @sum = () -> total: (a + b)
     }
     Base = *{
-      @base = -> v: 1
+      @base = () -> v: 1
     }
     Sub = Base ^ (n Integer = 1 + 2) *{
       super()
-      @sum = -> total: n
+      @sum = () -> total: n
     }
 
     @omitted
@@ -396,10 +396,10 @@ describe('constructor delimited form — expression defaults', () => {
   });
 
   it('an untyped param with an expression default is an error', () => {
-    expect(() => compileSource('C = (a Integer, b = a + 1) *{}\n@go = -> 1')).toThrow(/Param 'b': a default that isn't a literal needs a type/);
+    expect(() => compileSource('C = (a Integer, b = a + 1) *{}\n@go = () -> 1')).toThrow(/Param 'b': a default that isn't a literal needs a type/);
   });
 
   it('defaults that name each other are an error', () => {
-    expect(() => compileSource('C = (a Integer = b, b Integer = a) *{}\n@go = -> 1')).toThrow(/Param defaults form a cycle: a → b → a/);
+    expect(() => compileSource('C = (a Integer = b, b Integer = a) *{}\n@go = () -> 1')).toThrow(/Param defaults form a cycle: a → b → a/);
   });
 });

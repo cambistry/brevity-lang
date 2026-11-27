@@ -4,9 +4,9 @@ describe('public function', () => {
   const script = `
     @helloOpen
       =
-      -> answer: "world"
+      return answer: "world"
 
-    @helloInline = -> answer: "world"
+    @helloInline = () -> answer: "world"
 
     @echo = (text: Text) ->(:text)
 
@@ -26,7 +26,7 @@ describe('public function', () => {
     );
   });
 
-  it('@hello = -> — delimited inline', async () => {
+  it('@hello = () -> — delimited inline', async () => {
     await expectBehavior(script,
       { input: { id: '2', op: 'helloInline', from: 'c' } },
       { output: { id: '2', 'ty': [{ answer: 'Text' }], re: [{ answer: 'world' }], to: 'c' } },

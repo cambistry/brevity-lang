@@ -19,7 +19,7 @@ This is a compact, app-facing profile of Brevity's currently safe subset.
 Use `@name` for public operations.
 
 ```brevity
-@status = -> ok: "ready"
+@status = () -> ok: "ready"
 
 @echo = (text: Text) ->(:text)
 ```
@@ -99,7 +99,7 @@ Prefer public mutation handlers instead of hidden writes.
 ```brevity
 count *Integer = 0
 
-@total = -> count
+@total = () -> count
 @inc! = (by: Integer) { count <- count + by }
 @take! = {
   v Integer = count
@@ -123,13 +123,13 @@ use "DOM": DOM {
 content *Text = "initial"
 
 @bump. = (v: Text) { content <- v }
-@create = -> <div>{{ content }}</div>
+@create = () -> <div>{{ content }}</div>
 ```
 
 ## Conservative Style
 
 - Use named params: `(name: Text) -> `
 - Name every function that writes with `!`, or `.` if it doesn't reply
-- Use named replies: `-> :value` or `-> ok: "ready"`
+- Use named replies: `return :value` or `return ok: "ready"`
 - Use explicit locals before returning transformed data
 - Use one step per line in multi-step handlers

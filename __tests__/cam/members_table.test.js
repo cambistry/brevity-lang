@@ -140,7 +140,7 @@ describe('a prop', () => {
 describe('a protected cell', () => {
   const script = `
     val *Integer = 3
-    @read = -> val
+    @read = () -> val
   `;
 
   it('answers $get from inside', async () => {

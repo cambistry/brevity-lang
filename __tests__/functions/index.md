@@ -15,7 +15,7 @@ Public handler:
 Private function:
 
 ```brevity
-#secret = -> result: 42
+#secret = () -> result: 42
 ```
 
 Local function/lambda:

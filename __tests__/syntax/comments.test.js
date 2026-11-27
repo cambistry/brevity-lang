@@ -13,7 +13,7 @@ describe('// line comments', () => {
   it('full-line // before function is ignored', () => {
     const fns = parseFns(`
       // this is a comment
-      @hello = -> answer: "world"
+      @hello = () -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].name).toBe('@hello');
@@ -81,9 +81,9 @@ describe('-- dash comments', () => {
   it('--- opens and closes a block comment — @bogus is suppressed', () => {
     const fns = parseFns(`
       ---
-      @bogus = -> bogus: "stuff"
+      @bogus = () -> bogus: "stuff"
       ---
-      @hello = -> answer: "world"
+      @hello = () -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].name).toBe('@hello');
@@ -93,9 +93,9 @@ describe('-- dash comments', () => {
   it('---- (four dashes) also opens and closes a block comment', () => {
     const fns = parseFns(`
       ----
-      @bogus = -> bogus: "stuff"
+      @bogus = () -> bogus: "stuff"
       ----
-      @hello = -> answer: "world"
+      @hello = () -> answer: "world"
     `);
     expect(fns).toHaveLength(1);
     expect(fns[0].name).toBe('@hello');
@@ -139,7 +139,7 @@ describe('comment as lineal form header/body separator', () => {
     const fns = parseFns(`
       @hello
         =
-        -> answer: "world"
+        return answer: "world"
     `);
     expect(fns[0].params).toHaveLength(0);
     expect(fns[0].body.find(s => s.type === 'Reply')).toBeDefined();

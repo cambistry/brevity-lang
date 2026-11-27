@@ -59,7 +59,7 @@ a value from `notify`.
 ## LLM Rules
 
 - Use `name: Type` for named parameters in current examples.
-- Use `-> :name` or `-> field: expr` for replies.
+- Use `return :name` or `return field: expr` for replies.
 - Include `ty` when describing raw wire input/output expectations.
 - Treat `Remote.get(...)` as syntax for a typed actor message, not a local method
   call.

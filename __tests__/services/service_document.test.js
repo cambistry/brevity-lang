@@ -21,12 +21,12 @@ describe('the service document', () => {
       @size = (t Text) -> 1
       @size = (n Integer) -> 2
       @G = () *{
-        step = -> 1
+        step = () -> 1
       }
       @T = @G ^ (name Text) *{
-        @get = -> step()
+        @get = () -> step()
       } ^ {
-        @made = -> 1
+        @made = () -> 1
       }
     `);
     expect(iface.service).toEqual({
@@ -91,7 +91,7 @@ describe('the service document', () => {
       @G = (n Integer) *{
       }
       @U = @G ^ *{
-        @more = -> 2
+        @more = () -> 2
       }
     `);
     expect(iface.service).toEqual({
@@ -154,7 +154,7 @@ describe('the service document', () => {
   it('a public singleton is a node of its own', () => {
     const { interface: iface } = extract(`
       @s = actor {
-        @k = -> 1
+        @k = () -> 1
       }
     `);
     expect(iface.service).toEqual({

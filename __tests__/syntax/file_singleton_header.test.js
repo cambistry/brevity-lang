@@ -14,7 +14,7 @@ const script = `
   use Remote = "Remote" as { get () -> (Integer) }
   use name Text = name
   use n Integer = size
-  @get = -> name
+  @get = () -> name
 `;
 
 describe('file actor — forms', () => {
@@ -25,7 +25,7 @@ describe('file actor — forms', () => {
   it('delimited: actor { body }', () => {
     expect(() => compileSource(`
       actor {
-        @hello = -> greeting: "hi"
+        @hello = () -> greeting: "hi"
       }
     `)).not.toThrow();
   });
@@ -37,7 +37,7 @@ describe('file actor — forms', () => {
         use Remote = "Remote" as { get () -> (Integer) }
         use name Text = name
         use n Integer = size
-        @get = -> name
+        @get = () -> name
       }
     `);
     expect(bare.ast.dependencies).toEqual(delimited.ast.dependencies);
@@ -45,8 +45,8 @@ describe('file actor — forms', () => {
   });
 
   it('a named param in `use` is the same entry as in a `*` header', () => {
-    expect(extract('use name Text = name\nuse n Integer = size\n@get = -> name\n').ast.dependencies)
-      .toEqual(extract('*\n  name: Text\n  size: n Integer\n*\n@get = -> name\n').ast.dependencies);
+    expect(extract('use name Text = name\nuse n Integer = size\n@get = () -> name\n').ast.dependencies)
+      .toEqual(extract('*\n  name: Text\n  size: n Integer\n*\n@get = () -> name\n').ast.dependencies);
   });
 });
 
@@ -56,11 +56,11 @@ describe('file singleton header — kind', () => {
   });
 
   it('a headerless file is a singleton', () => {
-    expect(extract('@get = -> 1\n').ast.fileKind).toBe('singleton');
+    expect(extract('@get = () -> 1\n').ast.fileKind).toBe('singleton');
   });
 
   it('a `*` header makes a factory', () => {
-    expect(extract('*\n  n Integer\n*\n@get = -> n\n').ast.fileKind).toBe('factory');
+    expect(extract('*\n  n Integer\n*\n@get = () -> n\n').ast.fileKind).toBe('factory');
   });
 });
 
@@ -79,16 +79,16 @@ describe('factory header — no DI', () => {
 
   for (const [label, entry] of Object.entries(entries)) {
     it(`refuses ${label} in a lineal header`, () => {
-      expect(() => extract(`*\n  ${entry}\n*\n@get = -> 1\n`)).toThrow(refused);
+      expect(() => extract(`*\n  ${entry}\n*\n@get = () -> 1\n`)).toThrow(refused);
     });
   }
 
   it('refuses DI in a delimited header', () => {
-    expect(() => extract('( "svc.bv": Svc, n Integer ) *{\n  @get = -> n\n}\n')).toThrow(refused);
+    expect(() => extract('( "svc.bv": Svc, n Integer ) *{\n  @get = () -> n\n}\n')).toThrow(refused);
   });
 
   it('names the entry and points to `use`', () => {
-    expect(() => extract('*\n  n Integer\n  "svc.bv": Svc\n*\n@get = -> n\n'))
+    expect(() => extract('*\n  n Integer\n  "svc.bv": Svc\n*\n@get = () -> n\n'))
       .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 
@@ -101,7 +101,7 @@ describe('factory header — no DI', () => {
         @label: Text
         limit: Integer = 5
       *
-      @get = -> name
+      @get = () -> name
     `)).not.toThrow();
   });
 
@@ -115,7 +115,7 @@ describe('factory header — no DI', () => {
       'Html = HTML',
     ];
     for (const entry of bindings) {
-      expect(() => extract(`use ${entry}\n@get = -> 1\n`)).not.toThrow();
+      expect(() => extract(`use ${entry}\n@get = () -> 1\n`)).not.toThrow();
     }
   });
 });
@@ -125,7 +125,7 @@ describe('file actor — actor { } only at the head of a file', () => {
     expect(() => compileSource(`
       x = 1
       actor {
-        @get = -> 1
+        @get = () -> 1
       }
     `)).toThrow(/a whole-file 'actor \{ … \}' must open the file/);
   });
@@ -134,7 +134,7 @@ describe('file actor — actor { } only at the head of a file', () => {
     expect(() => compileSource(`
       type Point(Integer)
       actor {
-        @get = -> 1
+        @get = () -> 1
       }
     `)).toThrow(/a whole-file 'actor \{ … \}' must open the file/);
   });
@@ -142,10 +142,10 @@ describe('file actor — actor { } only at the head of a file', () => {
   it('twice', () => {
     expect(() => compileSource(`
       actor {
-        @get = -> 1
+        @get = () -> 1
       }
       actor {
-        @put = -> 1
+        @put = () -> 1
       }
     `)).toThrow(/body must be the entire file|must open the file/);
   });
@@ -157,7 +157,7 @@ describe('file actor — actor { } only at the head of a file', () => {
 // See notes/use-di-2026-11-17.md and notes/class-singleton-forms-2026-11-13.md.
 const classFile = `
   count *Integer = 10
-  @total = -> count
+  @total = () -> count
 
   @make = {
     c = new(5)
@@ -180,7 +180,7 @@ const classFile = `
   --
   @late = { return seed }
 
-  @after = -> count
+  @after = () -> count
 `;
 
 describe('file with `new =`', () => {
@@ -231,9 +231,9 @@ describe('file with `new =`', () => {
     await expectBehavior(`
       count *Integer = 10
       new = (seed Integer) *{
-        @n = -> count + seed
+        @n = () -> count + seed
 
-        @seed = -> seed
+        @seed = () -> seed
       }
       @make = {
         c = new(2)
@@ -247,17 +247,17 @@ describe('file with `new =`', () => {
   });
 
   it('a file declares `new` once', () => {
-    expect(() => extract('new = (a Integer) *{\n  @a = -> a\n}\nnew = (b Integer) *{\n  @b = -> b\n}\n'))
+    expect(() => extract('new = (a Integer) *{\n  @a = () -> a\n}\nnew = (b Integer) *{\n  @b = () -> b\n}\n'))
       .toThrow("A file declares 'new' once");
   });
 });
 
 describe('factory files are unchanged', () => {
   const forms = {
-    'lineal `*` header': '*\n  n Integer\n*\n@get = -> n\n',
-    '`*{ … }`': '*{\n  @get = -> 1\n}\n',
-    '`( params ) *{ … }`': '( n Integer ) *{\n  @get = -> n\n}\n',
-    '`( params ) -> *{ … }`': '( n Integer ) -> *{\n  @get = -> n\n}\n',
+    'lineal `*` header': '*\n  n Integer\n*\n@get = () -> n\n',
+    '`*{ … }`': '*{\n  @get = () -> 1\n}\n',
+    '`( params ) *{ … }`': '( n Integer ) *{\n  @get = () -> n\n}\n',
+    '`( params ) -> *{ … }`': '( n Integer ) -> *{\n  @get = () -> n\n}\n',
   };
   for (const [label, src] of Object.entries(forms)) {
     it(`${label} is a factory`, () => {
@@ -277,7 +277,7 @@ describe('file with `new =` — errors', () => {
         port: p Integer
         limit: Integer = 5
       *
-      @get = -> name
+      @get = () -> name
     `)).not.toThrow();
   });
 });

@@ -4122,7 +4122,7 @@ function checkRemoteSendAssignable(expr, remotesParsed) {
   }
   const sigs = parsed[expr.method];
   if (sigs && sigs.every(s => s.returns === null)) {
-    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — it is declared as silent (-> .).`);
+    throw new Error(`Cannot use the result of '${actorName}.${expr.method}()' — it is declared as silent (return .).`);
   }
 }
 

@@ -10,24 +10,24 @@ import { expectLocalAndRemote } from '../helpers.js';
 const parents = `
   K = *{} ^ {
     timeout *Integer = 30
-    h = -> 1
+    h = () -> 1
     @connect = { x Integer = timeout * 10 + h(); return x }
     @bump! = { timeout <- timeout + 1 }
     @read = { x Integer = timeout; return x }
   }
   G = *{
-    g = -> 100
+    g = () -> 100
   }
   T = G ^ (@n: Integer) *{
     super()
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
     @gee = { x Integer = g(); return x }
     @bump! = { count <- count + 1 }
   }
   A = (a Integer) *{
-    h = -> a
+    h = () -> a
     @ha = { x Integer = h(); return x }
   }
   B = (b Integer) *{
@@ -35,18 +35,18 @@ const parents = `
   }
   C = (@n: Integer) *{
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
   } ^ {
     total *Integer = 3
     @all = { x Integer = total * 10 + step(); return x }
-    step = -> 1
+    step = () -> 1
   }
 `;
 
 const children = `
   @V = K ^ {
-    h = -> 2
+    h = () -> 2
     @viaBase = { x Integer = base::h() * 100 + h(); return x }
     @asParent = { x Integer = K.connect(); return x }
   }
@@ -54,14 +54,14 @@ const children = `
     timeout *Integer = 5
   }
   @X = @W ^ {
-    h = -> 3
+    h = () -> 3
     @read = { x Integer = super() + 1000; return x }
   }
   @U = T ^ (k Integer) *{
     super(n: k * 2)
-    step = -> 10
-    g = -> 7
-    @cnt = -> count
+    step = () -> 10
+    g = () -> 7
+    @cnt = () -> count
     @poke! = { count <- count + 1 }
   }
   @Bare = T ^ (n: Integer) *{
@@ -75,12 +75,12 @@ const children = `
   }
   @Y = C ^ (k Integer) *{
     super(n: k)
-    step = -> 10
+    step = () -> 10
   }
   @AB = A ^ B ^ (k Integer) *{
     super[A](k)
     super[B](k + 1)
-    h = -> 9
+    h = () -> 9
   }
   @v = { x Integer = @V.connect(); return x }
   @w = { x Integer = @W.connect(); return x }
@@ -105,24 +105,24 @@ const children = `
 const parent = `
   @K = *{} ^ {
     timeout *Integer = 30
-    h = -> 1
+    h = () -> 1
     @connect = { x Integer = timeout * 10 + h(); return x }
     @bump! = { timeout <- timeout + 1 }
     @read = { x Integer = timeout; return x }
   }
   @G = *{
-    g = -> 100
+    g = () -> 100
   }
   @T = @G ^ (@n: Integer) *{
     super()
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
     @gee = { x Integer = g(); return x }
     @bump! = { count <- count + 1 }
   }
   @A = (a Integer) *{
-    h = -> a
+    h = () -> a
     @ha = { x Integer = h(); return x }
   }
   @B = (b Integer) *{
@@ -130,12 +130,12 @@ const parent = `
   }
   @C = (@n: Integer) *{
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
   } ^ {
     total *Integer = 3
     @all = { x Integer = total * 10 + step(); return x }
-    step = -> 1
+    step = () -> 1
   }
 `;
 

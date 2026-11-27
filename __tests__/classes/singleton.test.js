@@ -18,8 +18,8 @@ const script = `
   }
 
   // One statement, to the end of its line.
-  seven = actor -> @get = -> 7
-  @pubSeven = actor -> @get = -> 7
+  seven = actor -> @get = () -> 7
+  @pubSeven = actor -> @get = () -> 7
 
   @bump! = { counter.bump!() }
 
@@ -200,9 +200,9 @@ describe('a public singleton in the service document', () => {
     expect(extract(`
       @s = actor {
         @n *Integer = 0
-        @get = -> 1
+        @get = () -> 1
         @inner = actor {
-          @ping = -> 2
+          @ping = () -> 2
         }
       }
       @empty = actor {
@@ -226,9 +226,9 @@ describe('a public singleton in the service document', () => {
     expect(extract(`
       @Box = (seed Integer) *{
         @tally = actor {
-          @get = -> 1
+          @get = () -> 1
         }
-        @read = -> 2
+        @read = () -> 2
       }
     `).interface.service).toEqual({
       ':Box': {
@@ -244,9 +244,9 @@ describe('a public singleton in the service document', () => {
   it('a private singleton is not in it', () => {
     expect(extract(`
       s = actor {
-        @get = -> 1
+        @get = () -> 1
       }
-      @go = -> 2
+      @go = () -> 2
     `).interface.service).toEqual({ public: { go: [{ re: ['Integer'], writes: false }] } });
   });
 
@@ -373,7 +373,7 @@ describe('inline singleton compile errors', () => {
 
   it('an unnamed actor literal is an error', () => {
     expect(() => compileSource(`
-      @go = -> 1
+      @go = () -> 1
       C = *{
         actor {
           @get = { return 1 }

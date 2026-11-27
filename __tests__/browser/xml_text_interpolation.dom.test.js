@@ -48,7 +48,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         content *Text = "hello"
-        @create = -> <div>#{ content }</div>
+        @create = () -> <div>#{ content }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -63,7 +63,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         count *Integer = 42
-        @create = -> <div>#{ count }</div>
+        @create = () -> <div>#{ count }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -78,7 +78,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         flag *Boolean = true
-        @create = -> <div>#{ flag }</div>
+        @create = () -> <div>#{ flag }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -93,7 +93,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         ratio *Float = 1.0e-1
-        @create = -> <div>#{ ratio }</div>
+        @create = () -> <div>#{ ratio }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -112,7 +112,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         content *Text = "hello"
-        @create = -> <div>#{ content }</div>
+        @create = () -> <div>#{ content }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -127,7 +127,7 @@ describe('XML text interpolation `#{expr}`', () => {
         use :div = HTML
         a *Text = "dynamic"
         b *Text = "static"
-        @create = -> <div>{{ a }} / #{ b }</div>
+        @create = () -> <div>{{ a }} / #{ b }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -150,7 +150,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         name *Text = "world"
-        @create = -> <div>hello #{ name }!</div>
+        @create = () -> <div>hello #{ name }!</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -165,7 +165,7 @@ describe('XML text interpolation `#{expr}`', () => {
         use :div = HTML
         a *Text = "x"
         b *Text = "y"
-        @create = -> <div>#{ a }#{ b }</div>
+        @create = () -> <div>#{ a }#{ b }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -181,7 +181,7 @@ describe('XML text interpolation `#{expr}`', () => {
         pre_val *Text = "p"
         reactive *Text = "r"
         post_val *Text = "q"
-        @create = -> <div>A #{ pre_val } B {{ reactive }} C #{ post_val } D</div>
+        @create = () -> <div>A #{ pre_val } B {{ reactive }} C #{ post_val } D</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -199,7 +199,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div, :p = HTML
         name *Text = "Chris"
-        @create = -> <div><p>hi #{ name }</p></div>
+        @create = () -> <div><p>hi #{ name }</p></div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -217,7 +217,7 @@ describe('XML text interpolation `#{expr}`', () => {
     it('`\\\\` emits a single backslash', async () => {
       const script = `
         use :div = HTML
-        @create = -> <div>a \\\\ b</div>
+        @create = () -> <div>a \\\\ b</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -230,7 +230,7 @@ describe('XML text interpolation `#{expr}`', () => {
     it('`\\{` emits a literal `{` (not a closure)', async () => {
       const script = `
         use :div = HTML
-        @create = -> <div>\\{ not a closure }</div>
+        @create = () -> <div>\\{ not a closure }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -243,7 +243,7 @@ describe('XML text interpolation `#{expr}`', () => {
     it('`\\#{` emits a literal `#{` (not an interpolation)', async () => {
       const script = `
         use :div = HTML
-        @create = -> <div>\\#{ not an interp }</div>
+        @create = () -> <div>\\#{ not an interp }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -256,7 +256,7 @@ describe('XML text interpolation `#{expr}`', () => {
     it('bare `#` without `{` stays literal', async () => {
       const script = `
         use :div = HTML
-        @create = -> <div>price: #5</div>
+        @create = () -> <div>price: #5</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -270,7 +270,7 @@ describe('XML text interpolation `#{expr}`', () => {
       const script = `
         use :div = HTML
         x *Text = "ok"
-        @create = -> <div>\\\\ \\{ \\#{ #{ x }</div>
+        @create = () -> <div>\\\\ \\{ \\#{ #{ x }</div>
       `;
       await expectEmission(script,
         { input: { id: '1', op: 'create', from: 'c' } },
@@ -287,7 +287,7 @@ describe('XML text interpolation `#{expr}`', () => {
     const mustFail = (body) => {
       expect(() => compileSource(`
         use :div = HTML
-        @create = -> <div>${body}</div>
+        @create = () -> <div>${body}</div>
       `, {
         remotes: [{ path: 'HTML', service: HTML_MANIFEST }],
       })).toThrow();
@@ -308,7 +308,7 @@ describe('XML text interpolation `#{expr}`', () => {
 // (same wire shape as `#{expr}`). Reactive `{{ expr }}` (reads a * ref) continues
 // to emit a `#<actor:@N>` subscription address.
 //
-// Pure-thunk case: `{ para }` where `para = -> <p>…</p>` inlines the element —
+// Pure-thunk case: `{ para }` where `para = () -> <p>…</p>` inlines the element —
 // the <p> is pre-dispatched before the parent <div>, exactly as if the element
 // were written inline as a nested tag.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -318,7 +318,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     const script = `
       use :div = HTML
       label Text = "hello"
-      @create = -> <div>{{ label }}</div>
+      @create = () -> <div>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -333,7 +333,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     const script = `
       use :div = HTML
       name Text = "world"
-      @create = -> <div>hello {{ name }}!</div>
+      @create = () -> <div>hello {{ name }}!</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -348,7 +348,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
     const script = `
       use :div = HTML
       label *Text = "hello"
-      @create = -> <div>{{ label }}</div>
+      @create = () -> <div>{{ label }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -364,7 +364,7 @@ describe('non-reactive { expr } collapses to inline text', () => {
       use :div = HTML
       reactive *Text = "r"
       constant Text = "c"
-      @create = -> <div>{{ reactive }} / {{ constant }}</div>
+      @create = () -> <div>{{ reactive }} / {{ constant }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -378,13 +378,13 @@ describe('non-reactive { expr } collapses to inline text', () => {
 
 describe('non-reactive {{ expr }} — pure thunk inlining', () => {
   it('{ para } pre-dispatches <p> then delivers its address to <div>', async () => {
-    // para = -> <p>Inner</p> is a pure thunk; { para } inside <div> inlines the
+    // para = () -> <p>Inner</p> is a pure thunk; { para } inside <div> inlines the
     // DomConstructor. The <p> is pre-dispatched first; once we stub its reply
     // the actor continues and sends <div> with the <p> address in children.
     const script = `
       use :div, :p = HTML
-      para = -> <p>Inner</p>
-      @create = -> <div>{{ para }}</div>
+      para = () -> <p>Inner</p>
+      @create = () -> <div>{{ para }}</div>
     `;
     const compiled = await compileActor(script, {
       compileOptions: {

@@ -8,7 +8,7 @@ The host API is two-phase:
 import { extract, compile } from 'brevity-lang';
 
 const source = `
-  @ping = -> value: 1 as Integer
+  @ping = () -> value: 1 as Integer
 `;
 
 const { ast, interface: iface } = extract(source);

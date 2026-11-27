@@ -43,7 +43,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       use :div = HTML
       count *Integer = 0
-      @create = -> <div onclick={ count <- count + 1 }></div>
+      @create = () -> <div onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -58,7 +58,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       use :div = HTML
       count *Integer = 0
-      @create = -> <div onclick={ count <- count + 1 }>click me</div>
+      @create = () -> <div onclick={ count <- count + 1 }>click me</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -73,7 +73,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       use :div = HTML
       count *Integer = 0
-      @create = -> <div onclick={ count <- count + 1 }>{{ count }}</div>
+      @create = () -> <div onclick={ count <- count + 1 }>{{ count }}</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -87,7 +87,7 @@ describe('Q1: onclick wire encoding', () => {
   it('element without onclick has no onclick field', async () => {
     const script = `
       use :div = HTML
-      @create = -> <div>hello</div>
+      @create = () -> <div>hello</div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },
@@ -102,7 +102,7 @@ describe('Q1: onclick wire encoding', () => {
     const script = `
       use :div = HTML
       count *Integer = 0
-      @create = -> <div class="counter" onclick={ count <- count + 1 }></div>
+      @create = () -> <div class="counter" onclick={ count <- count + 1 }></div>
     `;
     await expectEmission(script,
       { input: { id: '1', op: 'create', from: 'c' } },

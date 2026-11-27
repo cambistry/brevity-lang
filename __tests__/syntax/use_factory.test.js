@@ -109,14 +109,14 @@ const deps = (src) => extract(src).ast.dependencies;
 
 describe('use in a factory file — the manifest', () => {
   it('its entries join the params', () => {
-    expect(deps(`*\n  k Integer\n*\nuse Svc = "svc.bv" as ${N}\n@get = -> k\n`)).toEqual([
+    expect(deps(`*\n  k Integer\n*\nuse Svc = "svc.bv" as ${N}\n@get = () -> k\n`)).toEqual([
       expect.objectContaining({ type: 'FileParam', name: 'k' }),
       expect.objectContaining({ type: 'Dependency', name: 'Svc', path: 'svc.bv' }),
     ]);
   });
 
   it('the same entry twice is one', () => {
-    const src = `( k Integer ) *{\n  use Svc = "svc.bv" as ${N}\n  use Svc = "svc.bv" as ${N}\n  @get = -> k\n}\n`;
+    const src = `( k Integer ) *{\n  use Svc = "svc.bv" as ${N}\n  use Svc = "svc.bv" as ${N}\n  @get = () -> k\n}\n`;
     expect(deps(src).filter(d => d.type === 'Dependency')).toHaveLength(1);
   });
 
@@ -126,9 +126,9 @@ describe('use in a factory file — the manifest', () => {
   });
 
   it('a dependency entry in the factory\'s params is an error that points to `use`', () => {
-    expect(() => extract('*\n  k Integer\n  "svc.bv": Svc\n*\n@get = -> k\n'))
+    expect(() => extract('*\n  k Integer\n  "svc.bv": Svc\n*\n@get = () -> k\n'))
       .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
-    expect(() => extract('( "svc.bv": Svc, k Integer ) *{\n  @get = -> k\n}\n'))
+    expect(() => extract('( "svc.bv": Svc, k Integer ) *{\n  @get = () -> k\n}\n'))
       .toThrow(`A '*' file header is a factory's params and takes no DI ('"svc.bv"') — declare DI with 'use' in the constructor body`);
   });
 });

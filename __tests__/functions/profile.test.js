@@ -8,16 +8,16 @@ describe('reply forms', () => {
   const script = `
     @inlineParen
       =
-      ->(answer: "world")
+      return (answer: "world")
 
     @openBody
       =
-      ->
+      return
         answer: "world"
 
     @multilineParen
       =
-      ->(
+      return (
         answer: "world"
       )
   `;

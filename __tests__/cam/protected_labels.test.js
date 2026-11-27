@@ -7,12 +7,12 @@ describe('protected labels — runtime', () => {
     label *Text = ""
     @pub *Integer = 0
 
-    @read = -> val
-    @readLabel = -> label
+    @read = () -> val
+    @readLabel = () -> label
 
     // $set to a token that isn't a cell
 
-    @read2 = -> @pub
+    @read2 = () -> @pub
 
     // a protected function value is its ~label
     double = (n Integer) -> n * 2
@@ -108,7 +108,7 @@ describe('a function named after an intrinsic', () => {
     await expectBehavior(`
       #set = (n Integer) -> n + 1
 
-      @go = -> #set(2)
+      @go = () -> #set(2)
     `,
       { input: { id: '1', op: 'go', from: 'c' } },
       { output: expect.objectContaining({ id: '1', re: [3], to: 'c' }) },

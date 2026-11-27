@@ -6,7 +6,7 @@ LLM orientation: this document summarizes methods tested in
 ## Forms
 
 ```brevity
-@upper = -> result: Text.upper("hello")
+@upper = () -> result: Text.upper("hello")
 
 @upperRef = {
   t *Text = "hello"

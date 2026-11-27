@@ -54,7 +54,7 @@ Box = (seed Integer) *{
 
   set = (n Integer) { value <- n }
 
-  @get = -> value: value
+  @get = () -> value: value
 }
 
 @go! = {
@@ -76,7 +76,7 @@ values, depending on the receiver.
 Person = * {
   name *Text = "anonymous"
   update = (name: n Text) -> name <- n
-  @get = -> name: name
+  @get = () -> name: name
 }
 
 @go = {

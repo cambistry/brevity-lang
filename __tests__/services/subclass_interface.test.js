@@ -18,7 +18,7 @@ const v = [{ re: [{ v: 'Integer' }], writes: false }];
 describe('subclass interface — $new', () => {
   it('a subclass with no constructor of its own takes its parent\'s params', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ *{}
     `);
     expect(s[':U'].extends).toEqual([':T']);
@@ -27,7 +27,7 @@ describe('subclass interface — $new', () => {
 
   it('a constructor of its own takes its own named params only', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ (y: Integer) *{ super(x: y) }
     `);
     expect(s[':U'].public.$new).toEqual($new([{ y: 'Integer' }], 'U'));
@@ -35,7 +35,7 @@ describe('subclass interface — $new', () => {
 
   it('a constructor of its own takes its own positional params only', () => {
     const s = svc(`
-      @T = (x Integer) *{ @a = -> v: x as Integer }
+      @T = (x Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ (y Integer) *{ super(y) }
     `);
     expect(s[':U'].public.$new).toEqual($new(['Integer'], 'U'));
@@ -43,8 +43,8 @@ describe('subclass interface — $new', () => {
 
   it('two parents, in order', () => {
     const s = svc(`
-      @A = (a: Integer) *{ @ga = -> v: a as Integer }
-      @B = (b: Integer) *{ @gb = -> v: b as Integer }
+      @A = (a: Integer) *{ @ga = () -> v: a as Integer }
+      @B = (b: Integer) *{ @gb = () -> v: b as Integer }
       @C = @A ^ @B ^ (c: Integer) *{ super[@A](a: c); super[@B](b: c) }
     `);
     expect(s[':C'].extends).toEqual([':A', ':B']);
@@ -53,7 +53,7 @@ describe('subclass interface — $new', () => {
 
   it('a constructor of its own with no params takes none', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ *{ super(x: 1) }
     `);
     expect(s[':U'].public.$new).toEqual($new(null, 'U'));
@@ -71,7 +71,7 @@ describe('subclass interface — $new', () => {
 describe('subclass interface — its instances', () => {
   it('an empty subclass\'s instances have its parent\'s ops', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ *{}
     `);
     expect(s[':U'].instance).toEqual({ public: { a: v } });
@@ -79,16 +79,16 @@ describe('subclass interface — its instances', () => {
 
   it('its own ops, then what it inherits', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
-      @U = @T ^ (y: Integer) *{ super(x: y); @b = -> v: y as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
+      @U = @T ^ (y: Integer) *{ super(x: y); @b = () -> v: y as Integer }
     `);
     expect(Object.keys(s[':U'].instance.public)).toEqual(['b', 'a']);
   });
 
   it('two parents\' ops, in order', () => {
     const s = svc(`
-      @A = (a: Integer) *{ @ga = -> v: a as Integer }
-      @B = (b: Integer) *{ @gb = -> v: b as Integer }
+      @A = (a: Integer) *{ @ga = () -> v: a as Integer }
+      @B = (b: Integer) *{ @gb = () -> v: b as Integer }
       @C = @A ^ @B ^ (c: Integer) *{ super[@A](a: c); super[@B](b: c) }
     `);
     expect(s[':C'].instance).toEqual({ public: { ga: v, gb: v } });
@@ -98,9 +98,9 @@ describe('subclass interface — its instances', () => {
 describe('subclass interface — chain depth', () => {
   it('extends names the direct parent; its instances have every ancestor\'s ops', () => {
     const s = svc(`
-      @A = (a: Integer) *{ @ga = -> v: a as Integer }
-      @B = @A ^ (b: Integer) *{ super(a: b); @gb = -> v: b as Integer }
-      @C = @B ^ (c: Integer) *{ super(b: c); @gc = -> v: c as Integer }
+      @A = (a: Integer) *{ @ga = () -> v: a as Integer }
+      @B = @A ^ (b: Integer) *{ super(a: b); @gb = () -> v: b as Integer }
+      @C = @B ^ (c: Integer) *{ super(b: c); @gc = () -> v: c as Integer }
     `);
     expect(s[':C'].extends).toEqual([':B']);
     expect(s[':C'].instance).toEqual({ public: { gc: v, gb: v, ga: v } });
@@ -110,7 +110,7 @@ describe('subclass interface — chain depth', () => {
 describe('subclass interface — the parent', () => {
   it('a parent has no extends, and only its own ops', () => {
     const s = svc(`
-      @T = (x: Integer) *{ @a = -> v: x as Integer }
+      @T = (x: Integer) *{ @a = () -> v: x as Integer }
       @U = @T ^ (y: Integer) *{ super(x: y) }
     `);
     expect(s[':T']).toEqual({ public: { $new: $new([{ x: 'Integer' }], 'T') }, instance: { public: { a: v } } });
@@ -162,7 +162,7 @@ describe('subclass interface — private parent', () => {
 describe('subclass interface — ^ forms', () => {
   it('a bare pure subclass', () => {
     const s = svc(`
-      @T = *{ @a = -> v: 1 as Integer }
+      @T = *{ @a = () -> v: 1 as Integer }
       @U = @T^
     `);
     expect(s[':U']).toEqual({ extends: [':T'], public: { $new: $new(null, 'U') }, instance: { public: { a: v } } });
@@ -170,8 +170,8 @@ describe('subclass interface — ^ forms', () => {
 
   it('two parents with no params', () => {
     const s = svc(`
-      @A = *{ @ga = -> v: 1 as Integer }
-      @B = *{ @gb = -> v: 2 as Integer }
+      @A = *{ @ga = () -> v: 1 as Integer }
+      @B = *{ @gb = () -> v: 2 as Integer }
       @C = @A ^ @B
     `);
     expect(s[':C'].extends).toEqual([':A', ':B']);
@@ -179,8 +179,8 @@ describe('subclass interface — ^ forms', () => {
 
   it('a name and type after the last ^ is a param, not a wrapped parent', () => {
     const s = svc(`
-      Box = *{ @g = -> v: 1 as Integer }
-      @A = *{ @ga = -> v: 1 as Integer }
+      Box = *{ @g = () -> v: 1 as Integer }
+      @A = *{ @ga = () -> v: 1 as Integer }
       @U = @A ^ (b Box) *{ super() }
     `);
     expect(s[':U'].extends).toEqual([':A']);
@@ -189,8 +189,8 @@ describe('subclass interface — ^ forms', () => {
 
   it('a param typed with a public class is a param, not a wrapped parent', () => {
     const s = svc(`
-      @Box = *{ @g = -> v: 1 as Integer }
-      @A = *{ @ga = -> v: 1 as Integer }
+      @Box = *{ @g = () -> v: 1 as Integer }
+      @A = *{ @ga = () -> v: 1 as Integer }
       @U = @A ^ (b @Box) *{ super() }
     `);
     expect(s[':U'].extends).toEqual([':A']);

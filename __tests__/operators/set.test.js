@@ -16,7 +16,7 @@ describe("set operation", () => {
 
       @get
         =
-        -> value: value
+        return value: value
 
       .
     end#Box
@@ -38,11 +38,11 @@ describe("set operation", () => {
 
       @pos
         =
-        -> value: p
+        return value: p
 
       @named
         =
-        -> value: label
+        return value: label
 
       .
     end#Store
@@ -62,7 +62,7 @@ describe("set operation", () => {
 
       @get
         =
-        -> count: count
+        return count: count
 
       .
     end#Counter
@@ -221,7 +221,7 @@ describe("set operation — compile errors", () => {
 
         @get
           =
-          -> value: value
+          return value: value
 
         .
       end#Box
@@ -255,7 +255,7 @@ describe("set operation — compile errors", () => {
 
         @get
           =
-          -> value: value
+          return value: value
 
         .
       end#Box

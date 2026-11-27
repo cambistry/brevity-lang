@@ -320,7 +320,7 @@ describe('class members — lineal scope', () => {
           *
           n Integer = count + seed
 
-      @after = -> 1
+      @after = () -> 1
     `);
     expect(ast.actors.find(a => !a.name).functions.map(f => f.name)).toContain('@after');
     expect(ast.actors.find(a => a.name === 'C').functions.map(f => f.name)).not.toContain('@after');
@@ -331,7 +331,7 @@ describe('class members — scope errors', () => {
   it('a trailing constructor can\'t name a member bare', () => {
     expect(() => compileSource(`
       C = (seed Integer) *{ n Integer = count } ^ { count *Integer = 3 }
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/^'count' is a member of the class 'C', and a trailing constructor doesn't close over its class block$/);
   });
 });
@@ -380,7 +380,7 @@ describe('class members — ordering', () => {
 describe('`new` is reserved', () => {
   it('can\'t be a function', () => {
     expect(() => compileSource(`
-      @new = -> 1
+      @new = () -> 1
     `)).toThrow(/'new' is reserved/);
   });
 
@@ -422,7 +422,7 @@ describe('class members in the service document', () => {
       @C = actor {
         @count *Integer = 0
         new = (seed Integer) *{
-          @n = -> 1
+          @n = () -> 1
         }
       }
     `).interface.service).toEqual({
@@ -459,12 +459,12 @@ const delegated = `
     shared *Integer = 5
     @pub *Integer = 1
     @f = { x Integer = count + g(); return x }
-    g = -> 1
+    g = () -> 1
     @readShared = { return shared }
   }
   B = A ^ {
     count *Integer = 20
-    g = -> 100
+    g = () -> 100
     @own = { return count }
     @bump! = { shared <- shared + 1 }
   }
@@ -507,10 +507,10 @@ describe('class blocks inherit by delegation', () => {
 // answer comes from the extending class.
 describe('class blocks inherit by delegation — from outside', () => {
   const script = `
-    @P = *{ @a = -> 1 } ^ {
+    @P = *{ @a = () -> 1 } ^ {
       @count *Integer = 3
     }
-    @Q = @P ^ *{ @b = -> 2 } ^ { }
+    @Q = @P ^ *{ @b = () -> 2 } ^ { }
   `;
 
   it('reads, writes and subscribes to the parent block\'s cell through the child', async () => {

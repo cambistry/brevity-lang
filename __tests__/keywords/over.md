@@ -17,7 +17,7 @@ double
   =
   n Integer
   =
-  -> (n * 2) as Integer
+  return (n * 2) as Integer
 
 result List of Integers = over(nums, &double)
 ```
@@ -29,7 +29,7 @@ result List of Integers = over nums
   =
   item Integer
   =
-  -> item * 2 as Integer
+  return item * 2 as Integer
 ```
 
 ## Tested Behavior

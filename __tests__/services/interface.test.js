@@ -7,7 +7,7 @@ describe('service interface — input signatures', () => {
     const { interface: iface } = extract(`
       @ping
         =
-        -> 1
+        return 1
     `);
     expect(iface.service).toEqual({ public: { ping: [{ re: ['Integer'], writes: false }] } });
   });
@@ -18,7 +18,7 @@ describe('service interface — input signatures', () => {
         =
         name: Text
         =
-        -> greeting: "hi"
+        return greeting: "hi"
     `);
     expect(iface.service).toEqual({
       public: { greet: [{ args: [{ name: 'Text' }], re: [{ greeting: 'Text' }], writes: false }] },
@@ -31,7 +31,7 @@ describe('service interface — input signatures', () => {
         =
         n Integer
         =
-        -> n + n
+        return n + n
     `);
     expect(iface.service).toEqual({ public: { double: [{ args: ['Integer'], re: ['Integer'], writes: false }] } });
   });
@@ -43,7 +43,7 @@ describe('service interface — input signatures', () => {
         a Integer
         label: Text
         =
-        -> 0, result: "ok"
+        return 0, result: "ok"
     `);
     expect(iface.service).toEqual({
       public: {
@@ -68,7 +68,7 @@ describe('service interface — -> signatures', () => {
         =
         n Integer
         =
-        -> n * n
+        return n * n
     `);
     expect(iface.service).toEqual({ public: { square: [{ args: ['Integer'], re: ['Integer'], writes: false }] } });
   });
@@ -79,7 +79,7 @@ describe('service interface — -> signatures', () => {
         =
         key: Text
         =
-        -> value: "found"
+        return value: "found"
     `);
     expect(iface.service).toEqual({ public: { lookup: [{ args: [{ key: 'Text' }], re: [{ value: 'Text' }], writes: false }] } });
   });
@@ -90,7 +90,7 @@ describe('service interface — -> signatures', () => {
         =
         msg: Text
         =
-        -> :msg
+        return :msg
     `);
     expect(iface.service).toEqual({ public: { echo: [{ args: [{ msg: 'Text' }], re: [{ msg: 'Text' }], writes: false }] } });
   });
@@ -102,7 +102,7 @@ describe('service interface — -> signatures', () => {
         a Integer
         b Integer
         =
-        -> a / b, remainder: 0
+        return a / b, remainder: 0
     `);
     expect(iface.service).toEqual({
       public: {
@@ -144,7 +144,7 @@ describe('service interface — multiple public functions', () => {
     const source = `
       @ping
         =
-        -> 1
+        return 1
       @log. = (msg: Text) {}
     `;
     expect(extract(source).interface.service).toEqual(
@@ -163,11 +163,11 @@ describe('service interface — multiple public functions', () => {
         =
         key: Text
         =
-        -> value: "v"
+        return value: "v"
       @set. = (key: Text, value: Text) {}
       @count
         =
-        -> 0
+        return 0
     `;
     expect(extract(source).interface.service).toEqual(
       {
@@ -205,12 +205,12 @@ describe('service interface — private function excluded', () => {
         =
         msg: Text
         =
-        -> :msg
+        return :msg
       helper
         =
         n Integer
         =
-        ->(result: n)
+        return (result: n)
     `;
     expect(extract(source).interface.service).toEqual({ public: { echo: [{ args: [{ msg: 'Text' }], re: [{ msg: 'Text' }], writes: false }] } });
   });
@@ -221,7 +221,7 @@ describe('service interface — private function excluded', () => {
         =
         n Integer
         =
-        ->(result: n)
+        return (result: n)
     `;
     expect(extract(source).interface.service).toEqual({});
   });
@@ -237,7 +237,7 @@ describe('service interface — optional args', () => {
         a Integer
         b Integer = 0
         =
-        -> (a + b)
+        return (a + b)
     `);
     expect(iface.service).toEqual({
       public: { add: [{ args: ['Integer', { '%opt': 'Integer' }], re: ['Integer'], writes: false }] },
@@ -251,7 +251,7 @@ describe('service interface — optional args', () => {
         name: Text
         greeting: Text = "hello"
         =
-        -> result: (name + greeting)
+        return result: (name + greeting)
     `);
     expect(iface.service).toEqual({
       public: {
@@ -272,7 +272,7 @@ describe('service interface — optional args', () => {
         =
         retries Integer = 3
         =
-        -> retries
+        return retries
     `);
     expect(iface.service).toEqual({ public: { ping: [{ args: [{ '%opt': 'Integer' }], re: ['Integer'], writes: false }] } });
   });
@@ -285,7 +285,7 @@ describe('service interface — optional args', () => {
         limit: Integer = 10
         offset: Integer = 0
         =
-        -> result: "ok"
+        return result: "ok"
     `);
     expect(iface.service).toEqual({
       public: {
@@ -307,7 +307,7 @@ describe('service interface — optional args', () => {
         a Integer
         b=100
         =
-        -> (a + b)
+        return (a + b)
     `);
     expect(iface.service).toEqual({
       public: { compute: [{ args: ['Integer', { '%opt': 'Integer' }], re: ['Integer'], writes: false }] },
@@ -469,7 +469,7 @@ describe('service interface — imported type address resolution', () => {
 
       @get
         =
-        -> Pair(key: "a", value: "b") as Pair
+        return Pair(key: "a", value: "b") as Pair
     `);
     expect(iface.service).toEqual({ public: { get: [{ re: ['/services/pair'], writes: false }] } });
   });
@@ -501,7 +501,7 @@ describe('service interface — imported type address resolution', () => {
         label: Text
         p Pair
         =
-        -> count: 1
+        return count: 1
     `);
     expect(iface.service).toEqual({
       public: {
@@ -522,7 +522,7 @@ describe('service interface — imported type address resolution', () => {
 
       @list
         =
-        -> items as List of Item
+        return items as List of Item
     `);
     expect(iface.service).toEqual({ public: { list: [{ re: [[['/models/item'], { '%t': 'List' }]], writes: false }] } });
   });
@@ -535,7 +535,7 @@ describe('service interface — imported type address resolution', () => {
         =
         key: Text
         =
-        -> result as Item | null
+        return result as Item | null
     `);
     expect(iface.service).toEqual({
       public: {
@@ -553,7 +553,7 @@ describe('service interface — imported type address resolution', () => {
         =
         u User
         =
-        -> s as Session
+        return s as Session
     `);
     expect(iface.service).toEqual({ public: { login: [{ args: ['/models/user'], re: ['/models/session'], writes: false }] } });
   });
@@ -566,7 +566,7 @@ describe('service interface — imported type address resolution', () => {
         =
         db: DB
         =
-        -> result: "ok"
+        return result: "ok"
     `);
     expect(iface.service).toEqual({
       public: { query: [{ args: [{ db: '/services/db' }], re: [{ result: 'Text' }], writes: false }] },
@@ -588,7 +588,7 @@ describe('service interface — imported type address resolution', () => {
 
       @make
         =
-        -> Geo::Point(1, 2) as Geo::Point
+        return Geo::Point(1, 2) as Geo::Point
     `);
     expect(iface.service).toEqual({ public: { make: [{ re: ['geometry.bv:Point'], writes: false }] } });
   });
@@ -619,10 +619,10 @@ describe('service interface — imported type address resolution', () => {
 describe('service interface — self-as declarations', () => {
   it('single self-as type appended after service interface body', () => {
     const { interface: iface } = extract(`
-      self as Integer = -> 100
+      self as Integer = () -> 100
       @get
         =
-        -> 1
+        return 1
     `);
     expect(iface.service).toEqual({
       public: { get: [{ re: ['Integer'], writes: false }], $as: [{ re: ['Integer'], writes: false }] },
@@ -631,11 +631,11 @@ describe('service interface — self-as declarations', () => {
 
   it('multiple self-as types appended in declaration order', () => {
     const { interface: iface } = extract(`
-      self as Text = -> "one hundred"
-      self as Integer = -> 100
+      self as Text = () -> "one hundred"
+      self as Integer = () -> 100
       @get
         =
-        -> num: 100
+        return num: 100
     `);
     expect(iface.service).toEqual({
       public: {
@@ -647,24 +647,24 @@ describe('service interface — self-as declarations', () => {
 
   it('self-as with no public handlers', () => {
     const { interface: iface } = extract(`
-      self as Integer = -> 42
+      self as Integer = () -> 42
     `);
     expect(iface.service).toEqual({ public: { $as: [{ re: ['Integer'], writes: false }] } });
   });
 
   it('negated self-as excluded from interface', () => {
     const { interface: iface } = extract(`
-      self as !Wrapper = -> 0
-      @ping = -> pong: "ok"
+      self as !Wrapper = () -> 0
+      @ping = () -> pong: "ok"
     `);
     expect(iface.service).toEqual({ public: { ping: [{ re: [{ pong: 'Text' }], writes: false }] } });
   });
 
   it('mixed positive and negated — only positive types listed', () => {
     const { interface: iface } = extract(`
-      self as Integer = -> 42
-      self as !Fallback = -> 0
-      @ping = -> pong: "ok"
+      self as Integer = () -> 42
+      self as !Fallback = () -> 0
+      @ping = () -> pong: "ok"
     `);
     expect(iface.service).toEqual({
       public: {
@@ -678,10 +678,10 @@ describe('service interface — self-as declarations', () => {
     const { interface: iface } = extract(`
       use Token = "/models/token"
 
-      self as Token = -> Token()
+      self as Token = () -> Token()
       @get
         =
-        -> 1
+        return 1
     `);
     expect(iface.service).toEqual({
       public: {
@@ -701,7 +701,7 @@ describe('service interface — general unions', () => {
         =
         x Integer | Text
         =
-        -> result: x
+        return result: x
     `);
     expect(iface.service).toEqual({
       public: {
@@ -722,7 +722,7 @@ describe('service interface — general unions', () => {
         =
         x: Integer | Text
         =
-        -> result: x
+        return result: x
     `);
     expect(iface.service).toEqual({
       public: {
@@ -743,7 +743,7 @@ describe('service interface — general unions', () => {
         =
         x: Integer | Text | Boolean
         =
-        -> :x
+        return :x
     `);
     expect(iface.service).toEqual({
       public: {
@@ -764,7 +764,7 @@ describe('service interface — general unions', () => {
         =
         flag Boolean
         =
-        -> result as Integer | Text
+        return result as Integer | Text
     `);
     expect(iface.service).toEqual({
       public: { pick: [{ args: ['Boolean'], re: [{ '%or': ['Integer', 'Text'] }], writes: false }] },
@@ -777,7 +777,7 @@ describe('service interface — general unions', () => {
         =
         x Integer | Text | null
         =
-        -> result as Integer | Text | null
+        return result as Integer | Text | null
     `);
     expect(iface.service).toEqual({
       public: {
@@ -834,7 +834,7 @@ describe('service interface — void-returning public functions', () => {
     const { interface: iface } = extract(`
       @noop
         =
-        -> ()
+        return ()
     `);
     expect(iface.service).toEqual({ public: { noop: [{ re: [], writes: false }] } });
   });
@@ -887,7 +887,7 @@ describe('service interface — void-returning public functions', () => {
 
   it('mixed: replying, void, and silent functions in declaration order', () => {
     const source = `
-      @get = -> 1
+      @get = () -> 1
       @clear = () -> ()
       @notify. = (msg: Text) {}
     `;

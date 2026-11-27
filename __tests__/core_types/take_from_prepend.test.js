@@ -18,16 +18,16 @@ const inp = (id, op) => ({ input: { id, op, from: 'c' } });
 describe('take / from / prepend — runtime', () => {
   const script = `
     // Text.take / Text.from
-      @takeFunc = -> result: Text.take("hello", 3)
-      @fromFunc = -> result: Text.from("hello", 2)
+      @takeFunc = () -> result: Text.take("hello", 3)
+      @fromFunc = () -> result: Text.from("hello", 2)
       @takeRef = { t *Text = "hello"; return result: t.take(3) }
       @fromRef = { t *Text = "hello"; return result: t.from(2) }
-      @takeOver = -> result: Text.take("hi", 99)
-      @fromOver = -> result: Text.from("hi", 99)
-      @takeZero = -> result: Text.take("hello", 0)
-      @fromZero = -> result: Text.from("hello", 0)
-      @takeEmoji = -> result: Text.take("a\u{1F600}b", 2)
-      @fromEmoji = -> result: Text.from("a\u{1F600}b", 1)
+      @takeOver = () -> result: Text.take("hi", 99)
+      @fromOver = () -> result: Text.from("hi", 99)
+      @takeZero = () -> result: Text.take("hello", 0)
+      @fromZero = () -> result: Text.from("hello", 0)
+      @takeEmoji = () -> result: Text.take("a\u{1F600}b", 2)
+      @fromEmoji = () -> result: Text.from("a\u{1F600}b", 1)
 
     // Text.take! / Text.from! / Text.prepend! (mutating bang forms)
       @takeBang
@@ -49,19 +49,19 @@ describe('take / from / prepend — runtime', () => {
         return result: t
 
     // Text.prepend
-      @prependFunc = -> result: Text.prepend("world", "hello ")
+      @prependFunc = () -> result: Text.prepend("world", "hello ")
       @prependRef = { t *Text = "world"; return result: t.prepend("hello ") }
-      @prependEmpty = -> result: Text.prepend("x", "")
+      @prependEmpty = () -> result: Text.prepend("x", "")
 
     // Blob.take / Blob.from / Blob.prepend
-      @takeFunc4 = -> result: Blob.take("hello", 3)
-      @fromFunc4 = -> result: Blob.from("hello", 2)
-      @prependFunc4 = -> result: Blob.prepend("world", "hello ")
+      @takeFunc4 = () -> result: Blob.take("hello", 3)
+      @fromFunc4 = () -> result: Blob.from("hello", 2)
+      @prependFunc4 = () -> result: Blob.prepend("world", "hello ")
       @takeBang4 = { b *Blob = "hello"; b.take!(3); return result: b }
       @fromBang4 = { b *Blob = "hello"; b.from!(2); return result: b }
       @prependBang4 = { b *Blob = "world"; b.prepend!("hello "); return result: b }
-      @takeOver4 = -> result: Blob.take("hi", 99)
-      @fromOver4 = -> result: Blob.from("hi", 99)
+      @takeOver4 = () -> result: Blob.take("hi", 99)
+      @fromOver4 = () -> result: Blob.from("hi", 99)
 
     // GraphemeText.take / GraphemeText.from / GraphemeText.prepend
       @takeRef5 = { g *GraphemeText = "hello"; return result: g.take(3) }

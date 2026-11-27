@@ -12,7 +12,7 @@ add
   acc Integer
   item Integer
   =
-  -> acc + item as Integer
+  return acc + item as Integer
 
 result Integer = reduce(0, nums, &add)
 ```

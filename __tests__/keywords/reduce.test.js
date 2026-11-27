@@ -7,7 +7,7 @@ describe('reduce', () => {
       acc Integer
       item Integer
       =
-      -> acc + item as Integer
+      return acc + item as Integer
 
     @sumWithInit
       =
@@ -67,7 +67,7 @@ describe('reduce', () => {
         acc Integer
         item Integer
         =
-        -> acc * item as Integer
+        return acc * item as Integer
       return :result
 
     @spaciousNoInit
@@ -78,7 +78,7 @@ describe('reduce', () => {
         acc Integer
         item Integer
         =
-        -> acc + item as Integer
+        return acc + item as Integer
       return :result
 
     @spaciousNoParenInit
@@ -89,7 +89,7 @@ describe('reduce', () => {
         acc Integer
         item Integer
         =
-        -> acc + item as Integer
+        return acc + item as Integer
       return :result
   `;
 

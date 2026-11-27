@@ -6,11 +6,11 @@ import { compileSource } from '../helpers.js';
 
 describe('namespace methods — what a builtin answers', () => {
   it('a method the namespace has', () => {
-    expect(() => compileSource('@go = -> Text.upper("hi")\n')).not.toThrow();
+    expect(() => compileSource('@go = () -> Text.upper("hi")\n')).not.toThrow();
   });
 
   it('a method it does not have', () => {
-    expect(() => compileSource('@go = -> Text.nope("hi")\n')).toThrow("'Text' has no method 'nope'");
+    expect(() => compileSource('@go = () -> Text.nope("hi")\n')).toThrow("'Text' has no method 'nope'");
   });
 
   it('in an assignment', () => {
@@ -18,7 +18,7 @@ describe('namespace methods — what a builtin answers', () => {
   });
 
   it('on a number namespace', () => {
-    expect(() => compileSource('@go = -> Integer.nope(1)\n')).toThrow("'Integer' has no method 'nope'");
+    expect(() => compileSource('@go = () -> Integer.nope(1)\n')).toThrow("'Integer' has no method 'nope'");
   });
 
   it('a bang is part of the name', () => {

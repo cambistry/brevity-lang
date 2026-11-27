@@ -25,7 +25,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -42,7 +42,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -64,7 +64,7 @@ describe('wrapped child — positional * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -83,7 +83,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -100,7 +100,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -117,7 +117,7 @@ describe('wrapped child — keyed * syntax — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -267,7 +267,7 @@ describe('wrapped child — runtime with *', () => {
 describe('wrapped child — independence', () => {
   const script = `
     Inner = * {
-      @value = -> result: 42
+      @value = () -> result: 42
     }
 
     Wrapper = (inner *) *{
@@ -325,7 +325,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -338,7 +338,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -351,7 +351,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
@@ -364,7 +364,7 @@ describe('wrapped child — definition always compiles (generic)', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -373,7 +373,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('positional * — missing method', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (inner *) *{
@@ -394,7 +394,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('attached star* — missing method', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (inner*) *{
@@ -415,7 +415,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('keyed * — missing method', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (name: *) *{
@@ -436,7 +436,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('keyed alias * — missing method', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (child: s *) *{
@@ -457,7 +457,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('keyed sugared alias* — missing method', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (child: s *) *{
@@ -478,7 +478,7 @@ describe('wrapped child — construction fails when method missing', () => {
   it('multiple missing methods reported', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (inner *) *{
@@ -500,8 +500,8 @@ describe('wrapped child — construction fails when method missing', () => {
   it('some methods present, one missing — still fails', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
-        @other = -> result: 2
+        @meth = () -> result: 1
+        @other = () -> result: 2
       }
 
       B = (inner *) *{
@@ -525,7 +525,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
   it('positional * — method exists', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (inner *) *{
@@ -546,7 +546,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
   it('keyed * — method exists', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (name: *) *{
@@ -567,7 +567,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
   it('alias * — method exists', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (child: s *) *{
@@ -588,7 +588,7 @@ describe('wrapped child — construction succeeds when methods match', () => {
   it('sugared alias* — method exists', () => {
     expect(() => compileSource(`
       A = * {
-        @meth = -> result: 1
+        @meth = () -> result: 1
       }
 
       B = (child: s *) *{
@@ -609,8 +609,8 @@ describe('wrapped child — construction succeeds when methods match', () => {
   it('multiple methods all present', () => {
     expect(() => compileSource(`
       A = * {
-        @foo = -> result: 1
-        @bar = -> result: 2
+        @foo = () -> result: 1
+        @bar = () -> result: 2
       }
 
       B = (inner *) *{
@@ -853,7 +853,7 @@ describe('wrapped child — arg types match at construction', () => {
   it('no-arg method passes', () => {
     expect(() => compileSource(`
       A = * {
-        @value = -> result: 42
+        @value = () -> result: 42
       }
 
       B = (inner *) *{
@@ -893,7 +893,7 @@ describe('inline constraint — compilation', () => {
         }
       }
 
-      @test = -> "x"
+      @test = () -> "x"
     `)).not.toThrow();
   });
 
@@ -911,14 +911,14 @@ describe('inline constraint — compilation', () => {
         }
       }
 
-      @test = -> "x"
+      @test = () -> "x"
     `)).not.toThrow();
   });
 
   it('constraint without * — inner is implicitly a ref', () => {
     expect(() => compileSource(`
       A = * {
-        @value = -> result: 42
+        @value = () -> result: 42
       }
 
       B = (inner { @value () -> (result: Integer) }) *{
@@ -928,7 +928,7 @@ describe('inline constraint — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 });
@@ -937,7 +937,7 @@ describe('inline constraint — construction fails when constraint not met', () 
   it('method missing from passed actor', () => {
     expect(() => compileSource(`
       A = * {
-        @other = -> result: 1
+        @other = () -> result: 1
       }
 
       B = (inner { @get (key: Text) -> (result: Text) }) *{
@@ -1157,7 +1157,7 @@ describe('inline constraint — multi-line form', () => {
         }
       }
 
-      @test = -> "x"
+      @test = () -> "x"
     `)).not.toThrow();
   });
 
@@ -1225,14 +1225,14 @@ describe('service coercion — compilation', () => {
         }
       }
 
-      @test = -> 1
+      @test = () -> 1
     `)).not.toThrow();
   });
 
   it('cast bypasses construction check — actor lacks method', () => {
     expect(() => compileSource(`
       A = * {
-        @other = -> result: 1
+        @other = () -> result: 1
       }
 
       B = (inner *) *{
@@ -1254,7 +1254,7 @@ describe('service coercion — compilation', () => {
   it('direct call on inner without cast still validates', () => {
     expect(() => compileSource(`
       A = * {
-        @other = -> result: 1
+        @other = () -> result: 1
       }
 
       B = (inner *) *{
@@ -1357,7 +1357,7 @@ describe('service coercion — compilation', () => {
         }
       }
 
-      @test = -> "x"
+      @test = () -> "x"
     `)).not.toThrow();
   });
 });
@@ -1383,7 +1383,7 @@ describe('service coercion — runtime', () => {
     // With the cast, it compiles — the developer takes responsibility for runtime.
     expect(() => compileSource(`
       A = * {
-        @value = -> result: 99
+        @value = () -> result: 99
       }
 
       B = (inner *) *{

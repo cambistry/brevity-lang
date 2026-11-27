@@ -15,7 +15,7 @@ describe('type wire — outbound payload + ty', () => {
   it('all-required type → positional payload + type tag', async () => {
     await expectBehavior(`
       type Point(Integer, Integer)
-      @coords = -> result: Point(1, 2)
+      @coords = () -> result: Point(1, 2)
     `,
       { input: { id: '1', op: 'coords', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: ':Point' }], re: [{ result: [1, 2] }], to: 'c' } },
@@ -25,7 +25,7 @@ describe('type wire — outbound payload + ty', () => {
   it('all-required type with mixed scalar fields', async () => {
     await expectBehavior(`
       type Mixed(Integer, Text, Boolean)
-      @go = -> result: Mixed(3, "hi", true)
+      @go = () -> result: Mixed(3, "hi", true)
     `,
       { input: { id: '2', op: 'go', from: 'c' } },
       { output: { id: '2', 'ty': [{ result: ':Mixed' }], re: [{ result: [3, 'hi', true] }], to: 'c' } },
@@ -35,7 +35,7 @@ describe('type wire — outbound payload + ty', () => {
   it('absent positionals are not sent; absent named fields are omitted', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: Game(turn: 3)
+      @go = () -> result: Game(turn: 3)
     `,
       { input: { id: '3', op: 'go', from: 'c' } },
       { output: { id: '3', 'ty': [{ result: ':Game' }], re: [{ result: [{ turn: 3 }] }], to: 'c' } },
@@ -45,7 +45,7 @@ describe('type wire — outbound payload + ty', () => {
   it('type with optional fields, all present → positional values, then the named object', async () => {
     await expectBehavior(`
       type Game(? Boolean, ? turn: Integer)
-      @go = -> result: Game(true, turn: 5)
+      @go = () -> result: Game(true, turn: 5)
     `,
       { input: { id: '4', op: 'go', from: 'c' } },
       { output: { id: '4', 'ty': [{ result: ':Game' }], re: [{ result: [true, { turn: 5 }] }], to: 'c' } },
@@ -55,7 +55,7 @@ describe('type wire — outbound payload + ty', () => {
   it('an absent trailing positional is not sent ahead of the named object', async () => {
     await expectBehavior(`
       type Game(Integer, ? Boolean, ? turn: Integer)
-      @go = -> result: Game(1, turn: 5)
+      @go = () -> result: Game(1, turn: 5)
     `,
       { input: { id: '5', op: 'go', from: 'c' } },
       { output: { id: '5', 'ty': [{ result: ':Game' }], re: [{ result: [1, { turn: 5 }] }], to: 'c' } },
@@ -188,9 +188,9 @@ describe('type wire — outbound argument payload + ty', () => {
 describe('type wire — no padding for absent positionals', () => {
   const script = `
     type Opts(? Boolean, ? Integer, ? k: Integer)
-    @namedOnly = -> result: Opts(k: 1)
-    @oneOfTwo = -> result: Opts(true, k: 1)
-    @none = -> result: Opts()
+    @namedOnly = () -> result: Opts(k: 1)
+    @oneOfTwo = () -> result: Opts(true, k: 1)
+    @none = () -> result: Opts()
     @read = (o: Opts) {
       (flag, n) = o
       return f: (flag)?, n: (n)?, k: o.k ?? 0

@@ -303,7 +303,7 @@ describe('explicit form — method call validation', () => {
 
       t = Thing(a: 5)
 
-      @go = -> t.fire.()
+      @go = () -> t.fire.()
     `)).toThrow(/silent/);
   });
 });
@@ -344,7 +344,7 @@ describe('constructor block — calls are checked as in a handler body', () => {
 
   it('a method a local class lacks → compile error', () => {
     expect(() => compileSource(`
-      T = (x Integer) *{ @a = -> v: x as Integer }
+      T = (x Integer) *{ @a = () -> v: x as Integer }
       t = T(1)
       y = t.zz()
     `)).toThrow(/'T' has no method 'zz'/);
@@ -356,7 +356,7 @@ describe('an unclaimed dependency — requires a document', () => {
     expect(() => compileSource(`
       use Thing = "thing.bv"
 
-      @go = -> 1
+      @go = () -> 1
     `)).toThrow(/has no type/);
   });
 

@@ -36,9 +36,9 @@ const fileScript = `
   @pc *Integer = 1
   c *Integer = 2
   k = 4
-  @pf = -> 8
-  f = -> 16
-  #f = -> 32
+  @pf = () -> 8
+  f = () -> 16
+  #f = () -> 32
   @pg = (n Integer) -> n + 64
   g = (n Integer) -> n + 128
   #g = (n Integer) -> n + 256
@@ -150,7 +150,7 @@ const fileScript = `
 
   // A class, at depth 1 and 2.
   @C1 = *{
-    @read = -> @pc + c + k
+    @read = () -> @pc + c + k
     @call = { x Integer = @pf() + f() + #f(); return x }
     @args = { x Integer = @pg(0) + g(0) + #g(0); return x }
     @write! = { c <- c + 1 }
@@ -163,7 +163,7 @@ const fileScript = `
   }
   @C2 = *{
     D = *{
-      @read = -> @pc + c + k
+      @read = () -> @pc + c + k
       @call = { x Integer = @pf() + f() + #f(); return x }
       @args = { x Integer = @pg(0) + g(0) + #g(0); return x }
     }
@@ -175,17 +175,17 @@ const fileScript = `
   @K = *{
     s Integer = @pc + c + k
     t Integer = @pf() + f() + #f()
-    @s = -> s
-    @t = -> t
+    @s = () -> s
+    @t = () -> t
   }
   @P = (v Integer = @pg(0) + g(0) + #g(0)) *{
-    @v = -> v
+    @v = () -> v
   }
   // A class block's nested \`new\`: its constructor block, methods and closures.
   @B = actor {
     new = () *{
       s Integer = @pc + c + k
-      @s = -> s
+      @s = () -> s
       @call = { x Integer = @pf() + f() + #f(); return x }
       @closure = {
         h = () -> @pg(0) + g(0) + #g(0)
@@ -302,9 +302,9 @@ const classScript = `
     @pc *Integer = 1
     c *Integer = 2
     k = 4
-    @pf = -> 8
-    f = -> 16
-    #f = -> 32
+    @pf = () -> 8
+    f = () -> 16
+    #f = () -> 32
     @pg = (n Integer) -> n + 64
     g = (n Integer) -> n + 128
     #g = (n Integer) -> n + 256
@@ -364,7 +364,7 @@ const classScript = `
 
     // A class inside it, at depth 1 and 2; a constructor block; a param default.
     D = *{
-      @read = -> @pc + c + k
+      @read = () -> @pc + c + k
       @call = { x Integer = @pf() + f() + #f(); return x }
       @write! = { c <- c + 1 }
       E = *{
@@ -374,10 +374,10 @@ const classScript = `
     }
     K = *{
       s Integer = @pc + c + k
-      @s = -> s
+      @s = () -> s
     }
     P = (v Integer = @pg(0) + g(0) + #g(0)) *{
-      @value = -> v
+      @value = () -> v
     }
     @viaRead = { d = D(); x Integer = d.read(); return x }
     @viaCall = { d = D(); x Integer = d.call(); return x }
@@ -446,9 +446,9 @@ const blockScript = `
     @pc *Integer = 1
     c *Integer = 2
     k = 4
-    @pf = -> 8
-    f = -> 16
-    #f = -> 32
+    @pf = () -> 8
+    f = () -> 16
+    #f = () -> 32
     @pg = (n Integer) -> n + 64
     g = (n Integer) -> n + 128
     #g = (n Integer) -> n + 256
@@ -458,8 +458,8 @@ const blockScript = `
 
     new = () *{
       s Integer = @pc + c + k
-      @s = -> s
-      @read = -> @pc + c + k
+      @s = () -> s
+      @read = () -> @pc + c + k
       @call = { x Integer = @pf() + f() + #f(); return x }
       @closure = {
         h = () -> @pg(0) + g(0) + #g(0)
@@ -623,7 +623,7 @@ describe('boundaries', () => {
     expect(() => compileSource(`
       C = actor {
         count *Integer = 0
-        new = (seed Integer) *{ @x = -> 1 }
+        new = (seed Integer) *{ @x = () -> 1 }
       }
       D = C ^ (n Integer) *{
         super(n)
@@ -635,8 +635,8 @@ describe('boundaries', () => {
   it('a subclass doesn\'t reach its parent\'s private names', () => {
     expect(() => compileSource(`
       A = *{
-        #secret = -> 5
-        @x = -> 1
+        #secret = () -> 5
+        @x = () -> 1
       }
       B = A ^ *{
         @get = { return #secret() }

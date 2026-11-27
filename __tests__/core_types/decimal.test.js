@@ -66,26 +66,26 @@ const script = `
     @roundTrip = (a Decimal, b Decimal) -> result: a * b / b
 
     // 500-digit literals
-    @addSelf      = -> equal: ${PI_500} + ${PI_500} == ${PI_500} * 2
-    @subInverse   = -> equal: (${PI_500} + ${E_500}) - ${E_500} == ${PI_500}
-    @subToZero    = -> equal: ${PI_500} - ${PI_500} == 0.0
-    @mulCommute   = -> equal: ${PI_500} * ${E_500} == ${E_500} * ${PI_500}
-    @mulByOne     = -> equal: ${PI_500} * 1.0 == ${PI_500}
-    @distrib      = -> equal: ${PI_500} * 7 == ${PI_500} * 3 + ${PI_500} * 4
-    @divPow2      = -> equal: ${PI_500} * 8 / 8 == ${PI_500}
-    @divPow5      = -> equal: ${PI_500} * 25 / 25 == ${PI_500}
-    @divMixedFactors = -> equal: ${PI_500} * 40 / 40 == ${PI_500}
-    @pow2         = -> equal: ${PI_500} ^ 2 == ${PI_500} * ${PI_500}
-    @pow3         = -> equal: ${PI_500} ^ 3 == ${PI_500} * ${PI_500} * ${PI_500}
-    @pow0         = -> equal: ${PI_500} ^ 0 == 1.0
-    @remBySelf    = -> equal: ${PI_500} % ${PI_500} == 0.0
-    @remBy2Sum    = -> equal: (${PI_500} + ${PI_500} + ${PI_500}) % ${PI_500} == 0.0
-    @remPreserved = -> equal: (${PI_500} + 10.0) % ${PI_500} == 10.0 % ${PI_500}
+    @addSelf      = () -> equal: ${PI_500} + ${PI_500} == ${PI_500} * 2
+    @subInverse   = () -> equal: (${PI_500} + ${E_500}) - ${E_500} == ${PI_500}
+    @subToZero    = () -> equal: ${PI_500} - ${PI_500} == 0.0
+    @mulCommute   = () -> equal: ${PI_500} * ${E_500} == ${E_500} * ${PI_500}
+    @mulByOne     = () -> equal: ${PI_500} * 1.0 == ${PI_500}
+    @distrib      = () -> equal: ${PI_500} * 7 == ${PI_500} * 3 + ${PI_500} * 4
+    @divPow2      = () -> equal: ${PI_500} * 8 / 8 == ${PI_500}
+    @divPow5      = () -> equal: ${PI_500} * 25 / 25 == ${PI_500}
+    @divMixedFactors = () -> equal: ${PI_500} * 40 / 40 == ${PI_500}
+    @pow2         = () -> equal: ${PI_500} ^ 2 == ${PI_500} * ${PI_500}
+    @pow3         = () -> equal: ${PI_500} ^ 3 == ${PI_500} * ${PI_500} * ${PI_500}
+    @pow0         = () -> equal: ${PI_500} ^ 0 == 1.0
+    @remBySelf    = () -> equal: ${PI_500} % ${PI_500} == 0.0
+    @remBy2Sum    = () -> equal: (${PI_500} + ${PI_500} + ${PI_500}) % ${PI_500} == 0.0
+    @remPreserved = () -> equal: (${PI_500} + 10.0) % ${PI_500} == 10.0 % ${PI_500}
 
     // digit rollover
-    @roll = -> equal: ${tiny} + ${big} == 1.0
-    @zero = -> equal: ${bigNum} - ${bigNum} == 0.0
-    @sum = -> equal: (${sum10}) == ${delta} * 10
+    @roll = () -> equal: ${tiny} + ${big} == 1.0
+    @zero = () -> equal: ${bigNum} - ${bigNum} == 0.0
+    @sum = () -> equal: (${sum10}) == ${delta} * 10
 
     // conversions
     @toInteger = (x Decimal) -> result: Decimal.to_integer(x)
@@ -281,25 +281,25 @@ describe('Decimal non-terminating division (runtime)', () => {
 describe('Decimal non-terminating division (compile-time)', () => {
   it('literal 1.0 / 3.0 → compile error', () => {
     expect(() => compileSource(`
-      @test = -> result: 1.0 / 3.0
+      @test = () -> result: 1.0 / 3.0
     `)).toThrow();
   });
 
   it('literal 1.0 / 7.0 → compile error', () => {
     expect(() => compileSource(`
-      @test = -> result: 1.0 / 7.0
+      @test = () -> result: 1.0 / 7.0
     `)).toThrow();
   });
 
   it('literal 1.0 / 4.0 → no error (terminates)', () => {
     expect(() => compileSource(`
-      @test = -> result: 1.0 / 4.0
+      @test = () -> result: 1.0 / 4.0
     `)).not.toThrow();
   });
 
   it('literal 1.0 / 0.3 → compile error (0.3 = 3/10 → after cancel, 3)', () => {
     expect(() => compileSource(`
-      @test = -> result: 1.0 / 0.3
+      @test = () -> result: 1.0 / 0.3
     `)).toThrow();
   });
 });
@@ -345,7 +345,7 @@ describe('Decimal exponentiation', () => {
 describe('Decimal exponentiation (compile-time)', () => {
   it('literal 2.5 ^ 3 → no error (positive exponent always exact)', () => {
     expect(() => compileSource(`
-      @test = -> result: 2.5 ^ 3
+      @test = () -> result: 2.5 ^ 3
     `)).not.toThrow();
   });
 });

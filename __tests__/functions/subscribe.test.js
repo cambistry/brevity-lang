@@ -25,14 +25,14 @@ describe('subscribe — runtime', () => {
 
     @readAll
       =
-      -> :lastPub as Integer, :lastPriv as Integer, :lastParam as Integer
+      return :lastPub as Integer, :lastPriv as Integer, :lastParam as Integer
 
     // a fn's own ref isn't a capture: another fn's ref of the same name doesn't replay it
     @ownRef = { held *Integer = 7; held }
     @writeOwn = { held *Integer = 1; held <- 2; held }
     replays *Integer = 0
     @doOwnSub. = { sub @ownRef, (v) { replays <- replays + 1 } }
-    @readReplays = -> :replays as Integer
+    @readReplays = () -> :replays as Integer
 
     // subscribe — in-script fns (local child actor)
     C = * {
@@ -47,7 +47,7 @@ describe('subscribe — runtime', () => {
     @doPubSub.   = { sub c.pub, (v) { last <- v } }
     @doParamSub. = { sub c.pub_w_params(p: 100), (v) { last <- v } }
     @bumpC.      = (n: Integer) { c.body <- n }
-    @readLast   = -> :last as Integer
+    @readLast   = () -> :last as Integer
 
     // subscribe — remote fn (stubbed publisher)
 
@@ -131,7 +131,7 @@ describe('subscribe — runtime', () => {
 
       @bump. = (n: Integer) { body <- n }
 
-      @readBoth = -> :lastA as Integer, :lastB as Integer
+      @readBoth = () -> :lastA as Integer, :lastB as Integer
     `;
 
     await expectBehavior(twoSubsScript,
@@ -293,7 +293,7 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     @doPubSub.   = { sub Pub.pub, (v) { last <- v } }
     @doParamSub. = { sub Pub.pub_w_params(p: 100), (v) { last <- v } }
     @setRemote.  = (n: Integer) { Pub.body <- n }
-    @readLast   = -> :last as Integer
+    @readLast   = () -> :last as Integer
   `;
 
   it('public fn subscriber receives initial then replay after remote set', async () => {

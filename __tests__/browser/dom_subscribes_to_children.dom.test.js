@@ -227,7 +227,7 @@ describe('template — a function returning an element, interpolated as a child'
   const factorySource = `
     use document
     use :div, :span = HTML
-    #badge = -> <span>new</span>
+    #badge = () -> <span>new</span>
     el = <div>[{{ #badge() }}]</div>
     body = document.body()
     body.append!(el)

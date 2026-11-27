@@ -24,7 +24,7 @@ describe('arguments — runtime', () => {
       =
       outer: inner Text
       =
-      ->(result: inner)
+      return (result: inner)
 
     @mixed
       =
@@ -80,7 +80,7 @@ describe('arguments — runtime', () => {
       a: Text
       b: Text = "world"
       =
-      -> result: a + " " + b
+      return result: a + " " + b
 
     --- named, no type, = value ---
 
@@ -89,7 +89,7 @@ describe('arguments — runtime', () => {
       a: Text
       b: = "default"
       =
-      -> result: a + " " + b
+      return result: a + " " + b
 
     // optional arguments — mixed
     @mixedOpt
@@ -282,7 +282,7 @@ describe('optional arguments — compilation', () => {
         a Integer = 0
         b Integer
         =
-        ->(a)
+        return (a)
     `)).toThrow();
   });
 
@@ -317,7 +317,7 @@ describe('optional arguments — compilation', () => {
         a: Text
         b: Text = "x"
         =
-        -> result: a
+        return result: a
     `)).not.toThrow();
   });
 
@@ -328,7 +328,7 @@ describe('optional arguments — compilation', () => {
         a: Text
         b: = "x"
         =
-        -> result: a
+        return result: a
     `)).not.toThrow();
   });
 });

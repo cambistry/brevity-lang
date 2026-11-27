@@ -151,7 +151,7 @@ describe('a caller\'s annotation on a value that isn\'t a call', () => {
   });
 
   it('leaves an actor to its `as` at run time', () => {
-    accepts('T = (x Integer) *{ @a = -> v: x as Integer }\n@g = {\n  t = T(1)\n  n Integer = t\n  return 1\n}\n');
+    accepts('T = (x Integer) *{ @a = () -> v: x as Integer }\n@g = {\n  t = T(1)\n  n Integer = t\n  return 1\n}\n');
   });
 
   it('checks a call inside an expression', () => {

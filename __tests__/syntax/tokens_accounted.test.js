@@ -44,7 +44,7 @@ describe('every token is used', () => {
     const parse = await parserWith(
       "      throw new Error(`Unexpected token at top level: ${peek().type} '${peek().value || ''}'`);",
       '      consume();');
-    expect(() => parse(tokenize('**\n@get = -> 1\n'))).toThrow("Parser bug: STARSTAR '**' (token 0, line 1) was read and dropped in the file");
+    expect(() => parse(tokenize('**\n@get = () -> 1\n'))).toThrow("Parser bug: STARSTAR '**' (token 0, line 1) was read and dropped in the file");
   });
 
   it('a `} : Type` parsed and dropped is a parser bug', async () => {
@@ -71,12 +71,12 @@ const box = (label) => `
 
     @get
       =
-      -> value: value
+      return value: value
 
     .
   end#${label}
 
-  @go = -> 1
+  @go = () -> 1
 `;
 
 describe('input the parser dropped is an error', () => {
@@ -105,6 +105,6 @@ describe('input the parser dropped is an error', () => {
   });
 
   it('a cell\'s `as Type` that conflicts with its type', () => {
-    expect(() => compileSource('C = *{\n  k *Integer = 1 as Text\n  @get = -> k\n}\n@go = -> 1\n')).toThrow("Conflicting type declarations for 'k': 'Integer' vs 'Text'");
+    expect(() => compileSource('C = *{\n  k *Integer = 1 as Text\n  @get = () -> k\n}\n@go = () -> 1\n')).toThrow("Conflicting type declarations for 'k': 'Integer' vs 'Text'");
   });
 });

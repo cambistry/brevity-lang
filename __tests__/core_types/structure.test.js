@@ -9,7 +9,7 @@ describe('structure — runtime', () => {
       =
       ...args Object
       =
-      ->
+      return
         ...args as Object
 
     // Object destructuring

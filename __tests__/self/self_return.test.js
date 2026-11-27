@@ -14,7 +14,7 @@ describe('a self-return, seen from outside', () => {
     }
 
     A = *{
-      @make = -> B()
+      @make = () -> B()
     } ^ {
       B = *{
         k *Integer = 0
@@ -27,7 +27,7 @@ describe('a self-return, seen from outside', () => {
         k *Integer = 0
         @bump! = { k <- k + 1 }
       }
-      @make = -> Inner()
+      @make = () -> Inner()
     }
 
     @s = actor {

@@ -6,7 +6,7 @@ trying to compress them.
 ## 1. Simple Public Status Handler
 
 ```brevity
-@status = -> ok: "ready"
+@status = () -> ok: "ready"
 ```
 
 Use this for health, readiness, and obvious demo-visible state.
@@ -80,7 +80,7 @@ use "DOM": DOM {
 content *Text = "initial"
 
 @bump. = (v: Text) { content <- v }
-@create = -> <div>{{ content }}</div>
+@create = () -> <div>{{ content }}</div>
 ```
 
 Use this when you need a small reactive demo surface.
@@ -118,7 +118,7 @@ tail return.
 ```brevity
 count *Integer = 0
 
-@total = -> count
+@total = () -> count
 @inc! = (by: Integer) { count <- count + by }
 @reset. = { count <- 0 }
 ```

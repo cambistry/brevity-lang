@@ -39,7 +39,7 @@ const child = `
   use :T = "svc"
   @U = T ^ (k Integer) *{
     super(n: k)
-    step = -> 10
+    step = () -> 10
   }
   @get = { u = @U(5); x Integer = u.get(); return x }
   @all = { x Integer = @U.all(); return x }
@@ -74,12 +74,12 @@ describe('the child of a parent class with a block, in another file', () => {
 const parent = `
   @T = (@n: Integer) *{
     count *Integer = n
-    step = -> 1
+    step = () -> 1
     @get = { x Integer = count + step(); return x }
   } ^ {
     total *Integer = 3
     @all = { x Integer = total * 10 + step(); return x }
-    step = -> 1
+    step = () -> 1
   }
 `;
 

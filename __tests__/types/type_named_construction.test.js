@@ -237,22 +237,22 @@ describe('named construction — runtime field placement', () => {
     type User(id: Integer, ? nickname: Integer)
     type Person(name: Text, age: Integer)
 
-    @allNamed = -> result: (Point(x: 10, y: 20).x)
+    @allNamed = () -> result: (Point(x: 10, y: 20).x)
 
-    @allNamedReversed = -> result: (Point(y: 20, x: 10).x)
+    @allNamedReversed = () -> result: (Point(y: 20, x: 10).x)
 
-    @mixedNamedField = -> result: (Pt(3, y: 4).y)
+    @mixedNamedField = () -> result: (Pt(3, y: 4).y)
 
     @mixedPositionalField = {
       (x) = Pt(3, y: 4)
       return result: x
     }
 
-    @threeNamed = -> result: (Vec3(z: 3, x: 1, y: 2).z)
+    @threeNamed = () -> result: (Vec3(z: 3, x: 1, y: 2).z)
 
-    @optOmitted = -> result: (User(id: 7).nickname ?? 99)
+    @optOmitted = () -> result: (User(id: 7).nickname ?? 99)
 
-    @optSupplied = -> result: (User(id: 7, nickname: 42).nickname ?? 99)
+    @optSupplied = () -> result: (User(id: 7, nickname: 42).nickname ?? 99)
 
     @computedNamed = {
       a = 5 as Integer
@@ -260,7 +260,7 @@ describe('named construction — runtime field placement', () => {
       return result: p.y
     }
 
-    @textNamed = -> result: (Person(age: 30, name: "ann").name)
+    @textNamed = () -> result: (Person(age: 30, name: "ann").name)
   `;
 
   const expectOp = (op, re, ty) => expectBehavior(

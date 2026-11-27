@@ -25,7 +25,7 @@ const singleViewSource = `
 
   view = *WebView(path: "/my_view")
 
-  @status = -> ok: "ready"
+  @status = () -> ok: "ready"
   @open. = { view.open... }
   @workflow!
     =

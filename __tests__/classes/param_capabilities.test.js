@@ -28,7 +28,7 @@ describe('class params — file-level *Integer write-cap', () => {
       *
 
       @bump. = { slot <- slot + 1 }
-      @get = -> :slot
+      @get = () -> :slot
     `,
       { constructorArgs: { slot: 100 } },
     );
@@ -58,7 +58,7 @@ describe('class params — file-level *Point write-cap', () => {
       @shift. = (dx Integer, dy Integer) {
         coords <- Point(coords.x + dx, coords.y + dy)
       }
-      @get = -> :coords
+      @get = () -> :coords
     `,
       { constructorArgs: { coords: { __type: 'Point', x: 0, y: 0 } } },
     );
@@ -87,7 +87,7 @@ describe('class params — file-level *List write-cap', () => {
       *
 
       @reset. = { ns <- [9, 8, 7] }
-      @get = -> :ns
+      @get = () -> :ns
     `,
       { constructorArgs: { ns: [1, 2, 3] } },
     );

@@ -31,7 +31,7 @@ const DOC = {
 const child = `
   use :T = "svc"
   @V = T ^ {
-    h = -> 2
+    h = () -> 2
     @viaBase = { x Integer = base::h() * 100 + h(); return x }
     @asParent = { x Integer = T.connect(); return x }
   }
@@ -39,7 +39,7 @@ const child = `
     timeout *Integer = 5
   }
   @X = @W ^ {
-    h = -> 3
+    h = () -> 3
     @read = { x Integer = super() + 1000; return x }
   }
 `;
@@ -144,7 +144,7 @@ describe('the child of a parent block in another file', () => {
 const parent = `
   @T = *{} ^ {
     timeout *Integer = 30
-    h = -> 1
+    h = () -> 1
     @connect = { x Integer = timeout * 10 + h(); return x }
     @bump! = { timeout <- timeout + 1 }
     @read = { x Integer = timeout; return x }

@@ -31,7 +31,7 @@ describe('ephemeral process actors', () => {
       *
       @hello
         =
-        -> greeting: "hi" as Text
+        return greeting: "hi" as Text
       .
 
     MathActor =
@@ -40,7 +40,7 @@ describe('ephemeral process actors', () => {
         =
         n Integer
         =
-        -> result: (n * 2) as Integer
+        return result: (n * 2) as Integer
       .
 
     Counter =
@@ -51,7 +51,7 @@ describe('ephemeral process actors', () => {
 
       @get
         =
-        -> value: value as Integer
+        return value: value as Integer
 
       .
 
@@ -62,7 +62,7 @@ describe('ephemeral process actors', () => {
       *
       @total
         =
-        -> sum: (a + b) as Integer
+        return sum: (a + b) as Integer
 
       .
 
@@ -76,7 +76,7 @@ describe('ephemeral process actors', () => {
         =
         n Integer
         =
-        -> result: value + n as Integer
+        return result: value + n as Integer
 
       .
   `;
@@ -131,7 +131,7 @@ describe('ephemeral process — optional class args', () => {
 
       @get
         =
-        -> value: value as Integer
+        return value: value as Integer
 
       .
 
@@ -142,7 +142,7 @@ describe('ephemeral process — optional class args', () => {
       *
       @total
         =
-        -> sum: (a + b) as Integer
+        return sum: (a + b) as Integer
 
       .
   `;

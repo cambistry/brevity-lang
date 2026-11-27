@@ -14,7 +14,7 @@ describe('arithmetic on untyped call results', () => {
     }
 
     C = *{
-      own = -> 1
+      own = () -> 1
       @outer = {
         x Integer = f() + g()
         return x
@@ -24,7 +24,7 @@ describe('arithmetic on untyped call results', () => {
         return x
       }
     } ^ {
-      h = -> 4
+      h = () -> 4
     }
 
     @outer = {

@@ -25,24 +25,24 @@ describe('single-expression functions — runtime', () => {
       fn!(3)
       return :count
 
-    // single-expression — fn = -> return_vals (no params)
+    // single-expression — fn = () -> return_vals (no params)
     @answer
       =
-      fn = -> 42 as Integer
+      fn = () -> 42 as Integer
       result Integer = fn()
       return :result
 
     @hello
       =
-      fn = -> "hello" as Text
+      fn = () -> "hello" as Text
       result Text = fn()
       return :result
 
     // single-expression — public function forms
-    @greet4 = -> "Hello from Brevity!"
-    @answer4 = -> 42
+    @greet4 = () -> "Hello from Brevity!"
+    @answer4 = () -> 42
     @echo = (n: Integer) -> :n
-    @alive = -> true
+    @alive = () -> true
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -70,14 +70,14 @@ describe('single-expression functions — runtime', () => {
     );
   });
 
-  it('single-expression — fn = -> return_vals (no params) — fn = -> 42 as Integer — no-param lambda arrow return', async () => {
+  it('single-expression — fn = () -> return_vals (no params) — fn = () -> 42 as Integer — no-param lambda arrow return', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'answer', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Integer' }], re: [{ result: 42 }], to: 'c' } },
     );
   });
 
-  it('single-expression — fn = -> return_vals (no params) — fn = -> "hello" as Text — no-param lambda string return', async () => {
+  it('single-expression — fn = () -> return_vals (no params) — fn = () -> "hello" as Text — no-param lambda string return', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'hello', from: 'c' } },
       { output: { id: '1', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } },
@@ -88,14 +88,14 @@ describe('single-expression functions — runtime', () => {
   // Public function single-expression forms
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  it('single-expression — public function forms — @op = -> "Hello" as Text', async () => {
+  it('single-expression — public function forms — @op = () -> "Hello" as Text', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'greet4', from: 'c' } },
       { output: { id: '1', 'ty': ['Text'], re: ['Hello from Brevity!'], to: 'c' } },
     );
   });
 
-  it('single-expression — public function forms — @op = -> 42 as Integer', async () => {
+  it('single-expression — public function forms — @op = () -> 42 as Integer', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'answer4', from: 'c' } },
       { output: { id: '1', 'ty': ['Integer'], re: [42], to: 'c' } },
@@ -109,7 +109,7 @@ describe('single-expression functions — runtime', () => {
     );
   });
 
-  it('single-expression — public function forms — @op = -> true as Boolean', async () => {
+  it('single-expression — public function forms — @op = () -> true as Boolean', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'alive', from: 'c' } },
       { output: { id: '1', 'ty': ['Boolean'], re: [true], to: 'c' } },

@@ -263,7 +263,7 @@ describe('function return — all forms', () => {
 // `return` is the explicit value-return; `->` is only the lambda / body-opener
 // arrow. A bare `->` where a statement is expected (inside a braced body, or
 // after another statement in a lineal body) is just a syntax error — a misplaced
-// arrow. The sole-tail one-liner `@get = -> x` and lambda values keep `->`.
+// arrow. The sole-tail one-liner `@get = () -> x` and lambda values keep `->`.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('a bare `->` is not a statement', () => {
@@ -283,7 +283,7 @@ describe('a bare `->` is not a statement', () => {
 
   it('`->` still opens a lambda / one-liner body (unchanged)', () => {
     // sole-tail one-liner getter — the arrow one-liner, kept as implicit return
-    expect(() => extract(`@get = -> value: 1\n`)).not.toThrow();
+    expect(() => extract(`@get = () -> value: 1\n`)).not.toThrow();
     // lambda value arrow inside a braced body
     expect(() => extract(`@go = {\n  f = (x) -> x + 1\n  return r: f(2)\n}\n`)).not.toThrow();
   });
@@ -292,7 +292,7 @@ describe('a bare `->` is not a statement', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // `return` is not an expression — it cannot be the right-hand side of `=`.
 // `@get = return x` opens no function body and `return` is not assignable, so it
-// is a parse error (distinct from the valid `@get = -> x` arrow one-liner and the
+// is a parse error (distinct from the valid `@get = () -> x` arrow one-liner and the
 // valid `@get = { return x }` braced body).
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -301,8 +301,8 @@ describe('`return` cannot be a right-hand side', () => {
     expect(() => extract(`@get = return x\n`)).toThrow(/right-hand side of '='/);
   });
 
-  it('`@get = return x` is NOT the same as the valid `@get = -> x`', () => {
-    expect(() => extract(`@get = -> x\n`)).not.toThrow();         // arrow one-liner
+  it('`@get = return x` is NOT the same as the valid `@get = () -> x`', () => {
+    expect(() => extract(`@get = () -> x\n`)).not.toThrow();         // arrow one-liner
     expect(() => extract(`@get = { return x }\n`)).not.toThrow(); // braced body
   });
 

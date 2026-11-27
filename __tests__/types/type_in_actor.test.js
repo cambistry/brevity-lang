@@ -10,7 +10,7 @@ describe('a type declared in a class', () => {
   const script = `
     W = *{
       type X(Integer)
-      @make = -> X(1)
+      @make = () -> X(1)
     }
     S = actor {
       type Widget(Text, Text)
@@ -20,13 +20,13 @@ describe('a type declared in a class', () => {
         type Y(Integer)
       }
     }
-    @byClass = -> result: W::X(2)
+    @byClass = () -> result: W::X(2)
     @byActor = {
       w = W()
       return result: w::X(3)
     }
-    @bySingleton = -> result: S::Widget("a", "b")
-    @nested = -> result: A::B::Y(4)
+    @bySingleton = () -> result: S::Widget("a", "b")
+    @nested = () -> result: A::B::Y(4)
     @inside = {
       w = W()
       p W::X = w.make()
@@ -86,7 +86,7 @@ describe('a type declared in a class', () => {
       type P(Integer)
       @W = *{
         type X(Integer)
-        @get = -> X(1)
+        @get = () -> X(1)
       }
       @S = actor {
         type Widget(Text, Text)
@@ -113,21 +113,21 @@ describe('types of one name in different actors', () => {
     type X(Integer)
     W = *{
       type X(Integer)
-      @make = -> X(1)
+      @make = () -> X(1)
     }
     V = *{
       type X(Integer, Integer)
     }
-    @file = -> result: X(1)
-    @w = -> result: W::X(2)
-    @v = -> result: V::X(3, 4)
+    @file = () -> result: X(1)
+    @w = () -> result: W::X(2)
+    @v = () -> result: V::X(3, 4)
     @same = {
       w = W()
       a W::X = w.make()
       b W::X = W::X(1)
       return result: a == b
     }
-    @differ = -> result: X(1) == W::X(1)
+    @differ = () -> result: X(1) == W::X(1)
     @readW = (p: W::X) {
       (n) = p
       return result: n
@@ -182,8 +182,8 @@ describe('a type of another file, reached through the service', () => {
   const remotes = [{ path: 'svc.bv', service: DOC }];
   const script = `
     use Svc = "svc.bv"
-    @point = -> result: Svc::Point(1, 2)
-    @classType = -> result: Svc::W::X(4)
+    @point = () -> result: Svc::Point(1, 2)
+    @classType = () -> result: Svc::W::X(4)
     @got = {
       w = Svc.W()
       p w::X = w.get()
@@ -237,8 +237,8 @@ describe('types of one name in two services', () => {
   const script = `
     use Svc = "svc.bv"
     use Geo = "geo.bv"
-    @svc = -> result: Svc::Point(1, 2)
-    @geo = -> result: Geo::Point(1, 2, 3)
+    @svc = () -> result: Svc::Point(1, 2)
+    @geo = () -> result: Geo::Point(1, 2, 3)
     @fromSvc = {
       p Svc::Point = Svc.origin()
       (x, y) = p
@@ -291,14 +291,14 @@ describe('types of one name in two services', () => {
 });
 
 describe('reaching a type: errors', () => {
-  const W = 'W = *{\n  type X(Integer)\n  @get = -> 1\n}\n';
+  const W = 'W = *{\n  type X(Integer)\n  @get = () -> 1\n}\n';
 
   it('a type and a class of the same name in one actor', () => {
-    expect(() => compileSource('type Box(Integer)\n@Box = *{}\n@go = -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
+    expect(() => compileSource('type Box(Integer)\n@Box = *{}\n@go = () -> 1\n')).toThrow(/^'Box' is declared as both a type and a class$/);
   });
 
   it('a class\'s type, bare outside the class', () => {
-    expect(() => compileSource(`${W}@go = -> X(1)\n`)).toThrow(/^'X' is a type of 'W' — reach it as 'W::X'$/);
+    expect(() => compileSource(`${W}@go = () -> X(1)\n`)).toThrow(/^'X' is a type of 'W' — reach it as 'W::X'$/);
   });
 
   it('a type reached with a dot', () => {
@@ -314,15 +314,15 @@ describe('reaching a type: errors', () => {
   });
 
   it('an actor whose class is not known', () => {
-    expect(() => compileSource(`${W}f = (a) {\n  return a::X(1)\n}\n@go = -> f(1)\n`)).toThrow(/^Can't tell the class of 'a' in 'a::X'$/);
+    expect(() => compileSource(`${W}f = (a) {\n  return a::X(1)\n}\n@go = () -> f(1)\n`)).toThrow(/^Can't tell the class of 'a' in 'a::X'$/);
   });
 
   it('a class without that type', () => {
-    expect(() => compileSource(`${W}@go = -> W::Nope(1)\n`)).toThrow(/^'W' has no type 'Nope'$/);
+    expect(() => compileSource(`${W}@go = () -> W::Nope(1)\n`)).toThrow(/^'W' has no type 'Nope'$/);
   });
 
   it('two types of one name in one class', () => {
-    expect(() => compileSource(`W = *{\n  type X(Integer)\n  type X(Integer)\n}\n@go = -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
+    expect(() => compileSource(`W = *{\n  type X(Integer)\n  type X(Integer)\n}\n@go = () -> 1\n`)).toThrow(/Duplicate type declaration: 'W::X'/);
   });
 
   it('`::Name (…)` in a class body', () => {

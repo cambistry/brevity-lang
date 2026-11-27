@@ -11,20 +11,20 @@ import { expectBehavior } from '../helpers.js';
 const levels = `
   @T = *{} ^ {
     timeout *Integer = 30
-    h = -> 1
+    h = () -> 1
     @connect = { x Integer = timeout * 10 + h(); return x }
     @bump! = { timeout <- timeout + 1 }
-    @timeout = -> timeout
+    @timeout = () -> timeout
   }
   @V = @T ^ {
-    h = -> 2
+    h = () -> 2
     @asParent = { x Integer = @T.connect(); return x }
   }
   @W = @V ^ {
     timeout *Integer = 5
   }
   @X = @W ^ {
-    h = -> 3
+    h = () -> 3
   }
   @t = { x Integer = @T.connect(); return x }
   @v = { x Integer = @V.connect(); return x }

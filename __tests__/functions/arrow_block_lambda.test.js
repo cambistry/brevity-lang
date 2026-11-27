@@ -132,7 +132,7 @@ describe('arrow + block lambda — compiles end to end', () => {
 describe('an arrow body that is an `if`', () => {
   const script = `
     count = (n Integer) -> if n == 0 { 0 } else { count(n - 1) }
-    @down = -> count(3)
+    @down = () -> count(3)
     @local = {
       size = (n Integer) -> if n > 1 { "big" } else { "small" }
       return size(5)
