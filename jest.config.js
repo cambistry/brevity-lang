@@ -7,6 +7,9 @@ const codegenDir = join(__dirname, 'src', 'codegen');
 
 const allTests = ['**/__tests__/**/*.test.js'];
 const exclude = (names) => names.map(n => `__tests__/${n}.test.js`);
+// Ticket worktrees (`.worktrees/<slug>`) hold their own copy of the suite. Anchored to
+// <rootDir> so a run from inside a worktree still finds its own tests.
+const WORKTREES = '<rootDir>/.worktrees/';
 
 // Discover targets by scanning src/codegen/*/index.js
 const projects = [];
@@ -26,7 +29,7 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
 
   // `*.dom.test.js` files need a DOM; they run only in the `dom` project
   // below. Every target project (browser included) runs the shared suite.
-  const ignorePatterns = ['/node_modules/', ...exclude(excludeTests), '\\.dom\\.test\\.js$'];
+  const ignorePatterns = ['/node_modules/', WORKTREES, ...exclude(excludeTests), '\\.dom\\.test\\.js$'];
 
   // Optional per-target setup file (e.g. raise test/hook timeouts).
   const setupPath = join(codegenDir, entry.name, 'jest.setup.js');
@@ -47,6 +50,7 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
     transform: {},
     testMatch: allTests,
     testPathIgnorePatterns: ignorePatterns,
+    modulePathIgnorePatterns: [WORKTREES],
     globals: { BREVITY_TARGET: targetName },
     ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
     ...globalFiles,
@@ -60,7 +64,8 @@ for (const entry of readdirSync(codegenDir, { withFileTypes: true })) {
       testEnvironment: 'node',
       transform: {},
       testMatch: ['**/__tests__/**/*.dom.test.js'],
-      testPathIgnorePatterns: ['/node_modules/', ...exclude(excludeTests)],
+      testPathIgnorePatterns: ['/node_modules/', WORKTREES, ...exclude(excludeTests)],
+      modulePathIgnorePatterns: [WORKTREES],
       globals: { BREVITY_TARGET: targetName },
       ...(setupFilesAfterEnv.length ? { setupFilesAfterEnv } : {}),
       ...globalFiles,

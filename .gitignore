@@ -64,3 +64,6 @@ erl_crash.dump
 
 # Kanban board worktree (kanban branch)
 .kanban/
+
+# Ticket worktrees (one branch per ticket)
+.worktrees/
