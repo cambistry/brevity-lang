@@ -1,12 +1,12 @@
 ---
 created: 2026-11-25
 ---
-# A type declaration should carry a namespace of functions
+# A type declaration should carry a namespace of functions / auto bang fns
 
 Design: `notes/type-namespaces-2026-11-25.md`.
 
 ```brevity
-type Ticket (slug Text, title Text, status Text, created Text) {
+type Ticket(slug: Text, title: Text, status: Text, created: Text) {
   label = (t Ticket) -> "#{t.title}  (#{t.slug})"
   newer = (a Ticket, b Ticket) -> a.created > b.created
 }
@@ -22,3 +22,14 @@ Want:
 - No `@` and no `self`: the namespace is an Object of functions, not an actor. Siblings see each other by lexical scope.
 
 Open (in the note): an entry sharing a field's name, adding functions to an imported type, and generic types.
+
+Also: should auto-bang functions for cell actors be built into the language when a function returns a value of the Type?
+
+```brevity
+type Item(count: Integer) {
+  bump = { Item(count: count + 1) } 
+}
+
+i *Item = Item(count: 0)
+i.bump!
+i.count == 1
