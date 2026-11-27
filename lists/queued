@@ -1,4 +1,3 @@
-kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/if-arrow-branch-is-not-a-return.md
 kanban/tickets/fix-binding-an-element-projection-gives-a-self-contradicting-error.md
 kanban/tickets/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md

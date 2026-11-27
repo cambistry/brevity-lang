@@ -5,3 +5,4 @@ kanban/finished/double-check-for-dead-code-paths-with-removal-of-ingest.md
 kanban/finished/an-unannotated-bind-infers-only-literals-and-own-calls.md
 kanban/finished/eliminate-need-for-the-noop-hack.md
 kanban/finished/retire-list-of-integers-and-such-feels-out-of-step-with-the.md
+kanban/finished/fix-a-bare-element-statement-in-a-function-body-is-dropped.md
