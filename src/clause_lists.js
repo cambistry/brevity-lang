@@ -29,6 +29,13 @@ export const matchesInput = (clauses) => clauses.some(c => c.heads.some(h => h.k
 const and = (a, b) => ({ ...AST.ifExpr(a, AST.ifBranch({ expr: b }), AST.ifBranch({ expr: AST.boolLiteral(false) })), boolOp: 'and' });
 const or = (a, b) => ({ ...AST.ifExpr(a, AST.ifBranch({ expr: AST.boolLiteral(true) }), AST.ifBranch({ expr: b })), boolOp: 'or' });
 
+function shownAs(node, name) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { node.forEach(n => shownAs(n, name)); return; }
+  if ((node.type === 'Identifier' || node.type === 'RefRead') && node.name === name) node.shownAs ??= name;
+  for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') shownAs(v, name);
+}
+
 // A name the clause binds is a param, though a cell of that name was in scope when
 // it was read: a read of it is the param's.
 function asParam(node, name) {
@@ -64,6 +71,8 @@ export function lowerClauseList(clauses) {
     const c = clauses[i];
     c.heads.forEach((h, k) => {
       if (h.kind !== 'bind') return;
+      // A read keeps the name it was written with, for the errors about it.
+      shownAs(c.body, h.name);
       renameIn(c.body, h.name, params[k].name);
       if (c.condition) renameIn(c.condition, h.name, params[k].name);
       asParam(c.body, params[k].name);

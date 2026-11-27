@@ -221,3 +221,19 @@ describe('repeat while — compile errors (repeat is non-assignable)', () => {
     `)).toThrow(/cannot.*bind|unassignable|\(\)/i);
   });
 });
+
+// A loop's body is checked as a function body is, with the names around it.
+describe('repeat while — the body is checked', () => {
+  it('a bind in the body', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        k *Integer = 0
+        repeat while (k < 3) {
+          t Text = n
+          k <- k + 1
+        }
+        return k
+      }
+    `)).toThrow("Cannot bind 't Text' to 'n', which is Integer");
+  });
+});

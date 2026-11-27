@@ -3872,6 +3872,16 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
   }
 
+  // A block inside the body (an `if`'s branch, a loop's body) is checked as a body
+  // is, with the names around it in scope. Each block validates the blocks in it.
+  if (!inferOnly) {
+    for (const block of nestedBlocks(body)) {
+      const blockEnv = new Map(typeEnv);
+      for (const [k, v] of buildTypeEnv([], block, null, dependencyNames)) if (v !== undefined) blockEnv.set(k, v);
+      validateBody(block, actorInfo, dependencyNames, remotesParsed, factoryDecls, blockEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
+    }
+  }
+
   // A lambda in a slot (`over`, `reduce`, `List.sort`, `sub`) runs its body with
   // its params as the slot types them, and the names around it.
   if (!inferOnly) {
@@ -3881,6 +3891,25 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       validateBody(lambdaBody, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
     }
   }
+}
+
+// The statement lists nested in a body, outermost first: an `if`'s branch bodies
+// and a loop's body, not those inside a function (it's validated with its own scope).
+function nestedBlocks(body) {
+  const blocks = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === 'Function') return;
+    if ((n.type === 'IfBranch' || n.type === 'WhileStatement') && Array.isArray(n.body)) {
+      blocks.push(n.body);
+      if (n.type === 'WhileStatement') walk(n.cond);
+      return;
+    }
+    for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
+  };
+  walk(body);
+  return blocks;
 }
 
 // A lambda's params take their types from the slot it's in: each element of the List
@@ -4321,7 +4350,7 @@ function checkAnnotationValue(s, value, actorByName) {
   const wrong = narrowable ? !members.some(holds) : !members.every(holds);
   if (!wrong) return;
   const is = members.length > 1 ? 'can be' : 'is';
-  const named = s.value?.type === 'Identifier' || s.value?.type === 'RefRead' ? s.value.name : null;
+  const named = s.value?.type === 'Identifier' || s.value?.type === 'RefRead' ? (s.value.shownAs ?? s.value.name) : null;
   const shownType = shown(type);
   if (named) {
     throw new Error(`Cannot bind '${s.name} ${declared}' to '${named}', which ${is} ${shownType}. Annotate '${s.name} ${shownType}', or coerce: '${s.name} ${declared} = ${named} as ${declared}'`);

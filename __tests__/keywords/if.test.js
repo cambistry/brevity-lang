@@ -1811,3 +1811,55 @@ describe('if — a return in an if used as a value', () => {
     `)).not.toThrow();
   });
 });
+
+// A branch's body is checked as a function body is, with the names around it.
+describe('if — a branch body is checked', () => {
+  it('a bind in a branch of an if used as a value', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        r Integer = if (n > 0) {
+          t Text = n
+          1
+        } else { 2 }
+        return r
+      }
+    `)).toThrow("Cannot bind 't Text' to 'n', which is Integer");
+  });
+
+  it('a bind in the else branch', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        r Integer = if (n > 0) { 1 } else {
+          t Text = n
+          2
+        }
+        return r
+      }
+    `)).toThrow("Cannot bind 't Text' to 'n', which is Integer");
+  });
+
+  it('a bind in a branch of an if used as a statement, nested', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        if (n > 0) {
+          if (n > 1) {
+            t Text = n
+          }
+        }
+        return 2
+      }
+    `)).toThrow("Cannot bind 't Text' to 'n', which is Integer");
+  });
+
+  it('a well-typed branch compiles', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) {
+        r Integer = if (n > 0) {
+          t Integer = n
+          t + 1
+        } else { 2 }
+        return r
+      }
+    `)).not.toThrow();
+  });
+});

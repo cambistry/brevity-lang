@@ -195,3 +195,21 @@ describe('the empty clause list', () => {
     `)).toThrow("'xs' is a List, which isn't called: a clause list is written 'head -> value' per entry");
   });
 });
+
+// A clause's body is checked with the name it binds, as written.
+describe('clause lists — a clause body is checked', () => {
+  it('a bind of a bound head', () => {
+    expect(() => compileSource(`
+      @g = (key Integer) {
+        r Integer = key |> [
+          0 -> 1
+          x -> {
+            t Text = x
+            2
+          }
+        ]
+        return r
+      }
+    `)).toThrow("Cannot bind 't Text' to 'x', which is Integer");
+  });
+});
