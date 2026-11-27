@@ -147,6 +147,37 @@ function lowerCellMemberReads(ast) {
   walk(ast.actors);
 }
 
+// `sub n, fn` on a cell the function declares is refused: every write to it happens
+// in the function's own turn, where it can be acted on directly, so there's nothing
+// to wait for. A lambda in the function subscribing to one of its cells is the same.
+function checkOwnCellSubscriptions(ast) {
+  const cellsIn = (node, out = new Set()) => {
+    if (!node || typeof node !== 'object') return out;
+    if (Array.isArray(node)) { node.forEach(n => cellsIn(n, out)); return out; }
+    if (node.type === 'RefDecl' && node.name) out.add(node.name);
+    for (const k in node) if (k !== 'loc' && node[k] && typeof node[k] === 'object') cellsIn(node[k], out);
+    return out;
+  };
+  for (const actor of ast.actors || []) {
+    for (const fn of actor.functions || []) {
+      const own = cellsIn(fn.body);
+      if (own.size === 0) continue;
+      const walk = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(walk); return; }
+        const t = n.type === 'SubscribeCall' ? n.target : null;
+        const name = (t?.type === 'RefRead' || t?.type === 'Identifier' || t?.type === 'RefArg') ? t.name : null;
+        if (name && own.has(name)) {
+          const where = fn.name.startsWith('__') ? 'this function' : `'${fn.name}'`;
+          throw new Error(`Cannot subscribe to '${name}', a cell ${where} declares: each write to it happens while ${where} runs, so act on the value where it's written`);
+        }
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
+      };
+      walk(fn.body);
+    }
+  }
+}
+
 // A reply of one of the actor's own functions (`-> &f`) is its address, a value like
 // any other: `#<:~f>`, relative to the replying actor, as `#<:C>` is for a class it
 // declares (src/codegen/fn_signature.js fnAddress).
@@ -376,6 +407,7 @@ function validateProgram(ast, options = {}) {
   lowerCellMemberReads(ast);
   lowerPointerWrites(ast);
   lowerFnRefReplies(ast);
+  checkOwnCellSubscriptions(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);

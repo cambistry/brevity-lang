@@ -1,4 +1,4 @@
-import { expectBehavior, createActor } from '../helpers.js';
+import { expectBehavior, createActor, compileSource } from '../helpers.js';
 
 describe('subscribe — runtime', () => {
   const script = `
@@ -344,5 +344,42 @@ describe('subscribe — interop fn (two actors, manually shepherded)', () => {
     expect(reply).toEqual(expect.objectContaining({
       id: '3', re: [{ last: 105 }], to: 'caller',
     }));
+  });
+});
+
+// A cell the function declares is written only while the function runs, so a
+// subscription to it has nothing to wait for: it's refused.
+describe('subscribe — a cell the function declares', () => {
+  it('a subscription to it is refused', () => {
+    expect(() => compileSource(`
+      @f = {
+        n *Integer = 0
+        seen *Integer = 0
+        sub n, (v Integer) { seen <- v }
+        n <- 5
+        return seen
+      }
+    `)).toThrow("Cannot subscribe to 'n', a cell '@f' declares: each write to it happens while '@f' runs, so act on the value where it's written");
+  });
+
+  it('so is one to a pointer it declares', () => {
+    expect(() => compileSource(`
+      T = *(x Integer) { @a = () -> x }
+      @f = {
+        c *T = T(1)
+        sub *c, (p T) { x = 1 }
+        return 1
+      }
+    `)).toThrow("Cannot subscribe to 'c', a cell '@f' declares: each write to it happens while '@f' runs, so act on the value where it's written");
+  });
+
+  it('and one from a lambda in the function', () => {
+    expect(() => compileSource(`
+      @f = {
+        n *Integer = 0
+        w = { sub n, (v Integer) { x = v } }
+        return 1
+      }
+    `)).toThrow("Cannot subscribe to 'n', a cell '@f' declares: each write to it happens while '@f' runs, so act on the value where it's written");
   });
 });

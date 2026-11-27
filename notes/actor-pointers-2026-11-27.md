@@ -50,6 +50,9 @@ sub cref, …               // error: an actor isn't a cell
 - **A name bound to an actor is not a cell** (`b = Box(0)`, `b Box = …`): `b <- v` is its `set`,
   as for a pointer, and `*b <- v` is an error, since there's no cell to repoint.
 - **`*p <- v` takes one value.** `*p <- a, b` is an error.
+- **`sub *p` takes a cell of the actor** (`sub *@peer, …`). On a pointer the function declares
+  it's an error, as for any cell the function declares: every write to it happens while the
+  function runs (decided 2026-11-27).
 - **Value cells are unchanged:** `n <- 1` writes, `sub n, …` subscribes, `bump!(*n)` grants. Only a
   cell holding an actor takes `*` on a write or a subscription, because only there does a bare name
   have two possible targets.
@@ -69,8 +72,6 @@ It's consistent, but at each use it doesn't separate the pointer from the actor.
 
 ## Open
 
-- `sub` takes a cell of the actor it's in (`@name`, `#name`), not a local cell, for any cell; so
-  `sub *p` on a local pointer is refused with the general error.
 - A call-site grant (`f(*p)`) reaches only a local function, for any cell.
 - The null rule covers pointers only. A plain local typed `T | null` still compiles a call through
   it unguarded.
