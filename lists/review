@@ -1,4 +1,3 @@
-kanban/finished/if-arrow-branch-is-not-a-return.md
 kanban/finished/fix-binding-an-element-projection-gives-a-self-contradicting-error.md
 kanban/finished/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
 kanban/finished/a-private-silent-function-that-writes-is-not-defined-at-its-calls.md
