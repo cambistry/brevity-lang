@@ -2932,7 +2932,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         if (args.length < minArgs || args.length > maxArgs) {
           throw new Error(`'${cleanMethod}' takes ${minArgs === maxArgs ? minArgs : `${minArgs} to ${maxArgs}`} arguments, got ${args.length}`);
         }
-        result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
+        // `Text.size(x)` keeps the subject type it was written for, which validation checks.
+        result = cleanMethod === 'size' ? Object.assign(AST.sizeExpr(args[0]), { of: 'Text' }) : AST.textMethodExpr(cleanMethod, args);
       } else if (result.type === 'Identifier' && result.name === 'Blob' && !isBang && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
         const args = [parseExpr()];
@@ -4873,13 +4874,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const constraint = {};
     while (peek().type !== 'RBRACE' && peek().type !== 'EOF') {
       if (peek().type === 'NEWLINE' || peek().type === 'COMMA') { if (peek().type === 'COMMA') expectItemBeforeComma(undefined, 'the list'); consume(); continue; }
+      // An entry is named: `@name` or `name`, a keyword among them (`@set`).
+      const entryName = () => {
+        if (peek().type !== 'IDENT' && peek().type !== 'KEYWORD') throw new Error(`Expected a name for the entry, got ${peek().type} '${peek().value}'`);
+        return take().value;
+      };
       let methodName;
       if (peek().type === 'AT') {
         take();
-        const nameTok = take();
-        methodName = '@' + nameTok.value;
+        methodName = '@' + entryName();
       } else {
-        methodName = take().value;
+        methodName = entryName();
       }
       expect('LPAREN');
       const params = [];

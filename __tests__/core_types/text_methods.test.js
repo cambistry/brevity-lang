@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 describe('Text methods', () => {
   const script = `
@@ -483,5 +483,46 @@ describe('Text methods', () => {
   });
   it('Text bang forms — same-type-returning mutators — concat! mutates ref to concatenated', async () => {
     await expectBehavior(script, { input: { id: '11', op: 'concatBang', from: 'c' } }, { output: { id: '11', 'ty': [{ result: 'Text' }], re: [{ result: 'hello world' }], to: 'c' } });
+  });
+});
+
+// A Text or Blob function takes its subject and its other args by type: a value
+// known to be something else is an error. A literal takes the form its slot asks for.
+describe('Text methods — args are checked by type', () => {
+  it("a subject that isn't Text", () => {
+    expect(() => compileSource(`
+      @f = (n Integer) { t Text = Text.slice(n, 0, 1); return t }
+    `)).toThrow("'Text.slice' takes a Text, got an Integer");
+  });
+
+  it("Text.size of a value that isn't Text", () => {
+    expect(() => compileSource(`
+      @f = (n Integer) { k Integer = Text.size(n); return k }
+    `)).toThrow("'Text.size' takes a Text, got an Integer");
+  });
+
+  it("an index that isn't an Integer", () => {
+    expect(() => compileSource(`
+      @f = (t Text) { u Text = Text.slice(t, "a", 1); return u }
+    `)).toThrow("'Text.slice' arg 2 takes an Integer, got a Text");
+  });
+
+  it("a Text arg that isn't Text", () => {
+    expect(() => compileSource(`
+      @f = (t Text, n Integer) { b Boolean = Text.contains(t, n); return b }
+    `)).toThrow("'Text.contains' arg 2 takes a Text, got an Integer");
+  });
+
+  it('a lambda param typed by its slot is checked', () => {
+    expect(() => compileSource(`
+      xs *List[Integer] = [1]
+      @f = { r List = over(xs) (x) { Text.slice(x, 0, 1) }; return r }
+    `)).toThrow("'Text.slice' takes a Text, got an Integer");
+  });
+
+  it('a Text literal fills a Blob slot', () => {
+    expect(() => compileSource(`
+      @f = () -> result: Blob.first("hello")
+    `)).not.toThrow();
   });
 });

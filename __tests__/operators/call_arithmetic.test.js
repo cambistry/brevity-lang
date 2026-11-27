@@ -1,4 +1,4 @@
-import { expectBehavior } from '../helpers.js';
+import { expectBehavior, compileSource } from '../helpers.js';
 
 // Arithmetic on call results computes in the type it's assigned to: a reply has no
 // type of its own until then. `x Integer = f() + g()`.
@@ -156,5 +156,45 @@ describe('a send as an operand', () => {
       { input: { id: '1', op: 'cond', from: 'c' } },
       { output: { id: '1', re: ['big'], ty: ['Text'], to: 'c' } },
     );
+  });
+});
+
+// Arithmetic takes numbers; `+` also joins two Texts or two Lists. A value known to
+// be something else is an error; an unknown type is accepted.
+describe('arithmetic — operands are checked by type', () => {
+  it('a Boolean operand', () => {
+    expect(() => compileSource(`
+      @f = (n Integer) { m Integer = n + true; return m }
+    `)).toThrow("'+' adds numbers, or joins two Texts or two Lists, got an Integer and a Boolean");
+  });
+
+  it('a Text and a number', () => {
+    expect(() => compileSource(`
+      @f = (a Text, n Integer) { c Text = a + n; return c }
+    `)).toThrow("'+' adds numbers, or joins two Texts or two Lists, got a Text and an Integer");
+  });
+
+  it("'-' on Text", () => {
+    expect(() => compileSource(`
+      @f = (a Text, b Text) { c Text = a - b; return c }
+    `)).toThrow("'-' takes numbers, got a Text");
+  });
+
+  it('an element in reduce typed by its slot', () => {
+    expect(() => compileSource(`
+      xs *List[Integer] = [1]
+      @f = { r Integer = reduce(0, xs) (acc, x) { acc + Text.size(x) }; return r }
+    `)).toThrow("'Text.size' takes a Text, got an Integer");
+  });
+
+  it('numbers, two Texts and two Lists compile', () => {
+    expect(() => compileSource(`
+      @f = (n Integer, d Decimal, a Text, b Text) {
+        x Decimal = n + d
+        t Text = a + b
+        l List[Integer] = [1] + [2]
+        return x
+      }
+    `)).not.toThrow();
   });
 });

@@ -193,6 +193,19 @@ describe('file-level DI — service coercion with as', () => {
     `)).not.toThrow();
   });
 
+  it("an as-cast's entry is named: a stray ',' before its '->' is an error", () => {
+    expect(() => compileSource(`
+      use Svc = "/services/generic" as { basic. () => . }
+
+      narrow = Svc as { @specialized (x: Integer) , -> (result: Integer) }
+
+      @go = (x: Integer) {
+        :result Integer = narrow.specialized(:x)
+        return :result
+      }
+    `)).toThrow();
+  });
+
   it('as-cast can widen to methods not in original constraint', () => {
     expect(() => compileSource(`
       use Svc = "/services/generic" as { basic. () => . }

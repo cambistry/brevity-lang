@@ -1445,6 +1445,7 @@ function validateProgram(ast, options = {}) {
   checkDecimalTermination(ast);
   // ── List method element-type compat ────────────────────────────────────
   checkListMethodArgs(ast);
+  checkTextArgsAndOperands(ast);
   // ── Type declarations: canonical declaration site per file ─────────────
   checkTypeDecls(ast);
   // ── Service-method callback-lambda param inference (C3) ─────────────────
@@ -2394,6 +2395,89 @@ function checkListMethodArgs(ast) {
       const typeEnv = buildTypeEnvEnc(fn.params || [], fn.body || []);
       for (const [k, v] of stateEnv) if (!typeEnv.has(k)) typeEnv.set(k, v);
       walkBody(fn.body || [], typeEnv);
+    }
+    walkBody(actor.constructorBody || [], stateEnv);
+    walkBody(actor.initBody || [], stateEnv);
+  }
+}
+
+// A Text or Blob function takes its subject and its other args by type, and
+// arithmetic takes numbers (`+` also joins two Texts or two Lists). A value known
+// to be something else is an error where it's met; an unknown type (`Anything`, a
+// union, an unannotated name) is accepted. A literal takes the form its slot asks
+// for (`Blob.size("hi")`).
+const TEXT_ARGS = {
+  Integer: new Set(['take', 'from', 'repeat', 'at', 'slice']),
+  Same: new Set(['before', 'after', 'contains', 'starts_with', 'ends_with', 'index_of', 'split', 'concat', 'append', 'prepend', 'replace', 'replace_first', 'xor', 'constant_time_equals']),
+};
+const BLOB_FROM_TEXT = new Set(['from_hex', 'from_base64', 'from_utf8']);
+const NUMBERS = new Set(['Integer', 'Decimal', 'Float']);
+const ARITHMETIC = new Set(['+', '-', '*', '/', '%', '**']);
+
+function checkTextArgsAndOperands(ast) {
+  const a = (x) => (/^[AEIOU]/.test(x) ? `an ${x}` : `a ${x}`);
+  const scalar = (t) => typeof t === 'string' && !t.includes(':') && t !== 'Anything';
+  const isLiteral = (e) => ['StringLiteral', 'IntLiteral', 'DecimalLiteral', 'FloatLiteral'].includes(e?.type);
+  const check = (expr, want, env, what) => {
+    const t = inferType(expr, env);
+    if (t === undefined || t === null || !(scalar(t) || isList(t) || t === 'Boolean')) return;
+    if (t === want) return;
+    if (isLiteral(expr) && LITERAL_FORMS.get(t)?.includes(want)) return;
+    throw new Error(`${what} takes ${a(want)}, got ${a(show(t))}`);
+  };
+  const checkMethod = (node, env) => {
+    const kind = node.type === 'TextMethodExpr' ? 'Text' : 'Blob';
+    const args = node.args || [];
+    const label = `${kind}.${node.method}`;
+    const subject = kind === 'Blob' && BLOB_FROM_TEXT.has(node.method) ? 'Text' : kind === 'Blob' && node.method === 'zeros' ? 'Integer' : kind;
+    if (args[0]) check(args[0], subject, env, `'${label}'`);
+    for (let i = 1; i < args.length; i++) {
+      const want = TEXT_ARGS.Integer.has(node.method) ? 'Integer' : TEXT_ARGS.Same.has(node.method) ? kind : null;
+      if (want) check(args[i], want, env, `'${label}' arg ${i + 1}`);
+    }
+  };
+  const checkOperands = (node, env) => {
+    if (!ARITHMETIC.has(node.op)) return;
+    const l = inferType(node.left, env);
+    const r = inferType(node.right, env);
+    const known = (t) => t !== undefined && t !== null && (scalar(t) || isList(t));
+    if (node.op === '+' && ((l === 'Text' && r === 'Text') || (isList(l) && isList(r)))) return;
+    for (const t of [l, r]) {
+      if (!known(t) || NUMBERS.has(t)) continue;
+      const other = t === l ? r : l;
+      if (node.op === '+' && (t === 'Text' || isList(t)) && !known(other)) continue;
+      const shownT = show(t);
+      throw new Error(node.op === '+'
+        ? `'+' adds numbers, or joins two Texts or two Lists, got ${a(show(l ?? 'Anything'))} and ${a(show(r ?? 'Anything'))}`
+        : `'${node.op}' takes numbers, got ${a(shownT)}`);
+    }
+  };
+  const walkBody = (body, env) => {
+    const walk = (node, env) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => walk(n, env)); return; }
+      if (node.type === 'Function') {
+        // A lambda's typed params (its slot's, or written) are in scope in it.
+        const inner = new Map(env);
+        for (const p of node.params || []) if (p.name) { if (p.typeEnc !== undefined) inner.set(p.name, p.typeEnc); else inner.delete(p.name); }
+        walk(node.body, inner);
+        walk(node.expr, inner);
+        return;
+      }
+      if (node.type === 'TextMethodExpr' || node.type === 'BlobMethodExpr') checkMethod(node, env);
+      if (node.type === 'SizeExpr' && node.of) check(node.arg, node.of, env, `'${node.of}.size'`);
+      if (node.type === 'BinaryExpr') checkOperands(node, env);
+      for (const k of Object.keys(node)) if (k !== 'type' && k !== 'loc') walk(node[k], env);
+    };
+    walk(body, env);
+  };
+  for (const actor of ast.actors || []) {
+    const stateEnv = new Map();
+    for (const d of actor.stateVarDecls || []) if (d.name && d.typeNameEnc !== undefined) stateEnv.set(d.name, d.typeNameEnc);
+    for (const fn of actor.functions || []) {
+      const env = buildTypeEnvEnc(fn.params || [], fn.body || []);
+      for (const [k, v] of stateEnv) if (!env.has(k)) env.set(k, v);
+      walkBody(fn.body || [], env);
     }
     walkBody(actor.constructorBody || [], stateEnv);
     walkBody(actor.initBody || [], stateEnv);
