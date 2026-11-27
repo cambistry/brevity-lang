@@ -337,8 +337,10 @@ function newTicket(title) {
   const taken = s => S.tickets.has(s) || [TICKETS, FINISHED].some(d => fs.existsSync(path.join(d, `${s}.md`)));
   for (let n = 2; taken(slug); n++) slug = `${base}-${n}`;
   fs.mkdirSync(folderOf(status), { recursive: true });
-  fs.writeFileSync(path.join(folderOf(status), `${slug}.md`), `---\ncreated: ${today()}\n---\n# ${title}\n`);
-  S.tickets = loadTickets();
+  const text = `---\ncreated: ${today()}\n---\n# ${title}\n`;
+  fs.writeFileSync(path.join(folderOf(status), `${slug}.md`), text);
+  // Only the new ticket: a full loadTickets() would reset every ticket's status to its folder's default.
+  S.tickets.set(slug, { ...parseTicket(slug, text, folderOf(status)), status });
   place(slug, status, 0);
   writeOrder();
   publish();
