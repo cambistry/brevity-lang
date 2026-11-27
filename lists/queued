@@ -1,7 +1,9 @@
+kanban/tickets/an-unannotated-bind-infers-only-literals-and-own-calls.md
 kanban/tickets/fix-a-bare-element-statement-in-a-function-body-is-dropped.md
 kanban/tickets/a-catch-label-can-t-exit-through-over-or-reduce.md
 kanban/tickets/if-arrow-branch-is-not-a-return.md
 kanban/tickets/fix-binding-an-element-projection-gives-a-self-contradicting-error.md
 kanban/tickets/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
 kanban/tickets/a-private-silent-function-that-writes-is-not-defined-at-its-calls.md
+kanban/tickets/over-and-reduce-accept-an-integer-as-the-list.md
 kanban/tickets/a-private-zero-arity-function-computing-from-a-cell-is-not-defined.md
