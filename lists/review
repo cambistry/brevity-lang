@@ -2,3 +2,5 @@ kanban/finished/fix-binding-an-element-projection-gives-a-self-contradicting-err
 kanban/finished/js-a-send-inside-a-compound-expression-isn-t-awaited.md
 kanban/finished/overloaded-clauses-that-differ-only-by-class-or-type-params.md
 kanban/finished/a-bare-value-in-a-tail-branch-is-lost.md
+kanban/finished/rust-drops-an-implicit-tail-value-after-a-guard.md
+kanban/finished/rust-r-b-get-with-a-named-reply-binds-null.md
