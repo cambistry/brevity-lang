@@ -713,6 +713,7 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     const s = genExpr(ctx, expr.args[0], typeEnv, sCtx);
     return dispatchMethod(ERL_LIST_METHODS, 'List', expr, s, (i) => genExpr(ctx, expr.args[i], typeEnv, sCtx));
   }
+  if (expr.type === 'SortByExpr') return genSortByExpr(ctx, expr, typeEnv, sCtx);
   if (expr.type === 'OverExpr') {
     return genOverExpr(ctx, expr, typeEnv, sCtx);
   }
@@ -1730,6 +1731,21 @@ function genReduceExpr(ctx, expr, typeEnv, sCtx) {
   return `brevity_foldl1(${fn}, ${list})`;
 }
 
+
+// `List.sort(xs) fn`: by a key (one param), a stable keysort; by a comparator (two),
+// `lists:sort/2`, stable when its fun says whether A goes no later than B.
+function genSortByExpr(ctx, expr, typeEnv, sCtx) {
+  const list = genExpr(ctx, expr.list, typeEnv, sCtx);
+  const send = ctx.selfSendPrefix ? `${ctx.selfSendPrefix}_self_send` : 'self_send';
+  const args = expr.byKey ? ['X_'] : ['A_', 'B_'];
+  let call;
+  if (expr.fn.type === 'FnRef' && ctx.actorFnNames.has(expr.fn.name)) call = `bv_object_one(${send}(${erlOp(expr.fn.name)}, [${args.join(', ')}]))`;
+  else if (expr.fn.type === 'FnRef' && ctx.lambdaVarNames.has(expr.fn.name)) call = `bv_object_one(${send}(${genExpr(ctx, { type: 'Identifier', name: expr.fn.name }, typeEnv, sCtx)}, [${args.join(', ')}]))`;
+  else if (expr.fn.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, expr.fn)) call = `bv_object_one(${send}(${erlGenLambdaArgLabel(ctx, expr.fn, typeEnv, sCtx)}, [${args.join(', ')}]))`;
+  else call = `(${genExpr(ctx, expr.fn, typeEnv, sCtx)})(${args.join(', ')})`;
+  if (expr.byKey) return `[V_ || {_, V_} <- lists:keysort(1, [{(fun(X_) -> ${call} end)(X_), X_} || X_ <- ${list}])]`;
+  return `lists:sort(fun(A0_, B0_) -> not is_truthy((fun(A_, B_) -> ${call} end)(B0_, A0_)) end, ${list})`;
+}
 
 function genIfExpr(ctx, expr, typeEnv, sCtx) {
   const cond = genExpr(ctx, expr.cond, typeEnv, sCtx);

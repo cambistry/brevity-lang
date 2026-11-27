@@ -40,6 +40,29 @@ export const LIST_PREAMBLE = `const _List = {
     }
     return _List.from(results);
   },
+  // A stable sort by a function: a key (one param), sorted in natural order, or a
+  // comparator (two), true when its first sorts before its second.
+  async sortByAsync(list, fn, byKey) {
+    const a = _List.toArray(list);
+    if (byKey) {
+      const keyed = [];
+      for (const x of a) keyed.push([BvObject.one(await fn(BvObject.pack([x])), 'sort'), x]);
+      keyed.sort((p, q) => _bv_list_cmp(p[0], q[0]));
+      return _List.from(keyed.map(p => p[1]));
+    }
+    const before = async (x, y) => { const r = BvObject.one(await fn(BvObject.pack([x, y])), 'sort'); return r !== false && r !== null; };
+    const sort = async (xs) => {
+      if (xs.length < 2) return xs;
+      const mid = xs.length >> 1;
+      const l = await sort(xs.slice(0, mid));
+      const r = await sort(xs.slice(mid));
+      const out = [];
+      let i = 0, j = 0;
+      while (i < l.length && j < r.length) out.push(await before(r[j], l[i]) ? r[j++] : l[i++]);
+      return [...out, ...l.slice(i), ...r.slice(j)];
+    };
+    return _List.from(await sort(a));
+  },
   async foldAsync(list, initial, fn) {
     if (list === null) return null;
     let acc = initial;

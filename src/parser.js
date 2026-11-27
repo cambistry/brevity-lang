@@ -2922,6 +2922,19 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
         result = AST.blobMethodExpr(cleanMethod, args);
+      } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && cleanMethod === 'sort' && peek().type === 'LPAREN') {
+        // `List.sort(xs)`, natural order; with a function, by it: a key (one param)
+        // or a comparator (two), as a trailing block or `&f`. Stable.
+        const args = parseCallArgs();
+        appendTrailingBlocks(args, true);
+        if (args.length === 1) result = AST.listMethodExpr('sort', args);
+        else {
+          if (args.length !== 2) throw new Error("'sort' takes a list, and a function to sort it by");
+          requireFunctionRef(args[1], 'sort');
+          const fn = args[1];
+          // A reference's params are counted once the file is read (settleSortFunctions).
+          result = { type: 'SortByExpr', list: args[0], fn, byKey: fn.type === 'Function' ? sortsByKey(fn.params) : null };
+        }
       } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && LIST_FUNCTIONS.has(cleanMethod) && peek().type === 'LPAREN') {
         result = parseListFunction(cleanMethod);
       } else if (result.type === 'Identifier' && result.name === 'List' && !isBang && LIST_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
@@ -6859,6 +6872,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   settleBangDecls(result);
   settleWrites(result);
   settleUnusedMaps(result);
+  settleSortFunctions(result);
   settleClauseCalls(result);
   settleStatementIfs(result);
   captureReturnedCells(result);
@@ -7129,6 +7143,28 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         if ((k === 'body' || k === 'initBody') && Array.isArray(v)) settleList(v);
         if (v && typeof v === 'object') visit(v);
       }
+    };
+    visit(program.actors);
+  }
+
+  // A sort's function takes one value (a key) or two (a comparator).
+  function sortsByKey(params) {
+    const n = (params || []).length;
+    if (n !== 1 && n !== 2) throw new Error("'sort''s function takes one value (a key) or two (whether the first sorts before the second)");
+    return n === 1;
+  }
+  function settleSortFunctions(program) {
+    const byName = new Map();
+    for (const a of program.actors || []) for (const f of a.functions || []) if (f.name && !byName.has(f.name)) byName.set(f.name, f);
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      if (node.type === 'SortByExpr' && node.byKey === null) {
+        const f = byName.get(node.fn.name);
+        if (!f) throw new Error(`'${node.fn.name}' is not defined`);
+        node.byKey = sortsByKey(f.params);
+      }
+      for (const [k, v] of Object.entries(node)) if (k !== 'loc' && v && typeof v === 'object') visit(v);
     };
     visit(program.actors);
   }

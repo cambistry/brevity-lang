@@ -1244,6 +1244,36 @@ ${subRegLines.join('\n')}
     const s = genRustExpr(expr.args[0], typeEnv, eCtx);
     return dispatchMethod(RUST_LIST_METHODS, 'List', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
+  // `List.sort(xs) fn`, stable. By a key (one param): keys, then a stable sort_by. By
+  // a comparator (two): an insertion sort, each element placed after the ones it
+  // doesn't sort before, so the comparator can call into the actor.
+  if (expr.type === 'SortByExpr') {
+    const coll = genRustExpr(expr.list, typeEnv, eCtx);
+    const listType = inferType(expr.list, typeEnv);
+    const elem = isList(listType) && listElement(listType) !== 'Anything' ? listElement(listType) : undefined;
+    const names = expr.byKey ? ['_x'] : ['_a', '_b'];
+    let value;
+    let env = typeEnv;
+    const binds = [];
+    if (expr.fn.type === 'Function') {
+      const tail = expr.fn.expr ?? expr.fn.body?.findLast(st => st.type === 'ImplicitReturn')?.expr;
+      if (!tail || (expr.fn.body || []).some(st => st.type !== 'ImplicitReturn')) throw new Error("A sort's function is one expression");
+      env = new Map(typeEnv);
+      expr.fn.params.forEach((p, i) => {
+        const t = envTypeOf(p) ?? elem;
+        if (t !== undefined) { env.set(p.name, t); binds.push(`let ${rustIdent(p.name)}: ${rustType(t)} = ${convertFromValue(`${names[i]}.clone()`, t)};`); }
+        else binds.push(`let ${rustIdent(p.name)} = ${names[i]}.clone();`);
+      });
+      value = expr.byKey ? toJsonValue(genRustExpr(tail, env, eCtx), inferType(tail, env)) : genRustCondition(tail, env);
+    } else {
+      const call = `self.${rustIdent(expr.fn.name)}_fn(&BvObject { positional: vec![${names.map(n => `${n}.clone()`).join(', ')}], named: Map::new() }).one()`;
+      value = expr.byKey ? call : `{ let _r = ${call}; _r != Value::Null && _r != json!(false) }`;
+    }
+    if (expr.byKey) {
+      return `{ let mut _keyed: Vec<(Value, Value)> = Vec::new(); for _x in ${coll}.as_array().cloned().unwrap_or_default() { ${binds.join(' ')} let _k: Value = ${value}; _keyed.push((_k, _x)); } _keyed.sort_by(|p, q| bv_cmp(&p.0, &q.0)); Value::Array(_keyed.into_iter().map(|p| p.1).collect()) }`;
+    }
+    return `{ let mut _out: Vec<Value> = Vec::new(); for _el in ${coll}.as_array().cloned().unwrap_or_default() { let mut _i = _out.len(); while _i > 0 { let _a = _el.clone(); let _b = _out[_i - 1].clone(); ${binds.join(' ')} let _before: bool = ${value}; if _before { _i -= 1; } else { break; } } _out.insert(_i, _el); } Value::Array(_out) }`;
+  }
   if (expr.type === 'OverExpr') {
     const coll = genRustExpr(expr.collection, typeEnv, eCtx);
     let fn = expr.fn;

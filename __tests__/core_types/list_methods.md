@@ -68,7 +68,9 @@ ns.take!(2)
 - `List.replace_first(list, target, replacement)` -> `List`
 - `List.flatten(list)` -> `List`
 - `List.unique(list)` -> `List`
-- `List.sort(list)` -> `List`
+- `List.sort(list)` -> `List`, in natural order
+- `List.sort(list) fn` -> `List`, stable, by a key (`(t) { t.created }`) or a comparator
+  (`(a, b) { a.created > b.created }`, true when `a` sorts before `b`)
 
 Bang forms are tested for reverse, repeat, replace, slice, take, from, concat,
 append, prepend, and sort.

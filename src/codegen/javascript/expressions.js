@@ -651,6 +651,9 @@ export function genExpr(ctx, expr) {
     const fnCode = genLambdaAwareFnArg(ctx, expr.fn);
     return `await _List.mapAsync(${genExpr(ctx, expr.collection)}, ${fnCode})`;
   }
+  if (expr.type === 'SortByExpr') {
+    return `await _List.sortByAsync(${genExpr(ctx, expr.list)}, ${genLambdaAwareFnArg(ctx, expr.fn)}, ${expr.byKey})`;
+  }
   if (expr.type === 'ReduceExpr') {
     const init = expr.initial ? genExpr(ctx, expr.initial) : 'null';
     const fnCode = genLambdaAwareFnArg(ctx, expr.fn);
