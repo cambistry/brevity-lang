@@ -47,7 +47,6 @@ kanban/tickets/remaining-gaps-in-a-a-a-as-separate-names.md
 kanban/tickets/what-s-the-ty-type-of-a-value-cell.md
 kanban/tickets/keywords-can-t-be-bare-names-inflected-forms-must-work.md
 kanban/tickets/replace-caller-based-type-inference-for-actor-params.md
-kanban/tickets/rust-drops-an-implicit-tail-value-after-a-guard.md
 kanban/tickets/remove-the-flat-call-paths-for-class-instances.md
 kanban/tickets/constructor-blocks-bind-cells-the-way-handlers-do.md
 kanban/tickets/define-what-a-failed-file-construction-does.md
