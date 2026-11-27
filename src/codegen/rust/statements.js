@@ -1,8 +1,9 @@
 // statements.js — Statement generation for Rust codegen
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { selfSlotTag } from '../../actor_values.js';
 import { isFn, isUnion } from '../../type_enc.js';
 import { typeText, classNameOf, hasType, envTypeOf, orAny } from '../enc_names.js';
-import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
+import { addressToken, memberOp, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { returnsOnlySelf } from '../../chains.js';
 import { argForParam } from '../../call_args.js';
@@ -1960,7 +1961,10 @@ function storeInsert(store, key, value) {
 // handler with captured variables. A body generated twice names the same handler.
 function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
   const existing = G.ctx.lambdaHandlers.find(h => h.fn === fnNode);
-  const lambdaName = existing?.name ?? `_lambda_${G.ctx.lambdaCounter++}`;
+  const n = existing ? null : nextLambdaNumber(G.ctx);
+  const lambdaName = existing?.name ?? `_lambda_${n}`;
+  // A lambda bound to a name is a value: its address, `#<:@N>`, answered by its `@N` arm.
+  const selector = existing?.selector ?? `@${n}`;
   // Find free variables (identifiers used but not defined as params or locals)
   const freeVars = [];
   const paramNames = new Set((fnNode.params || []).map(p => p.name));
@@ -2015,9 +2019,9 @@ function genRustLiftedLambda(s, fnNode, typeEnv, I, lines) {
     lines.push(`${I}self.state.insert("_cap_${lambdaName}_${v}".to_string(), ${capJson});`);
   }
   // A captured function value is a handler's name, not a number.
-  if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName, isFn: G.ctx.lambdaVarNames.has(v) })) });
+  if (!existing) G.ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: fnNode, captures: uniqueFreeVars.map(v => ({ name: v, lambdaName, isFn: G.ctx.lambdaVarNames.has(v) })) });
   G.ctx.lambdaVarNames.add(s.name);
-  lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String("${wireLabel(lambdaName)}".to_string());`);
+  lines.push(`${I}let ${mintRustSsa(s.name)} = Value::String(${JSON.stringify(`#<${selfAddress(selector)}>`)}.to_string());`);
 }
 
 // A cell of the class whose code this is, named bare (`c`, `@c`, `#c`), in a class.
@@ -2286,10 +2290,12 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor references support '<-'`);
       } else if (s.value?.type === 'Function') {
         // Lambda assignment to state/ref var — register handler, store label
-        const lambdaName = `_lambda_${G.ctx.lambdaCounter++}`;
-        G.ctx.lambdaHandlers.push({ name: lambdaName, fn: s.value });
+        // A lambda is a value: its address, `#<:@N>`, answered by its `@N` arm.
+        const n = nextLambdaNumber(G.ctx);
+        const lambdaName = `_lambda_${n}`;
+        G.ctx.lambdaHandlers.push({ name: lambdaName, selector: `@${n}`, fn: s.value });
         const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
-        lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), json!("${wireLabel(lambdaName)}"));`);
+        lines.push(`${I}${rsStore(s.name)}.insert("${kk}".to_string(), json!(${JSON.stringify(`#<${selfAddress(`@${n}`)}>`)}));`);
       } else {
         // If the RHS is a list literal containing spawn-needing actor
         // constructions, hoist each spawn into a `let` binding before the
@@ -3435,6 +3441,8 @@ function genRustTyBody(fields, typeEnv, refNames) {
   for (const f of pos) {
     // A `self` slot is tagged with a bare `@`, "my class"; the parent fills it in.
     if (f.expr?.type === 'SelfValue') { posTypes.push(JSON.stringify(selfSlotTag(G.ctx.childStatePrefix ? { name: G.ctx.childStatePrefix } : null))); continue; }
+    // A function value's tag, worked out by the front end (src/validate.js lowerFnRefReplies).
+    if (f.wireTag !== undefined) { posTypes.push(JSON.stringify(f.wireTag)); continue; }
     const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr, typeEnv);
     if (t === undefined) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -3446,6 +3454,7 @@ function genRustTyBody(fields, typeEnv, refNames) {
   for (const f of named) {
     let key, t, varName;
     if (f.value?.type === 'SelfValue') { namedTypes.push(`"${f.key}": ${JSON.stringify(selfSlotTag(G.ctx.childStatePrefix ? { name: G.ctx.childStatePrefix } : null))}`); continue; }
+    if (f.wireTag !== undefined) { namedTypes.push(`${JSON.stringify(f.key ?? f.sigil)}: ${JSON.stringify(f.wireTag)}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.typeEnc ?? typeEnv.get(f.sigil);

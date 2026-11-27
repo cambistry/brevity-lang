@@ -18,7 +18,7 @@ import { lowerChains } from '../../chains.js';
 import { outerNamesFor, readableNames, propNames } from '../../outer_reads.js';
 import { withCellReady } from '../../init_order.js';
 import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.js';
-import { RUNTIME_CALLBACKS, RUNTIME_IMPORT, erlVarName, erlString, erlStateKey, erlOp, erlExKey } from './preambles.js';
+import { RUNTIME_CALLBACKS, RUNTIME_IMPORT, erlVarName, erlString, erlJson, erlStateKey, erlOp, erlExKey } from './preambles.js';
 import { erlCellNotifyLines, erlNewOpEntries } from './expressions.js';
 import { bindLocalType } from '../../type_infer.js';
 import {
@@ -1027,7 +1027,7 @@ function genChildHandleOp(ctx, actor) {
   // A lambda made in this class's functions is called through its dispatch, as its
   // functions are, and runs as the class's actor. (One with overloads of the same
   // label stays in the file's dispatch, which tries each by arity.)
-  const lambdaKey = (lh) => lh.selector || wireLabel(lh.name);
+  const lambdaKey = (lh) => lambdaSelector(ctx, lh) || wireLabel(lh.name);
   for (let li = lambdaStart; li < ctx.lambdaHandlers.length; li++) {
     const lh = ctx.lambdaHandlers[li];
     if (lh.fn.emptyOverload || lh.emitted) continue;
@@ -1238,7 +1238,8 @@ function genChildActorCode(ctx, actors) {
     // Generate child-specific self_send if the child has functions to call
     if (mergedActor.functions.some(f => f.type === 'FunctionDecl' && f.name)) {
       const prefix = `child_${name.toLowerCase()}`;
-      sections.push(`${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Ty} = bv_call_self_(fun() -> ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),\n    bv_object_pack(Re).`);
+      // A function value is its address, #<:@N>: sent to here, it's the @N arm.
+      sections.push(`${prefix}_self_send(<<"#<:", Sel/binary>>, Payload) when byte_size(Sel) > 0 ->\n    ${prefix}_self_send(binary:part(Sel, 0, byte_size(Sel) - 1), Payload);\n${prefix}_self_send(OpName, Payload) ->\n    {ok, Re, _Ty} = bv_call_self_(fun() -> ${prefix}_handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),\n    bv_object_pack(Re).`);
     }
 
     // Generate per-class start_internal_<class>/1 + bv_loop_<class>/0 so
@@ -1298,6 +1299,18 @@ function genChildActorCode(ctx, actors) {
 // assignment from a call does (`X = bv_object_one(…)`).
 const oneOfCall = (expr, code) => expr?.type === 'FunctionCallExpr' ? `bv_object_one(${code})` : code;
 
+// What a lambda's own name holds inside it: its address when it's a value (`#<:@N>`),
+// else its local dispatch key.
+// An overload (`f << …`) answers to the same selector as the lambda it extends.
+function lambdaSelector(ctx, lh) {
+  return lh.selector ?? ctx.lambdaHandlers.find(h => h.name === lh.name && h.selector)?.selector;
+}
+
+function lambdaSelfRef(ctx, lName) {
+  const selector = ctx.lambdaHandlers.find(h => h.name === lName && h.selector)?.selector;
+  return selector ? erlString(`#<${selfAddress(selector)}>`) : erlOp(lName);
+}
+
 function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
   const params = fnNode.params || [];
   const I = '    ';
@@ -1311,7 +1324,7 @@ function genLambdaHandlerInner(ctx, lName, lVarName, fnNode, captures) {
 
   // Self-reference constant for recursive lambdas
   if (lVarName) {
-    lines.push(`${I}${erlVarName(lVarName)} = ${erlOp(lName)},`);
+    lines.push(`${I}${erlVarName(lVarName)} = ${lambdaSelfRef(ctx, lName)},`);
   }
 
   // Load captures from process dictionary
@@ -1542,7 +1555,7 @@ function genProgram(ctx, actor, allActors, options = {}) {
     // A wire lambda is dispatched by its `@N` selector (locally via ref-field
     // self-dispatch, or on the wire after perspective translation); a local
     // lambda by its bare `_lambda_N` name.
-    lambdaEntries.push({ name: lh.selector || wireLabel(lh.name), inner, params: lh.fn.params || [] });
+    lambdaEntries.push({ name: lambdaSelector(ctx, lh) || wireLabel(lh.name), inner, params: lh.fn.params || [] });
   }
   // Phase 2: group by dispatch key for arity-based dispatch
   const lambdasByName = new Map();
@@ -1668,6 +1681,17 @@ function genProgram(ctx, actor, allActors, options = {}) {
     blockLines.push(`    put(${erlStateKey(ctx, v.name)}, ${soleValueOf(s, genExpr(ctx, s.value, new Map(), {}))})`);
   }
   if (pendingCells.length) blockLines.push('    bv_join_all_()');
+  // A lambda the constructor block or a private function made (`f *Function = (x) -> …`)
+  // is registered after the arms above: it gets its arm here.
+  for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
+    const lh = ctx.lambdaHandlers[li];
+    if (lh.fn.emptyOverload || lh.emitted) continue;
+    const key = lambdaSelector(ctx, lh) || wireLabel(lh.name);
+    if (allClauses.some(c => c.startsWith(`handle_op(<<"${key}">>`))) continue;
+    lh.emitted = true;
+    const inner = genLambdaHandlerInner(ctx, lh.name, lh.varName, lh.fn, lh.captures);
+    allClauses.splice(allClauses.length - 1, 0, `handle_op(<<"${key}">>, _Message, Payload, _Id, _From) ->\n${inner}`);
+  }
   for (const p of constructorParams) {
     stateInitLines.push(`    put(${erlStateKey(ctx, p.name)}, null)`);
   }
@@ -1718,8 +1742,6 @@ ${putLines},
   ]);
   // A function reads as its address, typed with its signature (src/codegen/fn_signature.js).
   const fnsSeen = inspectableFunctions(actor);
-  const erlJson = (v) => (v === null ? 'null' : typeof v === 'boolean' ? String(v) : typeof v === 'string' ? erlString(v)
-    : Array.isArray(v) ? `[${v.map(erlJson).join(', ')}]` : `#{${Object.entries(v).map(([k, x]) => `${erlString(k)} => ${erlJson(x)}`).join(', ')}}`);
   const testGetClauses = [
     ...allStateNames.map(n => `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`),
     ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlString(fnAddress(f))}`),
@@ -2096,6 +2118,9 @@ read_loop() ->
   // self_send helper — routes through dispatch, returns Object
   const needsSelfSend = privateFns.length > 0 || ctx.lambdaHandlers.length > 0 || ctx.publicFnNames.size > 0;
   const selfSendFn = needsSelfSend ? `
+%% A function value is its address, #<:@N>: sent to here, it's the @N arm.
+self_send(<<"#<:", Sel/binary>>, Payload) when byte_size(Sel) > 0 ->
+    self_send(binary:part(Sel, 0, byte_size(Sel) - 1), Payload);
 self_send(OpName, Payload) ->
     {ok, Re, _Ty} = bv_call_self_(fun() -> handle_op(OpName, #{}, Payload, <<"0">>, <<"__self">>) end),
     bv_object_pack(Re).

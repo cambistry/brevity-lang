@@ -1,3 +1,4 @@
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { exitsOuterLabel } from '../label_exits.js';
 // ── Type inference, SSA, and lambda closure analysis for Erlang codegen ──────
 
@@ -343,7 +344,7 @@ function erlLambdaUsesOuterRefs(ctx, funcNode) {
 // (used directly in self_send). The internal `_lambda_N` name is kept for
 // capture keys regardless.
 function erlGenLambdaArgLabel(ctx, funcNode, typeEnv, sCtx, { wire = false } = {}) {
-  const n = ctx.lambdaCounter++;
+  const n = nextLambdaNumber(ctx);
   const lambdaName = `_lambda_${n}`;
   const selector = wire ? `@${n}` : null;
   const freeVars = erlCollectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));

@@ -864,6 +864,8 @@ function genClass(ctx, actor, exportKw, remotes = null) {
   for (let li = 0; li < ctx.lambdaHandlers.length; li++) {
     const lh = ctx.lambdaHandlers[li];
     const { name: lName, varName: lVarName, fn: fnNode, captures } = lh;
+    // An overload (`f << …`) answers to the same selector as the lambda it extends.
+    const selector = lh.selector ?? ctx.lambdaHandlers.find(h => h.name === lName && h.selector)?.selector;
     const params = fnNode.params || [];
     // Skip empty Function() initializer — no dispatch arm needed
     if (fnNode.emptyOverload) continue;
@@ -872,7 +874,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // Declare self-reference so recursive lambdas can call themselves
     if (lVarName) {
       const jsVarName = jsIdent(lVarName);
-      block += `\n        const ${jsVarName} = "${wireLabel(lName)}";`;
+      block += `\n        const ${jsVarName} = ${JSON.stringify(selector ? `#<${selfAddress(selector)}>` : wireLabel(lName))};`;
     }
     // Load captures from private fields
     if (captures && captures.length > 0) {
@@ -916,7 +918,7 @@ function genClass(ctx, actor, exportKw, remotes = null) {
     // The opName a dispatched message carries for this lambda: a wire lambda is
     // reached by its `@N` selector (locally via #fire self-dispatch, or on the
     // wire after perspective translation); a local lambda by its bare name.
-    const dispatchKey = lh.selector || wireLabel(lName);
+    const dispatchKey = selector || wireLabel(lName);
     // For overloaded lambdas (multiple handlers with same label), add arity condition
     const hasOverloads = ctx.lambdaHandlers.filter(h => h.name === lName).length > 1;
     let condition;
@@ -1394,6 +1396,9 @@ ${readsOuter ? `  // A read of a cell of an actor this class is declared in, \`l
   }
 
 ` : ''}${ext ? ext.methods : ''}  async #selfSend(op) {
+    // A function value is its address, \`#<:@N>\`: sent to here, it's the \`@N\` arm.
+    const _sel = (v) => (typeof v === 'string' && v.startsWith('#<:') && v.endsWith('>') ? v.slice(3, -1) : v);
+    op = Array.isArray(op) ? [...op.slice(0, -1), _sel(op[op.length - 1])] : _sel(op);
     const _opName = Array.isArray(op) ? op[op.length - 1] : op;
     const id = String(++this.#nextId);${[...silentFnNames].some(n => !intrinsicArm(n)) ? `
     if (${JSON.stringify([...silentFnNames].filter(n => !intrinsicArm(n)).map(wireLabel))}.includes(_opName)) {

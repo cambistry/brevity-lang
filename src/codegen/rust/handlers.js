@@ -1,4 +1,5 @@
 // handlers.js — Handler and child actor generation for Rust codegen
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { paramTag, typeText, classNameOf, hasType, envTypeOf, hasGeneric, declaredReturn, orAny } from '../enc_names.js';
 import { isFn, isList, listElement, isInstance } from '../../type_enc.js';
 import { intrinsicArm, wireLabel } from '../wire_labels.js';
@@ -557,7 +558,9 @@ function genRustLambdaArms(start, privateFns) {
     // A wire lambda is dispatched by its `@N` selector (locally via ref-field
     // self-dispatch, or on the wire after perspective translation); a local
     // lambda by its bare `_lambda_N` name.
-    lambdaEntries.push({ name: lh.selector || wireLabel(name), inner: lambdaLines.join('\n'), params });
+    // An overload (`f << …`) answers to the same selector as the lambda it extends.
+    const selector = lh.selector ?? G.ctx.lambdaHandlers.find(h => h.name === name && h.selector)?.selector;
+    lambdaEntries.push({ name: selector || wireLabel(name), inner: lambdaLines.join('\n'), params });
   }
 
   // Group lambda entries by name for arity-based dispatch
@@ -600,8 +603,10 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
   G.ctx.lambdaVarNames = new Set();
 
   // Pre-register init body lambdas so they get handler arms
+  // A cell's lambda is a value: its address, `#<:@N>` (pil.selector).
   for (const pil of preInitLambdas) {
-    G.ctx.lambdaHandlers.push({ name: pil.lambdaName, fn: pil.fn });
+    pil.selector = `@${nextLambdaNumber(G.ctx)}`;
+    G.ctx.lambdaHandlers.push({ name: pil.lambdaName, selector: pil.selector, fn: pil.fn });
   }
 
   const allFns = [...publicFns, ...privateFns].filter(h => !h.actorDef && !h.emptyOverload);

@@ -103,7 +103,7 @@ describe('capture — function reference state', () => {
     await actor.sendAsync({ id: '1', cam: 'capture', from: 'p' });
     const re = actor.posts.find(o => o.id === '1').re[0];
     expect(typeof re['~transform']).toBe('string');
-    expect(re['~transform']).toMatch(/^~_lambda_/);
+    expect(re['~transform']).toMatch(/^#<:@\d+>$/);
   });
 
   it('capture after @useDouble has a different label', async () => {
@@ -113,7 +113,7 @@ describe('capture — function reference state', () => {
     await actor.sendAsync({ id: '2', op: 'useDouble.', from: 'c' });
     await actor.sendAsync({ id: '3', cam: 'capture', from: 'p' });
     const after = actor.posts.find(o => o.id === '3').re[0]['~transform'];
-    expect(after).toMatch(/^~_lambda_/);
+    expect(after).toMatch(/^#<:@\d+>$/);
     expect(after).not.toBe(before);
   });
 
@@ -134,7 +134,7 @@ describe('capture — function reference state', () => {
     await actor.sendAsync({ id: '3', op: 'useNegate.', from: 'c' });
     await actor.sendAsync({ id: '4', cam: 'capture', from: 'p' });
     const negateLabel = actor.posts.find(o => o.id === '4').re[0]['~transform'];
-    expect(negateLabel).toMatch(/^~_lambda_/);
+    expect(negateLabel).toMatch(/^#<:@\d+>$/);
     expect(negateLabel).not.toBe(doubleLabel);
   });
 

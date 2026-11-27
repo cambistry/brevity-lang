@@ -5,7 +5,7 @@ import { hasInterface } from './actor_interface.js';
 import { checkEffects } from './effects.js';
 import { readDocument } from './service_doc.js';
 import { readParamsDocument } from './parser_types.js';
-import { fnAddressOf } from './codegen/fn_signature.js';
+import { fnAddressOf, fnSignatureForm } from './codegen/fn_signature.js';
 import { isFn, fnReply, fnSignature, isList, listElement, listOf, show, members as encMembers, isUnion, isInstance, ownPath, ownNames, addressesIn } from './type_enc.js';
 import { _opre_split as splitAddress, _opre_quote as quoteToken } from './codegen/opre_tokens.js';
 import { inferType, typesCompatible as typesCompatibleEnc, binaryResultType as binaryResultTypeEnc, ANY_LIST } from './type_infer.js';
@@ -181,20 +181,40 @@ function checkOwnCellSubscriptions(ast) {
 // A reply of one of the actor's own functions (`-> &f`) is its address, a value like
 // any other: `#<:~f>`, relative to the replying actor, as `#<:C>` is for a class it
 // declares (src/codegen/fn_signature.js fnAddress).
+// A lambda replied is tagged with its signature (`['%f', { args, re, writes }]`), and a
+// `*Function` cell's value with `Function`: the reply field's `wireTag`, which each
+// target emits as the slot's tag.
 function lowerFnRefReplies(ast) {
   for (const actor of ast.actors || []) {
     const own = new Set((actor.functions || []).map(f => f.name));
-    const walk = (n) => {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) { n.forEach(walk); return; }
-      if ((n.type === 'Reply' || n.type === 'Return') && Array.isArray(n.fields)) {
-        for (const f of n.fields) {
-          if (f.expr?.type === 'FnRef' && own.has(f.expr.name)) f.expr = { type: 'FnAddress', name: f.expr.name, address: fnAddressOf(f.expr.name), ...(f.expr.loc && { loc: f.expr.loc }) };
+    const fnCells = new Set((actor.stateVarDecls || []).filter(v => v.isRef && v.typeNameEnc === 'Function').map(v => v.name));
+    for (const fn of actor.functions || []) {
+      const lambdas = new Map();
+      const collect = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(collect); return; }
+        if ((n.type === 'Assign' || n.type === 'TypedAssign') && n.value?.type === 'Function') lambdas.set(n.name, n.value);
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') collect(n[k]);
+      };
+      collect(fn.body);
+      const walk = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(walk); return; }
+        if ((n.type === 'Reply' || n.type === 'Return') && Array.isArray(n.fields)) {
+          for (const f of n.fields) {
+            const e = f.expr;
+            if (e?.type === 'FnRef' && own.has(e.name)) f.expr = { type: 'FnAddress', name: e.name, address: fnAddressOf(e.name), ...(e.loc && { loc: e.loc }) };
+            else if (e?.type === 'FnRef' && lambdas.has(e.name)) {
+              const l = lambdas.get(e.name);
+              f.wireTag = fnSignatureForm({ ...l, name: e.name, body: l.body ?? [{ type: 'Reply', fields: [{ expr: l.expr, type: null, positional: true }] }] });
+            }
+            else if (fnCells.has((e?.type === 'Identifier' || e?.type === 'RefRead') ? e.name : !e ? f.name : null)) f.wireTag = 'Function';
+          }
         }
-      }
-      for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
-    };
-    walk(actor.functions);
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
+      };
+      walk(fn.body);
+    }
   }
 }
 

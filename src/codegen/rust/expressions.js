@@ -1,3 +1,4 @@
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { isSendOperand } from '../send_operands.js';
 // expressions.js — Expression generation for Rust codegen
 import { isDependencyValue } from '../dep_address.js';
@@ -59,7 +60,8 @@ function operandSrcType(node, inferredType) {
 function callFnCode(ref, payload) {
   const cls = G.ctx.childSelfSendPrefix;
   return cls
-    ? `self.child_${cls}_dispatch(&(${ref}).as_str().unwrap_or("").to_string(), ${payload}, "", "__parent")`
+    // A function value is its address, #<:@N>: the class's `@N` arm.
+    ? `self.child_${cls}_dispatch(&{ let _f = (${ref}).as_str().unwrap_or(""); _f.strip_prefix("#<:").and_then(|x| x.strip_suffix('>')).unwrap_or(_f).to_string() }, ${payload}, "", "__parent")`
     : `self.call_fn(&${ref}, ${payload})`;
 }
 
@@ -129,7 +131,7 @@ export function rustNewOpInserts(args, typeEnv, eCtx, msg = 'send_msg') {
 }
 
 function rustLambdaWireRef(fnNode) {
-  const n = G.ctx.lambdaCounter++;
+  const n = nextLambdaNumber(G.ctx);
   const lambdaName = `_lambda_${n}`;
   const selector = `@${n}`;
   G.ctx.lambdaHandlers.push({ name: lambdaName, selector, fn: fnNode });

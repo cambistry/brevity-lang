@@ -1,3 +1,4 @@
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { isSendOperand } from '../send_operands.js';
 import { exitsOuterLabel } from '../label_exits.js';
 import { isDependencyValue } from '../dep_address.js';
@@ -316,7 +317,7 @@ export function lambdaUsesOuterRefs(ctx, funcNode) {
 // The internal `_lambda_N` name is kept distinct from the `@N` wire selector
 // so capture-field identifiers (`_cap__lambda_N_v`) stay valid JS.
 export function genLambdaArgLabel(ctx, funcNode, { wire = false } = {}) {
-  const n = ctx.lambdaCounter++;
+  const n = nextLambdaNumber(ctx);
   const lambdaName = `_lambda_${n}`;
   const selector = wire ? `@${n}` : null;
   const freeVars = collectFreeVars(ctx, funcNode).filter(v => !ctx.actorFnNames.has(v));
@@ -522,7 +523,8 @@ export function genExpr(ctx, expr) {
   if (expr.type === 'BoolLiteral')    return expr.value ? 'true' : 'false';
   if (expr.type === 'FnRef') {
     if (ctx.actorFnNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), "${wireLabel(expr.name)}"])))`;
-    if (ctx.lambdaVarNames.has(expr.name)) return `(async (_s) => BvObject.pack(await this.#selfSend([BvObject.args(_s), ${ssaResolve(ctx, expr.name)}])))`;
+    // A local lambda is its address, a value like any other.
+    if (ctx.lambdaVarNames.has(expr.name)) return ssaResolve(ctx, expr.name);
 
     return ssaResolve(ctx, expr.name);
   }
@@ -1045,7 +1047,8 @@ export function genExpr(ctx, expr) {
       }
       return wrapWithCapture(ctx, `async (_s) => {${destr}\n  return BvObject.pack([${genExpr(ctx, expr.expr)}]);\n}`, expr);
     }
-    return genLambdaArgLabel(ctx, expr);
+    // A lambda used as a value (a cell's, a field's) is its address.
+    return genLambdaArgLabel(ctx, expr, { wire: true });
   }
   if (expr.type === 'DotCallExpr') {
     // Reference-field invocation: `v.ref(args)` / `v.ref!(args)` where `ref` is
@@ -1545,6 +1548,8 @@ export function genTyBody(ctx, fields, typeEnv) {
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
     if (f.expr?.type === 'SelfValue') { posTypes.push(JSON.stringify(selfSlotTag(ctx.currentActor))); continue; }
+    // A function value's tag, worked out by the front end (src/validate.js lowerFnRefReplies).
+    if (f.wireTag !== undefined) { posTypes.push(JSON.stringify(f.wireTag)); continue; }
     const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr, typeEnv);
     if (t === undefined) return null;
     if (isFunctionType(t)) return null;
@@ -1556,6 +1561,7 @@ export function genTyBody(ctx, fields, typeEnv) {
   for (const f of named) {
     let key, t, varName;
     if (f.value?.type === 'SelfValue') { namedTypes.push(`${JSON.stringify(f.key)}: ${JSON.stringify(selfSlotTag(ctx.currentActor))}`); continue; }
+    if (f.wireTag !== undefined) { namedTypes.push(`${JSON.stringify(f.key ?? f.sigil)}: ${JSON.stringify(f.wireTag)}`); continue; }
     if ('sigil' in f) {
       key = f.sigil; t = f.typeEnc ?? typeEnv.get(f.sigil); varName = f.sigil;
     } else if (f.key !== undefined) {

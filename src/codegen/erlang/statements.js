@@ -1,8 +1,9 @@
 // ── Statement codegen for Erlang ─────────────────────────────────────────────
 
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import { selfSlotTag } from '../../actor_values.js';
-import { erlVarName, erlString, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
-import { addressToken, memberOp, wireLabel } from '../wire_labels.js';
+import { erlVarName, erlString, erlJson, erlStateKey, erlOpExpr, erlOp } from './preambles.js';
+import { addressToken, memberOp, wireLabel, selfAddress } from '../wire_labels.js';
 import { _opre_join as joinAddress } from '../opre_tokens.js';
 import { argForParam } from '../../call_args.js';
 import { isDynamicTy } from '../ty_tags.js';
@@ -590,7 +591,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
         if (erlLambdaUsesOuterRefs(ctx, s.value)) {
           lines.push(`${I}${varName} = ${genFunctionLiteral(ctx, s.value, typeEnv, stmtCtx, s.name)},`);
         } else {
-          const lambdaName = `_lambda_${ctx.lambdaCounter++}`;
+          const n = nextLambdaNumber(ctx);
+          const lambdaName = `_lambda_${n}`;
+          // A lambda bound to a name is a value: its address, `#<:@N>`, answered by its `@N` arm.
+          const selector = `@${n}`;
           ctx.lambdaVarNames.add(s.name);
           const freeVars = erlCollectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
           for (const v of freeVars) {
@@ -599,8 +603,8 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
             const src = ctx.stateVarNames.has(v) ? `get(${erlStateKey(ctx, v)})` : genExpr(ctx, { type: 'Identifier', name: v }, typeEnv, stmtCtx);
             lines.push(`${I}put('${capKey}', ${src}),`);
           }
-          ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-          lines.push(`${I}${varName} = ${erlOp(lambdaName)},`);
+          ctx.lambdaHandlers.push({ name: lambdaName, selector, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+          lines.push(`${I}${varName} = ${erlString(`#<${selfAddress(selector)}>`)},`);
         }
       } else if (s.value?.type === 'DotCallExpr' && (
         (s.value.object.type === 'FunctionCallExpr' && s.value.object.callee?.type === 'Identifier' && ctx.actorInfo.has(s.value.object.callee.name)) ||
@@ -1536,6 +1540,8 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   for (const f of pos) {
     // A `self` slot is tagged with a bare `:`, "my class"; the parent fills it in.
     if (f.expr?.type === 'SelfValue') { posTypes.push(erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))); continue; }
+    // A function value's tag, worked out by the front end (src/validate.js lowerFnRefReplies).
+    if (f.wireTag !== undefined) { posTypes.push(erlJson(f.wireTag)); continue; }
     const t = f.typeEnc ?? (f.name ? typeEnv.get(f.name) : undefined) ?? inferType(f.expr || f.value, typeEnv);
     if (t === undefined) return null;
     const tag = slotTag(t, f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null));
@@ -1547,6 +1553,7 @@ function genTyBody(ctx, fields, typeEnv, sCtx) {
   for (const f of named) {
     let key, t, varName;
     if (f.value?.type === 'SelfValue') { namedTypes.push(`${erlString(f.key)} => ${erlString(selfSlotTag(ctx.childStatePrefix ? { name: ctx.childStatePrefix } : null))}`); continue; }
+    if (f.wireTag !== undefined) { namedTypes.push(`${erlString(f.key ?? f.sigil)} => ${erlJson(f.wireTag)}`); continue; }
     if ('sigil' in f) {
       key = f.sigil;
       t = f.typeEnc ?? typeEnv.get(f.sigil);

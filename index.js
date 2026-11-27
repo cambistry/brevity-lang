@@ -1,3 +1,4 @@
+import { reserveClosureSelectors } from './src/codegen/lambda_numbers.js';
 import { tokenize } from './src/lexer.js';
 import { parse } from './src/parser.js';
 import { validate, readRemote } from './src/validate.js';
@@ -111,6 +112,7 @@ export function compile(ast, options = {}) {
     settleOverrideTables(ast);
     renamePublicClasses(ast);
     validateWithSourceNames(validate, ast, options);
+    reserveClosureSelectors(ast);
     const name = options.target || process.env.BREVITY_TARGET || 'js';
     const target = getTarget(name);
     if (!target) {

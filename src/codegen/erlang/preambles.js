@@ -2351,6 +2351,15 @@ function erlString(s) {
   return `<<"${escaped}"/utf8>>`;
 }
 
+// A JSON value as an Erlang term: a map for an object, a list for an array.
+function erlJson(v) {
+  if (v === null) return 'null';
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'string') return erlString(v);
+  if (Array.isArray(v)) return `[${v.map(erlJson).join(', ')}]`;
+  return `#{${Object.entries(v).map(([k, x]) => `${erlString(k)} => ${erlJson(x)}`).join(', ')}}`;
+}
+
 function erlStateKey(ctx, name) {
   // Three disjoint user namespaces: bare → b_, @ → a_, # → h_.
   // Codegen-internal names use the __ prefix and bypass this function.
@@ -2427,4 +2436,4 @@ const RUNTIME_IMPORT = `-import(brevity_rt, [${RUNTIME_FUNCTIONS.join(', ')}]).`
 // What brevity_rt calls back in an actor's module: each generated module exports these.
 const RUNTIME_CALLBACKS = ['bv_type_name/1', 'bv_forward_ty_/2', 'bv_class_site/1', 'bv_source_key/1', 'bv_read_/2', 'bv_run_as_/3', 'bv_unwire_reply/2', 'dispatch/1', 'bv_block_info_/1', 'bv_block_base_class_/1', 'bv_block_remote_/1', 'bv_wire_in_/6', 'bv_block_instance_/1', 'bv_inherited_ty_/2', 'bv_fn_ty_/2', 'bv_inherited_owner_/2'];
 
-export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlStateKey, erlOpExpr, erlOp, erlExKey };
+export { RUNTIME_CALLBACKS, RUNTIME_MODULE, RUNTIME_IMPORT, RESERVED_ERL_VARS, erlVarName, erlString, erlJson, erlStateKey, erlOpExpr, erlOp, erlExKey };

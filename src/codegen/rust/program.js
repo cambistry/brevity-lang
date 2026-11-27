@@ -597,7 +597,7 @@ ${sourceArms}
         // Check if this was pre-registered as a lambda
         const preInit = _preInitLambdas.find(p => p.stateVar === s.name);
         if (preInit) {
-          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!("${wireLabel(preInit.lambdaName)}"));`);
+          stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!(${JSON.stringify(`#<${selfAddress(preInit.selector)}>`)}));`);
         } else if (s.value?.type === 'ObjectConstructor' || s.value?.type === 'ObjectLiteral') {
           // Store Object as wire-format JSON (Object type is not serializable)
           const positional = s.value.args.filter(a => a.positional);
@@ -1728,6 +1728,8 @@ ${(allActors || []).filter(a => a.name && G.ctx.actorInfo?.has(a.name)).map(a =>
     }
 
     fn self_send(&mut self, op_name: &str, payload: &Value) -> Value {
+        // A function value is its address, #<:@N>: sent to here, it's the @N arm.
+        let op_name = op_name.strip_prefix("#<:").and_then(|s| s.strip_suffix('>')).unwrap_or(op_name);
         let empty_msg = json!({});
         let (re, _ty, _handled) = self.handle_op(op_name, &empty_msg, payload, "__self", "");
         re.unwrap_or(Value::Null)

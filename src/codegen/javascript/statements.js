@@ -1,3 +1,4 @@
+import { nextLambdaNumber } from '../lambda_numbers.js';
 import * as AST from '../../ast.js';
 import { inferLiteralType, buildTypeEnv } from './types.js';
 import { bindLocalType } from '../../type_infer.js';
@@ -1051,7 +1052,10 @@ function genClosureBind(ctx, s, emitBinding, outerEnv) {
 // A handler with a guard generates its body twice, and both must name the same arm.
 function genLiftedLambdaBind(ctx, s, emitBinding) {
   const existing = ctx.lambdaHandlers.find(h => h.fn === s.value);
-  const lambdaName = existing?.name ?? `_lambda_${ctx.lambdaCounter++}`;
+  const n = existing ? null : nextLambdaNumber(ctx);
+  const lambdaName = existing?.name ?? `_lambda_${n}`;
+  // A lambda bound to a name is a value: its address, `#<:@N>`, answered by its `@N` arm.
+  const selector = existing?.selector ?? `@${n}`;
   ctx.lambdaVarNames.add(s.name);
   const freeVars = collectFreeVars(ctx, s.value).filter(v => v !== s.name && !ctx.actorFnNames.has(v));
   let captureCode = '';
@@ -1061,8 +1065,8 @@ function genLiftedLambdaBind(ctx, s, emitBinding) {
     const src = ctx.stateVarNames.has(v) ? `this.#${stateKey(v)}` : (ctx.ssaScope?.get(v) || jsIdent(v));
     captureCode += `\n        this.#${fieldName} = ${src};`;
   }
-  if (!existing) ctx.lambdaHandlers.push({ name: lambdaName, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
-  return captureCode + emitBinding(s.name, `"${wireLabel(lambdaName)}"`);
+  if (!existing) ctx.lambdaHandlers.push({ name: lambdaName, selector, varName: s.name, fn: s.value, captures: freeVars.map(v => ({ name: v, lambdaName })) });
+  return captureCode + emitBinding(s.name, JSON.stringify(`#<${selfAddress(selector)}>`));
 }
 
 // ── catch / label-invoke ──────────────────────────────────────────────────────

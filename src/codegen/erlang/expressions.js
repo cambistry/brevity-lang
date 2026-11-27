@@ -620,7 +620,8 @@ function genExpr(ctx, expr, typeEnv, sCtx) {
     if (erlLambdaUsesOuterRefs(ctx, expr)) {
       return genFunctionLiteral(ctx, expr, typeEnv, sCtx);
     }
-    return erlGenLambdaArgLabel(ctx, expr, typeEnv, sCtx);
+    // A lambda used as a value (a cell's, a field's) is its address.
+    return erlGenLambdaArgLabel(ctx, expr, typeEnv, sCtx, { wire: true });
   }
 
   if (expr.type === 'ListLiteral') {
