@@ -3,4 +3,3 @@ kanban/finished/list-concat-and-list-sort.md
 kanban/finished/publish-an-actor-of-a-class-nested-deeper-in-an-instance.md
 kanban/finished/double-check-for-dead-code-paths-with-removal-of-ingest.md
 kanban/finished/an-unannotated-bind-infers-only-literals-and-own-calls.md
-kanban/finished/eliminate-need-for-the-noop-hack.md
