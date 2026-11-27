@@ -2,7 +2,7 @@
 // Terminal kanban board over kanban/tickets.
 // Status and order live in lists/<status> on the kanban branch, checked out
 // as a worktree at .kanban/, one repo-relative ticket path per line.
-// Open tickets are in kanban/tickets/, done and won't-do ones in
+// Open tickets are in kanban/tickets/; review, done and won't-do ones in
 // kanban/finished/; a drop moves the file to its column's folder.
 // Each finished move commits and pushes lists/; while open, the board polls
 // origin and rebases onto other stations' moves.
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TICKETS = path.join(HERE, 'tickets');
 const FINISHED = path.join(HERE, 'finished');
-const FINISHED_COLUMNS = new Set(['done', 'wont-do']);
+const FINISHED_COLUMNS = new Set(['review', 'done', 'wont-do']);
 const REPO = path.resolve(HERE, '..');
 const WORKTREE = path.join(REPO, '.kanban');
 const ORDER_DIR = path.join(WORKTREE, 'lists');
