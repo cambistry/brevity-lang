@@ -66,7 +66,7 @@ describe('Blob methods', () => {
 
       @textSizeEmoji
         =
-        return result: size("\u{1F600}")
+        return result: Text.size("\u{1F600}")
 
       // Blob bang methods
       @bangReverse

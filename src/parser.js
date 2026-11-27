@@ -4,7 +4,7 @@ import * as ASTNodes from './ast.js';
 import { declaredTypeNames } from './names.js';
 import { isLiteralDefault } from './param_defaults.js';
 import { checkChainReceivers, lowerSelfChains } from './chains.js';
-import { tokenize } from './lexer.js';
+import { tokenize, KEYWORDS } from './lexer.js';
 import { TT, renderType } from './type_tree.js';
 import { wireLabel } from './codegen/wire_labels.js';
 import { encodeAstTypes } from './parser_types.js';
@@ -39,19 +39,6 @@ function assertBangValidRef(recv, method, isBang, table) {
   if (!meta || meta.returns !== recv) {
     throw new Error(`${recv} has no method \`${method}!\` — bang form exists only for methods that return ${recv}.`);
   }
-}
-
-// Functions declared at file level, found up front so that one named like a bare
-// builtin (`take`, `first`) shadows it wherever it's called, before or after.
-function fileLevelFunctionNames(tokens) {
-  const names = new Set();
-  let depth = 0;
-  tokens.forEach((t, i) => {
-    if (t.type === 'LBRACE' || t.type === 'LPAREN') depth++;
-    else if (t.type === 'RBRACE' || t.type === 'RPAREN') depth--;
-    else if (depth === 0 && t.type === 'IDENT' && tokens[i - 1]?.type !== 'AT' && tokens[i + 1]?.type === 'EQUALS' && ['LPAREN', 'LBRACE', '->'].includes(tokens[i + 2]?.type)) names.add(t.value);
-  });
-  return names;
 }
 
 // `@a <- v` writes this actor's published cell. It's one name to the statement forms.
@@ -215,7 +202,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     AST[k] = located(ASTNodes[k]);
   }
   const functionNames = new Set();
-  const fileFunctionNames = fileLevelFunctionNames(tokensIn);
   const localScopes = [new Set()];
   const refVarScopes = [new Map()];
   const readonlyParamScopes = [new Set()];
@@ -1196,12 +1182,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return AST.functionNode(params, body, { returnType });
   }
 
-  // `take(s, 1)`: a builtin, unless a function of that name shadows it.
-  function atBareBuiltinCall() {
-    return (peek().type === 'IDENT' || peek().type === 'KEYWORD') && TEXT_METHODS.has(peek().value) && tokens[pos + 1]?.type === 'LPAREN'
-      && !functionNames.has(peek().value) && !fileFunctionNames.has(peek().value);
-  }
-
   function checkFunctionArgs(args, calleeName) {
     const slots = functionParamSlots.get(calleeName);
     if (!slots) return;
@@ -1776,6 +1756,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
+      } else if (coreDestructureAhead()) {
+        bindCoreFunctions();
       } else if (implicitReplyFields && isDestructureStart()) {
         // Ambiguous: could be destructure OR implicit return — try reply fields, check for stop
         const savedPos2 = pos;
@@ -2662,6 +2644,14 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   function parsePrimary() {
     // The value a `|>` pipes in, where splicePipedValue put it.
     if (peek().type === 'PIPED_VALUE') return take().value;
+    // A call of a destructured core function is that type's: `after(…)` is `Text.after(…)`.
+    if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !isKnownLocal(peek().value)) {
+      const alias = coreAlias(peek().value);
+      if (alias) {
+        tokens[pos] = { ...tokens[pos], value: alias.type };
+        spliceTokens(pos + 1, [{ type: 'DOT' }, { type: 'IDENT', value: alias.method }]);
+      }
+    }
     // `use("source")` is an expression: the dependency the host supplies. Any other
     // `use` reached here is a statement in an inner scope (the file's own are read
     // as declarations, parseActorBodyIn), or a source with no parens.
@@ -2777,21 +2767,6 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       result = parseBase();
     } else if (atSuper()) {
       result = parseSuper();
-    } else if (atBareBuiltinCall()) {
-      const methodName = take().value;
-      consume(); // LPAREN
-      const args = [parseExpr()];
-      while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
-      expect('RPAREN');
-      const [minArgs, maxArgs] = TEXT_METHODS.get(methodName).arity;
-      if (args.length < minArgs || args.length > maxArgs) {
-        throw new Error(`'${methodName}' takes ${minArgs === maxArgs ? minArgs : `${minArgs} to ${maxArgs}`} arguments, got ${args.length}`);
-      }
-      if (methodName === 'size') {
-        result = AST.sizeExpr(args[0]);
-      } else {
-        result = AST.textMethodExpr(methodName, args);
-      }
     } else if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'LPAREN' && !functionNames.has(tokens[pos].value) && !isKnownLocal(tokens[pos].value)) {
       const name = take().value;
       result = parseForwardCall(name);
@@ -2934,6 +2909,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         const args = [parseExpr()];
         while (peek().type === 'COMMA') { consume(); args.push(parseExpr()); }
         expect('RPAREN');
+        const [minArgs, maxArgs] = TEXT_METHODS.get(cleanMethod).arity;
+        if (args.length < minArgs || args.length > maxArgs) {
+          throw new Error(`'${cleanMethod}' takes ${minArgs === maxArgs ? minArgs : `${minArgs} to ${maxArgs}`} arguments, got ${args.length}`);
+        }
         result = cleanMethod === 'size' ? AST.sizeExpr(args[0]) : AST.textMethodExpr(cleanMethod, args);
       } else if (result.type === 'Identifier' && result.name === 'Blob' && !isBang && BLOB_METHODS.has(cleanMethod) && peek().type === 'LPAREN') {
         expect('LPAREN');
@@ -3129,6 +3108,49 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       rest.push({ value: parsePipeExpr(), updateOp });
     }
     return { type: 'SetChain', first: value, rest };
+  }
+
+  // ── A core type's functions, destructured: `:after, size: textSize = Text` ──
+  // A name bound so calls that type's function: `after(t, "x")` is
+  // `Text.after(t, "x")`. It belongs to the scope it's declared in; at file level,
+  // to every actor of the file.
+  const CORE_FUNCTIONS = { Text: TEXT_METHODS, List: LIST_METHODS, Blob: BLOB_METHODS };
+  const coreAliases = new Map();
+  const coreAlias = (name) => {
+    const a = coreAliases.get(name);
+    return a && localScopes.includes(a.scope) ? a : null;
+  };
+  function coreDestructureAhead() {
+    let j = pos;
+    for (;;) {
+      if (tokens[j]?.type === 'SIGIL') j++;
+      else if (tokens[j]?.type === 'IDENT' && tokens[j + 1]?.type === 'COLON' && tokens[j + 2]?.type === 'IDENT') j += 3;
+      else return false;
+      if (tokens[j]?.type !== 'COMMA') break;
+      j++;
+    }
+    return tokens[j]?.type === 'EQUALS' && tokens[j + 1]?.type === 'IDENT' && !!CORE_FUNCTIONS[tokens[j + 1].value]
+      && !['DOT', 'LPAREN', 'DCOLON'].includes(tokens[j + 2]?.type);
+  }
+  function bindCoreFunctions() {
+    const items = [];
+    for (;;) {
+      if (peek().type === 'SIGIL') { const n = take().value; items.push([n, n]); }
+      else { const method = take().value; take(); /* : */ items.push([method, take().value]); }
+      if (peek().type !== 'COMMA') break;
+      take(); // ,
+    }
+    expect('EQUALS');
+    const type = take().value;
+    for (const [method, local] of items) {
+      if (!CORE_FUNCTIONS[type].has(method)) throw new Error(`${type} has no function '${method}'`);
+      if (KEYWORDS.has(local)) throw new Error(`'${local}' is a keyword: bind ${type}'s '${method}' under another name, '${method}: other = ${type}'`);
+      const was = coreAlias(local);
+      if (was || functionNames.has(local)) {
+        throw new Error(`'${local}' is declared twice${was ? ` (${was.type}'s and ${type}'s)` : ''}: rename one, '${method}: other = ${type}'`);
+      }
+      coreAliases.set(local, { type, method, scope: currentScope() });
+    }
   }
 
   // `v |> f(a)` is `f(v, a)`: the lowest binary operator, left-associative
@@ -4175,6 +4197,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         const typeName = parseType();
         declareLocal(name);
         body.push(AST.bareTypeDecl(name, typeName));
+      } else if (coreDestructureAhead()) {
+        bindCoreFunctions();
       } else if (isDestructureStart()) {
         if (peek().type === 'LBRACKET') {
           const stmt = parseListDestructureAssign();
@@ -5142,6 +5166,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           throw new Error("A constructor block returns no value: 'return' here stands alone");
         }
         constructorBody.push(AST.returnNode([]));
+        continue;
+      }
+      if (coreDestructureAhead()) {
+        bindCoreFunctions();
         continue;
       }
       if (isTypeKw()) {
@@ -6703,7 +6731,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
 
     if (peek().type === 'AT' || peek().type === 'IDENT' || peek().type === 'HASH_IDENT' ||
-               peek().type === 'DIVIDER' ||
+               peek().type === 'DIVIDER' || coreDestructureAhead() ||
                peek().type === 'STRING' || peek().type === 'INTERP_STRING' || peek().type === 'NUMBER' ||
                peek().type === 'LPAREN' || peek().type === 'LBRACKET' ||
                (peek().type === 'KEYWORD' && (peek().value === 'untracked' || peek().value === 'self' || peek().value === 'true' || peek().value === 'false' || peek().value === 'new' || peek().value === 'use'))) {

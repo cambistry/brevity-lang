@@ -7,7 +7,7 @@ describe('Text methods', () => {
       @lower = () -> result: Text.lower("HELLO")
       @upperRef = { t *Text = "hello"; return result: t.upper }
       @lowerRef = { t *Text = "HELLO"; return result: t.lower }
-      @upperConst = { t Text = "world"; return result: upper(t) }
+      @upperConst = { t Text = "world"; return result: Text.upper(t) }
 
       // Text.trim / trim_start / trim_end
       @trim = () -> result: Text.trim("  hi  ")
@@ -111,7 +111,7 @@ describe('Text methods', () => {
       @revRef = { t *Text = "abcde"; return result: t.reverse }
       @revEmoji = () -> result: Text.reverse("a\u{1F600}b")
       @revEmpty = () -> result: Text.reverse("")
-      @revBare = { t Text = "xyz"; return result: reverse(t) }
+      @revBare = { t Text = "xyz"; return result: Text.reverse(t) }
 
       // Bang methods — additional
       @bangReverse
@@ -196,7 +196,7 @@ describe('Text methods', () => {
   it('Text.upper / Text.lower — ref.lower', async () => {
     await expectBehavior(script, { input: { id: '4', op: 'lowerRef', from: 'c' } }, { output: { id: '4', 'ty': [{ result: 'Text' }], re: [{ result: 'hello' }], to: 'c' } });
   });
-  it('Text.upper / Text.lower — upper(const) bare call', async () => {
+  it('Text.upper / Text.lower — Text.upper on a constant', async () => {
     await expectBehavior(script, { input: { id: '5', op: 'upperConst', from: 'c' } }, { output: { id: '5', 'ty': [{ result: 'Text' }], re: [{ result: 'WORLD' }], to: 'c' } });
   });
 

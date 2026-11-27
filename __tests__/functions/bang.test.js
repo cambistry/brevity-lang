@@ -299,7 +299,7 @@ describe('! functions — runtime', () => {
 
     @hashReturned = { return #plain() as Integer }
 
-    @builtinReturned = { return upper("hi") as Text }
+    @builtinReturned = { return Text.upper("hi") as Text }
 
     @selfChain! = {
       @inc!(1).explicit!(2)
@@ -854,9 +854,9 @@ describe('a function named like a builtin', () => {
   });
 
   it('the builtin reports a wrong argument count', () => {
-    expect(() => compileSource('@go = { return take("abc") }\n')).toThrow(/'take' takes 2 arguments, got 1/);
-    expect(() => compileSource('@go = { return slice("abc") }\n')).toThrow(/'slice' takes 2 to 3 arguments, got 1/);
-    expect(() => compileSource('@go = {\n  x Text = take("abc")\n  return x\n}\n')).toThrow(/'take' takes 2 arguments, got 1/);
+    expect(() => compileSource('@go = { return Text.take("abc") }\n')).toThrow(/'take' takes 2 arguments, got 1/);
+    expect(() => compileSource('@go = { return Text.slice("abc") }\n')).toThrow(/'slice' takes 2 to 3 arguments, got 1/);
+    expect(() => compileSource('@go = {\n  x Text = Text.take("abc")\n  return x\n}\n')).toThrow(/'take' takes 2 arguments, got 1/);
   });
 });
 

@@ -26,9 +26,11 @@ t.upper!
 return result: t
 ```
 
-Bare helper call is available for some methods:
+A type's functions can be destructured from it and called by name, in a body or
+for the whole file (`size: textSize = Text` renames):
 
 ```brevity
+:upper, :trim = Text
 t Text = "hello"
 result Text = upper(t)
 ```

@@ -5,36 +5,36 @@ describe('size — runtime', () => {
     // size — literals
       @ascii
         =
-        return result: size("hello")
+        return result: Text.size("hello")
 
       @empty
         =
-        return result: size("")
+        return result: Text.size("")
 
       @singleChar
         =
-        return result: size("x")
+        return result: Text.size("x")
 
       @spaces
         =
-        return result: size("a b c")
+        return result: Text.size("a b c")
 
     // size — constants and refs
       @fromConst
         =
         greeting Text = "hello"
-        return result: size(greeting)
+        return result: Text.size(greeting)
 
       @fromRef
         =
         a *Text = "hello"
-        return result: size(a)
+        return result: Text.size(a)
 
       @afterMutate
         =
         a *Text = "hi"
         a <- "goodbye"
-        return result: size(a)
+        return result: Text.size(a)
 
     // size — Text.size() form
       @dotLiteral
@@ -54,65 +54,65 @@ describe('size — runtime', () => {
     // size — BMP scalars
       @cjk
         =
-        return result: size("\u{4F60}\u{597D}")
+        return result: Text.size("\u{4F60}\u{597D}")
 
       @precomposedAccent
         =
-        return result: size("\u{00E9}")
+        return result: Text.size("\u{00E9}")
 
       @currencySymbol
         =
-        return result: size("\u{20AC}")
+        return result: Text.size("\u{20AC}")
 
     // size — supplementary plane (astral) scalars
       @singleEmoji
         =
-        return result: size("\u{1F600}")
+        return result: Text.size("\u{1F600}")
 
       @musicalSymbol
         =
-        return result: size("\u{1D11E}")
+        return result: Text.size("\u{1D11E}")
 
       @mixedAsciiEmoji
         =
-        return result: size("hi\u{1F600}")
+        return result: Text.size("hi\u{1F600}")
 
     // size — combining sequences (scalar != grapheme)
       @combiningAcute
         =
-        return result: size("e\u{0301}")
+        return result: Text.size("e\u{0301}")
 
       @doubleCombining
         =
-        return result: size("a\u{0308}\u{0301}")
+        return result: Text.size("a\u{0308}\u{0301}")
 
       @hangulJamo
         =
-        return result: size("\u{1100}\u{1161}\u{11A8}")
+        return result: Text.size("\u{1100}\u{1161}\u{11A8}")
 
     // size — multi-scalar emoji sequences
       @flag
         =
-        return result: size("\u{1F1FA}\u{1F1F8}")
+        return result: Text.size("\u{1F1FA}\u{1F1F8}")
 
       @familyEmoji
         =
-        return result: size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")
+        return result: Text.size("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")
 
       @skinTone
         =
-        return result: size("\u{1F44B}\u{1F3FD}")
+        return result: Text.size("\u{1F44B}\u{1F3FD}")
 
     // size — concatenation result
       @concatSize
         =
         a Text = "hello"
         b Text = " world"
-        return result: size(a + b)
+        return result: Text.size(a + b)
 
       @concatLiteralSize
         =
-        return result: size("ab" + "cd")
+        return result: Text.size("ab" + "cd")
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════════

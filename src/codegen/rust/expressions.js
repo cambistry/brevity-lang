@@ -1220,21 +1220,21 @@ ${subRegLines.join('\n')}
   if (expr.type === 'BlobMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
-    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
+    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar' || /\.unwrap_or\(Value::Null\)$/.test(raw); // a cell read is a Value
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     return dispatchMethod(RUST_BLOB_METHODS, 'Blob', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'TextMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
-    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
+    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar' || /\.unwrap_or\(Value::Null\)$/.test(raw); // a cell read is a Value
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     return dispatchMethod(RUST_TEXT_METHODS, 'Text', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
   if (expr.type === 'GraphemeTextMethodExpr') {
     const a0 = expr.args[0];
     const raw = genRustExpr(a0, typeEnv, eCtx);
-    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar';
+    const isVal = a0.type === 'RefRead' || a0.type === 'StateVar' || /\.unwrap_or\(Value::Null\)$/.test(raw); // a cell read is a Value
     const s = isVal ? `${raw}.as_str().unwrap_or("")` : raw;
     return dispatchMethod(RUST_GRAPHEME_METHODS, 'GraphemeText', expr, s, (i) => genRustExpr(expr.args[i], typeEnv, eCtx), intFromI64, intToUsize);
   }
