@@ -1,6 +1,6 @@
 // handlers.js — Handler and child actor generation for Rust codegen
 import { paramTag, typeText, classNameOf, hasType, envTypeOf, hasGeneric, declaredReturn, orAny } from '../enc_names.js';
-import { isFn, isList, listElement } from '../../type_enc.js';
+import { isFn, isList, listElement, isInstance } from '../../type_enc.js';
 import { intrinsicArm, wireLabel } from '../wire_labels.js';
 
 // The key a handler's match arm answers: its wire op, or for a cell or class arm
@@ -99,11 +99,11 @@ function genRustPublicFnCode({ name, params, body: rawBody, actorDef, emptyOverl
   const positionalTyped = typedParams.filter(p => p.positional);
   const namedTyped = typedParams.filter(p => !p.positional);
   let guard = '';
-  // An overloaded clause's in-process call carries values, not tags: its values
-  // pick the clause. An outside call is matched by its tags.
+  // An overloaded clause is picked by a message's tags when it has them, whoever
+  // sent it, and by its values when it hasn't (an in-process call carries values only).
   const fit = valueFit(params, '&_s');
   const inProcessOr = (typeCheck) => (fit
-    ? `(if from == "__self" || from == "__test" { ${fit} } else { ${typeCheck} })`
+    ? `(if message.get("ty").is_none() { ${fit} } else { ${typeCheck} })`
     : `(from == "__self" || from == "__test" || ${typeCheck})`);
   // Build arity guard for overloaded functions
   if (hasOverloads && params.length > 0) {
@@ -720,17 +720,26 @@ function childTagGuard({ params }, overloaded = false) {
 }
 
 // The value check for an in-process call to one clause of an overloaded method,
-// or null when no param has a scalar type a value could contradict. \`subject\`
-// is the call's args as a \`&BvObject\`.
+// or null when no param has a type a value could contradict. \`subject\` is the
+// call's args as a \`&BvObject\`.
 function valueFit(params, subject) {
   if (params.some(p => p.rest)) return null;
-  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
   // A param's type as `bv_values_fit` reads it; a generic one, anything.
   const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, G.ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
-  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
-  return `bv_values_fit(${subject}, &[${pos.map(t => JSON.stringify(t)).join(', ')}], &[${named.map(([k, t]) => `(${JSON.stringify(k)}, ${JSON.stringify(t)})`).join(', ')}])`;
+  if (![...pos, ...named.map(n => n[1])].some(t => t !== 'Anything')) return null;
+  // A param of one of the file's classes takes an actor of that class: an in-process
+  // actor is a "<class>/<id>" ref. Anything else, an address included, isn't judged here.
+  const ofClass = (p, at) => {
+    const cls = isInstance(p.typeEnc) ? classNameOf(p.typeEnc) : undefined;
+    return cls ? [`${at}.and_then(|v| v.as_str()).and_then(|r| r.split_once('/')).map_or(true, |(c, i)| i.parse::<u32>().is_err() || c == ${JSON.stringify(cls.toLowerCase())})`] : [];
+  };
+  const classChecks = [
+    ...params.filter(p => p.positional).flatMap((p, i) => ofClass(p, `(${subject}).positional.get(${i})`)),
+    ...params.filter(p => !p.positional).flatMap(p => ofClass(p, `(${subject}).named.get(${JSON.stringify(p.key || p.name)})`)),
+  ];
+  return [`bv_values_fit(${subject}, &[${pos.map(t => JSON.stringify(t)).join(', ')}], &[${named.map(([k, t]) => `(${JSON.stringify(k)}, ${JSON.stringify(t)})`).join(', ')}])`, ...classChecks].join(' && ');
 }
 
 function genRustChildPublicFn(...args) {

@@ -1,3 +1,4 @@
+import { isInstance } from '../../type_enc.js';
 import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
@@ -620,17 +621,27 @@ function isSilentGuard(s, silent) {
     JSON.stringify(s.expr).includes('"type":"Return"');
 }
 
-// The value check for an in-process call to one clause of an overloaded
-// function, or null when no param has a scalar type a value could contradict.
+// The value check for an untagged call to one clause of an overloaded function,
+// or null when no param has a type a value could contradict.
 function erlValueFit(ctx, params) {
   if (params.some(p => p.rest)) return null;
-  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
   // A param's type as `bv_values_fit` reads it; a generic one, anything.
   const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
-  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
-  return `bv_values_fit(S_pos, S_named, [${pos.map(erlString).join(', ')}], [${named.map(([k, t]) => `{${erlString(k)}, ${erlString(t)}}`).join(', ')}])`;
+  if (![...pos, ...named.map(n => n[1])].some(t => t !== 'Anything')) return null;
+  // A param of one of the file's classes takes an actor of that class: an in-process
+  // actor is a process its class's start function began. Anything else, an address
+  // included, isn't judged here.
+  const ofClass = (p, at) => {
+    const cls = isInstance(p.typeEnc) ? classNameOf(p.typeEnc) : undefined;
+    return cls ? [`bv_pid_of_class_(${at}, ${erlString(`start_internal_${cls.toLowerCase()}`)})`] : [];
+  };
+  const classChecks = [
+    ...params.filter(p => p.positional).flatMap((p, i) => ofClass(p, `(case length(S_pos) > ${i} of true -> lists:nth(${i + 1}, S_pos); false -> null end)`)),
+    ...params.filter(p => !p.positional).flatMap(p => ofClass(p, `maps:get(${erlString(p.key || p.name)}, S_named, null)`)),
+  ];
+  return [`bv_values_fit(S_pos, S_named, [${pos.map(erlString).join(', ')}], [${named.map(([k, t]) => `{${erlString(k)}, ${erlString(t)}}`).join(', ')}])`, ...classChecks].join(' andalso ');
 }
 
 function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false, instance = false } = {}) {
@@ -672,11 +683,12 @@ function genPublicFnInner(ctx, fn, { skipTypeCheck = false, hasOverloads = false
       matchExpr = `match_types(Message, [${pairs}])`;
     }
   }
-  // An overloaded clause's in-process call carries values, not tags: its values
-  // pick the clause. (S_pos / S_named are bound before an overload's guard.)
+  // An overloaded clause is picked by a message's tags when it has them, whoever
+  // sent it, and by its values when it hasn't (an in-process call carries values
+  // only). (S_pos / S_named are bound before an overload's guard.)
   const valueFit = hasOverloads && matchExpr ? erlValueFit(ctx, params) : null;
   const typeCheck = !matchExpr ? ''
-    : valueFit ? `(case ${exempt} of true -> ${valueFit}; false -> ${matchExpr} end)`
+    : valueFit ? `(case bv_tagged_(Message) of false -> ${valueFit}; true -> ${matchExpr} end)`
     : `(${exempt} orelse ${matchExpr})`;
 
   // Build arity check for overloads — always applied (not bypassed by From)

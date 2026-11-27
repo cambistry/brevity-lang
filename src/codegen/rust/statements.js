@@ -1388,7 +1388,9 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             lines.push(`${I}let ${tempName} = ${tempName}_re_opt.unwrap_or(Value::Null);`);
           } else {
             const lc = spawnClass.toLowerCase();
-            lines.push(`${I}let ${tempName} = self.${instDispatchAt(lc, idVar)}${method}, &${payload}, "", "__parent");`);
+            // The args first: one may build an actor, which needs `self` too.
+            lines.push(`${I}let ${tempName}_args = ${payload};`);
+            lines.push(`${I}let ${tempName} = self.${instDispatchAt(lc, idVar)}${method}, &${tempName}_args, "", "__parent");`);
           }
           if (handleName) {
             lines.push(`${I}let ${mintRustSsa(handleName)}: Value = ${tempName};`);
@@ -2747,7 +2749,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
           lines.push(`${I}let _ = self.handle_op_at(bv_inst_id(&${idVar}), ${method}, &json!({}), &${payload}, "__parent", "");`);
         } else {
           const lc = spawnClass.toLowerCase();
-          lines.push(`${I}self.${instDispatchAt(lc, idVar)}${method}, &${payload}, "", "__parent");`);
+          lines.push(`${I}{ let _args = ${payload}; self.${instDispatchAt(lc, idVar)}${method}, &_args, "", "__parent"); }`);
         }
       } else if (s.expr.type === 'DotCallExpr' && (() => {
         const dotObjName = s.expr.object.type === 'RefRead' ? s.expr.object.name : (s.expr.object.type === 'Identifier' ? s.expr.object.name : null);

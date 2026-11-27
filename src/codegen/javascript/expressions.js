@@ -5,8 +5,8 @@ import { isLiteralDefault, orderParamsForDefaults } from '../../param_defaults.j
 import { inferLiteralType, checkReplyFieldTypes } from './types.js';
 import { inferType } from '../../type_infer.js';
 import { selfSlotTag } from '../../actor_values.js';
-import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply } from '../../type_enc.js';
-import { typeText, leadsWithList, typeTag, paramTag, hasGeneric } from '../enc_names.js';
+import { isList as isListEnc, listElement as listElementEnc, isFn, fnReply, isInstance } from '../../type_enc.js';
+import { typeText, leadsWithList, typeTag, paramTag, hasGeneric, classNameOf } from '../enc_names.js';
 import { enclosingChain } from '../../outer_reads.js';
 import { parseDecimalLiteral } from '../decimal_utils.js';
 import { isDynamicTy, tyMembers, wireTypes } from '../ty_tags.js';
@@ -1634,13 +1634,23 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = undefined, 
 // tags: null when no param has a scalar type a value could contradict.
 export function genValueCondition(ctx, params) {
   if (params.find(p => p.rest)) return null;
-  const scalar = /\b(Integer|Text|Boolean|Float|Decimal|null)\b/;
   // A param's type as `_bvValuesFit` reads it; a generic one, anything.
   const typeOf = p => (p.typeEnc !== undefined && !hasGeneric(p.typeEnc) ? typeText(p.typeEnc, ctx.depAliases) : 'Anything');
   const pos = params.filter(p => p.positional).map(typeOf);
   const named = params.filter(p => !p.positional).map(p => [p.key || p.name, typeOf(p)]);
-  if (![...pos, ...named.map(n => n[1])].some(t => scalar.test(t))) return null;
-  return `_bvValuesFit(_s, ${JSON.stringify(pos)}, ${JSON.stringify(named)})`;
+  if (![...pos, ...named.map(n => n[1])].some(t => t !== 'Anything')) return null;
+  // A param of one of the file's classes takes an actor of that class: an in-process
+  // actor (one with `receive`) is an instance of its class's JS class. Anything else,
+  // an address included, isn't judged here.
+  const ofClass = (p, at) => {
+    const cls = isInstance(p.typeEnc) ? classNameOf(p.typeEnc) : undefined;
+    return cls ? [`(typeof ${at}?.receive !== 'function' || ${at} instanceof ${cls})`] : [];
+  };
+  const classChecks = [
+    ...params.filter(p => p.positional).flatMap((p, i) => ofClass(p, `_s.positional[${i}]`)),
+    ...params.filter(p => !p.positional).flatMap(p => ofClass(p, `_s.named[${JSON.stringify(p.key || p.name)}]`)),
+  ];
+  return [`_bvValuesFit(_s, ${JSON.stringify(pos)}, ${JSON.stringify(named)})`, ...classChecks].join(' && ');
 }
 
 export function genTypeCondition(ctx, params) {

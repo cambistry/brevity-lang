@@ -67,3 +67,5 @@ Watch for:
 ## Done when
 
 Both repros and the "not yet run" variants pass on js, rust and erlang.
+
+**Decided (2026-11-27):** any message that carries `ty` is matched by its tags, whoever sent it; the in-process sender bypass goes. An untagged message falls back to the value check.

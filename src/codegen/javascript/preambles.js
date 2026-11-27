@@ -535,9 +535,10 @@ const _bvAsKind = (v) => {
   if (Array.isArray(v) || ('head' in v && 'tail' in v)) return 'List';
   return 'Object';
 };
-// Whether an in-process arg value (no tag travels with it) can be a param of type
-// \`t\`. Only a scalar member can contradict a value's kind; any other type is
-// not judged here. An absent (optional) arg fits.
+// Whether an arg value with no tag of its own on the message can be a param of type
+// \`t\`. A scalar member is judged by the value's kind; a declared type by the type
+// a typed value carries (\`__type\`), as \`_matchTypes\` judges a tag. Any other
+// type is not judged here. An absent (optional) arg fits.
 const _bvValueFits = (v, t) => {
   if (v === undefined) return true;
   const k = _bvAsKind(v);
@@ -546,7 +547,12 @@ const _bvValueFits = (v, t) => {
       case 'Integer': case 'Text': case 'Boolean': return k === m.trim();
       case 'Float': case 'Decimal': return k === 'Integer' || k === 'Float' || k === 'Decimal';
       case 'null': return k === 'null';
-      default: return true;
+      default: {
+        const want = Object.hasOwn(_bv_type_keys, m.trim()) ? _bv_type_keys[m.trim()] : null;
+        if (!want) return true;
+        const key = typeof v?.__type === 'string' ? _bv_type_name(v.__type) : null;
+        return key === want;
+      }
     }
   });
 };

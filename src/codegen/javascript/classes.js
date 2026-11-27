@@ -196,10 +196,10 @@ function genPublicFn(ctx, { name, params, body: rawBody, actorDef }, stateVarEnv
       checks.push(`Object.keys(_s.named).every(k => [${allNamedKeys.map(k => JSON.stringify(k)).join(',')}].includes(k))`);
     }
     if (typeCondition) {
-      // External callers are matched by their tags. An in-process call carries
-      // values but no tags, so its values pick the clause.
+      // A message with tags is matched by them, whoever sent it. One without (an
+      // in-process call carries values only) is matched by its values.
       const valueCondition = genValueCondition(ctx, params) ?? 'true';
-      condition = `${opMatch(name)} && (${checks.join(' && ')}) && ((from === '__parent' || from === '__inner' || from === '__self' || from === '__test') ? ${valueCondition} : ${typeCondition})`;
+      condition = `${opMatch(name)} && (${checks.join(' && ')}) && (_types == null ? ${valueCondition} : ${typeCondition})`;
     } else {
       condition = `${opMatch(name)} && (${checks.join(' && ')})`;
     }

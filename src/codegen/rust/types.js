@@ -199,9 +199,10 @@ impl IntoValue for &BvObject {
     fn into_value(self) -> Value { self.splat() }
 }
 
-// Whether an in-process arg value (no tag travels with it) can be a param of
-// type \`t\`. Only a scalar member can contradict a value's kind; any other type
-// is not judged here. An absent (optional) arg fits.
+// Whether an arg value with no tag on the message can be a param of type \`t\`. A
+// scalar member is judged by the value's kind; a declared type by the type a
+// typed value carries (\`__type\`). Any other type is not judged here. An absent
+// (optional) arg fits.
 #[allow(dead_code)]
 fn bv_value_fits(v: Option<&Value>, t: &str) -> bool {
     let v = match v { Some(v) => v, None => return true };
@@ -211,7 +212,10 @@ fn bv_value_fits(v: Option<&Value>, t: &str) -> bool {
         "Boolean" => v.is_boolean(),
         "Float" | "Decimal" => v.is_number(),
         "null" => v.is_null(),
-        _ => true,
+        other => match bv_source_key(other) {
+            None => true,
+            Some(want) => v.get("__type").and_then(|t| t.as_str()).is_some_and(|t| t == want || bv_type_name(t) == Some(want)),
+        },
     })
 }
 

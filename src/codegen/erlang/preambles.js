@@ -1086,9 +1086,23 @@ structure_splat_ty(TyFirst) when is_list(TyFirst) ->
 structure_splat_ty(M) when is_map(M) -> M;
 structure_splat_ty(_) -> null.
 
-%% Whether an in-process arg value (no tag travels with it) can be a param of
-%% type T. Only a scalar member can contradict a value's kind; any other type is
-%% not judged here. An absent (optional) arg fits.
+%% Whether an in-process actor (a process) is of the class whose start function
+%% began it. Anything else, an address included, isn't judged here.
+bv_pid_of_class_(V, Start) when is_pid(V) ->
+    case erlang:process_info(V, initial_call) of
+        {initial_call, {_, F, _}} -> atom_to_binary(F, utf8) =:= Start;
+        _ -> true
+    end;
+bv_pid_of_class_(_, _) -> true.
+
+%% Whether a message carries tags (ty) for its args.
+bv_tagged_(Message) when is_map(Message) -> maps:is_key(<<"ty">>, Message);
+bv_tagged_(_) -> false.
+
+%% Whether an arg value with no tag on the message can be a param of type T. A
+%% scalar member is judged by the value's kind; a declared type by the type a
+%% typed value carries (__type). Any other type is not judged here. An absent
+%% (optional) arg fits.
 bv_value_fits('__bv_absent', _T) -> true;
 bv_value_fits(V, T) ->
     lists:any(fun(M) -> bv_value_fits_one(V, string:trim(M)) end, binary:split(T, <<"|">>, [global])).
@@ -1098,7 +1112,15 @@ bv_value_fits_one(V, <<"Boolean">>) -> is_boolean(V);
 bv_value_fits_one(V, M) when M =:= <<"Float">>; M =:= <<"Decimal">> ->
     not is_binary(V) andalso not is_boolean(V) andalso V =/= null;
 bv_value_fits_one(V, <<"null">>) -> V =:= null;
-bv_value_fits_one(_, _) -> true.
+bv_value_fits_one(V, M) ->
+    case (bv_mod_()):bv_source_key(M) of
+        undefined -> true;
+        Want ->
+            is_map(V) andalso case maps:find(<<"__type">>, V) of
+                {ok, T} -> T =:= Want orelse (bv_mod_()):bv_type_name(T) =:= Want;
+                error -> false
+            end
+    end.
 
 %% An overload clause's guard for an in-process call: every arg value fits its param.
 bv_values_fit(Pos, Named, PosTypes, NamedTypes) ->
